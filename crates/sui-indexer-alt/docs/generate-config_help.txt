@@ -1,0 +1,6 @@
+Output the contents of the default configuration to STDOUT
+
+Usage: sui-indexer-alt generate-config
+
+Options:
+  -h, --help  Print help

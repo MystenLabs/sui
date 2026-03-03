@@ -45,7 +45,7 @@ const config = {
 
   onBrokenLinks: "throw",
   onBrokenAnchors: "ignore",
-  onDuplicateRoutes: 'ignore',
+  onDuplicateRoutes: "ignore",
 
   staticDirectories: ["static", "src/open-spec"],
 
@@ -53,10 +53,10 @@ const config = {
     format: "detect",
     mermaid: true,
     hooks: {
-    onBrokenMarkdownLinks: 'throw',
+      onBrokenMarkdownLinks: "throw",
+    },
   },
-  },
-  
+
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
     //require.resolve('./src/plugins/framework'),
@@ -160,7 +160,7 @@ const config = {
             "**/snippets/**",
             "**/standards/deepbook-ref/**",
             "**/app-examples/ts-sdk-ref/**",
-            "**/app-examples/ts-sdk-ref/**",
+            "**/images/*.mdx",
           ],
           admonitions: {
             keywords: ["checkpoint"],
@@ -172,7 +172,10 @@ const config = {
             [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],
             effortRemarkPlugin,
             betaRemarkPlugin,
-            [remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }],
+            [
+              remarkGlossary,
+              { glossaryFile: path.resolve(__dirname, "static/glossary.json") },
+            ],
           ],
           rehypePlugins: [katex],
         },
@@ -184,8 +187,13 @@ const config = {
           ],
         },
         pages: {
-          remarkPlugins: [[remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }]],
-        }
+          remarkPlugins: [
+            [
+              remarkGlossary,
+              { glossaryFile: path.resolve(__dirname, "static/glossary.json") },
+            ],
+          ],
+        },
       },
     ],
   ],
@@ -200,13 +208,14 @@ const config = {
       "data-button-hide": "true",
       "data-modal-title": "Ask Sui AI",
       "data-modal-ask-ai-input-placeholder": "Ask me anything about Sui!",
-      "data-modal-example-questions":"How do I deploy to Sui?,What is Mysticeti?,What are object ownership types for Sui Move?,What are programmable transaction blocks (PTBs)?",
+      "data-modal-example-questions":
+        "How do I deploy to Sui?,What is Mysticeti?,What are object ownership types for Sui Move?,What are programmable transaction blocks (PTBs)?",
       "data-modal-body-bg-color": "#E0E2E6",
       "data-source-link-bg-color": "#FFFFFF",
       "data-source-link-border": "#298DFF",
       "data-answer-feedback-button-bg-color": "#FFFFFF",
-      "data-answer-copy-button-bg-color" : "#FFFFFF",
-      "data-thread-clear-button-bg-color" : "#FFFFFF",
+      "data-answer-copy-button-bg-color": "#FFFFFF",
+      "data-thread-clear-button-bg-color": "#FFFFFF",
       "data-modal-image": "img/logo.svg",
       async: true,
     },

@@ -435,6 +435,7 @@ mod tests {
     use std::net::IpAddr;
     use std::net::Ipv4Addr;
     use std::path::PathBuf;
+    use std::process::Command;
 
     use async_graphql::EmptyMutation;
     use async_graphql::EmptySubscription;
@@ -551,5 +552,32 @@ mod tests {
 
         // Verify the panic is recorded in metrics
         assert_eq!(metrics.queries_panicked.get(), 1);
+    }
+
+    #[test]
+    fn test_help() {
+        vec!["rpc", "generate-config"]
+            .iter()
+            .for_each(|subcommand| {
+                let output = Command::new("cargo")
+                    .args(["run", subcommand, "--help"])
+                    .output()
+                    .expect(format!("subcommand {subcommand} execution failed").as_str());
+
+                if !output.status.success() {
+                    panic!(
+                        "subcommand {subcommand} failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
+
+                // Update the current file
+                let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("docs")
+                    .join(format!("{subcommand}_help.txt"));
+                fs::write(path, &output.stdout).unwrap();
+
+                assert_snapshot!(*subcommand, String::from_utf8(output.stdout).unwrap());
+            })
     }
 }

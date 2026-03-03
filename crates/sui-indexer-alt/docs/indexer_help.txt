@@ -1,0 +1,129 @@
+Run the indexer
+
+Usage: sui-indexer-alt indexer [OPTIONS] --config <CONFIG> <--remote-store-url <REMOTE_STORE_URL>|--remote-store-s3 <REMOTE_STORE_S3>|--remote-store-gcs <REMOTE_STORE_GCS>|--remote-store-azure <REMOTE_STORE_AZURE>|--local-ingestion-path <LOCAL_INGESTION_PATH>|--rpc-api-url <RPC_API_URL>>
+
+Options:
+      --database-url <DATABASE_URL>
+          The URL of the database to connect to
+          
+          [default: postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt]
+
+      --db-connection-pool-size <DB_CONNECTION_POOL_SIZE>
+          Number of connections to keep in the pool
+          
+          [default: 100]
+
+      --db-connection-timeout-ms <DB_CONNECTION_TIMEOUT_MS>
+          Time spent waiting for a connection from the pool to become available, in milliseconds
+          
+          [default: 60000]
+
+      --db-statement-timeout-ms <DB_STATEMENT_TIMEOUT_MS>
+          Time spent waiting for statements to complete, in milliseconds
+
+      --tls-verify-cert
+          Enable server certificate verification. By default, this is set to false to match the
+          default behavior of libpq
+
+      --tls-ca-cert-path <TLS_CA_CERT_PATH>
+          Path to a custom CA certificate to use for server certificate verification
+
+      --remote-store-url <REMOTE_STORE_URL>
+          Remote Store to fetch checkpoints from over HTTP
+
+      --remote-store-s3 <REMOTE_STORE_S3>
+          Fetch checkpoints from AWS S3. Provide the bucket name or endpoint-and-bucket. (env:
+          AWS_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION)
+
+      --remote-store-gcs <REMOTE_STORE_GCS>
+          Fetch checkpoints from Google Cloud Storage. Provide the bucket name. (env:
+          GOOGLE_SERVICE_ACCOUNT_PATH)
+
+      --remote-store-azure <REMOTE_STORE_AZURE>
+          Fetch checkpoints from Azure Blob Storage. Provide the container name. (env:
+          AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_ACCESS_KEY)
+
+      --local-ingestion-path <LOCAL_INGESTION_PATH>
+          Path to the local ingestion directory
+
+      --rpc-api-url <RPC_API_URL>
+          Sui fullnode gRPC url to fetch checkpoints from
+
+      --rpc-username <RPC_USERNAME>
+          Optional username for the gRPC service
+          
+          [env: RPC_USERNAME=]
+
+      --rpc-password <RPC_PASSWORD>
+          Optional password for the gRPC service
+          
+          [env: RPC_PASSWORD=]
+
+      --checkpoint-timeout-ms <CHECKPOINT_TIMEOUT_MS>
+          How long to wait for a checkpoint file to be downloaded (milliseconds). Set to 0 to
+          disable the timeout
+          
+          [default: 120000]
+
+      --checkpoint-connection-timeout-ms <CHECKPOINT_CONNECTION_TIMEOUT_MS>
+          How long to wait while establishing a connection to the checkpoint store (milliseconds).
+          Set to 0 to disable the timeout
+          
+          [default: 120000]
+
+      --streaming-url <STREAMING_URL>
+          gRPC endpoint for streaming checkpoints
+          
+          [env: STREAMING_URL=]
+
+      --first-checkpoint <FIRST_CHECKPOINT>
+          Override the next checkpoint for all pipelines without a committer watermark to start
+          processing from, which is 0 by default. Pipelines with existing watermarks will ignore
+          this setting and always resume from their committer watermark + 1.
+          
+          Setting this value indirectly affects ingestion, as the checkpoint to start ingesting from
+          is the minimum across all pipelines' next checkpoints.
+
+      --last-checkpoint <LAST_CHECKPOINT>
+          Override for the checkpoint to end ingestion at (inclusive) -- useful for backfills. By
+          default, ingestion will not stop, and will continue to poll for new checkpoints
+
+      --pipeline <PIPELINE>
+          Only run the following pipelines. If not provided, all pipelines found in the
+          configuration file will be run
+
+      --task <TASK>
+          An optional task name for this indexer. When set, pipelines will record watermarks using
+          the delimiter defined on the store. This allows the same pipelines to run under multiple
+          indexers (e.g. for backfills or temporary workflows) while maintaining separate watermark
+          entries in the database.
+          
+          By default there is no task name, and watermarks are keyed only by `pipeline`.
+          
+          Sequential pipelines cannot be attached to a tasked indexer.
+          
+          The framework ensures that tasked pipelines never commit checkpoints below the main
+          pipeline’s pruner watermark. Requires `--reader-interval-ms`.
+
+      --reader-interval-ms <READER_INTERVAL_MS>
+          The interval in milliseconds at which each of the pipelines on a tasked indexer should
+          refetch its main pipeline's reader watermark.
+          
+          This is required when `--task` is set and should should ideally be set to a value that is
+          an order of magnitude smaller than the main pipeline's pruning interval, to ensure this
+          task pipeline can pick up the new reader watermark before the main pipeline prunes up to
+          it.
+          
+          If the main pipeline does not have pruning enabled, this value can be set to some high
+          value, as the tasked pipeline will never see an updated reader watermark.
+
+      --metrics-address <METRICS_ADDRESS>
+          Address to serve Prometheus metrics from
+          
+          [default: 0.0.0.0:9184]
+
+      --config <CONFIG>
+          Path to the indexer's configuration TOML file
+
+  -h, --help
+          Print help (see a summary with '-h')

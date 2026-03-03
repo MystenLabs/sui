@@ -1,0 +1,29 @@
+---
+source: crates/sui-indexer-alt/src/lib.rs
+expression: "String::from_utf8(output.stdout).unwrap()"
+---
+Wipe the database of its contents
+
+Usage: sui-indexer-alt reset-database [OPTIONS]
+
+Options:
+      --database-url <DATABASE_URL>
+          The URL of the database to connect to [default:
+          postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt]
+      --db-connection-pool-size <DB_CONNECTION_POOL_SIZE>
+          Number of connections to keep in the pool [default: 100]
+      --db-connection-timeout-ms <DB_CONNECTION_TIMEOUT_MS>
+          Time spent waiting for a connection from the pool to become available, in milliseconds
+          [default: 60000]
+      --db-statement-timeout-ms <DB_STATEMENT_TIMEOUT_MS>
+          Time spent waiting for statements to complete, in milliseconds
+      --tls-verify-cert
+          Enable server certificate verification. By default, this is set to false to match the
+          default behavior of libpq
+      --tls-ca-cert-path <TLS_CA_CERT_PATH>
+          Path to a custom CA certificate to use for server certificate verification
+      --skip-migrations
+          If true, only drop all tables but do not run the migrations. That is, no tables will exist
+          in the DB after the reset
+  -h, --help
+          Print help

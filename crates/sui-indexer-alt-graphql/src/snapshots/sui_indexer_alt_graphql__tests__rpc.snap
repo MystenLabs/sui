@@ -1,0 +1,92 @@
+---
+source: crates/sui-indexer-alt-graphql/src/lib.rs
+expression: "String::from_utf8(output.stdout).unwrap()"
+---
+Run the RPC service
+
+Usage: sui-indexer-alt-graphql rpc [OPTIONS]
+
+Options:
+      --database-url <DATABASE_URL>
+          The URL of the database to connect to
+          
+          [default: postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt]
+
+      --fullnode-rpc-url <FULLNODE_RPC_URL>
+          gRPC URL for full node operations such as executeTransaction and simulateTransaction
+
+      --db-connection-pool-size <DB_CONNECTION_POOL_SIZE>
+          Number of connections to keep in the pool
+          
+          [default: 100]
+
+      --db-connection-timeout-ms <DB_CONNECTION_TIMEOUT_MS>
+          Time spent waiting for a connection from the pool to become available, in milliseconds
+          
+          [default: 60000]
+
+      --db-statement-timeout-ms <DB_STATEMENT_TIMEOUT_MS>
+          Time spent waiting for statements to complete, in milliseconds
+
+      --tls-verify-cert
+          Enable server certificate verification. By default, this is set to false to match the
+          default behavior of libpq
+
+      --tls-ca-cert-path <TLS_CA_CERT_PATH>
+          Path to a custom CA certificate to use for server certificate verification
+
+      --bigtable-instance <BIGTABLE_INSTANCE>
+          Bigtable instance ID to make KV store requests to
+
+      --bigtable-project <BIGTABLE_PROJECT>
+          GCP project ID for the BigTable instance (defaults to the token provider's project)
+
+      --bigtable-app-profile-id <BIGTABLE_APP_PROFILE_ID>
+          App profile ID to use for Bigtable client. If not provided, the default profile will be
+          used
+
+      --kv-max-decoding-message-size <KV_MAX_DECODING_MESSAGE_SIZE>
+          Maximum gRPC decoding message size for KV responses, in bytes.
+          
+          Applies to both Bigtable and Ledger gRPC readers.
+
+      --ledger-grpc-url <LEDGER_GRPC_URL>
+          gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
+
+      --kv-statement-timeout-ms <KV_STATEMENT_TIMEOUT_MS>
+          Time spent waiting for a request to the kv store to complete, in milliseconds
+
+      --consistent-store-url <CONSISTENT_STORE_URL>
+          URL of the consistent store gRPC service
+
+      --consistent-store-statement-timeout-ms <CONSISTENT_STORE_STATEMENT_TIMEOUT_MS>
+          Time spent waiting for a request to complete, in milliseconds
+
+      --rpc-listen-address <RPC_LISTEN_ADDRESS>
+          Address to accept incoming RPC connections on
+          
+          [default: 0.0.0.0:7000]
+
+      --no-ide
+          Do not expose the GraphiQL IDE
+
+      --epoch-polling-interval-ms <EPOCH_POLLING_INTERVAL_MS>
+          How long to wait between checking for epoch changes
+          
+          [default: 10000]
+
+      --metrics-address <METRICS_ADDRESS>
+          Address to serve Prometheus metrics from
+          
+          [default: 0.0.0.0:9184]
+
+      --config <CONFIG>
+          Path to the RPC's configuration TOML file. If one is not provided, the default values for
+          the configuration will be set
+
+      --indexer-config <INDEXER_CONFIG>
+          Path to indexer configuration TOML files (multiple can be supplied). These are used to
+          identify the pipelines that the RPC will monitor for watermark purposes
+
+  -h, --help
+          Print help (see a summary with '-h')

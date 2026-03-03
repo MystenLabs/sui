@@ -8,6 +8,18 @@ keywords: [indexer, consistent store, graphql, setup, dex]
 
 See [GraphQL and General-Purpose Indexer](/concepts/data-access/custom-indexers.mdx) for more information on the stack.
 
+## Components
+
+The indexer stack uses the following components:
+- [Archival service](/concepts/data-access/archival-store): A service that provides access to historical data beyond what full nodes or indexer databases retain.
+- [Consistent store](/concepts/data-access/graphql-rpc#working-with-consistent-store): Combined indexer and RPC service for indexing live data on-chain and serving queries for recent checkpoints.
+- [Full node](/guides/operator/sui-full-node): Nodes that track and verify the network's state, and serve read requests from clients.
+- [GraphQL](/guides/developer/accessing-data/query-with-graphql): A query language for APIs.
+- [Managed snapshots](/guides/operator/snapshots): Point-in-time view of a database's store.
+- [Remote store](/concepts/data-access/indexer-data-integration#remote-store): A remote storage location for checkpoint data.
+
+![Indexer stack components](./images/indexer_stack.svg "A diagram showing the indexer stack components")
+
 ## Indexer setup
 
 The indexer consists of multiple pipelines that each read, transform, and write checkpoint data to a table. Multiple instances of the indexer can run in parallel, each configured by its own TOML file.
@@ -24,37 +36,26 @@ The bulk of the storage is consumed by `obj_versions` at 8.2 TB. A pruning strat
 
 A 30-day retention adds 1.8 TB on top, while a 90-day retention contributes up to an additional 3.1 TB.
 
-30-day retention:
-
-| Table | Heap (GB) | Idx (GB) |
-|-------|-----------|-----------------|
-| tx_affected_objects | 64–70 | 276–397 |
-| tx_calls | 27–30 | 239–366 |
-| ev_struct_inst | 15–19 | 174–267 |
-| tx_affected_addresses | 17–18 | 63–92 |
-| ev_emit_mod | 8–9 | 54–85 |
-| tx_balance_changes | 18–20 | 5–6 |
-| tx_digests | 8 | 21–25 |
-| tx_kinds | 5 | 14–16 |
-| cp_sequence_numbers | 10 | 5 |
-| **TOTAL** | **444–450** | **1,827–1,842** |
-
-90-day retention:
-
-| Table | Heap (GB) | Idx (GB) |
-|-------|-----------|-----------------|
-| tx_affected_objects | 188–202 | 580–752 |
-| tx_calls | 82–87 | 560–715 |
-| ev_struct_inst | 45–50 | 432–531 |
-| tx_affected_addresses | 50–54 | 151–183 |
-| ev_emit_mod | 22–24 | 129–167 |
-| tx_balance_changes | 57–63 | 10–16 |
-| tx_digests | 24–26 | 45–55 |
-| tx_kinds | 15–16 | 30–36 |
-| cp_sequence_numbers | 10 | 5 |
-| **TOTAL** | **755–842** | **2,440–3,181** |
+| Table | Heap 30d (GB) | Idx 30d (GB) | Heap 90d (GB) | Idx 90d (GB) |
+|-------|---------------|--------------|---------------|--------------|
+| `tx_affected_objects` | 64–70 | 276–397 | 188–202 | 580–752 |
+| `tx_calls` | 27–30 | 239–366 | 82–87 | 560–715 |
+| `ev_struct_inst` | 15–19 | 174–267 | 45–50 | 432–531 |
+| `tx_affected_addresses` | 17–18 | 63–92 | 50–54 | 151–183 |
+| `ev_emit_mod` | 8–9 | 54–85 | 22–24 | 129–167 |
+| `tx_balance_changes` | 18–20 | 5–6 | 57–63 | 10–16 |
+| `tx_digests` | 8 | 21–25 | 24–26 | 45–55 |
+| `tx_kinds` | 5 | 14–16 | 15–16 | 30–36 |
+| `cp_sequence_numbers` | 10 | 5 | 10 | 5 |
+| **TOTAL** | **444–450** | **1,827–1,842** | **755–842** | **2,440–3,181** |
 
 ### Run `sui-indexer-alt`
+
+<details>
+<summary>`sui-indexer-alt` full command parameter list</summary>
+
+<ImportContent mode="code" source="crates/sui-indexer-alt/docs/indexer_help.txt"/>
+</details>
 
 Run an indexer instance using this command for each of the configuration files. The command varies based on whether the pipeline is prunable or unprunable:
 
@@ -84,7 +85,7 @@ For prunable pipelines, calculate the `first-checkpoint` based on your retention
 | `<CONFIG_FILE>`      | Path to indexer configuration file.                                                                                                  |
 | `<DATABASE_URL>`     | Postgres database connection string.                                                                                                 |
 | `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/guides/developer/accessing-data/custom-indexing-framework#data-sources). |
-| `<CHECKPOINT_NUMBER>`| (Optional) For prunable pipelines only - the checkpoint to start indexing from based on retention requirements.                        |
+| `<CHECKPOINT_NUMBER>`| (Optional) For prunable pipelines only. Identifies the checkpoint to start indexing from based on retention requirements.                        |
 
 #### Examples
 
@@ -455,7 +456,7 @@ sui-indexer-alt-graphql rpc \
     --fullnode-rpc-url https://localhost:9000
 ```
 
-### Generating Configuration
+### Generating configuration
 
 You can run the GraphQL RPC server without a configuration file, which will use default values. To customize settings, generate a config file using the command below and edit it as needed:
 
@@ -471,7 +472,7 @@ It will produce output similar to the following:
 	<ImportContent source="examples/prod-config/graphql.toml" mode="code" />
 </details>
 
-## Indexer/GraphQL Postgres-compatible Database Setup
+## Indexer/GraphQL Postgres-compatible database setup
 
 Both the indexer and GraphQL server require a Postgres-compatible database shared between them.
 
