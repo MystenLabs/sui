@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/ref_type_param.mvir
 ---
 processed 8 tasks
 

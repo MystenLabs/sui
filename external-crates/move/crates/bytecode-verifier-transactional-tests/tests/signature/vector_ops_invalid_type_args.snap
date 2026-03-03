@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/signature/vector_ops_invalid_type_args.mvir
 ---
 processed 3 tasks
 
