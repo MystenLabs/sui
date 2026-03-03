@@ -1,10 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::Future, future::poll_fn, panic, pin::pin, sync::Arc};
+use std::future::Future;
+use std::future::poll_fn;
+use std::panic;
+use std::pin::pin;
+use std::sync::Arc;
 
-use futures::{FutureExt, future::try_join_all, stream::Stream, try_join};
-use tokio::{sync::mpsc, task::JoinSet};
+use futures::FutureExt;
+use futures::future::try_join_all;
+use futures::stream::Stream;
+use futures::try_join;
+use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 
 /// Runtime configuration for adaptive concurrency control.
 ///
@@ -509,10 +517,9 @@ where
         };
 
         // Handle all completions: the one from select (if any) + drain ready ones.
-        for join_result in completed
-            .into_iter()
-            .chain(std::iter::from_fn(|| tasks.try_join_next()))
-        {
+        for join_result in completed.into_iter().chain(std::iter::from_fn(|| {
+            tasks.join_next().now_or_never().flatten()
+        })) {
             match join_result {
                 Ok(Ok(spawn_epoch)) => {
                     // Adjust concurrency limit based on channel fill fraction.
