@@ -40,6 +40,8 @@ use crate::scope::Scope;
 /// Multiplier to page limit to adjust for bloom filter false positives.
 const OVERFETCH_MULTIPLIER: f64 = 3.0;
 
+pub(super) type EventsBySequenceNumbers = BTreeMap<ScanEventCursor, Event>;
+
 pub(crate) trait CpBoundsCursor {
     fn cp_sequence_number(&self) -> u64;
 }
@@ -115,8 +117,6 @@ pub(crate) async fn transactions(
         })
         .collect()
 }
-
-pub(super) type EventsBySequenceNumbers = BTreeMap<ScanEventCursor, Event>;
 
 /// The map of events that might match the filter criteria in `cp_bounds` checkpoints keyed by EventCursor.
 pub(crate) async fn events(

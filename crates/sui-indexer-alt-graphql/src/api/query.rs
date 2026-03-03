@@ -324,13 +324,18 @@ impl Query {
         last: Option<u64>,
         before: Option<CScanEvent>,
         #[graphql(validator(custom = "ScanFilterValidator::new(ctx)"))] filter: EventFilter,
-    ) -> Result<Option<Connection<String, Event>>, RpcError> {
-        let scope = self.scope(ctx)?;
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Query", "events");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Event>, RpcError>> {
+        Some(
+            async {
+                let scope = self.scope(ctx)?;
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "events");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        Event::scan(ctx, scope, page, filter).await.map(Some)
+                Event::scan(ctx, scope, page, filter).await
+            }
+            .await,
+        )
     }
 
     /// Fetch addresses by their keys.

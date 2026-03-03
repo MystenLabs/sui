@@ -43,6 +43,8 @@ use crate::task::watermark::Watermarks;
 pub(crate) mod filter;
 mod lookups;
 
+pub(crate) type CScanEvent = JsonCursor<ScanEventCursor>;
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
 pub(crate) struct EventCursor {
     #[serde(rename = "t")]
@@ -62,8 +64,6 @@ pub(crate) struct ScanEventCursor {
     #[serde(rename = "e")]
     pub ev_sequence_number: u64,
 }
-
-pub(crate) type CScanEvent = JsonCursor<ScanEventCursor>;
 
 #[derive(Clone)]
 pub(crate) struct Event {
@@ -214,7 +214,7 @@ impl Event {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
-            field: Some("eventsScan".to_string()),
+            field: Some("scanEvents".to_string()),
             filters: Some(filter.active_filters()),
         };
         let reader_lo = available_range_key.reader_lo(watermarks)?;
