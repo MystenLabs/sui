@@ -115,7 +115,6 @@ pub struct PipelineLayer {
     pub cp_bloom_blocks: Option<ConcurrentLayer>,
     pub cp_blooms: Option<ConcurrentLayer>,
     pub coin_balance_buckets: Option<ConcurrentLayer>,
-    pub obj_info: Option<ConcurrentLayer>,
     pub cp_sequence_numbers: Option<ConcurrentLayer>,
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
@@ -276,7 +275,6 @@ impl PipelineLayer {
             cp_blooms: Some(Default::default()),
             cp_bloom_blocks: Some(Default::default()),
             coin_balance_buckets: Some(Default::default()),
-            obj_info: Some(Default::default()),
             sum_displays: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
@@ -398,7 +396,6 @@ impl Merge for PipelineLayer {
             coin_balance_buckets: self
                 .coin_balance_buckets
                 .merge(other.coin_balance_buckets)?,
-            obj_info: self.obj_info.merge(other.obj_info)?,
             sum_displays: self.sum_displays.merge(other.sum_displays)?,
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers)?,
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod)?,
