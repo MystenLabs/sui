@@ -1,0 +1,474 @@
+---
+title: Archival Store and Service
+description: Setup instructions for running the archival indexer, Bigtable store, and gRPC service in production.
+keywords: [archival, bigtable, grpc, kvstore, indexer, setup, historical data]
+---
+
+<ImportContent source="indexer-archival.mdx" mode="snippet" />
+
+See [Archival Store and Service](/concepts/data-access/archival-store.mdx) for more information on the stack.
+
+## Architecture overview
+
+The archival stack consists of three components:
+
+1. **Google Cloud Bigtable** — the backing store that holds all historical chain data across 11 tables.
+2. **`sui-kvstore-alt`** (Indexer) — reads checkpoints from the remote checkpoint store and writes processed data to Bigtable.
+3. **`sui-kv-rpc`** (Archival Service) — a gRPC server that reads from Bigtable and exposes the [`LedgerService`](/references/fullnode-protocol) API to clients.
+
+```
+Sui Fullnode ──▶ sui-kvstore-alt ──▶ Bigtable ◀── sui-kv-rpc ──▶ gRPC Clients
+```
+
+## Prerequisites
+
+- A GCP project with the [Bigtable API](https://cloud.google.com/bigtable/docs/quickstart) enabled.
+- Two GCP service accounts:
+  - **Read/write account** for the indexer — requires `roles/bigtable.user` (the indexer both writes pipeline data and reads its own watermarks).
+  - **Read-only account** for the gRPC service — requires `roles/bigtable.reader`.
+- Access to the Sui checkpoint buckets for your target network:
+  - **Mainnet:** GCS bucket `mysten-mainnet-checkpoints` or `https://checkpoints.mainnet.sui.io`
+  - **Testnet:** GCS bucket `mysten-testnet-checkpoints` or `https://checkpoints.testnet.sui.io`
+- A [Sui full node](/guides/operator/sui-full-node.mdx) with gRPC enabled. After the initial backfill, you can stream checkpoints from a full node instead of polling the bucket for lower latency. See [Steady-state operation](#steady-state-operation).
+
+## Authentication
+
+Both the indexer and gRPC service authenticate to GCP using [Application Default Credentials (ADC)](https://cloud.google.com/docs/authentication/application-default-credentials). The same credentials are used for Bigtable access and GCS checkpoint bucket reads.
+
+**On GKE:** Use [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) to bind your pod's Kubernetes service account to a GCP service account. No keys or environment variables needed — the SDKs automatically fetch tokens from the metadata server.
+
+**Outside GKE:** Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of a service account JSON key file:
+
+```sh
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+```
+
+The checkpoint buckets are publicly readable, but authenticated requests receive higher GCS rate limits than anonymous ones. Using `--remote-store-gcs` with valid credentials avoids throttling during backfill.
+
+## Bigtable setup
+
+### Create a Bigtable instance
+
+Create a Bigtable instance in your GCP project. Refer to the [Bigtable documentation](https://cloud.google.com/bigtable/docs/creating-instance) for instructions.
+
+Key decisions:
+
+| Setting | Recommendation |
+|---------|---------------|
+| Storage type | SSD is required. HDD has not been tested and is not recommended. |
+| Node count | Mysten Labs currently runs 5 nodes for mainnet and 2 for testnet as a starting point. Scale up to 15 nodes for backfill. Your steady-state node count will depend on your read traffic — enable autoscaling or monitor CPU utilization and scale manually. |
+
+**Replication:** A single-cluster instance is the recommended default. If you need to serve read traffic in multiple regions, you can add clusters in other zones — Bigtable automatically replicates data across clusters, so you get low-latency reads in additional regions without running a separate indexing stack in each one. The tradeoff is that storage costs scale with the number of clusters (the data is stored in full in each cluster). Use single-cluster routing in your app profile for single-cluster instances, or multi-cluster routing to let Bigtable route requests to the nearest cluster.
+
+### Create tables
+
+Create the following 11 tables, each with a single column family named `sui` and a GC policy that keeps only the latest cell version:
+
+| Table | Description |
+|-------|-------------|
+| `checkpoints` | Checkpoint summaries, signatures, and contents |
+| `checkpoints_by_digest` | Checkpoint lookup by digest |
+| `transactions` | Transaction data, effects, events, and balance changes |
+| `objects` | Object data keyed by object ID and version |
+| `epochs` | Epoch start and end data including system state |
+| `watermark_alt` | Internal indexer watermark tracking |
+| `protocol_configs` | Protocol configuration per epoch |
+| `packages` | Package metadata keyed by original ID and version |
+| `packages_by_id` | Package lookup by ID |
+| `packages_by_checkpoint` | Package lookup by checkpoint |
+| `system_packages` | System package data |
+
+Using the `cbt` CLI:
+
+```sh
+for table in checkpoints checkpoints_by_digest transactions objects epochs \
+    watermark_alt protocol_configs packages packages_by_id \
+    packages_by_checkpoint system_packages; do
+  cbt -project <GCP_PROJECT> -instance <INSTANCE_ID> createtable "$table"
+  cbt -project <GCP_PROJECT> -instance <INSTANCE_ID> createfamily "$table" sui
+  cbt -project <GCP_PROJECT> -instance <INSTANCE_ID> setgcpolicy "$table" sui maxversions=1
+done
+```
+
+### Storage requirements
+
+The storage footprint estimations below are based on the network as of early March 2026. These numbers are directional and will grow with network activity.
+
+**Mainnet (full history from genesis):**
+
+| Table | Size |
+|-------|------|
+| `transactions` | 8.1 TB |
+| `objects` | 4.4 TB |
+| `checkpoints` | 832 GB |
+| `checkpoints_by_digest` | 15 GB |
+| `watermark_alt` | 1.5 GB |
+| `epochs` | 83 MB |
+| `packages` | TBD (not yet backfilled) |
+| `packages_by_id` | TBD (not yet backfilled) |
+| `packages_by_checkpoint` | TBD (not yet backfilled) |
+| `protocol_configs` | TBD (not yet backfilled) |
+| `system_packages` | TBD (not yet backfilled) |
+| **Total** | **~13.3 TB** |
+
+**Testnet (full history from genesis):**
+
+| Table | Size |
+|-------|------|
+| `transactions` | 2.5 TB |
+| `objects` | 1.2 TB |
+| `checkpoints` | 514 GB |
+| `checkpoints_by_digest` | 18 GB |
+| `watermark_alt` | 12 MB |
+| `epochs` | 97 MB |
+| `packages` | TBD (not yet backfilled) |
+| `packages_by_id` | TBD (not yet backfilled) |
+| `packages_by_checkpoint` | TBD (not yet backfilled) |
+| `protocol_configs` | TBD (not yet backfilled) |
+| `system_packages` | TBD (not yet backfilled) |
+| **Total** | **~4.3 TB** |
+
+The `transactions` and `objects` tables dominate storage. The `packages`, `packages_by_id`, `packages_by_checkpoint`, `protocol_configs`, and `system_packages` pipelines are new and have not yet been backfilled — their storage contribution will increase once backfill is completed. Growth rate scales with network transaction volume.
+
+### Scaling
+
+Bigtable supports both manual and automatic node scaling. Mysten Labs uses manual scaling with CPU monitoring for better operational control, but autoscaling is a reasonable option if you prefer hands-off management.
+
+Key thresholds to monitor:
+
+- **CPU utilization:** Scale up if sustained above 60% (mixed read/write) or 90% (write-only).
+- **Storage utilization:** Each SSD node supports up to 5 TB, but Google recommends staying under 70% (3.5 TB per node) to accommodate spikes. Ensure your cluster has enough nodes for both compute and storage needs.
+
+### Backup policy
+
+Configure automated backups for disaster recovery. A daily backup with 7-day retention is a reasonable default. See the [Bigtable backup documentation](https://cloud.google.com/bigtable/docs/backups) for setup instructions.
+
+## Indexer setup
+
+The indexer (`sui-kvstore-alt`) reads checkpoints from the remote checkpoint store and writes data to Bigtable through 12 parallel pipelines.
+
+#### Hardware requirements
+
+**Steady-state (at network tip):**
+
+- **CPU:** 1 core per instance (conservative — observed usage is ~0.1-0.2 cores)
+- **Memory:** 1 GB per instance (conservative — observed usage is ~50 MB)
+
+**Backfill:**
+
+- **CPU:** 16 cores
+- **Memory:** 32 GB
+
+### Run `sui-kvstore-alt`
+
+```sh
+sui-kvstore-alt \
+    --config <CONFIG_FILE> \
+    --chain <CHAIN> \
+    <INSTANCE_ID> \
+    --remote-store-gcs <REMOTE_STORE_GCS_BUCKET>
+```
+
+| CLI parameter | Required | Description |
+|---------------|----------|-------------|
+| `--config` | No | Path to TOML configuration file. If omitted, framework defaults are used. See [Indexer configuration](#indexer-configuration). |
+| `<INSTANCE_ID>` | Yes | Bigtable instance ID. |
+| `--chain` | Yes | Chain identifier: `mainnet`, `testnet`, or `unknown`. |
+| `--remote-store-gcs` | One source required | GCS bucket name to fetch checkpoints from (recommended for backfill). Mutually exclusive with other source flags. |
+| `--remote-store-url` | One source required | HTTPS URL of the remote checkpoint store (alternative to `--remote-store-gcs`). Mutually exclusive with other source flags. |
+| `--rpc-api-url` | One source required | Fullnode gRPC URL to fetch checkpoints from (for steady-state). Mutually exclusive with other source flags. |
+| `--streaming-url` | No | Fullnode gRPC URL for streaming live checkpoints. Used alongside `--rpc-api-url` for lowest latency at the network tip. |
+| `--bigtable-project` | No | GCP project ID. Defaults to the project associated with the service account credentials. |
+| `--app-profile-id` | No | Bigtable app profile ID for routing. |
+| `--write-legacy-data` | No | Do not set this. Enable writing deprecated data formats. |
+| `--first-checkpoint` | No | Checkpoint to start indexing from. Defaults to 0 (genesis). |
+| `--last-checkpoint` | No | Checkpoint to stop indexing at. Useful for bounded backfill jobs. |
+| `--metrics-address` | No | Prometheus metrics bind address. Default: `0.0.0.0:9184`. |
+
+#### Example (backfill from GCS bucket)
+
+```sh
+sui-kvstore-alt \
+    --config kvstore.toml \
+    --chain mainnet \
+    my-bigtable-instance \
+    --remote-store-gcs mysten-mainnet-checkpoints
+```
+
+#### Example (steady-state from fullnode)
+
+```sh
+sui-kvstore-alt \
+    --chain mainnet \
+    my-bigtable-instance \
+    --rpc-api-url http://my-fullnode:9000 \
+    --streaming-url http://my-fullnode:9000
+```
+
+### Indexer configuration {#indexer-configuration}
+
+The indexer accepts an optional TOML configuration file via `--config`. For tip-of-chain indexing, the framework defaults are a good starting point and you can omit the flag entirely. Configuration tuning is primarily needed during [backfill](#backfill-rate-limit-sizing).
+
+#### Top-level options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `total-max-rows-per-second` | unlimited | Global rate limit shared across all pipelines (rows/sec). Set this during backfill to avoid overwhelming Bigtable. |
+| `max-rows-per-second` | unlimited | Default per-pipeline rate limit (rows/sec). Both this and `total-max-rows-per-second` are enforced, so you can use per-pipeline limits to prevent one pipeline from starving others. In practice this is not been needed and you can omit it. |
+| `bigtable-connection-pool-size` | 10 | Number of gRPC channels in the Bigtable connection pool. Rule of thumb: 2x your Bigtable node count. |
+| `bigtable-channel-timeout-ms` | 60000 | Channel-level timeout for Bigtable gRPC calls (ms). |
+
+#### Committer settings (`[committer]`)
+
+These control how each pipeline flushes data to Bigtable. Set at the top level to apply to all pipelines, or per-pipeline to override (see below).
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `write-concurrency` | 5 | Number of concurrent write tasks per pipeline. Increase for high-throughput pipelines during backfill. |
+| `collect-interval-ms` | 500 | How often to flush buffered rows (ms). |
+| `watermark-interval-ms` | 500 | How often to update the pipeline watermark (ms). |
+
+#### Per-pipeline overrides (`[pipeline.<name>]`)
+
+Each of the 12 pipelines can override the global settings. Use `[pipeline.<name>]` for pipeline-level options and `[pipeline.<name>.committer]` for committer overrides:
+
+```toml
+[pipeline.objects]
+max-rows-per-second = 50000
+
+[pipeline.objects.committer]
+write-concurrency = 40
+```
+
+| Option | Description |
+|--------|-------------|
+| `max-rows` | Maximum rows per Bigtable batch for this pipeline. |
+| `max-rows-per-second` | Per-pipeline rate limit, overriding the global `max-rows-per-second`. |
+| `committer.*` | Any committer field (`write-concurrency`, `collect-interval-ms`, `watermark-interval-ms`) can be set per pipeline. |
+
+For recommended backfill configuration for a 15-node cluster, see [Backfill rate limit sizing](#backfill-rate-limit-sizing).
+
+Additional advanced options (channel sizes, fanout concurrency, backpressure thresholds, ingestion settings) are available but rarely need tuning. See [Pipeline architecture — Performance tuning](/concepts/data-access/pipeline-architecture#performance-tuning) for the full reference.
+
+### Pipelines
+
+The indexer runs 12 pipelines in parallel. All pipelines are required for full archival service functionality:
+
+| Pipeline | Target table | Description |
+|----------|-------------|-------------|
+| `kvstore_checkpoints` | `checkpoints` | Checkpoint summaries, signatures, and contents. |
+| `kvstore_checkpoints_by_digest` | `checkpoints_by_digest` | Checkpoint digest-to-sequence-number mapping. |
+| `kvstore_transactions` | `transactions` | Transactions with effects, events, and balance changes. |
+| `kvstore_objects` | `objects` | Object data for each output object at each version. |
+| `kvstore_epochs_start` | `epochs` | Epoch start data including system state and gas price. |
+| `kvstore_epochs_end` | `epochs` | Epoch end data. |
+| `kvstore_protocol_configs` | `protocol_configs` | Protocol configuration snapshots per epoch. |
+| `kvstore_epoch_legacy` | `epochs` | Legacy epoch data format (requires `--write-legacy-data`). |
+| `kvstore_packages` | `packages` | Package metadata keyed by original package ID and version. |
+| `kvstore_packages_by_id` | `packages_by_id` | Package lookup by package ID. |
+| `kvstore_packages_by_checkpoint` | `packages_by_checkpoint` | Packages published in each checkpoint. |
+| `kvstore_system_packages` | `system_packages` | System package data. |
+
+### Backfill
+
+To index from genesis, start the indexer without `--first-checkpoint`. A full mainnet backfill takes approximately **2–3 days** with a 15-node SSD cluster and a 16 CPU indexer.
+
+For backfill, use a single indexer instance — one instance can generate enough load to fully saturate a 15-node cluster. The 16 CPU / 15-node configuration is the largest scale Mysten Labs has tested. Larger instance types and cluster sizes may work but could hit software bottlenecks that have not been identified yet.
+
+#### Recommended backfill strategy
+
+1. **Scale up** the Bigtable cluster to 15 nodes before starting the backfill.
+2. **Run one indexer instance** on a larger machine (16 CPU / 32 GB RAM) with aggressive rate limits (~150,000 rows/sec), using the checkpoint bucket as the data source.
+3. Once the backfill catches up to the network tip, **switch to steady-state** (see [Steady-state operation](#steady-state-operation) below).
+4. **Scale down** the Bigtable cluster to 5 nodes.
+
+From there, monitor cluster CPU utilization and scale nodes as needed — either with Bigtable autoscaling or by monitoring and scaling manually.
+
+#### Backfill rate limit sizing {#backfill-rate-limit-sizing}
+
+The rate limit you set in the TOML configuration should be based on your Bigtable cluster size. As a rule of thumb, each Bigtable SSD node can sustain approximately **111 rows/sec per 1% CPU utilization**. Google recommends targeting:
+
+- **90% CPU** for write-only backfill (no concurrent read traffic)
+- **60% CPU** if the cluster is also serving reads during backfill
+
+| Scenario | Target CPU | Rows/sec per node | 5 nodes | 10 nodes | 15 nodes |
+|----------|-----------|-------------------|---------|----------|----------|
+| Write-only backfill | 90% | ~10,000 | ~50,000 | ~100,000 | ~150,000 |
+| Backfill while serving reads | 60% | ~6,700 | ~33,500 | ~67,000 | ~100,000 |
+
+These numbers are a guideline. For new write-only clusters being backfilled, you can set the rate limit to the table values above. For clusters that are already serving read traffic, start lower, monitor CPU utilization, and increase the rate limit gradually.
+
+Set `total-max-rows-per-second` in your TOML config accordingly. Save the following as your backfill config file (e.g. `backfill.toml`) and pass it via `--config backfill.toml`. This example targets a 15-node write-only backfill:
+
+```toml title="backfill.toml"
+total-max-rows-per-second = 150000
+bigtable-connection-pool-size = 30
+
+[pipeline.objects.committer]
+write-concurrency = 40
+
+[pipeline.transactions.committer]
+write-concurrency = 20
+
+[pipeline.checkpoints.committer]
+write-concurrency = 10
+
+[pipeline.checkpoints_by_digest.committer]
+write-concurrency = 10
+```
+
+The default `write-concurrency` is 5, which is sufficient for the smaller pipelines. Only the high-throughput pipelines (`objects`, `transactions`, `checkpoints`, `checkpoints_by_digest`) need higher concurrency during backfill.
+
+#### Checkpoint-range sharding
+
+You can parallelize backfill across multiple indexer instances by splitting the checkpoint range using `--first-checkpoint` and `--last-checkpoint`. Each instance processes a different range independently.
+
+### Steady-state operation {#steady-state-operation}
+
+Once the backfill is complete and the indexer has caught up to the network tip, switch from the checkpoint bucket to streaming from a fullnode for the best latency. Replace `--remote-store-url` with `--rpc-api-url` and `--streaming-url` pointing to your fullnode's gRPC endpoint:
+
+```sh
+sui-kvstore-alt \
+    --chain mainnet \
+    my-bigtable-instance \
+    --rpc-api-url http://my-fullnode:9000 \
+    --streaming-url http://my-fullnode:9000
+```
+
+No `--config` is needed — the framework defaults are sufficient for steady-state indexing. The fullnode only needs gRPC enabled — JSON-RPC is not required. Mysten Labs runs fullnodes with a 2-week retention period and only uses the checkpoint bucket for backfills.
+
+If you want to set a rate limit at steady state, there is a tradeoff to consider. Write throughput is naturally bounded by the chain, but if the indexer crashes and needs to catch up, it will ingest as fast as possible from the fullnode. Without a rate limit it catches up faster but may briefly impact read latency while writing older data. With a rate limit, read latency stays stable but recovery takes longer.
+
+:::info
+
+Mysten Labs plans to enable requester-pays on the public checkpoint buckets in the future. Streaming from your own fullnode avoids these costs.
+
+:::
+
+#### Running multiple instances
+
+Bigtable writes are idempotent, so multiple indexer instances can safely process the same data. Mysten Labs runs **3 indexer instances** at steady state to enable rolling deployments without ever delaying updates from the chain.
+
+During backfill, a single instance is sufficient — one instance can saturate a 15-node cluster.
+
+## Archival Service setup
+
+The archival service (`sui-kv-rpc`) is a gRPC server that reads from Bigtable and exposes the [`LedgerService`](/references/fullnode-protocol) API.
+
+Resource requirements depend on your read traffic. Monitor CPU and memory utilization and scale accordingly.
+
+### Run `sui-kv-rpc`
+
+```sh
+sui-kv-rpc \
+    <INSTANCE_ID> \
+    <ADDRESS>
+```
+
+| CLI parameter | Required | Description |
+|---------------|----------|-------------|
+| `<INSTANCE_ID>` | Yes | Bigtable instance ID. |
+| `<ADDRESS>` | No | gRPC listen address. Default: `[::1]:8000`. |
+| `--credentials` | No | Path to GCP service account JSON key file. If not provided, uses [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials). |
+| `--tls-cert` | No | Path to TLS certificate PEM file. |
+| `--tls-key` | No | Path to TLS private key PEM file. |
+| `--bigtable-project` | No | GCP project ID. Defaults to the project associated with the service account credentials. |
+| `--app-profile-id` | No | Bigtable app profile ID. |
+| `--checkpoint-bucket` | No | GCS bucket for full checkpoint data (enables richer checkpoint responses). |
+| `--bigtable-channel-timeout-ms` | No | Channel-level timeout for Bigtable gRPC calls in milliseconds. Default: 60000. |
+
+#### Example
+
+```sh
+sui-kv-rpc \
+    my-bigtable-instance \
+    "[::]:8000" \
+    --credentials /etc/sui-kv-rpc/bigtable-ro-sa.json \
+    --tls-cert /secrets/cert.pem \
+    --tls-key /secrets/key.pem
+```
+
+### gRPC API
+
+The archival service implements the [`LedgerService`](/references/fullnode-protocol) gRPC API, which is the same API exposed by Sui full nodes. Existing gRPC clients can query the archival service by changing the endpoint URL.
+
+| Method | Description | Batch limit |
+|--------|-------------|-------------|
+| `GetServiceInfo` | Returns chain ID, current epoch, latest checkpoint, and server version. | — |
+| `GetObject` | Look up an object by ID, optionally at a specific version. | — |
+| `BatchGetObjects` | Batch object lookup. Requires exact versions. | 1000 |
+| `GetTransaction` | Look up a transaction by digest. | — |
+| `BatchGetTransactions` | Batch transaction lookup. | 200 |
+| `GetCheckpoint` | Look up a checkpoint by sequence number or digest. | — |
+| `GetEpoch` | Look up epoch data by epoch number. | — |
+
+All methods support field masking via the `read_mask` parameter to reduce response size.
+
+gRPC server reflection is enabled (both v1 and v1alpha), allowing tools like `grpcurl` and Postman to discover the API schema.
+
+### Health check
+
+The service exposes an HTTP health check endpoint at `GET /health` on port 8081.
+
+### TLS
+
+For production deployments, enable TLS by providing `--tls-cert` and `--tls-key`. The service expects PEM-encoded certificate and private key files.
+
+## Monitoring
+
+Both the indexer and archival service export Prometheus metrics on port 9184 at `/metrics`.
+
+The indexer uses the same [indexer framework metrics](/concepts/data-access/indexer-runtime-perf) as the general-purpose Postgres indexer (ingestion, pipeline, watermark, and commit metrics), with a `kvstore_alt_` prefix and pipeline-specific labels. If you already operate the Postgres indexer stack, the same dashboards and alerts apply.
+
+### Prometheus scrape configuration
+
+```yaml
+scrape_configs:
+  - job_name: sui-kvstore
+    static_configs:
+      - targets: ['<INDEXER_HOST>:9184']
+  - job_name: sui-kv-rpc
+    static_configs:
+      - targets: ['<RPC_HOST>:9184']
+```
+
+### Archival service metrics
+
+The archival service exports the following metrics:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `rpc_request_latency` | histogram | End-to-end request latency. |
+| `rpc_requests` | counter | Request count, labeled by `status`. |
+| `rpc_inflight_requests` | gauge | Concurrent requests in flight, labeled by `path`. |
+| `kv_get_latency_ms` | histogram | Bigtable read latency per batch request, labeled by `table`. |
+| `kv_get_latency_ms_per_key` | histogram | Bigtable read latency divided by batch size, labeled by `table`. |
+| `kv_scan_latency_ms` | histogram | Bigtable scan latency, labeled by `table`. |
+| `kv_bt_chunk_latency_ms` | histogram | Bigtable internal processing time per response chunk, labeled by `table`. |
+| `kv_get_success` | counter | Successful Bigtable reads, labeled by `table`. |
+| `kv_scan_success` | counter | Successful Bigtable scans, labeled by `table`. |
+| `thread_stall_duration_sec` | histogram | Tokio thread stall duration. |
+
+### Recommended log levels
+
+| Environment | `RUST_LOG` |
+|-------------|-----------|
+| Production | `info` |
+| Debugging | `info,sui_kvstore=debug,sui_indexer_alt_framework=debug` |
+
+## Related links
+
+<RelatedLink to="/concepts/data-access/archival-store" />
+<RelatedLink to="/concepts/data-access/grpc" />
+<RelatedLink to="/concepts/data-access/data-serving" />
+<RelatedLink to="/guides/operator/indexer-stack-setup" />
+<RelatedLink
+ href="https://github.com/MystenLabs/sui/tree/main/crates/sui-kvstore"
+ label="sui-kvstore"
+ desc="The sui-kvstore indexer crate in the Sui repo."
+/>
+<RelatedLink
+ href="https://github.com/MystenLabs/sui/tree/main/crates/sui-kv-rpc"
+ label="sui-kv-rpc"
+ desc="The archival gRPC service crate in the Sui repo."
+/>

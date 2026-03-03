@@ -24,9 +24,9 @@ use tracing::info;
 #[command(name = "sui-kvstore-alt")]
 #[command(about = "KVStore indexer using sui-indexer-alt-framework")]
 struct Args {
-    /// Path to TOML config file
+    /// Path to TOML config file. If not provided, defaults are used.
     #[arg(long)]
-    config: PathBuf,
+    config: Option<PathBuf>,
 
     /// BigTable instance ID
     instance_id: String,
@@ -74,8 +74,12 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let config_contents = tokio::fs::read_to_string(&args.config).await?;
-    let config: IndexerConfig = toml::from_str(&config_contents)?;
+    let config: IndexerConfig = if let Some(config_path) = &args.config {
+        let config_contents = tokio::fs::read_to_string(config_path).await?;
+        toml::from_str(&config_contents)?
+    } else {
+        IndexerConfig::default()
+    };
 
     let is_bounded = args.indexer_args.last_checkpoint.is_some();
     set_write_legacy_data(args.write_legacy_data);
