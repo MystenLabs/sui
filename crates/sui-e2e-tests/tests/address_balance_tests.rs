@@ -17,7 +17,8 @@ use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::FundSource;
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_root::AccumulatorValue,
     balance::Balance,
     base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr},
@@ -28,8 +29,8 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
-        Argument, CallArg, Command, FundsWithdrawalArg, GasData, ObjectArg, Transaction,
-        TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
+        Argument, CallArg, Command, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability,
+        Transaction, TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
         TransactionKind, VerifiedTransaction,
     },
 };
@@ -3367,6 +3368,244 @@ async fn test_address_balance_gas_pay_all_sui() {
     );
 
     test_env.verify_accumulator_exists(sender, 10_000_000);
+}
+
+/// Test that transactions with address balance gas require replay protection.
+/// Replay protection can come from:
+/// - Single-epoch ValidDuring (max_epoch = min_epoch + 1)
+/// - Owned input objects
+/// - Coin reservations
+///
+/// Note: Transactions must have at least one input object, so we use the Clock
+/// (an immutable shared object) as input for "stateless" test cases.
+#[sim_test]
+async fn test_replay_protection_validation() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    test_env.fund_one_address_balance(sender, 100_000_000).await;
+
+    let current_epoch = test_env
+        .cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().load_epoch_store_one_call_per_task().epoch());
+    let rgp = test_env.rgp;
+    let chain_id = test_env.chain_id;
+
+    // Creates a transaction with Clock input (immutable, no replay protection)
+    fn create_clock_read_tx(
+        sender: SuiAddress,
+        rgp: u64,
+        expiration: TransactionExpiration,
+    ) -> TransactionData {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                mutability: SharedObjectMutability::Immutable,
+            })
+            .unwrap();
+        let pt = builder.finish();
+
+        TransactionData::V1(TransactionDataV1 {
+            kind: TransactionKind::ProgrammableTransaction(pt),
+            sender,
+            gas_data: GasData {
+                payment: vec![],
+                owner: sender,
+                price: rgp,
+                budget: 10_000_000,
+            },
+            expiration,
+        })
+    }
+
+    // Case 1: Clock input + no expiration - should fail (no replay protection)
+    {
+        let tx = create_clock_read_tx(sender, rgp, TransactionExpiration::None);
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+        assert!(err.to_string().contains("address-owned inputs"));
+    }
+
+    // Case 2: Clock input + Epoch expiration - should fail (no replay protection)
+    {
+        let tx = create_clock_read_tx(
+            sender,
+            rgp,
+            TransactionExpiration::Epoch(current_epoch + 10),
+        );
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+        assert!(err.to_string().contains("address-owned inputs"));
+    }
+
+    // Case 3: Clock input + multi-epoch ValidDuring (5 epochs) - should fail
+    {
+        let tx = create_clock_read_tx(
+            sender,
+            rgp,
+            TransactionExpiration::ValidDuring {
+                min_epoch: Some(current_epoch),
+                max_epoch: Some(current_epoch + 5),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: chain_id,
+                nonce: 1,
+            },
+        );
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+        assert!(err.to_string().contains("address-owned inputs"));
+    }
+
+    // Case 4: Clock input + ValidDuring with max_epoch = min_epoch + 2 (boundary) - should fail
+    {
+        let tx = create_clock_read_tx(
+            sender,
+            rgp,
+            TransactionExpiration::ValidDuring {
+                min_epoch: Some(current_epoch),
+                max_epoch: Some(current_epoch + 2),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: chain_id,
+                nonce: 2,
+            },
+        );
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+        assert!(err.to_string().contains("address-owned inputs"));
+    }
+
+    // Case 5: Clock input + ValidDuring with min_epoch: None (unbounded start) - should fail
+    {
+        let tx = create_clock_read_tx(
+            sender,
+            rgp,
+            TransactionExpiration::ValidDuring {
+                min_epoch: None,
+                max_epoch: Some(current_epoch + 1),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: chain_id,
+                nonce: 3,
+            },
+        );
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+        assert!(err.to_string().contains("address-owned inputs"));
+    }
+
+    // Case 6: Clock input + ValidDuring with max_epoch: None (unbounded end) - should fail
+    {
+        let tx = create_clock_read_tx(
+            sender,
+            rgp,
+            TransactionExpiration::ValidDuring {
+                min_epoch: Some(current_epoch),
+                max_epoch: None,
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: chain_id,
+                nonce: 4,
+            },
+        );
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+        assert!(err.to_string().contains("address-owned inputs"));
+    }
+
+    // Case 7: Clock input + single-epoch ValidDuring - should SUCCEED
+    {
+        let tx = create_clock_read_tx(
+            sender,
+            rgp,
+            TransactionExpiration::ValidDuring {
+                min_epoch: Some(current_epoch),
+                max_epoch: Some(current_epoch + 1),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: chain_id,
+                nonce: 2,
+            },
+        );
+        let result = test_env.exec_tx_directly(tx).await;
+        assert!(
+            result.is_ok(),
+            "Single-epoch ValidDuring should provide replay protection: {:?}",
+            result.err()
+        );
+    }
+
+    // Case 8: Owned input provides replay protection - should SUCCEED
+    {
+        let (_, owned_object) = test_env.get_sender_and_gas(0);
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .obj(ObjectArg::ImmOrOwnedObject(owned_object))
+            .unwrap();
+        builder.transfer_arg(sender, Argument::Input(0));
+        let pt = builder.finish();
+
+        let tx = TransactionData::V1(TransactionDataV1 {
+            kind: TransactionKind::ProgrammableTransaction(pt),
+            sender,
+            gas_data: GasData {
+                payment: vec![],
+                owner: sender,
+                price: rgp,
+                budget: 10_000_000,
+            },
+            expiration: TransactionExpiration::None,
+        });
+
+        let result = test_env.exec_tx_directly(tx).await;
+        assert!(
+            result.is_ok(),
+            "Owned inputs should provide replay protection: {:?}",
+            result.err()
+        );
+    }
+
+    // Case 9: Gas coin in payment provides replay protection - should SUCCEED
+    {
+        let (_, gas_coin) = test_env.get_sender_and_gas(0);
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                mutability: SharedObjectMutability::Immutable,
+            })
+            .unwrap();
+        let pt = builder.finish();
+
+        let tx = TransactionData::V1(TransactionDataV1 {
+            kind: TransactionKind::ProgrammableTransaction(pt),
+            sender,
+            gas_data: GasData {
+                payment: vec![gas_coin],
+                owner: sender,
+                price: rgp,
+                budget: 10_000_000,
+            },
+            expiration: TransactionExpiration::None,
+        });
+
+        let result = test_env.exec_tx_directly(tx).await;
+        assert!(
+            result.is_ok(),
+            "Gas coins should provide replay protection: {:?}",
+            result.err()
+        );
+    }
 }
 
 /// Simulating a transaction with overflowing funds withdrawals must return an error.
