@@ -1658,7 +1658,7 @@ mod test {
 
         let auth_event_success_count: u64 = metrics
             .iter_stats()
-            .filter(|(op_set, _)| op_set.contains(AuthenticatedEventEmit::FLAG))
+            .filter(|(op_set, _)| op_set.contains(AuthenticatedEventEmit::NAME))
             .map(|(_, stats)| stats.success_count)
             .sum();
         info!(
