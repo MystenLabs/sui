@@ -1181,11 +1181,22 @@ fn test_peer_score_failure_tracking() {
 
 #[test]
 fn test_peer_heights_score_recording() {
-    use super::PeerHeights;
+    use super::{PeerHeights, PeerStateSyncInfo};
     use anemo::PeerId;
+    use sui_types::digests::CheckpointDigest;
+
+    let peer_id = PeerId([1; 32]);
 
     let mut peer_heights = PeerHeights {
-        peers: HashMap::new(),
+        peers: HashMap::from([(
+            peer_id,
+            PeerStateSyncInfo {
+                genesis_checkpoint_digest: CheckpointDigest::default(),
+                on_same_chain_as_us: true,
+                height: 0,
+                lowest: 0,
+            },
+        )]),
         unprocessed_checkpoints: HashMap::new(),
         sequence_number_to_digest: HashMap::new(),
         scores: HashMap::new(),
@@ -1196,8 +1207,6 @@ fn test_peer_heights_score_recording() {
         checkpoint_content_timeout_max: Duration::from_secs(30),
         exploration_probability: 0.1,
     };
-
-    let peer_id = PeerId([1; 32]);
 
     // Initially no throughput data and not failing
     assert!(peer_heights.get_throughput(&peer_id).is_none());
