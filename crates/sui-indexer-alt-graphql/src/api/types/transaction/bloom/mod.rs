@@ -26,9 +26,9 @@ use sui_sql_macro::query;
 use sui_types::base_types::ExecutionDigests;
 use sui_types::digests::TransactionDigest;
 
-use crate::api::types::event::CEvent;
+use crate::api::types::event::CScanEvent;
 use crate::api::types::event::Event;
-use crate::api::types::event::EventCursor;
+use crate::api::types::event::ScanEventCursor;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::transaction::CScanTransaction;
 use crate::api::types::transaction::ScanTransactionCursor;
@@ -50,6 +50,12 @@ impl CpBoundsCursor for CScanTransaction {
     }
 }
 
+impl CpBoundsCursor for CScanEvent {
+    fn cp_sequence_number(&self) -> u64 {
+        self.cp_sequence_number
+    }
+}
+
 pub(super) type TransactionsBySequenceNumbers =
     BTreeMap<ScanTransactionCursor, (TransactionDigest, TransactionContents)>;
 
@@ -61,7 +67,7 @@ pub(crate) async fn transactions(
 ) -> Result<TransactionsBySequenceNumbers, RpcError> {
     let kv_loader: &KvLoader = ctx.data()?;
 
-    let (cp_lo, cp_hi_inclusive) = cp_bounds_for_page(page, &cp_bounds);
+    let (cp_lo, cp_hi_inclusive) = clamped_cp_bounds(page, &cp_bounds);
     let filter_values = filter.bloom_probe_values();
     let candidate_cps = candidate_cps(ctx, &filter_values, cp_lo, cp_hi_inclusive, page).await?;
 
@@ -110,19 +116,19 @@ pub(crate) async fn transactions(
         .collect()
 }
 
-pub(super) type EventsBySequenceNumbers = BTreeMap<EventCursor, Event>;
+pub(super) type EventsBySequenceNumbers = BTreeMap<ScanEventCursor, Event>;
 
 /// The map of events that might match the filter criteria in `cp_bounds` checkpoints keyed by EventCursor.
 pub(crate) async fn events(
     ctx: &Context<'_>,
     scope: &Scope,
     filter: &EventFilter,
-    page: &Page<CEvent>,
+    page: &Page<CScanEvent>,
     cp_bounds: RangeInclusive<u64>,
 ) -> Result<EventsBySequenceNumbers, RpcError> {
     let kv_loader: &KvLoader = ctx.data()?;
 
-    let (cp_lo, cp_hi) = (*cp_bounds.start(), *cp_bounds.end());
+    let (cp_lo, cp_hi) = clamped_cp_bounds(page, &cp_bounds);
     let filter_values = filter.bloom_probe_values();
     let candidate_cps = candidate_cps(ctx, &filter_values, cp_lo, cp_hi, page).await?;
 
@@ -137,16 +143,19 @@ pub(crate) async fn events(
     let sequenced_tx_digests: Vec<_> = checkpoints
         .into_values()
         .flat_map(|(summary, content, _)| {
+            let cp_seq = summary.sequence_number;
             content
                 .enumerate_transactions(&summary)
-                .map(|(tx_seq, &ExecutionDigests { transaction, .. })| (tx_seq, transaction))
+                .map(move |(tx_seq, &ExecutionDigests { transaction, .. })| {
+                    (tx_seq, cp_seq, transaction)
+                })
                 .collect::<Vec<_>>()
         })
         .collect();
 
     let digests: Vec<_> = sequenced_tx_digests
         .iter()
-        .map(|(_, digest)| *digest)
+        .map(|(_, _, digest)| *digest)
         .collect();
     let events_by_digest: std::collections::HashMap<_, TransactionEventsContents> = kv_loader
         .load_many_transaction_events(digests)
@@ -154,7 +163,7 @@ pub(crate) async fn events(
         .context("Failed to load transaction events")?;
 
     let mut result = BTreeMap::new();
-    for (tx_sequence_number, transaction_digest) in sequenced_tx_digests {
+    for (tx_sequence_number, cp_sequence_number, transaction_digest) in sequenced_tx_digests {
         let contents = events_by_digest
             .get(&transaction_digest)
             .with_context(|| format!("Missing events for transaction {transaction_digest}"))?;
@@ -162,7 +171,8 @@ pub(crate) async fn events(
         for (idx, native) in contents.events()?.into_iter().enumerate() {
             let sequence_number = idx as u64;
             result.insert(
-                EventCursor {
+                ScanEventCursor {
+                    cp_sequence_number,
                     tx_sequence_number,
                     ev_sequence_number: sequence_number,
                 },
@@ -318,19 +328,6 @@ async fn candidate_cps<C>(
         .collect())
 }
 
-fn cp_bounds_for_page<C: CpBoundsCursor>(
-    page: &Page<C>,
-    cp_bounds: &RangeInclusive<u64>,
-) -> (u64, u64) {
-    let cp_lo = page.after().map_or(*cp_bounds.start(), |c| {
-        c.cp_sequence_number().max(*cp_bounds.start())
-    });
-    let cp_hi_inclusive = page.before().map_or(*cp_bounds.end(), |c| {
-        c.cp_sequence_number().min(*cp_bounds.end())
-    });
-    (cp_lo, cp_hi_inclusive)
-}
-
 /// SQL fragment that produces rows of probes (cp_block_index, bloom_block_index, byte_pos, bit_mask, bloom_count)
 /// using UNNEST. `bloom_count` is the number of distinct bloom_block_indices per cp_block_index,
 /// used in the HAVING clause to ensure all bloom blocks pass.
@@ -400,4 +397,17 @@ fn cp_bloom_check_sql(probe: &BloomProbe) -> Query<'static> {
         );
     }
     condition
+}
+
+fn clamped_cp_bounds<C: CpBoundsCursor>(
+    page: &Page<C>,
+    cp_bounds: &RangeInclusive<u64>,
+) -> (u64, u64) {
+    let cp_lo = page.after().map_or(*cp_bounds.start(), |c| {
+        c.cp_sequence_number().max(*cp_bounds.start())
+    });
+    let cp_hi_inclusive = page.before().map_or(*cp_bounds.end(), |c| {
+        c.cp_sequence_number().min(*cp_bounds.end())
+    });
+    (cp_lo, cp_hi_inclusive)
 }

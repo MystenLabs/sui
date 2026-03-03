@@ -34,6 +34,7 @@ use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::epoch::CEpoch;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
+use crate::api::types::event::CScanEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::event::filter::EventFilterValidator as EFValidator;
@@ -319,9 +320,9 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<CEvent>,
+        after: Option<CScanEvent>,
         last: Option<u64>,
-        before: Option<CEvent>,
+        before: Option<CScanEvent>,
         #[graphql(validator(custom = "ScanFilterValidator::new(ctx)"))] filter: EventFilter,
     ) -> Result<Option<Connection<String, Event>>, RpcError> {
         let scope = self.scope(ctx)?;

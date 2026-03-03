@@ -101,21 +101,24 @@ module P2::M2 {
 # Scan vs indexed cross-check, multi-filter combinations, empty-result edge cases,
 # checkpoint-bounded scan, and scan across bloom blocks.
 {
-  scanEventsA: scanEvents(filter: { sender: "@{A}" }) { ...EV }
+  scanEventsA: scanEvents(filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
   paginateEventsA: events(filter: { sender: "@{A}" }) { ...EV }
 
   eventsAFromP1: scanEvents(filter: {
     sender: "@{A}",
-    module: "@{P1}"
+    module: "@{P1}",
+    beforeCheckpoint: 10510
   }) { ...EV }
   scanTripleFilter: scanEvents(filter: {
     sender: "@{A}",
     module: "@{P1}",
-    type: "@{P1}::M1::EventA"
+    type: "@{P1}::M1::EventA",
+    beforeCheckpoint: 10510
   }) { ...EV }
 
   emptyNonExistent: scanEvents(filter: {
-    sender: "0x0000000000000000000000000000000000000000000000000000000000000001"
+    sender: "0x0000000000000000000000000000000000000000000000000000000000000001",
+    beforeCheckpoint: 10510
   }) { ...EV }
 
   earlyEvents: scanEvents(filter: {
@@ -144,20 +147,20 @@ fragment EV on EventConnection {
   edges { cursor node { sequenceNumber sender { address } contents { type { repr } } } }
 }
 
-//# run-graphql --cursors {"t":3,"e":0} {"t":7,"e":0} {"t":7,"e":2} {"t":20,"e":0}
+//# run-graphql --cursors {"c":1,"t":3,"e":0} {"c":5,"t":7,"e":0} {"c":5,"t":7,"e":2} {"c":20,"t":20,"e":0}
 # Cursor pagination: cursor_0 is cp1 event (t=3,e=0),
 # cursor_1 is cp5 first event (t=7,e=0), cursor_2 is cp5 last event (t=7,e=2).
 {
-  first2: scanEvents(first: 2, filter: { sender: "@{A}" }) { ...EV }
-  last2: scanEvents(last: 2, filter: { sender: "@{A}" }) { ...EV }
+  first2: scanEvents(first: 2, filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
+  last2: scanEvents(last: 2, filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
 
-  firstAfter: scanEvents(first: 10, after: "@{cursor_0}", filter: { sender: "@{A}" }) { ...EV }
-  firstBefore: scanEvents(first: 10, before: "@{cursor_2}", filter: { sender: "@{A}" }) { ...EV }
+  firstAfter: scanEvents(first: 10, after: "@{cursor_0}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
+  firstBefore: scanEvents(first: 10, before: "@{cursor_2}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
 
-  windowFirst: scanEvents(first: 10, after: "@{cursor_0}", before: "@{cursor_2}", filter: { sender: "@{A}" }) { ...EV }
+  windowFirst: scanEvents(first: 10, after: "@{cursor_0}", before: "@{cursor_2}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
 
-  nonexistentCursor: scanEvents(last: 10, after: "@{cursor_3}", filter: { sender: "@{A}" }) { ...EV }
-  invalidOrder: scanEvents(first: 10, after: "@{cursor_2}", before: "@{cursor_0}", filter: { sender: "@{A}" }) { ...EV }
+  nonexistentCursor: scanEvents(last: 10, after: "@{cursor_3}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
+  invalidOrder: scanEvents(first: 10, after: "@{cursor_2}", before: "@{cursor_0}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
 }
 
 fragment EV on EventConnection {

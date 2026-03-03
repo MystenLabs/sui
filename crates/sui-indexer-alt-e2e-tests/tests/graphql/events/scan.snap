@@ -87,20 +87,20 @@ task 16, line 98:
 //# create-checkpoint
 Checkpoint created: 10508
 
-task 17, lines 100-145:
+task 17, lines 100-148:
 //# run-graphql
 Response: {
   "data": {
     "scanEventsA": {
       "pageInfo": {
-        "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoyfQ==",
+        "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "eyJ0IjozLCJlIjowfQ==",
+          "cursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -114,7 +114,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo1LCJlIjowfQ==",
+          "cursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -128,7 +128,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjowfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -142,7 +142,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoxfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
           "node": {
             "sequenceNumber": 1,
             "sender": {
@@ -156,7 +156,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoyfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
           "node": {
             "sequenceNumber": 2,
             "sender": {
@@ -253,14 +253,14 @@ Response: {
     },
     "eventsAFromP1": {
       "pageInfo": {
-        "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoyfQ==",
+        "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "eyJ0IjozLCJlIjowfQ==",
+          "cursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -274,7 +274,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjowfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -288,7 +288,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoxfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
           "node": {
             "sequenceNumber": 1,
             "sender": {
@@ -302,7 +302,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoyfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
           "node": {
             "sequenceNumber": 2,
             "sender": {
@@ -319,14 +319,14 @@ Response: {
     },
     "scanTripleFilter": {
       "pageInfo": {
-        "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoyfQ==",
+        "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "eyJ0IjozLCJlIjowfQ==",
+          "cursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -340,7 +340,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjowfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -354,7 +354,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoxfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
           "node": {
             "sequenceNumber": 1,
             "sender": {
@@ -368,7 +368,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoyfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
           "node": {
             "sequenceNumber": 2,
             "sender": {
@@ -394,14 +394,14 @@ Response: {
     },
     "earlyEvents": {
       "pageInfo": {
-        "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo1LCJlIjowfQ==",
+        "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
+        "endCursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "eyJ0IjozLCJlIjowfQ==",
+          "cursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -415,7 +415,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo1LCJlIjowfQ==",
+          "cursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -432,14 +432,14 @@ Response: {
     },
     "atCheckpoint5": {
       "pageInfo": {
-        "startCursor": "eyJ0Ijo3LCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoyfQ==",
+        "startCursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "eyJ0Ijo3LCJlIjowfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -453,7 +453,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoxfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
           "node": {
             "sequenceNumber": 1,
             "sender": {
@@ -467,7 +467,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoyfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
           "node": {
             "sequenceNumber": 2,
             "sender": {
@@ -484,14 +484,14 @@ Response: {
     },
     "noFilter": {
       "pageInfo": {
-        "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjowfQ==",
+        "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
       "edges": [
         {
-          "cursor": "eyJ0IjozLCJlIjowfQ==",
+          "cursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -505,7 +505,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo0LCJlIjowfQ==",
+          "cursor": "eyJjIjoyLCJ0Ijo0LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -519,7 +519,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo1LCJlIjowfQ==",
+          "cursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -533,7 +533,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo2LCJlIjowfQ==",
+          "cursor": "eyJjIjo0LCJ0Ijo2LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -547,7 +547,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjowfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -564,14 +564,14 @@ Response: {
     },
     "scanAcrossBlocks": {
       "pageInfo": {
-        "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoyfQ==",
+        "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "eyJ0IjozLCJlIjowfQ==",
+          "cursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -585,7 +585,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo1LCJlIjowfQ==",
+          "cursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -599,7 +599,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjowfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -613,7 +613,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoxfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
           "node": {
             "sequenceNumber": 1,
             "sender": {
@@ -627,7 +627,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoyfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
           "node": {
             "sequenceNumber": 2,
             "sender": {
@@ -645,20 +645,20 @@ Response: {
   }
 }
 
-task 18, lines 147-166:
-//# run-graphql --cursors {"t":3,"e":0} {"t":7,"e":0} {"t":7,"e":2} {"t":20,"e":0}
+task 18, lines 150-169:
+//# run-graphql --cursors {"c":1,"t":3,"e":0} {"c":5,"t":7,"e":0} {"c":5,"t":7,"e":2} {"c":20,"t":20,"e":0}
 Response: {
   "data": {
     "first2": {
       "pageInfo": {
-        "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo1LCJlIjowfQ==",
+        "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
+        "endCursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
       "edges": [
         {
-          "cursor": "eyJ0IjozLCJlIjowfQ==",
+          "cursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -672,7 +672,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo1LCJlIjowfQ==",
+          "cursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -689,14 +689,14 @@ Response: {
     },
     "last2": {
       "pageInfo": {
-        "startCursor": "eyJ0Ijo3LCJlIjoxfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoyfQ==",
+        "startCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
         "hasPreviousPage": true,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "eyJ0Ijo3LCJlIjoxfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
           "node": {
             "sequenceNumber": 1,
             "sender": {
@@ -710,7 +710,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoyfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
           "node": {
             "sequenceNumber": 2,
             "sender": {
@@ -727,14 +727,14 @@ Response: {
     },
     "firstAfter": {
       "pageInfo": {
-        "startCursor": "eyJ0Ijo1LCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoyfQ==",
+        "startCursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
         "hasPreviousPage": true,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "eyJ0Ijo1LCJlIjowfQ==",
+          "cursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -748,7 +748,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjowfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -762,7 +762,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoxfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
           "node": {
             "sequenceNumber": 1,
             "sender": {
@@ -776,7 +776,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoyfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
           "node": {
             "sequenceNumber": 2,
             "sender": {
@@ -793,14 +793,14 @@ Response: {
     },
     "firstBefore": {
       "pageInfo": {
-        "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoxfQ==",
+        "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
       "edges": [
         {
-          "cursor": "eyJ0IjozLCJlIjowfQ==",
+          "cursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -814,7 +814,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo1LCJlIjowfQ==",
+          "cursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -828,7 +828,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjowfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -842,7 +842,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoxfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
           "node": {
             "sequenceNumber": 1,
             "sender": {
@@ -859,14 +859,14 @@ Response: {
     },
     "windowFirst": {
       "pageInfo": {
-        "startCursor": "eyJ0Ijo1LCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoxfQ==",
+        "startCursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
+        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
       "edges": [
         {
-          "cursor": "eyJ0Ijo1LCJlIjowfQ==",
+          "cursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -880,7 +880,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjowfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjowfQ==",
           "node": {
             "sequenceNumber": 0,
             "sender": {
@@ -894,7 +894,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0Ijo3LCJlIjoxfQ==",
+          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
           "node": {
             "sequenceNumber": 1,
             "sender": {
