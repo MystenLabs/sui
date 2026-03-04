@@ -11,7 +11,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiErrorKind, UserInputError};
-use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -81,10 +81,10 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
 
     assert_eq!(
         res.txn_result.as_ref().unwrap().status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::InsufficientCoinBalance,
             command: Some(0) // SplitCoins is the first command in the implementation of pay
-        },
+        }),
     );
 }
 
@@ -134,10 +134,10 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
     .await;
     assert_eq!(
         res.txn_result.as_ref().unwrap().status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::InsufficientCoinBalance,
             command: Some(0) // SplitCoins is the first command in the implementation of pay
-        },
+        }),
     );
 }
 

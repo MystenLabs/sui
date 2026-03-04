@@ -7,7 +7,9 @@ use crate::base_types::{
 };
 use crate::digests::{ObjectDigest, TransactionEventsDigest};
 use crate::effects::{InputConsensusObject, TransactionEffectsAPI, UnchangedConsensusKind};
-use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocation};
+use crate::execution_status::{
+    ExecutionFailure, ExecutionFailureStatus, ExecutionStatus, MoveLocation,
+};
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
 use serde::{Deserialize, Serialize};
@@ -155,10 +157,10 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn move_abort(&self) -> Option<(MoveLocation, u64)> {
-        let ExecutionStatus::Failure {
+        let ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::MoveAbort(move_location, code),
             ..
-        } = self.status()
+        }) = self.status()
         else {
             return None;
         };

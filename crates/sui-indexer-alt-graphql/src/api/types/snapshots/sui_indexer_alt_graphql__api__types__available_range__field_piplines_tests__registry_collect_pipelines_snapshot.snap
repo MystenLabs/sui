@@ -473,6 +473,15 @@ DynamicField.receivedTransactions
 DynamicField.value
   => {}
 
+Ed25519PublicKey.bytes
+  => {}
+
+Ed25519Signature.signature
+  => {}
+
+Ed25519Signature.publicKey
+  => {}
+
 EndOfEpochTransaction.transactions
   => {}
 
@@ -1097,6 +1106,9 @@ MoveType.abilities
 MoveValue.asAddress
   => {}
 
+MoveValue.asVector
+  => {}
+
 MoveValue.bcs
   => {}
 
@@ -1113,6 +1125,33 @@ MoveValue.json
   => {}
 
 MoveValue.type
+  => {}
+
+MultisigCommittee.members
+  => {}
+
+MultisigCommittee.threshold
+  => {}
+
+MultisigMember.publicKey
+  => {}
+
+MultisigMember.weight
+  => {}
+
+MultisigMemberSignature.scheme
+  => {}
+
+MultisigMemberSignature.signature
+  => {}
+
+MultisigSignature.signatures
+  => {}
+
+MultisigSignature.bitmap
+  => {}
+
+MultisigSignature.committee
   => {}
 
 MutateConsensusStreamEnded.address
@@ -1254,6 +1293,18 @@ PageInfo.startCursor
   => {}
 
 PageInfo.endCursor
+  => {}
+
+PasskeyPublicKey.bytes
+  => {}
+
+PasskeySignature.authenticatorData
+  => {}
+
+PasskeySignature.clientDataJson
+  => {}
+
+PasskeySignature.signature
   => {}
 
 PerEpochConfig.object
@@ -1449,6 +1500,24 @@ ReadConsensusStreamEnded.sequenceNumber
   => {}
 
 Receiving.object
+  => {}
+
+Secp256K1PublicKey.bytes
+  => {}
+
+Secp256K1Signature.signature
+  => {}
+
+Secp256K1Signature.publicKey
+  => {}
+
+Secp256R1PublicKey.bytes
+  => {}
+
+Secp256R1Signature.signature
+  => {}
+
+Secp256R1Signature.publicKey
   => {}
 
 ServiceConfig.mutationTimeoutMs
@@ -1664,6 +1733,9 @@ UpgradeCommand.upgradeTicket
 UserSignature.signatureBytes
   => {}
 
+UserSignature.scheme
+  => {}
+
 Validator.atRisk
   => {}
 
@@ -1692,6 +1764,18 @@ WithdrawMaxAmountU64.amount
   => {}
 
 WriteAccumulatorStorageCostTransaction._
+  => {}
+
+ZkLoginPublicIdentifier.iss
+  => {}
+
+ZkLoginPublicIdentifier.addressSeed
+  => {}
+
+ZkLoginSignature.maxEpoch
+  => {}
+
+ZkLoginSignature.signature
   => {}
 
 ZkLoginVerifyResult.success

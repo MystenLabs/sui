@@ -1388,6 +1388,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_display_dynamic_field_lookup_with_self_key() {
+        let registry = AccountAddress::from_str("0x1100").unwrap();
+        let bytes = bcs::to_bytes(&(registry, 7u64)).unwrap();
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![("registry", L::Address), ("nonce", L::U64)],
+        );
+
+        let store = MockStore::default().with_dynamic_field(
+            registry,
+            (registry, 7u64),
+            layout.clone(),
+            (123u64, 456u64),
+            struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
+        );
+
+        let formats = [
+            ("hit", "{registry->[$self].x}"),
+            ("miss", "{registry->[$self].z}"),
+        ];
+
+        let output = format(
+            store,
+            Limits::default(),
+            bytes,
+            layout,
+            usize::MAX,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "hit": Ok(
+                String("123"),
+            ),
+            "miss": Ok(
+                Null,
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_display_dynamic_object_fields() {
         let parent = AccountAddress::from_str("0x2000").unwrap();
         let child = AccountAddress::from_str("0x2001").unwrap();

@@ -21,6 +21,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::config::ConcurrencyConfig;
 use crate::ingestion::IngestionConfig;
 use crate::ingestion::error::Error;
 use crate::ingestion::ingestion_client::IngestionClient;
@@ -123,10 +124,11 @@ where
                 checkpoint_hi,
                 ingestion_end,
                 config.retry_interval(),
-                config.ingest_concurrency,
+                config.ingest_concurrency.clone(),
                 ingest_hi_rx.cloned(),
                 client.clone(),
                 subscribers.clone(),
+                metrics.clone(),
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -216,34 +218,38 @@ fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
     retry_interval: Duration,
-    ingest_concurrency: usize,
+    ingest_concurrency: ConcurrencyConfig,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     client: IngestionClient,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    metrics: Arc<IngestionMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
+        let report_metrics = metrics.clone();
         // Backpressure is enforced at the stream level: checkpoints are only yielded when
         // ingest_hi allows, preventing spawned tasks from piling up while blocked.
         backpressured_checkpoint_stream(start, end, ingest_hi_rx)
-            .try_for_each_spawned(ingest_concurrency, |cp| {
-                let client = client.clone();
-                let subscribers = subscribers.clone();
-
-                async move {
-                    // Fetch the checkpoint or stop if cancelled.
-                    let checkpoint = client.wait_for(cp, retry_interval).await?;
-
-                    // Send checkpoint to all subscribers.
-                    if send_checkpoint(checkpoint, &subscribers).await.is_ok() {
-                        debug!(checkpoint = cp, "Broadcasted checkpoint");
-                        Ok(())
-                    } else {
-                        // An error is returned meaning some subscriber channel has closed, which
-                        // we consider a shutdown signal for ingestion.
-                        Err(Break::Break)
+            .try_for_each_broadcast_spawned(
+                ingest_concurrency.into(),
+                |cp| {
+                    let client = client.clone();
+                    async move {
+                        // Fetch the checkpoint or stop if cancelled.
+                        let checkpoint = client.wait_for(cp, retry_interval).await?;
+                        debug!(checkpoint = cp, "Fetched checkpoint");
+                        Ok(checkpoint)
                     }
-                }
-            })
+                },
+                Arc::unwrap_or_clone(subscribers),
+                move |stats| {
+                    report_metrics
+                        .ingestion_concurrency_limit
+                        .set(stats.limit as i64);
+                    report_metrics
+                        .ingestion_concurrency_inflight
+                        .set(stats.inflight as i64);
+                },
+            )
             .await
     }))
 }
@@ -467,7 +473,7 @@ mod tests {
     fn test_config() -> IngestionConfig {
         IngestionConfig {
             checkpoint_buffer_size: 5,
-            ingest_concurrency: 2,
+            ingest_concurrency: ConcurrencyConfig::Fixed { value: 2 },
             retry_interval_ms: 100,
             streaming_backoff_initial_batch_size: 2,
             streaming_backoff_max_batch_size: 16,

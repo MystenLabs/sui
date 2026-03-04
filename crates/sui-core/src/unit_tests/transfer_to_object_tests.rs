@@ -10,7 +10,7 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{SuiError, SuiErrorKind, UserInputError},
     executable_transaction::VerifiedExecutableTransaction,
-    execution_status::{ExecutionFailureStatus, ExecutionStatus},
+    execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus},
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
@@ -989,10 +989,10 @@ async fn verify_tto_not_locked(
     assert!(invalid_effects.status().is_err());
     assert!(matches!(
         invalid_effects.status(),
-        ExecutionStatus::Failure {
+        ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::MoveAbort(_, _),
             ..
-        }
+        })
     ));
     (valid_effects, invalid_effects)
 }

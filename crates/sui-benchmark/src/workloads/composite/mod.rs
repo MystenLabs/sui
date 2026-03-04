@@ -7,17 +7,16 @@ use derive_more::Add;
 use mysten_common::random::get_rng;
 use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
-    ALIAS_ADD_FLAG, ALIAS_REMOVE_FLAG, ALIAS_TX_FLAG, ALL_OPERATIONS, AccumulatorBalanceRead,
+    ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AuthenticatedEventEmit,
-    INVALID_ALIAS_TX_FLAG, ObjectBalanceDeposit, ObjectBalanceWithdraw, OperationDescriptor,
-    RandomnessRead, SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit,
-    TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw, describe_flags,
+    INVALID_ALIAS_TX, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
+    OperationDescriptor, RandomnessRead, SharedCounterIncrement, SharedCounterRead,
+    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::composite::operations::ObjectBalanceOverdraw;
 use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER, Workload,
@@ -91,37 +90,39 @@ macro_rules! update_gas {
     }};
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OperationSet(u32);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OperationSet(Vec<&'static str>);
 
 impl OperationSet {
     pub fn new() -> Self {
-        Self(0)
+        Self(Vec::new())
     }
 
-    pub fn with(mut self, flag: u32) -> Self {
-        self.0 |= flag;
+    pub fn with(mut self, name: &'static str) -> Self {
+        if let Err(pos) = self.0.binary_search(&name) {
+            self.0.insert(pos, name);
+        }
         self
     }
 
-    pub fn contains(&self, flag: u32) -> bool {
-        (self.0 & flag) != 0
-    }
-
-    pub fn raw(&self) -> u32 {
-        self.0
+    pub fn contains(&self, name: &str) -> bool {
+        self.0.binary_search(&name).is_ok()
     }
 
     pub fn contains_shared_object_op(&self) -> bool {
-        self.contains(SharedCounterIncrement::FLAG) || self.contains(SharedCounterRead::FLAG)
+        self.contains(SharedCounterIncrement::NAME) || self.contains(SharedCounterRead::NAME)
     }
 
     pub fn contains_contentious_shared_object_op(&self) -> bool {
-        self.contains(SharedCounterIncrement::FLAG)
+        self.contains(SharedCounterIncrement::NAME)
     }
 
     pub fn describe(&self) -> String {
-        describe_flags(self.0)
+        if self.0.is_empty() {
+            "empty".to_string()
+        } else {
+            self.0.join(" + ")
+        }
     }
 }
 
@@ -145,7 +146,7 @@ pub struct OperationSetStats {
 
 #[derive(Debug, Default)]
 pub struct CompositionMetrics {
-    stats: std::collections::HashMap<u32, OperationSetStats>,
+    stats: HashMap<OperationSet, OperationSetStats>,
 }
 
 impl CompositionMetrics {
@@ -162,61 +163,55 @@ impl CompositionMetrics {
     }
 
     pub fn record_signed_and_sent(&mut self, op_set: OperationSet) {
-        self.stats
-            .entry(op_set.raw())
-            .or_default()
-            .signed_and_sent_count += 1;
+        self.stats.entry(op_set).or_default().signed_and_sent_count += 1;
     }
 
     pub fn record_success(&mut self, op_set: OperationSet) {
-        self.stats.entry(op_set.raw()).or_default().success_count += 1;
+        self.stats.entry(op_set).or_default().success_count += 1;
     }
 
     pub fn record_abort(&mut self, op_set: OperationSet) {
-        self.stats.entry(op_set.raw()).or_default().abort_count += 1;
+        self.stats.entry(op_set).or_default().abort_count += 1;
     }
 
     pub fn record_permanent_failure(&mut self, op_set: OperationSet) {
         self.stats
-            .entry(op_set.raw())
+            .entry(op_set)
             .or_default()
             .permanent_failure_count += 1;
     }
 
     pub fn record_retriable_failure(&mut self, op_set: OperationSet) {
         self.stats
-            .entry(op_set.raw())
+            .entry(op_set)
             .or_default()
             .retriable_failure_count += 1;
     }
 
     pub fn record_unknown_rejection(&mut self, op_set: OperationSet) {
         self.stats
-            .entry(op_set.raw())
+            .entry(op_set)
             .or_default()
             .unknown_rejection_count += 1;
     }
 
     pub fn record_cancellation(&mut self, op_set: OperationSet) {
-        self.stats
-            .entry(op_set.raw())
-            .or_default()
-            .cancellation_count += 1;
+        self.stats.entry(op_set).or_default().cancellation_count += 1;
     }
 
     pub fn record_insufficient_funds(&mut self, op_set: OperationSet) {
         self.stats
-            .entry(op_set.raw())
+            .entry(op_set)
             .or_default()
             .insufficient_funds_count += 1;
     }
 
-    pub fn get_stats(&self, op_set: OperationSet) -> Option<&OperationSetStats> {
-        self.stats.get(&op_set.raw())
+    pub fn get_stats(&self, op_set: &OperationSet) -> Option<&OperationSetStats> {
+        self.stats.get(op_set)
     }
 
-    pub fn cancellation_rate(&self, op_set: OperationSet) -> Option<f64> {
-        self.stats.get(&op_set.raw()).map(|s| {
+    pub fn cancellation_rate(&self, op_set: &OperationSet) -> Option<f64> {
+        self.stats.get(op_set).map(|s| {
             let total = s.success_count + s.abort_count + s.cancellation_count;
             if total == 0 {
                 0.0
@@ -226,9 +221,9 @@ impl CompositionMetrics {
         })
     }
 
-    pub fn total_transactions(&self, op_set: OperationSet) -> u64 {
+    pub fn total_transactions(&self, op_set: &OperationSet) -> u64 {
         self.stats
-            .get(&op_set.raw())
+            .get(op_set)
             .map(|s| s.success_count + s.abort_count + s.cancellation_count)
             .unwrap_or(0)
     }
@@ -268,7 +263,7 @@ impl CompositionMetrics {
     pub fn iter_stats(&self) -> impl Iterator<Item = (OperationSet, &OperationSetStats)> {
         self.stats
             .iter()
-            .map(|(raw, stats)| (OperationSet(*raw), stats))
+            .map(|(op_set, stats)| (op_set.clone(), stats))
     }
 }
 
@@ -276,7 +271,7 @@ const MAX_GAS_IN_UNIT: u64 = 1_000_000_000;
 
 #[derive(Debug, Clone)]
 pub struct CompositeWorkloadConfig {
-    pub probabilities: HashMap<u32, f32>,
+    pub probabilities: HashMap<&'static str, f32>,
     pub num_shared_counters: u64,
     pub shared_counter_hotness: f32,
     pub address_balance_amount: u64,
@@ -290,21 +285,21 @@ pub struct CompositeWorkloadConfig {
 impl CompositeWorkloadConfig {
     pub fn balanced() -> Self {
         let mut probabilities = HashMap::new();
-        probabilities.insert(SharedCounterIncrement::FLAG, 0.3);
-        probabilities.insert(SharedCounterRead::FLAG, 0.3);
-        probabilities.insert(RandomnessRead::FLAG, 0.2);
-        probabilities.insert(AddressBalanceDeposit::FLAG, 0.2);
-        probabilities.insert(AddressBalanceWithdraw::FLAG, 0.2);
-        probabilities.insert(ObjectBalanceDeposit::FLAG, 0.2);
-        probabilities.insert(ObjectBalanceWithdraw::FLAG, 0.2);
-        probabilities.insert(TestCoinMint::FLAG, 0.1);
-        probabilities.insert(TestCoinAddressDeposit::FLAG, 0.1);
-        probabilities.insert(TestCoinAddressWithdraw::FLAG, 0.1);
-        probabilities.insert(TestCoinObjectWithdraw::FLAG, 0.1);
-        probabilities.insert(AddressBalanceOverdraw::FLAG, 0.1);
-        probabilities.insert(AccumulatorBalanceRead::FLAG, 0.3);
-        probabilities.insert(ObjectBalanceOverdraw::FLAG, 0.1);
-        probabilities.insert(AuthenticatedEventEmit::FLAG, 0.1);
+        probabilities.insert(SharedCounterIncrement::NAME, 0.3);
+        probabilities.insert(SharedCounterRead::NAME, 0.3);
+        probabilities.insert(RandomnessRead::NAME, 0.2);
+        probabilities.insert(AddressBalanceDeposit::NAME, 0.2);
+        probabilities.insert(AddressBalanceWithdraw::NAME, 0.2);
+        probabilities.insert(ObjectBalanceDeposit::NAME, 0.2);
+        probabilities.insert(ObjectBalanceWithdraw::NAME, 0.2);
+        probabilities.insert(TestCoinMint::NAME, 0.1);
+        probabilities.insert(TestCoinAddressDeposit::NAME, 0.1);
+        probabilities.insert(TestCoinAddressWithdraw::NAME, 0.1);
+        probabilities.insert(TestCoinObjectWithdraw::NAME, 0.1);
+        probabilities.insert(AddressBalanceOverdraw::NAME, 0.1);
+        probabilities.insert(AccumulatorBalanceRead::NAME, 0.3);
+        probabilities.insert(ObjectBalanceOverdraw::NAME, 0.1);
+        probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -312,13 +307,13 @@ impl CompositeWorkloadConfig {
         }
     }
 
-    pub fn with_probability(mut self, flag: u32, prob: f32) -> Self {
-        self.probabilities.insert(flag, prob);
+    pub fn with_probability(mut self, name: &'static str, prob: f32) -> Self {
+        self.probabilities.insert(name, prob);
         self
     }
 
     pub fn probability_for(&self, desc: &OperationDescriptor) -> f32 {
-        self.probabilities.get(&desc.flag).copied().unwrap_or(0.0)
+        self.probabilities.get(desc.name).copied().unwrap_or(0.0)
     }
 
     pub fn sample_operations(&self) -> Vec<Box<dyn Operation>> {
@@ -473,7 +468,7 @@ enum BatchTxKind {
     InvalidPostRevocation,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct BatchTxInfo {
     gas_idx: usize,
     op_set: OperationSet,
@@ -564,7 +559,7 @@ impl CompositePayload {
                 });
             }
             if filter_authenticated_events {
-                ops.retain(|op| op.operation_flag() != AuthenticatedEventEmit::FLAG);
+                ops.retain(|op| op.name() != AuthenticatedEventEmit::NAME);
             }
             if !ops.is_empty() {
                 return ops;
@@ -582,9 +577,12 @@ impl CompositePayload {
 
         let mut op_set = OperationSet::new();
         for op in &ops {
-            op_set = op_set.with(op.operation_flag());
+            op_set = op_set.with(op.name());
         }
-        self.metrics.lock().unwrap().record_signed_and_sent(op_set);
+        self.metrics
+            .lock()
+            .unwrap()
+            .record_signed_and_sent(op_set.clone());
 
         let op_names: Vec<&str> = ops.iter().map(|op| op.name()).collect();
 
@@ -638,7 +636,7 @@ impl CompositePayload {
                 alias_state.cycle_state = AliasRevokeCycleState::RemovePending { tx_digest: None };
                 (
                     tx,
-                    OperationSet::new().with(ALIAS_REMOVE_FLAG),
+                    OperationSet::new().with(ALIAS_REMOVE),
                     BatchTxKind::AliasRemove,
                 )
             }
@@ -652,7 +650,7 @@ impl CompositePayload {
                 );
                 (
                     tx,
-                    OperationSet::new().with(ALIAS_TX_FLAG),
+                    OperationSet::new().with(ALIAS_TX),
                     BatchTxKind::AliasSigned,
                 )
             }
@@ -667,7 +665,7 @@ impl CompositePayload {
                 alias_state.cycle_state = AliasRevokeCycleState::InvalidPostRevocationTxPending;
                 (
                     tx,
-                    OperationSet::new().with(INVALID_ALIAS_TX_FLAG),
+                    OperationSet::new().with(INVALID_ALIAS_TX),
                     BatchTxKind::InvalidPostRevocation,
                 )
             }
@@ -691,14 +689,17 @@ impl CompositePayload {
                 alias_state.cycle_state = AliasRevokeCycleState::AddPending { tx_digest: None };
                 (
                     tx,
-                    OperationSet::new().with(ALIAS_ADD_FLAG),
+                    OperationSet::new().with(ALIAS_ADD),
                     BatchTxKind::AliasAdd,
                 )
             }
             _ => unreachable!("should not generate alias tx in pending state"),
         };
 
-        self.metrics.lock().unwrap().record_signed_and_sent(op_set);
+        self.metrics
+            .lock()
+            .unwrap()
+            .record_signed_and_sent(op_set.clone());
         (
             tx,
             BatchTxInfo {
@@ -992,7 +993,7 @@ impl Payload for CompositePayload {
 
         let mut gas = self.gas.lock().unwrap();
         for (i, result) in results.results.iter().enumerate() {
-            let tx_info = self.current_batch_txs[i];
+            let tx_info = &self.current_batch_txs[i];
             trace!("result: {}", result.description());
             assert!(
                 tx_info.gas_idx < gas.0.len(),
@@ -1015,19 +1016,19 @@ impl Payload for CompositePayload {
             match &result.status {
                 BatchedTransactionStatus::Success { effects } => {
                     if effects.is_cancelled() {
-                        metrics.record_cancellation(tx_info.op_set);
+                        metrics.record_cancellation(tx_info.op_set.clone());
                     } else if effects.is_insufficient_funds() {
-                        metrics.record_insufficient_funds(tx_info.op_set);
+                        metrics.record_insufficient_funds(tx_info.op_set.clone());
                     } else if effects.is_ok() {
-                        metrics.record_success(tx_info.op_set);
+                        metrics.record_success(tx_info.op_set.clone());
                     } else {
-                        metrics.record_abort(tx_info.op_set);
+                        metrics.record_abort(tx_info.op_set.clone());
                     }
                     update_gas!(&mut gas.0[tx_info.gas_idx], effects);
                 }
                 BatchedTransactionStatus::PermanentFailure { error } => {
                     permanent_failure_count += 1;
-                    metrics.record_permanent_failure(tx_info.op_set);
+                    metrics.record_permanent_failure(tx_info.op_set.clone());
                     tracing::debug!(
                         "Transaction {} ({}) rejected with error: {:?}",
                         i,
@@ -1036,7 +1037,7 @@ impl Payload for CompositePayload {
                     );
                 }
                 BatchedTransactionStatus::RetriableFailure { error } => {
-                    metrics.record_retriable_failure(tx_info.op_set);
+                    metrics.record_retriable_failure(tx_info.op_set.clone());
                     tracing::debug!(
                         "Transaction {} ({}) had retriable failure: {:?}",
                         i,
@@ -1045,7 +1046,7 @@ impl Payload for CompositePayload {
                     );
                 }
                 BatchedTransactionStatus::UnknownRejection => {
-                    metrics.record_unknown_rejection(tx_info.op_set);
+                    metrics.record_unknown_rejection(tx_info.op_set.clone());
                     tracing::debug!(
                         "Transaction {} ({}) had unknown rejection",
                         i,

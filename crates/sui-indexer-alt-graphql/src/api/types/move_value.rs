@@ -9,12 +9,17 @@ use async_graphql::Context;
 use async_graphql::Name;
 use async_graphql::Object;
 use async_graphql::Value;
+use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
 use async_graphql::dataloader::DataLoader;
 use async_graphql::indexmap::IndexMap;
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
+use move_core_types::u256::U256;
+use move_core_types::visitor_default;
 use sui_indexer_alt_reader::displays::DisplayKey;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_types::TypeTag;
@@ -26,6 +31,7 @@ use sui_types::object::rpc_visitor as RV;
 use tokio::join;
 
 use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
 use crate::api::scalars::json::Json;
 use crate::api::types::address::Address;
 use crate::api::types::display::Display;
@@ -36,7 +42,11 @@ use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::resource_exhausted;
 use crate::error::upcast;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
+
+type CVector = JsonCursor<usize>;
 
 #[derive(Clone)]
 pub(crate) struct MoveValue {
@@ -121,6 +131,90 @@ impl MoveValue {
             };
 
             Ok(Some(address))
+        }
+        .await
+        .transpose()
+    }
+
+    /// Attempts to treat this value as a `vector<T>` and paginate over its elements.
+    ///
+    /// Values of other types cannot be interpreted as vectors, and `null` is returned.
+    async fn as_vector(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CVector>,
+        last: Option<u64>,
+        before: Option<CVector>,
+    ) -> Option<Result<Connection<String, MoveValue>, RpcError>> {
+        struct Visitor<'p, 's> {
+            page: &'p Page<CVector>,
+            scope: &'s Scope,
+        }
+
+        impl AV::Visitor<'_, '_> for Visitor<'_, '_> {
+            type Value = Option<Connection<String, MoveValue>>;
+            type Error = AV::Error;
+
+            visitor_default! { <'_, '_> u8, u16, u32, u64, u128, u256 = Ok(None) }
+            visitor_default! { <'_, '_> bool, address, signer, struct, variant = Ok(None) }
+
+            fn visit_vector(
+                &mut self,
+                driver: &mut AV::VecDriver<'_, '_, '_>,
+            ) -> Result<Self::Value, Self::Error> {
+                let mut conn = Connection::new(false, false);
+
+                let total = driver.len() as usize;
+                let Some(range) = self.page.range(total) else {
+                    return Ok(Some(conn));
+                };
+
+                conn.has_previous_page = 0 < range.start;
+                conn.has_next_page = range.end < total;
+
+                let layout = driver.element_layout().clone();
+                let type_ = MoveType::from_layout(layout, self.scope.clone());
+
+                for i in 0..total {
+                    let start = driver.position();
+                    driver.skip_element()?;
+                    let end = driver.position();
+
+                    if range.contains(&i) {
+                        conn.edges.push(Edge::new(
+                            JsonCursor::new(i).encode_cursor(),
+                            MoveValue::new(type_.clone(), driver.bytes()[start..end].to_vec()),
+                        ));
+                    }
+                }
+
+                Ok(Some(conn))
+            }
+        }
+
+        async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MoveValue", "asVector");
+            let page = Page::from_params(limits, first, after, last, before)?;
+
+            if !matches!(self.type_.to_type_tag(), Some(TypeTag::Vector(_))) {
+                return Ok(None);
+            }
+
+            let Some(layout) = self.type_.layout_impl().await? else {
+                return Ok(None);
+            };
+
+            let mut visitor = Visitor {
+                page: &page,
+                scope: &self.type_.scope,
+            };
+
+            Ok(
+                A::MoveValue::visit_deserialize(&self.native, &layout, &mut visitor)
+                    .context("Failed to deserialize vector")?,
+            )
         }
         .await
         .transpose()

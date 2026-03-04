@@ -7,13 +7,13 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::execution_status::ExecutionStatus;
+use sui_types::execution_status::{ExecutionFailure, ExecutionStatus};
 use sui_types::object::Owner;
 
 /// Returns the reference for the first address-owned object created in the effects, or an error if
 /// there is none.
 pub fn address_owned(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
+    if let ExecutionStatus::Failure(ExecutionFailure { error, command }) = fx.status() {
         bail!("Transaction failed: {error} (command {command:?})");
     }
 
@@ -26,7 +26,7 @@ pub fn address_owned(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
 /// Returns the reference for the first address-owned object created in the effects owned by
 /// `owner`, or an error if there is none.
 pub fn address_owned_by(fx: &TransactionEffects, owner: SuiAddress) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
+    if let ExecutionStatus::Failure(ExecutionFailure { error, command }) = fx.status() {
         bail!("Transaction failed: {error} (command {command:?})");
     }
 
@@ -41,7 +41,7 @@ pub fn address_owned_by(fx: &TransactionEffects, owner: SuiAddress) -> anyhow::R
 /// Returns the reference for the first immutable object created in the effects, or an error if
 /// there is none.
 pub fn immutable(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
+    if let ExecutionStatus::Failure(ExecutionFailure { error, command }) = fx.status() {
         bail!("Transaction failed: {error} (command {command:?})");
     }
 
@@ -54,7 +54,7 @@ pub fn immutable(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
 /// Returns the reference for the first shared object created in the effects, or an error if there
 /// is none.
 pub fn shared(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
+    if let ExecutionStatus::Failure(ExecutionFailure { error, command }) = fx.status() {
         bail!("Transaction failed: {error} (command {command:?})");
     }
 
@@ -67,7 +67,7 @@ pub fn shared(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
 /// Returns the reference for the first address-owned object mutated in the effects that is not a
 /// gas payment, or an error if there is none.
 pub fn address_mutated(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
-    if let ExecutionStatus::Failure { error, command } = fx.status() {
+    if let ExecutionStatus::Failure(ExecutionFailure { error, command }) = fx.status() {
         bail!("Transaction failed: {error} (command {command:?})");
     }
 

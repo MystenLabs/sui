@@ -125,6 +125,7 @@ const guides = [
               'guides/developer/transactions/transaction-auth/intent-signing',
               'guides/developer/transactions/transaction-auth/multisig',
               'guides/developer/transactions/transaction-auth/offline-signing',
+              'guides/developer/transactions/transaction-auth/address-aliases',
               ],
             },
         ],
@@ -162,6 +163,7 @@ const guides = [
     },
     items: [
       'guides/developer/currency',
+      'guides/developer/address-balances-migration',
       'guides/developer/coin/regulated',
       'guides/developer/coin/in-game-token',
       'guides/developer/coin/loyalty',

@@ -9,8 +9,8 @@ use fastcrypto::encoding::Encoding;
 use sui_package_resolver::CleverError;
 use sui_package_resolver::ErrorConstants;
 use sui_types::execution_status::ExecutionFailureStatus;
-use sui_types::execution_status::ExecutionStatus as NativeExecutionStatus;
 use sui_types::execution_status::MoveLocation;
+use sui_types::execution_status::{ExecutionFailure, ExecutionStatus as NativeExecutionStatus};
 use sui_types::transaction::ProgrammableTransaction;
 use tokio::sync::OnceCell;
 
@@ -149,7 +149,7 @@ impl ExecutionError {
         status: &NativeExecutionStatus,
         programmable_tx: Option<&ProgrammableTransaction>,
     ) -> Result<Option<Self>, RpcError> {
-        let NativeExecutionStatus::Failure { error, command } = status else {
+        let NativeExecutionStatus::Failure(ExecutionFailure { error, command }) = status else {
             return Ok(None);
         };
 
