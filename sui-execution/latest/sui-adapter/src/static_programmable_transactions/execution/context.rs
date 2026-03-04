@@ -982,7 +982,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         modules: &[CompiledModule],
         linkage: &ExecutableLinkage,
     ) -> Result<(VerifiedPackage, MoveVM<'env>), ExecutionError> {
-        let serialized_pkg = pkg.into_serialized_move_package();
+        let serialized_pkg = pkg.into_serialized_move_package().map_err(|e| {
+            make_invariant_violation!("Failed to serialize package for verification: {}", e)
+        })?;
         let data_store = &self.env.linkable_store.package_store;
         let vm = self
             .env

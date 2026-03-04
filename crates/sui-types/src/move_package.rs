@@ -568,34 +568,38 @@ impl MovePackage {
         normalize_modules(pool, self.module_map.values(), binary_config, include_code)
     }
 
-    pub fn into_serialized_move_package(&self) -> SerializedPackage {
+    pub fn into_serialized_move_package(&self) -> SuiResult<SerializedPackage> {
+        macro_rules! expect_valid_identifier {
+            ($ident_str:expr) => {
+                Identifier::new($ident_str.clone()).map_err(|e| {
+                    debug_assert!(
+                        false,
+                        "Published modules must always have valid identifiers {}",
+                        e
+                    );
+                    SuiErrorKind::ExecutionInvariantViolation
+                })
+            };
+        }
         let type_origin_table = self
             .type_origin_table
             .iter()
             .map(|ty_origin| {
-                (
+                Ok((
                     IntraPackageName {
-                        module_name: Identifier::new(ty_origin.module_name.clone())
-                            .expect("Published modules must always have valid identifiers"),
-                        type_name: Identifier::new(ty_origin.datatype_name.clone())
-                            .expect("Published modules must always have valid identifiers"),
+                        module_name: expect_valid_identifier!(ty_origin.module_name)?,
+                        type_name: expect_valid_identifier!(ty_origin.datatype_name)?,
                     },
                     ty_origin.package.into(),
-                )
+                ))
             })
-            .collect();
-        SerializedPackage {
+            .collect::<SuiResult<_>>()?;
+        Ok(SerializedPackage {
             modules: self
                 .serialized_module_map()
                 .iter()
-                .map(|(k, v)| {
-                    (
-                        Identifier::new(k.clone())
-                            .expect("Published modules must always have valid identifiers"),
-                        v.clone(),
-                    )
-                })
-                .collect(),
+                .map(|(k, v)| Ok((expect_valid_identifier!(k)?, v.clone())))
+                .collect::<SuiResult<_>>()?,
             version_id: self.id.into(),
             original_id: self.original_package_id().into(),
             linkage_table: self
@@ -609,7 +613,7 @@ impl MovePackage {
                 .collect(),
             type_origin_table,
             version: self.version().value(),
-        }
+        })
     }
 }
 

@@ -310,6 +310,7 @@ impl ModuleResolver for InMemoryStore {
         for (i, id) in ids.iter().enumerate() {
             packages[i] = load_package_object_from_object_store(self, &ObjectID::from(*id))?
                 .map(|pkg| pkg.move_package().into_serialized_move_package())
+                .transpose()?;
         }
         Ok(packages)
     }
@@ -319,8 +320,9 @@ impl ModuleResolver for InMemoryStore {
         ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         ids.map(|id| {
-            load_package_object_from_object_store(self, &ObjectID::from(*id))
-                .map(|pkg| pkg.map(|pkg| pkg.move_package().into_serialized_move_package()))
+            let pkg = load_package_object_from_object_store(self, &ObjectID::from(*id))?;
+            pkg.map(|pkg| pkg.move_package().into_serialized_move_package())
+                .transpose()
         })
         .collect()
     }

@@ -358,9 +358,10 @@ pub fn get_package(
     store: impl BackingPackageStore,
     id: &ObjectID,
 ) -> SuiResult<Option<SerializedPackage>> {
-    Ok(store
+    store
         .get_package_object(id)?
-        .map(|package| package.move_package().into_serialized_move_package()))
+        .map(|package| package.move_package().into_serialized_move_package())
+        .transpose()
 }
 
 pub fn get_module_by_id<S: BackingPackageStore>(
