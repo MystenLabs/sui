@@ -11,4 +11,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: undefined,
     indices: [(VariantTag, 2)],
     offsets: [],
+    message: "Jump table length 2 does not equal number of variants 3",
 }

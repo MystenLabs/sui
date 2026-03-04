@@ -11,4 +11,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: undefined,
     indices: [],
     offsets: [],
+    message: "Cannot find ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000042, name: Identifier(\"M\") } in data cache",
 }

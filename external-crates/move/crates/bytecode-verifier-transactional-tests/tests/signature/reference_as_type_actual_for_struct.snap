@@ -11,4 +11,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [],
     offsets: [],
+    message: "reference not allowed",
 }
