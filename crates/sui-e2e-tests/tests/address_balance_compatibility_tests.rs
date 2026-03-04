@@ -299,7 +299,7 @@ async fn test_valid_coin_reservation_gas_payments() {
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
 
     assert!(effects.status().is_ok());
-    let gas_charge = effects.gas_cost_summary().gas_used() as u128;
+    let gas_charge = effects.gas_cost_summary().gas_used();
 
     // ensure both balances arrived at the recipient
     let recipient_balance = test_env.get_sui_balance_ab(recipient);
@@ -311,7 +311,7 @@ async fn test_valid_coin_reservation_gas_payments() {
     let final_sender_balance = test_env.get_sui_balance_ab(sender);
     assert_eq!(
         final_sender_balance,
-        initial_sender_balance as u64 - gas_charge as u64 - 1
+        initial_sender_balance - gas_charge - 1
     );
 
     test_env.cluster.trigger_reconfiguration().await;
