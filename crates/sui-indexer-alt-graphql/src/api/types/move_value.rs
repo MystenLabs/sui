@@ -1,24 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use anyhow::Context as _;
 use anyhow::anyhow;
 use async_graphql::Context;
 use async_graphql::Name;
 use async_graphql::Object;
 use async_graphql::Value;
-use async_graphql::dataloader::DataLoader;
 use async_graphql::indexmap::IndexMap;
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
-use sui_indexer_alt_reader::displays::DisplayKey;
-use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_types::TypeTag;
-use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::id::ID;
 use sui_types::id::UID;
 use sui_types::object::option_visitor as OV;
@@ -29,6 +23,8 @@ use crate::api::scalars::base64::Base64;
 use crate::api::scalars::json::Json;
 use crate::api::types::address::Address;
 use crate::api::types::display::Display;
+use crate::api::types::display::display_v1;
+use crate::api::types::display::display_v2;
 use crate::api::types::move_type::MoveType;
 use crate::api::types::object::Object;
 use crate::config::Limits;
@@ -63,6 +59,9 @@ struct JsonWriter<'b> {
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
+    #[error("Display error: {0}")]
+    Display(sui_display::v2::Error),
+
     #[error("Format error: {0}")]
     Format(sui_display::v2::FormatError),
 
@@ -134,48 +133,84 @@ impl MoveValue {
     /// A rendered JSON blob based on an on-chain template, substituted with data from this value.
     ///
     /// Returns `null` if the value's type does not have an associated `Display` template.
-    async fn display(&self, ctx: &Context<'_>) -> Option<Result<Display, RpcError>> {
+    async fn display(&self, ctx: &Context<'_>) -> Option<Result<Display, RpcError<Error>>> {
         async {
             let limits: &Limits = ctx.data()?;
-            let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
             let Some(TypeTag::Struct(type_)) = self.type_.to_type_tag() else {
                 return Ok(None);
             };
 
-            let (layout, display) = join!(
+            let (layout, display_v1, display_v2) = join!(
                 self.type_.layout_impl(),
-                pg_loader.load_one(DisplayKey(*type_)),
+                display_v1(ctx, *type_.clone()),
+                display_v2(ctx, self.type_.scope.clone(), *type_)
             );
 
-            let (Some(layout), Some(display)) =
-                (layout?, display.context("Failed to fetch Display")?)
-            else {
+            let Some(layout) = layout.map_err(upcast)? else {
                 return Ok(None);
             };
-
-            let event: DisplayVersionUpdatedEvent = bcs::from_bytes(&display.display)
-                .context("Failed to deserialize DisplayVersionUpdatedEvent")?;
 
             let mut output = IndexMap::new();
             let mut errors = IndexMap::new();
 
-            for (field, value) in
-                sui_display::v1::Format::parse(limits.max_display_field_depth, &event.fields)
-                    .map_err(resource_exhausted)?
-                    .display(limits.max_display_output_size, &self.native, &layout)
-                    .map_err(resource_exhausted)?
-            {
-                match value {
-                    Ok(v) => {
-                        output.insert(Name::new(&field), Value::String(v));
-                    }
+            if let Some(display_v2) = display_v2.map_err(upcast)? {
+                let store = DisplayStore::new(ctx, &self.type_.scope);
 
-                    Err(e) => {
-                        output.insert(Name::new(&field), Value::Null);
-                        errors.insert(Name::new(&field), Value::String(e.to_string()));
-                    }
+                let root = sui_display::v2::OwnedSlice {
+                    bytes: self.native.clone(),
+                    layout,
                 };
+
+                let interpreter = sui_display::v2::Interpreter::new(root, store);
+
+                for (field, value) in
+                    sui_display::v2::Display::parse(limits.display(), display_v2.fields())
+                        .map_err(display_error)?
+                        .display(
+                            limits.max_move_value_depth,
+                            limits.max_display_output_size,
+                            &interpreter,
+                        )
+                        .await
+                        .map_err(display_error)?
+                {
+                    match value {
+                        Ok(v) => {
+                            output.insert(
+                                Name::new(&field),
+                                v.try_into().context("Failed to serialize JSON")?,
+                            );
+                        }
+
+                        Err(e) => {
+                            output.insert(Name::new(&field), Value::Null);
+                            errors.insert(Name::new(&field), Value::String(e.to_string()));
+                        }
+                    }
+                }
+            } else if let Some(display_v1) = display_v1.map_err(upcast)? {
+                for (field, value) in sui_display::v1::Format::parse(
+                    limits.max_display_field_depth,
+                    &display_v1.fields,
+                )
+                .map_err(resource_exhausted)?
+                .display(limits.max_display_output_size, &self.native, &layout)
+                .map_err(resource_exhausted)?
+                {
+                    match value {
+                        Ok(v) => {
+                            output.insert(Name::new(&field), Value::String(v));
+                        }
+
+                        Err(e) => {
+                            output.insert(Name::new(&field), Value::Null);
+                            errors.insert(Name::new(&field), Value::String(e.to_string()));
+                        }
+                    };
+                }
+            } else {
+                return Ok(None);
             }
 
             Ok(Some(Display {
@@ -500,26 +535,25 @@ impl From<RV::Error> for VisitorError {
     }
 }
 
+fn display_error(e: sui_display::v2::Error) -> RpcError<Error> {
+    if e.is_internal_error() {
+        anyhow!(e).into()
+    } else if e.is_resource_limit_error() {
+        resource_exhausted(e)
+    } else {
+        bad_user_input(Error::Display(e))
+    }
+}
+
 fn format_error(
     wrap: impl FnOnce(sui_display::v2::FormatError) -> Error,
     e: sui_display::v2::FormatError,
 ) -> RpcError<Error> {
-    use sui_display::v2::FormatError as FE;
-    match &e {
-        FE::InvalidHexCharacter(_)
-        | FE::InvalidIdentifier(_)
-        | FE::InvalidNumber { .. }
-        | FE::OddHexLiteral(_)
-        | FE::TransformInvalid(_)
-        | FE::TransformInvalid_ { .. }
-        | FE::UnexpectedEos { .. }
-        | FE::UnexpectedRemaining(_)
-        | FE::UnexpectedToken { .. }
-        | FE::VectorArity { .. }
-        | FE::VectorNoType
-        | FE::VectorTypeMismatch { .. } => bad_user_input(wrap(e)),
-
-        FE::TooBig | FE::TooDeep | FE::TooManyLoads | FE::TooMuchOutput => resource_exhausted(e),
-        FE::Bcs(_) | FE::Visitor(_) | FE::Store(_) => anyhow!(e).into(),
+    if e.is_internal_error() {
+        anyhow!(e).into()
+    } else if e.is_resource_limit_error() {
+        resource_exhausted(e)
+    } else {
+        bad_user_input(wrap(e))
     }
 }
