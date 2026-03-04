@@ -115,7 +115,7 @@ impl EffectsContents {
                 .effects()
                 .map(|effects| match effects.status() {
                     NativeExecutionStatus::Success => ExecutionStatus::Success,
-                    NativeExecutionStatus::Failure { .. } => ExecutionStatus::Failure,
+                    NativeExecutionStatus::Failure(_) => ExecutionStatus::Failure,
                 })
                 .map_err(RpcError::from),
         )

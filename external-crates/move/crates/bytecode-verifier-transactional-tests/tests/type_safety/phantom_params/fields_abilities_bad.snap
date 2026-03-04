@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/phantom_params/fields_abilities_bad.mvir
 ---
 processed 10 tasks
 

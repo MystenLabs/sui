@@ -3850,7 +3850,7 @@ mod tests {
         }
 
         // THEN check for no inflight or suspended transactions.
-        state.execution_scheduler().check_empty_for_testing();
+        state.execution_scheduler().check_empty_for_testing().await;
     }
 
     fn to_short_strings(txs: Vec<VerifiedExecutableTransactionWithAliases>) -> Vec<String> {

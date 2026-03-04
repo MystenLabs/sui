@@ -300,6 +300,7 @@ const MAX_PROTOCOL_VERSION: u64 = 115;
 // Version 113: Validate gas price >= RGP at signing for address balance gas payments.
 // Version 114: Gate seeded test overrides for checkpoint tx limit behind feature flag.
 // Version 115: Gasless transaction drop safety.
+//              Enable address aliases on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4646,6 +4647,7 @@ impl ProtocolConfig {
                 }
                 115 => {
                     cfg.feature_flags.gasless_transaction_drop_safety = true;
+                    cfg.feature_flags.address_aliases = true;
                 }
                 // Use this template when making changes:
                 //
@@ -5000,6 +5002,10 @@ impl ProtocolConfig {
 
     pub fn disable_authenticated_event_streams_for_testing(&mut self) {
         self.feature_flags.enable_authenticated_event_streams = false;
+    }
+
+    pub fn disable_randomize_checkpoint_tx_limit_for_testing(&mut self) {
+        self.feature_flags.randomize_checkpoint_tx_limit_in_tests = false;
     }
 
     pub fn enable_non_exclusive_writes_for_testing(&mut self) {

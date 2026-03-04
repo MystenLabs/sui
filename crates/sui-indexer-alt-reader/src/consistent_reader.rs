@@ -357,7 +357,7 @@ impl ConsistentReader {
 
         if let Some(checkpoint) = checkpoint {
             request.metadata_mut().insert(
-                proto::CHECKPOINT_METADATA,
+                proto::CHECKPOINT_HEIGHT_METADATA,
                 checkpoint
                     .to_string()
                     .parse()

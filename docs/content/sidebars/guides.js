@@ -125,6 +125,7 @@ const guides = [
               'guides/developer/transactions/transaction-auth/intent-signing',
               'guides/developer/transactions/transaction-auth/multisig',
               'guides/developer/transactions/transaction-auth/offline-signing',
+              'guides/developer/transactions/transaction-auth/address-aliases',
               ],
             },
         ],
@@ -137,6 +138,7 @@ const guides = [
       'guides/developer/accessing-data/query-with-graphql',
       'guides/developer/accessing-data/archival-store',
       'guides/developer/accessing-data/using-events',
+      'guides/developer/accessing-data/authenticated-events',
       {
         type: 'category',
         label: 'Custom Indexing Framework',
@@ -161,6 +163,7 @@ const guides = [
     },
     items: [
       'guides/developer/currency',
+      'guides/developer/address-balances-migration',
       'guides/developer/coin/regulated',
       'guides/developer/coin/in-game-token',
       'guides/developer/coin/loyalty',
@@ -290,6 +293,7 @@ const guides = [
       'guides/operator/exchange-integration',
       'guides/operator/bridge-node-configuration',
       'guides/operator/indexer-stack-setup',
+      'guides/operator/archival-stack-setup',
       {
         type: 'category',
         label: 'Sui Validator Nodes',

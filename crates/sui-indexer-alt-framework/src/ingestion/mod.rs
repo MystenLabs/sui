@@ -15,6 +15,7 @@ use serde::Serialize;
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
 
+pub use crate::config::ConcurrencyConfig as IngestConcurrencyConfig;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
@@ -53,8 +54,10 @@ pub struct IngestionConfig {
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     pub checkpoint_buffer_size: usize,
 
-    /// Maximum number of checkpoints to attempt to fetch concurrently.
-    pub ingest_concurrency: usize,
+    /// Concurrency control for checkpoint ingestion. A plain integer gives fixed concurrency;
+    /// an object with `initial`, `min`, and `max` fields enables adaptive concurrency that adjusts
+    /// based on subscriber channel fill fraction.
+    pub ingest_concurrency: IngestConcurrencyConfig,
 
     /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
     pub retry_interval_ms: u64,
@@ -220,7 +223,12 @@ impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
             checkpoint_buffer_size: 50,
-            ingest_concurrency: 50,
+            ingest_concurrency: IngestConcurrencyConfig::Adaptive {
+                initial: 1,
+                min: 1,
+                max: 500,
+                dead_band: None,
+            },
             retry_interval_ms: 200,
             streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
@@ -262,7 +270,9 @@ mod tests {
             },
             IngestionConfig {
                 checkpoint_buffer_size,
-                ingest_concurrency,
+                ingest_concurrency: IngestConcurrencyConfig::Fixed {
+                    value: ingest_concurrency,
+                },
                 ..Default::default()
             },
             None,

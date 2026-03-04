@@ -1142,7 +1142,9 @@ impl From<crate::execution_status::ExecutionStatus> for ExecutionStatus {
             crate::execution_status::ExecutionStatus::Success => {
                 message.success = Some(true);
             }
-            crate::execution_status::ExecutionStatus::Failure { error, command } => {
+            crate::execution_status::ExecutionStatus::Failure(
+                crate::execution_status::ExecutionFailure { error, command },
+            ) => {
                 let description = if let Some(command) = command {
                     format!("{error:?} in command {command}")
                 } else {

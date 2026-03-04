@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/signature/reference_as_type_actual_in_struct_inst_for_bytecode_instruction.mvir
 ---
 processed 5 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 1, lines 15-29:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 2, lines 31-43:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 3, lines 45-54:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 4, lines 56-65:
@@ -52,4 +55,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [],
     offsets: [],
+    message: "reference not allowed",
 }

@@ -1199,6 +1199,7 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
             cfg.enable_authenticated_event_streams_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg.set_min_checkpoint_interval_ms_for_testing(1000);
+            cfg.disable_randomize_checkpoint_tx_limit_for_testing();
             cfg
         });
 
