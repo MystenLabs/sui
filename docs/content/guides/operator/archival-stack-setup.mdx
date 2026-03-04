@@ -353,7 +353,7 @@ Mysten Labs plans to enable requester-pays on the public checkpoint buckets in t
 
 Bigtable writes are idempotent, so multiple indexer instances can safely process the same data. Mysten Labs runs **3 indexer instances** at steady state to enable rolling deployments without ever delaying updates from the chain.
 
-During backfill, a single instance is sufficient — one instance can saturate a 15-node cluster.
+During backfill, a single instance is sufficient. One instance can saturate a 15-node cluster.
 
 ## Archival Service setup
 
