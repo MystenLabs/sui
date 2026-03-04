@@ -25,6 +25,7 @@ use crate::{
     package::{EnvironmentID, EnvironmentName},
     schema::{
         EXTERNAL_RESOLVE_ARG, PackageName, ResolveRequest, ResolveResponse, ResolverDependencyInfo,
+        ResolverName,
     },
 };
 
@@ -34,7 +35,6 @@ use super::{CombinedDependency, Dependency};
 /// externally resolved or system dependencies
 pub type Resolved = ResolverDependencyInfo;
 
-pub type ResolverName = String;
 pub type ResolverResult<T> = Result<T, ResolverError>;
 
 /// A [ResolvedDependency] is like a [CombinedDependency] except that it no longer has
@@ -205,7 +205,7 @@ async fn call_resolver(
     resolver: ResolverName,
     reqs: Vec<ResolveRequest>,
 ) -> ResolverResult<Vec<ResolveResponse>> {
-    let mut command = Command::new(&resolver);
+    let mut command = Command::new(&resolver.to_string());
     command
         .arg(EXTERNAL_RESOLVE_ARG)
         .stdin(Stdio::piped())
