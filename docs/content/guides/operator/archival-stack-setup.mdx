@@ -309,6 +309,8 @@ These numbers are a guideline. For new write-only clusters being backfilled, you
 Set `total-max-rows-per-second` in your TOML config accordingly. Save the following as your backfill config file (e.g. `backfill.toml`) and pass it via `--config backfill.toml`. This example targets a 15-node write-only backfill:
 
 ```toml title="backfill.toml"
+# Assumes a 15-node cluster targeting 90% CPU utilization (write-only).
+# Scale linearly for smaller clusters, e.g. 50000 for 5 nodes, 100000 for 10.
 total-max-rows-per-second = 150000
 bigtable-connection-pool-size = 30
 
