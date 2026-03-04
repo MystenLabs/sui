@@ -259,7 +259,7 @@ pub struct StateSyncConfig {
     /// Duration in milliseconds that a peer must be continuously failing before it is
     /// disconnected. Set to 0 to disable automatic disconnect of failing peers.
     ///
-    /// If unspecified, this will default to `300,000` (5 minutes).
+    /// If unspecified, this will default to `120,000` (2 minutes).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_disconnect_threshold_ms: Option<u64>,
 
@@ -404,7 +404,7 @@ impl StateSyncConfig {
     }
 
     pub fn peer_disconnect_threshold(&self) -> Duration {
-        const DEFAULT_MS: u64 = 300_000; // 5 minutes
+        const DEFAULT_MS: u64 = 120_000; // 2 minutes
         Duration::from_millis(self.peer_disconnect_threshold_ms.unwrap_or(DEFAULT_MS))
     }
 
