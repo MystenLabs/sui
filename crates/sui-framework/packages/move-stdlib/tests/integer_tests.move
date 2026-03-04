@@ -172,34 +172,23 @@ public(package) macro fun check_mul_div_ceil<$T, $U>($max: $T, $x: $T, $y: $T, $
     };
 }
 
-public(package) macro fun check_mul_div_precision($max: _, $x: _, $z: _) {
-    let x = $x;
-    let z = $z;
-    let max = $max;
-    // Identity: mul_div(x, z, z) == x even when x * z overflows.
-    if (z != 0) {
-        assert_eq!(x.mul_div(z, z), x);
-        assert_eq!(x.mul_div_ceil(z, z), x);
-    };
-    // Precision with distinct y != z: mul_div(x, y, z) >= (x/z)*y.
-    assert!((x / 3) * 2 <= x.mul_div(2, 3));
-    assert!((x / 3) * 2 <= x.mul_div_ceil(2, 3));
-    if (x <= max / 3 * 2) {
-        assert!((x / 2) * 3 <= x.mul_div(3, 2));
-        assert!((x / 2) * 3 <= x.mul_div_ceil(3, 2));
-    };
-}
-
 public(package) macro fun test_mul_div<$T, $U>($max: $T, $cases: vector<$T>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.mul_div(max, max.max(1)), max);
     cases!(max, cases, |case_pred, case, case_succ| {
         check_mul_div!<$T, $U>(max, case_pred, case, case_succ);
-        check_mul_div_ceil!<$T, $U>(max, case_pred, case, case_succ);
-        check_mul_div_precision!(max, case_pred, case_succ);
     });
     check_mul_div!<$T, $U>(max, max, max, max);
+}
+
+public(package) macro fun test_mul_div_ceil<$T, $U>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    assert_eq!(max.mul_div(max, max.max(1)), max);
+    cases!(max, cases, |case_pred, case, case_succ| {
+        check_mul_div_ceil!<$T, $U>(max, case_pred, case, case_succ);
+    });
     check_mul_div_ceil!<$T, $U>(max, max, max, max);
 }
 

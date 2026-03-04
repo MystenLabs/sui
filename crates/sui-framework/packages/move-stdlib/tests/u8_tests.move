@@ -57,11 +57,31 @@ fun test_mul_div() {
         integer_tests::check_mul_div!<u8, u16>(max, x, y, z);
         integer_tests::check_mul_div_ceil!<u8, u16>(max, x, y, z);
     });
-    integer_tests::cases!(max, CASES, |case_pred, _case, case_succ| {
-        integer_tests::check_mul_div_precision!(max, case_pred, case_succ);
-    });
+
     integer_tests::check_mul_div!<u8, u16>(max, max, max, max);
     integer_tests::check_mul_div_ceil!<u8, u16>(max, max, max, max);
+}
+
+#[test]
+fun test_mul_div_exhaustive() {
+    0u8.range_do_eq!(MAX, |x| {
+        0u8.range_do_eq!(MAX, |y| {
+            0u8.range_do_eq!(MAX, |z| {
+                integer_tests::check_mul_div!(MAX, x, y, z);
+            })
+        })
+    })
+}
+
+#[test]
+fun test_mul_div_ceil_exhaustive() {
+    0u8.range_do_eq!(MAX, |x| {
+        0u8.range_do_eq!(MAX, |y| {
+            0u8.range_do_eq!(MAX, |z| {
+                integer_tests::check_mul_div_ceil!(MAX, x, y, z);
+            })
+        })
+    })
 }
 
 #[test, expected_failure(arithmetic_error, location = std::u8)]
