@@ -6,7 +6,7 @@ use super::{AuthenticatedEvent, AuthenticatedEventsClient, ClientConfig, ClientE
 use futures::stream::Stream;
 use mysten_common::debug_fatal;
 use std::sync::Arc;
-use sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListAuthenticatedEventsRequest;
 use sui_types::accumulator_root::{EventCommitment, EventStreamHead};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use tokio::sync::mpsc;
@@ -45,7 +45,7 @@ impl EventStreamState {
         &mut self,
     ) -> Result<Vec<AuthenticatedEvent>, ClientError> {
         let mut parsed_events: Vec<AuthenticatedEvent> = Vec::new();
-        let mut page_token: Option<Vec<u8>> = None;
+        let mut page_token: Option<bytes::Bytes> = None;
         let start_checkpoint = self.current_checkpoint;
         let mut iteration_count = 0;
 

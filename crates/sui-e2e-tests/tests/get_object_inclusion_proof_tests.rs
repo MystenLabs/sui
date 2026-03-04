@@ -3,8 +3,8 @@
 
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_rpc_api::grpc::alpha::proof_service_proto::GetObjectInclusionProofRequest;
-use sui_rpc_api::grpc::alpha::proof_service_proto::proof_service_client::ProofServiceClient;
+use sui_rpc::proto::sui::rpc::v2::GetObjectInclusionProofRequest;
+use sui_rpc::proto::sui::rpc::v2::proof_service_client::ProofServiceClient;
 use sui_types::base_types::ObjectID;
 use test_cluster::{TestCluster, TestClusterBuilder};
 

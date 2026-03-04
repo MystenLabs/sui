@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::RpcService;
-use crate::grpc::alpha::event_service_proto::event_service_server::EventService;
-use crate::grpc::alpha::event_service_proto::{
+use crate::grpc::v2::list_authenticated_events;
+use sui_rpc::proto::sui::rpc::v2::event_service_server::EventService;
+use sui_rpc::proto::sui::rpc::v2::{
     ListAuthenticatedEventsRequest, ListAuthenticatedEventsResponse,
 };
-use crate::grpc::alpha::list_authenticated_events;
 
 #[tonic::async_trait]
 impl EventService for RpcService {

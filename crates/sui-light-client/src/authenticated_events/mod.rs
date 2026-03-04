@@ -16,8 +16,8 @@ use move_core_types::identifier::Identifier;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
-use sui_rpc_api::grpc::alpha::event_service_proto::event_service_client::EventServiceClient;
-use sui_rpc_api::grpc::alpha::proof_service_proto::proof_service_client::ProofServiceClient;
+use sui_rpc::proto::sui::rpc::v2::event_service_client::EventServiceClient;
+use sui_rpc::proto::sui::rpc::v2::proof_service_client::ProofServiceClient;
 use sui_rpc_api::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc_api::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
 use sui_types::accumulator_root::{EventStreamHead, derive_event_stream_head_object_id};
@@ -46,13 +46,11 @@ pub struct AuthenticatedEvent {
     pub event_idx: u32,
 }
 
-impl TryFrom<sui_rpc_api::grpc::alpha::event_service_proto::AuthenticatedEvent>
-    for AuthenticatedEvent
-{
+impl TryFrom<sui_rpc::proto::sui::rpc::v2::AuthenticatedEvent> for AuthenticatedEvent {
     type Error = ClientError;
 
     fn try_from(
-        event: sui_rpc_api::grpc::alpha::event_service_proto::AuthenticatedEvent,
+        event: sui_rpc::proto::sui::rpc::v2::AuthenticatedEvent,
     ) -> Result<Self, Self::Error> {
         let proto_event = event
             .event
@@ -538,9 +536,7 @@ impl AuthenticatedEventsClient {
 
         let mut proof_client = self.proof_service.clone();
 
-        let mut request =
-            sui_rpc_api::grpc::alpha::proof_service_proto::GetObjectInclusionProofRequest::default(
-            );
+        let mut request = sui_rpc::proto::sui::rpc::v2::GetObjectInclusionProofRequest::default();
         request.object_id = Some(stream_object_id.to_string());
         request.checkpoint = Some(checkpoint);
 
@@ -694,7 +690,7 @@ impl AuthenticatedEventsClient {
     fn verify_ocs_inclusion_proof(
         &self,
         committee: &Committee,
-        response: &sui_rpc_api::grpc::alpha::proof_service_proto::GetObjectInclusionProofResponse,
+        response: &sui_rpc::proto::sui::rpc::v2::GetObjectInclusionProofResponse,
     ) -> Result<(), ClientError> {
         let checkpoint_summary_bytes = response
             .checkpoint_summary
