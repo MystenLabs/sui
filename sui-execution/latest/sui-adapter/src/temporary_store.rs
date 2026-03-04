@@ -465,6 +465,20 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results.deleted_object_ids.insert(*id);
     }
 
+    /// Mutate an object that was created during this transaction.
+    pub fn mutate_created_object(&mut self, object: Object) {
+        let id = object.id();
+        debug_assert!(self.execution_results.created_object_ids.contains(&id));
+        self.execution_results.written_objects.insert(id, object);
+    }
+
+    /// Delete an object that was created during this transaction.
+    pub fn delete_created_object(&mut self, id: &ObjectID) {
+        debug_assert!(self.execution_results.created_object_ids.contains(id));
+        self.execution_results.written_objects.remove(id);
+        self.execution_results.created_object_ids.remove(id);
+    }
+
     pub fn drop_writes(&mut self) {
         self.execution_results.drop_writes();
     }
