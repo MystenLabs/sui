@@ -5,14 +5,13 @@
 
 use crate::RpcError;
 use crate::RpcService;
-use crate::grpc::alpha::event_service_proto::{
-    AuthenticatedEvent, ListAuthenticatedEventsRequest, ListAuthenticatedEventsResponse,
-};
 use bytes::Bytes;
 use prost::Message;
 use std::str::FromStr;
 use sui_macros::fail_point_if;
-use sui_rpc::proto::sui::rpc::v2::{Bcs, Event};
+use sui_rpc::proto::sui::rpc::v2::{
+    AuthenticatedEvent, Bcs, Event, ListAuthenticatedEventsRequest, ListAuthenticatedEventsResponse,
+};
 use sui_types::base_types::SuiAddress;
 
 const MAX_PAGE_SIZE: u32 = 1000;

@@ -14,14 +14,12 @@ use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::GetObjectInclusionProofRequest;
+use sui_rpc::proto::sui::rpc::v2::event_service_client::EventServiceClient;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::proof_service_client::ProofServiceClient;
+use sui_rpc::proto::sui::rpc::v2::{AuthenticatedEvent, ListAuthenticatedEventsRequest};
 use sui_rpc::proto::sui::rpc::v2::{Event, GetCheckpointRequest, GetEpochRequest};
-use sui_rpc_api::grpc::alpha::event_service_proto::event_service_client::EventServiceClient;
-use sui_rpc_api::grpc::alpha::event_service_proto::{
-    AuthenticatedEvent, ListAuthenticatedEventsRequest,
-};
-use sui_rpc_api::grpc::alpha::proof_service_proto::GetObjectInclusionProofRequest;
-use sui_rpc_api::grpc::alpha::proof_service_proto::proof_service_client::ProofServiceClient;
 use sui_sdk_types::ValidatorCommittee;
 use sui_types::accumulator_root as ar;
 use sui_types::accumulator_root::EventCommitment;
@@ -204,10 +202,7 @@ async fn query_authenticated_events(
     stream_id: &str,
     start_checkpoint: u64,
     page_size: Option<u32>,
-) -> Result<
-    sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsResponse,
-    tonic::Status,
-> {
+) -> Result<sui_rpc::proto::sui::rpc::v2::ListAuthenticatedEventsResponse, tonic::Status> {
     let mut client = connect_with_retry(|| EventServiceClient::connect(rpc_url.to_owned())).await;
 
     let mut req = ListAuthenticatedEventsRequest::default();
@@ -381,7 +376,7 @@ fn proto_bytes_to_digest(bytes: &[u8]) -> Result<Digest, String> {
 }
 
 fn proto_ocs_inclusion_proof_to_light_client_proof(
-    grpc_proof: &sui_rpc_api::grpc::alpha::proof_service_proto::OcsInclusionProof,
+    grpc_proof: &sui_rpc::proto::sui::rpc::v2::OcsInclusionProof,
 ) -> Result<OCSInclusionProof, String> {
     let merkle_proof_bytes = grpc_proof
         .merkle_proof
@@ -621,7 +616,7 @@ async fn verify_ocs_inclusion_proof(
     epoch_cache: &EpochCache,
     checkpoint_summary: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
     object_ref_proto: &sui_rpc::proto::sui::rpc::v2::ObjectReference,
-    grpc_proof: &sui_rpc_api::grpc::alpha::proof_service_proto::OcsInclusionProof,
+    grpc_proof: &sui_rpc::proto::sui::rpc::v2::OcsInclusionProof,
     checkpoint_seq: u64,
 ) -> Result<(), String> {
     let object_ref = proto_object_ref_to_sui_object_ref(object_ref_proto)?;
