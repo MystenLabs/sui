@@ -118,7 +118,6 @@ where
     P::Value: Send + Sync,
 {
     const NAME: &'static str = P::NAME;
-    const FANOUT: usize = P::FANOUT;
     type Value = P::Value;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
