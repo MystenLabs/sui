@@ -568,6 +568,27 @@ input CheckpointFilter {
 }
 
 """
+A G1 elliptic curve point with 3 base10-encoded Bn254 field elements.
+"""
+type CircomG1 {
+	e0: String
+	e1: String
+	e2: String
+}
+
+"""
+A G2 elliptic curve point with 6 base10-encoded Bn254 field elements.
+"""
+type CircomG2 {
+	e00: String
+	e01: String
+	e10: String
+	e11: String
+	e20: String
+	e21: String
+}
+
+"""
 System transaction for creating the coin deny list state.
 """
 type CoinDenyListStateCreateTransaction {
@@ -4531,6 +4552,42 @@ type WriteAccumulatorStorageCostTransaction {
 }
 
 """
+A Base64-encoded claim from the JWT used in zkLogin.
+"""
+type ZkLoginClaim {
+	"""
+	The index mod 4 used for Base64 decoding alignment.
+	"""
+	indexMod4: Int
+	"""
+	The Base64url-unpadded encoded claim value.
+	"""
+	value: String
+}
+
+"""
+The zkLogin inputs including proof, claim details, and JWT header.
+"""
+type ZkLoginInputs {
+	"""
+	The address seed as a base10-encoded string.
+	"""
+	addressSeed: String
+	"""
+	The Base64-encoded JWT header.
+	"""
+	headerBase64: String
+	"""
+	The Base64-encoded issuer claim details.
+	"""
+	issBase64Details: ZkLoginClaim
+	"""
+	The zero-knowledge proof points.
+	"""
+	proofPoints: ZkLoginProof
+}
+
+"""
 An enum that specifies the intent scope to be used to parse the bytes for signature verification.
 """
 enum ZkLoginIntentScope {
@@ -4542,6 +4599,38 @@ enum ZkLoginIntentScope {
 	Indicates that the bytes are to be parsed as a personal message.
 	"""
 	PERSONAL_MESSAGE
+}
+
+"""
+A JWK (JSON Web Key) identifier.
+"""
+type ZkLoginJwkId {
+	"""
+	The OIDC provider issuer string.
+	"""
+	iss: String
+	"""
+	The key ID that identifies the JWK.
+	"""
+	kid: String
+}
+
+"""
+The zero-knowledge proof consisting of three elliptic curve points.
+"""
+type ZkLoginProof {
+	"""
+	G1 point 'a'.
+	"""
+	a: CircomG1
+	"""
+	G2 point 'b'.
+	"""
+	b: CircomG2
+	"""
+	G1 point 'c'.
+	"""
+	c: CircomG1
 }
 
 """
@@ -4560,9 +4649,21 @@ type ZkLoginPublicIdentifier {
 
 type ZkLoginSignature {
 	"""
+	The zkLogin inputs including proof, claim details, and JWT header.
+	"""
+	inputs: ZkLoginInputs
+	"""
+	The JWK identifier used to verify the zkLogin proof.
+	"""
+	jwkId: ZkLoginJwkId
+	"""
 	The maximum epoch for which this signature is valid.
 	"""
 	maxEpoch: UInt53
+	"""
+	The public identifier (issuer + address seed) for this zkLogin authenticator.
+	"""
+	publicIdentifier: ZkLoginPublicIdentifier
 	"""
 	The inner user signature (ed25519/secp256k1/secp256r1).
 	"""

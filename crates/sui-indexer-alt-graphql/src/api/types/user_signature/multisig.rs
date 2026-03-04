@@ -102,9 +102,9 @@ pub(crate) struct PasskeyPublicKey {
 #[derive(SimpleObject, Clone, Default)]
 pub(crate) struct ZkLoginPublicIdentifier {
     /// The OAuth provider issuer string (e.g. "https://accounts.google.com").
-    iss: Option<String>,
+    pub(crate) iss: Option<String>,
     /// The address seed as a decimal string.
-    address_seed: Option<String>,
+    pub(crate) address_seed: Option<String>,
 }
 
 impl From<&MultiSig> for MultisigSignature {
