@@ -219,8 +219,14 @@ async fn wait_termination(mut shutdown_rx: tokio::sync::broadcast::Receiver<()>)
     let shutdown_recv = shutdown_rx.recv().boxed();
 
     tokio::select! {
-        _ = sigint => {},
-        _ = sigterm_recv => {},
-        _ = shutdown_recv => {},
+        _ = sigint => {
+            error!("SIGINT received");
+        },
+        _ = sigterm_recv => {
+            error!("SIGTERM received");
+        },
+        _ = shutdown_recv => {
+            error!("Shutdown channel received");
+        },
     }
 }
