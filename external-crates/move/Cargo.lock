@@ -4114,6 +4114,7 @@ dependencies = [
 name = "serializer-tests"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "move-binary-format",
  "proptest",
  "proptest-derive",
