@@ -341,7 +341,7 @@ sui-kvstore-alt \
 
 No `--config` is needed. The framework defaults are sufficient for steady-state indexing. The full node only needs gRPC enabled. JSON-RPC is not required. Mysten Labs runs full nodes with a 2-week retention period and only uses the checkpoint bucket for backfills.
 
-If you want to set a rate limit at steady state, there is a tradeoff to consider. Write throughput is naturally bounded by the chain, but if the indexer crashes and needs to catch up, it will ingest as fast as possible from the fullnode. Without a rate limit it catches up faster but may briefly impact read latency while writing older data. With a rate limit, read latency stays stable but recovery takes longer.
+If you want to set a rate limit at steady state, there is a tradeoff to consider. Write throughput is naturally bounded by the chain, but if the indexer crashes and needs to catch up, it will ingest as fast as possible from the full node. Without a rate limit it catches up faster but may briefly impact read latency while writing older data. With a rate limit, read latency stays stable but recovery takes longer.
 
 :::info
 
