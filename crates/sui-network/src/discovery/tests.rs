@@ -1410,3 +1410,26 @@ async fn expired_cooldown_moves_peer_to_preferred() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn configured_peer_exempt_from_failure_report() -> Result<()> {
+    let peer_id = PeerId([42; 32]);
+    let config = P2pConfig {
+        seed_peers: vec![SeedPeer {
+            peer_id: Some(peer_id),
+            address: "/dns/localhost/udp/8080".parse()?,
+        }],
+        ..Default::default()
+    };
+    let (builder, _server, _em) = Builder::new().config(config).build();
+    let (network, keypair) = build_network_and_key(|router| router);
+    let (mut event_loop, _handle) = builder.build(network, keypair);
+
+    event_loop.handle_peer_failure_report(peer_id);
+
+    assert!(
+        !event_loop.peer_cooldowns.contains_key(&peer_id),
+        "configured peer should not be placed on cooldown"
+    );
+    Ok(())
+}

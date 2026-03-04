@@ -429,6 +429,10 @@ impl DiscoveryEventLoop {
     }
 
     fn handle_peer_failure_report(&mut self, peer_id: PeerId) {
+        if self.configured_peers.contains_key(&peer_id) {
+            info!(?peer_id, "ignoring failure report for configured peer");
+            return;
+        }
         info!(
             ?peer_id,
             "peer failure reported, disconnecting and adding cooldown"
