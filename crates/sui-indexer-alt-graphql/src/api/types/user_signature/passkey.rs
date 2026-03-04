@@ -27,7 +27,7 @@ impl PasskeySignature {
     }
 
     /// The inner user signature (secp256r1).
-    async fn user_signature(&self) -> Option<SignatureScheme> {
-        Some(simple_signature_to_scheme(&self.native.signature()))
+    async fn signature(&self) -> Option<SignatureScheme> {
+        simple_signature_to_scheme(&self.native.signature())
     }
 }

@@ -22,7 +22,7 @@ impl ZkLoginSignature {
     }
 
     /// The inner user signature (ed25519/secp256k1/secp256r1).
-    async fn user_signature(&self) -> Option<SignatureScheme> {
-        Some(simple_signature_to_scheme(&self.native.user_signature))
+    async fn signature(&self) -> Option<SignatureScheme> {
+        simple_signature_to_scheme(&self.native.user_signature)
     }
 }

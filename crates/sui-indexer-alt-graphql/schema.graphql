@@ -3366,7 +3366,7 @@ type PasskeySignature {
 	"""
 	The inner user signature (secp256r1).
 	"""
-	userSignature: SignatureScheme
+	signature: SignatureScheme
 }
 
 type PerEpochConfig {
@@ -4566,7 +4566,7 @@ type ZkLoginSignature {
 	"""
 	The inner user signature (ed25519/secp256k1/secp256r1).
 	"""
-	userSignature: SignatureScheme
+	signature: SignatureScheme
 }
 
 """

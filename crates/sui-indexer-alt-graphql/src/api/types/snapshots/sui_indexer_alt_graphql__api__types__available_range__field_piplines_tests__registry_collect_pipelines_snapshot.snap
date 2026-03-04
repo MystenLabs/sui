@@ -1304,7 +1304,7 @@ PasskeySignature.authenticatorData
 PasskeySignature.clientDataJson
   => {}
 
-PasskeySignature.userSignature
+PasskeySignature.signature
   => {}
 
 PerEpochConfig.object
@@ -1775,7 +1775,7 @@ ZkLoginPublicIdentifier.addressSeed
 ZkLoginSignature.maxEpoch
   => {}
 
-ZkLoginSignature.userSignature
+ZkLoginSignature.signature
   => {}
 
 ZkLoginVerifyResult.success
