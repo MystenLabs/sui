@@ -73,7 +73,7 @@ hkdf = "0.10.0"
 im = "15.1.0"
 indexmap = "2.8.0"
 indoc = "2.0.6"
-internment = { version = "0.5.0", features = [ "arc"] }
+internment = { version = "0.5.0", features = ["arc"] }
 itertools = "0.10.0"
 json_comments = "0.2.2"
 leb128 = "0.2.5"
@@ -96,12 +96,12 @@ paste = "1.0.5"
 path-clean = "1.0.1"
 petgraph = "0.8.1"
 phf = { version = "0.11", features = ["macros"] }
-plotters = { version = "0.3.0", default-features = false, features = ["evcxr", "line_series", "histogram"]}
+plotters = { version = "0.3.0", default-features = false, features = ["evcxr", "line_series", "histogram"] }
 pretty = "0.10.0"
 pretty_simple = "0.1.1"
 pretty_assertions = "1.4.1"
 prettydiff = "0.4.0"
-primitive-types = { version = "0.10.1", features = ["impl-serde"]}
+primitive-types = { version = "0.10.1", features = ["impl-serde"] }
 proc-macro2 = "1.0.24"
 proptest = "1.6.0"
 proptest-derive = "0.5"
@@ -160,7 +160,7 @@ fs4 = { version = "0.13.1" }
 
 
 bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
-enum-compat-util = { path = "crates/enum-compat-util"}
+enum-compat-util = { path = "crates/enum-compat-util" }
 invalid-mutations = { path = "crates/invalid-mutations" }
 jsonrpc = { path = "crates/jsonrpc" }
 module-generation = { path = "crates/module-generation" }
@@ -205,7 +205,7 @@ move-unit-test = { path = "crates/move-unit-test" }
 move-vm-config = { path = "crates/move-vm-config" }
 move-vm-profiler = { path = "crates/move-vm-profiler" }
 move-vm-runtime = { path = "crates/move-vm-runtime" }
-prover_bytecode = { path = "crates/move-stackless-bytecode", package="move-stackless-bytecode" }
+prover_bytecode = { path = "crates/move-stackless-bytecode", package = "move-stackless-bytecode" }
 
 [profile.bench]
 debug = true
