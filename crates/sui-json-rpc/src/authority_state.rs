@@ -289,12 +289,7 @@ impl StateRead for AuthorityState {
                 debug_assert_eq!(balance, value.as_u128().map(|v| v as u64).unwrap_or(0));
 
                 let coin = Object::new_move(
-                    MoveObject::new_coin(
-                        currency_type,
-                        accumulator_version,
-                        object_id,
-                        balance,
-                    ),
+                    MoveObject::new_coin(currency_type, accumulator_version, object_id, balance),
                     Owner::AddressOwner(owner),
                     previous_transaction,
                 );
