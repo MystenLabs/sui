@@ -1,54 +1,43 @@
 ---
-title: Using the Archival Store and Service (Beta)
-description: Overview of the Archival Store and Service to access historical Sui network data.
-keywords: [ archival store, archival service, historical data, grpc, ledger service, bigtable, data retention, sui-kv-store ]
+title: Using the Archival Service
+description: Query historical Sui network data through the Archival Service gRPC API.
+keywords: [ archival store, archival service, historical data, grpc, ledger service, bigtable, sui-kv-rpc ]
 ---
 
-This guide provides practical examples using the Archival Store and Service. For core concepts, see the [corresponding concepts page](/concepts/data-access/archival-store).
+The Archival Service provides access to historical Sui network data through the same [`LedgerService`](/references/fullnode-protocol) gRPC API available on full nodes. Use it as a fallback when your full node has pruned the data you need, or as a dedicated source for historical queries.
 
-For developers, access an Archival Service hosted by any participating provider. The Sui Foundation offers an Archival Store and Service as a public good on a Bigtable-based store through the endpoints:
+For core concepts, see the [Archival Store and Service concepts page](/concepts/data-access/archival-store).
+
+## Public endpoints
+
+The Sui Foundation operates an Archival Service as a public good:
 
 - Testnet: `archive.testnet.sui.io`
 - Mainnet: `archive.mainnet.sui.io`
 
-This service has strict rate limits.
+These endpoints have strict rate limits.
 
-## Integration points
+## Querying the service
 
-- **gRPC APIs**: Apps can query the Archival Service directly when gRPC on full nodes returns retention-related errors. This approach provides a graceful fallback without requiring the app or full node to store historical data itself. Access the Archival Service in the same way you access [gRPC `LedgerService` APIs](/guides/developer/accessing-data/grpc-overview) on a full node. Replace the full node URL with the Archival Service endpoint.
+The Archival Service exposes the same [`LedgerService`](/references/fullnode-protocol) gRPC API as a Sui full node. Query it using any gRPC client by pointing at an Archival Service endpoint instead of a full node.
 
-- **GraphQL RPC**: GraphQL RPC delegates historical lookups to the Archival Service using the planned integration. It enables cost-efficient setup of a General-purpose Indexer database with limited retention.
+See [Using gRPC](/guides/developer/accessing-data/grpc-overview) for detailed examples with `grpcurl`, Buf CLI, TypeScript, Go, and Python.
 
-## Operating the Archival Store and Service 
+For example, to fetch a historical transaction using `grpcurl`:
 
-For RPC and data providers, operate the Archival Store and Service yourself:
-
-- Deploy the Archival Service binary.
-- Maintain a store like Bigtable.
-- Populate the store with checkpoints using an ingestion mechanism.
-
-### Populating the Archival Store
-
-Run an indexer pipeline to keep the Archival Store updated. Sui Foundation provides an ingestion mechanism for Bigtable:
-
-1. Download and install the [`sui-kv-store`](https://github.com/MystenLabs/sui/tree/main/crates/sui-kvstore) tool.
-
-1. Run the following script to initialize the Bigtable cluster:
 ```shell
-$ ./crates/sui-kvstore/src/bigtable/init.sh <name_of_bigtable_cluster>
+grpcurl -d '{
+  "digest": "BASE58_TX_DIGEST"
+}' archive.testnet.sui.io:443 sui.rpc.v2.LedgerService/GetTransaction
 ```
 
-1. Run the ingestion daemon with:
-```shell
-$ cargo run --bin sui-kvstore <name_of_your_bigtable_cluster> ingestion <mainnet|testnet>
-```
+## Using the Archival Service as a fallback
 
-If you are using a different storage backend, build a compatible indexer using the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework) and ensure it emits data in a structure that is compatible with the [gRPC API's](/concepts/data-access/grpc) `LedgerService` endpoints.
+Apps can query the Archival Service when a full node returns retention-related errors. This provides a graceful fallback without requiring the full node to store historical data:
 
-### Running the Archival Service
+1. Send your query to the full node.
+2. If the full node returns `NOT_FOUND` for data that should exist, retry against the Archival Service endpoint.
 
-The Archival Service implements the [gRPC API's](./grpc-overview.mdx) `LedgerService`. Any implementation must support this interface. See the reference implementation for Bigtable: [sui-kv-rpc](https://github.com/MystenLabs/sui/tree/main/crates/sui-kv-rpc), deploy the service independently, or deploy it colocated with other infrastructure.
+## Running your own instance
 
-## Related links
-
-<RelatedLink href="https://cloud.google.com/bigtable" label="Bigtable" desc="Low-latency, Cassandra, and HBase-compatible NoSQL database service for machine learning, operational analytics, and user-facing applications." />
+For production use or to avoid rate limits, you can run the full archival stack yourself. See the [Archival Stack Setup](/guides/operator/archival-stack-setup) operator guide for instructions on setting up Bigtable, the indexer, and the gRPC service.

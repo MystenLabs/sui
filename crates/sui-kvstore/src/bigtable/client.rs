@@ -136,6 +136,33 @@ impl BigTableClient {
         app_profile_id: Option<String>,
         channel_pool_size: Option<usize>,
     ) -> Result<Self> {
+        Self::new_remote_with_credentials(
+            instance_id,
+            project_id,
+            is_read_only,
+            timeout,
+            max_decoding_message_size,
+            client_name,
+            registry,
+            app_profile_id,
+            channel_pool_size,
+            None,
+        )
+        .await
+    }
+
+    pub async fn new_remote_with_credentials(
+        instance_id: String,
+        project_id: Option<String>,
+        is_read_only: bool,
+        timeout: Option<Duration>,
+        max_decoding_message_size: Option<usize>,
+        client_name: String,
+        registry: Option<&Registry>,
+        app_profile_id: Option<String>,
+        channel_pool_size: Option<usize>,
+        credentials_path: Option<String>,
+    ) -> Result<Self> {
         let pool_size = channel_pool_size
             .unwrap_or(DEFAULT_CHANNEL_POOL_SIZE)
             .max(1);
@@ -144,7 +171,10 @@ impl BigTableClient {
         } else {
             "https://www.googleapis.com/auth/bigtable.data"
         };
-        let token_provider = gcp_auth::provider().await?;
+        let token_provider: Arc<dyn TokenProvider> = match credentials_path {
+            Some(path) => Arc::new(gcp_auth::CustomServiceAccount::from_file(&path)?),
+            None => gcp_auth::provider().await?,
+        };
         let tls_config = ClientTlsConfig::new()
             .ca_certificate(Certificate::from_pem(include_bytes!("./proto/google.pem")))
             .domain_name("bigtable.googleapis.com");
