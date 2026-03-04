@@ -19,8 +19,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
 
-      - name: Generate automerge token
-        id: automerge_token
+      - name: Generate app token
+        id: app_token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # pin@v2.2.1
         with:
           app-id: ${{ secrets.APP_ID }}
@@ -28,9 +28,8 @@ jobs:
 
       - name: Create PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # git also uses this
-          AUTOMERGE_TOKEN: ${{ steps.automerge_token.outputs.token }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.app_token.outputs.token }}
           GITHUB_ACTOR: ${{ github.actor }}
         shell: bash
         run: |

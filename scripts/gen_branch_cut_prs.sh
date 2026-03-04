@@ -101,8 +101,5 @@ else
   exit 1
 fi
 
-# Use AUTOMERGE_TOKEN if available so the merge push triggers CI workflows
-# (merges with GITHUB_TOKEN suppress push events to prevent recursive loops).
-MERGE_TOKEN="${AUTOMERGE_TOKEN:-$GH_TOKEN}"
-GH_TOKEN="$MERGE_TOKEN" gh pr merge --auto --squash --delete-branch "$BRANCH"
+gh pr merge --auto --squash --delete-branch "$BRANCH"
 echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: $PR_URL"
