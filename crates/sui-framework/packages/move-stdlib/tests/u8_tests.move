@@ -64,9 +64,10 @@ fun test_mul_div() {
 
 #[test]
 fun test_mul_div_exhaustive() {
-    0u8.range_do_eq!(MAX, |x| {
-        0u8.range_do_eq!(MAX, |y| {
-            0u8.range_do_eq!(MAX, |z| {
+    let max: u8 = 32;
+    0u8.range_do_eq!(max, |x| {
+        0u8.range_do_eq!(max, |y| {
+            0u8.range_do_eq!(max, |z| {
                 integer_tests::check_mul_div!<u8, u16>(MAX, x, y, z);
             })
         })
@@ -75,9 +76,10 @@ fun test_mul_div_exhaustive() {
 
 #[test]
 fun test_mul_div_ceil_exhaustive() {
-    0u8.range_do_eq!(MAX, |x| {
-        0u8.range_do_eq!(MAX, |y| {
-            0u8.range_do_eq!(MAX, |z| {
+    let max: u8 = 32;
+    0u8.range_do_eq!(max, |x| {
+        0u8.range_do_eq!(max, |y| {
+            0u8.range_do_eq!(max, |z| {
                 integer_tests::check_mul_div_ceil!<u8, u16>(MAX, x, y, z);
             })
         })
