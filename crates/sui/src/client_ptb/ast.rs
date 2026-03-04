@@ -43,6 +43,7 @@ pub const DEV_INSPECT: &str = "dev-inspect";
 pub const SERIALIZE_UNSIGNED: &str = "serialize-unsigned-transaction";
 pub const SERIALIZE_SIGNED: &str = "serialize-signed-transaction";
 pub const SENDER: &str = "sender";
+pub const USE_ADDRESS_BALANCE_GAS: &str = "use-address-balance-gas";
 
 // Types
 pub const U8: &str = "u8";
@@ -85,6 +86,7 @@ pub const COMMANDS: &[&str] = &[
     SERIALIZE_UNSIGNED,
     SERIALIZE_SIGNED,
     SENDER,
+    USE_ADDRESS_BALANCE_GAS,
 ];
 
 pub fn is_keyword(s: &str) -> bool {
@@ -127,6 +129,7 @@ pub struct ProgramMetadata {
     pub gas_sponsor: Option<Spanned<NumericalAddress>>,
     pub mvr_names: BTreeMap<String, Span>,
     pub sender: Option<Spanned<NumericalAddress>>,
+    pub use_address_balance_gas: bool,
 }
 
 /// A parsed module access consisting of the address, module name, and function name.
