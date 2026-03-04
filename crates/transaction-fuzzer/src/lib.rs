@@ -57,9 +57,7 @@ fn generate_random_gas_data(
                 Owner::AddressOwner(sender)
             } else if owned_by_sender {
                 match o {
-                    Owner::ObjectOwner(_) | Owner::AddressOwner(_) => {
-                        Owner::AddressOwner(sender)
-                    }
+                    Owner::ObjectOwner(_) | Owner::AddressOwner(_) => Owner::AddressOwner(sender),
                     _ => o.clone(),
                 }
             } else {
