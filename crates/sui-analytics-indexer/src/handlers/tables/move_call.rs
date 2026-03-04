@@ -30,7 +30,6 @@ impl Row for MoveCallRow {
 #[async_trait]
 impl Processor for MoveCallProcessor {
     const NAME: &'static str = Pipeline::MoveCall.name();
-    const FANOUT: usize = 16;
     type Value = MoveCallRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

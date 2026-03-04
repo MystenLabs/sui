@@ -38,6 +38,7 @@ pub use sui_types as types;
 
 #[cfg(feature = "cluster")]
 pub mod cluster;
+pub mod config;
 pub mod ingestion;
 pub mod metrics;
 pub mod pipeline;
@@ -452,6 +453,7 @@ mod tests {
     use tokio::sync::watch;
 
     use crate::FieldCount;
+    use crate::config::ConcurrencyConfig;
     use crate::ingestion::ingestion_client::IngestionClientArgs;
     use crate::mocks::store::MockStore;
     use crate::pipeline::CommitterConfig;
@@ -481,11 +483,6 @@ mod tests {
     #[async_trait]
     impl Processor for ControllableHandler {
         const NAME: &'static str = "controllable";
-        /// The checkpoints to process come out of order. To account for potential flakiness in test
-        /// `test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo`, we set the FANOUT to
-        /// the total number of checkpoints to process, so we can ensure the correct checkpoints are
-        /// processed.
-        const FANOUT: usize = 501;
         type Value = MockValue;
 
         async fn process(
@@ -2126,6 +2123,9 @@ mod tests {
                         watermark_interval_ms: 10,
                         ..Default::default()
                     },
+                    // High fixed concurrency so all checkpoints can be processed
+                    // concurrently despite out-of-order arrival.
+                    fanout: Some(ConcurrencyConfig::Fixed { value: 501 }),
                     ..Default::default()
                 },
             )
