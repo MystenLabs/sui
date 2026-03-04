@@ -290,7 +290,7 @@ From there, monitor cluster CPU utilization and scale nodes as needed — either
 
 #### Backfill rate limit sizing {#backfill-rate-limit-sizing}
 
-The rate limit you set in the TOML configuration should be based on your Bigtable cluster size. As a rule of thumb, each Bigtable SSD node can sustain approximately **111 rows/sec per 1% CPU utilization**. Google recommends targeting:
+The rate limit you set in the TOML configuration should be based on your Bigtable cluster size. Each Bigtable SSD node can sustain approximately **111 rows/sec per 1% CPU utilization**. Google recommends targeting:
 
 - **90% CPU** for write-only backfill (no concurrent read traffic)
 - **60% CPU** if the cluster is also serving reads during backfill
