@@ -660,7 +660,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-serde",
  "alloy-sol-types",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "serde",
  "serde_json",
  "serde_with",
@@ -5468,18 +5468,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fastbloom"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e7f34442dbe69c60fe8eaf58a8cafff81a1f278816d8ab4db255b3bef4ac3c4"
-dependencies = [
- "getrandom 0.3.2",
- "libm",
- "rand 0.9.0",
- "siphasher 1.0.1",
-]
-
-[[package]]
 name = "fastcrypto"
 version = "0.1.9"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=db643fd05a1b1c4cd52de3939766b53e12ce137e#db643fd05a1b1c4cd52de3939766b53e12ce137e"
@@ -6137,11 +6125,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73fea8450eea4bac3940448fb7ae50d91f034f941199fcd9d909a5a07aa455f0"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "r-efi",
  "wasi 0.14.2+wasi-0.2.4",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -8052,12 +8038,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lru-slab"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
-
-[[package]]
 name = "lsp-server"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8293,7 +8273,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=b0e39b95970a048a808408a79896aee995f007fe#b0e39b95970a048a808408a79896aee995f007fe"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=cfe208a25c348a170db82e7fcd1b1ebeeb409852#cfe208a25c348a170db82e7fcd1b1ebeeb409852"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -11268,7 +11248,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "multimap",
  "once_cell",
@@ -11290,7 +11270,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.99",
@@ -11303,7 +11283,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.99",
@@ -11487,45 +11467,37 @@ dependencies = [
 
 [[package]]
 name = "quinn"
-version = "0.11.9"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9e20a958963c291dc322d98411f541009df2ced7b5a4f2bd52337638cfccf20"
+checksum = "e4ceeeeabace7857413798eb1ffa1e9c905a9946a57d81fb69b4b71c4d8eb3ad"
 dependencies = [
  "bytes",
- "cfg_aliases 0.2.1",
  "futures-io",
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
- "rustc-hash 2.1.1",
+ "rustc-hash 1.1.0",
  "rustls 0.23.31",
- "socket2 0.5.6",
- "thiserror 2.0.17",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
- "web-time",
 ]
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.14"
+version = "0.11.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
+checksum = "fadfaed2cd7f389d0161bb73eeb07b7b78f8691047a6f3e73caaeae55310a4a6"
 dependencies = [
  "bytes",
- "fastbloom",
- "getrandom 0.3.2",
- "lru-slab",
- "rand 0.9.0",
+ "rand 0.8.5",
  "ring 0.17.8",
  "rustc-hash 2.1.1",
  "rustls 0.23.31",
- "rustls-pki-types",
  "slab",
- "thiserror 2.0.17",
+ "thiserror 1.0.69",
  "tinyvec",
  "tracing",
- "web-time",
 ]
 
 [[package]]
@@ -11537,7 +11509,6 @@ dependencies = [
  "libc",
  "once_cell",
  "socket2 0.5.6",
- "tracing",
  "windows-sys 0.52.0",
 ]
 
@@ -12083,9 +12054,9 @@ dependencies = [
 
 [[package]]
 name = "roaring"
-version = "0.11.3"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ba9ce64a8f45d7fc86358410bb1a82e8c987504c0d4900e9141d69a9f26c885"
+checksum = "f08d6a905edb32d74a5d5737a0c9d7e950c312f3c46cb0ca0a2ca09ea11878a0"
 dependencies = [
  "bytemuck",
  "byteorder",
@@ -12394,7 +12365,6 @@ version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be040f8b0a225e40375822a563fa9524378b9d63112f53e19ffff34df5d33fdd"
 dependencies = [
- "web-time",
  "zeroize",
 ]
 
@@ -14544,7 +14514,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.2.0"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=2257815708603938849c91b51de8117783a83e97#2257815708603938849c91b51de8117783a83e97"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e#18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -14640,7 +14610,6 @@ dependencies = [
  "indexmap 2.8.0",
  "insta",
  "move-core-types",
- "prost-types 0.14.1",
  "serde",
  "serde_json",
  "sui-json-rpc-types",
@@ -15511,7 +15480,6 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "reqwest",
- "serde_json",
  "shared-crypto",
  "sui-config",
  "sui-core",
@@ -16449,7 +16417,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.2.2"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=2257815708603938849c91b51de8117783a83e97#2257815708603938849c91b51de8117783a83e97"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e#18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16496,7 +16464,6 @@ dependencies = [
  "serde_with",
  "sui-config",
  "sui-crypto",
- "sui-display",
  "sui-macros",
  "sui-name-service",
  "sui-package-resolver",
@@ -16639,7 +16606,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.2.2"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=2257815708603938849c91b51de8117783a83e97#2257815708603938849c91b51de8117783a83e97"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e#18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e"
 dependencies = [
  "base64ct",
  "bcs",
@@ -16649,7 +16616,7 @@ dependencies = [
  "bytes",
  "bytestring",
  "itertools 0.14.0",
- "roaring 0.11.3",
+ "roaring 0.11.2",
  "serde",
  "serde_derive",
  "serde_json",
@@ -17794,7 +17761,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=b0e39b95970a048a808408a79896aee995f007fe#b0e39b95970a048a808408a79896aee995f007fe"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=cfe208a25c348a170db82e7fcd1b1ebeeb409852#cfe208a25c348a170db82e7fcd1b1ebeeb409852"
 dependencies = [
  "arc-swap",
  "bincode 1.3.3",
