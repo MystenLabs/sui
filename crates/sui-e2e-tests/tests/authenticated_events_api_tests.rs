@@ -227,7 +227,7 @@ async fn list_authenticated_events(
         connect_with_retry(|| EventServiceClient::connect(rpc_url.to_owned())).await;
 
     let mut all_events = Vec::new();
-    let mut page_token: Option<Vec<u8>> = None;
+    let mut page_token: Option<prost::bytes::Bytes> = None;
     let page_size_value = page_size.unwrap_or(1000);
 
     loop {

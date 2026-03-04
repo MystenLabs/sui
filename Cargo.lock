@@ -14513,7 +14513,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.2.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=dc3b2bf6f998282e61aeebb803d93499aee2a4a2#dc3b2bf6f998282e61aeebb803d93499aee2a4a2"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e#18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -16416,7 +16416,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.2.2"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=dc3b2bf6f998282e61aeebb803d93499aee2a4a2#dc3b2bf6f998282e61aeebb803d93499aee2a4a2"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e#18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16456,7 +16456,6 @@ dependencies = [
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
- "protox",
  "rand 0.8.5",
  "roaring 0.10.9",
  "serde",
@@ -16479,13 +16478,11 @@ dependencies = [
  "tonic 0.14.3",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tonic-web",
  "tower 0.5.2",
  "tracing",
  "url",
- "walkdir",
 ]
 
 [[package]]
@@ -16608,7 +16605,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.2.2"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=dc3b2bf6f998282e61aeebb803d93499aee2a4a2#dc3b2bf6f998282e61aeebb803d93499aee2a4a2"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e#18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e"
 dependencies = [
  "base64ct",
  "bcs",
