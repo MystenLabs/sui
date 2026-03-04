@@ -79,9 +79,7 @@ proptest! {
             .expect("deserialization should work");
         prop_assert_eq!(module, deserialized_module);
     }
-}
 
-proptest! {
     #[test]
     fn identifier_serializer_roundtrip(module in CompiledModule::valid_strategy(20)) {
         let module_id = module.self_id();

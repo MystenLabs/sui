@@ -101,6 +101,5 @@ else
   exit 1
 fi
 
-# Setting the PR to auto merge
 gh pr merge --auto --squash --delete-branch "$BRANCH"
 echo "Pull request for Sui v${SUI_VERSION} Framework Bytecode snapshot created: $PR_URL"
