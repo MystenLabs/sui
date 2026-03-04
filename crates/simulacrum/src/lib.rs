@@ -205,6 +205,32 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         }
     }
 
+    /// Simulates the provided Transaction without committing any state changes.
+    ///
+    /// This runs the transaction through the same validation and execution pipeline as
+    /// `execute_transaction`, but discards all writes. The store is not mutated and the
+    /// transaction is not enqueued for checkpointing.
+    ///
+    /// Returns the `InnerTemporaryStore` (containing the would-be object writes), the
+    /// `TransactionEffects`, and an optional `ExecutionError` if execution failed.
+    pub fn simulate_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> anyhow::Result<(InnerTemporaryStore, TransactionEffects, Option<ExecutionError>)> {
+        let transaction = transaction
+            .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
+
+        let (inner_temporary_store, _, effects, execution_error_opt) =
+            self.epoch_state.execute_transaction(
+                &self.store,
+                &self.deny_config,
+                &self.verifier_signing_config,
+                &transaction,
+            )?;
+
+        Ok((inner_temporary_store, effects, execution_error_opt.err()))
+    }
+
     /// Attempts to execute the provided Transaction.
     ///
     /// The provided Transaction undergoes the same types of checks that a Validator does prior to
@@ -947,5 +973,37 @@ mod tests {
         } else {
             assert_eq!(checkpoint.network_total_transactions, 2); // genesis + 1 user txn
         };
+    }
+
+    #[test]
+    fn simulate_does_not_mutate() {
+        let mut sim = Simulacrum::new();
+        let recipient = SuiAddress::random_for_testing_only();
+
+        // Recipient should have no objects initially
+        assert_eq!(sim.store().owned_objects(recipient).count(), 0);
+
+        // Build a transfer transaction
+        let (tx, _transfer_amount) = sim.transfer_txn(recipient);
+
+        // Simulate — should succeed but NOT mutate store
+        let (_inner_store, effects, exec_err) = sim.simulate_transaction(tx.clone()).unwrap();
+        assert!(exec_err.is_none(), "simulation should succeed");
+        assert!(effects.status().is_ok(), "effects should show success");
+
+        // Store must still be unchanged
+        assert_eq!(
+            sim.store().owned_objects(recipient).count(),
+            0,
+            "simulate must not mutate store"
+        );
+
+        // Now execute for real — state should change
+        let (effects, _) = sim.execute_transaction(tx).unwrap();
+        assert!(effects.status().is_ok());
+        assert!(
+            sim.store().owned_objects(recipient).count() > 0,
+            "execute should mutate store"
+        );
     }
 }
