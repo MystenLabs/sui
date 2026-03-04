@@ -41,3 +41,4 @@ jobs:
     with:
       type: minor
       delivery: pr
+    secrets: inherit
