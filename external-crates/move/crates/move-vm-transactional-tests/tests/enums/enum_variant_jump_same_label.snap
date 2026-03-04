@@ -75,6 +75,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(3), 3)],
+    message: "tag mismatch: expected 1, got 0",
 }
 
 task 4, line 103:
@@ -85,4 +86,5 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(3), 3)],
+    message: "tag mismatch: expected 1, got 2",
 }

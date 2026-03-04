@@ -21,6 +21,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 2, lines 25-28:
@@ -31,6 +32,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 3, lines 30-40:
@@ -51,6 +53,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 5, lines 54-60:
@@ -61,6 +64,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 6, lines 62-72:
@@ -81,6 +85,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 8, lines 86-89:
@@ -91,4 +96,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }

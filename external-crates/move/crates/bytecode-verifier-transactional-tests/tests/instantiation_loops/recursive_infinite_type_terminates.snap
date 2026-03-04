@@ -11,4 +11,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x6::M,
     indices: [],
     offsets: [],
+    message: "edges with constructors: [f1#0 --StructInstantiation(DatatypeHandleIndex(0), [TypeParameter(0)])--> f1#0], nodes: [f1#0]",
 }
