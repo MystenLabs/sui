@@ -9,9 +9,10 @@ use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AuthenticatedEventEmit,
-    INVALID_ALIAS_TX, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
-    OperationDescriptor, RandomnessRead, SharedCounterIncrement, SharedCounterRead,
-    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
+    INVALID_ALIAS_TX, ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw,
+    ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead, SharedCounterIncrement,
+    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
+    TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -300,6 +301,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(AccumulatorBalanceRead::NAME, 0.3);
         probabilities.insert(ObjectBalanceOverdraw::NAME, 0.1);
         probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
+        probabilities.insert(ImmutableObjectRead::NAME, 0.2);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -383,6 +385,7 @@ pub struct OperationPool {
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_type: Option<TypeTag>,
     pub chain_identifier: sui_types::digests::ChainIdentifier,
+    pub immutable_object: Option<ObjectRef>,
 }
 
 impl OperationPool {
@@ -519,6 +522,7 @@ impl CompositePayload {
                 ResourceRequest::AccumulatorRoot => {
                     accumulator_root = Some(pool.accumulator_root_initial_shared_version);
                 }
+                ResourceRequest::ImmutableObject => {}
             }
         }
 
@@ -531,6 +535,7 @@ impl CompositePayload {
             balance_pool,
             test_coin_cap,
             test_coin_type: pool.test_coin_type.clone(),
+            immutable_object: pool.immutable_object,
         }
     }
 
@@ -1249,6 +1254,7 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             accumulator_root_initial_shared_version: None,
             balance_pool: None,
             test_coin_cap: None,
+            immutable_object: None,
             init_gas,
             payload_gas: payload_gas.into_iter().map(gas_to_multi_gas).collect(),
             num_payloads: self.num_payloads,
@@ -1268,6 +1274,7 @@ pub struct CompositeWorkload {
     accumulator_root_initial_shared_version: Option<SequenceNumber>,
     balance_pool: Option<(ObjectID, SequenceNumber)>,
     test_coin_cap: Option<(ObjectID, SequenceNumber)>,
+    immutable_object: Option<ObjectRef>,
     init_gas: Vec<Gas>,
     payload_gas: Vec<MultiGas>,
     num_payloads: u64,
@@ -1557,6 +1564,42 @@ impl Workload<dyn Payload> for CompositeWorkload {
             }
         }
 
+        if init_requirements.contains(&InitRequirement::CreateImmutableObject) {
+            info!("Creating immutable object for immutable object read operations");
+            let (multi_gas, sender, keypair) = &mut self.payload_gas[0];
+            let gas = &mut multi_gas[0];
+
+            let value: u64 = 42;
+            let mut tx_builder = TestTransactionBuilder::new(*sender, *gas, gas_price);
+            {
+                let builder = tx_builder.ptb_builder_mut();
+                let value_arg = builder.pure(value).unwrap();
+                builder.programmable_move_call(
+                    self.package_id.unwrap(),
+                    Identifier::new("immutable_object").unwrap(),
+                    Identifier::new("create_and_freeze").unwrap(),
+                    vec![],
+                    vec![value_arg],
+                );
+            }
+            let tx = tx_builder.build_and_sign(keypair.as_ref());
+
+            let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
+            let effects = execution_result.expect("Immutable object creation should succeed");
+            update_gas!(gas, effects);
+
+            let obj_ref = effects
+                .created()
+                .iter()
+                .find_map(|(obj_ref, owner)| match owner {
+                    Owner::Immutable => Some(*obj_ref),
+                    _ => None,
+                })
+                .expect("ImmutableData object should be created");
+            self.immutable_object = Some(obj_ref);
+            info!("Created immutable object {:?}", self.immutable_object);
+        }
+
         if init_requirements.contains(&InitRequirement::SeedTestCoinAddressBalance) {
             if let Some((cap_id, cap_version)) = self.test_coin_cap {
                 let seed_amount = self.config.address_balance_amount * 100;
@@ -1779,6 +1822,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             test_coin_cap: self.test_coin_cap,
             test_coin_type,
             chain_identifier: self.chain_identifier.unwrap(),
+            immutable_object: self.immutable_object,
         });
 
         let config = Arc::new(self.config.clone());
