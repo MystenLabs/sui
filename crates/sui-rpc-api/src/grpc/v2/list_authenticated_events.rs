@@ -236,6 +236,6 @@ pub fn list_authenticated_events(
     let mut response = ListAuthenticatedEventsResponse::default();
     response.events = events;
     response.highest_indexed_checkpoint = Some(highest_indexed);
-    response.next_page_token = next_page_token.map(|t| t.into());
+    response.next_page_token = next_page_token;
     Ok(response)
 }
