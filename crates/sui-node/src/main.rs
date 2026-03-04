@@ -195,6 +195,7 @@ fn main() {
         .unwrap()
         .block_on(wait_termination(runtime_shutdown_rx));
 
+    error!("Shutting down sui runtimes");
     // Drop and wait all runtimes on main thread
     drop(runtimes);
 }
