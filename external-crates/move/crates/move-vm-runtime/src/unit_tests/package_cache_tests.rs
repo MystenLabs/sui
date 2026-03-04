@@ -732,7 +732,10 @@ fn cache_reuses_packages_across_linkage_contexts() {
     );
 
     // But the contents should be equivalent
-    assert_eq!(pkg1_before.loaded_types_len(), pkg1_reloaded.loaded_types_len());
+    assert_eq!(
+        pkg1_before.loaded_types_len(),
+        pkg1_reloaded.loaded_types_len()
+    );
 }
 
 /// Compile a relinker test module with the given original/version IDs and dependencies.
@@ -749,17 +752,17 @@ fn relinker_pkg(
         .to_string();
     let dep_paths: Vec<String> = deps
         .iter()
-        .map(|d| base.join(format!("rt_{d}.move")).to_string_lossy().to_string())
+        .map(|d| {
+            base.join(format!("rt_{d}.move"))
+                .to_string_lossy()
+                .to_string()
+        })
         .collect();
 
-    let (_, units) = Compiler::from_files(
-        None,
-        vec![source],
-        dep_paths,
-        BTreeMap::<String, _>::new(),
-    )
-    .build_and_report()
-    .expect("compilation failed");
+    let (_, units) =
+        Compiler::from_files(None, vec![source], dep_paths, BTreeMap::<String, _>::new())
+            .build_and_report()
+            .expect("compilation failed");
 
     let modules: Vec<CompiledModule> = expect_modules(units)
         .filter(|m| *m.self_id().address() == original_id)
@@ -826,8 +829,7 @@ fn relink() {
 
     // A v0 (original=0x4, stored at 0x4) linked against C v1 and B v0
     let mut a0 = relinker_pkg(a_orig, a_orig, "a_v0", &["b_v0", "c_v1"]);
-    a0.0.linkage_table =
-        BTreeMap::from([(c_orig, c_v1_addr), (b_orig, b_orig), (a_orig, a_orig)]);
+    a0.0.linkage_table = BTreeMap::from([(c_orig, c_v1_addr), (b_orig, b_orig), (a_orig, a_orig)]);
     adapter.insert_package_into_storage(a0);
 
     // -- Load packages into cache with different linkage contexts --
@@ -870,7 +872,13 @@ fn relink() {
     );
 
     // Both C versions are cached as separate entries
-    assert!(adapter.runtime().cache().cached_package_at(c_orig).is_some());
+    assert!(
+        adapter
+            .runtime()
+            .cache()
+            .cached_package_at(c_orig)
+            .is_some()
+    );
     assert!(
         adapter
             .runtime()
@@ -884,8 +892,7 @@ fn relink() {
     // Try publishing A v0 linked against C v0 instead of C v1.
     // A calls d() which only exists in C v1, so verification should fail.
     let mut a0_bad = relinker_pkg(a_orig, a_orig, "a_v0", &["b_v0", "c_v1"]);
-    a0_bad.0.linkage_table =
-        BTreeMap::from([(c_orig, c_orig), (b_orig, b_orig), (a_orig, a_orig)]);
+    a0_bad.0.linkage_table = BTreeMap::from([(c_orig, c_orig), (b_orig, b_orig), (a_orig, a_orig)]);
     let result = adapter.publish_package(a_orig, a0_bad.into_serialized_package());
     assert!(
         result.is_err(),

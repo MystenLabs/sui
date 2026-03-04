@@ -350,7 +350,11 @@ impl MovePackage {
                 .serialize_with_version(module.version, &mut bytes)
                 .unwrap();
             if module_map.insert(name, bytes).is_some() {
-                panic!("Duplicate module {} in system package", module.self_id());
+                panic!(
+                    "Duplicate module {} in system package {}",
+                    module.self_id(),
+                    storage_id
+                );
             }
         }
 
@@ -395,10 +399,13 @@ impl MovePackage {
             };
             module.serialize_with_version(version, &mut bytes).unwrap();
             if module_map.insert(name, bytes).is_some() {
-                return Err(ExecutionError::from_kind(
-                    ExecutionErrorKind::DuplicateModuleName {
-                        duplicate_module_name: module.self_id().to_string(),
-                    },
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::VMVerificationOrDeserializationError,
+                    format!(
+                        "Duplicate module {} in package {}",
+                        module.self_id(),
+                        storage_id
+                    ),
                 ));
             }
         }

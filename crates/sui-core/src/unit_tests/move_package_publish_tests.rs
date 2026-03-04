@@ -163,13 +163,13 @@ async fn test_publish_duplicate_modules() {
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = submit_and_execute(&authority, transaction).await.unwrap().1;
-    assert!(matches!(
+    assert_eq!(
         result.status(),
         &ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::DuplicateModuleName { .. },
+            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
             command: Some(0)
         }
-    ));
+    )
 }
 
 #[tokio::test]
