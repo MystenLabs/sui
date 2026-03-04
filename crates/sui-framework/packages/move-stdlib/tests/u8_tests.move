@@ -67,7 +67,7 @@ fun test_mul_div_exhaustive() {
     0u8.range_do_eq!(MAX, |x| {
         0u8.range_do_eq!(MAX, |y| {
             0u8.range_do_eq!(MAX, |z| {
-                integer_tests::check_mul_div!(MAX, x, y, z);
+                integer_tests::check_mul_div!<u8, u16>(MAX, x, y, z);
             })
         })
     })
@@ -78,7 +78,7 @@ fun test_mul_div_ceil_exhaustive() {
     0u8.range_do_eq!(MAX, |x| {
         0u8.range_do_eq!(MAX, |y| {
             0u8.range_do_eq!(MAX, |z| {
-                integer_tests::check_mul_div_ceil!(MAX, x, y, z);
+                integer_tests::check_mul_div_ceil!<u8, u16>(MAX, x, y, z);
             })
         })
     })

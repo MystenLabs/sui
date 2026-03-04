@@ -53,6 +53,11 @@ fun test_mul_div() {
     integer_tests::test_mul_div!<u32, u64>(MAX, CASES);
 }
 
+#[test]
+fun test_mul_div_ceil() {
+    integer_tests::test_mul_div_ceil!<u32, u64>(MAX, CASES);
+}
+
 #[test, expected_failure(arithmetic_error, location = std::u32)]
 fun test_mul_div_div_by_zero() {
     1u32.mul_div(1, 0);
