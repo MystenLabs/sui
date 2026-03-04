@@ -242,6 +242,7 @@ jobs:
           event-type: nightly-build-failure
           client-payload: |-
             {
+              "commit_sha": "${{ github.sha }}",
               "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "run_id": "${{ github.run_id }}",
               "workflow_name": "${{ github.workflow }}",
