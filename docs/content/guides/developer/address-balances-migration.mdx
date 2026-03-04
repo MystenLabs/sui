@@ -18,6 +18,26 @@ Address balances introduce a canonical balance system for fungible assets tied t
 
 For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
 
+## Read this first
+
+### Limited impact
+
+This rollout initially has very limited impact:
+
+- Nothing is being deprecated or removed. All transactions that are currently valid will continue to be valid. Coin objects are not being forcibly migrated to address balances.
+- No contracts need to be re-written. Contracts can continue to accept `Coin<T>` and `&mut Coin<T>` as before.
+- Coins can still be sent via `transfer::public_transfer` or the `TransferObjects` command.
+
+### Impact for wallets, exchanges, and custody providers
+
+Anyone operating a wallet (custodial, non-custodial, exchange wallets, etc) may be impacted by this change.
+The reason is: **users can now send funds to your address via `send_funds()` instead of transferring a coin object**.
+If a wallet receives funds this way, but cannot "see" the funds or access them, the user may believe that the funds have been lost.
+The funds cannot actually be lost, but this may cause confusion and concern for affected users.
+
+Initially, this will not happen often, as most of the ecosystem will continue to transfer coin objects, just as they do today.
+But, since the possibility exists that funds can arrive at any wallet as an address balance transfer, wallet implementors should be prepared for this.
+
 ## Overview
 
 Previously, balances on Sui were computed by summing the values of all `Coin<T>` objects owned by an address. With address balances, each address may additionally have one address-owned balance for each currency type `T`. The total balance is the sum of all `Coin<T>` objects plus the address balance value for that coin type.
