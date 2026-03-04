@@ -10,7 +10,9 @@ if [[ -n $BIGTABLE_EMULATOR_HOST ]]; then
   command+=(-project emulator)
 fi
 
-for table in objects transactions checkpoints checkpoints_by_digest watermark_alt epochs; do
+for table in checkpoints checkpoints_by_digest transactions objects epochs \
+    watermark_alt protocol_configs packages packages_by_id \
+    packages_by_checkpoint system_packages; do
   (
     set -x
     "${command[@]}" createtable $table
@@ -18,4 +20,3 @@ for table in objects transactions checkpoints checkpoints_by_digest watermark_al
     "${command[@]}" setgcpolicy $table sui maxversions=1
   )
 done
-"${command[@]}" setgcpolicy watermark sui maxage=2d
