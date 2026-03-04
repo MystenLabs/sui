@@ -11,7 +11,7 @@ Error: Function execution failed with VMError: {
     location: 0x2a::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "000000000000000000000000000000000000000000000000000000000000002a::m::x_abort at offset 1",
+    message: "0x000000000000000000000000000000000000000000000000000000000000002a::m::x_abort at offset 1",
 }
 
 task 3, line 39:
@@ -22,7 +22,7 @@ Error: Function execution failed with VMError: {
     location: 0x2a::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(1), 1)],
-    message: "000000000000000000000000000000000000000000000000000000000000002a::m::id_abort at offset 1",
+    message: "0x000000000000000000000000000000000000000000000000000000000000002a::m::id_abort at offset 1",
 }
 
 task 4, line 41:
@@ -33,7 +33,7 @@ Error: Function execution failed with VMError: {
     location: 0x2a::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(4), 1)],
-    message: "000000000000000000000000000000000000000000000000000000000000002a::m::aborts2_not_0 at offset 1",
+    message: "0x000000000000000000000000000000000000000000000000000000000000002a::m::aborts2_not_0 at offset 1",
 }
 
 task 5, line 43:
@@ -44,5 +44,5 @@ Error: Function execution failed with VMError: {
     location: 0x2a::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(5), 1)],
-    message: "000000000000000000000000000000000000000000000000000000000000002a::m::aborts2_not_1 at offset 1",
+    message: "0x000000000000000000000000000000000000000000000000000000000000002a::m::aborts2_not_1 at offset 1",
 }

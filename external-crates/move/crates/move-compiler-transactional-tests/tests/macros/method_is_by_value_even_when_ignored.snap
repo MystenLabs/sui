@@ -11,7 +11,7 @@ Error: Function execution failed with VMError: {
     location: 0x2a::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "000000000000000000000000000000000000000000000000000000000000002a::m::x_abort at offset 1",
+    message: "0x000000000000000000000000000000000000000000000000000000000000002a::m::x_abort at offset 1",
 }
 
 task 3, line 31:
@@ -22,5 +22,5 @@ Error: Function execution failed with VMError: {
     location: 0x2a::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(1), 1)],
-    message: "000000000000000000000000000000000000000000000000000000000000002a::m::id_abort at offset 1",
+    message: "0x000000000000000000000000000000000000000000000000000000000000002a::m::id_abort at offset 1",
 }

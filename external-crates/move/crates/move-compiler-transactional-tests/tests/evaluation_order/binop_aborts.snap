@@ -11,7 +11,7 @@ Error: Function execution failed with VMError: {
     location: 0x43::test0,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "0000000000000000000000000000000000000000000000000000000000000043::test0::main at offset 1",
+    message: "0x0000000000000000000000000000000000000000000000000000000000000043::test0::main at offset 1",
 }
 
 task 2, lines 22-29:
@@ -22,7 +22,7 @@ Error: Function execution failed with VMError: {
     location: 0x42::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "0000000000000000000000000000000000000000000000000000000000000042::m::aborter at offset 1",
+    message: "0x0000000000000000000000000000000000000000000000000000000000000042::m::aborter at offset 1",
 }
 
 task 3, lines 31-37:
@@ -53,7 +53,7 @@ Error: Function execution failed with VMError: {
     location: 0x47::test4,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "0000000000000000000000000000000000000000000000000000000000000047::test4::test at offset 1",
+    message: "0x0000000000000000000000000000000000000000000000000000000000000047::test4::test at offset 1",
 }
 
 task 6, lines 55-61:
@@ -64,7 +64,7 @@ Error: Function execution failed with VMError: {
     location: 0x48::test5,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "0000000000000000000000000000000000000000000000000000000000000048::test5::test at offset 1",
+    message: "0x0000000000000000000000000000000000000000000000000000000000000048::test5::test at offset 1",
 }
 
 task 7, lines 63-69:
