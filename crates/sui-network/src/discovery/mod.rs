@@ -12,7 +12,7 @@ use shared_crypto::intent::IntentScope;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crate::endpoint_manager::{AddressSource, EndpointId, EndpointManager};
@@ -63,6 +63,9 @@ pub enum DiscoveryMessage {
     ReceivedNodeInfo {
         peer_info: Box<SignedVersionedNodeInfo>,
     },
+    PeerFailureReport {
+        peer_id: PeerId,
+    },
 }
 
 /// A Handle to the Discovery subsystem. The Discovery system will be shut down once all Handles
@@ -100,6 +103,12 @@ impl Sender {
                 addresses,
             })
             .expect("Discovery mailbox should not overflow or be closed")
+    }
+
+    pub fn report_peer_failure(&self, peer_id: PeerId) {
+        let _ = self
+            .sender
+            .try_send(DiscoveryMessage::PeerFailureReport { peer_id });
     }
 }
 
@@ -342,6 +351,7 @@ struct DiscoveryEventLoop {
     metrics: Metrics,
     consensus_external_address: Option<Multiaddr>,
     endpoint_manager: EndpointManager,
+    peer_cooldowns: HashMap<PeerId, Instant>,
 }
 
 impl DiscoveryEventLoop {
@@ -412,7 +422,19 @@ impl DiscoveryEventLoop {
                     &self.endpoint_manager,
                 );
             }
+            DiscoveryMessage::PeerFailureReport { peer_id } => {
+                self.handle_peer_failure_report(peer_id);
+            }
         }
+    }
+
+    fn handle_peer_failure_report(&mut self, peer_id: PeerId) {
+        info!(
+            ?peer_id,
+            "peer failure reported, disconnecting and adding cooldown"
+        );
+        let _ = self.network.disconnect(peer_id);
+        self.peer_cooldowns.insert(peer_id, Instant::now());
     }
 
     fn construct_our_info(&mut self) {
@@ -621,13 +643,19 @@ impl DiscoveryEventLoop {
             self.dial_seed_peers_task = None;
         }
 
+        let cooldown = self.discovery_config.peer_failure_cooldown();
+        self.peer_cooldowns
+            .retain(|_, since| since.elapsed() < cooldown);
+
         // Spawn some dials
         let state = self.state.read().unwrap();
         let our_peer_id = self.network.peer_id();
 
         // Collect eligible peers from both known_peers (V2) and known_peers_v2 (V3),
         // preferring fresher timestamps when a peer appears in both maps.
-        let mut eligible: HashMap<PeerId, NodeInfo> = HashMap::new();
+        // Partition into preferred (not on cooldown) and cooldown peers.
+        let mut preferred: HashMap<PeerId, NodeInfo> = HashMap::new();
+        let mut cooldown_peers: HashMap<PeerId, NodeInfo> = HashMap::new();
 
         for (peer_id, info) in state.known_peers.iter() {
             if *peer_id != our_peer_id
@@ -635,7 +663,11 @@ impl DiscoveryEventLoop {
                 && !state.connected_peers.contains_key(peer_id)
                 && !self.pending_dials.contains_key(peer_id)
             {
-                eligible.insert(*peer_id, info.data().clone());
+                if self.peer_cooldowns.contains_key(peer_id) {
+                    cooldown_peers.insert(*peer_id, info.data().clone());
+                } else {
+                    preferred.insert(*peer_id, info.data().clone());
+                }
             }
         }
         for (peer_id, info) in state.known_peers_v2.iter() {
@@ -644,37 +676,54 @@ impl DiscoveryEventLoop {
                 && !p2p_addresses.is_empty()
                 && !state.connected_peers.contains_key(peer_id)
                 && !self.pending_dials.contains_key(peer_id)
-                && eligible
+            {
+                let node_info = NodeInfo {
+                    peer_id: *peer_id,
+                    addresses: p2p_addresses.to_vec(),
+                    timestamp_ms: info.timestamp_ms(),
+                    access_type: info.access_type(),
+                };
+                if self.peer_cooldowns.contains_key(peer_id) {
+                    if cooldown_peers
+                        .get(peer_id)
+                        .is_none_or(|existing| info.timestamp_ms() > existing.timestamp_ms)
+                    {
+                        cooldown_peers.insert(*peer_id, node_info);
+                    }
+                } else if preferred
                     .get(peer_id)
                     .is_none_or(|existing| info.timestamp_ms() > existing.timestamp_ms)
-            {
-                eligible.insert(
-                    *peer_id,
-                    NodeInfo {
-                        peer_id: *peer_id,
-                        addresses: p2p_addresses.to_vec(),
-                        timestamp_ms: info.timestamp_ms(),
-                        access_type: info.access_type(),
-                    },
-                );
+                {
+                    preferred.insert(*peer_id, node_info);
+                }
             }
         }
 
-        // No need to connect to any more peers if we're already connected to a bunch
         let number_of_connections = state.connected_peers.len();
-        let number_to_dial = std::cmp::min(
-            eligible.len(),
-            self.discovery_config
-                .target_concurrent_connections()
-                .saturating_sub(number_of_connections),
-        );
+        let number_to_dial = self
+            .discovery_config
+            .target_concurrent_connections()
+            .saturating_sub(number_of_connections);
 
-        // randomize the order
         use rand::seq::IteratorRandom;
-        for (peer_id, info) in eligible
+        let mut rng = rand::thread_rng();
+
+        let preferred_to_dial = std::cmp::min(preferred.len(), number_to_dial);
+        let mut to_dial: Vec<_> = preferred
             .into_iter()
-            .choose_multiple(&mut rand::thread_rng(), number_to_dial)
-        {
+            .choose_multiple(&mut rng, preferred_to_dial);
+
+        let remaining = number_to_dial.saturating_sub(to_dial.len());
+        if remaining > 0 {
+            let cooldown_to_dial = std::cmp::min(cooldown_peers.len(), remaining);
+            to_dial.extend(
+                cooldown_peers
+                    .into_iter()
+                    .choose_multiple(&mut rng, cooldown_to_dial),
+            );
+        }
+
+        for (peer_id, info) in to_dial {
             let abort_handle = self
                 .tasks
                 .spawn(try_to_connect_to_peer(self.network.clone(), info));

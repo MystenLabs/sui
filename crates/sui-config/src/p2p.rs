@@ -393,12 +393,14 @@ impl StateSyncConfig {
 
     pub fn exploration_probability(&self) -> f64 {
         const DEFAULT: f64 = 0.1;
-        self.exploration_probability.unwrap_or(DEFAULT)
+        self.exploration_probability
+            .unwrap_or(DEFAULT)
+            .clamp(0.0, 1.0)
     }
 
     pub fn peer_failure_rate(&self) -> f64 {
         const DEFAULT: f64 = 0.3;
-        self.peer_failure_rate.unwrap_or(DEFAULT)
+        self.peer_failure_rate.unwrap_or(DEFAULT).clamp(0.0, 1.0)
     }
 
     pub fn peer_disconnect_threshold(&self) -> Duration {
@@ -514,6 +516,13 @@ pub struct DiscoveryConfig {
     /// If unspecified, this will default to `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_get_known_peers_v3: Option<bool>,
+
+    /// Duration in milliseconds to cooldown a peer after a failure report from state-sync.
+    /// During cooldown, the peer is deprioritized for new connections.
+    ///
+    /// If unspecified, this will default to `3,600,000` (1 hour).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_failure_cooldown_ms: Option<u64>,
 }
 
 impl DiscoveryConfig {
@@ -549,6 +558,11 @@ impl DiscoveryConfig {
 
     pub fn use_get_known_peers_v3(&self) -> bool {
         self.use_get_known_peers_v3.unwrap_or(false)
+    }
+
+    pub fn peer_failure_cooldown(&self) -> Duration {
+        const DEFAULT_MS: u64 = 3_600_000; // 1 hour
+        Duration::from_millis(self.peer_failure_cooldown_ms.unwrap_or(DEFAULT_MS))
     }
 }
 
