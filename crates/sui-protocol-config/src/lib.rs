@@ -4657,8 +4657,6 @@ impl ProtocolConfig {
                 115 => {
                     cfg.feature_flags.gasless_transaction_drop_safety = true;
                     cfg.feature_flags.address_aliases = true;
-                }
-                115 => {
                     cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
                 }
                 // Use this template when making changes:
