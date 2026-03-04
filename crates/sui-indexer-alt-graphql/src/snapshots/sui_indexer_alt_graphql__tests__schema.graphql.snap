@@ -1431,7 +1431,7 @@ input EventFilter {
 	"""
 	Events emitted by a particular module. An event is emitted by a particular module if some function in the module is called by a PTB and emits an event.
 	
-	Modules can be filtered by their package, or package::module. We currently do not support filtering by emitting module and event type at the same time so if both are provided in one filter, the query will error.
+	Modules can be filtered by their package, or package::module.
 	"""
 	module: String
 	"""
@@ -3643,6 +3643,13 @@ type Query {
 	Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
 	"""
 	protocolConfigs(version: UInt53): ProtocolConfigs
+	"""
+	The events that exist in the network, optionally filtered by multiple event filters.
+	Supports combining filters (e.g. `sender` AND `module` AND `type`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `afterCheckpoint`, `beforeCheckpoint`, or `atCheckpoint` to narrow it. Supports a longer retention than `Query.events`.
+	
+	Note that this differs from `Query.events`, which supports a single filter with an optional sender filter, with no checkpoint range restriction and generally a shorter retention.
+	"""
+	scanEvents(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection
 	"""
 	The transactions that exist in the network, optionally filtered by multiple transaction filters.
 	

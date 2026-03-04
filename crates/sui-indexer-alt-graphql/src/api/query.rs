@@ -35,8 +35,11 @@ use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::epoch::CEpoch;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
+use crate::api::types::event::CScanEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::filter::EventFilter;
+use crate::api::types::event::filter::EventFilterValidator as EFValidator;
+
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package;
 use crate::api::types::move_package::MovePackage;
@@ -295,7 +298,7 @@ impl Query {
         after: Option<CEvent>,
         last: Option<u64>,
         before: Option<CEvent>,
-        filter: Option<EventFilter>,
+        #[graphql(validator(custom = "EFValidator"))] filter: Option<EventFilter>,
     ) -> Option<Result<Connection<String, Event>, RpcError>> {
         Some(
             async {
@@ -305,6 +308,32 @@ impl Query {
                 let page = Page::from_params(limits, first, after, last, before)?;
 
                 Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
+            }
+            .await,
+        )
+    }
+
+    /// The events that exist in the network, optionally filtered by multiple event filters.
+    /// Supports combining filters (e.g. `sender` AND `module` AND `type`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `afterCheckpoint`, `beforeCheckpoint`, or `atCheckpoint` to narrow it. Supports a longer retention than `Query.events`.
+    ///
+    /// Note that this differs from `Query.events`, which supports a single filter with an optional sender filter, with no checkpoint range restriction and generally a shorter retention.
+    async fn scan_events(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CScanEvent>,
+        last: Option<u64>,
+        before: Option<CScanEvent>,
+        #[graphql(validator(custom = "ScanFilterValidator::new(ctx)"))] filter: EventFilter,
+    ) -> Option<Result<Connection<String, Event>, RpcError>> {
+        Some(
+            async {
+                let scope = self.scope(ctx)?;
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "events");
+                let page = Page::from_params(limits, first, after, last, before)?;
+
+                Event::scan(ctx, scope, page, filter).await
             }
             .await,
         )

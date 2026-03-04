@@ -5,6 +5,7 @@ use async_graphql::Context;
 use async_graphql::CustomValidator;
 use async_graphql::Enum;
 use async_graphql::InputObject;
+use async_graphql::InputType;
 use async_graphql::InputValueError;
 use sui_indexer_alt_reader::kv_loader::TransactionContents;
 use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
@@ -65,15 +66,9 @@ pub(crate) struct TransactionFilter {
 }
 
 pub(crate) struct TransactionFilterValidator;
-pub(crate) struct ScanFilterValidator {
-    max_scan_limit: u64,
-}
 
-impl ScanFilterValidator {
-    pub fn new(ctx: &Context<'_>) -> Self {
-        let &Limits { max_scan_limit, .. } = ctx.data_unchecked();
-        Self { max_scan_limit }
-    }
+pub(crate) struct ScanFilterValidator {
+    pub(crate) max_scan_limit: u64,
 }
 
 impl TransactionFilter {
@@ -226,6 +221,13 @@ impl CheckpointBounds for TransactionFilter {
     }
 }
 
+impl ScanFilterValidator {
+    pub fn new(ctx: &Context<'_>) -> Self {
+        let &Limits { max_scan_limit, .. } = ctx.data_unchecked();
+        Self { max_scan_limit }
+    }
+}
+
 impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
     fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
         let filters = filter.affected_address.is_some() as u8
@@ -242,12 +244,12 @@ impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
     }
 }
 
-impl CustomValidator<TransactionFilter> for ScanFilterValidator {
-    fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
+impl<T: CheckpointBounds + InputType> CustomValidator<T> for ScanFilterValidator {
+    fn check(&self, filter: &T) -> Result<(), InputValueError<T>> {
         let Some(range) = checkpoint_bounds(
-            filter.after_checkpoint.map(u64::from),
-            filter.at_checkpoint.map(u64::from),
-            filter.before_checkpoint.map(u64::from),
+            filter.after_checkpoint().map(u64::from),
+            filter.at_checkpoint().map(u64::from),
+            filter.before_checkpoint().map(u64::from),
             0,
             u64::MAX,
         ) else {
