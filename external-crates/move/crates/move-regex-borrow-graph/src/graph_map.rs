@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use indexmap::IndexMap;
 
 #[derive(Debug)]
@@ -14,14 +16,14 @@ pub struct NodeIndex {
 }
 
 #[derive(Debug, Clone)]
-/// A simple graph implementation that uses two `IndexMap`s. One to store a node "weights" and one
-/// To store edge "weights".
+/// A simple graph implementation that uses a `BTreeMap` for node "weights" and an `IndexMap` for
+/// edge "weights".
 /// In the context of the borrow graph, the node weights will be the `Ref`, and the edge weights
 /// will be an `Edge<Loc, Lbl>`.
 pub struct GraphMap<N, E> {
     generation: u32,
     next: u32,
-    node_weights: IndexMap<NodeIndex, N>,
+    node_weights: BTreeMap<NodeIndex, N>,
     edge_weights: IndexMap<(NodeIndex, NodeIndex), E>,
 }
 
@@ -35,7 +37,7 @@ impl<N, E> GraphMap<N, E> {
         Self {
             generation: 0,
             next: 0,
-            node_weights: IndexMap::with_capacity(canonical_reference_capacity),
+            node_weights: BTreeMap::new(),
             edge_weights: IndexMap::with_capacity(canonical_reference_capacity * 3 / 2),
         }
     }
@@ -155,7 +157,7 @@ impl<N, E> GraphMap<N, E> {
     /// Removes the specified node and all edges to/from it. Searching for the edges to remove
     /// is O(E)
     pub fn remove_node(&mut self, index: NodeIndex) -> Result<(), Error> {
-        let node = self.node_weights.swap_remove(&index);
+        let node = self.node_weights.remove(&index);
         if node.is_none() {
             debug_assert!(false, "Node {:?} does not exist", index);
             return Err(Error);
