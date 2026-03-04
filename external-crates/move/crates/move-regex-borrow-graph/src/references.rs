@@ -37,6 +37,9 @@ pub(crate) struct Edge<Loc, Lbl: Ord> {
 }
 
 #[derive(Clone, Copy, Debug)]
+/// Maps a `Ref` to its `NodeIndex` in the `GraphMap`. `Ref` and `NodeIndex` are kept separate
+/// because `Ref` identity changes during canonicalization and refreshing, while `NodeIndex` remains
+/// stable--avoiding the need to rebuild all edges on every remap.
 pub(crate) struct Node {
     is_mutable: bool,
     node_index: NodeIndex,
