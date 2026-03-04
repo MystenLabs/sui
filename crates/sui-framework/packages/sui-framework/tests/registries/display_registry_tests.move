@@ -325,7 +325,7 @@ macro fun test_tx($f: |&mut DisplayRegistry, &mut Scenario|) {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
 
-    display_registry::create_internal(scenario.ctx());
+    display_registry::create_for_testing(scenario.ctx());
     scenario.next_tx(sender);
 
     let mut registry = scenario.take_shared<DisplayRegistry>();

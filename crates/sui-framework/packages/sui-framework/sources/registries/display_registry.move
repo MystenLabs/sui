@@ -56,7 +56,7 @@ public fun new<T>(
     _: internal::Permit<T>,
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
-    let (display, cap) = new_display!<T>(registry, ctx);
+    let (display, cap) = new_display<T>(registry, ctx);
     (display, cap)
 }
 
@@ -67,7 +67,7 @@ public fun new_with_publisher<T>(
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
     assert!(publisher.from_package<T>(), ENotValidPublisher);
-    let (display, cap) = new_display!<T>(registry, ctx);
+    let (display, cap) = new_display<T>(registry, ctx);
     (display, cap)
 }
 
@@ -151,7 +151,7 @@ public fun migrate_v1_to_v2<T: key>(
     legacy: LegacyDisplay<T>,
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
-    let (mut display, cap) = new_display!<T>(registry, ctx);
+    let (mut display, cap) = new_display<T>(registry, ctx);
     display.fields = *legacy.fields();
     legacy.destroy();
 
@@ -184,16 +184,14 @@ public(package) fun migration_cap_receiver(): address {
     SYSTEM_MIGRATION_ADDRESS
 }
 
-macro fun new_display<$T>(
-    $registry: &mut DisplayRegistry,
-    $ctx: &mut TxContext,
-): (Display<$T>, DisplayCap<$T>) {
-    let registry = $registry;
-    let ctx = $ctx;
-    let key = DisplayKey<$T>();
+fun new_display<T>(
+    registry: &mut DisplayRegistry,
+    ctx: &mut TxContext,
+): (Display<T>, DisplayCap<T>) {
+    let key = DisplayKey<T>();
     assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
-    let cap = DisplayCap<$T> { id: object::new(ctx) };
-    let display = Display<$T> {
+    let cap = DisplayCap<T> { id: object::new(ctx) };
+    let display = Display<T> {
         id: derived_object::claim(&mut registry.id, key),
         fields: vec_map::empty(),
         cap_id: option::some(cap.id.to_inner()),
@@ -217,6 +215,7 @@ fun create(ctx: &mut TxContext) {
 }
 
 #[test_only]
-public(package) fun create_internal(ctx: &mut TxContext) {
+public(package) fun create_for_testing(ctx: &mut TxContext) {
     create(ctx);
 }
+
