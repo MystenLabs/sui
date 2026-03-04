@@ -1298,6 +1298,15 @@ PageInfo.endCursor
 PasskeyPublicKey.bytes
   => {}
 
+PasskeySignature.authenticatorData
+  => {}
+
+PasskeySignature.clientDataJson
+  => {}
+
+PasskeySignature.signature
+  => {}
+
 PerEpochConfig.object
   => {}
 
@@ -1761,6 +1770,12 @@ ZkLoginPublicIdentifier.iss
   => {}
 
 ZkLoginPublicIdentifier.addressSeed
+  => {}
+
+ZkLoginSignature.maxEpoch
+  => {}
+
+ZkLoginSignature.signature
   => {}
 
 ZkLoginVerifyResult.success

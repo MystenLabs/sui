@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod multisig;
+pub(crate) mod passkey;
+pub(crate) mod zklogin;
 
 use async_graphql::{Object, SimpleObject, Union};
 use sui_types::crypto::{SignatureScheme as NativeSignatureScheme, SuiSignature};
@@ -10,6 +12,8 @@ use sui_types::signature::GenericSignature;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::types::user_signature::multisig::MultisigSignature;
+use crate::api::types::user_signature::passkey::PasskeySignature;
+use crate::api::types::user_signature::zklogin::ZkLoginSignature;
 
 /// The structured details of a signature, varying by scheme.
 #[derive(Union, Clone)]
@@ -18,6 +22,8 @@ pub(crate) enum SignatureScheme {
     Secp256k1(Secp256k1Signature),
     Secp256r1(Secp256r1Signature),
     Multisig(MultisigSignature),
+    ZkLogin(ZkLoginSignature),
+    Passkey(PasskeySignature),
 }
 
 /// A user signature for a transaction.
@@ -43,8 +49,16 @@ impl UserSignature {
             GenericSignature::MultiSigLegacy(m) => MultiSig::try_from(m.clone())
                 .ok()
                 .map(|ms| SignatureScheme::Multisig((&ms).into())),
-            // TODO: Add support for ZkLogin and Passkey signature schemes.
-            _ => None,
+            GenericSignature::ZkLoginAuthenticator(z) => {
+                Some(SignatureScheme::ZkLogin(ZkLoginSignature {
+                    native: z.clone(),
+                }))
+            }
+            GenericSignature::PasskeyAuthenticator(p) => {
+                Some(SignatureScheme::Passkey(PasskeySignature {
+                    native: p.clone(),
+                }))
+            }
         }
     }
 }
