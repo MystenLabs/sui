@@ -1088,13 +1088,6 @@ impl SuiNode {
         randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
         prometheus_registry: &Registry,
     ) -> Result<P2pComponents> {
-        let (state_sync, state_sync_router) = state_sync::Builder::new()
-            .config(config.p2p_config.state_sync.clone().unwrap_or_default())
-            .store(state_sync_store)
-            .archive_config(config.archive_reader_config())
-            .with_metrics(prometheus_registry)
-            .build();
-
         let mut p2p_config = config.p2p_config.clone();
         {
             let disc = p2p_config.discovery.get_or_insert_with(Default::default);
@@ -1114,6 +1107,15 @@ impl SuiNode {
             }
         }
         let (discovery, discovery_server, endpoint_manager) = discovery_builder.build();
+        let discovery_sender = discovery.sender();
+
+        let (state_sync, state_sync_router) = state_sync::Builder::new()
+            .config(config.p2p_config.state_sync.clone().unwrap_or_default())
+            .store(state_sync_store)
+            .archive_config(config.archive_reader_config())
+            .discovery_sender(discovery_sender)
+            .with_metrics(prometheus_registry)
+            .build();
 
         let discovery_config = config.p2p_config.discovery.clone().unwrap_or_default();
         let known_peers: HashMap<PeerId, String> = discovery_config

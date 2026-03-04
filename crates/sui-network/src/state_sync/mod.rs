@@ -142,6 +142,7 @@ pub(super) fn compute_adaptive_timeout(
     const MAX_TRANSACTIONS_PER_CHECKPOINT: u64 = 10_000;
     const JITTER_FRACTION: f64 = 0.1;
 
+    let max_timeout = max_timeout.max(min_timeout);
     let ratio = (tx_count as f64 / MAX_TRANSACTIONS_PER_CHECKPOINT as f64).min(1.0);
     let extra = Duration::from_secs_f64((max_timeout - min_timeout).as_secs_f64() * ratio);
     let base = min_timeout + extra;
@@ -343,6 +344,7 @@ impl PeerHeights {
         if let Some(info) = self.peers.get_mut(&peer_id) {
             info.on_same_chain_as_us = false;
         }
+        self.scores.remove(&peer_id);
     }
 
     /// Updates the peer's height without storing any checkpoint data.
@@ -680,6 +682,7 @@ struct StateSyncEventLoop<S> {
 
     sync_checkpoint_from_archive_task: Option<AbortHandle>,
     archive_config: Option<ArchiveReaderConfig>,
+    discovery_sender: Option<crate::discovery::Sender>,
 }
 
 impl<S> StateSyncEventLoop<S>
@@ -993,7 +996,11 @@ where
         drop(peer_heights);
 
         info!("disconnecting peer {peer_id} for consistent state sync failures");
-        let _ = self.network.disconnect(peer_id);
+        if let Some(sender) = &self.discovery_sender {
+            sender.report_peer_failure(peer_id);
+        } else {
+            let _ = self.network.disconnect(peer_id);
+        }
         self.metrics.inc_peers_disconnected_for_failure();
     }
 
