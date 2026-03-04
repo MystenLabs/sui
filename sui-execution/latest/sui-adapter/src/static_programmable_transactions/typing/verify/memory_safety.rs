@@ -68,7 +68,13 @@ impl Value {
 }
 
 impl Context {
-    fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
+    fn new(env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
+        let gas_coin =
+            if ast.gas_coin.is_none() && env.protocol_config.gasless_transaction_drop_safety() {
+                None
+            } else {
+                Some(Value::NonRef)
+            };
         let objects = ast.objects.iter().map(|_| Some(Value::NonRef)).collect();
         let withdrawals = ast
             .withdrawals
@@ -93,7 +99,7 @@ impl Context {
             graph,
             local_root,
             tx_context: Some(Value::NonRef),
-            gas_coin: Some(Value::NonRef),
+            gas_coin,
             objects,
             withdrawals,
             pure,
@@ -226,8 +232,8 @@ impl Context {
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
-pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
-    let mut context = Context::new(ast)?;
+pub fn verify(env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
+    let mut context = Context::new(env, ast)?;
     let commands = &ast.commands;
     for c in commands {
         let result = command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
