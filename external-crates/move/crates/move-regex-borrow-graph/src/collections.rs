@@ -485,10 +485,13 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     }
 
     /// Removes all references and edges from the graph
-    pub fn release_all(&mut self) {
+    pub fn release_all(&mut self) -> Result<()> {
         self.nodes.clear();
-        self.graph.clear();
-        self.fresh_id = 0
+        self.graph
+            .clear()
+            .map_err(|_| error!("failed to clear graph"))?;
+        self.fresh_id = 0;
+        Ok(())
     }
 
     //**********************************************************************************************
@@ -626,7 +629,9 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             })
             .collect::<Result<_>>()?;
         self.fresh_id = 0;
-        self.graph.minimize();
+        self.graph
+            .minimize()
+            .map_err(|_| error!("failed to minimize graph"))?;
         debug_assert!(self.is_canonical());
         debug_assert!(
             self.graph.node_count() <= self.canonical_reference_capacity,

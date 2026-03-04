@@ -8,7 +8,10 @@ use indexmap::IndexMap;
 pub struct Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NodeIndex(u32);
+pub struct NodeIndex {
+    generation: u32,
+    id: u32,
+}
 
 #[derive(Debug, Clone)]
 /// A simple graph implementation that uses two `IndexMap`s. One to store a node "weights" and one
@@ -16,6 +19,7 @@ pub struct NodeIndex(u32);
 /// In the context of the borrow graph, the node weights will be the `Ref`, and the edge weights
 /// will be an `Edge<Loc, Lbl>`.
 pub struct GraphMap<N, E> {
+    generation: u32,
     next: u32,
     node_weights: IndexMap<NodeIndex, N>,
     edge_weights: IndexMap<(NodeIndex, NodeIndex), E>,
@@ -29,6 +33,7 @@ impl<N, E> GraphMap<N, E> {
     pub fn new(canonical_reference_capacity: usize) -> Self {
         debug_assert!(canonical_reference_capacity < 512);
         Self {
+            generation: 0,
             next: 0,
             node_weights: IndexMap::with_capacity(canonical_reference_capacity),
             edge_weights: IndexMap::with_capacity(canonical_reference_capacity * 3 / 2),
@@ -38,20 +43,32 @@ impl<N, E> GraphMap<N, E> {
     /// Clear the graph of all nodes and edges.
     /// NOTE: Do not keep any `NodeIndex` values from before this call. They will be invalid and
     /// may panic if used (at the very least they will give the wrong nodes/edges)
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self) -> Result<(), Error> {
+        let Some(generation) = self.generation.checked_add(1) else {
+            debug_assert!(false, "generation overflow");
+            return Err(Error);
+        };
+        self.generation = generation;
         self.next = 0;
         self.node_weights.clear();
         self.edge_weights.clear();
+        Ok(())
     }
 
     /// Recalculate the `next` field based on the current nodes. This should be called after
     /// canonicalization
-    pub fn minimize(&mut self) {
+    pub fn minimize(&mut self) -> Result<(), Error> {
+        let Some(generation) = self.generation.checked_add(1) else {
+            debug_assert!(false, "generation overflow");
+            return Err(Error);
+        };
+        self.generation = generation;
         let mut max_next = 0;
         for index in self.node_weights.keys() {
-            max_next = max_next.max(index.0.saturating_add(1));
+            max_next = max_next.max(index.id.saturating_add(1));
         }
         self.next = max_next;
+        Ok(())
     }
 
     /// Returns the number of nodes in the graph.
@@ -61,10 +78,15 @@ impl<N, E> GraphMap<N, E> {
 
     /// Adds a node (with the given weight) to the graph and returns its index.
     pub fn add_node(&mut self, weight: N) -> Result<NodeIndex, Error> {
-        let index = NodeIndex(self.next);
-        let next = self.next.checked_add(1);
-        debug_assert!(next.is_some(), "NodeIndex overflow");
-        self.next = next.ok_or(Error)?;
+        let index = NodeIndex {
+            generation: self.generation,
+            id: self.next,
+        };
+        let Some(next) = self.next.checked_add(1) else {
+            debug_assert!(false, "NodeIndex id overflow");
+            return Err(Error);
+        };
+        self.next = next;
         let prev = self.node_weights.insert(index, weight);
         if prev.is_some() {
             debug_assert!(false, "NodeIndex {:?} already exists", index);
@@ -235,10 +257,16 @@ impl<N, E> GraphMap<N, E> {
             // Check that all node indices are less than `next`
             for index in self.node_weights.keys() {
                 debug_assert!(
-                    index.0 < self.next,
+                    index.id < self.next,
                     "NodeIndex {:?} out of bounds (next: {:?})",
                     index,
                     self.next
+                );
+                debug_assert!(
+                    index.generation <= self.generation,
+                    "NodeIndex {:?} has future generation (current: {:?})",
+                    index,
+                    self.generation
                 );
             }
         }

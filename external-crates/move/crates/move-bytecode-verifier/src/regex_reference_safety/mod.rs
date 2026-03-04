@@ -288,7 +288,7 @@ fn execute_inner(
 
         Bytecode::Abort => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_non_ref());
-            state.abort()
+            state.abort()?
         }
         Bytecode::LdTrue
         | Bytecode::LdFalse

@@ -1,9 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::graph_map::GraphMap;
+use crate::graph_map::{GraphMap, NodeIndex};
 
 const DEFAULT_CAPACITY: usize = 16;
+
+#[test]
+fn node_index_is_u64_sized() {
+    assert_eq!(std::mem::size_of::<NodeIndex>(), std::mem::size_of::<u64>());
+}
 
 // -------------------------------------------------------------------------------------------------
 // Nod Tests
@@ -269,7 +274,7 @@ fn clear_removes_all_nodes_and_edges() {
     let n2 = g.add_node(2).unwrap();
     g.add_edge(n1, "edge", n2).unwrap();
 
-    g.clear();
+    g.clear().unwrap();
 
     assert_eq!(g.node_count(), 0);
     assert!(!g.contains_node(n1));
@@ -278,18 +283,20 @@ fn clear_removes_all_nodes_and_edges() {
 }
 
 #[test]
-fn clear_resets_node_index_counter() {
+fn clear_invalidates_old_indices() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
     let n1 = g.add_node(1).unwrap();
     g.add_node(2).unwrap();
-    g.clear();
+    g.clear().unwrap();
 
     let n3 = g.add_node(3).unwrap();
-    assert_eq!(n1, n3);
+    assert_ne!(n1, n3);
+    assert!(!g.contains_node(n1));
+    assert!(g.contains_node(n3));
 }
 
 #[test]
-fn add_node_returns_unique_indices_but_minimize_reuses() {
+fn minimize_invalidates_old_indices() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
     let n1 = g.add_node(1).unwrap();
     let n2 = g.add_node(2).unwrap();
@@ -304,10 +311,12 @@ fn add_node_returns_unique_indices_but_minimize_reuses() {
     assert_ne!(n4, n2);
     assert_ne!(n4, n3);
     g.remove_node(n4).unwrap();
-    // minimize and n3 will be reused
-    g.minimize();
+    // minimize bumps generation, so old indices are stale
+    g.minimize().unwrap();
     let n5 = g.add_node(5).unwrap();
-    assert_eq!(n5, n3);
+    assert_ne!(n5, n3);
+    assert!(!g.contains_node(n3));
+    assert!(g.contains_node(n5));
 }
 // -------------------------------------------------------------------------------------------------
 // Check Invariants Tests

@@ -606,10 +606,11 @@ impl AbstractState {
         Ok(())
     }
 
-    pub(crate) fn abort(&mut self) {
+    pub(crate) fn abort(&mut self) -> PartialVMResult<()> {
         // release all references
         self.locals.clear();
-        self.graph.release_all()
+        self.graph.release_all()?;
+        Ok(())
     }
 
     //**********************************************************************************************
