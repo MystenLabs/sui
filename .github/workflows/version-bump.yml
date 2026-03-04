@@ -85,9 +85,9 @@ jobs:
           NEW_VERSION=$(grep '^NEW_VERSION=' /tmp/bump-output.txt | cut -d= -f2)
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Generate automerge token
+      - name: Generate app token
         if: inputs.delivery == 'pr'
-        id: automerge_token
+        id: app_token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # pin@v2.2.1
         with:
           app-id: ${{ secrets.APP_ID }}
@@ -96,9 +96,8 @@ jobs:
       - name: Deliver via PR
         if: inputs.delivery == 'pr'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
           GITHUB_ACTOR: ${{ github.actor }}
-          AUTOMERGE_TOKEN: ${{ steps.automerge_token.outputs.token }}
           NEW_VERSION: ${{ steps.bump.outputs.new_version }}
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -121,10 +120,6 @@ jobs:
             --title "$BODY" \
             --reviewer "ebmifa,pei-mysten,tharbert" \
             --body "$BODY"
-
-          # Use app token so the merge push triggers CI workflows
-          MERGE_TOKEN="${AUTOMERGE_TOKEN:-$GH_TOKEN}"
-          GH_TOKEN="$MERGE_TOKEN" gh pr merge --auto --squash --delete-branch "$BRANCH"
 
       - name: Deliver direct push
         if: inputs.delivery == 'direct'
