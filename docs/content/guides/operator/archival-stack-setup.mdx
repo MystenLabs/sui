@@ -20,16 +20,20 @@ The archival stack consists of three components:
 Sui Fullnode ──▶ sui-kvstore-alt ──▶ Bigtable ◀── sui-kv-rpc ──▶ gRPC Clients
 ```
 
-## Prerequisites
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
-- A GCP project with the [Bigtable API](https://cloud.google.com/bigtable/docs/quickstart) enabled.
-- Two GCP service accounts:
-  - **Read/write account** for the indexer — requires `roles/bigtable.user` (the indexer both writes pipeline data and reads its own watermarks).
-  - **Read-only account** for the gRPC service — requires `roles/bigtable.reader`.
-- Access to the Sui checkpoint buckets for your target network:
-  - **Mainnet:** GCS bucket `mysten-mainnet-checkpoints` or `https://checkpoints.mainnet.sui.io`
-  - **Testnet:** GCS bucket `mysten-testnet-checkpoints` or `https://checkpoints.testnet.sui.io`
-- A [Sui full node](/guides/operator/sui-full-node.mdx) with gRPC enabled. After the initial backfill, you can stream checkpoints from a full node instead of polling the bucket for lower latency. See [Steady-state operation](#steady-state-operation).
+- [x] A GCP project with the [Bigtable API](https://cloud.google.com/bigtable/docs/quickstart) enabled.
+- [x] Two GCP service accounts:
+   - [x] **Read/write account** for the indexer; requires `roles/bigtable.user` (the indexer both writes pipeline data and reads its own watermarks).
+   - [x] **Read-only account** for the gRPC service; requires `roles/bigtable.reader`.
+- [x] Access to the Sui checkpoint buckets for your target network:
+   - [x] **Mainnet:** GCS bucket `mysten-mainnet-checkpoints` or `https://checkpoints.mainnet.sui.io`
+   - [x] **Testnet:** GCS bucket `mysten-testnet-checkpoints` or `https://checkpoints.testnet.sui.io`
+- [x] A [Sui full node](/guides/operator/sui-full-node.mdx) with gRPC enabled. After the initial backfill, you can stream checkpoints from a full node instead of polling the bucket for lower latency. See [Steady-state operation](#steady-state-operation).
+
+</TabsItem>
+</Tabs>
 
 ## Authentication
 
