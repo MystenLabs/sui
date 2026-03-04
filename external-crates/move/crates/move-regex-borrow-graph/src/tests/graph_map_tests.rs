@@ -18,30 +18,30 @@ fn new_graph_is_empty() {
 #[test]
 fn add_node_increments_count() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    g.add_node(42);
+    g.add_node(42).unwrap();
     assert_eq!(g.node_count(), 1);
-    g.add_node(43);
+    g.add_node(43).unwrap();
     assert_eq!(g.node_count(), 2);
 }
 
 #[test]
 fn contains_node_returns_true_for_existing_node() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n = g.add_node(42);
+    let n = g.add_node(42).unwrap();
     assert!(g.contains_node(n));
 }
 
 #[test]
 fn node_weight_returns_correct_value() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n = g.add_node(42);
+    let n = g.add_node(42).unwrap();
     assert_eq!(g.node_weight(n), Some(&42));
 }
 
 #[test]
 fn node_weight_mut_allows_modification() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n = g.add_node(42);
+    let n = g.add_node(42).unwrap();
     *g.node_weight_mut(n).unwrap() = 100;
     assert_eq!(g.node_weight(n), Some(&100));
 }
@@ -49,19 +49,19 @@ fn node_weight_mut_allows_modification() {
 #[test]
 fn remove_node_decrements_count() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let _n2 = g.add_node(2);
+    let n1 = g.add_node(1).unwrap();
+    let _n2 = g.add_node(2).unwrap();
     assert_eq!(g.node_count(), 2);
-    g.remove_node(n1);
+    g.remove_node(n1).unwrap();
     assert_eq!(g.node_count(), 1);
 }
 
 #[test]
 fn remove_node_makes_contains_return_false() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n = g.add_node(42);
+    let n = g.add_node(42).unwrap();
     assert!(g.contains_node(n));
-    g.remove_node(n);
+    g.remove_node(n).unwrap();
     assert!(!g.contains_node(n));
 }
 
@@ -69,10 +69,10 @@ fn remove_node_makes_contains_return_false() {
 #[should_panic(expected = "does not exist")]
 fn removed_node_panics() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n = g.add_node(42);
-    g.remove_node(n);
-    // panics
-    g.remove_node(n);
+    let n = g.add_node(42).unwrap();
+    g.remove_node(n).unwrap();
+    // debug_assert panics before returning Err
+    let _ = g.remove_node(n);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -82,26 +82,26 @@ fn removed_node_panics() {
 #[test]
 fn add_edge_creates_edge() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "edge", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "edge", n2).unwrap();
     assert!(g.contains_edge(n1, n2));
 }
 
 #[test]
 fn contains_edge_returns_false_for_nonexistent_edge() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
     assert!(!g.contains_edge(n1, n2));
 }
 
 #[test]
 fn edge_is_directional() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "forward", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "forward", n2).unwrap();
     assert!(g.contains_edge(n1, n2));
     assert!(!g.contains_edge(n2, n1));
 }
@@ -109,26 +109,26 @@ fn edge_is_directional() {
 #[test]
 fn edge_weight_returns_correct_value() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "my_edge", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "my_edge", n2).unwrap();
     assert_eq!(g.edge_weight(n1, n2), Some(&"my_edge"));
 }
 
 #[test]
 fn edge_weight_returns_none_for_nonexistent_edge() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
     assert_eq!(g.edge_weight(n1, n2), None);
 }
 
 #[test]
 fn edge_weight_mut_allows_modification() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "old", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "old", n2).unwrap();
     *g.edge_weight_mut(n1, n2).unwrap() = "new";
     assert_eq!(g.edge_weight(n1, n2), Some(&"new"));
 }
@@ -137,17 +137,18 @@ fn edge_weight_mut_allows_modification() {
 #[should_panic(expected = "already exists")]
 fn add_duplicate_edge_panics() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "first", n2);
-    g.add_edge(n1, "second", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "first", n2).unwrap();
+    // debug_assert panics before returning Err
+    let _ = g.add_edge(n1, "second", n2);
 }
 
 #[test]
 fn self_edge_allowed() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n = g.add_node(1);
-    g.add_edge(n, "self", n);
+    let n = g.add_node(1).unwrap();
+    g.add_edge(n, "self", n).unwrap();
     assert!(g.contains_edge(n, n));
     assert_eq!(g.edge_weight(n, n), Some(&"self"));
 }
@@ -155,20 +156,20 @@ fn self_edge_allowed() {
 #[test]
 fn remove_node_removes_outgoing_edges() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "out", n2);
-    g.remove_node(n1);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "out", n2).unwrap();
+    g.remove_node(n1).unwrap();
     assert!(!g.contains_edge(n1, n2));
 }
 
 #[test]
 fn remove_node_removes_incoming_edges() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "in", n2);
-    g.remove_node(n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "in", n2).unwrap();
+    g.remove_node(n2).unwrap();
     assert!(!g.contains_edge(n1, n2));
 }
 
@@ -179,12 +180,12 @@ fn remove_node_removes_incoming_edges() {
 #[test]
 fn outgoing_edges_returns_correct_edges() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    let n3 = g.add_node(3);
-    g.add_edge(n1, "n1_to_n2", n2);
-    g.add_edge(n1, "n1_to_n3", n3);
-    g.add_edge(n2, "n2_to_n3", n3);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    let n3 = g.add_node(3).unwrap();
+    g.add_edge(n1, "n1_to_n2", n2).unwrap();
+    g.add_edge(n1, "n1_to_n3", n3).unwrap();
+    g.add_edge(n2, "n2_to_n3", n3).unwrap();
 
     let n1_outgoing: Vec<_> = g.outgoing_edges_idx(n1).collect();
     assert_eq!(n1_outgoing.len(), 2);
@@ -195,9 +196,9 @@ fn outgoing_edges_returns_correct_edges() {
 #[test]
 fn outgoing_edges_empty_for_node_with_no_outgoing() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n2, "n2_to_n1", n1);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n2, "n2_to_n1", n1).unwrap();
 
     let outgoing: Vec<_> = g.outgoing_edges_idx(n1).collect();
     assert!(outgoing.is_empty());
@@ -206,12 +207,12 @@ fn outgoing_edges_empty_for_node_with_no_outgoing() {
 #[test]
 fn incoming_edges_returns_correct_edges() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    let n3 = g.add_node(3);
-    g.add_edge(n1, "n1_to_n3", n3);
-    g.add_edge(n2, "n2_to_n3", n3);
-    g.add_edge(n1, "n1_to_n2", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    let n3 = g.add_node(3).unwrap();
+    g.add_edge(n1, "n1_to_n3", n3).unwrap();
+    g.add_edge(n2, "n2_to_n3", n3).unwrap();
+    g.add_edge(n1, "n1_to_n2", n2).unwrap();
 
     let incoming: Vec<_> = g.incoming_edges_idx(n3).collect();
     assert_eq!(incoming.len(), 2);
@@ -222,23 +223,23 @@ fn incoming_edges_returns_correct_edges() {
 #[test]
 fn incoming_edges_empty_for_node_with_no_incoming() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "n1_to_n2", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "n1_to_n2", n2).unwrap();
 
-    let incoming: Vec<_> = g.incoming_edges(n1).collect();
+    let incoming: Vec<_> = g.incoming_edges(n1).map(|r| r.unwrap()).collect();
     assert!(incoming.is_empty());
 }
 
 #[test]
 fn all_edges_returns_all_edges() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    let n3 = g.add_node(3);
-    g.add_edge(n1, "n1_to_n2", n2);
-    g.add_edge(n2, "n2_to_n3", n3);
-    g.add_edge(n1, "n1_to_n3", n3);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    let n3 = g.add_node(3).unwrap();
+    g.add_edge(n1, "n1_to_n2", n2).unwrap();
+    g.add_edge(n2, "n2_to_n3", n3).unwrap();
+    g.add_edge(n1, "n1_to_n3", n3).unwrap();
 
     let all: Vec<_> = g.all_edges_idx().collect();
     assert_eq!(all.len(), 3);
@@ -250,10 +251,10 @@ fn all_edges_returns_all_edges() {
 #[test]
 fn all_edges_empty_for_graph_with_no_edges() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    g.add_node(1);
-    g.add_node(2);
+    g.add_node(1).unwrap();
+    g.add_node(2).unwrap();
 
-    let all: Vec<_> = g.all_edges().collect();
+    let all: Vec<_> = g.all_edges().map(|r| r.unwrap()).collect();
     assert!(all.is_empty());
 }
 
@@ -264,9 +265,9 @@ fn all_edges_empty_for_graph_with_no_edges() {
 #[test]
 fn clear_removes_all_nodes_and_edges() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "edge", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "edge", n2).unwrap();
 
     g.clear();
 
@@ -279,33 +280,33 @@ fn clear_removes_all_nodes_and_edges() {
 #[test]
 fn clear_resets_node_index_counter() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    g.add_node(2);
+    let n1 = g.add_node(1).unwrap();
+    g.add_node(2).unwrap();
     g.clear();
 
-    let n3 = g.add_node(3);
+    let n3 = g.add_node(3).unwrap();
     assert_eq!(n1, n3);
 }
 
 #[test]
 fn add_node_returns_unique_indices_but_minimize_reuses() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    let n3 = g.add_node(3);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    let n3 = g.add_node(3).unwrap();
     assert_ne!(n1, n2);
     assert_ne!(n2, n3);
     assert_ne!(n1, n3);
-    g.remove_node(n3);
+    g.remove_node(n3).unwrap();
     // unique even after removal
-    let n4 = g.add_node(4);
+    let n4 = g.add_node(4).unwrap();
     assert_ne!(n4, n1);
     assert_ne!(n4, n2);
     assert_ne!(n4, n3);
-    g.remove_node(n4);
+    g.remove_node(n4).unwrap();
     // minimize and n3 will be reused
     g.minimize();
-    let n5 = g.add_node(5);
+    let n5 = g.add_node(5).unwrap();
     assert_eq!(n5, n3);
 }
 // -------------------------------------------------------------------------------------------------
@@ -315,9 +316,9 @@ fn add_node_returns_unique_indices_but_minimize_reuses() {
 #[test]
 fn check_invariants_passes_for_valid_graph() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "edge", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "edge", n2).unwrap();
     g.check_invariants();
 }
 
@@ -334,22 +335,22 @@ fn check_invariants_passes_for_empty_graph() {
 #[test]
 fn diamond_graph_structure() {
     let mut g: GraphMap<&str, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let top = g.add_node("top");
-    let left = g.add_node("left");
-    let right = g.add_node("right");
-    let bottom = g.add_node("bottom");
+    let top = g.add_node("top").unwrap();
+    let left = g.add_node("left").unwrap();
+    let right = g.add_node("right").unwrap();
+    let bottom = g.add_node("bottom").unwrap();
 
-    g.add_edge(top, "top_to_left", left);
-    g.add_edge(top, "top_to_right", right);
-    g.add_edge(left, "left_to_bottom", bottom);
-    g.add_edge(right, "right_to_bottom", bottom);
+    g.add_edge(top, "top_to_left", left).unwrap();
+    g.add_edge(top, "top_to_right", right).unwrap();
+    g.add_edge(left, "left_to_bottom", bottom).unwrap();
+    g.add_edge(right, "right_to_bottom", bottom).unwrap();
 
     assert_eq!(g.node_count(), 4);
 
-    let top_outgoing: Vec<_> = g.outgoing_edges(top).collect();
+    let top_outgoing: Vec<_> = g.outgoing_edges(top).map(|r| r.unwrap()).collect();
     assert_eq!(top_outgoing.len(), 2);
 
-    let bottom_incoming: Vec<_> = g.incoming_edges(bottom).collect();
+    let bottom_incoming: Vec<_> = g.incoming_edges(bottom).map(|r| r.unwrap()).collect();
     assert_eq!(bottom_incoming.len(), 2);
 
     g.check_invariants();
@@ -360,10 +361,10 @@ fn list_graph_structure() {
     let mut g: GraphMap<u32, u32> = GraphMap::new(DEFAULT_CAPACITY);
     let mut nodes = Vec::new();
     for i in 0..5 {
-        nodes.push(g.add_node(i));
+        nodes.push(g.add_node(i).unwrap());
     }
     for i in 0..4 {
-        g.add_edge(nodes[i], i as u32, nodes[i + 1]);
+        g.add_edge(nodes[i], i as u32, nodes[i + 1]).unwrap();
     }
 
     assert_eq!(g.node_count(), 5);
@@ -379,17 +380,17 @@ fn list_graph_structure() {
 #[test]
 fn multiple_self_loops() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    g.add_edge(n1, "self", n1);
-    g.add_edge(n2, "self", n2);
-    g.add_edge(n1, "n1_to_n2", n2);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    g.add_edge(n1, "self", n1).unwrap();
+    g.add_edge(n2, "self", n2).unwrap();
+    g.add_edge(n1, "n1_to_n2", n2).unwrap();
 
     assert!(g.contains_edge(n1, n1));
     assert!(g.contains_edge(n2, n2));
     assert!(g.contains_edge(n1, n2));
 
-    let n1_outgoing: Vec<_> = g.outgoing_edges(n1).collect();
+    let n1_outgoing: Vec<_> = g.outgoing_edges(n1).map(|r| r.unwrap()).collect();
     assert_eq!(n1_outgoing.len(), 2);
 
     g.check_invariants();
@@ -403,25 +404,25 @@ fn edge_iterators_consistent_and_all_contained() {
     let mut g: GraphMap<u32, &str> = GraphMap::new(DEFAULT_CAPACITY);
 
     // Build an interesting graph: diamond with self-loops and back-edges
-    let n1 = g.add_node(1);
-    let n2 = g.add_node(2);
-    let n3 = g.add_node(3);
-    let n4 = g.add_node(4);
-    let n5 = g.add_node(5);
+    let n1 = g.add_node(1).unwrap();
+    let n2 = g.add_node(2).unwrap();
+    let n3 = g.add_node(3).unwrap();
+    let n4 = g.add_node(4).unwrap();
+    let n5 = g.add_node(5).unwrap();
 
     let nodes = [n1, n2, n3, n4, n5];
 
     // Diamond: n1 -> n2, n1 -> n3, n2 -> n4, n3 -> n4
-    g.add_edge(n1, "n1_n2", n2);
-    g.add_edge(n1, "n1_n3", n3);
-    g.add_edge(n2, "n2_n4", n4);
-    g.add_edge(n3, "n3_n4", n4);
+    g.add_edge(n1, "n1_n2", n2).unwrap();
+    g.add_edge(n1, "n1_n3", n3).unwrap();
+    g.add_edge(n2, "n2_n4", n4).unwrap();
+    g.add_edge(n3, "n3_n4", n4).unwrap();
     // Self-loops
-    g.add_edge(n1, "n1_self", n1);
-    g.add_edge(n4, "n4_self", n4);
+    g.add_edge(n1, "n1_self", n1).unwrap();
+    g.add_edge(n4, "n4_self", n4).unwrap();
     // Extra edges
-    g.add_edge(n4, "n4_n5", n5);
-    g.add_edge(n2, "n2_n3", n3);
+    g.add_edge(n4, "n4_n5", n5).unwrap();
+    g.add_edge(n2, "n2_n3", n3).unwrap();
 
     // Collect edges from all_edges
     let all_edges_set: BTreeSet<(NodeIndex, &str, NodeIndex)> = g

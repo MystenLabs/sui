@@ -114,14 +114,17 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     pub(crate) fn successors(
         &self,
         r: Ref,
-    ) -> Result<impl Iterator<Item = (&Edge<Loc, Lbl>, Ref)> + '_> {
+    ) -> Result<impl Iterator<Item = Result<(&Edge<Loc, Lbl>, Ref)>> + '_> {
         let r_idx = self.node(&r)?.node_index();
         ensure!(
             self.graph.contains_node(r_idx),
             "missing ref {:?} in graph",
             r_idx
         );
-        Ok(self.graph.outgoing_edges(r_idx).map(|(e, s)| (e, *s)))
+        Ok(self.graph.outgoing_edges(r_idx).map(|result| {
+            let (e, s) = result.map_err(|_| error!("missing node in outgoing edge"))?;
+            Ok((e, *s))
+        }))
     }
 
     /// Returns the direct successors of the specified reference by NodeIndex
@@ -134,14 +137,20 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     }
 
     /// Returns the direct predecessors of the specified reference
-    fn predecessors(&self, r: Ref) -> Result<impl Iterator<Item = (Ref, &Edge<Loc, Lbl>)> + '_> {
+    fn predecessors(
+        &self,
+        r: Ref,
+    ) -> Result<impl Iterator<Item = Result<(Ref, &Edge<Loc, Lbl>)>> + '_> {
         let r_idx = self.node(&r)?.node_index();
         ensure!(
             self.graph.contains_node(r_idx),
             "missing ref {:?} in graph",
             r_idx
         );
-        Ok(self.graph.incoming_edges(r_idx).map(|(p, e)| (*p, e)))
+        Ok(self.graph.incoming_edges(r_idx).map(|result| {
+            let (p, e) = result.map_err(|_| error!("missing node in incoming edge"))?;
+            Ok((*p, e))
+        }))
     }
 
     /// Returns the direct predecessors of the specified reference by NodeIndex
@@ -160,10 +169,15 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         self.fresh_id += 1;
         let r = Ref::fresh(id);
 
-        let r_idx = self.graph.add_node(r);
+        let r_idx = self
+            .graph
+            .add_node(r)
+            .map_err(|_| error!("failed to add node {:?}", r))?;
         let mut edge = Edge::<Loc, Lbl>::new();
         edge.insert(loc, Cow::Owned(Regex::epsilon()));
-        self.graph.add_edge(r_idx, edge, r_idx);
+        self.graph
+            .add_edge(r_idx, edge, r_idx)
+            .map_err(|_| error!("failed to add self edge {:?}", r_idx))?;
 
         let node = Node::new(is_mut, r_idx);
         let prev = self.nodes.insert(r, node);
@@ -444,7 +458,9 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         for r in regexes {
             edge.insert(loc, Cow::Owned(r));
         }
-        self.graph.add_edge(source, edge, target);
+        self.graph
+            .add_edge(source, edge, target)
+            .map_err(|_| error!("failed to add edge {:?} -> {:?}", source, target))?;
         Ok(())
     }
 
@@ -460,12 +476,10 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         let Some(node) = self.nodes.remove(&r) else {
             bail!("missing ref {:?}", r);
         };
-        ensure!(
-            self.graph.contains_node(node.node_index()),
-            "missing ref {:?} in graph",
-            r
-        );
-        self.graph.remove_node(node.node_index());
+        let res = self.graph.remove_node(node.node_index());
+        if res.is_err() {
+            bail!("failed to remove node {:?}", r)
+        };
         self.check_invariants();
         Ok(())
     }
@@ -490,7 +504,8 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         let mut paths = BTreeMap::new();
         let mut nodes_visited = 0usize;
         let mut total_edge_size = 0usize;
-        for (edge, s) in self.successors(r)? {
+        for successor_result in self.successors(r)? {
+            let (edge, s) = successor_result?;
             nodes_visited = nodes_visited.saturating_add(1);
             if r == s {
                 // skip self epsilon
@@ -515,7 +530,8 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         let mut paths = BTreeMap::new();
         let mut nodes_visited = 0usize;
         let mut total_edge_size = 0usize;
-        for (p, edge) in self.predecessors(r)? {
+        for predecessor_result in self.predecessors(r)? {
+            let (p, edge) = predecessor_result?;
             nodes_visited = nodes_visited.saturating_add(1);
             if r == p {
                 // skip self epsilon
@@ -539,11 +555,13 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         self.check_join_invariants(other);
         let mut total_edge_size_increase = 0usize;
         let self_keys = self.keys().collect::<BTreeSet<_>>();
-        for (p, other_edge, s) in other
-            .graph
-            .all_edges()
-            .filter(|(p, _, s)| self_keys.contains(p) && self_keys.contains(s))
-        {
+        for edge_result in other.graph.all_edges() {
+            let Ok((p, other_edge, s)) = edge_result else {
+                bail!("missing node in all_edges during join");
+            };
+            if !self_keys.contains(p) || !self_keys.contains(s) {
+                continue;
+            }
             let p_self_idx = self.node(p)?.node_index();
             let s_self_idx = self.node(s)?.node_index();
             let self_edge_size_increase = match self.graph.edge_weight_entry(p_self_idx, s_self_idx)
@@ -678,7 +696,11 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
                 let is_new = node_indices.insert(node.node_index());
                 debug_assert!(is_new, "duplicate node index");
             }
-            for (p, e, s) in self.graph.all_edges() {
+            for edge_result in self.graph.all_edges() {
+                let Ok((p, e, s)) = edge_result else {
+                    debug_assert!(false, "missing node in all_edges during check_invariants");
+                    continue;
+                };
                 debug_assert!(self.nodes.contains_key(p));
                 debug_assert!(self.nodes.contains_key(s));
                 e.check_invariants();
@@ -694,9 +716,11 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     pub fn check_self_epsilon_invariant(&self, _r: NodeIndex) {
         #[cfg(debug_assertions)]
         {
-            let edge_opt = self.graph.edge_weight(_r, _r);
-            debug_assert!(edge_opt.is_some());
-            let rs = edge_opt.unwrap().regexes().collect::<Vec<_>>();
+            let Some(edge) = self.graph.edge_weight(_r, _r) else {
+                debug_assert!(false, "missing self edge for {:?}", _r);
+                return;
+            };
+            let rs = edge.regexes().collect::<Vec<_>>();
             debug_assert_eq!(rs.len(), 1);
             debug_assert!(rs[0].is_epsilon());
         }
@@ -737,7 +761,11 @@ where
                     Ok(s) => s,
                     Err(e) => return write!(f, "ERROR {r} {:?}", e),
                 };
-                for (edge, s) in successors {
+                for result in successors {
+                    let Ok((edge, s)) = result else {
+                        debug_assert!(false, "missing node in successors during display");
+                        continue;
+                    };
                     writeln!(f, "\n    {}: {{", s)?;
                     for regex in edge.regexes() {
                         writeln!(f, "        {},", regex)?;

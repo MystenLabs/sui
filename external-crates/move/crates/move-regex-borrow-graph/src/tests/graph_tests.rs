@@ -61,6 +61,6 @@ fn extend_by_label_adds_label_path() {
     let new_r = g.extend_by_label(1, [r], false, 'x', meter).unwrap();
     g.check_invariants();
 
-    let successors: Vec<_> = g.successors(r).unwrap().collect();
+    let successors: Vec<_> = g.successors(r).unwrap().map(|r| r.unwrap()).collect();
     assert!(successors.iter().any(|(_, s)| *s == new_r));
 }
