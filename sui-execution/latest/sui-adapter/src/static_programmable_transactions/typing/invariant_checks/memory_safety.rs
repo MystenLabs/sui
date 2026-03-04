@@ -290,9 +290,9 @@ impl Location {
 }
 
 impl Context {
-    fn new(txn: &T::Transaction) -> anyhow::Result<Self> {
+    fn new(env: &Env, txn: &T::Transaction) -> anyhow::Result<Self> {
         let T::Transaction {
-            gas_coin: _,
+            gas_coin,
             bytes: _,
             objects,
             withdrawals,
@@ -302,7 +302,11 @@ impl Context {
             commands: _,
         } = txn;
         let tx_context = Location::non_ref(T::Location::TxContext);
-        let gas = Location::non_ref(T::Location::GasCoin);
+        let mut gas = Location::non_ref(T::Location::GasCoin);
+        if gas_coin.is_none() && env.protocol_config.gasless_transaction_drop_safety() {
+            gas.move_value()
+                .map_err(|_| anyhow::anyhow!("gas coin should be initialized"))?;
+        }
         let object_inputs = (0..objects.len())
             .map(|i| {
                 Ok(Location::non_ref(T::Location::ObjectInput(checked_as!(
@@ -540,12 +544,12 @@ impl Context {
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
-pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
-    verify_(txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))
+pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+    verify_(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))
 }
 
-fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
-    let mut context = Context::new(txn)?;
+fn verify_(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
+    let mut context = Context::new(env, txn)?;
     let T::Transaction {
         gas_coin: _,
         bytes: _,
