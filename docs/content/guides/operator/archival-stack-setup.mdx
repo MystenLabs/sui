@@ -12,9 +12,9 @@ See [Archival Store and Service](/concepts/data-access/archival-store.mdx) for m
 
 The archival stack consists of three components:
 
-1. **Google Cloud Bigtable** — the backing store that holds all historical chain data across 11 tables.
-2. **`sui-kvstore-alt`** (Indexer) — reads checkpoints from the remote checkpoint store and writes processed data to Bigtable.
-3. **`sui-kv-rpc`** (Archival Service) — a gRPC server that reads from Bigtable and exposes the [`LedgerService`](/references/fullnode-protocol) API to clients.
+1. **Google Cloud Bigtable**: The backing store that holds all historical chain data across 11 tables.
+2. **`sui-kvstore-alt`** (Indexer): Reads checkpoints from the remote checkpoint store and writes processed data to Bigtable.
+3. **`sui-kv-rpc`** (Archival Service): A gRPC server that reads from Bigtable and exposes the [`LedgerService`](/references/fullnode-protocol) API to clients.
 
 ```
 Sui Fullnode ──▶ sui-kvstore-alt ──▶ Bigtable ◀── sui-kv-rpc ──▶ gRPC Clients
