@@ -131,14 +131,16 @@ impl RpcService {
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
 
-            let event_service_alpha =
-                crate::grpc::alpha::event_service_proto::event_service_server::EventServiceServer::new(
+            let event_service =
+                sui_rpc::proto::sui::rpc::v2::event_service_server::EventServiceServer::new(
                     self.clone(),
-                );
-            let proof_service_alpha =
-                crate::grpc::alpha::proof_service_proto::proof_service_server::ProofServiceServer::new(
-                    crate::grpc::alpha::proof_service::ProofServiceImpl::new(self.clone()),
-                );
+                )
+                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            let proof_service =
+                sui_rpc::proto::sui::rpc::v2::proof_service_server::ProofServiceServer::new(
+                    crate::grpc::v2::proof_service::ProofServiceImpl::new(self.clone()),
+                )
+                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
 
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -181,8 +183,8 @@ impl RpcService {
                 service_name(&signature_verification_service),
                 service_name(&move_package_service),
                 service_name(&name_service),
-                service_name(&event_service_alpha),
-                service_name(&proof_service_alpha),
+                service_name(&event_service),
+                service_name(&proof_service),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -199,9 +201,8 @@ impl RpcService {
                 .add_service(signature_verification_service)
                 .add_service(move_package_service)
                 .add_service(name_service)
-                // alpha
-                .add_service(event_service_alpha)
-                .add_service(proof_service_alpha)
+                .add_service(event_service)
+                .add_service(proof_service)
                 // Reflection
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha);

@@ -4,7 +4,7 @@
 use crate::authenticated_events::ClientError;
 use crate::proof::ocs::OCSInclusionProof;
 use std::str::FromStr;
-use sui_rpc_api::grpc::alpha::proof_service_proto::OcsInclusionProof as ProtoOcsInclusionProof;
+use sui_rpc::proto::sui::rpc::v2::OcsInclusionProof as ProtoOcsInclusionProof;
 use sui_types::base_types::ObjectID;
 
 pub(super) fn proto_object_ref_to_sui_object_ref(
