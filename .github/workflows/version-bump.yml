@@ -14,6 +14,11 @@ on:
         type: string
         required: false
         default: "pr"
+      auto_merge:
+        description: "Enable auto-merge on the PR"
+        type: boolean
+        required: false
+        default: true
 
   workflow_dispatch:
     inputs:
@@ -33,6 +38,11 @@ on:
         options:
           - pr
           - direct
+      auto_merge:
+        description: "Enable auto-merge on the PR"
+        type: boolean
+        required: false
+        default: true
 
 concurrency:
   group: version-bump-${{ github.ref }}
@@ -98,6 +108,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           GITHUB_ACTOR: ${{ github.actor }}
+          AUTO_MERGE: ${{ inputs.auto_merge }}
           NEW_VERSION: ${{ steps.bump.outputs.new_version }}
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -120,6 +131,10 @@ jobs:
             --title "$BODY" \
             --reviewer "ebmifa,pei-mysten,tharbert" \
             --body "$BODY"
+
+          if [[ "$AUTO_MERGE" == "true" ]]; then
+            gh pr merge --auto --squash --delete-branch "$BRANCH"
+          fi
 
       - name: Deliver direct push
         if: inputs.delivery == 'direct'
