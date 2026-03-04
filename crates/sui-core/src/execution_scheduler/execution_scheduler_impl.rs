@@ -629,7 +629,13 @@ impl ExecutionScheduler {
     }
 
     #[cfg(test)]
-    pub fn check_empty_for_testing(&self) {
+    pub async fn check_empty_for_testing(&self) {
+        for _ in 0..10 {
+            if self.num_pending_certificates() == 0 {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
         assert_eq!(self.num_pending_certificates(), 0);
     }
 }
@@ -758,7 +764,7 @@ mod test {
         drop(pending_certificate);
 
         // scheduler should be empty.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         // Enqueue a transaction with a new gas object, empty input.
         let gas_object_new = Object::with_id_owner_version_for_testing(
@@ -822,7 +828,7 @@ mod test {
         drop(pending_certificate2);
 
         // scheduler should be empty at the end.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
     }
 
     // Tests when objects become available, correct set of transactions can be sent to execute.
@@ -1033,7 +1039,7 @@ mod test {
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
 
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -1055,7 +1061,7 @@ mod test {
         // scheduler should output no transaction.
         assert!(rx_ready_certificates.try_recv().is_err());
         // scheduler should be empty at the beginning.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         let obj_id = ObjectID::random();
         let object_arguments: Vec<_> = (0..10)
@@ -1122,7 +1128,7 @@ mod test {
         }
 
         // After everything scheduler should be empty.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -1144,7 +1150,7 @@ mod test {
         // scheduler should output no transaction.
         assert!(rx_ready_certificates.try_recv().is_err());
         // scheduler should be empty at the beginning.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         let obj_id = ObjectID::random();
         let receiving_object_new0 =
@@ -1230,7 +1236,7 @@ mod test {
         // scheduler should output no transaction.
         assert!(rx_ready_certificates.try_recv().is_err());
         // scheduler should be empty at the beginning.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         let obj_id = ObjectID::random();
         let receiving_object_new0 =
@@ -1350,7 +1356,7 @@ mod test {
         // scheduler should output no transaction.
         assert!(rx_ready_certificates.try_recv().is_err());
         // scheduler should be empty at the beginning.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         let receiving_object_new0 = Object::with_id_owner_version_for_testing(
             receiving_object.id(),
@@ -1504,7 +1510,7 @@ mod test {
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
 
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
     }
 
     #[test]
