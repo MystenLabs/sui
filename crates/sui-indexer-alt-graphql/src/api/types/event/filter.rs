@@ -18,7 +18,6 @@ use crate::api::scalars::type_filter::TypeFilter;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::event::CEvent;
 use crate::api::types::lookups::CheckpointBounds;
-use crate::api::types::transaction::filter::ScanFilterValidator;
 use crate::error::RpcError;
 use crate::pagination::Page;
 
@@ -204,38 +203,6 @@ impl CustomValidator<EventFilter> for EventFilterValidator {
                 "Filtering by both emitting module and event type is not supported",
             ));
         }
-        Ok(())
-    }
-}
-
-impl CustomValidator<EventFilter> for ScanFilterValidator {
-    fn check(&self, filter: &EventFilter) -> Result<(), InputValueError<EventFilter>> {
-        let (cp_lo, cp_hi) = if let Some(at) = filter.at_checkpoint.map(u64::from) {
-            (at, at.saturating_add(1))
-        } else if let Some(before) = filter.before_checkpoint.map(u64::from) {
-            (
-                filter
-                    .after_checkpoint
-                    .map_or(0, |a| u64::from(a).saturating_add(1)),
-                before,
-            )
-        } else {
-            return Err(InputValueError::custom(format!(
-                "Unbounded scan, add beforeCheckpoint or atCheckpoint filters (Scan limit: {}).",
-                self.max_scan_limit,
-            )));
-        };
-
-        let cps_scanned = cp_hi.saturating_sub(cp_lo);
-        if cps_scanned > self.max_scan_limit {
-            return Err(InputValueError::custom(format!(
-                "Scan of {cps_scanned} checkpoints exceeds maximum of {}. \
-                Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters \
-                to reduce the range.",
-                self.max_scan_limit,
-            )));
-        }
-
         Ok(())
     }
 }
