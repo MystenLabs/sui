@@ -650,6 +650,14 @@ impl Interpreter {
         loader: &Loader,
     ) -> PartialVMResult<()> {
         debug_writeln!(buf, "Call Stack:")?;
+        // We reverse number the call stack so that the most recent frame is at the bottom when
+        // printed and with index 0 (the stack grows downwards in the printed output):
+        //
+        // ```
+        // [n] entry_frame_into_vm_and_oldest_frame
+        // ...
+        // [0] most_recent_frame
+        // ```
         for (i, frame) in (0..self.call_stack.0.len())
             .rev()
             .zip(self.call_stack.0.iter())
