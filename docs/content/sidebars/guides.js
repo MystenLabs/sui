@@ -89,48 +89,62 @@ const guides = [
       'guides/developer/objects/local-fee-markets',
       'guides/developer/objects/simulating-refs',
     ],
+  },
+  {
+    type: 'category',
+    label: 'Packages',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/packages/index',
+        },
+    items: [
+      'guides/developer/packages/package-overview',
+      'guides/developer/packages/move-package-management',
+      'guides/developer/packages/upgrade',
+      'guides/developer/packages/custom-policies',
+      'guides/developer/packages/automated-address-management',
+    ],
+  },
+  {
+    type: 'category',
+    label: 'Transactions',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/transactions/index',
     },
-    {
-        type: 'category',
-        label: 'Packages',
-  				items: [
-          'guides/developer/packages/move-package-management',
-					'guides/developer/packages/upgrade',
-					'guides/developer/packages/custom-policies',
-					'guides/developer/packages/automated-address-management',
-				],
-			},
+    items: [
+      'guides/developer/transactions/txn-overview',
+      'guides/developer/transactions/transaction-lifecycle',
       {
-				type: 'category',
-				label: 'Transactions',
-				link: {
-					type: 'doc',
-					id: 'guides/developer/transactions/txn-overview',
-				},
+        type: 'category',
+        label: 'Programmable Transaction Blocks (PTBs)',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/transactions/ptbs/index',
+        },
         items: [
-           {
-            type: 'category',
-            label: 'Programmable Transaction Blocks',
-            link: {
-              type: 'doc',
-              id: 'guides/developer/transactions/prog-txn-blocks',
-            },
-              items: [
-              'guides/developer/transactions/building-ptb',
-              ],
-            },
-            'guides/developer/transactions/sign-and-send-txn',
-            'guides/developer/transactions/sponsor-txn',
-            {
-            type: 'category',
-            label: 'Transaction Authentication',
-              items: [
-              'guides/developer/transactions/transaction-auth/intent-signing',
-              'guides/developer/transactions/transaction-auth/multisig',
-              'guides/developer/transactions/transaction-auth/offline-signing',
-              ],
-            },
+          'guides/developer/transactions/ptbs/prog-txn-blocks',
+          'guides/developer/transactions/ptbs/building-ptb',
+          'guides/developer/transactions/ptbs/inputs-and-results',
+          'guides/developer/transactions/ptbs/sign-and-send-txn',
         ],
+      },
+      {
+        type: 'category',
+        label: 'Transaction Authentication',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/transactions/transaction-auth/index',
+        },
+        items: [
+          'guides/developer/transactions/transaction-auth/intent-signing',
+          'guides/developer/transactions/transaction-auth/multisig',
+          'guides/developer/transactions/transaction-auth/offline-signing',
+        ],
+      },
+      'guides/developer/transactions/sponsor-txn',
+			'guides/developer/transactions/gas-smashing',
+    ],
   },
   {
     type: 'category',
@@ -144,7 +158,6 @@ const guides = [
       'guides/developer/accessing-data/query-with-graphql',
       'guides/developer/accessing-data/archival-store',
       'guides/developer/accessing-data/using-events',
-      'guides/developer/accessing-data/authenticated-events',
       {
         type: 'category',
         label: 'Custom Indexing Framework',
@@ -304,7 +317,6 @@ const guides = [
       'guides/operator/exchange-integration',
       'guides/operator/bridge-node-configuration',
       'guides/operator/indexer-stack-setup',
-      'guides/operator/archival-stack-setup',
       {
         type: 'category',
         label: 'Sui Validator Nodes',
