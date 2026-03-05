@@ -46,7 +46,7 @@ pub(crate) struct Checkpoint {
 }
 
 #[derive(Clone)]
-pub(crate) struct CheckpointContents {
+struct CheckpointContents {
     // TODO: Remove when the scope is used in a nested field.
     #[allow(unused)]
     scope: Scope,

@@ -34,7 +34,6 @@ use crate::api::scalars::json::Json;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
-use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas_input::GasInput;
 use crate::api::types::lookups::CheckpointBounds;
@@ -51,24 +50,7 @@ use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
-pub(crate) mod bloom;
 pub(crate) mod filter;
-
-/// Cursor for transaction pagination
-pub(crate) type CTransaction = JsonCursor<u64>;
-
-/// Cursor for transaction scanning.
-#[derive(
-    serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord,
-)]
-pub(crate) struct ScanTransactionCursor {
-    #[serde(rename = "c")]
-    pub(crate) cp_sequence_number: u64,
-    #[serde(rename = "t")]
-    pub(crate) tx_sequence_number: u64,
-}
-
-pub(crate) type CScanTransaction = JsonCursor<ScanTransactionCursor>;
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -81,6 +63,8 @@ pub(crate) struct TransactionContents {
     pub(crate) scope: Scope,
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
+
+pub(crate) type CTransaction = JsonCursor<u64>;
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -312,54 +296,6 @@ impl Transaction {
             tx_digests(ctx, &tx_sequence_numbers).await?,
             |(s, _)| JsonCursor::new(*s),
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
-        )
-    }
-
-    /// Scan a bounded checkpoint range for transactions matching the filter. Uses bloom filters to
-    /// find candidate checkpoints that may contain matching transaction, then fetches and returns
-    /// transactions that match the filter.
-    pub(crate) async fn scan(
-        ctx: &Context<'_>,
-        scope: Scope,
-        page: Page<CScanTransaction>,
-        filter: TransactionFilter,
-    ) -> Result<Connection<String, Transaction>, RpcError> {
-        let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let available_range_key = AvailableRangeKey {
-            type_: "Query".to_string(),
-            field: Some("scanTransactions".to_string()),
-            filters: Some(filter.active_filters()),
-        };
-        let reader_lo = available_range_key.reader_lo(watermarks)?;
-
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
-            return Ok(Connection::new(false, false));
-        };
-
-        let Some(cp_bounds) = checkpoint_bounds(
-            filter.after_checkpoint().map(u64::from),
-            filter.at_checkpoint().map(u64::from),
-            filter.before_checkpoint().map(u64::from),
-            reader_lo,
-            checkpoint_viewed_at,
-        ) else {
-            return Ok(Connection::new(false, false));
-        };
-
-        let transactions = bloom::transactions(ctx, &page, &filter, cp_bounds).await?;
-
-        page.paginate_filtered(
-            &transactions,
-            |(_, contents)| filter.matches(contents),
-            |(digest, contents)| {
-                Ok::<_, RpcError>(Transaction {
-                    digest: *digest,
-                    contents: TransactionContents {
-                        scope: scope.clone(),
-                        contents: Some(Arc::new(contents.clone())),
-                    },
-                })
-            },
         )
     }
 }
