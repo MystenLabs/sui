@@ -1,0 +1,160 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/development/typing/signed_int_negation_min_overflow.move:8:16
+  │
+8 │         let x: i8 = -128i8;
+  │                ^^ Signed integers are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/development/typing/signed_int_negation_min_overflow.move:9:17
+  │
+9 │         let _y: i8 = -x; // overflows: -(-128) doesn't fit in i8
+  │                 ^^ Signed integers are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/development/typing/signed_int_negation_min_overflow.move:9:22
+  │
+9 │         let _y: i8 = -x; // overflows: -(-128) doesn't fit in i8
+  │                      ^^ Signed integer values are not supported in bytecode
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:13:16
+   │
+13 │         let x: i64 = -9223372036854775808i64;
+   │                ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:14:17
+   │
+14 │         let _y: i64 = -x; // overflows
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:14:23
+   │
+14 │         let _y: i64 = -x; // overflows
+   │                       ^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:19:17
+   │
+19 │         let _x: i8 = -(-127i8); // = 127, should be fine
+   │                 ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:19:22
+   │
+19 │         let _x: i8 = -(-127i8); // = 127, should be fine
+   │                      ^^^^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:24:17
+   │
+24 │         let _x: i8 = (128i64 as i8); // 128 doesn't fit in i8
+   │                 ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:24:23
+   │
+24 │         let _x: i8 = (128i64 as i8); // 128 doesn't fit in i8
+   │                       ^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:24:23
+   │
+24 │         let _x: i8 = (128i64 as i8); // 128 doesn't fit in i8
+   │                       ^^^^^^^^^^^^ Signed integer casts are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:28:17
+   │
+28 │         let _x: i8 = (-129i64 as i8); // -129 doesn't fit in i8
+   │                 ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:28:23
+   │
+28 │         let _x: i8 = (-129i64 as i8); // -129 doesn't fit in i8
+   │                       ^^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_negation_min_overflow.move:28:23
+   │
+28 │         let _x: i8 = (-129i64 as i8); // -129 doesn't fit in i8
+   │                       ^^^^^^^^^^^^^ Signed integer casts are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues

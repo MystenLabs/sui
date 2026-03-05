@@ -386,11 +386,13 @@ fn fold_binary_op(
         (B::Shl, V::I64(u1), V::U8(u2)) => V::I64(u1.checked_shl(u2 as u32)?),
         (B::Shl, V::I128(u1), V::U8(u2)) => V::I128(u1.checked_shl(u2 as u32)?),
 
-        (B::Shr, V::I8(u1), V::U8(u2)) => V::I8(u1.checked_shr(u2 as u32)?),
-        (B::Shr, V::I16(u1), V::U8(u2)) => V::I16(u1.checked_shr(u2 as u32)?),
-        (B::Shr, V::I32(u1), V::U8(u2)) => V::I32(u1.checked_shr(u2 as u32)?),
-        (B::Shr, V::I64(u1), V::U8(u2)) => V::I64(u1.checked_shr(u2 as u32)?),
-        (B::Shr, V::I128(u1), V::U8(u2)) => V::I128(u1.checked_shr(u2 as u32)?),
+        (B::Shr, V::I8(u1), V::U8(u2)) => V::I8(((u1 as i8).checked_shr(u2 as u32)?) as u8),
+        (B::Shr, V::I16(u1), V::U8(u2)) => V::I16(((u1 as i16).checked_shr(u2 as u32)?) as u16),
+        (B::Shr, V::I32(u1), V::U8(u2)) => V::I32(((u1 as i32).checked_shr(u2 as u32)?) as u32),
+        (B::Shr, V::I64(u1), V::U8(u2)) => V::I64(((u1 as i64).checked_shr(u2 as u32)?) as u64),
+        (B::Shr, V::I128(u1), V::U8(u2)) => {
+            V::I128(((u1 as i128).checked_shr(u2 as u32)?) as u128)
+        }
 
         //************************************
         // Pure arith
@@ -548,35 +550,36 @@ fn fold_cast(loc: Loc, sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<Unann
         (BT::U256, V::U64(u)) => V::U256(u.into()),
         (BT::U256, V::U128(u)) => V::U256(u.into()),
         (BT::U256, V::U256(u)) => V::U256(u),
-        // Signed-to-signed casts
+        // Signed-to-signed casts: convert through signed types for correct
+        // sign-extension (widening) and signed range checks (narrowing).
         (BT::I8, V::I8(u)) => V::I8(u),
-        (BT::I8, V::I16(u)) => V::I8(u8::try_from(u).ok()?),
-        (BT::I8, V::I32(u)) => V::I8(u8::try_from(u).ok()?),
-        (BT::I8, V::I64(u)) => V::I8(u8::try_from(u).ok()?),
-        (BT::I8, V::I128(u)) => V::I8(u8::try_from(u).ok()?),
+        (BT::I8, V::I16(u)) => V::I8(i8::try_from(u as i16).ok()? as u8),
+        (BT::I8, V::I32(u)) => V::I8(i8::try_from(u as i32).ok()? as u8),
+        (BT::I8, V::I64(u)) => V::I8(i8::try_from(u as i64).ok()? as u8),
+        (BT::I8, V::I128(u)) => V::I8(i8::try_from(u as i128).ok()? as u8),
 
-        (BT::I16, V::I8(u)) => V::I16(u as u16),
+        (BT::I16, V::I8(u)) => V::I16(((u as i8) as i16) as u16),
         (BT::I16, V::I16(u)) => V::I16(u),
-        (BT::I16, V::I32(u)) => V::I16(u16::try_from(u).ok()?),
-        (BT::I16, V::I64(u)) => V::I16(u16::try_from(u).ok()?),
-        (BT::I16, V::I128(u)) => V::I16(u16::try_from(u).ok()?),
+        (BT::I16, V::I32(u)) => V::I16(i16::try_from(u as i32).ok()? as u16),
+        (BT::I16, V::I64(u)) => V::I16(i16::try_from(u as i64).ok()? as u16),
+        (BT::I16, V::I128(u)) => V::I16(i16::try_from(u as i128).ok()? as u16),
 
-        (BT::I32, V::I8(u)) => V::I32(u as u32),
-        (BT::I32, V::I16(u)) => V::I32(u as u32),
+        (BT::I32, V::I8(u)) => V::I32(((u as i8) as i32) as u32),
+        (BT::I32, V::I16(u)) => V::I32(((u as i16) as i32) as u32),
         (BT::I32, V::I32(u)) => V::I32(u),
-        (BT::I32, V::I64(u)) => V::I32(u32::try_from(u).ok()?),
-        (BT::I32, V::I128(u)) => V::I32(u32::try_from(u).ok()?),
+        (BT::I32, V::I64(u)) => V::I32(i32::try_from(u as i64).ok()? as u32),
+        (BT::I32, V::I128(u)) => V::I32(i32::try_from(u as i128).ok()? as u32),
 
-        (BT::I64, V::I8(u)) => V::I64(u as u64),
-        (BT::I64, V::I16(u)) => V::I64(u as u64),
-        (BT::I64, V::I32(u)) => V::I64(u as u64),
+        (BT::I64, V::I8(u)) => V::I64(((u as i8) as i64) as u64),
+        (BT::I64, V::I16(u)) => V::I64(((u as i16) as i64) as u64),
+        (BT::I64, V::I32(u)) => V::I64(((u as i32) as i64) as u64),
         (BT::I64, V::I64(u)) => V::I64(u),
-        (BT::I64, V::I128(u)) => V::I64(u64::try_from(u).ok()?),
+        (BT::I64, V::I128(u)) => V::I64(i64::try_from(u as i128).ok()? as u64),
 
-        (BT::I128, V::I8(u)) => V::I128(u as u128),
-        (BT::I128, V::I16(u)) => V::I128(u as u128),
-        (BT::I128, V::I32(u)) => V::I128(u as u128),
-        (BT::I128, V::I64(u)) => V::I128(u as u128),
+        (BT::I128, V::I8(u)) => V::I128(((u as i8) as i128) as u128),
+        (BT::I128, V::I16(u)) => V::I128(((u as i16) as i128) as u128),
+        (BT::I128, V::I32(u)) => V::I128(((u as i32) as i128) as u128),
+        (BT::I128, V::I64(u)) => V::I128(((u as i64) as i128) as u128),
         (BT::I128, V::I128(u)) => V::I128(u),
 
         // Cross signed/unsigned casts: don't fold, let bytecode handle

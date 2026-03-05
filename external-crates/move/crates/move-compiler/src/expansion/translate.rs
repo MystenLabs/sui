@@ -2986,7 +2986,13 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 pe => return exp(context, Box::new(pe)),
             }
         }
-        PE::Value(pv) => unwrap_or_error_exp!(value(&mut context.defn_context, pv).map(EE::Value)),
+        PE::Value(pv) => {
+            let v = value(&mut context.defn_context, pv);
+            if let Some(sp!(vloc, ref v_)) = v {
+                check_signed_literal_range(context, vloc, v_);
+            }
+            unwrap_or_error_exp!(v.map(EE::Value))
+        }
         PE::Name(pn) if pn.value.has_tyargs() => {
             let msg = "Expected name to be followed by a brace-enclosed list of field expressions \
                 or a parenthesized list of arguments for a function call";
@@ -3105,6 +3111,18 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         }
         PE::Continue(name) => EE::Continue(name),
         PE::Dereference(pe) => EE::Dereference(exp(context, pe)),
+        PE::UnaryExp(op, pe) if op.value == P::UnaryOp_::Neg => match pe.value {
+            PE::Value(pv) if is_signed_literal(&pv) => {
+                match value(&mut context.defn_context, pv) {
+                    Some(sp!(vloc, v_)) => EE::Value(sp(vloc, negate_signed_value(v_))),
+                    None => {
+                        assert!(context.env().has_errors());
+                        EE::UnresolvedError
+                    }
+                }
+            }
+            _ => EE::UnaryExp(op, exp(context, pe)),
+        },
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, pe)),
         PE::BinopExp(_pl, op, _pr) if op.value.is_spec_only() => {
             context.spec_deprecated(loc, /* is_error */ true);
@@ -3633,6 +3651,75 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                 sp(loc, EP::At(x, Box::new(match_pattern(context, *inner))))
             }
         }
+    }
+}
+
+//**************************************************************************************************
+// Signed integer literal helpers
+//**************************************************************************************************
+
+fn is_signed_literal(pv: &P::Value) -> bool {
+    match &pv.value {
+        P::Value_::Num(s) => {
+            s.ends_with("i8")
+                || s.ends_with("i16")
+                || s.ends_with("i32")
+                || s.ends_with("i64")
+                || s.ends_with("i128")
+        }
+        _ => false,
+    }
+}
+
+fn negate_signed_value(v_: E::Value_) -> E::Value_ {
+    use E::Value_ as EV;
+    match v_ {
+        EV::I8(u) => EV::I8((u as i8).wrapping_neg() as u8),
+        EV::I16(u) => EV::I16((u as i16).wrapping_neg() as u16),
+        EV::I32(u) => EV::I32((u as i32).wrapping_neg() as u32),
+        EV::I64(u) => EV::I64((u as i64).wrapping_neg() as u64),
+        EV::I128(u) => EV::I128((u as i128).wrapping_neg() as u128),
+        v_ => v_,
+    }
+}
+
+fn check_signed_literal_range(context: &mut Context, loc: Loc, v_: &E::Value_) {
+    use E::Value_ as EV;
+    let exceeds_max = match v_ {
+        EV::I8(u) => *u > i8::MAX as u8,
+        EV::I16(u) => *u > i16::MAX as u16,
+        EV::I32(u) => *u > i32::MAX as u32,
+        EV::I64(u) => *u > i64::MAX as u64,
+        EV::I128(u) => *u > i128::MAX as u128,
+        _ => false,
+    };
+    if exceeds_max {
+        let type_str = match v_ {
+            EV::I8(_) => "i8",
+            EV::I16(_) => "i16",
+            EV::I32(_) => "i32",
+            EV::I64(_) => "i64",
+            EV::I128(_) => "i128",
+            _ => unreachable!(),
+        };
+        context.add_diag(diag!(
+            Syntax::InvalidNumber,
+            (
+                loc,
+                format!(
+                    "Invalid numerical literal. The value is too large for '{type_str}'. \
+                     Did you mean '-{val}{type_str}'?",
+                    val = match v_ {
+                        EV::I8(u) => format!("{u}"),
+                        EV::I16(u) => format!("{u}"),
+                        EV::I32(u) => format!("{u}"),
+                        EV::I64(u) => format!("{u}"),
+                        EV::I128(u) => format!("{u}"),
+                        _ => unreachable!(),
+                    },
+                )
+            ),
+        ));
     }
 }
 

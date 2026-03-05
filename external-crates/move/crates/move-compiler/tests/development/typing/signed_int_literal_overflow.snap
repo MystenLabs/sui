@@ -9,4 +9,4 @@ error[E01006]: invalid number literal
   ┌─ tests/development/typing/signed_int_literal_overflow.move:4:22
   │
 4 │         let _a: i8 = 128i8;
-  │                      ^^^^^ Invalid number literal. The given literal is too large to fit into 'i8'
+  │                      ^^^^^ Invalid numerical literal. The value is too large for 'i8'. Did you mean '-128i8'?

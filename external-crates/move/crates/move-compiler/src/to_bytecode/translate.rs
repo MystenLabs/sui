@@ -5,7 +5,7 @@
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
     PreCompiledProgramInfo,
-    cfgir::{ast as G, translate::move_value_from_value_},
+    cfgir::ast as G,
     compiled_unit::*,
     diag,
     diagnostics::{DiagnosticReporter, Diagnostics, warning_filters::WarningFiltersScope},
@@ -30,7 +30,9 @@ use crate::{
 };
 use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;
-use move_core_types::account_address::AccountAddress as MoveAddress;
+use move_core_types::{
+    account_address::AccountAddress as MoveAddress, runtime_value::MoveValue,
+};
 use move_ir_types::{ast as IR, location::*};
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -1223,8 +1225,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     let [ty]: [IR::Type; 1] = types(context, e.ty)
                         .try_into()
                         .expect("ICE value type should have one element");
-                    let mv = move_value_from_value_(v_)
-                        .expect("ICE address/vector should convert to MoveValue");
+                    let mv = move_value_from_value_for_bytecode(v_);
                     B::LdConst(ty, mv)
                 }
             };
@@ -1463,4 +1464,26 @@ fn binary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
             O::Range | O::Implies | O::Iff => panic!("specification operator unexpected"),
         },
     ));
+}
+
+fn move_value_from_value_for_bytecode(v_: Value_) -> MoveValue {
+    use Value_ as V;
+    match v_ {
+        V::Address(a) => MoveValue::Address(MoveAddress::new(a.into_bytes())),
+        V::U8(u) => MoveValue::U8(u),
+        V::U16(u) => MoveValue::U16(u),
+        V::U32(u) => MoveValue::U32(u),
+        V::U64(u) => MoveValue::U64(u),
+        V::U128(u) => MoveValue::U128(u),
+        V::U256(u) => MoveValue::U256(u),
+        V::Bool(b) => MoveValue::Bool(b),
+        V::Vector(_, vs) => MoveValue::Vector(
+            vs.into_iter()
+                .map(|sp!(_, v_)| move_value_from_value_for_bytecode(v_))
+                .collect(),
+        ),
+        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) => {
+            panic!("ICE signed integer in LdConst bytecode")
+        }
+    }
 }
