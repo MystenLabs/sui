@@ -303,6 +303,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
+        gas_coin: Option<ObjectID>,
         pure_input_bytes: IndexSet<Vec<u8>>,
         object_inputs: Vec<T::ObjectInput>,
         input_withdrawal_metadata: Vec<T::WithdrawalInput>,
@@ -329,7 +330,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         let withdrawal_inputs = Locals::new(withdrawal_values)?;
         let pure_inputs = Locals::new_invalid(pure_input_metadata.len())?;
         let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
-        let gas = match gas_charger.gas_coin() {
+        let gas = match gas_coin {
             Some(gas_coin) => {
                 let ty = env.gas_coin_type()?;
                 let (gas_metadata, gas_value) = load_object_arg_impl(

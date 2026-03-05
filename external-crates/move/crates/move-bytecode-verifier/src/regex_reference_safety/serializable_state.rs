@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use move_binary_format::file_format::{
     EnumDefinitionIndex, FieldHandleIndex, LocalIndex, MemberCount, VariantTag,
 };
-use move_regex_borrow_graph::references::Ref;
+use move_regex_borrow_graph::{meter::DummyMeter, references::Ref};
 use serde::{Deserialize, Serialize};
 
 use crate::regex_reference_safety::abstract_state::{AbstractState, Graph, Label};
@@ -105,7 +105,7 @@ fn graph_to_serializable(
     let outgoing = graph
         .keys()
         .filter_map(|source| {
-            let borrowed_by = graph.borrowed_by(source).unwrap();
+            let borrowed_by = graph.borrowed_by(source, &mut DummyMeter).unwrap();
             if borrowed_by.is_empty() {
                 return None;
             }

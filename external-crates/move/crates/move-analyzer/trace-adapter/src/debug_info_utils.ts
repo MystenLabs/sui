@@ -10,7 +10,9 @@ import { JSON_FILE_EXT } from './utils';
 // Data types corresponding to debug info file JSON schema.
 
 interface JSONSrcDefinitionLocation {
-    file_hash: number[];
+    // in an earlier version of the compiler it's a byte array,
+    // in the latest version it's a hex string
+    file_hash: number[] | string;
     start: number;
     end: number;
 }
@@ -47,6 +49,19 @@ interface JSONSrcRootObject {
     enum_map: Record<string, JSONSrcEnumSourceMapEntry>;
     function_map: Record<string, JSONSrcFunctionMapEntry>;
     constant_map: Record<string, string>;
+}
+
+/**
+ * Converts a file hash from JSON (either a hex string or a byte array)
+ * to the canonical version.
+ */
+function fileHashFromJSON(fileHash: number[] | string): string {
+    if (typeof fileHash === 'string') {
+        // later version: hex string like "d71f1b77..."
+        return Buffer.from(fileHash, 'hex').toString('base64');
+    }
+    // earlier version: byte array like [255, 42, 7, ...]
+    return Buffer.from(fileHash).toString('base64');
 }
 
 // Runtime data types.
@@ -230,7 +245,7 @@ function readDebugInfo(
 ): IDebugInfo | undefined {
     const debugInfoJSON: JSONSrcRootObject = JSON.parse(fs.readFileSync(debugInfoPath, 'utf8'));
 
-    let fileHash = Buffer.from(debugInfoJSON.definition_location.file_hash).toString('base64');
+    let fileHash = fileHashFromJSON(debugInfoJSON.definition_location.file_hash);
     let fileInfo = filesMap.get(fileHash);
     if (!fileInfo) {
         if (failOnNoSourceFile) {
@@ -289,7 +304,7 @@ function readDebugInfo(
         // in the source map
         for (const [pc, defLocation] of Object.entries(funEntry.code_map)) {
             const currentPC = parseInt(pc);
-            const defLocFileHash = Buffer.from(defLocation.file_hash).toString('base64');
+            const defLocFileHash = fileHashFromJSON(defLocation.file_hash);
             const fileInfo = filesMap.get(defLocFileHash);
             if (!fileInfo) {
                 throw new Error('Could not find file with hash: '

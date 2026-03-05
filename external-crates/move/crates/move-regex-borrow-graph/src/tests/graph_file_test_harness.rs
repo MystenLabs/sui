@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{collections::Graph, references::Ref};
+use crate::{collections::Graph, meter::DummyMeter, references::Ref};
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -349,7 +349,7 @@ impl BorrowArrangementParser {
 fn is_writable(graph: &Graph<Loc, char>, r: Ref) -> bool {
     graph.is_mutable(r).unwrap()
         && graph
-            .borrowed_by(r)
+            .borrowed_by(r, &mut DummyMeter)
             .unwrap()
             .values()
             .all(|paths| paths.iter().all(|path| path.is_epsilon()))
@@ -369,7 +369,7 @@ fn build_and_check_graph_from_arrangement(
     // Add all the locals to the graph as base "mutable references."
     let local_defs: Vec<_> = locals.iter().map(|i| (i, (), true)).collect::<Vec<_>>();
 
-    let (mut g, local_map) = Graph::new(local_defs).unwrap();
+    let (mut g, local_map) = Graph::new(local_defs.len(), local_defs).unwrap();
     // Ensure we do not make new graphs
     let g_ref = &mut g;
 
@@ -416,14 +416,14 @@ fn build_and_check_graph_from_arrangement(
                 } => {
                     let base_ref = local_map[&{ *local_id }];
                     let new_ref = g_ref
-                        .extend_by_epsilon((), [base_ref], *is_mutable)
+                        .extend_by_epsilon((), [base_ref], *is_mutable, &mut DummyMeter)
                         .unwrap();
                     refs.insert(*lhs, new_ref);
                 }
                 BorrowOp::Alias { base, is_mutable } => {
                     let base_ref = refs[base];
                     let new_ref = g_ref
-                        .extend_by_epsilon((), [base_ref], *is_mutable)
+                        .extend_by_epsilon((), [base_ref], *is_mutable, &mut DummyMeter)
                         .unwrap();
                     refs.insert(*lhs, new_ref);
                 }
@@ -434,15 +434,15 @@ fn build_and_check_graph_from_arrangement(
                 } => {
                     let base_ref = refs[base];
                     let new_ref = g_ref
-                        .extend_by_label((), [base_ref], *is_mutable, *label)
+                        .extend_by_label((), [base_ref], *is_mutable, *label, &mut DummyMeter)
                         .unwrap();
                     refs.insert(*lhs, new_ref);
                 }
                 BorrowOp::Call { args, is_mutable } => {
-                    let arg_refs: Vec<_> = args.iter().map(|a| refs[a]).collect();
+                    let arg_refs = args.iter().map(|a| refs[a]).collect();
                     let muts = vec![*is_mutable];
                     let new_refs = g_ref
-                        .extend_by_dot_star_for_call((), arg_refs, muts)
+                        .extend_by_dot_star_for_call((), &arg_refs, muts, &mut DummyMeter)
                         .unwrap();
                     assert!(new_refs.len() == 1);
                     refs.insert(*lhs, new_refs[0]);

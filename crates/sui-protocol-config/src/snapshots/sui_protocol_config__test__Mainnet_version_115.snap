@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 114
+version: 115
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -136,6 +136,7 @@ feature_flags:
   deprecate_global_storage_ops: true
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
+  address_aliases: true
   fix_checkpoint_signature_mapping: true
   consensus_skip_gced_blocks_in_direct_finalization: true
   gas_rounding_halve_digits: true
@@ -145,6 +146,7 @@ feature_flags:
   consensus_always_accept_system_transactions: true
   validator_metadata_verify_v2: true
   randomize_checkpoint_tx_limit_in_tests: true
+  gasless_transaction_drop_safety: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

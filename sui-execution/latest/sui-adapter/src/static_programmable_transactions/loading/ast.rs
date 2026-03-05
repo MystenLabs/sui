@@ -26,6 +26,7 @@ use sui_types::{
 
 #[derive(Debug)]
 pub struct Transaction {
+    pub gas_coin: Option<ObjectID>,
     pub inputs: Inputs,
     pub commands: Commands,
 }

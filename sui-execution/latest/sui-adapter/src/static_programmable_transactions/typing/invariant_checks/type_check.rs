@@ -58,6 +58,7 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
 fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
     let context = Context::new(txn);
     let T::Transaction {
+        gas_coin: _,
         bytes: _,
         objects,
         withdrawals,
