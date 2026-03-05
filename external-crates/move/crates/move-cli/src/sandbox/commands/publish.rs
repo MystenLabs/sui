@@ -96,10 +96,6 @@ pub fn publish<V: VMTestSetup>(
         &mut gas_status,
         NativeExtensions::default(),
     )?;
-    // TODO: Fix this?
-    // if verbose {
-    //     explain_publish_changeset(&changeset);
-    // }
     state.save_package(ser_pkg)?;
 
     Ok(())
