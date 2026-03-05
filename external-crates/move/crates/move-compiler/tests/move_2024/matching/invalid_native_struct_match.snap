@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04015]: invalid use of native item
+  ┌─ tests/move_2024/matching/invalid_native_struct_match.move:9:13
+  │
+5 │     public native struct S;
+  │            ------ Struct declared 'native' here
+  ·
+9 │             S {} => 0,
+  │             ^^^^ Invalid pattern usage for native struct '0x0::M::S'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
+
+error[E04015]: invalid use of native item
+   ┌─ tests/move_2024/matching/invalid_native_struct_match.move:16:13
+   │
+ 5 │     public native struct S;
+   │            ------ Struct declared 'native' here
+   ·
+16 │             S {} => 0,
+   │             ^^^^ Invalid pattern usage for native struct '0x0::M::S'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
+
+error[E04015]: invalid use of native item
+   ┌─ tests/move_2024/matching/invalid_native_struct_match.move:23:13
+   │
+ 5 │     public native struct S;
+   │            ------ Struct declared 'native' here
+   ·
+23 │             S {} => 0,
+   │             ^^^^ Invalid pattern usage for native struct '0x0::M::S'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
