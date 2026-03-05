@@ -10,7 +10,7 @@ use move_vm_config::verifier::VerifierConfig;
 use sui_types::randomness_state::is_mutable_random;
 use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
-    base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, TxContext, TxContextKind},
+    base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, TxContextKind},
     clock::Clock,
     error::ExecutionError,
     is_object, is_object_vector, is_primitive,
@@ -153,7 +153,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
     // then the first parameter must be of a one-time witness type and must be passed by value. This
     // is checked by the verifier for pass one-time witness value (one_time_witness_verifier) -
     // please see the description of this pass for additional details.
-    if TxContext::kind(module, &parameters[parameters.len() - 1]) != TxContextKind::None {
+    if TxContextKind::derive(module, &parameters[parameters.len() - 1]) != TxContextKind::None {
         Ok(())
     } else {
         Err(format!(
@@ -178,7 +178,7 @@ fn verify_entry_function_impl(
     let params = view.signature_at(handle.parameters);
 
     let all_non_ctx_params = match params.0.last() {
-        Some(last_param) if TxContext::kind(view, last_param) != TxContextKind::None => {
+        Some(last_param) if TxContextKind::derive(view, last_param) != TxContextKind::None => {
             &params.0[0..params.0.len() - 1]
         }
         _ => &params.0,

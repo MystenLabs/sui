@@ -36,11 +36,12 @@ use move_core_types::{
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_types::{data_store::DataStore, loaded_data::runtime_types as vm_runtime_type};
 use std::{cell::OnceCell, rc::Rc, sync::Arc};
+use sui_execution_types::TxContext;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     balance::RESOLVED_BALANCE_STRUCT,
-    base_types::{ObjectID, TxContext},
+    base_types::ObjectID,
     coin::RESOLVED_COIN_STRUCT,
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::TypeArgumentError,

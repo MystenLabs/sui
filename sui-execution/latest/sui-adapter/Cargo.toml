@@ -39,6 +39,7 @@ move-regex-borrow-graph = { path = "../../../external-crates/move/crates/move-re
 
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
+sui-execution-types.workspace = true
 sui-types.workspace = true
 parking_lot.workspace = true
 either.workspace = true

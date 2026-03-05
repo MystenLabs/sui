@@ -27,8 +27,8 @@ use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::base_types::{
     ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, STD_ASCII_MODULE_NAME,
     STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME,
-    STD_UTF8_STRUCT_NAME, SuiAddress, TxContext, TxContextKind, is_primitive_type_tag,
-    move_ascii_str_layout, move_utf8_str_layout,
+    STD_UTF8_STRUCT_NAME, SuiAddress, TxContextKind, is_primitive_type_tag, move_ascii_str_layout,
+    move_utf8_str_layout,
 };
 use sui_types::id::{self, ID, RESOLVED_SUI_ID};
 use sui_types::move_package::MovePackage;
@@ -831,7 +831,7 @@ pub fn resolve_move_function_args(
 
     // Lengths have to match, less one, due to TxContext
     let expected_len = match parameters.last() {
-        Some(param) if TxContext::kind(&module, param) != TxContextKind::None => {
+        Some(param) if TxContextKind::derive(&module, param) != TxContextKind::None => {
             parameters.len() - 1
         }
         _ => parameters.len(),

@@ -34,15 +34,15 @@ mod checked {
         fmt,
         sync::Arc,
     };
+    use sui_execution_types::{MoveLegacyTxContext, TxContext};
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
     use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
         base_types::{
-            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
-            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
-            TX_CONTEXT_STRUCT_NAME,
+            MoveObjectType, ObjectID, SuiAddress, TxContextKind, RESOLVED_ASCII_STR,
+            RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},

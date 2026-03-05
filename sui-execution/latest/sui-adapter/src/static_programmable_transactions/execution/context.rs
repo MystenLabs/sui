@@ -44,12 +44,13 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
+use sui_execution_types::TxContext;
 use sui_move_natives::object_runtime::{
     self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
 };
 use sui_types::{
     TypeTag,
-    base_types::{MoveObjectType, ObjectID, SequenceNumber, TxContext},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber},
     error::{ExecutionError, ExecutionErrorKind, SafeIndex},
     execution::ExecutionResults,
     metrics::LimitsMetrics,

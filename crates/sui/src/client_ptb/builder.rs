@@ -34,7 +34,7 @@ use sui_rpc_api::Client;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
-    base_types::{ObjectID, TxContext, TxContextKind, is_primitive_type_tag},
+    base_types::{ObjectID, TxContextKind, is_primitive_type_tag},
     move_package::MovePackage,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -562,7 +562,7 @@ impl<'a> PTBBuilder<'a> {
             .0
             .clone()
             .into_iter()
-            .filter(|tok| matches!(TxContext::kind(&module, tok), TxContextKind::None))
+            .filter(|tok| matches!(TxContextKind::derive(&module, tok), TxContextKind::None))
             .collect();
 
         if parameters.len() != args.len() {

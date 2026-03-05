@@ -5,12 +5,13 @@ use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
+use sui_execution_types::TxContext;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{SuiAddress, TxContext},
+    base_types::SuiAddress,
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,

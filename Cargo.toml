@@ -208,6 +208,7 @@ members = [
   "crates/x",
   "sui-execution",
   "sui-execution/cut",
+  "sui-execution/sui-execution-types",
   "sui-execution/latest/sui-adapter",
   "sui-execution/latest/sui-move-natives",
   "sui-execution/latest/sui-verifier",
@@ -783,6 +784,7 @@ consensus-types = { path = "consensus/types" }
 consensus-simtests = { path = "consensus/simtests" }
 
 sui-execution = { path = "sui-execution" }
+sui-execution-types = { path = "sui-execution/sui-execution-types" }
 # sui-move-natives = { path = "sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 # sui-adapter = { path = "sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 # sui-verifier = { path = "sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }

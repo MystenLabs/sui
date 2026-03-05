@@ -44,6 +44,7 @@ sui-config.workspace = true
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-sdk.workspace = true
+sui-execution-types.workspace = true
 sui-types.workspace = true
 sui-package-alt.workspace = true
 better_any = "0.1.1"

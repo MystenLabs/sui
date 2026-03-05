@@ -28,6 +28,7 @@ mod checked {
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
 
+    use sui_execution_types::TxContext;
     use sui_move_natives::{NativesCostTable, object_runtime::ObjectRuntime};
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{

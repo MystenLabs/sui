@@ -41,6 +41,7 @@ mod checked {
     };
     use move_vm_types::data_store::DataStore;
     use move_vm_types::loaded_data::runtime_types::Type;
+    use sui_execution_types::TxContext;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
@@ -49,7 +50,7 @@ mod checked {
     use sui_types::storage::PackageObject;
     use sui_types::{
         balance::Balance,
-        base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
+        base_types::{MoveObjectType, ObjectID, SuiAddress},
         coin::Coin,
         error::{ExecutionError, ExecutionErrorKind},
         event::Event,

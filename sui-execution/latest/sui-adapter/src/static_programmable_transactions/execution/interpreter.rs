@@ -15,8 +15,8 @@ use crate::{
 use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
+use sui_execution_types::TxContext;
 use sui_types::{
-    base_types::TxContext,
     error::{ExecutionError, ExecutionErrorKind},
     execution::{ExecutionTiming, ResultWithTimings},
     execution_status::PackageUpgradeError,

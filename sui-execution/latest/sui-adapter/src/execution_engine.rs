@@ -39,6 +39,7 @@ mod checked {
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_core_types::ident_str;
+    use sui_execution_types::TxContext;
     use sui_move_natives::all_natives;
     use sui_protocol_config::{
         LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig, check_limit_by_meter,
@@ -81,7 +82,7 @@ mod checked {
     use sui_types::{
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
         SUI_SYSTEM_PACKAGE_ID,
-        base_types::{SuiAddress, TransactionDigest, TxContext},
+        base_types::{SuiAddress, TransactionDigest},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
