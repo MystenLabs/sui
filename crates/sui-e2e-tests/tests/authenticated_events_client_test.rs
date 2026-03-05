@@ -5,8 +5,8 @@ use futures::StreamExt;
 use move_core_types::identifier::Identifier;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_authenticated_events_client::AuthenticatedEventsClient;
 use sui_keys::keystore::AccountKeystore;
-use sui_light_client::authenticated_events::AuthenticatedEventsClient;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMask;
@@ -15,10 +15,13 @@ use sui_rpc_api::proto::sui::rpc::v2::GetEpochRequest;
 use sui_rpc_api::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_sdk_types::ValidatorCommittee;
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::committee::Committee;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::TransactionData;
 use test_cluster::{TestCluster, TestClusterBuilder};
+
+fn to_sdk_address(addr: SuiAddress) -> sui_sdk_types::Address {
+    sui_sdk_types::Address::new(addr.to_inner())
+}
 
 fn create_rpc_config_with_authenticated_events() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
@@ -173,7 +176,7 @@ where
     unreachable!()
 }
 
-async fn get_genesis_committee(test_cluster: &TestCluster) -> Committee {
+async fn get_genesis_committee(test_cluster: &TestCluster) -> ValidatorCommittee {
     let mut ledger_client =
         connect_with_retry(|| LedgerServiceClient::connect(test_cluster.rpc_url().to_owned()))
             .await;
@@ -185,9 +188,7 @@ async fn get_genesis_committee(test_cluster: &TestCluster) -> Committee {
         .into_inner();
 
     let proto_committee = response.epoch.unwrap().committee.unwrap();
-
-    let sdk_committee = ValidatorCommittee::try_from(&proto_committee).unwrap();
-    Committee::from(sdk_committee)
+    ValidatorCommittee::try_from(&proto_committee).unwrap()
 }
 
 #[sim_test]
@@ -195,7 +196,7 @@ async fn test_client_end_to_end_stream() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     emit_events(&test_cluster, package_id, sender, 5).await;
 
@@ -240,7 +241,7 @@ async fn test_client_cross_epoch_stream() {
 
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     emit_events(&test_cluster, package_id, sender, 3).await;
 
@@ -292,7 +293,7 @@ async fn test_client_resume_after_downtime() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     emit_events(&test_cluster, package_id, sender, 3).await;
 
@@ -348,7 +349,7 @@ async fn test_client_mmr_verification() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     emit_events(&test_cluster, package_id, sender, 5).await;
 
@@ -380,8 +381,8 @@ async fn test_client_multiple_streams() {
     let package_id_1 = publish_auth_event_package(&test_cluster).await;
     let package_id_2 = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id_1 = SuiAddress::from(package_id_1);
-    let stream_id_2 = SuiAddress::from(package_id_2);
+    let stream_id_1 = to_sdk_address(SuiAddress::from(package_id_1));
+    let stream_id_2 = to_sdk_address(SuiAddress::from(package_id_2));
 
     emit_events(&test_cluster, package_id_1, sender, 3).await;
     emit_events(&test_cluster, package_id_2, sender, 3).await;
@@ -430,7 +431,7 @@ async fn test_client_resume_from_checkpoint_without_events() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     let genesis_committee = get_genesis_committee(&test_cluster).await;
     let client = Arc::new(
@@ -464,7 +465,7 @@ async fn test_client_resume_from_checkpoint_without_events() {
         panic!("Should have failed to create stream from checkpoint without events");
     };
 
-    let sui_light_client::authenticated_events::ClientError::InternalError(msg) = e else {
+    let sui_authenticated_events_client::ClientError::InternalError(msg) = e else {
         panic!("Expected InternalError, got: {:?}", e);
     };
 
@@ -493,7 +494,7 @@ async fn test_client_pruned_checkpoint_error() {
 
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     emit_events(&test_cluster, package_id, sender, 5).await;
 
@@ -520,10 +521,7 @@ async fn test_client_pruned_checkpoint_error() {
     };
 
     assert!(
-        matches!(
-            e,
-            sui_light_client::authenticated_events::ClientError::RpcError(_)
-        ),
+        matches!(e, sui_authenticated_events_client::ClientError::RpcError(_)),
         "Expected RpcError for pruned checkpoint, got: {:?}",
         e
     );
@@ -534,7 +532,7 @@ async fn test_client_large_gap_with_pagination() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     let genesis_committee = get_genesis_committee(&test_cluster).await;
     let client = Arc::new(
@@ -597,7 +595,7 @@ async fn test_client_multiple_events_single_transaction() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     let genesis_committee = get_genesis_committee(&test_cluster).await;
     let client = Arc::new(
@@ -626,7 +624,7 @@ async fn test_client_stream_nonexistent_stream() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     let genesis_committee = get_genesis_committee(&test_cluster).await;
     let client = Arc::new(
@@ -657,7 +655,7 @@ async fn test_client_detects_corrupted_event_data() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
     register_fail_point_if("corrupt_authenticated_event", || true);
 
@@ -702,9 +700,9 @@ async fn test_client_pagination_limit_forward_progress() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
-    let stream_id = SuiAddress::from(package_id);
+    let stream_id = to_sdk_address(SuiAddress::from(package_id));
 
-    let config = sui_light_client::authenticated_events::ClientConfig::new(
+    let config = sui_authenticated_events_client::ClientConfig::new(
         5,                                     /* page_size */
         std::time::Duration::from_millis(100), /* poll_interval */
         2,                                     /* max_pagination_iterations */

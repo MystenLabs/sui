@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use sui_authenticated_events_client::mmr::apply_stream_updates;
+use sui_authenticated_events_client::types::{
+    EventCommitment as SdkEventCommitment, EventStreamHead as SdkEventStreamHead,
+};
 use sui_keys::keystore::AccountKeystore;
-use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc_api::client::ExecutedTransaction;
@@ -18,6 +21,30 @@ use sui_types::{
     transaction::TransactionData,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
+
+fn convert_event_commitment(ec: &EventCommitment) -> SdkEventCommitment {
+    SdkEventCommitment::new(
+        ec.checkpoint_seq,
+        ec.transaction_idx,
+        ec.event_idx,
+        sui_sdk_types::Digest::new(ec.digest.into_inner()),
+    )
+}
+
+fn convert_event_stream_head(h: &EventStreamHead) -> SdkEventStreamHead {
+    SdkEventStreamHead {
+        mmr: h
+            .mmr
+            .iter()
+            .map(|v| {
+                let bytes = v.to_le_bytes();
+                sui_authenticated_events_client::types::U256::from_le_slice(&bytes).unwrap()
+            })
+            .collect(),
+        checkpoint_seq: h.checkpoint_seq,
+        num_events: h.num_events,
+    }
+}
 
 async fn setup_test_cluster_with_auth_events() -> TestCluster {
     let _guard: sui_protocol_config::OverrideGuard =
@@ -295,20 +322,26 @@ async fn authenticated_events_mmr_validation_test() {
         }
     }
 
-    let calculated_stream_head_x = apply_stream_updates(&EventStreamHead::new(), events_up_to_x);
+    let sdk_events_up_to_x: Vec<Vec<SdkEventCommitment>> = events_up_to_x
+        .iter()
+        .map(|batch| batch.iter().map(convert_event_commitment).collect())
+        .collect();
+    let calculated_stream_head_x =
+        apply_stream_updates(&SdkEventStreamHead::new(), sdk_events_up_to_x);
+    let expected_stream_head_x = convert_event_stream_head(&sui_stream_head_x);
 
     assert_eq!(
-        calculated_stream_head_x.num_events, sui_stream_head_x.num_events,
+        calculated_stream_head_x.num_events, expected_stream_head_x.num_events,
         "Event count should match at checkpoint X"
     );
 
     assert_eq!(
-        calculated_stream_head_x.mmr, sui_stream_head_x.mmr,
+        calculated_stream_head_x.mmr, expected_stream_head_x.mmr,
         "MMR should match at checkpoint X"
     );
 
     assert_eq!(
-        calculated_stream_head_x.checkpoint_seq, sui_stream_head_x.checkpoint_seq,
+        calculated_stream_head_x.checkpoint_seq, expected_stream_head_x.checkpoint_seq,
         "checkpoint_seq should match at checkpoint X"
     );
 
@@ -361,20 +394,27 @@ async fn authenticated_events_mmr_validation_test() {
         actual_stream_head_x_prime.checkpoint_seq,
     );
 
-    let calculated_stream_head_x_prime = apply_stream_updates(stream_head_x, events_between);
+    let sdk_events_between: Vec<Vec<SdkEventCommitment>> = events_between
+        .iter()
+        .map(|batch| batch.iter().map(convert_event_commitment).collect())
+        .collect();
+    let sdk_stream_head_x = convert_event_stream_head(stream_head_x);
+    let calculated_stream_head_x_prime =
+        apply_stream_updates(&sdk_stream_head_x, sdk_events_between);
+    let expected_stream_head_x_prime = convert_event_stream_head(&actual_stream_head_x_prime);
 
     assert_eq!(
-        calculated_stream_head_x_prime.num_events, actual_stream_head_x_prime.num_events,
+        calculated_stream_head_x_prime.num_events, expected_stream_head_x_prime.num_events,
         "Event count should match between calculated and actual stream heads"
     );
 
     assert_eq!(
-        calculated_stream_head_x_prime.mmr, actual_stream_head_x_prime.mmr,
+        calculated_stream_head_x_prime.mmr, expected_stream_head_x_prime.mmr,
         "MMR should match between calculated and actual stream heads"
     );
 
     assert_eq!(
-        calculated_stream_head_x_prime.checkpoint_seq, actual_stream_head_x_prime.checkpoint_seq,
+        calculated_stream_head_x_prime.checkpoint_seq, expected_stream_head_x_prime.checkpoint_seq,
         "checkpoint_seq should match between calculated and actual stream heads"
     );
 }

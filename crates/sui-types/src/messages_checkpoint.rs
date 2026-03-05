@@ -24,9 +24,7 @@ use crate::sui_serde::Readable;
 use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiErrorKind};
 use anyhow::Result;
-use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::MultisetHash;
-use fastcrypto::merkle::MerkleTree;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
 use prometheus::Histogram;
@@ -38,6 +36,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use sui_crypto::merkle::MerkleTree;
 use sui_protocol_config::ProtocolConfig;
 use tap::TapFallible;
 use tracing::warn;
@@ -139,7 +138,7 @@ impl CheckpointArtifact {
     pub fn digest(&self) -> SuiResult<Digest> {
         match self {
             Self::ObjectStates(object_states) => {
-                let tree = MerkleTree::<Blake2b256>::build_from_unserialized(
+                let tree = MerkleTree::build_from_unserialized(
                     object_states
                         .iter()
                         .map(|(id, (seq, digest))| (id, seq, digest)),
