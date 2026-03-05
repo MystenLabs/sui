@@ -30,9 +30,3 @@ All GraphQL API elements are accessible via the left sidebar, the following are 
 - <UnsafeLink href="/references/sui-api/sui-graphql/alpha/reference/types/objects/object">Object</UnsafeLink> is the type representing all on-chain objects (Move values and packages).
 - <UnsafeLink href="/references/sui-api/sui-graphql/alpha/reference/types/objects/address">Address</UnsafeLink> corresponds to account addresses (derived from the public keys of signatures that sign transactions) and can be used to query the objects owned by these accounts and the transactions they have signed or been affected by.
 <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/owned-or-immutable">Owner</UnsafeLink> represents any entity that can own a <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/move-object">MoveObject</UnsafeLink> to handle cases where it is not known whether the owner is an <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/object">Object</UnsafeLink> or an <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/address">Address</UnsafeLink> (for example, from the perspective of a Move object looking at its owner).
-
-## Related links
-
-<RelatedLink to="/guides/developer/accessing-data/query-with-graphql.mdx" />
-<RelatedLink to="/concepts/data-access/graphql-rpc.mdx" />
-<RelatedLink to="/concepts/data-access/custom-indexers" />

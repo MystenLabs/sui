@@ -52,7 +52,7 @@
       { "source": "/build", "destination": "/guides", "permanent": true },
       { "source": "/build/rust-sdk", "destination": "/references/sdk/rust-sdk", "permanent": true },
       { "source": "/build/rpc-best-practices", "destination": "/references/sui-api/rpc-best-practices", "permanent": true },
-      { "source": "/build/zk_login", "destination": "/concepts/cryptography/zklogin", "permanent": true },
+      { "source": "/build/zk_login", "destination": "/guides/developer/cryptography/zklogin-integration", "permanent": true },
       { "source": "/build/package-upgrades", "destination": "/guides/developer/packages/upgrade", "permanent": true },
       { "source": "/build/custom-upgrade-policy", "destination": "/guides/developer/packages/custom-policies", "permanent": true },
       { "source": "/build/automated-address-management", "destination": "/guides/developer/packages/automated-address-management", "permanent": true },
