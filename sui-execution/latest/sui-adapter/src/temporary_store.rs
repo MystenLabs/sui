@@ -665,6 +665,41 @@ impl<'backing> TemporaryStore<'backing> {
             None
         }
     }
+
+    pub(crate) fn get_gas_coin_value_unsafe(&self, id: &ObjectID) -> Result<u64, ExecutionError> {
+        let obj = self.objects().get(id).ok_or_else(|| {
+            ExecutionError::invariant_violation(format!("Gas coin object not found: {id:?}"))
+        })?;
+        let Data::Move(move_obj) = &obj.data else {
+            return Err(ExecutionError::invariant_violation(
+                "Provided non-gas coin object as input for gas!",
+            ));
+        };
+        if !move_obj.type_().is_gas_coin() {
+            return Err(ExecutionError::invariant_violation(
+                "Provided non-gas coin object as input for gas!",
+            ));
+        }
+        Ok(move_obj.get_coin_value_unsafe())
+    }
+
+    pub(crate) fn set_gas_coin_value_unsafe(&mut self, id: &ObjectID, new_balance: u64) -> Result<(), ExecutionError> {
+        let mut gas_object = self
+            .objects()
+            .get(id)
+            // unwrap safe because coin either existed or was just created.
+            .ok_or_else(|| ExecutionError::invariant_violation(format!("Gas coin object not found: {id:?}")))?
+            .clone();
+
+        gas_object
+            .data
+            .try_as_move_mut()
+            // unwrap should be safe because we checked that the primary gas object was a coin object above.
+            .ok_or_else(|| ExecutionError::invariant_violation(format!("Invalid coin object in txn {}", self.tx_digest)))?
+            .set_coin_value_unsafe(new_balance);
+        self.mutate_input_object(gas_object);
+        Ok(())
+    }
 }
 
 impl TemporaryStore<'_> {
