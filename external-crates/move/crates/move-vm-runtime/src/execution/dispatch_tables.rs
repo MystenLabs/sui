@@ -1145,7 +1145,13 @@ impl VirtualTableKey {
 
     pub fn to_string(&self, interner: &IdentifierInterner) -> String {
         let inner_name = self.0.inner_pkg_key.to_string(interner);
-        format!("{}::{}", self.0.package_key, inner_name)
+        format!(
+            "{}::{}",
+            self.0
+                .package_key
+                .to_canonical_display(/* with_prefix */ true),
+            inner_name
+        )
     }
 
     pub fn to_short_string(&self, interner: &IdentifierInterner) -> String {
