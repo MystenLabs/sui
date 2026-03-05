@@ -64,26 +64,44 @@ fun test_mul_div() {
 
 #[test]
 fun test_mul_div_exhaustive() {
-    let max: u8 = 32;
-    0u8.range_do_eq!(max, |x| {
-        0u8.range_do_eq!(max, |y| {
-            0u8.range_do_eq!(max, |z| {
+    let step: u8 = 32;
+    let mut x = 0u8;
+    loop {
+        let mut y = 0u8;
+        loop {
+            let mut z = 0u8;
+            loop {
                 integer_tests::check_mul_div!<u8, u16>(MAX, x, y, z);
-            })
-        })
-    })
+                if (z >= MAX - step + 1) { if (z < MAX) { z = MAX } else break }
+                else { z = z + step };
+            };
+            if (y >= MAX - step + 1) { if (y < MAX) { y = MAX } else break }
+            else { y = y + step };
+        };
+        if (x >= MAX - step + 1) { if (x < MAX) { x = MAX } else break }
+        else { x = x + step };
+    }
 }
 
 #[test]
 fun test_mul_div_ceil_exhaustive() {
-    let max: u8 = 32;
-    0u8.range_do_eq!(max, |x| {
-        0u8.range_do_eq!(max, |y| {
-            0u8.range_do_eq!(max, |z| {
+    let step: u8 = 32;
+    let mut x = 0u8;
+    loop {
+        let mut y = 0u8;
+        loop {
+            let mut z = 0u8;
+            loop {
                 integer_tests::check_mul_div_ceil!<u8, u16>(MAX, x, y, z);
-            })
-        })
-    })
+                if (z >= MAX - step + 1) { if (z < MAX) { z = MAX } else break }
+                else { z = z + step };
+            };
+            if (y >= MAX - step + 1) { if (y < MAX) { y = MAX } else break }
+            else { y = y + step };
+        };
+        if (x >= MAX - step + 1) { if (x < MAX) { x = MAX } else break }
+        else { x = x + step };
+    }
 }
 
 #[test, expected_failure(arithmetic_error, location = std::u8)]
