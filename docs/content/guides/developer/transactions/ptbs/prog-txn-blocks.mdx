@@ -60,7 +60,7 @@ Inputs are the values that are provided to the PTB, and results are the values t
 
 They can be seen as populating an array of values. For inputs, there is a single array, but for results, there is an array for each individual transaction command, creating a 2D-array of result values. You can access these values by borrowing, mutably or immutably, by copying, if the type permits, or by moving, which takes the value out of the array without re-indexing.
 
-Learn more about [inputs and results](/guides/developer/transactions/inputs-and-results).
+Learn more about [inputs and results](/guides/developer/transactions/ptbs/inputs-and-results).
 
 ## `Argument` structure and usage
 
@@ -142,7 +142,7 @@ Shared objects have restrictions on by value usage to ensure they remain shared 
 
 #### Pure value type checking
 
-Pure values are not type checked until their usage. When checking if a pure value has type `T`, the system verifies whether `T` is a valid type for a pure value (see the list in the [Inputs section](/guides/developer/transactions/inputs-and-results)). If it is, the bytes are validated. You can use a pure value with multiple types as long as the bytes are valid for each type. For example, you can use a string as an ASCII string `std::ascii::String` and as a UTF8 string `std::string::String`. However, after you mutably borrow the pure value, the type becomes fixed, and all future usages must be with that type.
+Pure values are not type checked until their usage. When checking if a pure value has type `T`, the system verifies whether `T` is a valid type for a pure value (see the list in the [Inputs section](/guides/developer/transactions/ptbs/inputs-and-results)). If it is, the bytes are validated. You can use a pure value with multiple types as long as the bytes are valid for each type. For example, you can use a string as an ASCII string `std::ascii::String` and as a UTF8 string `std::string::String`. However, after you mutably borrow the pure value, the type becomes fixed, and all future usages must be with that type.
 
 ### End of execution
 
