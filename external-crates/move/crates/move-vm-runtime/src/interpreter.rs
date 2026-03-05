@@ -650,11 +650,17 @@ impl Interpreter {
         loader: &Loader,
     ) -> PartialVMResult<()> {
         debug_writeln!(buf, "Call Stack:")?;
-        for (i, frame) in self.call_stack.0.iter().enumerate() {
+        for (i, frame) in (0..self.call_stack.0.len())
+            .rev()
+            .zip(self.call_stack.0.iter())
+        {
             self.debug_print_frame(buf, loader, i, frame)?;
         }
         debug_writeln!(buf, "Operand Stack:")?;
-        for (idx, val) in self.operand_stack.value.iter().enumerate() {
+        for (idx, val) in (0..self.operand_stack.value.len())
+            .rev()
+            .zip(self.operand_stack.value.iter())
+        {
             // TODO: Currently we do not know the types of the values on the operand stack.
             // Revisit.
             debug_write!(buf, "    [{}] ", idx)?;
