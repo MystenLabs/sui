@@ -144,6 +144,12 @@ async fn test_handle_transfer_transaction_extra_signature() {
 
 #[sim_test]
 async fn test_empty_gas_data() {
+    // Use a protocol config without relax_valid_during_for_owned_inputs to test legacy behavior
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_relax_valid_during_for_owned_inputs_for_testing(false);
+        config
+    });
+
     do_transaction_test_skip_cert_checks(
         |tx| {
             tx.gas_data_mut().payment = vec![];
