@@ -232,7 +232,7 @@ fn incoming_edges_empty_for_node_with_no_incoming() {
     let n2 = g.add_node(2).unwrap();
     g.add_edge(n1, "n1_to_n2", n2).unwrap();
 
-    let incoming: Vec<_> = g.incoming_edges(n1).map(|r| r.unwrap()).collect();
+    let incoming: Vec<_> = g.incoming_edges(n1).unwrap().collect();
     assert!(incoming.is_empty());
 }
 
@@ -259,7 +259,7 @@ fn all_edges_empty_for_graph_with_no_edges() {
     g.add_node(1).unwrap();
     g.add_node(2).unwrap();
 
-    let all: Vec<_> = g.all_edges().map(|r| r.unwrap()).collect();
+    let all: Vec<_> = g.all_edges().unwrap().collect();
     assert!(all.is_empty());
 }
 
@@ -356,10 +356,10 @@ fn diamond_graph_structure() {
 
     assert_eq!(g.node_count(), 4);
 
-    let top_outgoing: Vec<_> = g.outgoing_edges(top).map(|r| r.unwrap()).collect();
+    let top_outgoing: Vec<_> = g.outgoing_edges(top).unwrap().collect();
     assert_eq!(top_outgoing.len(), 2);
 
-    let bottom_incoming: Vec<_> = g.incoming_edges(bottom).map(|r| r.unwrap()).collect();
+    let bottom_incoming: Vec<_> = g.incoming_edges(bottom).unwrap().collect();
     assert_eq!(bottom_incoming.len(), 2);
 
     g.check_invariants();
@@ -399,7 +399,7 @@ fn multiple_self_loops() {
     assert!(g.contains_edge(n2, n2));
     assert!(g.contains_edge(n1, n2));
 
-    let n1_outgoing: Vec<_> = g.outgoing_edges(n1).map(|r| r.unwrap()).collect();
+    let n1_outgoing: Vec<_> = g.outgoing_edges(n1).unwrap().collect();
     assert_eq!(n1_outgoing.len(), 2);
 
     g.check_invariants();

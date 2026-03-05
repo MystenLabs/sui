@@ -121,6 +121,7 @@ impl<N, E> GraphMap<N, E> {
     }
 
     /// Returns the weight of the specified node, or None if the node does not exist.
+    #[allow(unused)]
     pub fn node_weight(&self, index: NodeIndex) -> Option<&N> {
         self.node_weights.get(&index)
     }
@@ -179,20 +180,25 @@ impl<N, E> GraphMap<N, E> {
         )
     }
 
-    /// Returns an iterator over the outgoing edges (with the node weight) from the specified node
+    /// Returns an iterator over the outgoing edges (with the node weight) from the specified node.
+    /// Validates all edge targets up front, returning an error if any target node is missing.
     pub fn outgoing_edges(
         &self,
         index: NodeIndex,
-    ) -> impl Iterator<Item = Result<(&E, &N), Error>> + '_ {
-        self.edge_weights.iter().filter_map(move |((p, s), e)| {
+    ) -> Result<impl Iterator<Item = (&E, &N)> + '_, Error> {
+        for ((p, s), _) in &self.edge_weights {
+            if *p == index && !self.node_weights.contains_key(s) {
+                debug_assert!(false, "Edge to non-existent node: {:?}", s);
+                return Err(Error);
+            }
+        }
+        Ok(self.edge_weights.iter().filter_map(move |((p, s), e)| {
             if *p == index {
-                let s_weight = self.node_weight(*s);
-                debug_assert!(s_weight.is_some(), "Edge to non-existent node: {:?}", s);
-                Some(s_weight.map(|n| (e, n)).ok_or(Error))
+                Some((e, self.node_weights.get(s).unwrap()))
             } else {
                 None
             }
-        })
+        }))
     }
 
     /// Returns an iterator over the incoming edges to the specified node
@@ -207,20 +213,25 @@ impl<N, E> GraphMap<N, E> {
         )
     }
 
-    /// Returns an iterator over the incoming edges (with the node weight) to the specified node
+    /// Returns an iterator over the incoming edges (with the node weight) to the specified node.
+    /// Validates all edge sources up front, returning an error if any source node is missing.
     pub fn incoming_edges(
         &self,
         index: NodeIndex,
-    ) -> impl Iterator<Item = Result<(&N, &E), Error>> + '_ {
-        self.edge_weights.iter().filter_map(move |((p, s), e)| {
+    ) -> Result<impl Iterator<Item = (&N, &E)> + '_, Error> {
+        for ((p, s), _) in &self.edge_weights {
+            if *s == index && !self.node_weights.contains_key(p) {
+                debug_assert!(false, "Edge from non-existent node: {:?}", p);
+                return Err(Error);
+            }
+        }
+        Ok(self.edge_weights.iter().filter_map(move |((p, s), e)| {
             if *s == index {
-                let p_weight = self.node_weight(*p);
-                debug_assert!(p_weight.is_some(), "Edge from non-existent node: {:?}", p);
-                Some(p_weight.map(|n| (n, e)).ok_or(Error))
+                Some((self.node_weights.get(p).unwrap(), e))
             } else {
                 None
             }
-        })
+        }))
     }
 
     /// Returns an iterator over all edges in the graph, as (from, weight, to) triples.
@@ -230,14 +241,25 @@ impl<N, E> GraphMap<N, E> {
 
     /// Returns an iterator over all edges in the graph, as (from, weight, to) triples with
     /// node weights.
-    pub fn all_edges(&self) -> impl Iterator<Item = Result<(&N, &E, &N), Error>> + '_ {
-        self.edge_weights.iter().map(|((p, s), e)| {
-            let p_weight = self.node_weight(*p);
-            let s_weight = self.node_weight(*s);
-            debug_assert!(p_weight.is_some(), "Edge from non-existent node: {:?}", p);
-            debug_assert!(s_weight.is_some(), "Edge to non-existent node: {:?}", s);
-            Ok((p_weight.ok_or(Error)?, e, s_weight.ok_or(Error)?))
-        })
+    /// Validates all edge endpoints up front, returning an error if any node is missing.
+    pub fn all_edges(&self) -> Result<impl Iterator<Item = (&N, &E, &N)> + '_, Error> {
+        for ((p, s), _) in &self.edge_weights {
+            if !self.node_weights.contains_key(p) {
+                debug_assert!(false, "Edge from non-existent node: {:?}", p);
+                return Err(Error);
+            }
+            if !self.node_weights.contains_key(s) {
+                debug_assert!(false, "Edge to non-existent node: {:?}", s);
+                return Err(Error);
+            }
+        }
+        Ok(self.edge_weights.iter().map(|((p, s), e)| {
+            (
+                self.node_weights.get(p).unwrap(),
+                e,
+                self.node_weights.get(s).unwrap(),
+            )
+        }))
     }
 
     pub(crate) fn check_invariants(&self) {
