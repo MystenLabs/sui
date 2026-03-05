@@ -133,6 +133,9 @@ impl Persistent<ProcessedTxnData> for PgBridgePersistent {
                                                 .eq(excluded(token_transfer_data::amount)),
                                             token_transfer_data::is_finalized
                                                 .eq(excluded(token_transfer_data::is_finalized)),
+                                            token_transfer_data::message_timestamp_ms.eq(excluded(
+                                                token_transfer_data::message_timestamp_ms,
+                                            )),
                                         ))
                                         .filter(token_transfer_data::is_finalized.eq(false))
                                         .execute(conn)

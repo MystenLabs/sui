@@ -45,6 +45,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install CryptoProvider");
+
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();

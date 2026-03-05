@@ -18,6 +18,7 @@ const COMMITTEE: &IdentStr = ident_str!("committee");
 const TREASURY: &IdentStr = ident_str!("treasury");
 
 const TOKEN_DEPOSITED_EVENT: &IdentStr = ident_str!("TokenDepositedEvent");
+const TOKEN_DEPOSITED_EVENT_V2: &IdentStr = ident_str!("TokenDepositedEventV2");
 const TOKEN_TRANSFER_APPROVED: &IdentStr = ident_str!("TokenTransferApproved");
 const TOKEN_TRANSFER_CLAIMED: &IdentStr = ident_str!("TokenTransferClaimed");
 
