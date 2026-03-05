@@ -4663,8 +4663,6 @@ impl ProtocolConfig {
                 115 => {
                     cfg.feature_flags.gasless_transaction_drop_safety = true;
                     cfg.feature_flags.address_aliases = true;
-                }
-                115 => {
                     // Enable GCP Confidential Spaces attestation on devnet only initially.
                     // Base cost derived from Criterion benchmark: full_verify_gcp_attestation ≈ 22 µs
                     // (ring BoringSSL-backed RSA-2048 PKCS#1v15 SHA-256).
