@@ -38,6 +38,12 @@ The funds cannot actually be lost, but this may cause confusion and concern for 
 Initially, this will not happen often, as most of the ecosystem will continue to transfer coin objects, just as they do today.
 But, since the possibility exists that funds can arrive at any wallet as an address balance transfer, wallet implementors should be prepared for this.
 
+Additionally, user funds may become **split across both coins and address balances**. Balance queries (via JSON-RPC, gRPC, or GraphQL) will show the combined total. However, to send funds that include the address balance portion, you must either:
+
+- Use `coinWithBalance` from a recent version of the TypeScript SDK (v2+), which automatically draws from both sources.
+- Use the JSON-RPC with an older SDK version, which provides backward compatibility through "fake coins" that represent address balance reservations.
+- Implement manual withdrawal logic as described in this guide.
+
 ## Overview
 
 Previously, balances on Sui were computed by summing the values of all `Coin<T>` objects owned by an address. With address balances, each address may additionally have one address-owned balance for each currency type `T`. The total balance is the sum of all `Coin<T>` objects plus the address balance value for that coin type.
