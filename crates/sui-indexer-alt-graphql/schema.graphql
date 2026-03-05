@@ -2830,31 +2830,6 @@ A multisig member's public key, varying by scheme.
 union MultisigMemberPublicKey = Ed25519PublicKey | Secp256K1PublicKey | Secp256R1PublicKey | PasskeyPublicKey | ZkLoginPublicIdentifier
 
 """
-A single member's signature within a multisig.
-"""
-type MultisigMemberSignature {
-	"""
-	The signature scheme used by this member.
-	"""
-	scheme: MultisigMemberSignatureScheme
-	"""
-	The raw signature bytes (without public key).
-	"""
-	signature: Base64
-}
-
-"""
-The signature scheme of a multisig member's signature.
-"""
-enum MultisigMemberSignatureScheme {
-	ED25519
-	SECP256K1
-	SECP256R1
-	ZKLOGIN
-	PASSKEY
-}
-
-"""
 An aggregated multisig signature.
 """
 type MultisigSignature {
@@ -2868,8 +2843,10 @@ type MultisigSignature {
 	committee: MultisigCommittee
 	"""
 	The individual member signatures, one per signer who participated.
+	Compressed signatures within a multisig do not include the signer's public key,
+	so `publicKey` will be `null` for simple signature schemes (Ed25519, Secp256k1, Secp256r1).
 	"""
-	signatures: [MultisigMemberSignature!]
+	signatures: [SignatureScheme!]
 }
 
 """

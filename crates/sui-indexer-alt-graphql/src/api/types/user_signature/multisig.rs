@@ -1,45 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Enum, SimpleObject, Union};
+use async_graphql::{SimpleObject, Union};
 use sui_types::crypto::{CompressedSignature, PublicKey};
 use sui_types::multisig::MultiSig;
 
 use crate::api::scalars::base64::Base64;
+use crate::api::types::user_signature::passkey::PasskeySignature;
+use crate::api::types::user_signature::zklogin::ZkLoginSignature;
+use crate::api::types::user_signature::{
+    Ed25519Signature, Secp256k1Signature, Secp256r1Signature, SignatureScheme,
+};
 
 /// An aggregated multisig signature.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct MultisigSignature {
     /// The individual member signatures, one per signer who participated.
-    signatures: Option<Vec<MultisigMemberSignature>>,
+    /// Compressed signatures within a multisig do not include the signer's public key,
+    /// so `publicKey` will be `null` for simple signature schemes (Ed25519, Secp256k1, Secp256r1).
+    signatures: Option<Vec<SignatureScheme>>,
     /// A bitmap indicating which members of the committee signed.
     bitmap: Option<u16>,
     /// The multisig committee (public keys + weights + threshold).
     committee: Option<MultisigCommittee>,
-}
-
-/// A single member's signature within a multisig.
-#[derive(SimpleObject, Clone)]
-pub(crate) struct MultisigMemberSignature {
-    /// The signature scheme used by this member.
-    scheme: Option<MultisigMemberSignatureScheme>,
-    /// The raw signature bytes (without public key).
-    signature: Option<Base64>,
-}
-
-/// The signature scheme of a multisig member's signature.
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum MultisigMemberSignatureScheme {
-    #[graphql(name = "ED25519")]
-    Ed25519,
-    #[graphql(name = "SECP256K1")]
-    Secp256k1,
-    #[graphql(name = "SECP256R1")]
-    Secp256r1,
-    #[graphql(name = "ZKLOGIN")]
-    ZkLogin,
-    #[graphql(name = "PASSKEY")]
-    Passkey,
 }
 
 /// The multisig committee definition.
@@ -113,7 +96,7 @@ impl From<&MultiSig> for MultisigSignature {
             signatures: Some(
                 m.get_sigs()
                     .iter()
-                    .map(MultisigMemberSignature::from)
+                    .filter_map(compressed_signature_to_scheme)
                     .collect(),
             ),
             bitmap: Some(m.get_bitmap()),
@@ -122,22 +105,32 @@ impl From<&MultiSig> for MultisigSignature {
     }
 }
 
-impl From<&CompressedSignature> for MultisigMemberSignature {
-    fn from(sig: &CompressedSignature) -> Self {
-        let (scheme, bytes): (_, &[u8]) = match sig {
-            CompressedSignature::Ed25519(b) => (MultisigMemberSignatureScheme::Ed25519, &b.0),
-            CompressedSignature::Secp256k1(b) => (MultisigMemberSignatureScheme::Secp256k1, &b.0),
-            CompressedSignature::Secp256r1(b) => (MultisigMemberSignatureScheme::Secp256r1, &b.0),
-            CompressedSignature::ZkLogin(b) => {
-                (MultisigMemberSignatureScheme::ZkLogin, b.0.as_slice())
-            }
-            CompressedSignature::Passkey(b) => {
-                (MultisigMemberSignatureScheme::Passkey, b.0.as_slice())
-            }
-        };
-        Self {
-            scheme: Some(scheme),
-            signature: Some(Base64(bytes.to_vec())),
+/// Converts a `CompressedSignature` into a `SignatureScheme`.
+/// Compressed signatures within a multisig do not include the signer's public key,
+/// so `public_key` will be `None` for simple signature schemes.
+fn compressed_signature_to_scheme(sig: &CompressedSignature) -> Option<SignatureScheme> {
+    match sig {
+        CompressedSignature::Ed25519(b) => Some(SignatureScheme::Ed25519(Ed25519Signature {
+            signature: Some(Base64(b.0.to_vec())),
+            public_key: None,
+        })),
+        CompressedSignature::Secp256k1(b) => Some(SignatureScheme::Secp256k1(Secp256k1Signature {
+            signature: Some(Base64(b.0.to_vec())),
+            public_key: None,
+        })),
+        CompressedSignature::Secp256r1(b) => Some(SignatureScheme::Secp256r1(Secp256r1Signature {
+            signature: Some(Base64(b.0.to_vec())),
+            public_key: None,
+        })),
+        CompressedSignature::ZkLogin(b) => {
+            bcs::from_bytes::<sui_types::zk_login_authenticator::ZkLoginAuthenticator>(&b.0)
+                .ok()
+                .map(|native| SignatureScheme::ZkLogin(ZkLoginSignature { native }))
+        }
+        CompressedSignature::Passkey(b) => {
+            bcs::from_bytes::<sui_types::passkey_authenticator::PasskeyAuthenticator>(&b.0)
+                .ok()
+                .map(|native| SignatureScheme::Passkey(PasskeySignature { native }))
         }
     }
 }

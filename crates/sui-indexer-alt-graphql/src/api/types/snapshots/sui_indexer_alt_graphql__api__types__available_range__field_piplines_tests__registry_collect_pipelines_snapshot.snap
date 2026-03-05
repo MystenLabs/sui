@@ -1166,12 +1166,6 @@ MultisigMember.publicKey
 MultisigMember.weight
   => {}
 
-MultisigMemberSignature.scheme
-  => {}
-
-MultisigMemberSignature.signature
-  => {}
-
 MultisigSignature.signatures
   => {}
 
