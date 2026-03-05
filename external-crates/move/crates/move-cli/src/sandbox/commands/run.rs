@@ -8,10 +8,7 @@ use crate::sandbox::utils::{
 use anyhow::{Result, anyhow, bail};
 use move_binary_format::file_format::CompiledModule;
 use move_command_line_common::files::try_exists;
-use move_core_types::{
-    account_address::AccountAddress, identifier::IdentStr, language_storage::TypeTag,
-    runtime_value::MoveValue,
-};
+use move_core_types::{identifier::IdentStr, language_storage::TypeTag, runtime_value::MoveValue};
 use move_package_alt_compilation::compiled_package::CompiledPackage;
 use move_trace_format::format::{MoveTraceBuilder, TRACE_FILE_EXTENSION};
 use move_unit_test::{TRACE_DIR, vm_test_setup::VMTestSetup};
@@ -25,7 +22,6 @@ pub fn run<V: VMTestSetup>(
     _package: &CompiledPackage,
     module_file: &Path,
     function_name: &str,
-    signers: &[String],
     txn_args: &[MoveValue],
     vm_type_tags: Vec<TypeTag>,
     gas_budget: Option<u64>,
@@ -53,10 +49,6 @@ pub fn run<V: VMTestSetup>(
     );
     let bytecode = fs::read(module_file)?;
 
-    let signer_addresses = signers
-        .iter()
-        .map(|s| AccountAddress::from_hex_literal(s))
-        .collect::<Result<Vec<AccountAddress>, _>>()?;
     let vm_args: Vec<Vec<u8>> = txn_args
         .iter()
         .map(|arg| {
@@ -77,16 +69,6 @@ pub fn run<V: VMTestSetup>(
         .map(|tag| session.load_type(tag))
         .collect::<Result<Vec<_>, _>>()?;
 
-    // TODO rethink move-cli arguments for executing functions
-    let vm_args: Vec<Vec<u8>> = signer_addresses
-        .iter()
-        .map(|a| {
-            MoveValue::Signer(*a)
-                .simple_serialize()
-                .expect("transaction arguments must serialize")
-        })
-        .chain(vm_args)
-        .collect();
     let args_hash = {
         let mut hasher = Sha3_256::new();
         for arg in &vm_args {
@@ -139,7 +121,6 @@ pub fn run<V: VMTestSetup>(
             &script_type_parameters,
             &script_parameters,
             &vm_type_tags,
-            &signer_addresses,
             txn_args,
         )
     } else {

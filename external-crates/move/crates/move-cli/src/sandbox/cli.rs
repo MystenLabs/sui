@@ -62,14 +62,6 @@ pub enum SandboxCommand {
         /// Name of the function inside the module specified in `module_file` to call.
         #[clap(name = "name")]
         function_name: String,
-        /// Possibly-empty list of signers for the current transaction (e.g., `account` in
-        /// `main(&account: signer)`). Must match the number of signers expected by `script_file`.
-        #[clap(
-            long = "signers",
-            num_args(1..),
-            action = clap::ArgAction::Append,
-        )]
-        signers: Vec<String>,
         /// Possibly-empty list of arguments passed to the transaction (e.g., `i` in
         /// `main(i: u64)`). Must match the arguments types expected by `script_file`.
         /// Supported argument types are
@@ -129,9 +121,6 @@ pub enum SandboxCommand {
     /// Delete all resources, events, and modules stored on disk under `storage-dir`.
     /// Does *not* delete anything in `src`.
     Clean {},
-    /// Run well-formedness checks on the `storage-dir` and `install-dir` directories.
-    #[clap(name = "doctor")]
-    Doctor {},
     /// Generate struct layout bindings for the modules stored on disk under `storage-dir`
     // TODO: expand this to generate script bindings, etc.?.
     #[clap(name = "generate")]
@@ -221,7 +210,6 @@ impl SandboxCommand {
             SandboxCommand::Run {
                 module_file,
                 function_name,
-                signers,
                 args,
                 type_args,
                 gas_budget,
@@ -238,7 +226,6 @@ impl SandboxCommand {
                     context.package(),
                     module_file,
                     function_name,
-                    signers,
                     args,
                     type_args.to_vec(),
                     *gas_budget,
@@ -286,13 +273,6 @@ impl SandboxCommand {
                     fs::remove_dir_all(&build_dir)?;
                 }
                 Ok(())
-            }
-            SandboxCommand::Doctor {} => {
-                let state =
-                    PackageContext::new::<F>(&move_args.package_path, &move_args.build_config)
-                        .await?
-                        .prepare_state(storage_dir)?;
-                sandbox::commands::doctor(&state)
             }
             SandboxCommand::Generate { cmd } => {
                 let state =
