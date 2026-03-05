@@ -13,7 +13,6 @@ use diesel::sql_types::Integer;
 use diesel::sql_types::SmallInt;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents;
-use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_schema::blooms::blocked::BlockedBloomProbe;
 use sui_indexer_alt_schema::blooms::bloom::BloomProbe;
@@ -21,11 +20,14 @@ use sui_indexer_alt_schema::cp_bloom_blocks::CP_BLOCK_SIZE;
 use sui_indexer_alt_schema::cp_bloom_blocks::CpBlockedBloomFilter;
 use sui_indexer_alt_schema::cp_bloom_blocks::cp_block_index;
 use sui_indexer_alt_schema::cp_blooms::CpBloomFilter;
+use sui_package_resolver::PackageStore as _;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::base_types::ExecutionDigests;
 use sui_types::digests::TransactionDigest;
 
+use crate::api::scalars::module_filter::ModuleFilter;
+use crate::api::scalars::type_filter::TypeFilter;
 use crate::api::types::event::CScanEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::ScanEventCursor;
@@ -37,10 +39,16 @@ use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::scope::Scope;
 
-/// Multiplier to page limit to adjust for bloom filter false positives.
-const OVERFETCH_MULTIPLIER: f64 = 3.0;
+mod scan;
+use scan::BloomScan;
 
 pub(super) type EventsBySequenceNumbers = BTreeMap<ScanEventCursor, Event>;
+
+struct CandidateTxn {
+    cp_sequence_number: u64,
+    tx_sequence_number: u64,
+    digest: TransactionDigest,
+}
 
 pub(crate) trait CpBoundsCursor {
     fn cp_sequence_number(&self) -> u64;
@@ -61,64 +69,57 @@ impl CpBoundsCursor for CScanEvent {
 pub(super) type TransactionsBySequenceNumbers =
     BTreeMap<ScanTransactionCursor, (TransactionDigest, TransactionContents)>;
 
+/// Scans a checkpoint range for transactions matching a filter. Uses bloom filters
+/// as a pre-filter to find candidate checkpoints, then loads each candidate's
+/// transactions from KV and checks against the filter (`filter.matches()`).
 pub(crate) async fn transactions(
     ctx: &Context<'_>,
+    scope: &Scope,
     page: &Page<CScanTransaction>,
     filter: &TransactionFilter,
     cp_bounds: RangeInclusive<u64>,
 ) -> Result<TransactionsBySequenceNumbers, RpcError> {
-    let kv_loader: &KvLoader = ctx.data()?;
-
-    let (cp_lo, cp_hi_inclusive) = clamped_cp_bounds(page, &cp_bounds);
-    let filter_values = filter.bloom_probe_values();
-    let candidate_cps = candidate_cps(ctx, &filter_values, cp_lo, cp_hi_inclusive, page).await?;
-
-    if candidate_cps.is_empty() {
+    if !validate_tx_filter(scope, filter).await {
         return Ok(BTreeMap::new());
     }
 
-    let checkpoints = kv_loader
-        .load_many_checkpoints(candidate_cps.to_vec())
-        .await
-        .context("Failed to load checkpoint transactions")?;
-    let sequenced_tx_digests: Vec<_> = checkpoints
-        .into_values()
-        .flat_map(|(summary, content, _)| {
-            let cp_seq = summary.sequence_number;
-            content
-                .enumerate_transactions(&summary)
-                .map(move |(tx_seq, &ExecutionDigests { transaction, .. })| {
-                    (tx_seq, cp_seq, transaction)
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect();
+    let kv_loader: &KvLoader = ctx.data()?;
+    let filter_values = filter.bloom_probe_values();
+    let mut scan = BloomScan::new(page, &cp_bounds);
+    let mut result = BTreeMap::new();
 
-    let digests = sequenced_tx_digests
-        .iter()
-        .map(|(_, _, digest)| *digest)
-        .collect();
-    let mut transactions_by_digest = kv_loader
-        .load_many_transactions(digests)
-        .await
-        .context("Failed to load transactions")?;
+    while let Some(candidate_cps) = scan.next(ctx, &filter_values, page).await? {
+        let txns = candidate_txns(kv_loader, &candidate_cps).await?;
+        let digests = txns.iter().map(|t| t.digest).collect();
+        let mut transactions_by_digest = kv_loader
+            .load_many_transactions(digests)
+            .await
+            .context("Failed to load transactions")?;
 
-    sequenced_tx_digests
-        .into_iter()
-        .map(|(tx_seq, cp_seq, digest)| -> Result<_, RpcError> {
+        for txn in txns {
             let contents = transactions_by_digest
-                .remove(&digest)
-                .with_context(|| format!("Failed to fetch Transaction with digest {digest}"))?;
-            let cursor = ScanTransactionCursor {
-                tx_sequence_number: tx_seq,
-                cp_sequence_number: cp_seq,
-            };
-            Ok((cursor, (digest, contents)))
-        })
-        .collect()
+                .remove(&txn.digest)
+                .with_context(|| {
+                    format!("Failed to fetch Transaction with digest {}", txn.digest)
+                })?;
+            if filter.matches(&contents) {
+                let cursor = ScanTransactionCursor {
+                    tx_sequence_number: txn.tx_sequence_number,
+                    cp_sequence_number: txn.cp_sequence_number,
+                };
+                result.insert(cursor, (txn.digest, contents));
+            }
+        }
+
+        scan.update(&candidate_cps, result.len());
+    }
+
+    Ok(result)
 }
 
-/// The map of events that might match the filter criteria in `cp_bounds` checkpoints keyed by EventCursor.
+/// Scans a checkpoint range for transactions matching a filter. Uses bloom filters
+/// as a pre-filter to find candidate checkpoints, then loads each candidate's
+/// events from KV and checks against the filter (`filter.matches()`).
 pub(crate) async fn events(
     ctx: &Context<'_>,
     scope: &Scope,
@@ -126,89 +127,100 @@ pub(crate) async fn events(
     page: &Page<CScanEvent>,
     cp_bounds: RangeInclusive<u64>,
 ) -> Result<EventsBySequenceNumbers, RpcError> {
-    let kv_loader: &KvLoader = ctx.data()?;
-
-    let (cp_lo, cp_hi) = clamped_cp_bounds(page, &cp_bounds);
-    let filter_values = filter.bloom_probe_values();
-    let candidate_cps = candidate_cps(ctx, &filter_values, cp_lo, cp_hi, page).await?;
-
-    if candidate_cps.is_empty() {
+    if !validate_event_filter(scope, filter).await {
         return Ok(BTreeMap::new());
     }
 
+    let kv_loader: &KvLoader = ctx.data()?;
+    let filter_values = filter.bloom_probe_values();
+    let mut scan = BloomScan::new(page, &cp_bounds);
+    let mut result = BTreeMap::new();
+
+    while let Some(candidate_cps) = scan.next(ctx, &filter_values, page).await? {
+        let txns = candidate_txns(kv_loader, &candidate_cps).await?;
+        let digests = txns.iter().map(|t| t.digest).collect();
+        let events_by_digest = kv_loader
+            .load_many_transaction_events(digests)
+            .await
+            .context("Failed to load transaction events")?;
+
+        for txn in &txns {
+            let contents = events_by_digest
+                .get(&txn.digest)
+                .with_context(|| format!("Missing events for transaction {}", txn.digest))?;
+            for (idx, native) in contents.events()?.into_iter().enumerate() {
+                if filter.matches(&native) {
+                    let sequence_number = idx as u64;
+                    result.insert(
+                        ScanEventCursor {
+                            cp_sequence_number: txn.cp_sequence_number,
+                            tx_sequence_number: txn.tx_sequence_number,
+                            ev_sequence_number: sequence_number,
+                        },
+                        Event {
+                            scope: scope.clone(),
+                            native,
+                            transaction_digest: txn.digest,
+                            sequence_number,
+                            timestamp_ms: contents.timestamp_ms(),
+                        },
+                    );
+                }
+            }
+        }
+
+        scan.update(&candidate_cps, result.len());
+    }
+
+    Ok(result)
+}
+
+/// Load checkpoints for the given candidate CPs to get transaction digests with checkpoint and transaction sequence numbers.
+async fn candidate_txns(
+    kv_loader: &KvLoader,
+    candidate_cps: &[u64],
+) -> Result<Vec<CandidateTxn>, RpcError> {
     let checkpoints = kv_loader
         .load_many_checkpoints(candidate_cps.to_vec())
         .await
         .context("Failed to load checkpoint transactions")?;
-    let sequenced_tx_digests: Vec<_> = checkpoints
+    Ok(checkpoints
         .into_values()
         .flat_map(|(summary, content, _)| {
             let cp_seq = summary.sequence_number;
             content
                 .enumerate_transactions(&summary)
-                .map(move |(tx_seq, &ExecutionDigests { transaction, .. })| {
-                    (tx_seq, cp_seq, transaction)
-                })
+                .map(
+                    move |(tx_seq, &ExecutionDigests { transaction, .. })| CandidateTxn {
+                        tx_sequence_number: tx_seq,
+                        cp_sequence_number: cp_seq,
+                        digest: transaction,
+                    },
+                )
                 .collect::<Vec<_>>()
         })
-        .collect();
-
-    let digests: Vec<_> = sequenced_tx_digests
-        .iter()
-        .map(|(_, _, digest)| *digest)
-        .collect();
-    let events_by_digest: std::collections::HashMap<_, TransactionEventsContents> = kv_loader
-        .load_many_transaction_events(digests)
-        .await
-        .context("Failed to load transaction events")?;
-
-    let mut result = BTreeMap::new();
-    for (tx_sequence_number, cp_sequence_number, transaction_digest) in sequenced_tx_digests {
-        let contents = events_by_digest
-            .get(&transaction_digest)
-            .with_context(|| format!("Missing events for transaction {transaction_digest}"))?;
-        let timestamp_ms = contents.timestamp_ms();
-        for (idx, native) in contents.events()?.into_iter().enumerate() {
-            let sequence_number = idx as u64;
-            result.insert(
-                ScanEventCursor {
-                    cp_sequence_number,
-                    tx_sequence_number,
-                    ev_sequence_number: sequence_number,
-                },
-                Event {
-                    scope: scope.clone(),
-                    native,
-                    transaction_digest,
-                    sequence_number,
-                    timestamp_ms,
-                },
-            );
-        }
-    }
-    Ok(result)
+        .collect())
 }
 
 /// The checkpoints that might contain the filter criteria.
 ///
 /// Does a coarse filter over checkpoints ranges using cp_bloom_blocks,
 /// then a finer filter over those ranges for checkpoint matches using cp_blooms.
-async fn candidate_cps<C>(
+pub(super) async fn candidate_cps<C>(
     ctx: &Context<'_>,
     filter_values: &[[u8; 32]],
     cp_lo: u64,
     cp_hi_inclusive: u64,
     page: &Page<C>,
+    candidate_limit: usize,
 ) -> Result<Vec<u64>, RpcError> {
     if filter_values.is_empty() {
         return Ok(if page.is_from_front() {
-            (cp_lo..=cp_hi_inclusive)
-                .take(page.limit_with_overhead())
-                .collect()
+            (cp_lo..=cp_hi_inclusive).take(candidate_limit).collect()
         } else {
             (cp_lo..=cp_hi_inclusive)
                 .rev()
-                .take(page.limit_with_overhead())
+                .take(candidate_limit)
                 .collect()
         });
     }
@@ -233,7 +245,7 @@ async fn candidate_cps<C>(
     let q_bloom_check = cp_bloom_check_sql(&CpBloomFilter::probe(filter_values));
 
     let block_size = CP_BLOCK_SIZE as i64;
-    let adjusted_limit = (page.limit_with_overhead() as f64 * OVERFETCH_MULTIPLIER) as i64;
+    let adjusted_limit = candidate_limit as i64;
 
     // For each unique (cp_block_index, bloom_block_index) probe pair, fetch the bloom block
     // row once via index lookup, then check all bit probes against it.
@@ -399,15 +411,77 @@ fn cp_bloom_check_sql(probe: &BloomProbe) -> Query<'static> {
     condition
 }
 
-fn clamped_cp_bounds<C: CpBoundsCursor>(
-    page: &Page<C>,
-    cp_bounds: &RangeInclusive<u64>,
-) -> (u64, u64) {
-    let cp_lo = page.after().map_or(*cp_bounds.start(), |c| {
-        c.cp_sequence_number().max(*cp_bounds.start())
-    });
-    let cp_hi_inclusive = page.before().map_or(*cp_bounds.end(), |c| {
-        c.cp_sequence_number().min(*cp_bounds.end())
-    });
-    (cp_lo, cp_hi_inclusive)
+/// Validates that the module/function referenced by a transaction filter exists on-chain.
+/// Returns false if the module or function doesn't exist within a successfully loaded package,
+/// allowing callers to short-circuit and return empty results. Returns true if the package
+/// cannot be fetched (e.g. kv_packages not populated), so the scan proceeds normally.
+async fn validate_tx_filter(scope: &Scope, filter: &TransactionFilter) -> bool {
+    let Some(function) = &filter.function else {
+        return true;
+    };
+    let Some(module_name) = function.module() else {
+        // Package-only filter — can't validate further without scanning all modules.
+        return true;
+    };
+    let resolver = scope.package_resolver();
+    let Ok(package) = resolver
+        .package_store()
+        .fetch(function.package().into())
+        .await
+    else {
+        // Package not in store (e.g. kv_packages not populated) — can't validate, proceed.
+        return true;
+    };
+    let Ok(module) = package.module(module_name) else {
+        return false;
+    };
+    match function.name() {
+        Some(name) => module.function_def(name).is_ok_and(|f| f.is_some()),
+        None => true,
+    }
+}
+
+/// Validates that the module or event type referenced by an event filter exists on-chain.
+/// Returns false only when the package was successfully loaded but the module/type doesn't
+/// exist within it. Returns true if the package cannot be fetched, so the scan proceeds.
+async fn validate_event_filter(scope: &Scope, filter: &EventFilter) -> bool {
+    if let Some(module_filter) = &filter.module {
+        if let ModuleFilter::Module(package_addr, module_name) = module_filter {
+            let resolver = scope.package_resolver();
+            let Ok(package) = resolver.package_store().fetch((*package_addr).into()).await else {
+                return true;
+            };
+            return package.module(module_name).is_ok();
+        }
+    }
+    if let Some(type_filter) = &filter.type_ {
+        match type_filter {
+            TypeFilter::Package(_) => return true,
+            TypeFilter::Module(package_addr, module_name) => {
+                let resolver = scope.package_resolver();
+                let Ok(package) = resolver.package_store().fetch((*package_addr).into()).await
+                else {
+                    return true;
+                };
+                return package.module(module_name).is_ok();
+            }
+            TypeFilter::Type(struct_tag) => {
+                let resolver = scope.package_resolver();
+                let Ok(package) = resolver
+                    .package_store()
+                    .fetch(struct_tag.address.into())
+                    .await
+                else {
+                    return true;
+                };
+                let Ok(module) = package.module(struct_tag.module.as_str()) else {
+                    return false;
+                };
+                return module
+                    .data_def(struct_tag.name.as_str())
+                    .is_ok_and(|d| d.is_some());
+            }
+        }
+    }
+    true
 }

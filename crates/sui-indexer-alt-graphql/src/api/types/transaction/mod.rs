@@ -346,7 +346,7 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         };
 
-        let transactions = bloom::transactions(ctx, &page, &filter, cp_bounds).await?;
+        let transactions = bloom::transactions(ctx, &scope, &page, &filter, cp_bounds).await?;
 
         page.paginate_filtered(
             &transactions,
