@@ -104,6 +104,7 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
     // this has to match whatever we're doing in build_for_driver function
     let root_package_name = Symbol::from(package_name.to_string());
 
+    let no_units_compiled = all_compiled_units.is_empty();
     for mut annot_unit in all_compiled_units {
         let source_path = PathBuf::from(
             file_map
@@ -177,14 +178,18 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
 
     let under_path = shared::get_build_output_path(&project_root, build_config);
 
-    save_to_disk(
-        root_compiled_units.clone(),
-        compiled_package_info.clone(),
-        deps_compiled_units.clone(),
-        compiled_docs.clone(),
-        package_name,
-        under_path,
-    )?;
+    if !no_units_compiled || compiled_docs.is_some() {
+        // Save to disk only if there are any artfifacts. In particular,
+        // driver compilation may not produce any compiled modules.
+        save_to_disk(
+            root_compiled_units.clone(),
+            compiled_package_info.clone(),
+            deps_compiled_units.clone(),
+            compiled_docs.clone(),
+            package_name,
+            under_path,
+        )?;
+    }
 
     let compiled_package = CompiledPackage {
         compiled_package_info,
