@@ -309,6 +309,13 @@ impl CompositeWorkloadConfig {
         }
     }
 
+    pub fn exclude_ops(mut self, ops: &[String]) -> Self {
+        for op in ops {
+            self.probabilities.retain(|name, _| *name != op.as_str());
+        }
+        self
+    }
+
     pub fn with_probability(mut self, name: &'static str, prob: f32) -> Self {
         self.probabilities.insert(name, prob);
         self

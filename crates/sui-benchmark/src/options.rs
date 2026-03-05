@@ -191,6 +191,10 @@ pub enum RunSpec {
         // relative weight of composite transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         composite: Vec<u32>,
+        // Operations to exclude from the composite workload (comma-separated).
+        // Use operation names like: object_balance_withdraw, address_balance_deposit, etc.
+        #[clap(long, num_args(1..), value_delimiter = ',')]
+        composite_exclude_ops: Option<Vec<String>>,
 
         // --- workload-specific options --- (TODO: use subcommands or similar)
         // 100 for max hotness i.e all requests target

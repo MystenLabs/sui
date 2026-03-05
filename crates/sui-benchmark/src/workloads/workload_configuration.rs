@@ -88,6 +88,7 @@ impl WorkloadConfiguration {
                 party,
                 conflicting_transfer,
                 composite,
+                composite_exclude_ops,
                 shared_counter_hotness_factor,
                 num_shared_counters,
                 shared_counter_max_tip,
@@ -144,7 +145,13 @@ impl WorkloadConfiguration {
                         in_flight_ratio: in_flight_ratio[i],
                         duration: duration[i],
                         composite_config: if composite[i] > 0 {
-                            Some(CompositeWorkloadConfig::balanced())
+                            let config = CompositeWorkloadConfig::balanced();
+                            let config = if let Some(ref exclude) = composite_exclude_ops {
+                                config.exclude_ops(exclude)
+                            } else {
+                                config
+                            };
+                            Some(config)
                         } else {
                             None
                         },
