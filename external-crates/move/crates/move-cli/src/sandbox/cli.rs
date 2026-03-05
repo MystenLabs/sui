@@ -129,9 +129,6 @@ pub enum SandboxCommand {
     /// Delete all resources, events, and modules stored on disk under `storage-dir`.
     /// Does *not* delete anything in `src`.
     Clean {},
-    /// Run well-formedness checks on the `storage-dir` and `install-dir` directories.
-    #[clap(name = "doctor")]
-    Doctor {},
     /// Generate struct layout bindings for the modules stored on disk under `storage-dir`
     // TODO: expand this to generate script bindings, etc.?.
     #[clap(name = "generate")]
@@ -286,13 +283,6 @@ impl SandboxCommand {
                     fs::remove_dir_all(&build_dir)?;
                 }
                 Ok(())
-            }
-            SandboxCommand::Doctor {} => {
-                let state =
-                    PackageContext::new::<F>(&move_args.package_path, &move_args.build_config)
-                        .await?
-                        .prepare_state(storage_dir)?;
-                sandbox::commands::doctor(&state)
             }
             SandboxCommand::Generate { cmd } => {
                 let state =
