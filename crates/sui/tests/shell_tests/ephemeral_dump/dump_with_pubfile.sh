@@ -17,8 +17,11 @@ sed "s|<PWD>|$PWD|g" Pub.template.toml > Pub.localnet.toml
 sui move --client.config config.yaml \
   build -p main_pkg --dump --pubfile-path Pub.localnet.toml -e testnet --no-tree-shaking > output.json
 
-cat output.json | sed 's/.*"modules":\["\([^"]*\)".*/\1/' | base64 -d > main.mv
+cat output.json
+cat output.json | jq -r '.modules[0]' | base64 -d > main.mv
 sui move disassemble main.mv > main.move
+
+cat main.move
 
 echo
 echo "=== decompiled bytecode should have main module at address 0 ==="
