@@ -158,6 +158,8 @@ pub struct Limits {
     /// Maximum number of "rich" queries that can be performed in a single request. Rich queries are
     /// queries that require dedicated requests to the backing store.
     pub max_rich_queries: usize,
+    /// Maximum number of checkpoints that can be scanned in a single scanning pagination query.
+    pub max_scan_limit: u64,
 }
 
 #[DefaultConfig]
@@ -187,6 +189,7 @@ pub struct LimitsLayer {
     pub max_display_output_size: Option<usize>,
     pub max_disassembled_module_size: Option<usize>,
     pub max_rich_queries: Option<usize>,
+    pub max_scan_limit: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -382,6 +385,7 @@ impl LimitsLayer {
                 .max_disassembled_module_size
                 .unwrap_or(base.max_disassembled_module_size),
             max_rich_queries: self.max_rich_queries.unwrap_or(base.max_rich_queries),
+            max_scan_limit: self.max_scan_limit.unwrap_or(base.max_scan_limit),
         }
     }
 }
@@ -452,6 +456,7 @@ impl From<Limits> for LimitsLayer {
             max_display_output_size: Some(value.max_display_output_size),
             max_disassembled_module_size: Some(value.max_disassembled_module_size),
             max_rich_queries: Some(value.max_rich_queries),
+            max_scan_limit: Some(value.max_scan_limit),
         }
     }
 }
@@ -544,6 +549,8 @@ impl Default for Limits {
             max_display_output_size: 1024 * 1024,
             max_disassembled_module_size: 1024 * 1024,
             max_rich_queries: 21,
+            // ~1 week worth of checkpoints
+            max_scan_limit: 3_000_000,
         }
     }
 }
