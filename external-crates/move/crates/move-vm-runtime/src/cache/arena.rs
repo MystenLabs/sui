@@ -97,13 +97,13 @@ impl Arena {
 }
 
 impl<T> ArenaVec<T> {
-    pub fn iter(&self) -> std::slice::Iter<T> {
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
         self.0.iter()
     }
 
     /// Returns an iterator over mutable references.
     /// Crate-only because nobody else should be modifying arena values.
-    pub(crate) fn iter_mut(&mut self) -> std::slice::IterMut<T> {
+    pub(crate) fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
         self.0.iter_mut()
     }
 

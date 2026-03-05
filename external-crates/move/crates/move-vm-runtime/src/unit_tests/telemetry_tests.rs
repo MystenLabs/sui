@@ -77,7 +77,7 @@ fn make_adapter() -> InMemoryTestAdapter {
     adapter
 }
 
-fn make_vm_0(adapter: &InMemoryTestAdapter) -> MoveVM {
+fn make_vm_0(adapter: &InMemoryTestAdapter) -> MoveVM<'_> {
     let linkage = adapter.get_linkage_context(TEST_ADDR_0).unwrap();
     adapter.make_vm(linkage).unwrap()
 }
@@ -110,7 +110,7 @@ fn call_bar_0(vm: &mut MoveVM) -> VMResult<()> {
     Ok(())
 }
 
-fn make_vm_1(adapter: &InMemoryTestAdapter) -> MoveVM {
+fn make_vm_1(adapter: &InMemoryTestAdapter) -> MoveVM<'_> {
     let linkage = adapter.get_linkage_context(TEST_ADDR_1).unwrap();
     adapter.make_vm(linkage).unwrap()
 }
