@@ -5,11 +5,16 @@ use itertools::Itertools;
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use std::time::Duration;
+use sui_authenticated_events_client::mmr::apply_stream_updates;
+use sui_authenticated_events_client::proof::base::{
+    Proof, ProofContents, ProofTarget, ProofVerifier,
+};
+use sui_authenticated_events_client::proof::committee::extract_new_committee_info;
+use sui_authenticated_events_client::proof::ocs::{OCSInclusionProof, OCSProof, OCSTarget};
+use sui_authenticated_events_client::types::{
+    EventCommitment as SdkEventCommitment, EventStreamHead as SdkEventStreamHead, U256,
+};
 use sui_keys::keystore::AccountKeystore;
-use sui_light_client::authenticated_events::mmr::apply_stream_updates;
-use sui_light_client::proof::base::{Proof, ProofContents, ProofTarget, ProofVerifier};
-use sui_light_client::proof::committee::extract_new_committee_info;
-use sui_light_client::proof::ocs::{OCSInclusionProof, OCSProof, OCSTarget};
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMask;
@@ -24,7 +29,6 @@ use sui_sdk_types::ValidatorCommittee;
 use sui_types::accumulator_root as ar;
 use sui_types::accumulator_root::EventCommitment;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::committee::Committee;
 use sui_types::digests::{Digest, ObjectDigest};
 use sui_types::dynamic_field::{DynamicFieldKey, Field};
 use sui_types::object::Object;
@@ -32,6 +36,58 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::TransactionData;
 use sui_types::{MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS};
 use test_cluster::{TestCluster, TestClusterBuilder};
+
+fn to_sdk_digest(d: Digest) -> sui_sdk_types::Digest {
+    sui_sdk_types::Digest::new(d.into_inner())
+}
+
+fn to_sdk_object_reference(
+    obj_ref: (ObjectID, SequenceNumber, ObjectDigest),
+) -> sui_sdk_types::ObjectReference {
+    sui_sdk_types::ObjectReference::new(
+        sui_sdk_types::Address::new(obj_ref.0.into_bytes()),
+        obj_ref.1.value(),
+        sui_sdk_types::Digest::new(obj_ref.2.into_inner()),
+    )
+}
+
+fn to_sdk_event_commitment(ec: &EventCommitment) -> SdkEventCommitment {
+    SdkEventCommitment::new(
+        ec.checkpoint_seq,
+        ec.transaction_idx,
+        ec.event_idx,
+        to_sdk_digest(ec.digest),
+    )
+}
+
+fn to_sdk_event_stream_head(h: &ar::EventStreamHead) -> SdkEventStreamHead {
+    SdkEventStreamHead {
+        mmr: h
+            .mmr
+            .iter()
+            .map(|v| {
+                let bytes = v.to_le_bytes();
+                U256::from_le_slice(&bytes).unwrap()
+            })
+            .collect(),
+        checkpoint_seq: h.checkpoint_seq,
+        num_events: h.num_events,
+    }
+}
+
+fn to_sdk_signed_checkpoint(
+    certified: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
+) -> sui_sdk_types::SignedCheckpointSummary {
+    let bcs_bytes = bcs::to_bytes(certified).expect("BCS serialization failed");
+    bcs::from_bytes(&bcs_bytes).expect("BCS deserialization failed")
+}
+
+fn to_sdk_checkpoint_summary(
+    summary: &sui_types::messages_checkpoint::CheckpointSummary,
+) -> sui_sdk_types::CheckpointSummary {
+    let bcs_bytes = bcs::to_bytes(summary).expect("BCS serialization failed");
+    bcs::from_bytes(&bcs_bytes).expect("BCS deserialization failed")
+}
 
 fn create_rpc_config_with_authenticated_events() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
@@ -319,32 +375,34 @@ async fn verify_events_with_stream_head(
         expected_event_count
     );
 
-    let events_by_accum_version: Vec<Vec<EventCommitment>> = events
+    let events_by_accum_version: Vec<Vec<SdkEventCommitment>> = events
         .iter()
         .filter(|event| event.checkpoint.unwrap() > first_event_checkpoint)
         .map(|event| {
             let commitment = convert_grpc_event_to_commitment(event)
                 .expect("should convert event to commitment");
+            let sdk_commitment = to_sdk_event_commitment(&commitment);
             let accumulator_version = event
                 .accumulator_version
                 .expect("Missing accumulator_version");
-            (accumulator_version, commitment)
+            (accumulator_version, sdk_commitment)
         })
         .chunk_by(|(version, _)| *version)
         .into_iter()
         .map(|(_, group)| group.map(|(_, commitment)| commitment).collect())
         .collect();
 
-    let calculated_stream_head =
-        apply_stream_updates(&first_stream_head.value, events_by_accum_version);
+    let sdk_first_head = to_sdk_event_stream_head(&first_stream_head.value);
+    let calculated_stream_head = apply_stream_updates(&sdk_first_head, events_by_accum_version);
+    let sdk_last_head = to_sdk_event_stream_head(&last_stream_head.value);
 
     assert_eq!(
-        calculated_stream_head.num_events, last_stream_head.value.num_events,
+        calculated_stream_head.num_events, sdk_last_head.num_events,
         "Calculated event count should match actual event count"
     );
 
     assert_eq!(
-        calculated_stream_head.mmr, last_stream_head.value.mmr,
+        calculated_stream_head.mmr, sdk_last_head.mmr,
         "Calculated MMR should match actual MMR from EventStreamHead"
     );
 }
@@ -368,11 +426,11 @@ fn proto_object_ref_to_sui_object_ref(
     Ok((object_id, version, digest))
 }
 
-fn proto_bytes_to_digest(bytes: &[u8]) -> Result<Digest, String> {
+fn proto_bytes_to_sdk_digest(bytes: &[u8]) -> Result<sui_sdk_types::Digest, String> {
     let digest: [u8; 32] = bytes
         .try_into()
         .map_err(|_| format!("Invalid digest length: expected 32, got {}", bytes.len()))?;
-    Ok(Digest::new(digest))
+    Ok(sui_sdk_types::Digest::new(digest))
 }
 
 fn proto_ocs_inclusion_proof_to_light_client_proof(
@@ -388,7 +446,7 @@ fn proto_ocs_inclusion_proof_to_light_client_proof(
     let leaf_index = grpc_proof.leaf_index.ok_or("Missing leaf_index")? as usize;
 
     let tree_root_bytes = grpc_proof.tree_root.as_ref().ok_or("Missing tree_root")?;
-    let tree_root = proto_bytes_to_digest(tree_root_bytes)?;
+    let tree_root = proto_bytes_to_sdk_digest(tree_root_bytes)?;
 
     Ok(OCSInclusionProof {
         merkle_proof,
@@ -466,7 +524,7 @@ fn get_event_stream_head_object_id(
 async fn get_committee_for_epoch_via_api(
     ledger_client: &mut LedgerServiceClient<tonic::transport::Channel>,
     epoch: u64,
-) -> Result<sui_types::committee::Committee, String> {
+) -> Result<ValidatorCommittee, String> {
     let response = ledger_client
         .get_epoch(GetEpochRequest::new(epoch).with_read_mask(FieldMask::from_paths(["committee"])))
         .await
@@ -479,14 +537,12 @@ async fn get_committee_for_epoch_via_api(
         .committee
         .ok_or("Missing committee in epoch response")?;
 
-    let sdk_committee = ValidatorCommittee::try_from(&proto_committee).map_err(|e| {
+    ValidatorCommittee::try_from(&proto_committee).map_err(|e| {
         format!(
             "Failed to convert proto committee to SDK committee: {:?}",
             e
         )
-    })?;
-
-    Ok(sui_types::committee::Committee::from(sdk_committee))
+    })
 }
 
 async fn get_last_checkpoint_of_epoch(
@@ -513,7 +569,7 @@ async fn get_last_checkpoint_of_epoch(
     Ok(first_checkpoint - 1)
 }
 
-async fn get_genesis_committee(test_cluster: &TestCluster) -> Result<Committee, String> {
+async fn get_genesis_committee(test_cluster: &TestCluster) -> Result<ValidatorCommittee, String> {
     let mut ledger_client =
         connect_with_retry(|| LedgerServiceClient::connect(test_cluster.rpc_url().to_owned()))
             .await;
@@ -522,11 +578,14 @@ async fn get_genesis_committee(test_cluster: &TestCluster) -> Result<Committee, 
 }
 
 struct EpochCache {
-    committees: Vec<(u64, u64, Committee)>, // (start_checkpoint, end_checkpoint, committee)
+    committees: Vec<(u64, u64, ValidatorCommittee)>,
 }
 
 impl EpochCache {
-    fn get_committee_for_checkpoint(&self, checkpoint_seq: u64) -> Result<&Committee, String> {
+    fn get_committee_for_checkpoint(
+        &self,
+        checkpoint_seq: u64,
+    ) -> Result<&ValidatorCommittee, String> {
         self.committees
             .iter()
             .find(|(start, end, _)| checkpoint_seq >= *start && checkpoint_seq <= *end)
@@ -546,7 +605,7 @@ impl EpochCache {
 
 async fn build_epoch_cache(
     ledger_client: &mut LedgerServiceClient<tonic::transport::Channel>,
-    genesis_committee: Committee,
+    genesis_committee: ValidatorCommittee,
     current_epoch: u64,
 ) -> Result<EpochCache, String> {
     let mut committees = Vec::new();
@@ -586,9 +645,10 @@ async fn build_epoch_cache(
             .try_into()
             .map_err(|e| format!("Failed to convert checkpoint: {:?}", e))?;
 
+        let sui_types_committee = sui_types::committee::Committee::from(current_committee.clone());
         checkpoint
             .summary
-            .verify_with_contents(&current_committee, None)
+            .verify_with_contents(&sui_types_committee, None)
             .map_err(|e| {
                 format!(
                     "Failed to verify checkpoint {}: {}",
@@ -596,7 +656,8 @@ async fn build_epoch_cache(
                 )
             })?;
 
-        let next_committee = extract_new_committee_info(&checkpoint.summary).map_err(|e| {
+        let sdk_summary = to_sdk_checkpoint_summary(checkpoint.summary.data());
+        let next_committee = extract_new_committee_info(&sdk_summary).map_err(|e| {
             format!(
                 "Failed to extract committee from checkpoint {}: {}",
                 end_of_epoch_checkpoint_seq, e
@@ -620,13 +681,16 @@ async fn verify_ocs_inclusion_proof(
     checkpoint_seq: u64,
 ) -> Result<(), String> {
     let object_ref = proto_object_ref_to_sui_object_ref(object_ref_proto)?;
+    let sdk_object_ref = to_sdk_object_reference(object_ref);
     let ocs_inclusion_proof = proto_ocs_inclusion_proof_to_light_client_proof(grpc_proof)?;
 
-    let target = OCSTarget::new_inclusion_target(object_ref);
+    let target = OCSTarget::new_inclusion_target(sdk_object_ref);
+
+    let sdk_checkpoint_summary = to_sdk_signed_checkpoint(checkpoint_summary);
 
     let proof = Proof {
         targets: ProofTarget::ObjectCheckpointState(target),
-        checkpoint_summary: checkpoint_summary.clone(),
+        checkpoint_summary: sdk_checkpoint_summary,
         proof_contents: ProofContents::ObjectCheckpointStateProof(OCSProof::Inclusion(
             ocs_inclusion_proof,
         )),

@@ -895,7 +895,7 @@ dependencies = [
  "http 1.3.1",
  "matchit 0.5.0",
  "pin-project-lite",
- "pkcs8 0.10.2",
+ "pkcs8",
  "quinn",
  "quinn-proto",
  "rand 0.8.5",
@@ -3044,6 +3044,10 @@ name = "bnum"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "119771309b95163ec7aaf79810da82f7cd0599c19722d48b9c03894dca833966"
+dependencies = [
+ "serde",
+ "serde-big-array",
+]
 
 [[package]]
 name = "borsh"
@@ -4621,8 +4625,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1a467a65c5e759bce6e65eaf91cc29f466cdc57cb65777bd646872a8a1fd4de"
 dependencies = [
  "const-oid",
- "pem-rfc7468 0.6.0",
- "zeroize",
 ]
 
 [[package]]
@@ -4632,7 +4634,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f55bf8e7b65898637379c1b74eb1551107c8294ed26d855ceb9fd1a09cfc9bc0"
 dependencies = [
  "const-oid",
- "pem-rfc7468 0.7.0",
+ "pem-rfc7468",
  "zeroize",
 ]
 
@@ -5083,7 +5085,7 @@ dependencies = [
  "rfc6979 0.4.0",
  "serdect",
  "signature 2.2.0",
- "spki 0.7.3",
+ "spki",
 ]
 
 [[package]]
@@ -5092,7 +5094,7 @@ version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60f6d271ca33075c88028be6f04d502853d63a5ece419d269c15315d4fc1cf1d"
 dependencies = [
- "pkcs8 0.10.2",
+ "pkcs8",
  "signature 2.2.0",
  "zeroize",
 ]
@@ -5179,8 +5181,8 @@ dependencies = [
  "ff 0.13.0",
  "generic-array",
  "group 0.13.0",
- "pem-rfc7468 0.7.0",
- "pkcs8 0.10.2",
+ "pem-rfc7468",
+ "pkcs8",
  "rand_core 0.6.4",
  "sec1 0.7.1",
  "serde_json",
@@ -5470,7 +5472,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.9"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=db643fd05a1b1c4cd52de3939766b53e12ce137e#db643fd05a1b1c4cd52de3939766b53e12ce137e"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8d525070fe390ddebaa48b2785b5230c7c85babb#8d525070fe390ddebaa48b2785b5230c7c85babb"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5510,7 +5512,7 @@ dependencies = [
  "rand 0.8.5",
  "readonly",
  "rfc6979 0.4.0",
- "rsa 0.8.2",
+ "rsa",
  "schemars 0.8.21",
  "secp256k1 0.27.0",
  "serde",
@@ -5530,7 +5532,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=db643fd05a1b1c4cd52de3939766b53e12ce137e#db643fd05a1b1c4cd52de3939766b53e12ce137e"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8d525070fe390ddebaa48b2785b5230c7c85babb#8d525070fe390ddebaa48b2785b5230c7c85babb"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -5539,7 +5541,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=db643fd05a1b1c4cd52de3939766b53e12ce137e#db643fd05a1b1c4cd52de3939766b53e12ce137e"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8d525070fe390ddebaa48b2785b5230c7c85babb#8d525070fe390ddebaa48b2785b5230c7c85babb"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -5559,7 +5561,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=db643fd05a1b1c4cd52de3939766b53e12ce137e#db643fd05a1b1c4cd52de3939766b53e12ce137e"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8d525070fe390ddebaa48b2785b5230c7c85babb#8d525070fe390ddebaa48b2785b5230c7c85babb"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -5576,7 +5578,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=db643fd05a1b1c4cd52de3939766b53e12ce137e#db643fd05a1b1c4cd52de3939766b53e12ce137e"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8d525070fe390ddebaa48b2785b5230c7c85babb#8d525070fe390ddebaa48b2785b5230c7c85babb"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -10613,15 +10615,6 @@ dependencies = [
 
 [[package]]
 name = "pem-rfc7468"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24d159833a9105500e0398934e205e0773f0b27529557134ecfc51c27646adac"
-dependencies = [
- "base64ct",
-]
-
-[[package]]
-name = "pem-rfc7468"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88b39c9bfcfc231068454382784bb460aae594343fb030d46e9f50a645418412"
@@ -10807,35 +10800,13 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pkcs1"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff33bdbdfc54cc98a2eca766ebdec3e1b8fb7387523d5c9c9a2891da856f719"
-dependencies = [
- "der 0.6.1",
- "pkcs8 0.9.0",
- "spki 0.6.0",
- "zeroize",
-]
-
-[[package]]
-name = "pkcs1"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8ffb9f10fa047879315e6625af03c164b16962a5368d724ed16323b68ace47f"
 dependencies = [
  "der 0.7.9",
- "pkcs8 0.10.2",
- "spki 0.7.3",
-]
-
-[[package]]
-name = "pkcs8"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9eca2c590a5f85da82668fa685c09ce2888b9430e83299debf1f34b65fd4a4ba"
-dependencies = [
- "der 0.6.1",
- "spki 0.6.0",
+ "pkcs8",
+ "spki",
 ]
 
 [[package]]
@@ -10845,7 +10816,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
 dependencies = [
  "der 0.7.9",
- "spki 0.7.3",
+ "spki",
 ]
 
 [[package]]
@@ -11767,7 +11738,7 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.6.0",
- "tokio-macros 2.6.0 (git+https://github.com/MystenLabs/tokio-msim-fork.git?rev=6b1da10b18f9a4b1d42b1432415a0b3092908c77)",
+ "tokio-macros 2.6.0",
  "windows-sys 0.61.2",
 ]
 
@@ -12091,42 +12062,21 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 
 [[package]]
 name = "rsa"
-version = "0.8.2"
+version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55a77d189da1fee555ad95b7e50e7457d91c0e089ec68ca69ad2989413bbdab4"
+checksum = "b8573f03f5883dcaebdfcf4725caa1ecb9c15b2ef50c43a07b816e06799bb12d"
 dependencies = [
- "byteorder",
- "digest 0.10.7",
- "num-bigint-dig",
- "num-integer",
- "num-iter",
- "num-traits",
- "pkcs1 0.4.1",
- "pkcs8 0.9.0",
- "rand_core 0.6.4",
- "sha2 0.10.9",
- "signature 2.2.0",
- "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "rsa"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72f1471dbb4be5de45050e8ef7040625298ccb9efe941419ac2697088715925f"
-dependencies = [
- "byteorder",
  "const-oid",
  "digest 0.10.7",
  "num-bigint-dig",
  "num-integer",
- "num-iter",
  "num-traits",
- "pkcs1 0.7.5",
- "pkcs8 0.10.2",
+ "pkcs1",
+ "pkcs8",
  "rand_core 0.6.4",
+ "sha2 0.10.9",
  "signature 2.2.0",
+ "spki",
  "subtle",
  "zeroize",
 ]
@@ -12667,7 +12617,7 @@ dependencies = [
  "base16ct 0.2.0",
  "der 0.7.9",
  "generic-array",
- "pkcs8 0.10.2",
+ "pkcs8",
  "serdect",
  "subtle",
  "zeroize",
@@ -13379,7 +13329,7 @@ checksum = "13a6dfdd7c433e0f4bb96d777c88d900c5abe3dc4d2f26d2340fd6c7caadcc6c"
 dependencies = [
  "base64 0.21.7",
  "jsonwebtoken",
- "rsa 0.9.1",
+ "rsa",
  "serde",
  "sha2 0.10.9",
  "thiserror 1.0.69",
@@ -13443,16 +13393,6 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
-
-[[package]]
-name = "spki"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67cf02bbac7a337dc36e4f5a693db6c21e7863f45070f7064577eb4367a3212b"
-dependencies = [
- "base64ct",
- "der 0.6.1",
-]
 
 [[package]]
 name = "spki"
@@ -14051,6 +13991,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-authenticated-events-client"
+version = "0.0.1"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk?rev=aa94b76fa755510486b4227f5da37c7e4c5c8667#aa94b76fa755510486b4227f5da37c7e4c5c8667"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "blake2",
+ "bnum",
+ "bytes",
+ "futures",
+ "serde",
+ "sui-crypto",
+ "sui-rpc",
+ "sui-sdk-types",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.14.3",
+ "tracing",
+]
+
+[[package]]
 name = "sui-authority-aggregation"
 version = "0.1.0"
 dependencies = [
@@ -14514,7 +14476,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.2.0"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e#18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk?rev=aa94b76fa755510486b4227f5da37c7e4c5c8667#aa94b76fa755510486b4227f5da37c7e4c5c8667"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -14522,6 +14484,9 @@ dependencies = [
  "ark-snark",
  "ark-std 0.4.0",
  "base64ct",
+ "bcs",
+ "blake2",
+ "blst",
  "bnum",
  "ed25519-dalek",
  "itertools 0.14.0",
@@ -14534,6 +14499,7 @@ dependencies = [
  "sha2 0.10.9",
  "signature 2.2.0",
  "sui-sdk-types",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -14650,6 +14616,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared-crypto",
+ "sui-authenticated-events-client",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -14658,7 +14625,6 @@ dependencies = [
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-light-client",
  "sui-macros",
  "sui-move-build",
  "sui-network",
@@ -15631,47 +15597,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-light-client"
-version = "1.68.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bcs",
- "bytes",
- "clap",
- "env_logger",
- "fastcrypto",
- "futures",
- "hex",
- "log",
- "move-binary-format",
- "move-core-types",
- "mysten-common",
- "mysten-metrics",
- "object_store 0.13.0",
- "prost-types 0.14.1",
- "reqwest",
- "roaring 0.10.9",
- "serde",
- "serde_json",
- "serde_yaml 0.8.26",
- "sui-config",
- "sui-data-ingestion-core",
- "sui-package-resolver",
- "sui-rpc",
- "sui-rpc-api",
- "sui-storage",
- "sui-types",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "tonic 0.14.3",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
@@ -16417,7 +16342,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.2.2"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e#18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk?rev=aa94b76fa755510486b4227f5da37c7e4c5c8667#aa94b76fa755510486b4227f5da37c7e4c5c8667"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16606,7 +16531,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.2.2"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk.git?rev=18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e#18f9a5d60abd4fa4b6efbafeeb7d2e93cf62d46e"
+source = "git+https://github.com/alex-mysten/sui-rust-sdk?rev=aa94b76fa755510486b4227f5da37c7e4c5c8667#aa94b76fa755510486b4227f5da37c7e4c5c8667"
 dependencies = [
  "base64ct",
  "bcs",
@@ -16980,7 +16905,7 @@ dependencies = [
  "axum-server",
  "ed25519",
  "fastcrypto",
- "pkcs8 0.10.2",
+ "pkcs8",
  "rand 0.8.5",
  "rcgen",
  "reqwest",
@@ -17194,6 +17119,7 @@ dependencies = [
  "static_assertions",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "sui-crypto",
  "sui-enum-compat-util",
  "sui-macros",
  "sui-protocol-config",
@@ -17936,7 +17862,7 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.6.0",
- "tokio-macros 2.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-macros 2.6.1",
  "tracing",
  "windows-sys 0.61.2",
 ]
@@ -17959,8 +17885,7 @@ dependencies = [
 [[package]]
 name = "tokio-macros"
 version = "2.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5"
+source = "git+https://github.com/MystenLabs/tokio-msim-fork.git?rev=6b1da10b18f9a4b1d42b1432415a0b3092908c77#6b1da10b18f9a4b1d42b1432415a0b3092908c77"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -17969,8 +17894,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "2.6.0"
-source = "git+https://github.com/MystenLabs/tokio-msim-fork.git?rev=6b1da10b18f9a4b1d42b1432415a0b3092908c77#6b1da10b18f9a4b1d42b1432415a0b3092908c77"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c55a2eff8b69ce66c84f85e1da1c233edc36ceb85a2058d11b0d6a3c7e7569c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -18709,7 +18635,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -19897,7 +19823,7 @@ dependencies = [
  "pem 3.0.4",
  "ring 0.17.8",
  "signature 2.2.0",
- "spki 0.7.3",
+ "spki",
  "thiserror 1.0.69",
  "zeroize",
 ]

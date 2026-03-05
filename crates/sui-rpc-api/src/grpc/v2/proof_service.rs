@@ -4,9 +4,8 @@
 use crate::RpcError;
 use crate::RpcService;
 use bcs;
-use fastcrypto::hash::Blake2b256;
-use fastcrypto::merkle::MerkleTree;
 use std::str::FromStr;
+use sui_crypto::merkle::MerkleTree;
 use sui_rpc::proto::sui::rpc::v2::{
     GetObjectInclusionProofRequest, GetObjectInclusionProofResponse, OcsInclusionProof,
     proof_service_server::ProofService,
@@ -87,7 +86,7 @@ fn build_ocs_inclusion_proof(
             )
         })?;
 
-    let tree = MerkleTree::<Blake2b256>::build_from_unserialized(leaves.iter())
+    let tree = MerkleTree::build_from_unserialized(leaves.iter())
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
     let merkle_proof = tree
