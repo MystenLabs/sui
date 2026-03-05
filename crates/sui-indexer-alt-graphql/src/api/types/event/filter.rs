@@ -4,10 +4,7 @@
 use std::ops::Range;
 
 use anyhow::Context as _;
-use async_graphql::CustomValidator;
 use async_graphql::InputObject;
-use async_graphql::InputValueError;
-use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::event::Event as NativeEvent;
@@ -19,6 +16,7 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::event::CEvent;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::error::RpcError;
+use crate::error::feature_unavailable;
 use crate::pagination::Page;
 
 #[derive(InputObject, Debug, Default, Clone)]
@@ -37,7 +35,7 @@ pub(crate) struct EventFilter {
 
     /// Events emitted by a particular module. An event is emitted by a particular module if some function in the module is called by a PTB and emits an event.
     ///
-    /// Modules can be filtered by their package, or package::module.
+    /// Modules can be filtered by their package, or package::module. We currently do not support filtering by emitting module and event type at the same time so if both are provided in one filter, the query will error.
     pub module: Option<ModuleFilter>,
 
     /// This field is used to specify the type of event emitted.
@@ -53,7 +51,12 @@ impl EventFilter {
     /// Uses the provided transaction bounds subquery to limit results to a specific transaction range
     pub(crate) fn query<'q>(&self) -> Result<Query<'q>, RpcError> {
         let table = match (&self.module, &self.type_) {
-            (Some(_), _) => query!("ev_emit_mod"),
+            (Some(_), Some(_)) => {
+                return Err(feature_unavailable(
+                    "Filtering by both emitting module and event type is not supported",
+                ));
+            }
+            (Some(_), None) => query!("ev_emit_mod"),
             (None, _) => query!("ev_struct_inst"),
         };
 
@@ -165,19 +168,6 @@ impl EventFilter {
         }
         filters
     }
-
-    /// Values to probe in bloom filters.
-    pub(crate) fn bloom_probe_values(&self) -> Vec<[u8; 32]> {
-        [
-            self.sender.map(|s| s.into_bytes()),
-            self.module.as_ref().map(|m| m.package().into_bytes()),
-            self.type_.as_ref().map(|t| t.package().into_bytes()),
-        ]
-        .into_iter()
-        .flatten()
-        .filter(|v| !should_skip_for_bloom(v))
-        .collect()
-    }
 }
 
 impl CheckpointBounds for EventFilter {
@@ -191,19 +181,6 @@ impl CheckpointBounds for EventFilter {
 
     fn before_checkpoint(&self) -> Option<UInt53> {
         self.before_checkpoint
-    }
-}
-
-pub(crate) struct EventFilterValidator;
-
-impl CustomValidator<EventFilter> for EventFilterValidator {
-    fn check(&self, filter: &EventFilter) -> Result<(), InputValueError<EventFilter>> {
-        if filter.module.is_some() && filter.type_.is_some() {
-            return Err(InputValueError::custom(
-                "Filtering by both emitting module and event type is not supported",
-            ));
-        }
-        Ok(())
     }
 }
 

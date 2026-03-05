@@ -35,11 +35,8 @@ use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::epoch::CEpoch;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
-use crate::api::types::event::CScanEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::filter::EventFilter;
-use crate::api::types::event::filter::EventFilterValidator as EFValidator;
-
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package;
 use crate::api::types::move_package::MovePackage;
@@ -58,10 +55,8 @@ use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::protocol_configs::ProtocolConfigs;
 use crate::api::types::service_config::ServiceConfig;
 use crate::api::types::simulation_result::SimulationResult;
-use crate::api::types::transaction::CScanTransaction;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::filter::ScanFilterValidator;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
@@ -298,7 +293,7 @@ impl Query {
         after: Option<CEvent>,
         last: Option<u64>,
         before: Option<CEvent>,
-        #[graphql(validator(custom = "EFValidator"))] filter: Option<EventFilter>,
+        filter: Option<EventFilter>,
     ) -> Option<Result<Connection<String, Event>, RpcError>> {
         Some(
             async {
@@ -308,32 +303,6 @@ impl Query {
                 let page = Page::from_params(limits, first, after, last, before)?;
 
                 Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
-            }
-            .await,
-        )
-    }
-
-    /// The events that exist in the network, optionally filtered by multiple event filters.
-    /// Supports combining filters (e.g. `sender` AND `module` AND `type`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `afterCheckpoint`, `beforeCheckpoint`, or `atCheckpoint` to narrow it. Supports a longer retention than `Query.events`.
-    ///
-    /// Note that this differs from `Query.events`, which supports a single filter with an optional sender filter, with no checkpoint range restriction and generally a shorter retention.
-    async fn scan_events(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<CScanEvent>,
-        last: Option<u64>,
-        before: Option<CScanEvent>,
-        #[graphql(validator(custom = "ScanFilterValidator::new(ctx)"))] filter: EventFilter,
-    ) -> Option<Result<Connection<String, Event>, RpcError>> {
-        Some(
-            async {
-                let scope = self.scope(ctx)?;
-                let pagination: &PaginationConfig = ctx.data()?;
-                let limits = pagination.limits("Query", "events");
-                let page = Page::from_params(limits, first, after, last, before)?;
-
-                Event::scan(ctx, scope, page, filter).await
             }
             .await,
         )
@@ -741,35 +710,9 @@ impl Query {
                 let limits = pagination.limits("Query", "transactions");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
+                // Use the filter if provided, otherwise use default (unfiltered)
                 let filter = filter.unwrap_or_default();
                 Transaction::paginate(ctx, scope, page, filter).await
-            }
-            .await,
-        )
-    }
-
-    /// The transactions that exist in the network, optionally filtered by multiple transaction filters.
-    ///
-    /// Supports combining filters (e.g. `affectedAddress` AND `function`). The checkpoint range being scanned can not exceed `ServiceConfig.maxScanLimit` — use `checkpointBound` to narrow it. Supports a longer retention than `Query.transactions`.
-    ///
-    /// Note that this differs from `Query.transactions`, which supports a single filter with an optional sender filter, with no checkpoint range restriction and generally a shorter retention.
-    async fn scan_transactions(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<CScanTransaction>,
-        last: Option<u64>,
-        before: Option<CScanTransaction>,
-        #[graphql(validator(custom = "ScanFilterValidator::new(ctx)"))] filter: TransactionFilter,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
-        Some(
-            async {
-                let scope = self.scope(ctx)?;
-                let pagination: &PaginationConfig = ctx.data()?;
-                let limits = pagination.limits("Query", "scanTransactions");
-                let page = Page::from_params(limits, first, after, last, before)?;
-
-                Transaction::scan(ctx, scope, page, filter).await
             }
             .await,
         )
