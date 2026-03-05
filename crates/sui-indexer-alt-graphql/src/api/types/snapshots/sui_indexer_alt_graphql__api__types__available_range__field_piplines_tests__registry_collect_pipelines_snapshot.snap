@@ -1789,6 +1789,3 @@ ZkLoginSignature.signature
 
 ZkLoginVerifyResult.success
   => {}
-
-ZkLoginVerifyResult.error
-  => {}

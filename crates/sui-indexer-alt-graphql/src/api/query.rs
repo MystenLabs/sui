@@ -853,9 +853,9 @@ impl Query {
         }
     }
 
-    /// Verify a zkLogin signature os from the given `author`.
+    /// Verify a zkLogin signature is from the given `author`.
     ///
-    /// Returns a `ZkLoginVerifyResult` where `success` is `true` and `error` is empty if the signature is valid. If the signature is invalid, `success` is `false` and `error` contains the relevant error message.
+    /// Returns successfully if the signature is valid. If the signature is invalid, returns an error with the reason for the failure.
     ///
     /// - `bytes` are either the bytes of a serialized personal message, or `TransactionData`, Base64-encoded.
     /// - `signature` is a serialized zkLogin signature, also Base64-encoded.
