@@ -235,8 +235,7 @@ impl AuthorityPerpetualTables {
 
         let mut objects_config = KeySpaceConfig::new()
             .with_unloaded_iterator(true)
-            .with_value_cache_size(value_cache_size)
-            .with_max_dirty_keys(4048);
+            .with_value_cache_size(value_cache_size);
         if matches!(db_options_override, Some(options) if options.is_validator) {
             objects_config = objects_config.with_compactor(Box::new(objects_compactor));
         }
@@ -246,7 +245,7 @@ impl AuthorityPerpetualTables {
                 "objects".to_string(),
                 ThConfig::new_with_config_indexing(
                     object_indexing,
-                    mutexes * 8,
+                    mutexes * 2,
                     KeyType::uniform(1),
                     objects_config,
                 ),
