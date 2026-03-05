@@ -625,24 +625,19 @@ Response: {
 task 9, lines 141-148:
 //# run-graphql
 Response: {
-  "data": {
-    "eventsByModuleAndTypeIsUnavailable": null
-  },
+  "data": null,
   "errors": [
     {
-      "message": "Filtering by both emitting module and event type is not supported not available",
+      "message": "Failed to parse \"EventFilter\": Filtering by both emitting module and event type is not supported",
       "locations": [
         {
           "line": 2,
-          "column": 3
+          "column": 65
         }
       ],
       "path": [
         "eventsByModuleAndTypeIsUnavailable"
-      ],
-      "extensions": {
-        "code": "FEATURE_UNAVAILABLE"
-      }
+      ]
     }
   ]
 }
