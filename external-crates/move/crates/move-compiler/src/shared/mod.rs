@@ -76,8 +76,9 @@ pub use move_core_types::parsing::parser::{
 
 use std::num::ParseIntError;
 
-// Signed integer parsing: parse a non-negative literal value that must fit in the
-// non-negative range of the signed type. Negation is handled as a separate unary operator.
+// Signed integer parsing: parse a literal value that fits in 0..=abs(MIN) for the signed type.
+// Values in 0..=MAX are always valid. Values equal to abs(MIN) (i.e., MAX+1) are only valid
+// when negated; expansion rejects bare literals that exceed MAX.
 // `ParseIntError` has no public constructor, so we produce one via a known-failing parse.
 fn signed_overflow_parse_error() -> ParseIntError {
     "256".parse::<u8>().unwrap_err()
@@ -87,7 +88,7 @@ macro_rules! define_parse_signed_int {
     ($fname:ident, $parse_unsigned:ident, $unsigned:ty, $signed:ty) => {
         pub fn $fname(s: &str) -> Result<($unsigned, NumberFormat), ParseIntError> {
             let (val, fmt) = $parse_unsigned(s)?;
-            if val > <$signed>::MAX as $unsigned {
+            if val > <$signed>::MIN.unsigned_abs() {
                 return Err(signed_overflow_parse_error());
             }
             Ok((val, fmt))

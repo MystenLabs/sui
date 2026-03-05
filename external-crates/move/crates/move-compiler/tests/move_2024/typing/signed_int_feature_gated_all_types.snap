@@ -1,0 +1,136 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:7:17
+  │
+7 │         let _x: i8 = 0;
+  │                 ^^ Signed integer types are under development and should not be used right now.
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:11:17
+   │
+11 │         let _x: i16 = 0;
+   │                 ^^^ Signed integer types are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:15:17
+   │
+15 │         let _x: i32 = 0;
+   │                 ^^^ Signed integer types are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:19:17
+   │
+19 │         let _x: i64 = 0;
+   │                 ^^^ Signed integer types are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:23:17
+   │
+23 │         let _x: i128 = 0;
+   │                 ^^^^ Signed integer types are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:27:18
+   │
+27 │         let _x = 1i8;
+   │                  ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:27:19
+   │
+27 │         let _x = 1i8;
+   │                   ^^
+   │                   │
+   │                   Unexpected 'i8'
+   │                   Expected ';'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:31:18
+   │
+31 │         let _x = 1i16;
+   │                  ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:31:19
+   │
+31 │         let _x = 1i16;
+   │                   ^^^
+   │                   │
+   │                   Unexpected 'i16'
+   │                   Expected ';'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:35:18
+   │
+35 │         let _x = 1i32;
+   │                  ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:35:19
+   │
+35 │         let _x = 1i32;
+   │                   ^^^
+   │                   │
+   │                   Unexpected 'i32'
+   │                   Expected ';'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:39:18
+   │
+39 │         let _x = 1i64;
+   │                  ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:39:19
+   │
+39 │         let _x = 1i64;
+   │                   ^^^
+   │                   │
+   │                   Unexpected 'i64'
+   │                   Expected ';'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:43:18
+   │
+43 │         let _x = 1i128;
+   │                  ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_all_types.move:43:19
+   │
+43 │         let _x = 1i128;
+   │                   ^^^^
+   │                   │
+   │                   Unexpected 'i128'
+   │                   Expected ';'
