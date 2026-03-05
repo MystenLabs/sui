@@ -1,0 +1,40 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/invalid_or_pattern_guard.move:15:35
+   │
+15 │             E::A(x) | E::B(x) if (x > 0) => x,
+   │                  -                ^ Invalid argument to '>'
+   │                  │                 
+   │                  Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/invalid_or_pattern_guard.move:15:37
+   │
+15 │             E::A(x) | E::B(x) if (x > 0) => x,
+   │                  -                  ^ - Found: integer. It is not compatible with the other type.
+   │                  │                  │  
+   │                  │                  Incompatible arguments to '>'
+   │                  Found: '&u64'. It is not compatible with the other type.
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/move_2024/matching/invalid_or_pattern_guard.move:15:39
+   │
+15 │             E::A(x) | E::B(x) if (x > 0) => x,
+   │                                       ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/invalid_or_pattern_guard.move:15:39
+   │
+15 │             E::A(x) | E::B(x) if (x > 0) => x,
+   │                  -                    ^ Invalid argument to '>'
+   │                  │                     
+   │                  Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

@@ -314,10 +314,19 @@ impl PatternArm {
                 if &name == ctor_name =>
             {
                 let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
-                let decl_fields = context
-                    .program_info()
-                    .enum_variant_fields(&mident, &enum_, &name)
-                    .unwrap();
+                let Some(decl_fields) =
+                    context
+                        .program_info()
+                        .enum_variant_fields(&mident, &enum_, &name)
+                else {
+                    ice_assert!(
+                        context.reporter(),
+                        context.env().has_errors(),
+                        loc,
+                        "Missing enum variant fields in match specialization"
+                    );
+                    return None;
+                };
                 let ordered_pats = order_fields_by_decl(context, decl_fields, field_pats);
                 for (_, _, pat) in ordered_pats.into_iter().rev() {
                     output.pats.push_front(pat);
@@ -375,10 +384,16 @@ impl PatternArm {
             TP::Struct(mident, struct_, _, fields)
             | TP::BorrowStruct(_, mident, struct_, _, fields) => {
                 let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
-                let decl_fields = context
-                    .program_info()
-                    .struct_fields(&mident, &struct_)
-                    .unwrap();
+                let Some(decl_fields) = context.program_info().struct_fields(&mident, &struct_)
+                else {
+                    ice_assert!(
+                        context.reporter(),
+                        context.env().has_errors(),
+                        loc,
+                        "Native struct reached match specialization without a prior error"
+                    );
+                    return None;
+                };
                 let ordered_pats = order_fields_by_decl(context, decl_fields, field_pats);
                 for (_, _, pat) in ordered_pats.into_iter().rev() {
                     output.pats.push_front(pat);
