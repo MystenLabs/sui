@@ -75,7 +75,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound, get_authority_key_pair,
 };
-use sui_types::digests::{ConsensusCommitDigest, TransactionDigest};
+use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest, TransactionDigest};
 use sui_types::effects::{
     AccumulatorOperation, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
 };
@@ -976,6 +976,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 };
                 let gas_price: u64 = gas_price.unwrap_or(self.gas_price);
                 let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let expiration = if address_balance_gas {
+                    self.get_replay_protected_expiration()
+                } else {
+                    TransactionExpiration::None
+                };
                 let transaction = self.sign_txn(sender, |sender, gas| {
                     let rec_arg = builder.pure(recipient).unwrap();
                     builder.command(sui_types::transaction::Command::TransferObjects(
@@ -984,7 +989,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     ));
                     let pt = builder.finish();
                     let gas = if address_balance_gas { vec![] } else { gas };
-                    TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
+                    let mut tx_data =
+                        TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price);
+                    *tx_data.expiration_mut_for_testing() = expiration;
+                    tx_data
                 });
                 let summary = self.execute_txn(transaction).await?;
                 let output = self.object_summary_output(&summary, /* summarize */ false);
@@ -1076,9 +1084,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
                 let summary = if !dev_inspect && !dry_run {
                     let gas_price = gas_price.unwrap_or(self.gas_price);
-                    let expiration = expiration
-                        .map(TransactionExpiration::Epoch)
-                        .unwrap_or(TransactionExpiration::None);
+                    let expiration = match expiration {
+                        Some(epoch) => TransactionExpiration::Epoch(epoch),
+                        None if address_balance_gas => self.get_replay_protected_expiration(),
+                        None => TransactionExpiration::None,
+                    };
                     let transaction = self.sign_sponsor_txn(
                         sender,
                         sponsor,
@@ -1100,9 +1110,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     self.execute_txn(transaction).await?
                 } else if dry_run {
                     let gas_price = gas_price.unwrap_or(self.gas_price);
-                    let expiration = expiration
-                        .map(TransactionExpiration::Epoch)
-                        .unwrap_or(TransactionExpiration::None);
+                    let expiration = match expiration {
+                        Some(epoch) => TransactionExpiration::Epoch(epoch),
+                        None if address_balance_gas => self.get_replay_protected_expiration(),
+                        None => TransactionExpiration::None,
+                    };
                     let sender = self.get_sender(sender);
                     let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
@@ -1513,6 +1525,26 @@ impl SuiTestAdapter {
         self.executor
     }
 
+    fn get_chain_identifier(&self) -> ChainIdentifier {
+        self.get_checkpoint_by_sequence_number(0)
+            .map(|cp| ChainIdentifier::from(*cp.digest()))
+            .unwrap_or_else(|| {
+                ChainIdentifier::from(sui_types::digests::CheckpointDigest::default())
+            })
+    }
+
+    fn get_replay_protected_expiration(&self) -> TransactionExpiration {
+        let current_epoch = self.get_latest_epoch_id().unwrap_or(0);
+        TransactionExpiration::ValidDuring {
+            min_epoch: Some(current_epoch),
+            max_epoch: Some(current_epoch),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: self.get_chain_identifier(),
+            nonce: 0,
+        }
+    }
+
     fn named_variables(&self) -> BTreeMap<String, String> {
         let mut variables = BTreeMap::new();
 
@@ -1609,7 +1641,7 @@ impl SuiTestAdapter {
         dry_run: bool,
         policy: u8,
         gas_price: u64,
-        use_address_balance_gas: bool,
+        address_balance_gas: bool,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
@@ -1657,22 +1689,31 @@ impl SuiTestAdapter {
         );
 
         let pt = builder.finish();
+        let expiration = if address_balance_gas {
+            self.get_replay_protected_expiration()
+        } else {
+            TransactionExpiration::None
+        };
 
         if dry_run {
-            let transaction = TransactionData::new_programmable(
+            let mut transaction = TransactionData::new_programmable(
                 self.get_sender(Some(sender)).address,
                 vec![],
                 pt,
                 gas_budget,
                 gas_price,
             );
+            *transaction.expiration_mut_for_testing() = expiration;
             let summary = self.dry_run(transaction).await?;
             return Ok(self.object_summary_output(&summary, false));
         }
 
         let data = |sender, gas: Vec<ObjectRef>| {
-            let gas = if use_address_balance_gas { vec![] } else { gas };
-            TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
+            let gas = if address_balance_gas { vec![] } else { gas };
+            let mut tx_data =
+                TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price);
+            *tx_data.expiration_mut_for_testing() = expiration;
+            tx_data
         };
         let transaction = self.sign_txn(Some(sender), data);
         let summary = self.execute_txn(transaction).await?;
