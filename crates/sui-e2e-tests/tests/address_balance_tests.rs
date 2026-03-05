@@ -1283,7 +1283,15 @@ async fn test_transaction_invalid_chain_id() {
 
 #[sim_test]
 async fn test_transaction_expiration_min_none_max_some() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    // Use a protocol config without relax_valid_during_for_owned_inputs to test legacy validation
+    let mut test_env = TestEnvBuilder::new()
+        .with_num_validators(1)
+        .with_proto_override_cb(Box::new(|_version, mut config| {
+            config.set_relax_valid_during_for_owned_inputs_for_testing(false);
+            config
+        }))
+        .build()
+        .await;
 
     let (sender, gas_coin) = test_env.get_sender_and_gas(0);
     let current_epoch = 0;

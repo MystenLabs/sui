@@ -5022,6 +5022,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_non_exclusive_writes = true;
     }
 
+    pub fn set_relax_valid_during_for_owned_inputs_for_testing(&mut self, val: bool) {
+        self.feature_flags.relax_valid_during_for_owned_inputs = val;
+    }
+
     pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(
         &mut self,
         val: bool,
