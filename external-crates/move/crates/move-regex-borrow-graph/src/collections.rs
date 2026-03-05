@@ -138,10 +138,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     }
 
     /// Returns the direct predecessors of the specified reference
-    fn predecessors(
-        &self,
-        r: Ref,
-    ) -> Result<impl Iterator<Item = (Ref, &Edge<Loc, Lbl>)> + '_> {
+    fn predecessors(&self, r: Ref) -> Result<impl Iterator<Item = (Ref, &Edge<Loc, Lbl>)> + '_> {
         let r_idx = self.node(&r)?.node_index();
         ensure!(
             self.graph.contains_node(r_idx),
