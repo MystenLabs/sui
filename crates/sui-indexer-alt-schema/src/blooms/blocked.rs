@@ -34,14 +34,16 @@
 //! ```
 //!
 
+use std::collections::BTreeMap;
+
+use crate::blooms::bloom::BloomProbe;
 use crate::blooms::hash::DoubleHasher;
 use crate::blooms::hash::set_bit;
 
 /// Probe for checking membership in a blocked bloom filter.
 pub struct BlockedBloomProbe {
     pub block_idx: usize,
-    pub byte_offsets: Vec<usize>,
-    pub bit_masks: Vec<usize>,
+    pub probe: BloomProbe,
 }
 
 /// A generic blocked bloom filter.
@@ -99,6 +101,31 @@ impl<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>
             .take(HASHES as usize)
             .map(move |h| (h as usize) % bits_per_block);
         (block_idx, bit_iter)
+    }
+
+    /// Probes for use bloom filter membership checks, probes from different values that hash to the
+    /// same block are merged together.
+    pub fn probe(
+        seed: u128,
+        values: impl IntoIterator<Item = impl AsRef<[u8]>>,
+    ) -> Vec<BlockedBloomProbe> {
+        let mut by_block: BTreeMap<usize, BTreeMap<usize, u8>> = BTreeMap::new();
+        for value in values {
+            let (block_idx, bits) = Self::hash(value.as_ref(), seed);
+            let block_entry = by_block.entry(block_idx).or_default();
+            for b in bits {
+                *block_entry.entry(b / 8).or_default() |= 1u8 << (b % 8);
+            }
+        }
+        by_block
+            .into_iter()
+            .map(|(block_idx, by_offset)| BlockedBloomProbe {
+                block_idx,
+                probe: BloomProbe {
+                    bit_probes: by_offset.into_iter().collect(),
+                },
+            })
+            .collect()
     }
 }
 
