@@ -1,42 +1,41 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+
 use move_binary_format::CompiledModule;
+use move_bytecode_verifier_meter::Meter;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use move_vm_runtime_latest::move_vm::MoveVM;
+#[cfg(feature = "custom-natives")]
+use move_vm_runtime_latest::native_functions::NativeFunctionTable;
+use sui_adapter_latest::{
+    adapter::{new_move_vm, run_metered_move_bytecode_verifier},
+    execution_engine::{execute_genesis_state_update, execute_transaction_to_effects},
+    execution_mode,
+    type_layout_resolver::TypeLayoutResolver,
+};
+use sui_move_natives_latest::all_natives;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::execution::ExecutionTiming;
-use sui_types::execution_params::ExecutionOrEarlyError;
-use sui_types::transaction::GasData;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
-    execution::{ExecutionResult, TypeLayoutStore},
+    execution::{ExecutionResult, ExecutionTiming, TypeLayoutStore},
+    execution_params::ExecutionOrEarlyError,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
-    transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
+    storage::BackingStore,
+    transaction::{CheckedInputObjects, GasData, ProgrammableTransaction, TransactionKind},
 };
-
-use move_bytecode_verifier_meter::Meter;
-use move_vm_runtime_latest::move_vm::MoveVM;
-use sui_adapter_latest::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
-use sui_adapter_latest::execution_engine::{
-    execute_genesis_state_update, execute_transaction_to_effects,
-};
-use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
-use sui_move_natives_latest::all_natives;
-use sui_types::storage::BackingStore;
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
-use crate::executor;
-use crate::verifier;
-use sui_adapter_latest::execution_mode;
+use crate::{executor, verifier};
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
@@ -49,6 +48,18 @@ impl Executor {
     pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
             all_natives(silent, protocol_config),
+            protocol_config,
+        )?)))
+    }
+
+    #[cfg(feature = "custom-natives")]
+    pub(crate) fn new_with_custom_natives(
+        protocol_config: &ProtocolConfig,
+        _silent: bool,
+        native_functions: NativeFunctionTable,
+    ) -> Result<Self, SuiError> {
+        Ok(Executor(Arc::new(new_move_vm(
+            native_functions,
             protocol_config,
         )?)))
     }
