@@ -5,7 +5,6 @@
 // Constants
 // -------------------------------------------------------------------------------------------------
 
-// TODO Determine stack size limits based on gas limit
 pub const OPERAND_STACK_SIZE_LIMIT: usize = 1024;
 pub const CALL_STACK_SIZE_LIMIT: usize = 1024;
 
