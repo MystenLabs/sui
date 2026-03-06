@@ -1462,4 +1462,3 @@ fn binary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
         },
     ));
 }
-
