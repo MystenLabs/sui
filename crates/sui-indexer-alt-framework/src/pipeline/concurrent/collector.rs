@@ -283,7 +283,6 @@ mod tests {
     impl Processor for TestHandler {
         type Value = Entry;
         const NAME: &'static str = "test_handler";
-        const FANOUT: usize = 1;
 
         async fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])

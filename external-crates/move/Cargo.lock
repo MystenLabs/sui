@@ -2232,6 +2232,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha3",
  "similar",
  "tempfile",
  "tokio",
@@ -2695,6 +2696,7 @@ name = "move-regex-borrow-graph"
 version = "0.0.1"
 dependencies = [
  "datatest-stable",
+ "indexmap 2.8.0",
  "insta",
  "itertools 0.10.5",
  "move-binary-format",
@@ -4113,6 +4115,7 @@ dependencies = [
 name = "serializer-tests"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "move-binary-format",
  "proptest",
  "proptest-derive",

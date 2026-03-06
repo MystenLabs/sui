@@ -27,6 +27,7 @@ storage
 Move.lock
 .trace
 .coverage_map.mvcov
+traces
 
 # Thumbnails
 ._*

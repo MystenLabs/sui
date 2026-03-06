@@ -48,10 +48,8 @@ pub(crate) enum ZkLoginIntentScope {
 /// The result of the zkLogin signature verification.
 #[derive(SimpleObject, Clone, Debug)]
 pub(crate) struct ZkLoginVerifyResult {
-    /// The boolean result of the verification. If true, errors should be empty.
+    /// Whether the signature was verified successfully.
     pub success: Option<bool>,
-    /// The error field capture reasons why the signature could not be verified, assuming the inputs are valid and there are no internal errors.
-    pub error: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -64,6 +62,9 @@ pub(crate) enum Error {
 
     #[error("Failed to deserialize TransactionData from bytes")]
     NotTransactionData,
+
+    #[error("Verification failed: {0}")]
+    VerificationFailed(String),
 }
 
 /// Verified a zkLogin signature is from the given `author`.
@@ -138,7 +139,7 @@ pub(crate) async fn verify_signature(
         true,
     );
 
-    Ok(match intent_scope {
+    match intent_scope {
         ZkLoginIntentScope::TransactionData => verify(
             sig,
             &IntentMessage::new(
@@ -161,6 +162,11 @@ pub(crate) async fn verify_signature(
             epoch.epoch_id,
             &params,
         ),
+    }
+    .map_err(|e| bad_user_input(Error::VerificationFailed(e.to_string())))?;
+
+    Ok(ZkLoginVerifyResult {
+        success: Some(true),
     })
 }
 
@@ -170,22 +176,12 @@ fn verify<T: Serialize>(
     author: SuiAddress,
     epoch_id: u64,
     params: &VerifyParams,
-) -> ZkLoginVerifyResult {
-    match sig.verify_authenticator(
+) -> Result<(), sui_types::error::SuiError> {
+    sig.verify_authenticator(
         message,
         author.into(),
         epoch_id,
         params,
         Arc::new(VerifiedDigestCache::new_empty()),
-    ) {
-        Ok(()) => ZkLoginVerifyResult {
-            success: Some(true),
-            error: None,
-        },
-
-        Err(e) => ZkLoginVerifyResult {
-            success: Some(false),
-            error: Some(e.to_string()),
-        },
-    }
+    )
 }

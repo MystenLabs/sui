@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/signature/two_type_actuals_reverse_order.mvir
 ---
 processed 2 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(Signature, 1), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected type with abilities [Key, ] got type actual Bool with incompatible abilities [Copy, Drop, Store, ]",
 }
 
 task 1, lines 13-24:
@@ -22,4 +22,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M2,
     indices: [(Signature, 1), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected type with abilities [Key, ] got type actual Bool with incompatible abilities [Copy, Drop, Store, ]",
 }

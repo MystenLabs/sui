@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04025]: invalid control flow
+  ┌─ tests/move_2024/hlir/invalid_abort_subject_25457.move:3:16
+  │
+3 │         match (abort 0u64) {
+  │                ^^^^^^^^^^ Cannot match on an expression that always diverges

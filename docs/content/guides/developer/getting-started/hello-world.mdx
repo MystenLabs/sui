@@ -8,7 +8,7 @@ pagination_next: null
 
 You'll build a "Hello, World!" program to learn the fundamentals of programming on Sui. You create programs on Sui by writing and deploying smart contracts to the network.
 
-The most basic unit of storage on Sui is an [_object_](/guides/developer/objects/object-model.mdx). Other blockchains typically structure storage using key-value stores. Sui centers storage around objects with unique ID addresses on-chain. Every Sui smart contract is an object that manipulates other objects.
+The most basic unit of storage on Sui is an [object](/guides/developer/objects/object-model.mdx). Other blockchains typically structure storage using key-value stores. Sui centers storage around objects with unique ID addresses on-chain. Every Sui smart contract is an object that manipulates other objects.
 
 Objects can be immutable or mutable:
 
@@ -425,7 +425,7 @@ Failed to sign transaction by a quorum of validators because one or more of its 
 
 If you receive this error, you must wait until the current epoch is over before submitting your transaction again. You can see how long is left in the current epoch using [Sui Explorer](https://suivision.xyz/) or another network explorer like [SuiScan](https://suiscan.xyz/mainnet/home). 
 
-To prevent the same object from being modified by multiple transactions at once, your address 'locks' the object to prevent conflicting modifications. If you'd like to batch multiple transaction commands together, you can use [programmable transaction blocks](/guides/developer/transactions/prog-txn-blocks.mdx).
+To prevent the same object from being modified by multiple transactions at once, your address 'locks' the object to prevent conflicting modifications. If you'd like to batch multiple transaction commands together, you can use [programmable transaction blocks](/guides/developer/transactions/ptbs/prog-txn-blocks).
 
 Transactions also have limitations regarding total size, number of objects, and number of inputs. Learn more about limitations in [Building Against Limits](https://move-book.com/guides/building-against-limits/) in The Move Book.
 

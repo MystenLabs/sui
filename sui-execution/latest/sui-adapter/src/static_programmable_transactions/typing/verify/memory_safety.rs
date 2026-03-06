@@ -14,7 +14,7 @@ use crate::{
         typing::ast::{self as T, Type},
     },
 };
-use move_regex_borrow_graph::references::Ref;
+use move_regex_borrow_graph::{MeterError, meter::DummyMeter, references::Ref};
 use sui_types::{
     error::{ExecutionError, SafeIndex, command_argument_error},
     execution_status::CommandArgumentError,
@@ -68,7 +68,13 @@ impl Value {
 }
 
 impl Context {
-    fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
+    fn new(env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
+        let gas_coin =
+            if ast.gas_coin.is_none() && env.protocol_config.gasless_transaction_drop_safety() {
+                None
+            } else {
+                Some(Value::NonRef)
+            };
         let objects = ast.objects.iter().map(|_| Some(Value::NonRef)).collect();
         let withdrawals = ast
             .withdrawals
@@ -85,15 +91,27 @@ impl Context {
             .iter()
             .map(|_| Some(Value::NonRef))
             .collect::<Vec<_>>();
-        let (mut graph, _locals) = Graph::new::<()>([]).map_err(graph_err)?;
+        let canonical_reference_capacity = ast
+            .commands
+            .iter()
+            .flat_map(|command| &command.value.result_type)
+            .filter(|ty| matches!(&ty, Type::Reference(_, _)))
+            .count();
+        let (mut graph, _locals) =
+            Graph::new::<()>(canonical_reference_capacity, []).map_err(graph_err)?;
         let local_root = graph
-            .extend_by_epsilon((), std::iter::empty(), /* is_mut */ true)
-            .map_err(graph_err)?;
+            .extend_by_epsilon(
+                (),
+                std::iter::empty(),
+                /* is_mut */ true,
+                &mut DummyMeter,
+            )
+            .map_err(graph_meter_err)?;
         Ok(Self {
             graph,
             local_root,
             tx_context: Some(Value::NonRef),
-            gas_coin: Some(Value::NonRef),
+            gas_coin,
             objects,
             withdrawals,
             pure,
@@ -122,7 +140,9 @@ impl Context {
     }
 
     fn borrowed_by(&self, r: Ref) -> Result<BTreeMap<Ref, Paths>, ExecutionError> {
-        self.graph.borrowed_by(r).map_err(graph_err)
+        self.graph
+            .borrowed_by(r, &mut DummyMeter)
+            .map_err(graph_meter_err)
     }
 
     /// Used for checking if a location is borrowed
@@ -135,14 +155,16 @@ impl Context {
     }
 
     fn release(&mut self, r: Ref) -> Result<(), ExecutionError> {
-        self.graph.release(r).map_err(graph_err)
+        self.graph
+            .release(r, &mut DummyMeter)
+            .map_err(graph_meter_err)
     }
 
     fn extend_by_epsilon(&mut self, r: Ref, is_mut: bool) -> Result<Ref, ExecutionError> {
         let new_r = self
             .graph
-            .extend_by_epsilon((), std::iter::once(r), is_mut)
-            .map_err(graph_err)?;
+            .extend_by_epsilon((), std::iter::once(r), is_mut, &mut DummyMeter)
+            .map_err(graph_meter_err)?;
         Ok(new_r)
     }
 
@@ -154,8 +176,14 @@ impl Context {
     ) -> Result<Ref, ExecutionError> {
         let new_r = self
             .graph
-            .extend_by_label((), std::iter::once(r), is_mut, Location(extension))
-            .map_err(graph_err)?;
+            .extend_by_label(
+                (),
+                std::iter::once(r),
+                is_mut,
+                Location(extension),
+                &mut DummyMeter,
+            )
+            .map_err(graph_meter_err)?;
         Ok(new_r)
     }
 
@@ -166,8 +194,8 @@ impl Context {
     ) -> Result<Vec<Ref>, ExecutionError> {
         let new_refs = self
             .graph
-            .extend_by_dot_star_for_call((), sources.iter().copied(), mutabilities)
-            .map_err(graph_err)?;
+            .extend_by_dot_star_for_call((), sources, mutabilities, &mut DummyMeter)
+            .map_err(graph_meter_err)?;
         Ok(new_refs)
     }
 
@@ -226,8 +254,8 @@ impl Context {
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
-pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
-    let mut context = Context::new(ast)?;
+pub fn verify(env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
+    let mut context = Context::new(env, ast)?;
     let commands = &ast.commands;
     for c in commands {
         let result = command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
@@ -283,7 +311,7 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
         "reference to local root not released"
     );
     context.release(context.local_root)?;
-    assert_invariant!(context.graph.abstract_size() == 0, "reference not released");
+    assert_invariant!(context.graph.is_empty(), "reference not released");
     assert_invariant!(
         context.tx_context.is_some(),
         "tx_context should never be moved"
@@ -564,8 +592,17 @@ fn call(
     Ok(return_values)
 }
 
+fn graph_meter_err(e: MeterError<()>) -> ExecutionError {
+    match e {
+        MeterError::Meter(()) => {
+            make_invariant_violation!("DummyMeter should never produce a Meter error")
+        }
+        MeterError::InvariantViolation(iv) => graph_err(iv),
+    }
+}
+
 fn graph_err(e: move_regex_borrow_graph::InvariantViolation) -> ExecutionError {
-    ExecutionError::invariant_violation(format!("Borrow graph invariant violation: {}", e.0))
+    make_invariant_violation!("Borrow graph invariant violation: {}", e.0)
 }
 
 impl fmt::Display for Location {

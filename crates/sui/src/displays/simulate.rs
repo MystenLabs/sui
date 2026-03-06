@@ -4,7 +4,11 @@
 use crate::{client_commands::estimate_gas_budget_from_gas_cost, displays::Pretty};
 use std::fmt::{Display, Formatter};
 use sui_rpc_api::client::SimulateTransactionResponse;
-use sui_types::{effects::TransactionEffectsAPI, transaction::TransactionDataAPI};
+use sui_types::{
+    effects::TransactionEffectsAPI,
+    execution_status::{ExecutionFailure, ExecutionStatus},
+    transaction::TransactionDataAPI,
+};
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{Panel as TablePanel, Style as TableStyle, style::HorizontalLine},
@@ -16,8 +20,8 @@ impl Display for Pretty<'_, SimulateTransactionResponse> {
 
         write!(f, "Dry run completed, execution status: ",)?;
         match response.transaction.effects.status() {
-            sui_types::execution_status::ExecutionStatus::Success => writeln!(f, "success")?,
-            sui_types::execution_status::ExecutionStatus::Failure { error, command } => {
+            ExecutionStatus::Success => writeln!(f, "success")?,
+            ExecutionStatus::Failure(ExecutionFailure { error, command }) => {
                 writeln!(f, "failure")?;
                 if let Some(command) = command {
                     writeln!(f, "{error:?} in command {command}")?;

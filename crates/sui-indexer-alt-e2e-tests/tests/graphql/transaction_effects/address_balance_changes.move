@@ -19,12 +19,12 @@
 //# view-object 0,1
 
 // Use address balance as gas
-//# transfer-object --recipient A --sender B 0,1 --gas-budget-from-address-balance 1000000000
+//# transfer-object --recipient A --sender B 0,1 --gas-budget 1000000000 --address-balance-gas
 
 //# create-checkpoint
 
 // Now have B send address balance to C using address balance as gas
-//# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) @C --gas-budget-from-address-balance 1000000000
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) @C --gas-budget 1000000000 --address-balance-gas
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
 

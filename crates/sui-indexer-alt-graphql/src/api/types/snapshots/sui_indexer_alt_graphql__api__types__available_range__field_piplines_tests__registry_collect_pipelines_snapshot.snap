@@ -224,6 +224,33 @@ Checkpoint.transactions (filter: affectedObject)
 Checkpoint.transactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
+CircomG1.e0
+  => {}
+
+CircomG1.e1
+  => {}
+
+CircomG1.e2
+  => {}
+
+CircomG2.e00
+  => {}
+
+CircomG2.e01
+  => {}
+
+CircomG2.e10
+  => {}
+
+CircomG2.e11
+  => {}
+
+CircomG2.e20
+  => {}
+
+CircomG2.e21
+  => {}
+
 CoinDenyListStateCreateTransaction._
   => {}
 
@@ -471,6 +498,15 @@ DynamicField.receivedTransactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 DynamicField.value
+  => {}
+
+Ed25519PublicKey.bytes
+  => {}
+
+Ed25519Signature.signature
+  => {}
+
+Ed25519Signature.publicKey
   => {}
 
 EndOfEpochTransaction.transactions
@@ -1097,6 +1133,9 @@ MoveType.abilities
 MoveValue.asAddress
   => {}
 
+MoveValue.asVector
+  => {}
+
 MoveValue.bcs
   => {}
 
@@ -1113,6 +1152,27 @@ MoveValue.json
   => {}
 
 MoveValue.type
+  => {}
+
+MultisigCommittee.members
+  => {}
+
+MultisigCommittee.threshold
+  => {}
+
+MultisigMember.publicKey
+  => {}
+
+MultisigMember.weight
+  => {}
+
+MultisigSignature.signatures
+  => {}
+
+MultisigSignature.bitmap
+  => {}
+
+MultisigSignature.committee
   => {}
 
 MutateConsensusStreamEnded.address
@@ -1254,6 +1314,18 @@ PageInfo.startCursor
   => {}
 
 PageInfo.endCursor
+  => {}
+
+PasskeyPublicKey.bytes
+  => {}
+
+PasskeySignature.authenticatorData
+  => {}
+
+PasskeySignature.clientDataJson
+  => {}
+
+PasskeySignature.signature
   => {}
 
 PerEpochConfig.object
@@ -1449,6 +1521,24 @@ ReadConsensusStreamEnded.sequenceNumber
   => {}
 
 Receiving.object
+  => {}
+
+Secp256K1PublicKey.bytes
+  => {}
+
+Secp256K1Signature.signature
+  => {}
+
+Secp256K1Signature.publicKey
+  => {}
+
+Secp256R1PublicKey.bytes
+  => {}
+
+Secp256R1Signature.signature
+  => {}
+
+Secp256R1Signature.publicKey
   => {}
 
 ServiceConfig.mutationTimeoutMs
@@ -1664,6 +1754,9 @@ UpgradeCommand.upgradeTicket
 UserSignature.signatureBytes
   => {}
 
+UserSignature.scheme
+  => {}
+
 Validator.atRisk
   => {}
 
@@ -1694,8 +1787,59 @@ WithdrawMaxAmountU64.amount
 WriteAccumulatorStorageCostTransaction._
   => {}
 
-ZkLoginVerifyResult.success
+ZkLoginClaim.value
   => {}
 
-ZkLoginVerifyResult.error
+ZkLoginClaim.indexMod4
+  => {}
+
+ZkLoginInputs.proofPoints
+  => {}
+
+ZkLoginInputs.issBase64Details
+  => {}
+
+ZkLoginInputs.headerBase64
+  => {}
+
+ZkLoginInputs.addressSeed
+  => {}
+
+ZkLoginJwkId.iss
+  => {}
+
+ZkLoginJwkId.kid
+  => {}
+
+ZkLoginProof.a
+  => {}
+
+ZkLoginProof.b
+  => {}
+
+ZkLoginProof.c
+  => {}
+
+ZkLoginPublicIdentifier.iss
+  => {}
+
+ZkLoginPublicIdentifier.addressSeed
+  => {}
+
+ZkLoginSignature.maxEpoch
+  => {}
+
+ZkLoginSignature.signature
+  => {}
+
+ZkLoginSignature.publicIdentifier
+  => {}
+
+ZkLoginSignature.inputs
+  => {}
+
+ZkLoginSignature.jwkId
+  => {}
+
+ZkLoginVerifyResult.success
   => {}

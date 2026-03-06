@@ -12,7 +12,7 @@ use crate::{
 };
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag, u256::U256};
 use sui_types::{
-    base_types::TxContext,
+    base_types::{ObjectID, TxContext},
     error::ExecutionError,
     object::Owner,
     transaction::{self as P, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability},
@@ -25,6 +25,7 @@ pub fn transaction<Mode: ExecutionMode>(
     // which inputs are withdrawals that need to be converted to coins, must
     // be the same length as the inputs
     withdrawal_compatibility_inputs: Option<Vec<bool>>,
+    gas_coin: Option<ObjectID>,
     pt: P::ProgrammableTransaction,
 ) -> Result<L::Transaction, ExecutionError> {
     metering::pre_translation::meter(meter, &pt)?;
@@ -55,7 +56,11 @@ pub fn transaction<Mode: ExecutionMode>(
         .enumerate()
         .map(|(idx, cmd)| command(env, cmd).map_err(|e| e.with_command_index(idx)))
         .collect::<Result<Vec<_>, _>>()?;
-    let loaded_tx = L::Transaction { inputs, commands };
+    let loaded_tx = L::Transaction {
+        gas_coin,
+        inputs,
+        commands,
+    };
     metering::loading::meter(meter, &loaded_tx)?;
     Ok(loaded_tx)
 }

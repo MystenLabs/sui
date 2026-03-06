@@ -4,7 +4,7 @@
 use mysten_common::random::get_rng;
 use rand::Rng;
 use sui_types::TypeTag;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
@@ -25,18 +25,16 @@ pub enum InitRequirement {
     CreateTestCoinCap,
     SeedTestCoinAddressBalance,
     EnableAddressAlias,
+    CreateImmutableObject,
 }
 
-// Flags reserved for metrics use, even though alias testing is not implemented
-// using Operations.
-pub const ALIAS_TX_FLAG: u32 = 1 << 12;
-pub const ALIAS_REMOVE_FLAG: u32 = 1 << 13;
-pub const ALIAS_ADD_FLAG: u32 = 1 << 14;
-pub const INVALID_ALIAS_TX_FLAG: u32 = 1 << 15;
+pub const ALIAS_TX: &str = "alias_tx";
+pub const ALIAS_REMOVE: &str = "alias_remove";
+pub const ALIAS_ADD: &str = "alias_add";
+pub const INVALID_ALIAS_TX: &str = "invalid_alias_tx";
 
 pub struct OperationDescriptor {
     pub name: &'static str,
-    pub flag: u32,
     pub factory: fn() -> Box<dyn Operation>,
 }
 
@@ -55,20 +53,9 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     AddressBalanceOverdraw::DESCRIPTOR,
     AccumulatorBalanceRead::DESCRIPTOR,
     ObjectBalanceOverdraw::DESCRIPTOR,
+    AuthenticatedEventEmit::DESCRIPTOR,
+    ImmutableObjectRead::DESCRIPTOR,
 ];
-
-pub fn describe_flags(flags: u32) -> String {
-    let names: Vec<&str> = ALL_OPERATIONS
-        .iter()
-        .filter(|d| (flags & d.flag) != 0)
-        .map(|d| d.name)
-        .collect();
-    if names.is_empty() {
-        "empty".to_string()
-    } else {
-        names.join(" + ")
-    }
-}
 
 #[derive(Debug, Clone)]
 pub enum ResourceRequest {
@@ -78,6 +65,7 @@ pub enum ResourceRequest {
     ObjectBalance,
     TestCoinCap,
     AccumulatorRoot,
+    ImmutableObject,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -94,11 +82,11 @@ pub struct OperationResources {
     pub balance_pool: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_type: Option<TypeTag>,
+    pub immutable_object: Option<ObjectRef>,
 }
 
 pub trait Operation: Send + Sync {
     fn name(&self) -> &'static str;
-    fn operation_flag(&self) -> u32;
     fn resource_requests(&self) -> Vec<ResourceRequest>;
     fn constraints(&self) -> OperationConstraints {
         OperationConstraints::default()
@@ -117,21 +105,16 @@ pub trait Operation: Send + Sync {
 pub struct SharedCounterIncrement;
 
 impl SharedCounterIncrement {
-    pub const FLAG: u32 = 1 << 0;
+    pub const NAME: &'static str = "shared_counter_increment";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "SharedCounterIncrement",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(SharedCounterIncrement),
     };
 }
 
 impl Operation for SharedCounterIncrement {
     fn name(&self) -> &'static str {
-        "shared_counter_increment"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -165,21 +148,16 @@ impl Operation for SharedCounterIncrement {
 pub struct SharedCounterRead;
 
 impl SharedCounterRead {
-    pub const FLAG: u32 = 1 << 1;
+    pub const NAME: &'static str = "shared_counter_read";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "SharedCounterRead",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(SharedCounterRead),
     };
 }
 
 impl Operation for SharedCounterRead {
     fn name(&self) -> &'static str {
-        "shared_counter_read"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -213,21 +191,16 @@ impl Operation for SharedCounterRead {
 pub struct RandomnessRead;
 
 impl RandomnessRead {
-    pub const FLAG: u32 = 1 << 2;
+    pub const NAME: &'static str = "randomness_read";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "RandomnessRead",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(RandomnessRead),
     };
 }
 
 impl Operation for RandomnessRead {
     fn name(&self) -> &'static str {
-        "randomness_read"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -267,21 +240,16 @@ impl Operation for RandomnessRead {
 pub struct AddressBalanceDeposit;
 
 impl AddressBalanceDeposit {
-    pub const FLAG: u32 = 1 << 3;
+    pub const NAME: &'static str = "address_balance_deposit";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "AddressBalanceDeposit",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(AddressBalanceDeposit),
     };
 }
 
 impl Operation for AddressBalanceDeposit {
     fn name(&self) -> &'static str {
-        "address_balance_deposit"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -331,21 +299,16 @@ impl Operation for AddressBalanceDeposit {
 pub struct AddressBalanceWithdraw;
 
 impl AddressBalanceWithdraw {
-    pub const FLAG: u32 = 1 << 4;
+    pub const NAME: &'static str = "address_balance_withdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "AddressBalanceWithdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(AddressBalanceWithdraw),
     };
 }
 
 impl Operation for AddressBalanceWithdraw {
     fn name(&self) -> &'static str {
-        "address_balance_withdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -388,21 +351,16 @@ impl Operation for AddressBalanceWithdraw {
 pub struct ObjectBalanceDeposit;
 
 impl ObjectBalanceDeposit {
-    pub const FLAG: u32 = 1 << 5;
+    pub const NAME: &'static str = "object_balance_deposit";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "ObjectBalanceDeposit",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(ObjectBalanceDeposit),
     };
 }
 
 impl Operation for ObjectBalanceDeposit {
     fn name(&self) -> &'static str {
-        "object_balance_deposit"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -464,21 +422,16 @@ impl Operation for ObjectBalanceDeposit {
 pub struct ObjectBalanceWithdraw;
 
 impl ObjectBalanceWithdraw {
-    pub const FLAG: u32 = 1 << 6;
+    pub const NAME: &'static str = "object_balance_withdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "ObjectBalanceWithdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(ObjectBalanceWithdraw),
     };
 }
 
 impl Operation for ObjectBalanceWithdraw {
     fn name(&self) -> &'static str {
-        "object_balance_withdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -549,21 +502,16 @@ impl Operation for ObjectBalanceWithdraw {
 pub struct TestCoinMint;
 
 impl TestCoinMint {
-    pub const FLAG: u32 = 1 << 7;
+    pub const NAME: &'static str = "test_coin_mint";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "TestCoinMint",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(TestCoinMint),
     };
 }
 
 impl Operation for TestCoinMint {
     fn name(&self) -> &'static str {
-        "test_coin_mint"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -635,21 +583,16 @@ impl Operation for TestCoinMint {
 pub struct TestCoinAddressDeposit;
 
 impl TestCoinAddressDeposit {
-    pub const FLAG: u32 = 1 << 8;
+    pub const NAME: &'static str = "test_coin_address_deposit";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "TestCoinAddressDeposit",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(TestCoinAddressDeposit),
     };
 }
 
 impl Operation for TestCoinAddressDeposit {
     fn name(&self) -> &'static str {
-        "test_coin_address_deposit"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -722,21 +665,16 @@ impl Operation for TestCoinAddressDeposit {
 pub struct TestCoinAddressWithdraw;
 
 impl TestCoinAddressWithdraw {
-    pub const FLAG: u32 = 1 << 9;
+    pub const NAME: &'static str = "test_coin_address_withdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "TestCoinAddressWithdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(TestCoinAddressWithdraw),
     };
 }
 
 impl Operation for TestCoinAddressWithdraw {
     fn name(&self) -> &'static str {
-        "test_coin_address_withdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -788,21 +726,16 @@ impl Operation for TestCoinAddressWithdraw {
 pub struct TestCoinObjectWithdraw;
 
 impl TestCoinObjectWithdraw {
-    pub const FLAG: u32 = 1 << 10;
+    pub const NAME: &'static str = "test_coin_object_withdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "TestCoinObjectWithdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(TestCoinObjectWithdraw),
     };
 }
 
 impl Operation for TestCoinObjectWithdraw {
     fn name(&self) -> &'static str {
-        "test_coin_object_withdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -873,21 +806,16 @@ impl Operation for TestCoinObjectWithdraw {
 pub struct AddressBalanceOverdraw;
 
 impl AddressBalanceOverdraw {
-    pub const FLAG: u32 = 1 << 11;
+    pub const NAME: &'static str = "address_balance_overdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "AddressBalanceOverdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(AddressBalanceOverdraw),
     };
 }
 
 impl Operation for AddressBalanceOverdraw {
     fn name(&self) -> &'static str {
-        "address_balance_overdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -939,21 +867,16 @@ impl Operation for AddressBalanceOverdraw {
 pub struct AccumulatorBalanceRead;
 
 impl AccumulatorBalanceRead {
-    pub const FLAG: u32 = 1 << 16;
+    pub const NAME: &'static str = "accumulator_balance_read";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "AccumulatorBalanceRead",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(AccumulatorBalanceRead),
     };
 }
 
 impl Operation for AccumulatorBalanceRead {
     fn name(&self) -> &'static str {
-        "accumulator_balance_read"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -997,21 +920,16 @@ impl Operation for AccumulatorBalanceRead {
 pub struct ObjectBalanceOverdraw;
 
 impl ObjectBalanceOverdraw {
-    pub const FLAG: u32 = 1 << 16;
+    pub const NAME: &'static str = "object_balance_overdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "ObjectBalanceOverdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(ObjectBalanceOverdraw),
     };
 }
 
 impl Operation for ObjectBalanceOverdraw {
     fn name(&self) -> &'static str {
-        "object_balance_overdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -1077,5 +995,108 @@ impl Operation for ObjectBalanceOverdraw {
 
         let recipient = SuiAddress::random_for_testing_only();
         builder.transfer_arg(recipient, coin);
+    }
+}
+
+pub struct AuthenticatedEventEmit;
+
+impl AuthenticatedEventEmit {
+    pub const NAME: &'static str = "authenticated_event_emit";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(AuthenticatedEventEmit),
+    };
+}
+
+impl Operation for AuthenticatedEventEmit {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let mut rng = get_rng();
+        let count: u64 = rng.gen_range(1..=5);
+
+        let start_arg = builder.pure(count).unwrap();
+        let count_arg = builder.pure(count).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("auth_event").unwrap(),
+            Identifier::new("emit_multiple").unwrap(),
+            vec![],
+            vec![start_arg, count_arg],
+        );
+    }
+}
+
+pub struct ImmutableObjectRead;
+
+impl ImmutableObjectRead {
+    pub const NAME: &'static str = "immutable_object_read";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(ImmutableObjectRead),
+    };
+}
+
+impl Operation for ImmutableObjectRead {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::ImmutableObject]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::CreateImmutableObject]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let obj_ref = resources
+            .immutable_object
+            .expect("ImmutableObject not resolved");
+
+        let obj_arg = builder.obj(ObjectArg::ImmOrOwnedObject(obj_ref)).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("immutable_object").unwrap(),
+            Identifier::new("value").unwrap(),
+            vec![],
+            vec![obj_arg],
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_operation_names_are_unique() {
+        let mut names = std::collections::HashSet::new();
+        for desc in ALL_OPERATIONS {
+            assert!(
+                names.insert(desc.name),
+                "Duplicate operation name: {}",
+                desc.name
+            );
+        }
     }
 }

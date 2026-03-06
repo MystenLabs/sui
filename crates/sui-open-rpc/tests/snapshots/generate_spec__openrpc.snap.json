@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "114",
+              "maxSupportedProtocolVersion": "115",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1379,6 +1379,7 @@
                 "flexible_tx_context_positions": false,
                 "fresh_vm_on_framework_upgrade": false,
                 "gas_rounding_halve_digits": false,
+                "gasless_transaction_drop_safety": false,
                 "generate_df_type_layouts": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
@@ -1417,6 +1418,7 @@
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
                 "record_time_estimate_processed": false,
                 "reject_mutable_random_on_entry_functions": false,
+                "relax_valid_during_for_owned_inputs": false,
                 "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,

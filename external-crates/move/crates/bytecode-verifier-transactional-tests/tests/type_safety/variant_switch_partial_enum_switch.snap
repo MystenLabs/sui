@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/variant_switch_partial_enum_switch.mvir
 ---
 processed 3 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: undefined,
     indices: [(VariantTag, 0)],
     offsets: [],
+    message: "Jump table length 0 does not equal number of variants 1",
 }
 
 task 2, lines 30-43:
@@ -22,4 +22,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: undefined,
     indices: [(VariantTag, 1)],
     offsets: [],
+    message: "Jump table length 1 does not equal number of variants 2",
 }

@@ -18,7 +18,10 @@ bin_version::bin_version!();
 
 #[derive(Parser)]
 struct App {
-    credentials: String,
+    /// Path to GCP service account JSON key file. If not provided, uses Application Default
+    /// Credentials (GOOGLE_APPLICATION_CREDENTIALS or metadata server).
+    #[clap(long)]
+    credentials: Option<String>,
     instance_id: String,
     #[clap(default_value = "[::1]:8000")]
     address: String,
@@ -53,9 +56,6 @@ async fn main() -> Result<()> {
         .install_default()
         .expect("Failed to install CryptoProvider");
     let app = App::parse();
-    unsafe {
-        std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", app.credentials.clone());
-    };
     let server_version = Some(ServerVersion::new("sui-kv-rpc", VERSION));
     let registry_service = mysten_metrics::start_prometheus_server(
         format!("{}:{}", app.metrics_host, app.metrics_port).parse()?,
@@ -71,6 +71,7 @@ async fn main() -> Result<()> {
         channel_timeout,
         server_version,
         &registry,
+        app.credentials,
     )
     .await?;
     let addr = app.address.parse()?;

@@ -8,7 +8,6 @@ info:
   no_collapsed_sections: true
   include_dep_diagrams: false
   include_call_diagrams: false
-input_file: crates/move-docgen-tests/tests/move/code_block/Move.toml
 ---
 <a name="a_m"></a>
 

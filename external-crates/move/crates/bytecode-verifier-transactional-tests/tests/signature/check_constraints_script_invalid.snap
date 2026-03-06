@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/signature/check_constraints_script_invalid.mvir
 ---
 processed 9 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Copy, ] got type actual TypeParameter(0) with incompatible abilities [Drop, ]",
 }
 
 task 2, lines 26-33:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Drop, ] got type actual TypeParameter(0) with incompatible abilities [Copy, Store, ]",
 }
 
 task 3, lines 35-42:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Store, ] got type actual TypeParameter(0) with incompatible abilities [Key, ]",
 }
 
 task 4, lines 44-51:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Key, ] got type actual TypeParameter(0) with incompatible abilities []",
 }
 
 task 5, lines 53-60:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Copy, ] got type actual StructInstantiation(DatatypeHandleIndex(1), [TypeParameter(0)]) with incompatible abilities []",
 }
 
 task 6, lines 62-69:
@@ -62,6 +66,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Drop, ] got type actual StructInstantiation(DatatypeHandleIndex(1), [TypeParameter(0)]) with incompatible abilities []",
 }
 
 task 7, lines 71-78:
@@ -72,6 +77,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Store, ] got type actual StructInstantiation(DatatypeHandleIndex(1), [TypeParameter(0)]) with incompatible abilities []",
 }
 
 task 8, lines 80-87:
@@ -82,4 +88,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Key, ] got type actual StructInstantiation(DatatypeHandleIndex(1), [TypeParameter(0)]) with incompatible abilities []",
 }

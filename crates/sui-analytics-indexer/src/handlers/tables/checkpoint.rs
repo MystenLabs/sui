@@ -31,7 +31,6 @@ impl Row for CheckpointRow {
 #[async_trait]
 impl Processor for CheckpointProcessor {
     const NAME: &'static str = Pipeline::Checkpoint.name();
-    const FANOUT: usize = 16;
     type Value = CheckpointRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

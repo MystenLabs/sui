@@ -1,0 +1,45 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== M1.move ========================================================
+-- test 0 -------------------
+use line: 17, use_ndx: 0
+References:
+  'int_match' at int_match.move:3:16
+  'int_match' at M1.move:14:31
+  'int_match_function' at M1.move:14:44
+  'int_match_function' at M1.move:17:9
+  'int_match' at M1.move:25:31
+  'int_match_function' at M1.move:25:44
+  'int_match_function' at M1.move:28:9
+  'int_match' at M1.move:36:31
+  'int_match_function' at M1.move:36:44
+  'int_match_function' at M1.move:39:9
+
+-- test 1 -------------------
+use line: 28, use_ndx: 0
+References:
+  'int_match' at int_match.move:3:16
+  'int_match' at M1.move:14:31
+  'int_match_function' at M1.move:14:44
+  'int_match_function' at M1.move:17:9
+  'int_match' at M1.move:25:31
+  'int_match_function' at M1.move:25:44
+  'int_match_function' at M1.move:28:9
+  'int_match' at M1.move:36:31
+  'int_match_function' at M1.move:36:44
+  'int_match_function' at M1.move:39:9
+
+-- test 2 -------------------
+use line: 39, use_ndx: 0
+References:
+  'int_match' at int_match.move:3:16
+  'int_match' at M1.move:14:31
+  'int_match_function' at M1.move:14:44
+  'int_match_function' at M1.move:17:9
+  'int_match' at M1.move:25:31
+  'int_match_function' at M1.move:25:44
+  'int_match_function' at M1.move:28:9
+  'int_match' at M1.move:36:31
+  'int_match_function' at M1.move:36:44
+  'int_match_function' at M1.move:39:9

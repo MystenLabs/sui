@@ -230,8 +230,36 @@ mod checked {
             true, // gas_ownership_checks
         )?;
         check_objects(transaction, input_objects)?;
+        check_replay_protection(transaction, input_objects)?;
 
         Ok(gas_status)
+    }
+
+    /// All transactions must have replay protection, which can come from:
+    /// - ValidDuring expiration with at most two-epoch range (max_epoch = min_epoch + 1)
+    /// - Owned input objects (which have unique versions/digests)
+    /// - Coin reservations (which have epoch constraint like ValidDuring)
+    ///
+    /// This check happens here (not at validation time) because we need access to the
+    /// actual objects to determine if they are owned vs immutable.
+    fn check_replay_protection(
+        transaction: &TransactionData,
+        input_objects: &InputObjects,
+    ) -> UserInputResult<()> {
+        let has_replay_protection = transaction.expiration().is_replay_protected()
+            || !transaction.gas_data().payment.is_empty()
+            || input_objects
+                .iter()
+                .any(|obj| obj.is_replay_protected_input());
+
+        if !has_replay_protection {
+            return Err(UserInputError::InvalidExpiration {
+                error: "Transactions must either have address-owned inputs, or a ValidDuring expiration with at most two epochs of validity"
+                    .to_string(),
+            });
+        }
+
+        Ok(())
     }
 
     fn check_receiving_objects(

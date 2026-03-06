@@ -27,7 +27,7 @@ use move_compiler::{
 use move_ir_types::location::sp;
 use move_symbol_pool::Symbol;
 
-use std::{collections::BTreeMap, path::PathBuf, sync::LazyLock};
+use std::{path::PathBuf, sync::LazyLock};
 
 /// List of completion items of Move's primitive types.
 pub static PRIMITIVE_TYPE_COMPLETIONS: LazyLock<Vec<CompletionItem>> = LazyLock::new(|| {
@@ -39,15 +39,21 @@ pub static PRIMITIVE_TYPE_COMPLETIONS: LazyLock<Vec<CompletionItem>> = LazyLock:
     primitive_types
 });
 
-/// Get import imsertion info for the cursor's module.
+/// Get import insertion info for the file where the cursor is located.
 pub fn import_insertion_info(
     symbols: &Symbols,
     cursor: &CursorContext,
 ) -> Option<AutoImportInsertionInfo> {
-    cursor
-        .module
-        .and_then(|m| mod_defs(symbols, &m.value))
-        .and_then(|m| m.import_insert_info)
+    // Get the file path from the cursor's location
+    let fhash = cursor.loc.file_hash();
+    let fpath = symbols.files.file_path(&fhash);
+    // For auto-imports, find the module whose range contains the cursor
+    symbols.mod_parsing_info.get(fpath).and_then(|mod_map| {
+        mod_map
+            .iter()
+            .find(|(mod_loc, _)| mod_loc.contains(&cursor.loc))
+            .and_then(|(_, mod_info)| mod_info.import_insert_info)
+    })
 }
 
 /// Get definitions for a given module.
@@ -322,23 +328,15 @@ pub fn compute_cursor(
     let mut symbols_computation_data = SymbolsComputationData::new();
     // we only compute cursor context and tag it on the existing symbols to avoid spending time
     // recomputing all symbols (saves quite a bit of time when running the test suite)
-    let typed_mod_named_address_maps = compiled_pkg_info
-        .program
-        .typed_modules
-        .iter()
-        .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
-        .collect::<BTreeMap<_, _>>();
     let mut cursor_context = compute_symbols_pre_process(
         &mut symbols_computation_data,
         compiled_pkg_info,
         cursor_info,
-        &typed_mod_named_address_maps,
     );
     cursor_context = compute_symbols_parsed_program(
         &mut symbols_computation_data,
         compiled_pkg_info,
         cursor_context,
-        &typed_mod_named_address_maps,
     );
     symbols.cursor_context = cursor_context;
 }
