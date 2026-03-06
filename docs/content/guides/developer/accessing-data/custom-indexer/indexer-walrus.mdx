@@ -115,10 +115,3 @@ All Walrus blobs carry an associated lifetime, so you must track expiration chan
 - Construct PTBs that make calls to manage blob lifetime and ping the `Metadata` dynamic field in the same transaction.
 
 If you don't want to perform additional work on the write side, then you are limited to the first two options. This requires two pipelines, one to do the work in the previous section of indexing metadata, and another to index `BlobCertified` events (or `Blob` object changes.)
-
-## Related links
-
-<RelatedLink href="https://docs.wal.app/" label="Walrus Docs" desc="Walrus is a decentralized storage and data availability protocol designed specifically for large binary files, or blobs." />
-<RelatedLink to="/concepts/data-access/custom-indexers.mdx" />
-<RelatedLink to="/guides/developer/objects/dynamic-fields.mdx" />
-<RelatedLink href="https://github.com/MystenLabs/sui/tree/main/examples/rust/walrus-attributes-indexer" label="Indexer with Walrus example files" desc="Directory in the Sui repo containing the files for this example." />
