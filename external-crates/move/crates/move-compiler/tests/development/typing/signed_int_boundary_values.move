@@ -47,21 +47,66 @@ module 0x42::m {
         let _x: i128 = 170141183460469231731687303715884105727i128;
     }
 
-    // Negation of zero
+    // Negation of zero for all types
     fun neg_zero_i8() {
-        let _x: i8 = -(0i8);
+        let _x: i8 = -0i8;
+    }
+
+    fun neg_zero_i16() {
+        let _x: i16 = -0i16;
+    }
+
+    fun neg_zero_i32() {
+        let _x: i32 = -0i32;
     }
 
     fun neg_zero_i64() {
-        let _x: i64 = -(0i64);
+        let _x: i64 = -0i64;
     }
 
-    // Negation of max (produces min + 1)
+    fun neg_zero_i128() {
+        let _x: i128 = -0i128;
+    }
+
+    // Negation of one for all types
+    fun neg_one_i8() {
+        let _x: i8 = -1i8;
+    }
+
+    fun neg_one_i16() {
+        let _x: i16 = -1i16;
+    }
+
+    fun neg_one_i32() {
+        let _x: i32 = -1i32;
+    }
+
+    fun neg_one_i64() {
+        let _x: i64 = -1i64;
+    }
+
+    fun neg_one_i128() {
+        let _x: i128 = -1i128;
+    }
+
+    // Negation of max (produces min + 1) for all types
     fun neg_max_i8() {
-        let _x: i8 = -(127i8);
+        let _x: i8 = -127i8;
+    }
+
+    fun neg_max_i16() {
+        let _x: i16 = -32767i16;
+    }
+
+    fun neg_max_i32() {
+        let _x: i32 = -2147483647i32;
     }
 
     fun neg_max_i64() {
-        let _x: i64 = -(9223372036854775807i64);
+        let _x: i64 = -9223372036854775807i64;
+    }
+
+    fun neg_max_i128() {
+        let _x: i128 = -170141183460469231731687303715884105727i128;
     }
 }

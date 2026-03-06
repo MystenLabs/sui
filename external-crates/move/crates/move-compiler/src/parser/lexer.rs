@@ -923,27 +923,21 @@ fn get_hex_number(text: &str, edition: Edition) -> (Tok, usize) {
 // Given the text for a number literal and the length for the characters that match to the number
 // portion, checks for a typed suffix.
 fn get_number_maybe_with_suffix(text: &str, num_text_len: usize, edition: Edition) -> (Tok, usize) {
+    use crate::shared::{SIGNED_INT_SUFFIXES, UNSIGNED_INT_SUFFIXES};
     let rest = &text[num_text_len..];
-    let signed = edition.supports(FeatureGate::SignedIntegers);
-    if rest.starts_with("u8") || (signed && rest.starts_with("i8")) {
-        (Tok::NumTypedValue, num_text_len + 2)
-    } else if rest.starts_with("u64")
-        || rest.starts_with("u16")
-        || rest.starts_with("u32")
-        || (signed && rest.starts_with("i64"))
-        || (signed && rest.starts_with("i16"))
-        || (signed && rest.starts_with("i32"))
-    {
-        (Tok::NumTypedValue, num_text_len + 3)
-    } else if rest.starts_with("u128")
-        || rest.starts_with("u256")
-        || (signed && rest.starts_with("i128"))
-    {
-        (Tok::NumTypedValue, num_text_len + 4)
-    } else {
-        // No typed suffix
-        (Tok::NumValue, num_text_len)
+    for suffix in UNSIGNED_INT_SUFFIXES {
+        if rest.starts_with(suffix) {
+            return (Tok::NumTypedValue, num_text_len + suffix.len());
+        }
     }
+    if edition.supports(FeatureGate::SignedIntegers) {
+        for suffix in SIGNED_INT_SUFFIXES {
+            if rest.starts_with(suffix) {
+                return (Tok::NumTypedValue, num_text_len + suffix.len());
+            }
+        }
+    }
+    (Tok::NumValue, num_text_len)
 }
 
 // Return the length of the quoted string, or None if there is no closing quote.
