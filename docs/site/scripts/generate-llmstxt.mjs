@@ -216,7 +216,7 @@ for (const file of files) {
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const segments = docUrlPath.replace(/^\//, "").split("/");
+  const segments = urlPath.replace(/^\//, "").split("/");
   // segments[0] is "docs", so use segments[1] for category grouping
   const section = segments.length > 2
     ? toSectionTitle(segments[1])
