@@ -178,6 +178,41 @@ fun metadata_invalid_worker_addr() {
     abort
 }
 
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidNetPubkey)]
+fun metadata_invalid_equal_network_pubkey_next_epoch() {
+    let ctx = &mut tx_context::dummy();
+    let mut validator = validator_builder::preset().build(ctx);
+    let pubkey_bytes = *validator.worker_pubkey_bytes();
+
+    validator.update_next_epoch_network_pubkey(pubkey_bytes);
+
+    abort
+}
+
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidWorkerPubkey)]
+fun metadata_invalid_equal_worker_pubkey_next_epoch() {
+    let ctx = &mut tx_context::dummy();
+    let mut validator = validator_builder::preset().build(ctx);
+    let pubkey_bytes = *validator.network_pubkey_bytes();
+
+    validator.update_next_epoch_worker_pubkey(pubkey_bytes);
+
+    abort
+}
+
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidWorkerPubkey)]
+fun metadata_invalid_equal_both_pubkey_next_epoch() {
+    let ctx = &mut tx_context::dummy();
+    let mut validator = validator_builder::preset().build(ctx);
+    let mut pubkey_bytes = *validator.network_pubkey_bytes();
+    *pubkey_bytes.borrow_mut(0) = 0;
+
+    validator.update_next_epoch_network_pubkey(pubkey_bytes);
+    validator.update_next_epoch_worker_pubkey(pubkey_bytes);
+
+    abort
+}
+
 #[test, allow(implicit_const_copy)]
 fun validator_update_metadata_ok() {
     let new_protocol_pub_key =
