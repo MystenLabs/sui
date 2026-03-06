@@ -1843,6 +1843,3 @@ ZkLoginSignature.jwkId
 
 ZkLoginVerifyResult.success
   => {}
-
-ZkLoginVerifyResult.error
-  => {}
