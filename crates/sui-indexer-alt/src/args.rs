@@ -59,6 +59,25 @@ pub enum Command {
         config: Vec<PathBuf>,
     },
 
+    /// Reset the watermark for one or more pipelines, causing them to re-process from the
+    /// beginning (or the configured --first-checkpoint) on next startup. This is useful for
+    /// correcting data in sequential pipelines without manually modifying the database.
+    ResetPipeline {
+        /// The URL of the database to connect to.
+        #[clap(
+            long,
+            default_value = "postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt"
+        )]
+        database_url: Url,
+
+        #[command(flatten)]
+        db_args: DbArgs,
+
+        /// Pipeline names to reset. Can be specified multiple times.
+        #[arg(long, required = true, action = clap::ArgAction::Append)]
+        pipeline: Vec<String>,
+    },
+
     /// Wipe the database of its contents
     ResetDatabase {
         /// The URL of the database to connect to.
