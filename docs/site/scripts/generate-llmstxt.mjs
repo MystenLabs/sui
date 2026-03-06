@@ -24,9 +24,24 @@ const baseUrl      = flags["base-url"]    ?? "";
 const outputFile = flags["output"] ?? path.join(scriptDir, "../../static/llms.txt");
 const siteDesc     = flags["description"] ?? "";
 
+// ── Auto-detect Vercel preview URL ───────────────────────────────────────────
+// Vercel sets VERCEL_URL (e.g. "my-site-abc123.vercel.app") on every build.
+// VERCEL_ENV is "production", "preview", or "development".
+// For preview deploys, use the Vercel URL so llms.txt links resolve on the
+// preview domain. For production, fall through to --base-url or docusaurus config.
+function resolveVercelBaseUrl() {
+  const vercelUrl = process.env.VERCEL_URL;
+  const vercelEnv = process.env.VERCEL_ENV;
+  if (vercelUrl && vercelEnv === "preview") {
+    return `https://${vercelUrl}`;
+  }
+  return "";
+}
+
 // ── Auto-detect docusaurus config ────────────────────────────────────────────
 let resolvedName = flags["name"] ?? null;
-let resolvedBaseUrl = baseUrl;
+// Priority: --base-url flag > VERCEL_URL (preview only) > docusaurus config url
+let resolvedBaseUrl = baseUrl || resolveVercelBaseUrl();
 
 function findDocusaurusConfig(startDir) {
   let dir = startDir;
