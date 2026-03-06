@@ -37,7 +37,6 @@ If you'd like to view the Vercel preview before your changes are ready for revie
 
 
 
-
 ## Contributing
 
 Sui is for the community. Contribute for the benefit of all.
