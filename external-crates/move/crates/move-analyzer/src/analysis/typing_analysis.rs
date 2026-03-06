@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    analysis::{DefMap, add_member_use_def, find_datatype},
+    analysis::{CurrentLocationContext, DefMap, add_member_use_def, find_datatype},
     compiler_info::CompilerAnalysisInfo,
     symbols::{
         def_info::DefInfo,
-        mod_defs::{MemberDefInfo, ModuleDefs},
+        mod_defs::{MemberDefInfo, ModuleDefs, ModuleParsingInfo},
         type_def_loc,
         use_def::{References, UseDef, UseDefMap},
     },
@@ -38,6 +38,8 @@ pub struct TypingAnalysisContext<'a> {
     /// string so that we can access it regardless of the ModuleIdent representation
     /// (e.g., in the parsing AST or in the typing AST)
     pub mod_outer_defs: &'a mut BTreeMap<String, ModuleDefs>,
+    /// Per-module parsing data, keyed by file hash and then by module location
+    pub mod_parsing_info: &'a mut BTreeMap<FileHash, BTreeMap<Loc, ModuleParsingInfo>>,
     /// Mapped file information for translating locations into positions
     pub files: &'a MappedFiles,
     /// Associates uses for a given definition to allow displaying all references
@@ -46,9 +48,8 @@ pub struct TypingAnalysisContext<'a> {
     pub def_info: &'a mut DefMap,
     /// A UseDefMap for a given file
     pub use_defs: &'a mut BTreeMap<FileHash, UseDefMap>,
-    /// Current module identifier string (needs to be appropriately set before the module
-    /// processing starts)
-    pub current_mod_ident_str: Option<String>,
+    /// Current location context (set when inside a module member, None otherwise)
+    pub current_location: Option<CurrentLocationContext>,
     /// Alias lengths in access paths for a given module (needs to be appropriately
     /// set before the module processing starts)
     pub alias_lengths: &'a BTreeMap<Position, usize>,
@@ -127,6 +128,21 @@ impl TypingAnalysisContext<'_> {
     fn reset_for_module_member(&mut self) {
         self.type_params = BTreeMap::new();
         self.expression_scope = OrdMap::new();
+    }
+
+    /// Find the module location that contains the given member location.
+    /// This is used in typing analysis to determine which module's parsing info to update.
+    fn find_mod_loc(&self, member_loc: &Loc) -> Option<Loc> {
+        let file_hash = member_loc.file_hash();
+        let mod_map = self.mod_parsing_info.get(&file_hash)?;
+        // Find the module whose location range contains this member
+        // (linear scan but number of modules in a file is expected to be small)
+        for mod_loc in mod_map.keys() {
+            if mod_loc.contains(member_loc) {
+                return Some(*mod_loc);
+            }
+        }
+        None
     }
 
     /// Add type parameter to a scope holding type params
@@ -359,9 +375,7 @@ impl TypingAnalysisContext<'_> {
         let _ = std::mem::replace(self.references, refs);
 
         if result.is_none() {
-            // TODO: re-enable this after full support for module extensions
-            // is implemented, otherwise module extension test will faile here.
-            //            debug_assert!(false);
+            debug_assert!(false);
         }
         result
     }
@@ -592,14 +606,16 @@ impl TypingAnalysisContext<'_> {
         let Some(use_def) = call_use_def else {
             return;
         };
-        assert!(self.current_mod_ident_str.is_some());
-        let Some(callsite_mod_defs) = self
-            .mod_outer_defs
-            .get_mut(&self.current_mod_ident_str.clone().unwrap())
-        else {
+        let Some(ref current_location) = self.current_location else {
             return;
         };
-        if let Some(info) = callsite_mod_defs.call_infos.get_mut(&fun_use.loc) {
+        let Some(mod_map) = self.mod_parsing_info.get_mut(&current_location.file_hash) else {
+            return;
+        };
+        let Some(mod_parsing_info) = mod_map.get_mut(&current_location.mod_loc) else {
+            return;
+        };
+        if let Some(info) = mod_parsing_info.call_infos.get_mut(&fun_use.loc) {
             info.def_loc = Some(use_def.def_loc());
         }
     }
@@ -708,9 +724,18 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
         sdef: &N::StructDefinition,
     ) {
         self.reset_for_module_member();
-        assert!(self.current_mod_ident_str.is_none());
-        self.current_mod_ident_str = Some(expansion_mod_ident_to_map_key(&module.value));
+        assert!(self.current_location.is_none());
         let file_hash = struct_name.loc().file_hash();
+        // Extensions are inlined into the base module in the typed AST, so we need
+        // to find the actual module location from the member's source location.
+        let mod_loc = self.find_mod_loc(&struct_name.loc());
+        if let Some(mod_loc) = mod_loc {
+            self.current_location = Some(CurrentLocationContext::new(
+                expansion_mod_ident_to_map_key(&module.value),
+                file_hash,
+                mod_loc,
+            ));
+        }
         // enter self-definition for struct name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&struct_name.loc());
         let struct_info = self.def_info.get(&struct_name.loc()).unwrap();
@@ -759,7 +784,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                 }
             }
         }
-        self.current_mod_ident_str = None;
+        self.current_location = None;
     }
 
     fn visit_enum_custom(
@@ -769,9 +794,18 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
         edef: &N::EnumDefinition,
     ) -> bool {
         self.reset_for_module_member();
-        assert!(self.current_mod_ident_str.is_none());
-        self.current_mod_ident_str = Some(expansion_mod_ident_to_map_key(&module.value));
+        assert!(self.current_location.is_none());
         let file_hash = enum_name.loc().file_hash();
+        // Extensions are inlined into the base module in the typed AST, so we need
+        // to find the actual module location from the member's source location.
+        let mod_loc = self.find_mod_loc(&enum_name.loc());
+        if let Some(mod_loc) = mod_loc {
+            self.current_location = Some(CurrentLocationContext::new(
+                expansion_mod_ident_to_map_key(&module.value),
+                file_hash,
+                mod_loc,
+            ));
+        }
         // enter self-definition for enum name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&enum_name.loc());
         let enum_info = self.def_info.get(&enum_name.loc()).unwrap();
@@ -795,7 +829,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
         for (vname, vdef) in edef.variants.key_cloned_iter() {
             self.visit_variant(&module, &enum_name, vname, vdef);
         }
-        self.current_mod_ident_str = None;
+        self.current_location = None;
         true
     }
 
@@ -861,9 +895,19 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
         cdef: &T::Constant,
     ) {
         self.reset_for_module_member();
-        assert!(self.current_mod_ident_str.is_none());
-        self.current_mod_ident_str = Some(expansion_mod_ident_to_map_key(&module.value));
+        assert!(self.current_location.is_none());
         let loc = constant_name.loc();
+        let file_hash = loc.file_hash();
+        // Extensions are inlined into the base module in the typed AST, so we need
+        // to find the actual module location from the member's source location.
+        let mod_loc = self.find_mod_loc(&loc);
+        if let Some(mod_loc) = mod_loc {
+            self.current_location = Some(CurrentLocationContext::new(
+                expansion_mod_ident_to_map_key(&module.value),
+                file_hash,
+                mod_loc,
+            ));
+        }
         // enter self-definition for const name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&loc);
         let const_info = self.def_info.get_mut(&loc).unwrap();
@@ -871,7 +915,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
 
         let DefInfo::Const(_, _, _, value, _) = const_info else {
             debug_assert!(false);
-            self.current_mod_ident_str = None;
+            self.current_location = None;
             return;
         };
         if let Some(const_string) = self
@@ -895,7 +939,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             ),
         );
         self.visit_exp(&cdef.value);
-        self.current_mod_ident_str = None;
+        self.current_location = None;
     }
 
     fn visit_function(
@@ -908,9 +952,19 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
         if ignored_function(function_name.value()) {
             return;
         }
-        assert!(self.current_mod_ident_str.is_none());
-        self.current_mod_ident_str = Some(expansion_mod_ident_to_map_key(&module.value));
+        assert!(self.current_location.is_none());
         let loc = function_name.loc();
+        let file_hash = loc.file_hash();
+        // Extensions are inlined into the base module in the typed AST, so we need
+        // to find the actual module location from the member's source location.
+        let mod_loc = self.find_mod_loc(&loc);
+        if let Some(mod_loc) = mod_loc {
+            self.current_location = Some(CurrentLocationContext::new(
+                expansion_mod_ident_to_map_key(&module.value),
+                file_hash,
+                mod_loc,
+            ));
+        }
         // first, enter self-definition for function name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&loc);
         let fun_info = self.def_info.get(&loc).unwrap();
@@ -959,7 +1013,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
 
         // clear type params from the scope
         self.type_params.clear();
-        self.current_mod_ident_str = None;
+        self.current_location = None;
     }
 
     fn visit_lvalue(&mut self, kind: &LValueKind, lvalue: &T::LValue) {
@@ -1137,9 +1191,9 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                     // TODO: if above ever changes, we need to update this (presumably
                     // `ErrorConstant` will carry module ident at this point)
                     if let Some(name) = error_constant
-                        && let Some(mod_def) = visitor
-                            .mod_outer_defs
-                            .get(visitor.current_mod_ident_str.as_ref().unwrap())
+                        && let Some(ref current_location) = visitor.current_location
+                        && let Some(mod_def) =
+                            visitor.mod_outer_defs.get(&current_location.mod_ident_str)
                     {
                         visitor.add_const_use_def(&mod_def.ident.clone(), name);
                     };

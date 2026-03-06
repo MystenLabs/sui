@@ -27,7 +27,7 @@ References:
 -- test 3 -------------------
 use line: 26, use_ndx: 0
 References:
-  'match_mut' at mut_match.move:3:16
   'match_mut' at M1.move:23:31
   'match_mut_fun' at M1.move:23:44
   'match_mut_fun' at M1.move:26:9
+  'match_mut' at mut_match.move:3:16

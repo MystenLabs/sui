@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module contains code for handling module-leve definitions
+//! This module contains code for handling module-level definitions
 //! and other module-related info.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -18,9 +18,11 @@ use move_compiler::{
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
+/// Per-MODULE definitions from the typed AST (already merged for extensions).
+/// This is cacheable for dependencies.
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct ModuleDefs {
-    /// File where this module is located
+    /// File where this module is located (base module's file for extensions)
     pub fhash: FileHash,
     /// Location where this module is located
     pub name_loc: Loc,
@@ -34,15 +36,26 @@ pub struct ModuleDefs {
     pub constants: BTreeMap<Symbol, MemberDef>,
     /// Function definitions
     pub functions: BTreeMap<Symbol, MemberDef>,
+    /// Dependencies summary
+    pub neighbors: UniqueMap<ModuleIdent, Neighbor>,
+}
+
+/// Per-MODULE parsing data collected during parsing analysis.
+/// Keyed by module location (mod_loc) to uniquely identify modules
+/// within a file (e.g., multiple module extensions in the same file).
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
+pub struct ModuleParsingInfo {
+    /// Module identifier string for the module this belongs to.
+    /// Used to detect extension files (files whose hash differs from
+    /// the base module's fhash but share the same module identifier).
+    pub mod_ident_str: String,
     /// Definitions where the type is not explicitly specified
     /// and should be inserted as an inlay hint
     pub untyped_defs: BTreeSet<Loc>,
     /// Information about calls in this module
     pub call_infos: BTreeMap<Loc, CallInfo>,
-    /// Position where auto-imports should be inserted
+    /// Position where auto-imports should be inserted for this module
     pub import_insert_info: Option<AutoImportInsertionInfo>,
-    /// Dependencies summary
-    pub neighbors: UniqueMap<ModuleIdent, Neighbor>,
 }
 
 /// Definition of a module member
@@ -88,7 +101,7 @@ pub struct CallInfo {
 
 /// Information needed for auto-import insertion. We do our best
 /// to make the insertion fit with what's already in the source file.
-/// In particular, if uses are already preasent, we insert the new import
+/// In particular, if uses are already present, we insert the new import
 /// in the following line keeping the tabulation of the previous import.
 /// If no imports are present, we insert the new import before the first
 /// module member (or before its doc comment if it exists), pushing
@@ -127,12 +140,23 @@ impl ModuleDefs {
         self.fhash
     }
 
-    pub fn untyped_defs(&self) -> &BTreeSet<Loc> {
-        &self.untyped_defs
-    }
-
     pub fn ident(&self) -> &ModuleIdent_ {
         &self.ident
+    }
+}
+
+impl ModuleParsingInfo {
+    pub fn new(mod_ident_str: String) -> Self {
+        Self {
+            mod_ident_str,
+            untyped_defs: BTreeSet::new(),
+            call_infos: BTreeMap::new(),
+            import_insert_info: None,
+        }
+    }
+
+    pub fn untyped_defs(&self) -> &BTreeSet<Loc> {
+        &self.untyped_defs
     }
 }
 

@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    analysis::{DefMap, add_member_use_def},
+    analysis::{CurrentLocationContext, DefMap, add_member_use_def},
     symbols::{
         compilation::ParsedDefinitions,
         cursor::{CursorContext, CursorDefinition, CursorPosition},
         ignored_function,
-        mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, ModuleDefs},
+        mod_defs::{
+            AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, ModuleDefs,
+            ModuleParsingInfo,
+        },
         parsed_address,
         use_def::{References, UseDef, UseDefMap},
     },
@@ -20,16 +23,19 @@ use move_command_line_common::files::FileHash;
 use std::{collections::BTreeMap, sync::Arc};
 
 use move_compiler::{
+    expansion::ast as E,
     parser::ast as P,
-    shared::{Identifier, Name, NamedAddressMap, files::MappedFiles},
+    shared::{Identifier, Name, NamedAddressMap, NamedAddressMaps, files::MappedFiles},
 };
-use move_ir_types::location::*;
+use move_ir_types::location::{sp, *};
 
 pub struct ParsingAnalysisContext<'a> {
-    /// Outermost definitions in a module (structs, consts, functions), keyd on a ModuleIdent
+    /// Outermost definitions in a module (structs, consts, functions), keyed on a ModuleIdent
     /// string so that we can access it regardless of the ModuleIdent representation
     /// (e.g., in the parsing AST or in the typing AST)
     pub mod_outer_defs: &'a mut BTreeMap<String, ModuleDefs>,
+    /// Per-module parsing info, keyed by file hash and then by module location
+    pub mod_parsing_info: &'a mut BTreeMap<FileHash, BTreeMap<Loc, ModuleParsingInfo>>,
     /// Mapped file information for translating locations into positions
     pub files: &'a MappedFiles,
     /// Additional information about definitions
@@ -38,14 +44,13 @@ pub struct ParsingAnalysisContext<'a> {
     pub references: &'a mut References,
     /// A UseDefMap for a given file
     pub use_defs: &'a mut BTreeMap<FileHash, UseDefMap>,
-    /// Current module identifier string (needs to be appropriately set before the module
-    /// processing starts)
-    pub current_mod_ident_str: Option<String>,
+    /// Current location context (set when inside a module, None otherwise)
+    pub current_location: Option<CurrentLocationContext>,
     /// Module name lengths in access paths for a given module (needs to be appropriately
     /// set before the module processing starts)
     pub alias_lengths: BTreeMap<Position, usize>,
     /// A per-package mapping from package names to their addresses (needs to be appropriately set
-    /// before the package processint starts)
+    /// before the package processing starts)
     pub pkg_addresses: Arc<NamedAddressMap>,
     /// Cursor contextual information, computed as part of the traversal.
     pub cursor: Option<&'a mut CursorContext>,
@@ -74,13 +79,12 @@ impl<'a> ParsingAnalysisContext<'a> {
         &mut self,
         prog: &'a ParsedDefinitions,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
-        typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         prog.source_definitions.iter().for_each(|pkg_def| {
-            self.pkg_symbols(pkg_def, mod_to_alias_lengths, typed_mod_named_address_maps)
+            self.pkg_symbols(pkg_def, mod_to_alias_lengths, &prog.named_address_maps)
         });
         prog.lib_definitions.iter().for_each(|pkg_def| {
-            self.pkg_symbols(pkg_def, mod_to_alias_lengths, typed_mod_named_address_maps)
+            self.pkg_symbols(pkg_def, mod_to_alias_lengths, &prog.named_address_maps)
         });
     }
 
@@ -89,27 +93,71 @@ impl<'a> ParsingAnalysisContext<'a> {
         &mut self,
         pkg_def: &P::PackageDefinition,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
-        typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+        named_address_maps: &NamedAddressMaps,
     ) {
         if let P::Definition::Module(mod_def) = &pkg_def.def {
-            // when doing full standalone compilation (vs. pre-compiling dependencies)
-            // we may have a module at parsing but no longer at typing
-            // in case there is a name conflict with a dependency (and
-            // mod_named_address_maps comes from typing modules)
-            // TODO(extensions): This location-based lookup fails for extension modules because
-            // extensions have different locations than the merged typed module. Extensions share
-            // the same NamedAddressMap as their base module, so we could use pkg_def.named_address_map
-            // to look up directly from parsing-level NamedAddressMaps instead.
-            let Some(pkg_addresses) = typed_mod_named_address_maps.get(&mod_def.loc) else {
-                eprintln!(
-                    "no typing-level named address maps for module {}",
-                    mod_def.name.value()
-                );
+            // Get the address map directly from the package's own index - works for extensions too
+            let pkg_addresses = named_address_maps.get(pkg_def.named_address_map);
+            let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses);
+
+            let Some(addr) = mod_def.address else {
+                eprintln!("skipping module {} (no address)", mod_def.name.value());
+                let _ = std::mem::replace(&mut self.pkg_addresses, old_addresses);
                 return;
             };
-            let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses.clone());
+
+            // name_conflict's value does not matter
+            // as it's not used for ModuleIdent comparison
+            let e_address = parsed_address(
+                addr,
+                self.pkg_addresses.clone(),
+                /* name_conflict */ false,
+            );
+            let mod_ident = sp(
+                mod_def.name_loc,
+                E::ModuleIdent_::new(e_address, mod_def.name),
+            );
+            let mod_ident_str = parsing_leading_and_mod_names_to_map_key(
+                self.pkg_addresses.clone(),
+                addr,
+                mod_def.name,
+            );
+
+            // When doing full standalone compilation (vs. pre-compiling dependencies)
+            // we may have a module at parsing but no longer at typing in case there
+            // is a name conflict with a dependency. We use typing-level info
+            // (mod_outer_defs) during parsing analysis, so skip modules not in typed program.
+            if !self.mod_outer_defs.contains_key(&mod_ident_str) {
+                eprintln!("skipping module {mod_ident_str} (not in typed modules)");
+                let _ = std::mem::replace(&mut self.pkg_addresses, old_addresses);
+                return;
+            }
+
+            // Set cursor.module if cursor is in this module (works for extensions too
+            // since during parsing each extension is a separate module definition)
+            if let Some(cursor) = &mut self.cursor
+                && mod_def.loc.contains(&cursor.loc)
+            {
+                cursor.module = Some(mod_ident);
+            }
+
+            // Set up per-module parsing data, keyed by file hash and module location
+            let file_hash = mod_def.loc.file_hash();
+            let mod_loc = mod_def.loc;
+            assert!(self.current_location.is_none());
+            self.current_location = Some(CurrentLocationContext::new(
+                mod_ident_str.clone(),
+                file_hash,
+                mod_loc,
+            ));
+            self.mod_parsing_info
+                .entry(file_hash)
+                .or_default()
+                .insert(mod_loc, ModuleParsingInfo::new(mod_ident_str.clone()));
+
             self.mod_symbols(mod_def, mod_to_alias_lengths);
-            self.current_mod_ident_str = None;
+
+            self.current_location = None;
             let _ = std::mem::replace(&mut self.pkg_addresses, old_addresses);
         }
     }
@@ -191,13 +239,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                 earliest_loc
             }
         }
-        // parsing symbolicator is currently only responsible for processing use declarations
-        let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses.clone(), mod_def)
-        else {
-            return;
-        };
-        assert!(self.current_mod_ident_str.is_none());
-        self.current_mod_ident_str = Some(mod_ident_str.clone());
+        // current_location must be set by pkg_symbols before calling this
+        let current_location = self.current_location.as_ref().unwrap();
+        let mod_ident_str = current_location.mod_ident_str.clone();
 
         let alias_lengths: BTreeMap<Position, usize> = BTreeMap::new();
         let old_alias_lengths = std::mem::replace(&mut self.alias_lengths, alias_lengths);
@@ -382,19 +426,28 @@ impl<'a> ParsingAnalysisContext<'a> {
         }
         self.add_import_insert_info(latest_use_loc, earliest_member_loc);
 
-        self.current_mod_ident_str = None;
         let processed_alias_lengths = std::mem::replace(&mut self.alias_lengths, old_alias_lengths);
-        mod_to_alias_lengths.insert(mod_ident_str, processed_alias_lengths);
+        // Merge alias lengths to support extension modules that share
+        // the same module identifier string as their base module
+        mod_to_alias_lengths
+            .entry(mod_ident_str)
+            .or_default()
+            .extend(processed_alias_lengths);
     }
 
     fn add_import_insert_info(&mut self, latest_use_loc: Loc, earliest_member_loc: Loc) {
-        let Some(mod_defs) = self
-            .mod_outer_defs
-            .get_mut(&self.current_mod_ident_str.clone().unwrap())
-        else {
+        let Some(ref current_location) = self.current_location else {
             return;
         };
-        mod_defs.import_insert_info = if latest_use_loc.end() > 0 {
+        let file_hash = current_location.file_hash;
+        let mod_loc = current_location.mod_loc;
+        let Some(mod_map) = self.mod_parsing_info.get_mut(&file_hash) else {
+            return;
+        };
+        let Some(mod_parsing_info) = mod_map.get_mut(&mod_loc) else {
+            return;
+        };
+        mod_parsing_info.import_insert_info = if latest_use_loc.end() > 0 {
             // imports exist, auto-imports position is at the end of the last
             // auto import
             if let Some(use_start) = loc_start_to_lsp_position_opt(self.files, &latest_use_loc) {
@@ -511,16 +564,16 @@ impl<'a> ParsingAnalysisContext<'a> {
             E::Call(chain, v) => {
                 self.chain_symbols(chain);
                 v.value.iter().for_each(|e| self.exp_symbols(e));
-                assert!(self.current_mod_ident_str.is_some());
-                if let Some(mod_defs) = self
-                    .mod_outer_defs
-                    .get_mut(&self.current_mod_ident_str.clone().unwrap())
+                if let Some(ref current_location) = self.current_location
+                    && let Some(mod_map) =
+                        self.mod_parsing_info.get_mut(&current_location.file_hash)
+                    && let Some(mod_parsing_info) = mod_map.get_mut(&current_location.mod_loc)
                 {
-                    mod_defs.call_infos.insert(
+                    mod_parsing_info.call_infos.insert(
                         last_chain_symbol_loc(chain),
-                        CallInfo::new(/* do_call */ false, &v.value),
+                        CallInfo::new(/* dot_call */ false, &v.value),
                     );
-                };
+                }
             }
             E::Pack(chain, v) => {
                 self.chain_symbols(chain);
@@ -604,15 +657,15 @@ impl<'a> ParsingAnalysisContext<'a> {
                     v.iter().for_each(|t| self.type_symbols(t));
                 }
                 v.value.iter().for_each(|e| self.exp_symbols(e));
-                assert!(self.current_mod_ident_str.is_some());
-                if let Some(mod_defs) = self
-                    .mod_outer_defs
-                    .get_mut(&self.current_mod_ident_str.clone().unwrap())
+                if let Some(ref current_location) = self.current_location
+                    && let Some(mod_map) =
+                        self.mod_parsing_info.get_mut(&current_location.file_hash)
+                    && let Some(mod_parsing_info) = mod_map.get_mut(&current_location.mod_loc)
                 {
-                    mod_defs
+                    mod_parsing_info
                         .call_infos
-                        .insert(name.loc, CallInfo::new(/* do_call */ true, &v.value));
-                };
+                        .insert(name.loc, CallInfo::new(/* dot_call */ true, &v.value));
+                }
             }
             E::Index(e, v) => {
                 self.exp_symbols(e);
@@ -661,13 +714,13 @@ impl<'a> ParsingAnalysisContext<'a> {
             }
             MP::Name(_, chain) => {
                 self.chain_symbols(chain);
-                assert!(self.current_mod_ident_str.is_some());
-                if let Some(mod_defs) = self
-                    .mod_outer_defs
-                    .get_mut(&self.current_mod_ident_str.clone().unwrap())
+                if let Some(ref current_location) = self.current_location
+                    && let Some(mod_map) =
+                        self.mod_parsing_info.get_mut(&current_location.file_hash)
+                    && let Some(mod_parsing_info) = mod_map.get_mut(&current_location.mod_loc)
                 {
-                    mod_defs.untyped_defs.insert(chain.loc);
-                };
+                    mod_parsing_info.untyped_defs.insert(chain.loc);
+                }
             }
             MP::Or(m1, m2) => {
                 self.match_pattern_symbols(m2);
@@ -903,14 +956,13 @@ impl<'a> ParsingAnalysisContext<'a> {
                 }
             }
             B::Var(_, var) => {
-                if !explicitly_typed {
-                    assert!(self.current_mod_ident_str.is_some());
-                    if let Some(mod_defs) = self
-                        .mod_outer_defs
-                        .get_mut(&self.current_mod_ident_str.clone().unwrap())
-                    {
-                        mod_defs.untyped_defs.insert(var.loc());
-                    };
+                if !explicitly_typed
+                    && let Some(ref current_location) = self.current_location
+                    && let Some(mod_map) =
+                        self.mod_parsing_info.get_mut(&current_location.file_hash)
+                    && let Some(mod_parsing_info) = mod_map.get_mut(&current_location.mod_loc)
+                {
+                    mod_parsing_info.untyped_defs.insert(var.loc());
                 }
             }
         }
@@ -982,7 +1034,9 @@ fn parsing_leading_and_mod_names_to_map_key(
     ln: P::LeadingNameAccess,
     name: P::ModuleName,
 ) -> String {
-    let parsed_addr = parsed_address(ln, pkg_addresses);
+    // name_conflict is set to true to reliably compare parsing
+    // and expansion/typing AST's module identifiers
+    let parsed_addr = parsed_address(ln, pkg_addresses, /* name_conflict */ true);
     format!("{}::{}", parsed_addr, name).to_string()
 }
 
@@ -992,9 +1046,15 @@ fn parsing_mod_ident_to_map_key(
     pkg_addresses: Arc<NamedAddressMap>,
     mod_ident: &P::ModuleIdent_,
 ) -> String {
+    // name_conflict is set to true to reliably compare parsing
+    // and expansion/typing AST's module identifiers
     format!(
         "{}::{}",
-        parsed_address(mod_ident.address, pkg_addresses),
+        parsed_address(
+            mod_ident.address,
+            pkg_addresses,
+            /* name_conflict */ true
+        ),
         mod_ident.module
     )
     .to_string()

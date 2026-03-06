@@ -1,0 +1,34 @@
+// Tests if inlay hints work for module extensions
+{
+  "Hint": {
+    "project": "tests/module-ext",
+    "file_tests": {
+      "M1.move": [
+        {
+          "use_line": 16,
+          "use_col": 16
+        },
+        {
+          "use_line": 17,
+          "use_col": 28
+        },
+        {
+          "use_line": 27,
+          "use_col": 16
+        },
+        {
+          "use_line": 28,
+          "use_col": 28
+        },
+        {
+          "use_line": 38,
+          "use_col": 16
+        },
+        {
+          "use_line": 39,
+          "use_col": 28
+        }
+      ]
+    }
+  }
+}
