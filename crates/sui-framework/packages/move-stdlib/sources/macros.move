@@ -236,7 +236,7 @@ public(package) macro fun num_mul_div<$T, $U>($a: $T, $b: $T, $c: $T): $T {
 }
 
 public(package) macro fun num_mul_div_ceil<$T, $U>($a: $T, $b: $T, $c: $T): $T {
-    (($a as $U) * ($b as $U)).divide_and_round_up($c as $U) as $T
+    num_divide_and_round_up!(($a as $U) * ($b as $U), $c as $U) as $T
 }
 
 /// Creates a fixed-point value from a quotient specified by its numerator and denominator.
