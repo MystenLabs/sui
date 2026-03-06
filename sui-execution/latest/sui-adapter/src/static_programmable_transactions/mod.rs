@@ -57,12 +57,10 @@ pub fn execute<Mode: ExecutionMode>(
         LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
     let ptb_type_linkage = linkage_analysis
         .compute_input_type_resolution_linkage(&txn, &package_store, state_view)
+        .and_then(|linkage| linkage.linkage_context())
         .map_err(|e| (e, vec![]))?;
     let resolution_vm = vm
-        .make_vm(
-            &package_store.package_store,
-            ptb_type_linkage.linkage_context(),
-        )
+        .make_vm(&package_store.package_store, ptb_type_linkage)
         .map_err(|e| {
             (
                 ExecutionError::new_with_source(ExecutionErrorKind::InvalidLinkage, e),

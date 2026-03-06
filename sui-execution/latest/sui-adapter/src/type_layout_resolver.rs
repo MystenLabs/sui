@@ -40,7 +40,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         let resolver =
             CachedPackageStore::new(self.vm, TransactionPackageStore::new(&null_resolver));
         let tag_linkage = ExecutableLinkage::type_linkage(ids, &resolver)?;
-        let link_context = tag_linkage.linkage_context();
+        let link_context = tag_linkage.linkage_context()?;
         let data_store = TransactionPackageStore::new(&null_resolver);
         let Ok(vm) = self.vm.make_vm(data_store, link_context) else {
             return Err(SuiErrorKind::FailObjectLayout {

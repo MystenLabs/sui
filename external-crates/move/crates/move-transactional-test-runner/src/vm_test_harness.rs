@@ -244,7 +244,7 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
                     .collect::<Vec<_>>();
                 let sender = *move_stdlib.first().unwrap().self_id().address();
                 println!("generating stdlib linkage");
-                let linkage_context = LinkageContext::new(BTreeMap::from([(sender, sender)]));
+                let linkage_context = LinkageContext::new(BTreeMap::from([(sender, sender)]))?;
                 println!("calling stdlib publish with address {sender:?}");
                 let pkg = StoredPackage::from_module_for_testing_with_linkage(
                     sender,

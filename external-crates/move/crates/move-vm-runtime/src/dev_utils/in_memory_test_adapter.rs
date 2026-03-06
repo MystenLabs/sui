@@ -211,14 +211,13 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
             !all_dependencies.contains(&original_id),
             "Found circular dependencies during linkage generation."
         );
-        let linkage_context = LinkageContext::new(
+        LinkageContext::new(
             all_dependencies
                 .into_iter()
                 .map(|id| (id, id))
                 .chain(vec![(original_id, version_id)])
                 .collect(),
-        );
-        Ok(linkage_context)
+        )
     }
 
     fn get_package_from_store(&self, version_id: &VersionId) -> VMResult<SerializedPackage> {

@@ -119,7 +119,7 @@ impl Adapter {
         let vm = Arc::new(RwLock::new(
             InMemoryTestAdapter::new_with_runtime_and_storage(runtime, store),
         ));
-        let linkage = LinkageContext::new(BTreeMap::new());
+        let linkage = LinkageContext::new(BTreeMap::new()).unwrap();
         Self {
             store: {
                 RelinkingStore {
@@ -138,9 +138,7 @@ impl Adapter {
     ) -> Self {
         Self {
             store: {
-                let linkage = LinkageContext {
-                    linkage_table: linkage,
-                };
+                let linkage = LinkageContext::new(linkage).unwrap();
                 let type_origin = type_origin
                     .into_iter()
                     .map(|((module, type_name), origin)| {

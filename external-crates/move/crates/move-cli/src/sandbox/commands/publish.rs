@@ -77,7 +77,7 @@ pub fn publish<V: VMTestSetup>(
     let mut gas_status = vm_test_setup.new_meter(None);
 
     // Create a `LinkageContext`
-    let linkage_context = LinkageContext::new(dependency_map);
+    let linkage_context = LinkageContext::new(dependency_map)?;
 
     // Serialize the modules into a package to prepare them for publishing
     let pkg = StoredPackage::from_module_for_testing_with_linkage(
