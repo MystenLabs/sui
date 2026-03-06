@@ -1,18 +1,5 @@
-#!/usr/bin/env node
-
-/**
- * check-relative-links.mjs
- *
- * Scans all .mdx (and .md) files under a docs directory for relative links
- * and verifies that each target resolves to an actual file on disk.
- *
- * Usage:
- *   node check-relative-links.mjs [docs-directory]
- *
- * Defaults to ./docs if no directory is provided.
- *
- * Exit code 0 = all links valid, 1 = broken links found.
- */
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { resolve, dirname, join, extname } from "node:path";
