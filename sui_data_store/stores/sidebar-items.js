@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CHECKPOINT_VERSIONS_FILE","DATA_STORE_DIR","EPOCH_DIR","NODE_MAPPING_FILE","OBJECTS_DIR","ROOT_VERSIONS_FILE","TRANSACTION_DIR"],"struct":["DataStore","FileSystemStore","InMemoryStore","LruMemoryStore","ReadThroughStore"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_all_balances_for_owner","get_balance"]};

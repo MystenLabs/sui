@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Command","CommandMeta"],"fn":["execute_move_command"],"mod":["build","cache_package","coverage","disassemble","migrate","new","summary","unit_test","update_deps"]};

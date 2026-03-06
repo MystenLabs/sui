@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["eth_bridge_status","eth_vault_balance","metrics","sui_bridge_status","total_supplies"],"struct":["BridgeWatchDog"],"trait":["Observable"]};
