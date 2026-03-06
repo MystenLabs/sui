@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E08001]: cannot compute constant value
+  ┌─ tests/move_check/folding/constant_self_referencing.move:3:11
+  │
+3 │     const C: u64 = C + 1;
+  │           ^ Constant 'C' references itself
+
+error[E08001]: cannot compute constant value
+  ┌─ tests/move_check/folding/constant_self_referencing.move:6:11
+  │
+6 │     const D: u64 = D;
+  │           ^ Constant 'D' references itself
+
+error[E08001]: cannot compute constant value
+  ┌─ tests/move_check/folding/constant_self_referencing.move:9:11
+  │
+9 │     const E: u64 = C + 2;
+  │           ^ Constant uses constant C, which has a circular dependency
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_check/folding/constant_self_referencing.move:15:11
+   │
+15 │     const G: u64 = C + F;
+   │           ^ Constant uses constant C, which has a circular dependency
