@@ -45,16 +45,7 @@ pub mod checked {
     #[derive(Debug, PartialEq, Eq, Clone, Copy)]
     pub enum PaymentLocation {
         Coin(ObjectID),
-        AddressBalance(SuiAddress),
-    }
-
-    impl PaymentMethod {
-        pub fn location(&self) -> PaymentLocation {
-            match self {
-                PaymentMethod::Coin(obj_ref) => PaymentLocation::Coin(obj_ref.0),
-                PaymentMethod::AddressBalance(addr, _) => PaymentLocation::AddressBalance(*addr),
-            }
-        }
+        AddressBalance(SuiAddress, /* reserved amount */ u64),
     }
 
     impl GasCharger {
@@ -96,7 +87,12 @@ pub mod checked {
         }
 
         pub fn gas_payment_location(&self) -> Option<PaymentLocation> {
-            self.smash_target().map(|pm| pm.location())
+            self.smash_target().map(|pm| match pm {
+                PaymentMethod::Coin(obj_ref) => PaymentLocation::Coin(obj_ref.0),
+                PaymentMethod::AddressBalance(addr, _) => {
+                    PaymentLocation::AddressBalance(*addr, self.address_balance_reserved)
+                }
+            })
         }
 
         /// Returns the ObjectID of the gas coin if payment is via a Coin, None otherwise.
@@ -106,10 +102,6 @@ pub mod checked {
                 Some(PaymentLocation::Coin(id)) => Some(id),
                 _ => None,
             }
-        }
-
-        pub fn address_balance_reserved(&self) -> u64 {
-            self.address_balance_reserved
         }
 
         // TODO: there is only one caller to this function that should not exist otherwise.

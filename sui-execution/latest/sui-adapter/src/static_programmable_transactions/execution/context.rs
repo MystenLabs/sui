@@ -265,9 +265,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
                 Some((PaymentLocation::Coin(gas_coin_id), gas_metadata, gas_locals))
             }
-            Some(PaymentLocation::AddressBalance(sui_address)) => {
+            Some(PaymentLocation::AddressBalance(sui_address, reserved_amount)) => {
                 let ty = env.gas_coin_type()?;
-                let reserved_amount = gas_charger.address_balance_reserved();
                 let id = tx_context.borrow_mut().fresh_id();
                 new_gas_coin_id = Some(id);
                 let gas_metadata = InputObjectMetadata {
@@ -284,7 +283,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 let max_gas_in_balance = gas_charger.gas_budget();
                 gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
                 Some((
-                    PaymentLocation::AddressBalance(sui_address),
+                    PaymentLocation::AddressBalance(sui_address, reserved_amount),
                     gas_metadata,
                     gas_locals,
                 ))
@@ -368,7 +367,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         // For ephemeral gas (AddressBalance), handle separately with end_of_transaction=false
         // to avoid the "untransferred new object" invariant check in ObjectRuntime.
         let (gas_for_chain, ephemeral_gas) = match gas_payment_location {
-            Some(PaymentLocation::AddressBalance(_)) => (None, gas.map(|(_, m, v)| (m, v))),
+            Some(PaymentLocation::AddressBalance(..)) => (None, gas.map(|(_, m, v)| (m, v))),
             _ => (gas.map(|(_, m, v)| (m, v)), None),
         };
         for (metadata, value_opt) in object_inputs.into_iter().chain(gas_for_chain) {
@@ -478,7 +477,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 &mut accumulator_events,
                 gas_id,
                 gas_payment_location,
-                gas_charger.address_balance_reserved(),
             )?;
         }
 
@@ -1498,13 +1496,13 @@ fn destroy_ephemeral_gas_coin<OType>(
     accumulator_events: &mut Vec<sui_move_natives::object_runtime::MoveAccumulatorEvent>,
     gas_id: ObjectID,
     gas_payment_location: Option<PaymentLocation>,
-    reserved_amount: u64,
 ) -> Result<(), ExecutionError> {
     use sui_move_natives::object_runtime::{
         MoveAccumulatorAction, MoveAccumulatorEvent, MoveAccumulatorValue,
     };
 
-    let Some(PaymentLocation::AddressBalance(address)) = gas_payment_location else {
+    let Some(PaymentLocation::AddressBalance(address, reserved_amount)) = gas_payment_location
+    else {
         return Ok(());
     };
 
