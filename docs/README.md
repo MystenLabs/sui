@@ -4,7 +4,7 @@ This directory contains the assets required to build and update the [Sui documen
 
 ## Build the site locally
 
-To run docs.sui.io locally, open the `site` directory in a terminal or console. Use a package manager to install the required modules:
+To run `docs.sui.io` locally, open the `site` directory in a terminal or console. Use a package manager to install the required modules:
 
 ```shell
 pnpm install
