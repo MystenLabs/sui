@@ -125,7 +125,11 @@ pub(crate) async fn get_service_info(
     message.chain_id = Some(Digest::new(chain_id.as_bytes().to_owned()).to_string());
     message.chain = Some(chain_id.chain().as_str().into());
     message.epoch = Some(wm.epoch_hi_inclusive);
-    message.checkpoint_height = Some(wm.checkpoint_hi_inclusive);
+    message.checkpoint_height = Some(
+        wm.checkpoint_hi
+            .checked_sub(1)
+            .unwrap_or_else(|| panic!("Watermark checkpoint_hi underflow {wm:?}")),
+    );
     message.timestamp = Some(timestamp_ms_to_proto(wm.timestamp_ms_hi_inclusive));
     message.lowest_available_checkpoint = Some(0);
     message.lowest_available_checkpoint_objects = Some(0);

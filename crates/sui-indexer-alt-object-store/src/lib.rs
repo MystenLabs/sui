@@ -32,9 +32,9 @@ pub struct ObjectStoreConnection {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct ComitterWatermark {
+struct CommitterWatermark {
     epoch_hi_inclusive: u64,
-    checkpoint_hi_inclusive: u64,
+    checkpoint_hi: u64,
     tx_hi: u64,
     timestamp_ms_hi_inclusive: u64,
 }
@@ -51,22 +51,22 @@ impl ObjectStoreConnection {
     }
 }
 
-impl From<framework_traits::CommitterWatermark> for ComitterWatermark {
+impl From<framework_traits::CommitterWatermark> for CommitterWatermark {
     fn from(w: framework_traits::CommitterWatermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            checkpoint_hi: w.checkpoint_hi,
             tx_hi: w.tx_hi,
             timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
         }
     }
 }
 
-impl From<ComitterWatermark> for framework_traits::CommitterWatermark {
-    fn from(w: ComitterWatermark) -> Self {
+impl From<CommitterWatermark> for framework_traits::CommitterWatermark {
+    fn from(w: CommitterWatermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            checkpoint_hi: w.checkpoint_hi,
             tx_hi: w.tx_hi,
             timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
         }
@@ -90,7 +90,7 @@ impl Connection for ObjectStoreConnection {
         Ok(self
             .committer_watermark(pipeline_task)
             .await?
-            .map(|w| w.checkpoint_hi_inclusive))
+            .map(|w| w.checkpoint_hi))
     }
 
     async fn committer_watermark(
@@ -101,12 +101,12 @@ impl Connection for ObjectStoreConnection {
         match self.object_store.get(&object_path).await {
             Ok(result) => {
                 let bytes = result.bytes().await?;
-                let watermark: ComitterWatermark = serde_json::from_slice(&bytes)
+                let watermark: CommitterWatermark = serde_json::from_slice(&bytes)
                     .context("Failed to parse watermark from object store")?;
 
                 info!(
                     pipeline_task,
-                    checkpoint = watermark.checkpoint_hi_inclusive,
+                    checkpoint_hi = watermark.checkpoint_hi,
                     "Downloaded watermark from object store"
                 );
 
@@ -137,7 +137,7 @@ impl Connection for ObjectStoreConnection {
         pipeline_task: &str,
         watermark: framework_traits::CommitterWatermark,
     ) -> anyhow::Result<bool> {
-        let new_watermark: ComitterWatermark = watermark.into();
+        let new_watermark: CommitterWatermark = watermark.into();
         let object_path = ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline_task));
 
         let (current_watermark, e_tag, version) = match self.object_store.get(&object_path).await {
@@ -145,7 +145,7 @@ impl Connection for ObjectStoreConnection {
                 let e_tag = result.meta.e_tag.clone();
                 let version = result.meta.version.clone();
                 let bytes = result.bytes().await?;
-                let watermark: ComitterWatermark = serde_json::from_slice(&bytes)
+                let watermark: CommitterWatermark = serde_json::from_slice(&bytes)
                     .context("Failed to parse watermark from object store")?;
                 (Some(watermark), e_tag, version)
             }
@@ -154,7 +154,7 @@ impl Connection for ObjectStoreConnection {
         };
 
         if let Some(ref current) = current_watermark
-            && current.checkpoint_hi_inclusive >= new_watermark.checkpoint_hi_inclusive
+            && current.checkpoint_hi >= new_watermark.checkpoint_hi
         {
             return Ok(false);
         }
@@ -216,7 +216,7 @@ mod tests {
         // Set initial watermark
         let initial_watermark = framework_traits::CommitterWatermark {
             epoch_hi_inclusive: 1,
-            checkpoint_hi_inclusive: 100,
+            checkpoint_hi: 100,
             tx_hi: 1000,
             timestamp_ms_hi_inclusive: 1000000,
         };
@@ -231,14 +231,14 @@ mod tests {
         assert!(watermark.is_some());
         let watermark = watermark.unwrap();
         assert_eq!(watermark.epoch_hi_inclusive, 1);
-        assert_eq!(watermark.checkpoint_hi_inclusive, 100);
+        assert_eq!(watermark.checkpoint_hi, 100);
         assert_eq!(watermark.tx_hi, 1000);
         assert_eq!(watermark.timestamp_ms_hi_inclusive, 1000000);
 
         // Update watermark with higher checkpoint
         let updated_watermark = framework_traits::CommitterWatermark {
             epoch_hi_inclusive: 2,
-            checkpoint_hi_inclusive: 200,
+            checkpoint_hi: 200,
             tx_hi: 2000,
             timestamp_ms_hi_inclusive: 2000000,
         };
@@ -253,12 +253,12 @@ mod tests {
 
         // Verify the updated watermark
         let watermark = conn.committer_watermark(pipeline).await.unwrap().unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 200);
+        assert_eq!(watermark.checkpoint_hi, 200);
 
         // Try to set a watermark with a lower checkpoint (should be rejected)
         let regressed_watermark = framework_traits::CommitterWatermark {
             epoch_hi_inclusive: 1,
-            checkpoint_hi_inclusive: 150,
+            checkpoint_hi: 150,
             tx_hi: 1500,
             timestamp_ms_hi_inclusive: 1500000,
         };
@@ -270,6 +270,6 @@ mod tests {
 
         // Verify watermark hasn't changed
         let watermark = conn.committer_watermark(pipeline).await.unwrap().unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 200);
+        assert_eq!(watermark.checkpoint_hi, 200);
     }
 }

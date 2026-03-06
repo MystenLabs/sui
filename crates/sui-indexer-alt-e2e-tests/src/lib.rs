@@ -222,7 +222,7 @@ impl FullCluster {
             .wait_for_graphql(checkpoint.sequence_number, Duration::from_secs(100));
 
         try_join!(indexer, consistent_store, graphql)
-            .expect("Timed out waiting for indexer and consistent store");
+            .expect("Timed out waiting for indexer, consistent store, graphql");
 
         checkpoint
     }
@@ -460,19 +460,29 @@ impl OffchainCluster {
             .await
             .context("Failed to connect to database")?;
 
-        let latest: HashMap<String, i64> = w::watermarks
-            .select((w::pipeline, w::checkpoint_hi_inclusive))
+        let checkpoint_his: HashMap<String, i64> = w::watermarks
+            .select((w::pipeline, w::checkpoint_hi))
             .filter(w::pipeline.eq_any(&self.pipelines))
+            // When reader_lo and checkpoint_hi are the same value, the
+            // [reader_lo, checkpoint_hi) range is empty.
+            .filter(w::checkpoint_hi.gt(w::reader_lo))
             .load(&mut conn)
             .await?
             .into_iter()
             .collect();
 
-        if latest.len() != self.pipelines.len() {
+        if checkpoint_his.len() != self.pipelines.len() {
             return Ok(None);
         }
 
-        Ok(latest.into_values().min().map(|l| l as u64))
+        // checkpoint_hi is exclusive, so subtract 1 to get the inclusive checkpoint.
+        Ok(checkpoint_his
+            .into_iter()
+            .map(|(pipeline, checkpoint_hi)| u64::try_from(checkpoint_hi)
+                .unwrap_or_else(|e| panic!("Entry checkpoint_hi is negative pipeline={pipeline} checkpoint_hi={checkpoint_hi}: {e}"))
+                .checked_sub(1)
+                .unwrap_or_else(|| panic!("Entry checkpoint_hi underflow pipeline={pipeline} checkpoint_hi={checkpoint_hi}")))
+            .min())
     }
 
     /// Returns the latest checkpoint that the pruner is willing to prune up to for the given

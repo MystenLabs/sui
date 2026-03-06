@@ -795,7 +795,7 @@ mod tests {
 
         // The next batch should still be the remaining 10 rows from checkpoint 1.
         assert_eq!(batch.batch_len, 10);
-        assert_eq!(batch.watermark[0].watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(batch.watermark[0].watermark.checkpoint_hi, 2);
 
         recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
 

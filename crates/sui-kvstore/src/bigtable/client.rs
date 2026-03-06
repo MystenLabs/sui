@@ -244,9 +244,7 @@ impl BigTableClient {
                 && let Some((_, value_bytes)) = row.last()
             {
                 let next = u64::from_be_bytes(value_bytes.as_ref().try_into()?);
-                if next > 0 {
-                    legacy_checkpoint = Some(next - 1);
-                }
+                legacy_checkpoint = Some(next);
             }
         }
 
@@ -263,7 +261,7 @@ impl BigTableClient {
 
         Ok(legacy_checkpoint.map(|cp| Watermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: cp,
+            checkpoint_hi: cp,
             tx_hi: 0,
             timestamp_ms_hi_inclusive: 0,
         }))
@@ -740,7 +738,7 @@ impl KeyValueStoreReader for BigTableClient {
         for (_, row) in &rows {
             let wm = tables::watermarks::decode(row)?;
             min_wm = Some(match min_wm {
-                Some(prev) if prev.checkpoint_hi_inclusive <= wm.checkpoint_hi_inclusive => prev,
+                Some(prev) if prev.checkpoint_hi <= wm.checkpoint_hi => prev,
                 _ => wm,
             });
         }

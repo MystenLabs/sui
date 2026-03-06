@@ -221,14 +221,12 @@ impl StoreMode {
         &self,
         pipeline: &str,
         epoch: u64,
-        checkpoint_hi_inclusive: u64,
+        checkpoint_hi: u64,
     ) -> Result<(), WatermarkUpdateError> {
         match self {
             StoreMode::Live(_) => Ok(()),
             StoreMode::Migration(store) => {
-                store
-                    .update_watermark(pipeline, epoch, checkpoint_hi_inclusive)
-                    .await
+                store.update_watermark(pipeline, epoch, checkpoint_hi).await
             }
         }
     }
@@ -642,7 +640,7 @@ impl Connection for AnalyticsConnection<'_> {
                 Ok(self
                     .committer_watermark(pipeline_task)
                     .await?
-                    .map(|w| w.checkpoint_hi_inclusive))
+                    .map(|w| w.checkpoint_hi))
             }
             StoreMode::Migration(store) => {
                 let output_prefix = self.pipeline_config(pipeline_task).output_prefix();

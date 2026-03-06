@@ -89,7 +89,7 @@ impl Connection for BigTableConnection<'_> {
             .client
             .get_pipeline_watermark(pipeline_task)
             .await?
-            .map(|wm| wm.checkpoint_hi_inclusive))
+            .map(|wm| wm.checkpoint_hi))
     }
 
     async fn committer_watermark(
@@ -123,13 +123,13 @@ impl Connection for BigTableConnection<'_> {
 
             let maybe_update = {
                 let mut guard = tracker.lock().expect("legacy tracker lock poisoned");
-                guard.update(pipeline_name, pipeline_watermark.checkpoint_hi_inclusive)
+                guard.update(pipeline_name, pipeline_watermark.checkpoint_hi)
             };
 
             if let Some((min, prev)) = maybe_update {
-                // Write min + 1 to the legacy `[0]` row.
-                // The legacy format stores `next_checkpoint` (exclusive upper bound).
-                let next_checkpoint = min + 1;
+                // The legacy format stores `next_checkpoint` (exclusive upper bound),
+                // which is the same as `checkpoint_hi`.
+                let next_checkpoint = min;
                 let entry = tables::make_entry(
                     vec![0u8],
                     [(

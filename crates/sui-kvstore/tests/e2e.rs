@@ -397,7 +397,7 @@ impl TestHarness {
                 interval.tick().await;
                 let ok = self.client.get_watermark().await.is_ok_and(|wm| {
                     wm.is_some_and(|wm| {
-                        wm.checkpoint_hi_inclusive >= checkpoint && wm.epoch_hi_inclusive >= epoch
+                        wm.checkpoint_hi > checkpoint && wm.epoch_hi_inclusive >= epoch
                     })
                 });
                 if ok {

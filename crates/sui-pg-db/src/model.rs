@@ -12,7 +12,7 @@ use crate::schema::watermarks;
 pub struct StoredWatermark {
     pub pipeline: String,
     pub epoch_hi_inclusive: i64,
-    pub checkpoint_hi_inclusive: i64,
+    pub checkpoint_hi: i64,
     pub tx_hi: i64,
     pub timestamp_ms_hi_inclusive: i64,
     pub reader_lo: i64,

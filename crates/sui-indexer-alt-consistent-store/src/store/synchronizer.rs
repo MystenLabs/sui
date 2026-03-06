@@ -103,7 +103,13 @@ impl Synchronizer {
         let Some(init_checkpoint) = self
             .last_watermarks
             .values()
-            .map(|w| w.map_or(self.first_checkpoint, |w| w.checkpoint_hi_inclusive))
+            .map(|w| {
+                w.map_or(self.first_checkpoint, |w| {
+                    w.checkpoint_hi
+                        .checked_sub(1)
+                        .unwrap_or_else(|| panic!("Watermark checkpoint_hi underflow {w:?}"))
+                })
+            })
             .max()
         else {
             bail!("No pipelines registered with the synchronizer");
@@ -162,7 +168,7 @@ async fn synchronizer(
     loop {
         let next_checkpoint = current_watermark
             .as_ref()
-            .map(|w| w.checkpoint_hi_inclusive + 1)
+            .map(|w| w.checkpoint_hi)
             .unwrap_or(first_checkpoint);
 
         match next_snapshot_checkpoint.cmp(&next_checkpoint) {
@@ -216,7 +222,7 @@ async fn synchronizer(
 
         debug!(pipeline, ?watermark, "Received batch");
         ensure!(
-            watermark.checkpoint_hi_inclusive == next_checkpoint,
+            watermark.checkpoint_hi == next_checkpoint + 1,
             "Out-of-order batch for {pipeline}: expected {next_checkpoint}, got {watermark:?}",
         );
 

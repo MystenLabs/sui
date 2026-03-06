@@ -214,7 +214,7 @@ pub struct ProtocolConfigData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Watermark {
     pub epoch_hi_inclusive: u64,
-    pub checkpoint_hi_inclusive: u64,
+    pub checkpoint_hi: u64,
     pub tx_hi: u64,
     pub timestamp_ms_hi_inclusive: u64,
 }
@@ -235,7 +235,7 @@ pub trait KeyValueStoreReader {
         digest: CheckpointDigest,
     ) -> Result<Option<CheckpointData>>;
     /// Return the minimum watermark across the given pipelines, selecting the whole
-    /// watermark with the lowest `checkpoint_hi_inclusive`. Returns `None` if any
+    /// watermark with the lowest `checkpoint_hi`. Returns `None` if any
     /// pipeline is missing a watermark.
     async fn get_watermark_for_pipelines(
         &mut self,
@@ -480,7 +480,7 @@ impl From<sui_indexer_alt_framework_store_traits::CommitterWatermark> for Waterm
     fn from(w: sui_indexer_alt_framework_store_traits::CommitterWatermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            checkpoint_hi: w.checkpoint_hi,
             tx_hi: w.tx_hi,
             timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
         }
@@ -491,7 +491,7 @@ impl From<Watermark> for sui_indexer_alt_framework_store_traits::CommitterWaterm
     fn from(w: Watermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            checkpoint_hi: w.checkpoint_hi,
             tx_hi: w.tx_hi,
             timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
         }

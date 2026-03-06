@@ -89,14 +89,14 @@ impl SystemPackageTask {
                     epoch_hi_inclusive: i64,
 
                     #[diesel(sql_type = BigInt)]
-                    checkpoint_hi_inclusive: i64,
+                    checkpoint_hi: i64,
                 }
 
                 let query = query!(
                     r#"
                     SELECT
                         epoch_hi_inclusive,
-                        checkpoint_hi_inclusive
+                        checkpoint_hi
                     FROM
                         watermarks
                     WHERE
@@ -106,7 +106,7 @@ impl SystemPackageTask {
 
                 let Watermark {
                     epoch_hi_inclusive: next_epoch,
-                    checkpoint_hi_inclusive,
+                    checkpoint_hi,
                 } = match conn.results(query).await.as_deref() {
                     Ok([watermark]) => *watermark,
 
@@ -147,9 +147,9 @@ impl SystemPackageTask {
                         kv_packages
                     WHERE
                         is_system_package
-                    AND cp_sequence_number <= {BigInt}
+                    AND cp_sequence_number < {BigInt}
                     "#,
-                    checkpoint_hi_inclusive
+                    checkpoint_hi
                 );
 
                 let system_packages: Vec<SystemPackage> = match conn.results(query).await {

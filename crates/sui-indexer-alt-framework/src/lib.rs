@@ -375,13 +375,12 @@ impl<S: Store> Indexer<S> {
         let pipeline_task =
             pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
 
-        let checkpoint_hi_inclusive = conn
+        let checkpoint_hi = conn
             .init_watermark(&pipeline_task, self.default_next_checkpoint)
             .await
             .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
 
-        let next_checkpoint =
-            checkpoint_hi_inclusive.map_or(self.default_next_checkpoint, |c| c + 1);
+        let next_checkpoint = checkpoint_hi.unwrap_or(self.default_next_checkpoint);
 
         self.first_ingestion_checkpoint = next_checkpoint.min(self.first_ingestion_checkpoint);
 
@@ -701,7 +700,7 @@ mod tests {
         conn.set_committer_watermark(
             A::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 100,
+                checkpoint_hi: 101,
                 ..Default::default()
             },
         )
@@ -710,7 +709,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -719,7 +718,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 1,
+                checkpoint_hi: 2,
                 ..Default::default()
             },
         )
@@ -728,7 +727,7 @@ mod tests {
         conn.set_committer_watermark(
             D::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 50,
+                checkpoint_hi: 51,
                 ..Default::default()
             },
         )
@@ -792,7 +791,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -801,7 +800,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 1,
+                checkpoint_hi: 2,
                 ..Default::default()
             },
         )
@@ -865,7 +864,7 @@ mod tests {
         conn.set_committer_watermark(
             A::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 100,
+                checkpoint_hi: 101,
                 ..Default::default()
             },
         )
@@ -874,7 +873,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -883,7 +882,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 1,
+                checkpoint_hi: 2,
                 ..Default::default()
             },
         )
@@ -932,7 +931,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(indexer.first_ingestion_checkpoint, 1);
+        assert_eq!(indexer.first_ingestion_checkpoint, 0);
     }
 
     /// first_ingestion_checkpoint is first_checkpoint when at least one pipeline has no
@@ -951,7 +950,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 50,
+                checkpoint_hi: 51,
                 ..Default::default()
             },
         )
@@ -960,7 +959,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -1026,7 +1025,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 50,
+                checkpoint_hi: 51,
                 ..Default::default()
             },
         )
@@ -1035,7 +1034,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -1095,7 +1094,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 50,
+                checkpoint_hi: 51,
                 ..Default::default()
             },
         )
@@ -1104,7 +1103,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -1169,7 +1168,7 @@ mod tests {
         conn.set_committer_watermark(
             A::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 5,
+                checkpoint_hi: 6,
                 ..Default::default()
             },
         )
@@ -1178,7 +1177,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -1187,7 +1186,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 15,
+                checkpoint_hi: 16,
                 ..Default::default()
             },
         )
@@ -1196,7 +1195,7 @@ mod tests {
         conn.set_committer_watermark(
             D::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 20,
+                checkpoint_hi: 21,
                 ..Default::default()
             },
         )
@@ -1311,7 +1310,7 @@ mod tests {
         conn.set_committer_watermark(
             A::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 5,
+                checkpoint_hi: 6,
                 ..Default::default()
             },
         )
@@ -1320,7 +1319,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -1329,7 +1328,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 15,
+                checkpoint_hi: 16,
                 ..Default::default()
             },
         )
@@ -1338,7 +1337,7 @@ mod tests {
         conn.set_committer_watermark(
             D::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 20,
+                checkpoint_hi: 21,
                 ..Default::default()
             },
         )
@@ -1453,7 +1452,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -1462,7 +1461,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 15,
+                checkpoint_hi: 16,
                 ..Default::default()
             },
         )
@@ -1471,7 +1470,7 @@ mod tests {
         conn.set_committer_watermark(
             D::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 20,
+                checkpoint_hi: 21,
                 ..Default::default()
             },
         )
@@ -1585,7 +1584,7 @@ mod tests {
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -1594,7 +1593,7 @@ mod tests {
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 15,
+                checkpoint_hi: 16,
                 ..Default::default()
             },
         )
@@ -1603,7 +1602,7 @@ mod tests {
         conn.set_committer_watermark(
             D::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 20,
+                checkpoint_hi: 21,
                 ..Default::default()
             },
         )
@@ -1706,17 +1705,23 @@ mod tests {
     #[tokio::test]
     async fn test_init_watermark_concurrent_no_first_checkpoint() {
         let (committer_watermark, pruner_watermark) = test_init_watermark(None, true).await;
-        // Indexer will not init the watermark, pipeline tasks will write commit watermarks as normal.
-        assert_eq!(committer_watermark, None);
-        assert_eq!(pruner_watermark, None);
+
+        let committer_watermark = committer_watermark.unwrap();
+        assert_eq!(committer_watermark.checkpoint_hi, 0);
+
+        let pruner_watermark = pruner_watermark.unwrap();
+        assert_eq!(pruner_watermark.pruner_hi, 0);
     }
 
     #[tokio::test]
     async fn test_init_watermark_concurrent_first_checkpoint_0() {
         let (committer_watermark, pruner_watermark) = test_init_watermark(Some(0), true).await;
-        // Indexer will not init the watermark, pipeline tasks will write commit watermarks as normal.
-        assert_eq!(committer_watermark, None);
-        assert_eq!(pruner_watermark, None);
+
+        let committer_watermark = committer_watermark.unwrap();
+        assert_eq!(committer_watermark.checkpoint_hi, 0);
+
+        let pruner_watermark = pruner_watermark.unwrap();
+        assert_eq!(pruner_watermark.pruner_hi, 0);
     }
 
     #[tokio::test]
@@ -1724,7 +1729,7 @@ mod tests {
         let (committer_watermark, pruner_watermark) = test_init_watermark(Some(1), true).await;
 
         let committer_watermark = committer_watermark.unwrap();
-        assert_eq!(committer_watermark.checkpoint_hi_inclusive, 0);
+        assert_eq!(committer_watermark.checkpoint_hi, 1);
 
         let pruner_watermark = pruner_watermark.unwrap();
         assert_eq!(pruner_watermark.reader_lo, 1);
@@ -1736,7 +1741,7 @@ mod tests {
         let (committer_watermark, pruner_watermark) = test_init_watermark(Some(1), false).await;
 
         let committer_watermark = committer_watermark.unwrap();
-        assert_eq!(committer_watermark.checkpoint_hi_inclusive, 0);
+        assert_eq!(committer_watermark.checkpoint_hi, 1);
 
         let pruner_watermark = pruner_watermark.unwrap();
         assert_eq!(pruner_watermark.reader_lo, 1);
@@ -1756,7 +1761,7 @@ mod tests {
             MockHandler::NAME,
             CommitterWatermark {
                 epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 tx_hi: 20,
                 timestamp_ms_hi_inclusive: 10000,
             },
@@ -1769,7 +1774,7 @@ mod tests {
             SequentialHandler::NAME,
             CommitterWatermark {
                 epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive: 5,
+                checkpoint_hi: 6,
                 tx_hi: 10,
                 timestamp_ms_hi_inclusive: 5000,
             },
@@ -1857,8 +1862,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(watermark1.unwrap().checkpoint_hi_inclusive, 19);
-        assert_eq!(watermark2.unwrap().checkpoint_hi_inclusive, 19);
+        assert_eq!(watermark1.unwrap().checkpoint_hi, 20);
+        assert_eq!(watermark2.unwrap().checkpoint_hi, 20);
     }
 
     /// When a tasked indexer is initialized such that a tasked pipeline is run with a
@@ -1875,7 +1880,7 @@ mod tests {
         conn.set_committer_watermark(
             MockCheckpointSequenceNumberHandler::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -1967,7 +1972,7 @@ mod tests {
         conn.set_committer_watermark(
             "test",
             CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
         )
@@ -2053,10 +2058,10 @@ mod tests {
         }
         let main_pipeline_watermark = store.watermark("test").unwrap();
         // assert that the main pipeline's watermarks are not updated
-        assert_eq!(main_pipeline_watermark.checkpoint_hi_inclusive, 10);
+        assert_eq!(main_pipeline_watermark.checkpoint_hi, 11);
         assert_eq!(main_pipeline_watermark.reader_lo, 5);
         let tasked_pipeline_watermark = store.watermark("test@task").unwrap();
-        assert_eq!(tasked_pipeline_watermark.checkpoint_hi_inclusive, 25);
+        assert_eq!(tasked_pipeline_watermark.checkpoint_hi, 26);
         assert_eq!(tasked_pipeline_watermark.reader_lo, 9);
     }
 
@@ -2071,7 +2076,7 @@ mod tests {
         conn.set_committer_watermark(
             ControllableHandler::NAME,
             CommitterWatermark {
-                checkpoint_hi_inclusive: 11,
+                checkpoint_hi: 12,
                 ..Default::default()
             },
         )

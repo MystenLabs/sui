@@ -535,7 +535,7 @@ mod tests {
 
         let watermark = MockWatermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: 3,
+            checkpoint_hi: 4,
             tx_hi: 9,
             timestamp_ms_hi_inclusive: timestamp,
             reader_lo: 3,
@@ -614,7 +614,7 @@ mod tests {
 
         let watermark = MockWatermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: 3,
+            checkpoint_hi: 4,
             tx_hi: 9,
             timestamp_ms_hi_inclusive: timestamp,
             reader_lo: 3,
@@ -680,7 +680,7 @@ mod tests {
 
         let watermark = MockWatermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: 4,
+            checkpoint_hi: 5,
             tx_hi: 8,
             timestamp_ms_hi_inclusive: timestamp,
             reader_lo: 4,        // Allow pruning up to checkpoint 4 (exclusive)
