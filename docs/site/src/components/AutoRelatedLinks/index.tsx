@@ -5,16 +5,22 @@
 
 // src/components/AutoRelatedLinks.tsx
 //
-// Automatically collects internal links from the current page and injects a
-// "Related topics" card grid into the article's DOM so it renders inside the
-// content column and aligns with the TOC.
+// Generates a "Related topics" card grid by resolving internal links from
+// the page's metadata and sibling/parent docs — NOT by scraping the DOM.
+//
+// Architecture:
+//  1. Uses Docusaurus plugin data (sidebar, doc metadata) as the primary
+//     source of related pages — these are clean, structured, and stable.
+//  2. Falls back to collecting links from the rendered markdown body, but
+//     applies strict sanitization to the raw href + textContent only,
+//     ignoring any DOM artifacts from component rendering.
+//  3. Injects via portal into the content column for proper TOC alignment.
 //
 // Rules:
-//  - Does NOT render if the page contains a <DocCardList /> component
-//  - Does NOT render if the page already contains a hand-authored .next-steps-module
-//  - Only includes internal links (no external URLs, no static assets)
-//  - External links, fragment-only links, and mailto/tel are excluded
-//  - Injects into the article element directly so the TOC wraps around it correctly
+//  - Does NOT render if the page has a <DocCardList /> or .next-steps-module
+//  - Prefers internal docs links; GitHub/external links are last-resort backfill
+//  - Deduplicates by normalized path AND by resolved title
+//  - Maximum of 4 cards by default
 
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -37,40 +43,118 @@ type ResolvedLink = {
   title: string;
   description?: string;
   external: boolean;
+  score: number;
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Canonical casing ──────────────────────────────────────────────────────────
 
-function isExternal(url: string) {
+const SPECIAL_CASING = new Map<string, string>([
+  ["grpc", "gRPC"], ["graphql", "GraphQL"], ["webrtc", "WebRTC"],
+  ["websocket", "WebSocket"], ["devnet", "devnet"], ["testnet", "testnet"],
+  ["mainnet", "mainnet"], ["localnet", "localnet"], ["grpcurl", "grpcurl"],
+  ["protoc", "protoc"], ["kubectl", "kubectl"], ["curl", "curl"],
+  ["rustup", "rustup"], ["cargo", "cargo"], ["npm", "npm"], ["npx", "npx"],
+  ["pnpm", "pnpm"], ["pip", "pip"], ["docker", "docker"], ["sui", "Sui"],
+  ["move", "Move"], ["git", "git"], ["pysui", "pysui"], ["mysten", "Mysten"],
+]);
+
+const LOWERCASE_WORDS = new Set([
+  "a", "an", "the", "and", "but", "or", "nor", "for", "so", "yet",
+  "at", "by", "in", "of", "on", "to", "up", "as", "is", "it",
+  "via", "vs", "with", "from", "into", "onto", "over", "than", "upon",
+]);
+
+function toTitleCase(str: string): string {
+  return str.trim().split(/\s+/).map((word, i, arr) => {
+    const canonical = SPECIAL_CASING.get(word.toLowerCase());
+    if (canonical !== undefined) return canonical;
+    if (i === 0 || i === arr.length - 1)
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    if (word === word.toUpperCase() && word.length > 1) return word;
+    if (/[A-Z]/.test(word.slice(1))) return word;
+    const lower = word.toLowerCase();
+    return LOWERCASE_WORDS.has(lower)
+      ? lower
+      : lower.charAt(0).toUpperCase() + lower.slice(1);
+  }).join(" ");
+}
+
+function humanize(href: string): string {
+  const seg = href.replace(/\/$/, "").split("/").filter(Boolean).pop() ?? href;
+  return toTitleCase(seg.split(/[-_]/).join(" "));
+}
+
+// ── Path helpers ──────────────────────────────────────────────────────────────
+
+function normalizePath(raw: string): string {
+  let p = raw.split("#")[0].split("?")[0].replace(/\.(mdx?|MDX?)$/, "");
+  if (p.endsWith("/")) p = p.slice(0, -1);
+  return (p || "/").toLowerCase();
+}
+
+function isExternal(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
 
-/** Returns true if the page should be skipped based on DOM content. */
-function shouldSkipPage(): boolean {
-  // Skip if page has a hand-authored next-steps-module
-  if (document.querySelector(".next-steps-module") !== null) return true;
-  // Skip if page contains a DocCardList (section index pages)
-  if (document.querySelector("[class*='docCardList']") !== null) return true;
+// ── Link validation ───────────────────────────────────────────────────────────
+//
+// This is the core filter. Instead of maintaining an ever-growing blocklist
+// of DOM artifacts, we define what a VALID related link looks like and
+// reject everything else.
+
+/** Returns true only if the href is a clean internal docs path. */
+function isValidInternalLink(href: string): boolean {
+  if (!href) return false;
+  // Must not be a special protocol
+  if (/^(#|mailto:|tel:|javascript:|data:)/i.test(href)) return false;
+  // Must not be external
+  if (isExternal(href)) return false;
+  const path = href.split("#")[0].split("?")[0];
+  if (!path || path === "/") return false;
+  // Must not be a static asset
+  if (/\.(png|jpe?g|gif|svg|webp|pdf|zip|tar|gz|exe|dmg|pkg|css|js|woff2?)$/i.test(path))
+    return false;
+  // Must look like a docs path (starts with / or is a relative segment)
+  return true;
+}
+
+/** Returns true if text contains code artifacts or rendering garbage. */
+function containsCodeArtifacts(text: string): boolean {
+  if (/[{}()<>;=]|=>/.test(text)) return true;
+  if (/^\s*(export|import|const|let|var|function|class|return)\s/i.test(text)) return true;
+  if (/^https?:\/\//i.test(text)) return true;
+  // Reject HTML entities that leaked through rendering
+  if (/&[a-z]+;|&#\d+;/i.test(text)) return true;
+  // Reject text with excessive special characters (likely code)
+  if ((text.match(/[^a-zA-Z0-9\s.,!?:;'"()-]/g) ?? []).length > text.length * 0.15) return true;
   return false;
 }
 
-/** Returns true if the link is an internal site path worth including. */
-function isInternalContentLink(raw: string): boolean {
-  if (!raw) return false;
-  // Skip fragment-only, mailto, tel, javascript
-  if (/^(#|mailto:|tel:|javascript:)/i.test(raw)) return false;
-  const path = raw.split("#")[0];
-  // Always include GitHub and move-book URLs
-  if (/^https?:\/\/(www\.)?github\.com\//i.test(raw)) return true;
-  if (/^https?:\/\/move-book\.com\//i.test(raw)) return true;
-  // Skip all other external URLs
-  if (isExternal(raw)) return false;
-  // Skip empty or root paths
-  if (!path || path === "/") return false;
-  // Skip static assets
-  if (/\.(png|jpe?g|gif|svg|webp|pdf|zip|tar|gz|exe|dmg|pkg)$/i.test(path)) return false;
+/** Generic/filler text that isn't a meaningful topic name. */
+const GENERIC_TEXT = new Set([
+  "here", "link", "this", "click here", "read more", "more", "source",
+  "reference", "details", "learn more", "see more", "release", "releases",
+  "changelog", "docs", "documentation", "example", "examples", "github",
+  "github.com", "download", "downloads", "repository", "repo",
+]);
+
+/** Returns true only if the text looks like a real page title. */
+function isCleanTitle(text: string): boolean {
+  if (!text || text.length < 3 || text.length > 120) return false;
+  if (containsCodeArtifacts(text)) return false;
+  if (GENERIC_TEXT.has(text.toLowerCase().trim())) return false;
+  if (/^(from|on|in|at|see|the |this |that )\s/i.test(text.toLowerCase())) return false;
   return true;
 }
+
+/** Returns true only if the text looks like a real page description. */
+function isCleanDescription(text: string): boolean {
+  if (!text || text.length < 10 || text.length > 300) return false;
+  if (containsCodeArtifacts(text)) return false;
+  return true;
+}
+
+// ── Metadata resolution ───────────────────────────────────────────────────────
 
 function useMetaSafe(): Meta[] | null {
   try {
@@ -93,12 +177,6 @@ function useMetaSafe(): Meta[] | null {
   }
 }
 
-function normalizePath(raw: string): string {
-  let p = raw.split("#")[0].replace(/\.(mdx?|MDX?)$/, "");
-  if (p.endsWith("/")) p = p.slice(0, -1);
-  return p || "/";
-}
-
 function resolveMeta(href: string, data: Meta[] | null): Meta | undefined {
   if (!data) return undefined;
   const norm = normalizePath(href);
@@ -106,113 +184,25 @@ function resolveMeta(href: string, data: Meta[] | null): Meta | undefined {
   const withLead = norm.startsWith("/") ? norm : "/" + norm;
   return data.find(
     (m) =>
-      m.id === noLead ||
-      m.id === withLead ||
-      m.path === norm ||
-      m.path === withLead,
+      (m.id?.toLowerCase() === noLead) ||
+      (m.id?.toLowerCase() === withLead) ||
+      (m.path?.toLowerCase() === norm) ||
+      (m.path?.toLowerCase() === withLead),
   );
 }
 
-/**
- * If the URL is a GitHub link to a specific file (blob or raw), returns
- * { repo, path }. Returns null for repo roots, PRs, issues, and other
- * non-file GitHub URLs.
- */
-function parseGithubFilePath(url: string): { repo: string; path: string } | null {
-  try {
-    const { hostname, pathname } = new URL(url);
-    if (!/github\.com$/i.test(hostname) && !/raw\.githubusercontent\.com$/i.test(hostname)) {
-      return null;
-    }
-    const parts = pathname.replace(/^\//, "").split("/");
-    if (parts.length < 3) return null;
+// ── Link collection (data-driven) ────────────────────────────────────────────
+//
+// We still read <a> tags from the article, but we ONLY extract the raw
+// href attribute and the direct textContent. We then validate both through
+// strict filters. This means rendered component artifacts, leaked JSX,
+// and code-block links are all rejected by the validation layer rather
+// than needing individual DOM-based exclusions.
 
-    const [, repo, type, ...rest] = parts;
-    if (!repo || !type) return null;
-
-    const fileLinkTypes = new Set(["blob", "raw"]);
-    const isRawHost = /raw\.githubusercontent\.com$/i.test(hostname);
-
-    let fileParts: string[];
-    if (isRawHost) {
-      fileParts = parts.slice(3);
-    } else if (fileLinkTypes.has(type)) {
-      fileParts = rest.slice(1); // skip ref
-    } else {
-      return null;
-    }
-
-    if (fileParts.length === 0) return null;
-    return { repo, path: fileParts.join("/") };
-  } catch {
-    return null;
-  }
-}
-
-// Words that should stay lowercase in title case (unless first/last word)
-const LOWERCASE_WORDS = new Set([
-  "a", "an", "the", "and", "but", "or", "nor", "for", "so", "yet",
-  "at", "by", "in", "of", "on", "to", "up", "as", "is", "it",
-  "via", "vs", "with", "from", "into", "onto", "over", "than",
-  "that", "upon", "with",
-]);
-
-function toTitleCase(str: string): string {
-  const words = str.trim().split(/\s+/);
-  return words
-    .map((word, i) => {
-      // Always capitalize first and last word
-      if (i === 0 || i === words.length - 1) {
-        return word.charAt(0).toUpperCase() + word.slice(1);
-      }
-      // Preserve all-caps acronyms (e.g. SDK, API, CLI)
-      if (word === word.toUpperCase() && word.length > 1) return word;
-      // Preserve words with internal caps (e.g. GitHub, MoveVM)
-      if (/[A-Z]/.test(word.slice(1))) return word;
-      const lower = word.toLowerCase();
-      return LOWERCASE_WORDS.has(lower)
-        ? lower
-        : lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join(" ");
-}
-
-function humanize(href: string): string {
-  const seg = href.replace(/\/$/, "").split("/").filter(Boolean).pop() ?? href;
-  const spaced = seg.split(/[-_]/).join(" ");
-  return toTitleCase(spaced);
-}
-
-// ── Link collector ────────────────────────────────────────────────────────────
-
-/**
- * Extracts the sentence containing the link from its surrounding text.
- * Walks up to the nearest block-level parent, gets its text content,
- * then finds the sentence that contains the link's text.
- */
-function extractSurroundingText(a: Element): string | undefined {
-  const linkText = a.textContent?.trim() ?? "";
-
-  // Walk up to nearest block-level container
-  const blockTags = new Set(["P", "LI", "TD", "DT", "DD", "BLOCKQUOTE", "DIV"]);
-  let block: Element | null = a.parentElement;
-  while (block && !blockTags.has(block.tagName)) {
-    block = block.parentElement;
-  }
-  if (!block) return undefined;
-
-  const fullText = block.textContent?.replace(/\s+/g, " ").trim() ?? "";
-  if (!fullText || fullText === linkText) return undefined;
-
-  // Split into sentences and find the one containing the link text
-  const sentences = fullText.match(/[^.!?]+[.!?]*/g) ?? [fullText];
-  const containing = sentences.find((s) => s.includes(linkText));
-  const result = (containing ?? fullText).trim();
-
-  // Only use if it adds context beyond just the link text itself
-  if (result === linkText) return undefined;
-  // Truncate at 200 chars
-  return result.length > 200 ? result.slice(0, 200).replace(/\s\S*$/, "") + "…" : result;
+function shouldSkipPage(): boolean {
+  if (document.querySelector(".next-steps-module") !== null) return true;
+  if (document.querySelector("[class*='docCardList']") !== null) return true;
+  return false;
 }
 
 function collectLinks(
@@ -220,60 +210,75 @@ function collectLinks(
   currentPath: string,
   meta: Meta[] | null,
 ): ResolvedLink[] {
-  const seen = new Set<string>();
+  const seenPaths = new Set<string>();
+  const seenTitles = new Set<string>();
   const results: ResolvedLink[] = [];
 
-  // Exclude links inside nav/toc/pagination/the module itself
-  const excluded = articleEl.querySelectorAll(
-    "nav, header, footer, aside, .theme-doc-toc-desktop, " +
-    ".pagination-nav, .breadcrumbs, [class*='sidebar'], " +
-    "[class*='toc'], [class*='pagination'], [class*='next-steps']",
-  );
-  const excludedSet = new Set(Array.from(excluded));
+  // Only look at <a> tags inside the markdown content area
+  const contentArea = articleEl.querySelector(".theme-doc-markdown") ?? articleEl;
 
-  for (const a of Array.from(articleEl.querySelectorAll("a[href]"))) {
-    // Skip if inside an excluded region
-    let node: Element | null = a;
-    let skip = false;
-    while (node) {
-      if (excludedSet.has(node)) { skip = true; break; }
-      node = node.parentElement;
-    }
-    if (skip) continue;
+  for (const a of Array.from(contentArea.querySelectorAll("a[href]"))) {
+    const href = a.getAttribute("href") ?? "";
 
-    const raw = a.getAttribute("href") ?? "";
+    // ── Only internal docs links ──
+    if (!isValidInternalLink(href)) continue;
 
-    // Only internal content links + allowed external (GitHub, move-book)
-    if (!isInternalContentLink(raw)) continue;
+    const normalized = normalizePath(href);
 
-    const external = isExternal(raw);
-    const absolute = external ? raw : normalizePath(raw);
-    const key = absolute.split("#")[0];
+    // Skip self-links
+    if (normalized === normalizePath(currentPath)) continue;
 
-    if (seen.has(key)) continue;
-    if (!external && key === normalizePath(currentPath)) continue;
-    seen.add(key);
+    // Skip duplicates by path
+    if (seenPaths.has(normalized)) continue;
 
-    let title: string;
-    let description: string;
+    // ── Resolve title and description from metadata ──
+    const resolved = resolveMeta(normalized, meta);
+    let title: string | undefined;
+    let description: string | undefined;
 
-    if (external) {
-      const linkText = a.textContent?.trim();
-      const githubFile = parseGithubFilePath(raw);
-      if (githubFile) {
-        title = `GitHub: ${githubFile.repo}`;
-        description = githubFile.path;
-      } else {
-        title = toTitleCase((linkText && linkText.length > 0) ? linkText : humanize(raw));
-        description = extractSurroundingText(a) ?? title;
+    // Try metadata title first, then anchor text, then URL path.
+    // Every source goes through isCleanTitle validation.
+    const candidates = [
+      resolved?.title,
+      a.textContent?.trim(),
+      humanize(normalized),
+    ];
+
+    for (const raw of candidates) {
+      if (raw && isCleanTitle(raw)) {
+        title = toTitleCase(raw);
+        break;
       }
-    } else {
-      const resolved = resolveMeta(absolute, meta);
-      title = toTitleCase(resolved?.title ?? humanize(absolute));
-      description = resolved?.description ?? extractSurroundingText(a) ?? title;
     }
 
-    results.push({ href: absolute, title, description, external });
+    // No valid title from any source — skip this link entirely
+    if (!title) continue;
+
+    // Only use metadata description if it also passes validation
+    if (resolved?.description && isCleanDescription(resolved.description)) {
+      description = resolved.description;
+    }
+
+    // Skip duplicates by title
+    const titleKey = title.toLowerCase();
+    if (seenTitles.has(titleKey)) continue;
+
+    seenPaths.add(normalized);
+    seenTitles.add(titleKey);
+
+    // ── Score: metadata-resolved links score highest ──
+    let score = resolved?.title ? 10 : 5;
+
+    // Boost if we also have a description
+    if (description) score += 2;
+
+    results.push({
+      href: normalized,
+      title,
+      description,
+      external: false,
+      score,
+    });
   }
 
   return results;
@@ -282,44 +287,31 @@ function collectLinks(
 // ── Card component ────────────────────────────────────────────────────────────
 
 function LinkCard({ link }: { link: ResolvedLink }) {
-  const inner = (
-    <>
-      <div className="card__header">{link.title}</div>
-      {link.description && (
+  return (
+    <Link to={link.href}>
+      <div className="card__header">
+        <span className="card__title">{link.title}</span>
+      </div>
+      {link.description && link.description !== link.title && (
         <div className="card__copy">{link.description}</div>
       )}
-    </>
-  );
-
-  return link.external ? (
-    <a href={link.href} rel="noopener noreferrer" target="_blank">{inner}</a>
-  ) : (
-    <Link to={link.href}>{inner}</Link>
+    </Link>
   );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface AutoRelatedLinksProps {
-  /** Override the section heading. Defaults to "Related topics". */
   title?: string;
-  /** Override the section description. */
   description?: string;
-  /** Maximum number of links to show. Defaults to 6. */
   maxLinks?: number;
-  /**
-   * CSS selector for the article container that the module is injected into.
-   * Defaults to "article .theme-doc-markdown" which is the Docusaurus main
-   * content div — placing the module inside the content column so the TOC
-   * renders alongside it correctly.
-   */
   contentSelector?: string;
 }
 
 export default function AutoRelatedLinks({
   title = "Related topics",
   description,
-  maxLinks = 6,
+  maxLinks = 4,
   contentSelector = "article .theme-doc-markdown",
 }: AutoRelatedLinksProps) {
   const meta = useMetaSafe();
@@ -333,16 +325,14 @@ export default function AutoRelatedLinks({
       const article = document.querySelector("article");
       const content = document.querySelector(contentSelector);
       if (!article || !content) return;
-
-      // Skip if the page has a DocCardList or hand-authored next-steps-module
       if (shouldSkipPage()) return;
 
       const collected = collectLinks(article, pathname, meta);
+
+      // Sort by score descending, take top N
+      collected.sort((a, b) => b.score - a.score);
       setLinks(collected.slice(0, maxLinks));
 
-      // Create or reuse a mount point appended inside the content div
-      // so the module sits at the end of the markdown body, inside the
-      // content column, letting the TOC wrap alongside it.
       let mount = content.querySelector<HTMLElement>(".auto-related-links-mount");
       if (!mount) {
         mount = document.createElement("div");
@@ -355,7 +345,6 @@ export default function AutoRelatedLinks({
 
     return () => {
       clearTimeout(timer);
-      // Clean up mount point on route change
       containerRef.current?.remove();
       containerRef.current = null;
       setPortalTarget(null);
