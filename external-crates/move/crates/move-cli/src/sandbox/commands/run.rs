@@ -104,7 +104,7 @@ pub fn run<V: VMTestSetup>(
             serialized_args,
             &mut gas_status,
             tracer,
-            false, /*  bypass_declared_entry_check */
+            true, /*  bypass_declared_entry_check */
         )
     };
 

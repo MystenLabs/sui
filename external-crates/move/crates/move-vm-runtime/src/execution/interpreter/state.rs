@@ -276,12 +276,26 @@ impl MachineState {
         buf: &mut B,
     ) -> PartialVMResult<()> {
         debug_writeln!(buf, "Call Stack:");
-        self.debug_print_frame(buf, vtables, 0, &self.call_stack.current_frame)?;
-        for (i, frame) in self.call_stack.frames.iter().enumerate() {
-            self.debug_print_frame(buf, vtables, i.saturating_add(1), frame)?;
+        // We reverse number the call stack so that the most recent frame is at the bottom when
+        // printed and with index 0 (the stack grows downwards in the printed output):
+        //
+        // ```
+        // [n] entry_frame_into_vm_and_oldest_frame
+        // ...
+        // [0] most_recent_frame
+        // ```
+        for (i, frame) in (1..=self.call_stack.frames.len())
+            .rev()
+            .zip(self.call_stack.frames.iter())
+        {
+            self.debug_print_frame(buf, vtables, i, frame)?;
         }
+        self.debug_print_frame(buf, vtables, 0, &self.call_stack.current_frame)?;
         debug_writeln!(buf, "Operand Stack:");
-        for (idx, val) in self.operand_stack.value.iter().enumerate() {
+        for (idx, val) in (0..self.operand_stack.len())
+            .rev()
+            .zip(self.operand_stack.value.iter())
+        {
             // TODO: Currently we do not know the types of the values on the operand stack.
             // Revisit.
             debug_write!(buf, "    [{}] ", idx);

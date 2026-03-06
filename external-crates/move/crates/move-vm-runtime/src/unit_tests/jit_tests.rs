@@ -54,7 +54,6 @@ fn translate_without_optimization() {
     let verified = make_verified_empty_package(original_id, version_id);
 
     let vm_config = VMConfig {
-        optimize_bytecode: false,
         ..VMConfig::default()
     };
     let natives = NativeFunctions::empty_for_testing().unwrap();
@@ -65,23 +64,26 @@ fn translate_without_optimization() {
     assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
 }
 
-#[test]
-fn translate_with_optimization() {
-    let original_id = AccountAddress::from([3u8; 32]);
-    let version_id = AccountAddress::from([4u8; 32]);
-    let verified = make_verified_empty_package(original_id, version_id);
-
-    let vm_config = VMConfig {
-        optimize_bytecode: true,
-        ..VMConfig::default()
-    };
-    let natives = NativeFunctions::empty_for_testing().unwrap();
-    let interner = IdentifierInterner::new();
-
-    let result = translate_package(&vm_config, &interner, &natives, verified);
-    let runtime_pkg = result.expect("translate_package should succeed for minimal package");
-    assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
-}
+// FUTURE: Re-enable once we add optimizations to the translation pipeline. For now, this test is
+// identical to the one above since no optimizations are implemented, so we just have one test to
+// cover the current code.
+// #[test]
+// fn translate_with_optimization() {
+//     let original_id = AccountAddress::from([3u8; 32]);
+//     let version_id = AccountAddress::from([4u8; 32]);
+//     let verified = make_verified_empty_package(original_id, version_id);
+//
+//     let vm_config = VMConfig {
+//         // FUTURE: Enable optimizations here when we have some implemented.
+//         ..VMConfig::default()
+//     };
+//     let natives = NativeFunctions::empty_for_testing().unwrap();
+//     let interner = IdentifierInterner::new();
+//
+//     let result = translate_package(&vm_config, &interner, &natives, verified);
+//     let runtime_pkg = result.expect("translate_package should succeed for minimal package");
+//     assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
+// }
 
 // -------------------------------------------------------------------------------------------------
 // Helper functions for creating modules with dependencies

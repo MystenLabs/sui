@@ -2691,6 +2691,7 @@ pub mod debug {
         Ok(())
     }
 
+    #[cfg(any(debug_assertions, feature = "testing"))]
     pub fn print_stack_frame<B: Write>(
         buf: &mut B,
         stack_frame: &StackFrame,
