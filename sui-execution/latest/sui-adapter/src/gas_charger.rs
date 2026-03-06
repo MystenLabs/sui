@@ -304,6 +304,20 @@ pub mod checked {
             self.smash_gas(tx_ctx, temporary_store);
         }
 
+        fn should_write_gas_coin(&self, gas_coin: Option<&Object>) -> bool {
+            if let PaymentMethod::Metered {
+                primary_coin,
+                address_balance_payer,
+                ..
+            } = &self.payment_method
+            {
+                primary_coin.is_some()
+                    || gas_coin.unwrap().owner() != &Owner::AddressOwner(*address_balance_payer)
+            } else {
+                false
+            }
+        }
+
         /// Entry point for gas charging.
         /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of
         /// mutated objects
@@ -328,6 +342,8 @@ pub mod checked {
             let gas_coin = self
                 .smashed_gas_coin
                 .map(|id| temporary_store.read_object(&id).unwrap().clone());
+
+            let write_gas_coin = self.should_write_gas_coin(gas_coin.as_ref());
 
             if let PaymentMethod::Metered {
                 primary_coin,
@@ -358,13 +374,8 @@ pub mod checked {
                     self.reset(tx_ctx, temporary_store);
                 }
 
-                let gas_coin = gas_coin.as_ref().unwrap().clone();
-                if primary_coin.is_some()
-                    || gas_coin.owner() != &Owner::AddressOwner(address_balance_payer)
-                {
-                    temporary_store.mutate_input_object(gas_coin);
-                } else {
-                    temporary_store.delete_created_object(&gas_coin.id());
+                if !write_gas_coin {
+                    temporary_store.delete_created_object(&gas_coin.as_ref().unwrap().id());
                 }
             }
 
@@ -374,7 +385,6 @@ pub mod checked {
 
             let PaymentMethod::Metered {
                 address_balance_payer,
-                primary_coin,
                 ..
             } = self.payment_method
             else {
@@ -392,15 +402,17 @@ pub mod checked {
             // If the primary coin was initially real, or if it was synthesized but
             // transferred away, then the object must be mutated so it is written
             // in effects.
-            if primary_coin.is_none()
-                && gas_coin.owner() == &Owner::AddressOwner(address_balance_payer)
-            {
+            if write_gas_coin {
                 // no primary coin (address balance payment).
                 // Take the remaining balance of the synthesized smashed coin and transfer it back
                 // to the address balance.
-                let remaining_balance = get_gas_balance(&gas_coin).unwrap();
-                // TODO: is this necessary?
+
+                // TODO: is this necessary? it should not be because we take pains to exclude the coin
+                // from charging if its not going to be written
                 let storage_costs = gas_coin.storage_rebate;
+
+                let remaining_balance = get_gas_balance(&gas_coin).unwrap();
+                temporary_store.mutate_input_object(gas_coin);
                 temporary_store.credit_address_balance_gas(
                     &address_balance_payer,
                     remaining_balance + storage_costs,
