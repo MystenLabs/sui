@@ -74,18 +74,6 @@ const concepts = [
 		items: [
 			'concepts/cryptography/passkeys',
 			'concepts/cryptography/system/checkpoint-verification',
-			/*{
-				type: 'category',
-				label: 'System',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/system',
-				},
-				items: [
-					'concepts/cryptography/system/validator-signatures',
-					'concepts/cryptography/system/intents-for-validation',
-				],
-			},*/
 		],
 	},
 	'concepts/gaming',
