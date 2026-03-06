@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "115",
+              "maxSupportedProtocolVersion": "116",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1358,6 +1358,7 @@
                 "enable_coin_reservation_obj_refs": false,
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
+                "enable_gcp_attestation": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
@@ -1689,6 +1690,8 @@
                   "u64": "5"
                 },
                 "gas_rounding_step": null,
+                "gcp_attestation_verify_base_cost": null,
+                "gcp_attestation_verify_cost_per_byte": null,
                 "groth16_prepare_verifying_key_bls12381_cost_base": {
                   "u64": "52"
                 },

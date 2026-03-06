@@ -21,9 +21,10 @@ mod checked {
         TransactionDataAPI, TransactionKind,
     };
     use sui_types::{
-        SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
-        SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
-        SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+        SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+        SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+        SUI_SYSTEM_STATE_OBJECT_ID,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -551,7 +552,9 @@ mod checked {
                         // System objects that can only be taken immutably
                         | (SUI_CLOCK_OBJECT_ID, SharedObjectMutability::Immutable)
                         | (SUI_RANDOMNESS_STATE_OBJECT_ID, SharedObjectMutability::Immutable)
-                        | (SUI_ACCUMULATOR_ROOT_OBJECT_ID, SharedObjectMutability::Immutable) => (),
+                        | (SUI_ACCUMULATOR_ROOT_OBJECT_ID, SharedObjectMutability::Immutable)
+                        // AuthenticatorState: immutable reads allowed for JWK lookup (e.g. GCP attestation)
+                        | (SUI_AUTHENTICATOR_STATE_OBJECT_ID, SharedObjectMutability::Immutable) => (),
 
                         // All other system objects: cannot be used as input at all
                         _ => {

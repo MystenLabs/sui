@@ -33,7 +33,6 @@ public struct AuthenticatorStateInner has store {
     active_jwks: vector<ActiveJwk>,
 }
 
-#[allow(unused_field)]
 /// Must match the JWK struct in fastcrypto-zkp
 public struct JWK has copy, drop, store {
     kty: String,
@@ -42,14 +41,12 @@ public struct JWK has copy, drop, store {
     alg: String,
 }
 
-#[allow(unused_field)]
 /// Must match the JwkId struct in fastcrypto-zkp
 public struct JwkId has copy, drop, store {
     iss: String,
     kid: String,
 }
 
-#[allow(unused_field)]
 public struct ActiveJwk has copy, drop, store {
     jwk_id: JwkId,
     jwk: JWK,
@@ -355,9 +352,90 @@ fun get_active_jwks(self: &AuthenticatorState, ctx: &TxContext): vector<ActiveJw
     self.load_inner().active_jwks
 }
 
+/// Look up a JWK by issuer and key ID. Returns `none` if not found.
+public fun get_jwk_by_kid(self: &AuthenticatorState, iss: String, kid: String): Option<JWK> {
+    let inner = self.load_inner();
+    let mut i = 0;
+    while (i < inner.active_jwks.length()) {
+        let active = &inner.active_jwks[i];
+        if (&active.jwk_id.iss == &iss && &active.jwk_id.kid == &kid) {
+            return option::some(active.jwk)
+        };
+        i = i + 1;
+    };
+    option::none()
+}
+
+public fun jwk_n(jwk: &JWK): &String {
+    &jwk.n
+}
+
+public fun jwk_e(jwk: &JWK): &String {
+    &jwk.e
+}
+
+public fun jwk_alg(jwk: &JWK): &String {
+    &jwk.alg
+}
+
+public fun jwk_kty(jwk: &JWK): &String {
+    &jwk.kty
+}
+
 #[test_only]
 public fun create_for_testing(ctx: &TxContext) {
     create(ctx);
+}
+
+/// Creates and returns a new AuthenticatorState object for unit testing.
+/// Unlike `create_for_testing`, the object is NOT shared, so callers hold it directly
+/// and can pass mutable references in the same test function.
+#[test_only]
+public fun new_for_testing(ctx: &mut TxContext): AuthenticatorState {
+    let version = CurrentVersion;
+    let inner = AuthenticatorStateInner { version, active_jwks: vector[] };
+    let mut self = AuthenticatorState { id: object::new(ctx), version };
+    dynamic_field::add(&mut self.id, version, inner);
+    self
+}
+
+/// Directly sets the active JWKs on a test AuthenticatorState, bypassing the
+/// system-address sender check so it can be used in plain `#[test]` functions.
+#[test_only]
+public fun set_active_jwks_for_testing(
+    self: &mut AuthenticatorState,
+    active_jwks: vector<ActiveJwk>,
+) {
+    let inner = self.load_inner_mut();
+    inner.active_jwks = active_jwks;
+}
+
+/// Drops a test-only AuthenticatorState created by `new_for_testing`.
+#[test_only]
+public fun destroy_for_testing(self: AuthenticatorState) {
+    let AuthenticatorState { mut id, version } = self;
+    let inner: AuthenticatorStateInner = dynamic_field::remove(&mut id, version);
+    let AuthenticatorStateInner { version: _, active_jwks: _ } = inner;
+    object::delete(id);
+}
+
+/// Creates an `ActiveJwk` with caller-supplied modulus and exponent (as base64url strings),
+/// for use when tests need realistic key material rather than the placeholder values in
+/// `create_active_jwk`.
+#[test_only]
+public fun create_active_jwk_with_n_e(
+    iss: std::string::String,
+    kid: std::string::String,
+    kty: std::string::String,
+    n: std::string::String,
+    e: std::string::String,
+    epoch: u64,
+): ActiveJwk {
+    ActiveJwk {
+        jwk_id: JwkId { iss, kid },
+        jwk: JWK { kty, e, n, alg: utf8(b"RS256") },
+        epoch,
+    }
 }
 
 #[test_only]

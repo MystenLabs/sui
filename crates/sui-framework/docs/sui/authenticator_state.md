@@ -23,6 +23,11 @@ title: Module `sui::authenticator_state`
 -  [Function `deduplicate`](#sui_authenticator_state_deduplicate)
 -  [Function `expire_jwks`](#sui_authenticator_state_expire_jwks)
 -  [Function `get_active_jwks`](#sui_authenticator_state_get_active_jwks)
+-  [Function `get_jwk_by_kid`](#sui_authenticator_state_get_jwk_by_kid)
+-  [Function `jwk_n`](#sui_authenticator_state_jwk_n)
+-  [Function `jwk_e`](#sui_authenticator_state_jwk_e)
+-  [Function `jwk_alg`](#sui_authenticator_state_jwk_alg)
+-  [Function `jwk_kty`](#sui_authenticator_state_jwk_kty)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -762,6 +767,136 @@ JWK state from the chain.
 <pre><code><b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_get_active_jwks">get_active_jwks</a>(self: &<a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">AuthenticatorState</a>, ctx: &TxContext): vector&lt;<a href="../sui/authenticator_state.md#sui_authenticator_state_ActiveJwk">ActiveJwk</a>&gt; {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/authenticator_state.md#sui_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
     self.<a href="../sui/authenticator_state.md#sui_authenticator_state_load_inner">load_inner</a>().active_jwks
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_authenticator_state_get_jwk_by_kid"></a>
+
+## Function `get_jwk_by_kid`
+
+Look up a JWK by issuer and key ID. Returns <code>none</code> if not found.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_get_jwk_by_kid">get_jwk_by_kid</a>(self: &<a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">sui::authenticator_state::AuthenticatorState</a>, iss: <a href="../std/string.md#std_string_String">std::string::String</a>, kid: <a href="../std/string.md#std_string_String">std::string::String</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">sui::authenticator_state::JWK</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_get_jwk_by_kid">get_jwk_by_kid</a>(self: &<a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">AuthenticatorState</a>, iss: String, kid: String): Option&lt;<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">JWK</a>&gt; {
+    <b>let</b> inner = self.<a href="../sui/authenticator_state.md#sui_authenticator_state_load_inner">load_inner</a>();
+    <b>let</b> <b>mut</b> i = 0;
+    <b>while</b> (i &lt; inner.active_jwks.length()) {
+        <b>let</b> active = &inner.active_jwks[i];
+        <b>if</b> (&active.jwk_id.iss == &iss && &active.jwk_id.kid == &kid) {
+            <b>return</b> option::some(active.jwk)
+        };
+        i = i + 1;
+    };
+    option::none()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_authenticator_state_jwk_n"></a>
+
+## Function `jwk_n`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_n">jwk_n</a>(jwk: &<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">sui::authenticator_state::JWK</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_n">jwk_n</a>(jwk: &<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">JWK</a>): &String {
+    &jwk.n
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_authenticator_state_jwk_e"></a>
+
+## Function `jwk_e`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_e">jwk_e</a>(jwk: &<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">sui::authenticator_state::JWK</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_e">jwk_e</a>(jwk: &<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">JWK</a>): &String {
+    &jwk.e
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_authenticator_state_jwk_alg"></a>
+
+## Function `jwk_alg`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_alg">jwk_alg</a>(jwk: &<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">sui::authenticator_state::JWK</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_alg">jwk_alg</a>(jwk: &<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">JWK</a>): &String {
+    &jwk.alg
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_authenticator_state_jwk_kty"></a>
+
+## Function `jwk_kty`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_kty">jwk_kty</a>(jwk: &<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">sui::authenticator_state::JWK</a>): &<a href="../std/string.md#std_string_String">std::string::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_kty">jwk_kty</a>(jwk: &<a href="../sui/authenticator_state.md#sui_authenticator_state_JWK">JWK</a>): &String {
+    &jwk.kty
 }
 </code></pre>
 

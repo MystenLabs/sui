@@ -14624,6 +14624,7 @@ version = "1.68.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.21.7",
  "bcs",
  "clap",
  "coset",
@@ -14647,8 +14648,10 @@ dependencies = [
  "prost-types 0.14.1",
  "rand 0.8.5",
  "reqwest",
+ "rsa 0.9.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "shared-crypto",
  "sui-config",
  "sui-core",
@@ -15818,6 +15821,7 @@ dependencies = [
 name = "sui-move-natives-latest"
 version = "0.1.0"
 dependencies = [
+ "base64 0.21.7",
  "bcs",
  "better_any",
  "fastcrypto",
@@ -15986,6 +15990,7 @@ dependencies = [
  "prometheus",
  "reqwest",
  "serde",
+ "serde_json",
  "sui-config",
  "sui-core",
  "sui-http",
@@ -17183,7 +17188,9 @@ dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
  "rand 0.8.5",
+ "ring 0.17.8",
  "roaring 0.10.9",
+ "rsa 0.9.1",
  "rustls-pki-types",
  "schemars 0.8.21",
  "serde",
@@ -17192,6 +17199,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml 0.8.26",
+ "sha2 0.10.9",
  "shared-crypto",
  "signature 1.6.4",
  "static_assertions",

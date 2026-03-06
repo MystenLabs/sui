@@ -89,8 +89,11 @@ ciborium.workspace = true
 x509-parser.workspace = true
 p384.workspace = true
 rustls-pki-types.workspace = true
+ring = { version = "0.17", default-features = false, features = ["std"] }
 
 [dev-dependencies]
+rsa = { version = "0.9", default-features = false, features = ["std"] }
+sha2 = { version = "0.10", default-features = false }
 base64.workspace = true
 bincode.workspace = true
 criterion.workspace = true
@@ -115,6 +118,10 @@ harness = false
 
 [[bench]]
 name = "nitro_attestation_bench"
+harness = false
+
+[[bench]]
+name = "gcp_attestation_bench"
 harness = false
 
 [features]
