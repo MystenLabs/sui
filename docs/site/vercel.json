@@ -3351,7 +3351,7 @@
       "source": "/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature",
       "destination": "/references/sui-api/sui-graphql/beta/reference",
       "permanent": true
-    }
+    },
     { "source": "/concepts/cryptography.md", "destination": "/concepts/cryptography/index.md" },
     { "source": "/guides/developer/accessing-data/custom-indexer.md", "destination": "/guides/developer/accessing-data/custom-indexer/index.md" },
     { "source": "/guides/developer/app-examples.md", "destination": "/guides/developer/app-examples/index.md" },
@@ -3364,7 +3364,7 @@
     { "source": "/references/framework/sui_std.md", "destination": "/references/framework/sui_std/index.md" },
     { "source": "/references/framework/sui_sui.md", "destination": "/references/framework/sui_sui/index.md" },
     { "source": "/references/framework/sui_sui_system.md", "destination": "/references/framework/sui_sui_system/index.md" },
-    { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" },
+    { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" }
   ],
   "rewrites": [
     {
