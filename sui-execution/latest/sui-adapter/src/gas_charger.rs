@@ -304,7 +304,7 @@ pub mod checked {
             self.smash_gas(tx_ctx, temporary_store);
         }
 
-        fn should_write_gas_coin(&self, gas_coin: Option<&Object>) -> bool {
+        fn should_write_gas_coin(&self, gas_coin: &Object) -> bool {
             if let PaymentMethod::Metered {
                 primary_coin,
                 address_balance_payer,
@@ -312,7 +312,7 @@ pub mod checked {
             } = &self.payment_method
             {
                 primary_coin.is_some()
-                    || gas_coin.unwrap().owner() != &Owner::AddressOwner(*address_balance_payer)
+                    || gas_coin.owner() != &Owner::AddressOwner(*address_balance_payer)
             } else {
                 false
             }
@@ -339,65 +339,68 @@ pub mod checked {
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
 
-            let gas_coin = self
-                .smashed_gas_coin
-                .map(|id| temporary_store.read_object(&id).unwrap().clone());
-
-            let write_gas_coin = self.should_write_gas_coin(gas_coin.as_ref());
-
-            if let PaymentMethod::Metered {
-                primary_coin,
+            let PaymentMethod::Metered {
                 address_balance_payer,
                 ..
             } = self.payment_method
+            else {
+                // compute and collect storage charges
+                temporary_store.ensure_active_inputs_mutated();
+                temporary_store.collect_storage_and_rebate(self);
+                return GasCostSummary::default();
+            };
+
+            let gas_coin_id = self.smashed_gas_coin.unwrap();
+            let gas_coin = temporary_store.read_object(&gas_coin_id).unwrap().clone();
+            let write_gas_coin = self.should_write_gas_coin(&gas_coin);
+
+            if write_gas_coin {
+                // Must mutate before storage charging so that storage costs of coin are
+                // updated and charged.
+                temporary_store.mutate_input_object(gas_coin.clone());
+            } else {
+                // Remove from store before charging so we don't charge for storage of the coin.
+                temporary_store.delete_created_object(&gas_coin.id());
+            }
+
+            // bucketize computation cost
+            let is_move_abort = execution_result
+                .as_ref()
+                .err()
+                .map(|err| {
+                    matches!(
+                        err.kind(),
+                        sui_types::execution_status::ExecutionFailureStatus::MoveAbort(_, _)
+                    )
+                })
+                .unwrap_or(false);
+            if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
+                && execution_result.is_ok()
             {
-                // bucketize computation cost
-                let is_move_abort = execution_result
-                    .as_ref()
-                    .err()
-                    .map(|err| {
-                        matches!(
-                            err.kind(),
-                            sui_types::execution_status::ExecutionFailureStatus::MoveAbort(_, _)
-                        )
-                    })
-                    .unwrap_or(false);
-                // bucketize computation cost
-                if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
-                    && execution_result.is_ok()
-                {
-                    *execution_result = Err(err);
-                }
+                *execution_result = Err(err);
+            }
 
-                // On error we need to dump writes, deletes, etc before charging storage gas
-                if execution_result.is_err() {
-                    self.reset(tx_ctx, temporary_store);
-                }
-
-                if !write_gas_coin {
-                    temporary_store.delete_created_object(&gas_coin.as_ref().unwrap().id());
-                } else {
-                    temporary_store.mutate_input_object(gas_coin.as_ref().unwrap().clone());
-                }
+            // On error we need to dump writes, deletes, etc before charging storage gas
+            if execution_result.is_err() {
+                self.reset(tx_ctx, temporary_store);
             }
 
             // compute and collect storage charges
             temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
 
-            let PaymentMethod::Metered {
-                address_balance_payer,
-                ..
-            } = self.payment_method
-            else {
-                return GasCostSummary::default();
-            };
-
-            let mut gas_coin = gas_coin.unwrap();
-
+            // charge storage and rebate
             self.compute_storage_and_rebate(tx_ctx, temporary_store, execution_result);
             let cost_summary = self.gas_status.summary();
             let net_change: i64 = cost_summary.net_gas_usage();
+
+            // If gas coin is written, re-read it from store to get the version that includes
+            // storage rebate field.
+            let mut gas_coin = if write_gas_coin {
+                temporary_store.read_object(&gas_coin_id).unwrap().clone()
+            } else {
+                gas_coin
+            };
 
             deduct_gas(&mut gas_coin, net_change);
 
@@ -405,20 +408,12 @@ pub mod checked {
             // transferred away, then the object must be mutated so it is written
             // in effects.
             if write_gas_coin {
-                // no primary coin (address balance payment).
-                // Take the remaining balance of the synthesized smashed coin and transfer it back
-                // to the address balance.
-
-                // TODO: is this necessary? it should not be because we take pains to exclude the coin
-                // from charging if its not going to be written
-                let storage_costs = gas_coin.storage_rebate;
-
-                let remaining_balance = get_gas_balance(&gas_coin).unwrap();
                 temporary_store.mutate_input_object(gas_coin);
-                temporary_store.credit_address_balance_gas(
-                    &address_balance_payer,
-                    remaining_balance + storage_costs,
-                );
+            } else {
+                let remaining_balance = get_gas_balance(&gas_coin).unwrap();
+                // gas_coin has been deleted from store, so its remaining balance must be credited to the address balance.
+                temporary_store
+                    .credit_address_balance_gas(&address_balance_payer, remaining_balance);
             }
 
             cost_summary
