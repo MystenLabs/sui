@@ -1,0 +1,34 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04005]: expected a single type
+  ┌─ tests/move_2024/matching/match_unit_type.move:8:9
+  │
+8 │     let x = ();
+  │         ^   -- Expected a single type, but found expression list type: '()'
+  │         │    
+  │         Invalid type for local
+
+error[E04005]: expected a single type
+  ┌─ tests/move_2024/matching/match_unit_type.move:9:12
+  │
+8 │     let x = ();
+  │             -- Expected a single type, but found expression list type: '()'
+9 │     match (x) {
+  │            ^ Invalid 'match' subject
+
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/match_unit_type.move:9:12
+  │
+9 │     match (x) {
+  │            ^ Pattern '_' not covered
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/match_unit_type.move:10:10
+   │
+10 │         () => 42,
+   │          ^ Invalid pattern
