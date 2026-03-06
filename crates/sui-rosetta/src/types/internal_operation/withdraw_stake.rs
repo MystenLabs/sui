@@ -122,6 +122,7 @@ impl TryConstructTransaction for WithdrawStake {
             party_objects: vec![],
             total_sui_balance,
             budget,
+            address_balance_withdrawal: 0,
         })
     }
 }

@@ -16,6 +16,8 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
+use sui_types::digests::ChainIdentifier;
+
 use crate::operations::Operations;
 use crate::types::{
     Block, BlockHash, BlockIdentifier, BlockResponse, Transaction, TransactionIdentifier,
@@ -26,6 +28,7 @@ use crate::{CoinMetadataCache, Error};
 pub struct OnlineServerContext {
     pub client: GrpcClient,
     pub coin_metadata_cache: CoinMetadataCache,
+    pub chain_id: ChainIdentifier,
     block_provider: Arc<dyn BlockProvider + Send + Sync>,
 }
 
@@ -34,11 +37,13 @@ impl OnlineServerContext {
         client: GrpcClient,
         block_provider: Arc<dyn BlockProvider + Send + Sync>,
         coin_metadata_cache: CoinMetadataCache,
+        chain_id: ChainIdentifier,
     ) -> Self {
         Self {
             client,
             block_provider,
             coin_metadata_cache,
+            chain_id,
         }
     }
 
