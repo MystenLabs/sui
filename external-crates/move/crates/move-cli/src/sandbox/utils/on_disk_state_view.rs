@@ -425,7 +425,7 @@ impl OnDiskStateView {
                 .map(|id| (id, id))
                 .chain(vec![(*package_address, *package_address)])
                 .collect(),
-        );
+        )?;
         Ok(linkage_context)
     }
 }

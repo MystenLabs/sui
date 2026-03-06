@@ -205,7 +205,7 @@ impl MoveRuntime {
             .iter()
             .map(|(id, pkg)| (*id, &*pkg.verified))
             .collect();
-        validate_for_vm_execution(validation_packages)?;
+        validate_for_vm_execution(validation_packages, link_context)?;
         let runtime_packages = packages
             .into_values()
             .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
@@ -258,7 +258,7 @@ impl MoveRuntime {
             let result = try_block! {
                 dbg_println!("\n\nPublishing module at {} (=> {original_id})\n\n", pkg.version_id);
 
-                let link_context = LinkageContext::new(pkg.linkage_table.clone());
+                let link_context = LinkageContext::new(pkg.linkage_table.clone())?;
 
                 // Verify a provided serialized package. This will validate the provided serialized
                 // package, including attempting to jit-compile the package and verify linkage with
@@ -282,7 +282,7 @@ impl MoveRuntime {
                         .iter()
                         .map(|(id, pkg)| (*id, &*pkg.verified))
                         .collect();
-                    validate_for_publish(&self.natives, &self.vm_config, original_id, pkg, deps)
+                    validate_for_publish(&self.natives, &self.vm_config, original_id, pkg, deps, &link_context)
                 };
                 txn_telemetry.report_time(valdation_timer);
                 let verified_pkg = verified_pkg?;
