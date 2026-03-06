@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{identifier::Identifier, u256::U256};
-use rand::{Rng, seq::SliceRandom};
+use rand::{seq::SliceRandom, Rng};
 use shared_crypto::intent::Intent;
 use std::{
     path::PathBuf,
     sync::{
-        Arc,
         atomic::{AtomicU64, Ordering},
+        Arc,
     },
 };
 use sui_core::accumulators::balances::get_all_balances_for_owner;
@@ -17,10 +17,9 @@ use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::FundSource;
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_root::AccumulatorValue,
     balance::Balance,
-    base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr},
+    base_types::{dbg_addr, ObjectID, ObjectRef, SuiAddress},
     digests::{ChainIdentifier, CheckpointDigest},
     effects::{InputConsensusObject, TransactionEffectsAPI},
     gas::GasCostSummary,
@@ -32,10 +31,11 @@ use sui_types::{
         TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
         TransactionKind, VerifiedTransaction,
     },
+    TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use test_cluster::{
-    TestClusterBuilder,
     addr_balance_test_env::{TestEnv, TestEnvBuilder},
+    TestClusterBuilder,
 };
 
 fn create_transaction_with_expiration(
@@ -117,11 +117,9 @@ async fn test_accumulators_root_created() {
     // accumulator root is not created yet.
     test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(
-            !state
-                .load_epoch_store_one_call_per_task()
-                .accumulator_root_exists()
-        );
+        assert!(!state
+            .load_epoch_store_one_call_per_task()
+            .accumulator_root_exists());
     });
 
     test_env.trigger_reconfiguration().await;
@@ -130,11 +128,9 @@ async fn test_accumulators_root_created() {
     // but we didn't upgrade to the next protocol version yet.
     test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(
-            state
-                .load_epoch_store_one_call_per_task()
-                .accumulator_root_exists()
-        );
+        assert!(state
+            .load_epoch_store_one_call_per_task()
+            .accumulator_root_exists());
         assert_eq!(
             state
                 .load_epoch_store_one_call_per_task()
@@ -2361,7 +2357,7 @@ async fn test_address_balance_large_rebate() {
     let created_object_ref = effects
         .created()
         .iter()
-        .find(|(obj_ref, _)| obj_ref.0 != effects.gas_object().0.0)
+        .find(|(obj_ref, _)| obj_ref.0 != effects.gas_object().0 .0)
         .map(|(obj_ref, _)| *obj_ref)
         .expect("Should have created an object");
 
@@ -2578,11 +2574,9 @@ async fn test_get_all_balances() {
         let balances = get_all_balances_for_owner(sender, child_object_resolver, &indexes).unwrap();
 
         assert_eq!(balances.len(), 2);
-        assert!(
-            balances
-                .iter()
-                .any(|(t, _)| t.to_canonical_string(true).contains("::sui::SUI"))
-        );
+        assert!(balances
+            .iter()
+            .any(|(t, _)| t.to_canonical_string(true).contains("::sui::SUI")));
         assert!(balances.iter().any(|(t, _)| {
             t.to_canonical_string(true)
                 .contains("::trusted_coin::TRUSTED_COIN")
@@ -3374,10 +3368,9 @@ async fn test_address_balance_gas_pay_all_sui() {
         .execute_transaction_may_fail(signed_tx)
         .await
         .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("Argument::GasCoin is not supported with address balance gas payments"),
-    );
+    assert!(err
+        .to_string()
+        .contains("Argument::GasCoin is not supported with address balance gas payments"),);
 
     test_env.verify_accumulator_exists(sender, 10_000_000);
 }
@@ -3592,4 +3585,55 @@ fn create_redeem_and_transfer_transaction(
             nonce,
         },
     })
+}
+
+#[sim_test]
+async fn test_gas_coin_not_allowed_with_empty_gas_payment() {
+    // Test that Argument::GasCoin cannot be used when gas payment is empty.
+    // When using pure address balance gas (no coins in payment list), there is
+    // no gas coin to reference, so GasCoin args should be rejected at signing time.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+
+    // Build a transaction that uses Argument::GasCoin with empty gas payment.
+    // This should fail at signing time because there's no gas coin to reference.
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let amount = builder.pure(100u64).unwrap();
+    builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
+    let pt = builder.finish();
+
+    let tx = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: test_env.rgp,
+            budget: 10_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: test_env.chain_id,
+            nonce: 0,
+        },
+    });
+
+    // This should fail at signing/validation time
+    let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+    assert!(
+        err.to_string().contains("GasCoin cannot be used"),
+        "Expected Unsupported error about GasCoin, got: {}",
+        err
+    );
 }
