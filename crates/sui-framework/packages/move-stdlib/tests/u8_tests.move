@@ -50,57 +50,47 @@ fun test_diff() {
 
 #[test]
 fun test_mul_div() {
-    let max: u8 = MAX;
-    let ex_cases: vector<u8> = vector[0, 1, 10, 127, 128, 255];
-    assert_eq!(max.mul_div(max, max.max(1)), max);
-    integer_tests::exhaustive_cases!(ex_cases, |x, y, z| {
-        integer_tests::check_mul_div!<u8, u16>(max, x, y, z);
-        integer_tests::check_mul_div_ceil!<u8, u16>(max, x, y, z);
-    });
+    integer_tests::test_mul_div!<u8, u16>(MAX, CASES);
+}
 
-    integer_tests::check_mul_div!<u8, u16>(max, max, max, max);
-    integer_tests::check_mul_div_ceil!<u8, u16>(max, max, max, max);
+#[test]
+fun test_mul_div_ceil() {
+    integer_tests::test_mul_div_ceil!<u8, u16>(MAX, CASES);
 }
 
 #[test]
 fun test_mul_div_exhaustive() {
     let step: u8 = 32;
     let mut x = 0u8;
-    loop {
+    while (x < MAX) {
         let mut y = 0u8;
-        loop {
+        while (y < MAX) {
             let mut z = 0u8;
-            loop {
+            while (z < MAX) {
                 integer_tests::check_mul_div!<u8, u16>(MAX, x, y, z);
-                if (z >= MAX - step + 1) { if (z < MAX) { z = MAX } else break }
-                else { z = z + step };
+                z = z.saturating_add(step);
             };
-            if (y >= MAX - step + 1) { if (y < MAX) { y = MAX } else break }
-            else { y = y + step };
+            y = y.saturating_add(step);
         };
-        if (x >= MAX - step + 1) { if (x < MAX) { x = MAX } else break }
-        else { x = x + step };
+        x = x.saturating_add(step);
     }
 }
 
 #[test]
 fun test_mul_div_ceil_exhaustive() {
-    let step: u8 = 32;
+    let step: u8 = 48;
     let mut x = 0u8;
-    loop {
+    while (x < MAX) {
         let mut y = 0u8;
-        loop {
+        while (y < MAX) {
             let mut z = 0u8;
-            loop {
+            while (z < MAX) {
                 integer_tests::check_mul_div_ceil!<u8, u16>(MAX, x, y, z);
-                if (z >= MAX - step + 1) { if (z < MAX) { z = MAX } else break }
-                else { z = z + step };
+                z = z.saturating_add(step);
             };
-            if (y >= MAX - step + 1) { if (y < MAX) { y = MAX } else break }
-            else { y = y + step };
+            y = y.saturating_add(step);
         };
-        if (x >= MAX - step + 1) { if (x < MAX) { x = MAX } else break }
-        else { x = x + step };
+        x = x.saturating_add(step);
     }
 }
 
