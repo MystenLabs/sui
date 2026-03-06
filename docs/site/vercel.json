@@ -3365,6 +3365,7 @@
     { "source": "/references/framework/sui_sui.md", "destination": "/references/framework/sui_sui/index.md" },
     { "source": "/references/framework/sui_sui_system.md", "destination": "/references/framework/sui_sui_system/index.md" },
     { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" }
+    },
   ],
   "rewrites": [
     {
