@@ -7,7 +7,7 @@ use move_binary_format::{
     errors::{PartialVMResult, VMResult},
     partial_vm_error,
 };
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::language_storage::TypeTag;
 
 use crate::shared::types::{OriginalId, VersionId};
 
@@ -36,21 +36,8 @@ impl LinkageContext {
         Self { linkage_table }
     }
 
-    pub fn contains_key(&self, address: &OriginalId) -> bool {
-        self.linkage_table.contains_key(address)
-    }
-    /// Translate the runtime `module_id` to the on-chain `ModuleId` that it should be loaded from.
-    pub fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
-        self.linkage_table
-            .get(module_id.address())
-            .map(|remapped_address| ModuleId::new(*remapped_address, module_id.name().into()))
-            .ok_or_else(|| {
-                partial_vm_error!(LINKER_ERROR, "Did not find {module_id} in linkage table")
-            })
-    }
-
     /// Returns the package version IDs of the linkage table.
-    pub fn all_packages(&self) -> VMResult<BTreeSet<VersionId>> {
+    pub(crate) fn all_packages(&self) -> VMResult<BTreeSet<VersionId>> {
         Ok(self
             .linkage_table
             .values()
@@ -59,7 +46,7 @@ impl LinkageContext {
     }
 
     /// Gives the package version IDs of the linkage table with the specified version ID removed.
-    pub fn all_package_dependencies_except(
+    pub(crate) fn all_package_dependencies_except(
         &self,
         except: VersionId,
     ) -> VMResult<BTreeSet<VersionId>> {
@@ -111,7 +98,7 @@ impl LinkageContext {
             acc
         });
         for arg_address in type_arg_addresses {
-            if !self.contains_key(&arg_address) {
+            if !self.linkage_table.contains_key(&arg_address) {
                 let _ = self.add_entry(arg_address, arg_address);
             }
         }
