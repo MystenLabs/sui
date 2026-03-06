@@ -26,7 +26,6 @@ const siteDesc     = flags["description"] ?? "";
 
 // ── Auto-detect docusaurus config ────────────────────────────────────────────
 let resolvedName = flags["name"] ?? null;
-// Priority: --base-url flag > VERCEL_URL (preview only) > docusaurus config url
 let resolvedBaseUrl = baseUrl;
 
 function findDocusaurusConfig(startDir) {
