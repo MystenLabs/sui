@@ -477,7 +477,15 @@ fn constant(
             constant_values
                 .add(name, value.clone())
                 .expect("ICE constant name collision");
-            move_value_from_value(context, value)
+            let loc = value.loc;
+            let mv = move_value_from_value(value);
+            if mv.is_none() {
+                context.add_diag(diag!(
+                    CodeGeneration::UnfoldableConstant,
+                    (loc, "Signed integers are not yet supported in constant values")
+                ));
+            }
+            mv
         }
         _ => None,
     };
@@ -600,7 +608,7 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
     }
 }
 
-fn move_value_from_value(context: &Context, sp!(loc, v_): Value) -> Option<MoveValue> {
+pub(crate) fn move_value_from_value(sp!(_, v_): Value) -> Option<MoveValue> {
     use MoveValue as MV;
     use Value_ as V;
     Some(match v_ {
@@ -613,19 +621,10 @@ fn move_value_from_value(context: &Context, sp!(loc, v_): Value) -> Option<MoveV
         V::U256(u) => MV::U256(u),
         V::Bool(b) => MV::Bool(b),
         V::Vector(_, vs) => {
-            let mvs: Option<Vec<_>> = vs
-                .into_iter()
-                .map(|v| move_value_from_value(context, v))
-                .collect();
+            let mvs: Option<Vec<_>> = vs.into_iter().map(move_value_from_value).collect();
             MV::Vector(mvs?)
         }
-        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) => {
-            context.add_diag(diag!(
-                CodeGeneration::UnfoldableConstant,
-                (loc, "Signed integers are not yet supported in constant values")
-            ));
-            return None;
-        }
+        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) => return None,
     })
 }
 

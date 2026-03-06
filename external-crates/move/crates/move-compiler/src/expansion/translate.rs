@@ -2987,11 +2987,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             }
         }
         PE::Value(pv) => {
-            let v = value(&mut context.defn_context, pv);
-            if let Some(sp!(vloc, ref v_)) = v {
-                check_signed_literal_range(context, vloc, v_);
-            }
-            unwrap_or_error_exp!(v.map(EE::Value))
+            unwrap_or_error_exp!(value(&mut context.defn_context, pv).map(EE::Value))
         }
         PE::Name(pn) if pn.value.has_tyargs() => {
             let msg = "Expected name to be followed by a brace-enclosed list of field expressions \
@@ -3111,17 +3107,17 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         }
         PE::Continue(name) => EE::Continue(name),
         PE::Dereference(pe) => EE::Dereference(exp(context, pe)),
-        PE::UnaryExp(op, pe) if op.value == P::UnaryOp_::Neg => match pe.value {
-            PE::Value(pv) if is_signed_literal(&pv) => {
-                match value(&mut context.defn_context, pv) {
-                    Some(sp!(vloc, v_)) => EE::Value(sp(vloc, negate_signed_value(v_))),
+        PE::UnaryExp(op, pe) if op.value == P::UnaryOp_::Neg => match *pe {
+            sp!(vloc, PE::Value(sp!(_, P::Value_::Num(s)))) if has_signed_suffix(&s) => {
+                match signed_num(&mut context.defn_context, vloc, &s, /* negated */ true) {
+                    Some(v_) => EE::Value(sp(vloc, v_)),
                     None => {
                         assert!(context.env().has_errors());
                         EE::UnresolvedError
                     }
                 }
             }
-            _ => EE::UnaryExp(op, exp(context, pe)),
+            pe => EE::UnaryExp(op, exp(context, Box::new(pe))),
         },
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, pe)),
         PE::BinopExp(_pl, op, _pr) if op.value.is_spec_only() => {
@@ -3655,71 +3651,87 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
 }
 
 //**************************************************************************************************
-// Signed integer literal helpers
+// Numeric literal helpers
 //**************************************************************************************************
 
-fn is_signed_literal(pv: &P::Value) -> bool {
-    match &pv.value {
-        P::Value_::Num(s) => {
-            s.ends_with("i8")
-                || s.ends_with("i16")
-                || s.ends_with("i32")
-                || s.ends_with("i64")
-                || s.ends_with("i128")
-        }
-        _ => false,
+fn has_signed_suffix(s: &str) -> bool {
+    SIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
+}
+
+fn has_unsigned_suffix(s: &str) -> bool {
+    UNSIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
+}
+
+fn signed_num(
+    context: &mut DefnContext,
+    loc: Loc,
+    s: &str,
+    negated: bool,
+) -> Option<E::Value_> {
+    use E::Value_ as EV;
+    macro_rules! parse_signed {
+        ($parse_fn:ident, $suffix_len:expr, $ctor:ident, $ty:expr) => {{
+            match $parse_fn(&s[..s.len() - $suffix_len], negated) {
+                Ok((v, _)) => Some(EV::$ctor(v)),
+                Err(_) => {
+                    let msg = format!(
+                        "Invalid number literal. The given literal is too large to fit into {}", $ty
+                    );
+                    context.add_diag(diag!(Syntax::InvalidNumber, (loc, msg)));
+                    None
+                }
+            }
+        }};
+    }
+    if s.ends_with("i128") {
+        parse_signed!(parse_i128, 4, I128, "'i128'")
+    } else if s.ends_with("i64") {
+        parse_signed!(parse_i64, 3, I64, "'i64'")
+    } else if s.ends_with("i32") {
+        parse_signed!(parse_i32, 3, I32, "'i32'")
+    } else if s.ends_with("i16") {
+        parse_signed!(parse_i16, 3, I16, "'i16'")
+    } else if s.ends_with("i8") {
+        parse_signed!(parse_i8, 2, I8, "'i8'")
+    } else {
+        panic!("ICE expected signed integer suffix")
     }
 }
 
-fn negate_signed_value(v_: E::Value_) -> E::Value_ {
+fn unsigned_num(
+    context: &mut DefnContext,
+    loc: Loc,
+    s: &str,
+) -> Option<E::Value_> {
     use E::Value_ as EV;
-    match v_ {
-        EV::I8(u) => EV::I8((u as i8).wrapping_neg() as u8),
-        EV::I16(u) => EV::I16((u as i16).wrapping_neg() as u16),
-        EV::I32(u) => EV::I32((u as i32).wrapping_neg() as u32),
-        EV::I64(u) => EV::I64((u as i64).wrapping_neg() as u64),
-        EV::I128(u) => EV::I128((u as i128).wrapping_neg() as u128),
-        v_ => v_,
+    macro_rules! parse_unsigned {
+        ($parse_fn:ident, $suffix_len:expr, $ctor:ident, $ty:expr) => {{
+            match $parse_fn(&s[..s.len() - $suffix_len]) {
+                Ok((v, _)) => Some(EV::$ctor(v)),
+                Err(_) => {
+                    let msg = format!(
+                        "Invalid number literal. The given literal is too large to fit into {}", $ty
+                    );
+                    context.add_diag(diag!(Syntax::InvalidNumber, (loc, msg)));
+                    None
+                }
+            }
+        }};
     }
-}
-
-fn check_signed_literal_range(context: &mut Context, loc: Loc, v_: &E::Value_) {
-    use E::Value_ as EV;
-    let exceeds_max = match v_ {
-        EV::I8(u) => *u > i8::MAX as u8,
-        EV::I16(u) => *u > i16::MAX as u16,
-        EV::I32(u) => *u > i32::MAX as u32,
-        EV::I64(u) => *u > i64::MAX as u64,
-        EV::I128(u) => *u > i128::MAX as u128,
-        _ => false,
-    };
-    if exceeds_max {
-        let type_str = match v_ {
-            EV::I8(_) => "i8",
-            EV::I16(_) => "i16",
-            EV::I32(_) => "i32",
-            EV::I64(_) => "i64",
-            EV::I128(_) => "i128",
-            _ => unreachable!(),
-        };
-        context.add_diag(diag!(
-            Syntax::InvalidNumber,
-            (
-                loc,
-                format!(
-                    "Invalid numerical literal. The value is too large for '{type_str}'. \
-                     Did you mean '-{val}{type_str}'?",
-                    val = match v_ {
-                        EV::I8(u) => format!("{u}"),
-                        EV::I16(u) => format!("{u}"),
-                        EV::I32(u) => format!("{u}"),
-                        EV::I64(u) => format!("{u}"),
-                        EV::I128(u) => format!("{u}"),
-                        _ => unreachable!(),
-                    },
-                )
-            ),
-        ));
+    if s.ends_with("u256") {
+        parse_unsigned!(parse_u256, 4, U256, "'u256'")
+    } else if s.ends_with("u128") {
+        parse_unsigned!(parse_u128, 4, U128, "'u128'")
+    } else if s.ends_with("u64") {
+        parse_unsigned!(parse_u64, 3, U64, "'u64'")
+    } else if s.ends_with("u32") {
+        parse_unsigned!(parse_u32, 3, U32, "'u32'")
+    } else if s.ends_with("u16") {
+        parse_unsigned!(parse_u16, 3, U16, "'u16'")
+    } else if s.ends_with("u8") {
+        parse_unsigned!(parse_u8, 2, U8, "'u8'")
+    } else {
+        panic!("ICE expected unsigned integer suffix")
     }
 }
 
@@ -3727,15 +3739,25 @@ fn check_signed_literal_range(context: &mut Context, loc: Loc, v_: &E::Value_) {
 // Values
 //**************************************************************************************************
 
-pub(super) fn value(context: &mut DefnContext, value: P::Value) -> Option<E::Value> {
-    match value_result(context, value) {
-        Ok(value) => Some(value),
-        Err(errs) => {
-            for err in errs {
-                context.add_diag(err.into_diagnostic());
-            }
-            None
+pub(super) fn value(context: &mut DefnContext, pvalue: P::Value) -> Option<E::Value> {
+    use P::Value_ as PV;
+    let sp!(loc, pvalue_) = pvalue;
+    match pvalue_ {
+        PV::Num(ref s) if has_signed_suffix(s) => {
+            signed_num(context, loc, s, /* negated */ false).map(|v_| sp(loc, v_))
         }
+        PV::Num(ref s) if has_unsigned_suffix(s) => {
+            unsigned_num(context, loc, s).map(|v_| sp(loc, v_))
+        }
+        pvalue_ => match value_result(context, sp(loc, pvalue_)) {
+            Ok(v) => Some(v),
+            Err(errs) => {
+                for err in errs {
+                    context.add_diag(err.into_diagnostic());
+                }
+                None
+            }
+        },
     }
 }
 
@@ -3793,18 +3815,20 @@ pub(super) fn value_result(
         PV::Num(s) if s.ends_with("u256") => {
             parse_num!(parse_u256(&s[..s.len() - 4]), EV::U256, "'u256'")
         }
-        PV::Num(s) if s.ends_with("i8") => parse_num!(parse_i8(&s[..s.len() - 2]), EV::I8, "'i8'"),
+        PV::Num(s) if s.ends_with("i8") => {
+            parse_num!(parse_i8(&s[..s.len() - 2], false), EV::I8, "'i8'")
+        }
         PV::Num(s) if s.ends_with("i16") => {
-            parse_num!(parse_i16(&s[..s.len() - 3]), EV::I16, "'i16'")
+            parse_num!(parse_i16(&s[..s.len() - 3], false), EV::I16, "'i16'")
         }
         PV::Num(s) if s.ends_with("i32") => {
-            parse_num!(parse_i32(&s[..s.len() - 3]), EV::I32, "'i32'")
+            parse_num!(parse_i32(&s[..s.len() - 3], false), EV::I32, "'i32'")
         }
         PV::Num(s) if s.ends_with("i64") => {
-            parse_num!(parse_i64(&s[..s.len() - 3]), EV::I64, "'i64'")
+            parse_num!(parse_i64(&s[..s.len() - 3], false), EV::I64, "'i64'")
         }
         PV::Num(s) if s.ends_with("i128") => {
-            parse_num!(parse_i128(&s[..s.len() - 4]), EV::I128, "'i128'")
+            parse_num!(parse_i128(&s[..s.len() - 4], false), EV::I128, "'i128'")
         }
         PV::Num(s) => parse_num!(
             parse_u256(&s),

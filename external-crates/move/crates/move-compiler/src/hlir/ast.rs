@@ -360,15 +360,15 @@ pub enum Value_ {
     // <num>u256
     U256(move_core_types::u256::U256),
     // <num>i8
-    I8(u8),
+    I8(i8),
     // <num>i16
-    I16(u16),
+    I16(i16),
     // <num>i32
-    I32(u32),
+    I32(i32),
     // <num>i64
-    I64(u64),
+    I64(i64),
     // <num>i128
-    I128(u128),
+    I128(i128),
     // true
     // false
     Bool(bool),
@@ -459,11 +459,16 @@ impl FunctionSignature {
 impl Value_ {
     pub fn is_zero(&self) -> bool {
         match self {
-            Self::U8(v) | Self::I8(v) => *v == 0,
-            Self::U16(v) | Self::I16(v) => *v == 0,
-            Self::U32(v) | Self::I32(v) => *v == 0,
-            Self::U64(v) | Self::I64(v) => *v == 0,
-            Self::U128(v) | Self::I128(v) => *v == 0,
+            Self::U8(v) => *v == 0,
+            Self::U16(v) => *v == 0,
+            Self::U32(v) => *v == 0,
+            Self::U64(v) => *v == 0,
+            Self::U128(v) => *v == 0,
+            Self::I8(v) => *v == 0,
+            Self::I16(v) => *v == 0,
+            Self::I32(v) => *v == 0,
+            Self::I64(v) => *v == 0,
+            Self::I128(v) => *v == 0,
             Self::U256(v) => *v == move_core_types::u256::U256::zero(),
             Self::Address(_) | Self::Bool(_) | Self::Vector(_, _) => false,
         }

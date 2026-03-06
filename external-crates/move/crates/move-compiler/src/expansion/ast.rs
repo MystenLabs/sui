@@ -363,15 +363,15 @@ pub enum Value_ {
     // <num>u256
     U256(move_core_types::u256::U256),
     // <num>i8
-    I8(u8),
+    I8(i8),
     // <num>i16
-    I16(u16),
+    I16(i16),
     // <num>i32
-    I32(u32),
+    I32(i32),
     // <num>i64
-    I64(u64),
+    I64(i64),
     // <num>i128
-    I128(u128),
+    I128(i128),
     // true
     // false
     Bool(bool),

@@ -228,7 +228,7 @@ bug[ICE12003]: INTERNAL COMPILER ERROR
 bug[ICE12003]: INTERNAL COMPILER ERROR
    ┌─ tests/development/typing/signed_int_boundary_values.move:52:17
    │
-52 │         let _x: i8 = -(0i8);
+52 │         let _x: i8 = -0i8;
    │                 ^^ Signed integers are not supported in bytecode
    │
    = The Move compiler has encountered an internal compiler error.
@@ -239,8 +239,8 @@ bug[ICE12003]: INTERNAL COMPILER ERROR
 bug[ICE12003]: INTERNAL COMPILER ERROR
    ┌─ tests/development/typing/signed_int_boundary_values.move:52:22
    │
-52 │         let _x: i8 = -(0i8);
-   │                      ^^^^^^ Signed integer values are not supported in bytecode
+52 │         let _x: i8 = -0i8;
+   │                      ^^^^ Signed integer values are not supported in bytecode
    │
    = The Move compiler has encountered an internal compiler error.
       Please report this issue to the Mysten Labs Move language team,
@@ -250,7 +250,7 @@ bug[ICE12003]: INTERNAL COMPILER ERROR
 bug[ICE12003]: INTERNAL COMPILER ERROR
    ┌─ tests/development/typing/signed_int_boundary_values.move:56:17
    │
-56 │         let _x: i64 = -(0i64);
+56 │         let _x: i16 = -0i16;
    │                 ^^^ Signed integers are not supported in bytecode
    │
    = The Move compiler has encountered an internal compiler error.
@@ -261,8 +261,8 @@ bug[ICE12003]: INTERNAL COMPILER ERROR
 bug[ICE12003]: INTERNAL COMPILER ERROR
    ┌─ tests/development/typing/signed_int_boundary_values.move:56:23
    │
-56 │         let _x: i64 = -(0i64);
-   │                       ^^^^^^^ Signed integer values are not supported in bytecode
+56 │         let _x: i16 = -0i16;
+   │                       ^^^^^ Signed integer values are not supported in bytecode
    │
    = The Move compiler has encountered an internal compiler error.
       Please report this issue to the Mysten Labs Move language team,
@@ -270,31 +270,9 @@ bug[ICE12003]: INTERNAL COMPILER ERROR
       at : https://github.com/MystenLabs/sui/issues
 
 bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/development/typing/signed_int_boundary_values.move:61:17
+   ┌─ tests/development/typing/signed_int_boundary_values.move:60:17
    │
-61 │         let _x: i8 = -(127i8);
-   │                 ^^ Signed integers are not supported in bytecode
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/development/typing/signed_int_boundary_values.move:61:22
-   │
-61 │         let _x: i8 = -(127i8);
-   │                      ^^^^^^^^ Signed integer values are not supported in bytecode
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/development/typing/signed_int_boundary_values.move:65:17
-   │
-65 │         let _x: i64 = -(9223372036854775807i64);
+60 │         let _x: i32 = -0i32;
    │                 ^^^ Signed integers are not supported in bytecode
    │
    = The Move compiler has encountered an internal compiler error.
@@ -303,12 +281,276 @@ bug[ICE12003]: INTERNAL COMPILER ERROR
       at : https://github.com/MystenLabs/sui/issues
 
 bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/development/typing/signed_int_boundary_values.move:65:23
+   ┌─ tests/development/typing/signed_int_boundary_values.move:60:23
    │
-65 │         let _x: i64 = -(9223372036854775807i64);
-   │                       ^^^^^^^^^^^^^^^^^^^^^^^^^ Signed integer values are not supported in bytecode
+60 │         let _x: i32 = -0i32;
+   │                       ^^^^^ Signed integer values are not supported in bytecode
    │
    = The Move compiler has encountered an internal compiler error.
       Please report this issue to the Mysten Labs Move language team,
       including this error and any relevant code, to the Mysten Labs issue tracker
       at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:64:17
+   │
+64 │         let _x: i64 = -0i64;
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:64:23
+   │
+64 │         let _x: i64 = -0i64;
+   │                       ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:68:17
+   │
+68 │         let _x: i128 = -0i128;
+   │                 ^^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:68:24
+   │
+68 │         let _x: i128 = -0i128;
+   │                        ^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:73:17
+   │
+73 │         let _x: i8 = -1i8;
+   │                 ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:73:22
+   │
+73 │         let _x: i8 = -1i8;
+   │                      ^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:77:17
+   │
+77 │         let _x: i16 = -1i16;
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:77:23
+   │
+77 │         let _x: i16 = -1i16;
+   │                       ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:81:17
+   │
+81 │         let _x: i32 = -1i32;
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:81:23
+   │
+81 │         let _x: i32 = -1i32;
+   │                       ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:85:17
+   │
+85 │         let _x: i64 = -1i64;
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:85:23
+   │
+85 │         let _x: i64 = -1i64;
+   │                       ^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:89:17
+   │
+89 │         let _x: i128 = -1i128;
+   │                 ^^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:89:24
+   │
+89 │         let _x: i128 = -1i128;
+   │                        ^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:94:17
+   │
+94 │         let _x: i8 = -127i8;
+   │                 ^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:94:22
+   │
+94 │         let _x: i8 = -127i8;
+   │                      ^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:98:17
+   │
+98 │         let _x: i16 = -32767i16;
+   │                 ^^^ Signed integers are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/development/typing/signed_int_boundary_values.move:98:23
+   │
+98 │         let _x: i16 = -32767i16;
+   │                       ^^^^^^^^^ Signed integer values are not supported in bytecode
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+    ┌─ tests/development/typing/signed_int_boundary_values.move:102:17
+    │
+102 │         let _x: i32 = -2147483647i32;
+    │                 ^^^ Signed integers are not supported in bytecode
+    │
+    = The Move compiler has encountered an internal compiler error.
+       Please report this issue to the Mysten Labs Move language team,
+       including this error and any relevant code, to the Mysten Labs issue tracker
+       at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+    ┌─ tests/development/typing/signed_int_boundary_values.move:102:23
+    │
+102 │         let _x: i32 = -2147483647i32;
+    │                       ^^^^^^^^^^^^^^ Signed integer values are not supported in bytecode
+    │
+    = The Move compiler has encountered an internal compiler error.
+       Please report this issue to the Mysten Labs Move language team,
+       including this error and any relevant code, to the Mysten Labs issue tracker
+       at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+    ┌─ tests/development/typing/signed_int_boundary_values.move:106:17
+    │
+106 │         let _x: i64 = -9223372036854775807i64;
+    │                 ^^^ Signed integers are not supported in bytecode
+    │
+    = The Move compiler has encountered an internal compiler error.
+       Please report this issue to the Mysten Labs Move language team,
+       including this error and any relevant code, to the Mysten Labs issue tracker
+       at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+    ┌─ tests/development/typing/signed_int_boundary_values.move:106:23
+    │
+106 │         let _x: i64 = -9223372036854775807i64;
+    │                       ^^^^^^^^^^^^^^^^^^^^^^^ Signed integer values are not supported in bytecode
+    │
+    = The Move compiler has encountered an internal compiler error.
+       Please report this issue to the Mysten Labs Move language team,
+       including this error and any relevant code, to the Mysten Labs issue tracker
+       at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+    ┌─ tests/development/typing/signed_int_boundary_values.move:110:17
+    │
+110 │         let _x: i128 = -170141183460469231731687303715884105727i128;
+    │                 ^^^^ Signed integers are not supported in bytecode
+    │
+    = The Move compiler has encountered an internal compiler error.
+       Please report this issue to the Mysten Labs Move language team,
+       including this error and any relevant code, to the Mysten Labs issue tracker
+       at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+    ┌─ tests/development/typing/signed_int_boundary_values.move:110:24
+    │
+110 │         let _x: i128 = -170141183460469231731687303715884105727i128;
+    │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Signed integer values are not supported in bytecode
+    │
+    = The Move compiler has encountered an internal compiler error.
+       Please report this issue to the Mysten Labs Move language team,
+       including this error and any relevant code, to the Mysten Labs issue tracker
+       at : https://github.com/MystenLabs/sui/issues
