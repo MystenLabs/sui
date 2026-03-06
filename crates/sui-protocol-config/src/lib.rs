@@ -301,7 +301,7 @@ const MAX_PROTOCOL_VERSION: u64 = 115;
 // Version 114: Gate seeded test overrides for checkpoint tx limit behind feature flag.
 // Version 115: Gasless transaction drop safety.
 //              Enable address aliases on mainnet.
-// Version 115: Relax ValidDuring requirement for transactions with owned inputs.
+//              Relax ValidDuring requirement for transactions with owned inputs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
