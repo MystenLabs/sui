@@ -39,46 +39,49 @@ pub mod checked {
     pub struct GasCharger {
         tx_digest: TransactionDigest,
         gas_model_version: u64,
-        payment_method: PaymentMethod,
-        // this is the first gas coin in `gas_coins` and the one that all others will
-        // be smashed into. It can be None for system transactions when `gas_coins` is empty.
-        smashed_gas_coin: Option<ObjectID>,
+        /// Empty if unmetered
+        payment_methods: Vec<PaymentMethod>,
         //smashed_gas_coin_bud
         gas_status: SuiGasStatus,
     }
 
     #[derive(Debug)]
     pub enum PaymentMethod {
-        Unmetered,
-        Coins(Vec<ObjectRef>),
+        Coin(ObjectRef),
+        AddressBalance(SuiAddress, /* withdrawal reservation */ u64),
+    }
+
+    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    pub enum PaymentLocation {
+        Coin(ObjectID),
         AddressBalance(SuiAddress),
     }
 
     impl PaymentMethod {
-        pub fn is_unmetered(&self) -> bool {
-            matches!(self, PaymentMethod::Unmetered)
-        }
-        pub fn is_address_balance(&self) -> bool {
-            matches!(self, PaymentMethod::AddressBalance(_))
-        }
-        pub fn is_coins(&self) -> bool {
-            matches!(self, PaymentMethod::Coins(_))
+        pub fn location(&self) -> PaymentLocation {
+            match self {
+                PaymentMethod::Coin(obj_ref) => PaymentLocation::Coin(obj_ref.0),
+                PaymentMethod::AddressBalance(addr, _) => PaymentLocation::AddressBalance(*addr),
+            }
         }
     }
 
     impl GasCharger {
         pub fn new(
             tx_digest: TransactionDigest,
-            payment_method: PaymentMethod,
+            payment_methods: Vec<PaymentMethod>,
             gas_status: SuiGasStatus,
             protocol_config: &ProtocolConfig,
         ) -> Self {
+            assert!(
+                !payment_methods.is_empty(),
+                "GasCharger must have at least one payment method"
+            );
             let gas_model_version = protocol_config.gas_model_version();
             Self {
                 tx_digest,
                 gas_model_version,
-                payment_method,
-                smashed_gas_coin: None,
+                payment_methods,
                 gas_status,
             }
         }
@@ -87,27 +90,30 @@ pub mod checked {
             Self {
                 tx_digest,
                 gas_model_version: 6, // pick any of the latest, it should not matter
-                payment_method: PaymentMethod::Unmetered,
-                smashed_gas_coin: None,
+                payment_methods: vec![],
                 gas_status: SuiGasStatus::new_unmetered(),
             }
         }
 
-        // TODO: there is only one caller to this function that should not exist otherwise.
-        //       Explore way to remove it.
-        pub(crate) fn gas_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
-            match &self.payment_method {
-                PaymentMethod::Coins(gas_coins) => Either::Left(gas_coins.iter()),
-                PaymentMethod::AddressBalance(_) | PaymentMethod::Unmetered => {
-                    Either::Right(std::iter::empty())
-                }
-            }
+        // // TODO: there is only one caller to this function that should not exist otherwise.
+        // //       Explore way to remove it.
+        // pub(crate) fn gas_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
+        //     match &self.payment_method {
+        //         PaymentMethod::Coins(gas_coins) => Either::Left(gas_coins.iter()),
+        //         PaymentMethod::AddressBalance(_) | PaymentMethod::Unmetered => {
+        //             Either::Right(std::iter::empty())
+        //         }
+        //     }
+        // }
+        //
+
+        fn smash_target(&self) -> Option<&PaymentMethod> {
+            self.payment_methods.first()
         }
 
-        // Return the logical gas coin for this transactions or None if no gas coin was present
-        // (system transactions).
-        pub fn gas_coin(&self) -> Option<ObjectID> {
-            self.smashed_gas_coin
+        // Return the payment location for this transaction, or None if it was unmetered.
+        pub fn gas_payment_location(&self) -> Option<PaymentLocation> {
+            self.payment_methods.first().map(|method| method.location())
         }
 
         pub fn gas_budget(&self) -> u64 {
@@ -152,24 +158,24 @@ pub mod checked {
         // Transaction and certificate input checks must have insured that all gas coins
         // are correct.
         pub fn smash_gas(&mut self, temporary_store: &mut TemporaryStore<'_>) {
-            if let PaymentMethod::Coins(gas_coins) = &mut self.payment_method {
-                let gas_coin_count = gas_coins.len();
-                if gas_coin_count == 0 || (gas_coin_count == 1 && gas_coins[0].0 == ObjectID::ZERO)
-                {
-                    return; // self.smashed_gas_coin is None
-                }
-                // set the first coin to be the transaction only gas coin.
-                // All others will be smashed into this one.
-                let gas_coin_id = gas_coins[0].0;
-                self.smashed_gas_coin = Some(gas_coin_id);
-                if gas_coin_count == 1 {
-                    return;
-                }
+            let payment_count = self.payment_methods.len();
+            let Some(primary_method) = self.smash_target() else {
+                // unmetered, nothing to smash
+                return;
+            };
+            let primary_location = primary_method.location();
+            if self.payment_methods.len() == 1 {
+                // only one payment method, nothing to smash
+                return;
+            }
 
-                // sum the value of all gas coins
-                let new_balance = gas_coins
-                    .iter()
-                    .map(|obj_ref| {
+            // sum the value of all gas coins
+            let total = self
+                .payment_methods
+                .iter()
+                .map(|payment| match payment {
+                    PaymentMethod::AddressBalance(_, reservation) => Ok(*reservation),
+                    PaymentMethod::Coin(obj_ref) => {
                         let obj = temporary_store.objects().get(&obj_ref.0).unwrap();
                         let Data::Move(move_obj) = &obj.data else {
                             return Err(ExecutionError::invariant_violation(
@@ -182,46 +188,62 @@ pub mod checked {
                             ));
                         }
                         Ok(move_obj.get_coin_value_unsafe())
-                    })
-                    .collect::<Result<Vec<u64>, ExecutionError>>()
-                    // transaction and certificate input checks must have insured that all gas coins
-                    // are valid
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Invariant violation: non-gas coin object as input for gas in txn {}",
-                            self.tx_digest
-                        )
-                    })
-                    .iter()
-                    .sum();
-                let mut primary_gas_object = temporary_store
-                    .objects()
-                    .get(&gas_coin_id)
-                    // unwrap should be safe because we checked that this exists in `self.objects()` above
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Invariant violation: gas coin not found in store in txn {}",
-                            self.tx_digest
-                        )
-                    })
-                    .clone();
-                // delete all gas objects except the primary_gas_object
-                for (id, _version, _digest) in &gas_coins[1..] {
-                    debug_assert_ne!(*id, primary_gas_object.id());
-                    temporary_store.delete_input_object(id);
+                    }
+                })
+                .collect::<Result<Vec<u64>, ExecutionError>>()
+                // transaction and certificate input checks must have insured that all gas coins
+                // are valid
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Unable to process gas payments for transaction {}",
+                        self.tx_digest
+                    )
+                })
+                .iter()
+                .sum();
+            // delete all gas objects except the primary_gas_object
+            for payment_method in &self.payment_methods[1..] {
+                let location = payment_method.location();
+                assert_ne!(location, primary_location, "Payment methods must be unique");
+                match payment_method {
+                    PaymentMethod::AddressBalance(sui_address, reservation) => {
+                        temporary_store.withdraw_from_address_balance(*sui_address, *reservation);
+                    }
+                    PaymentMethod::Coin((id, _, _)) => {
+                        temporary_store.delete_input_object(id);
+                    }
                 }
-                primary_gas_object
-                    .data
-                    .try_as_move_mut()
-                    // unwrap should be safe because we checked that the primary gas object was a coin object above.
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Invariant violation: invalid coin object in txn {}",
-                            self.tx_digest
-                        )
-                    })
-                    .set_coin_value_unsafe(new_balance);
-                temporary_store.mutate_input_object(primary_gas_object);
+            }
+            match primary_method {
+                PaymentMethod::AddressBalance(sui_address, reservation) => {
+                    temporary_store.withdraw_from_address_balance(*sui_address, *reservation);
+                    temporary_store.deposit_to_address_balance(*sui_address, total);
+                }
+                PaymentMethod::Coin((gas_coin_id, _, _)) => {
+                    let mut primary_gas_object = temporary_store
+                        .objects()
+                        .get(&gas_coin_id)
+                        // unwrap should be safe because we checked that this exists in `self.objects()` above
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Invariant violation: gas coin not found in store in txn {}",
+                                self.tx_digest
+                            )
+                        })
+                        .clone();
+                    primary_gas_object
+                        .data
+                        .try_as_move_mut()
+                        // unwrap should be safe because we checked that the primary gas object was a coin object above.
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Invariant violation: invalid coin object in txn {}",
+                                self.tx_digest
+                            )
+                        })
+                        .set_coin_value_unsafe(total);
+                    temporary_store.mutate_input_object(primary_gas_object);
+                }
             }
         }
 
@@ -319,7 +341,7 @@ pub mod checked {
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
 
-            if self.smashed_gas_coin.is_some() || self.payment_method.is_address_balance() {
+            if !self.payment_methods.is_empty() {
                 // bucketize computation cost
                 let is_move_abort = execution_result
                     .as_ref()
@@ -348,13 +370,14 @@ pub mod checked {
             temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
 
-            if self.smashed_gas_coin.is_some() {
+            let Some(primary_method) = self.smash_target() else {
+                // unmetered, nothing to charge
+                return GasCostSummary::default();
+            };
+
+            if let PaymentMethod::Coin(_) = primary_method {
                 #[skip_checked_arithmetic]
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
-            }
-
-            if self.payment_method.is_unmetered() {
-                return GasCostSummary::default();
             }
 
             if execution_result
@@ -367,7 +390,7 @@ pub mod checked {
                     )
                 })
                 .unwrap_or(false)
-                && self.payment_method.is_address_balance() {
+                && let PaymentMethod::AddressBalance(_,_) = primary_method {
                     // If we don't have enough balance to withdraw, don't charge for gas
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
@@ -377,27 +400,31 @@ pub mod checked {
             let cost_summary = self.gas_status.summary();
             let net_change = cost_summary.net_gas_usage();
 
-            match self.payment_method {
-                PaymentMethod::AddressBalance(payer_address) => {
-                    if net_change != 0 {
-                        let balance_type = sui_types::balance::Balance::type_tag(
-                            sui_types::gas_coin::GAS::type_tag(),
-                        );
-                        let accumulator_event = AccumulatorEvent::from_balance_change(
-                            payer_address,
-                            balance_type,
-                            net_change,
-                        )
-                        .expect("Failed to create accumulator event for gas balance");
+            match primary_method {
+                PaymentMethod::AddressBalance(payer_address, _) => {
+                    // if net_change != 0 {
+                    //     let balance_type = sui_types::balance::Balance::type_tag(
+                    //         sui_types::gas_coin::GAS::type_tag(),
+                    //     );
+                    //     let accumulator_event = AccumulatorEvent::from_balance_change(
+                    //         payer_address,
+                    //         balance_type,
+                    //         net_change,
+                    //     )
+                    //     .expect("Failed to create accumulator event for gas balance");
 
-                        temporary_store.add_accumulator_event(accumulator_event);
+                    //     temporary_store.add_accumulator_event(accumulator_event);
+                    // }
+                    // TODO tracing?
+                    if net_change < 0 {
+                        temporary_store
+                            .withdraw_from_address_balance(*payer_address, -net_change as u64);
+                    } else if net_change > 0 {
+                        temporary_store
+                            .deposit_to_address_balance(*payer_address, net_change as u64);
                     }
-
-                    cost_summary
                 }
-                PaymentMethod::Coins(_) => {
-                    let gas_object_id = self.smashed_gas_coin.unwrap();
-
+                PaymentMethod::Coin((gas_object_id, _, _)) => {
                     let mut gas_object =
                         temporary_store.read_object(&gas_object_id).unwrap().clone();
                     deduct_gas(&mut gas_object, net_change);
@@ -405,10 +432,9 @@ pub mod checked {
                     trace!(net_change, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
                     temporary_store.mutate_input_object(gas_object);
-                    cost_summary
                 }
-                PaymentMethod::Unmetered => unreachable!(),
             }
+            cost_summary
         }
 
         /// Calculate total gas cost considering storage and rebate.
