@@ -20,7 +20,7 @@ use crate::{
 use move_binary_format::errors::VMResult;
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
-use tracing::error;
+use tracing::{error, instrument};
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -82,11 +82,13 @@ impl MoveRuntime {
     /// Resolve a package, loading it if necessary. This will use the provided `ModuleResolver` to
     /// fetch the package if it is not already cached.
     /// If there is an error loading or verifying the package, an error is returned.
+    #[instrument(level = "trace", skip_all)]
     pub fn resolve_and_cache_package(
         &self,
         module_resolver: impl ModuleResolver,
         package_key: VersionId,
     ) -> VMResult<ResolvedPackageResult> {
+        tracing::trace!(version_id = %package_key, "resolving and caching package");
         self.telemetry.with_transaction_telemetry(|txn_telemetry| {
             package_resolution::resolve_package(
                 module_resolver,
@@ -105,11 +107,13 @@ impl MoveRuntime {
     /// The resuling map of vtables _must_ be closed under the static dependency graph of the root
     /// package w.r.t, to the current linkage context in `data_store`.
     #[inline]
+    #[instrument(level = "trace", skip_all)]
     pub fn make_vm<'extensions>(
         &self,
         package_store: impl ModuleResolver,
         link_context: LinkageContext,
     ) -> VMResult<MoveVM<'extensions>> {
+        tracing::trace!(linkage_table = ?link_context.linkage_table, "making Move VM");
         self.make_vm_with_native_extensions(
             package_store,
             link_context,
@@ -117,12 +121,14 @@ impl MoveRuntime {
         )
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn make_vm_with_native_extensions<'extensions>(
         &self,
         package_store: impl ModuleResolver,
         link_context: LinkageContext,
         native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>> {
+        tracing::trace!(linkage_table = ?link_context.linkage_table, "making Move VM for execution with extensions");
         self.telemetry.with_transaction_telemetry(|txn_telemetry| {
             let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
@@ -178,6 +184,7 @@ impl MoveRuntime {
     /// - and Return the VTables.
     ///
     /// If there is an error loading or verifying the packages, an error is returned instead.
+    #[instrument(level = "trace", skip_all)]
     fn load_and_cache_vtables(
         &self,
         package_store: &impl ModuleResolver,
@@ -185,6 +192,7 @@ impl MoveRuntime {
         link_context: &LinkageContext,
         linkage_hash: &crate::shared::linkage_context::LinkageHash,
     ) -> Result<VMDispatchTables, move_binary_format::errors::VMError> {
+        tracing::trace!(linkage_table = ?link_context.linkage_table, "loading and caching VTables for linkage context");
         let all_packages = link_context.all_packages()?;
         let packages = package_resolution::resolve_packages(
             package_store,
@@ -228,6 +236,7 @@ impl MoveRuntime {
     ///
     /// In case an invariant violation occurs, the provided data cache should be considered
     /// corrupted and discarded; a change set will not be returned.
+    #[instrument(level = "trace", skip_all)]
     pub fn validate_package<'extensions>(
         &self,
         package_store: impl ModuleResolver,
@@ -236,6 +245,12 @@ impl MoveRuntime {
         _gas_meter: &mut impl GasMeter,
         native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
+        tracing::trace!(
+            version_id = %pkg.version_id,
+            original_id = %original_id,
+            version = %pkg.version,
+            "validating package for publication and making VM instance",
+        );
         let vm_telemetry = self.telemetry.clone();
         self.telemetry.with_transaction_telemetry(|txn_telemetry| {
             let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);

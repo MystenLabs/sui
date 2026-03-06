@@ -34,6 +34,7 @@ use move_core_types::{
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::runtime::VMConfig;
 use std::sync::Arc;
+use tracing::instrument;
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -119,6 +120,7 @@ impl<'extensions> MoveVM<'extensions> {
     ///
     /// In case an invariant violation occurs, the whole Session should be considered corrupted and
     /// one shall not proceed with effect generation.
+    #[instrument(level = "trace", skip_all)]
     pub fn execute_entry_function(
         &mut self,
         module: &ModuleId,
@@ -127,6 +129,11 @@ impl<'extensions> MoveVM<'extensions> {
         args: Vec<Value>,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<Vec<Value>> {
+        tracing::trace!(
+            module = %module,
+            function_name = %function_name,
+            "Calling into function"
+        );
         let bypass_declared_entry_check = false;
         self.execute_function(
             module,
@@ -140,6 +147,7 @@ impl<'extensions> MoveVM<'extensions> {
     }
 
     /// Similar to execute_entry_function, but it bypasses visibility checks and accepts a tracer
+    #[instrument(level = "trace", skip_all)]
     pub fn execute_function_bypass_visibility(
         &mut self,
         module: &ModuleId,
@@ -154,6 +162,11 @@ impl<'extensions> MoveVM<'extensions> {
         } else {
             None
         };
+        tracing::trace!(
+            module = %module,
+            function_name = %function_name,
+            "Calling into function"
+        );
 
         dbg_println!("running {module}::{function_name}");
         dbg_println!("tables: {:#?}", self.virtual_tables.loaded_packages);
@@ -174,12 +187,18 @@ impl<'extensions> MoveVM<'extensions> {
     // -------------------------------------------
 
     /// NB: The `module_id` is using the _runtime_ ID.
+    #[instrument(level = "trace", skip_all)]
     pub fn function_information(
         &self,
         module_id: &ModuleId,
         function_name: &IdentStr,
         ty_args: &[Type],
     ) -> VMResult<LoadedFunctionInformation> {
+        tracing::trace!(
+            module = %module_id,
+            function_name = %function_name,
+            "Getting function information"
+        );
         let MoveVMFunction {
             function,
             parameters,
@@ -235,7 +254,9 @@ impl<'extensions> MoveVM<'extensions> {
     /// errors and not anything else.
     /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
     /// IDs) are not correct here.
+    #[instrument(level = "trace", skip_all)]
     pub fn load_type(&self, tag: &TypeTag) -> VMResult<Type> {
+        tracing::trace!(type_tag = %tag, "Loading type for type tag");
         self.virtual_tables.load_type(tag).map_err(|e| {
             Self::convert_to_external_resolution_error(
                 e,
@@ -250,7 +271,9 @@ impl<'extensions> MoveVM<'extensions> {
     /// errors and not anything else.
     /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
     /// IDs) are not correct here.
+    #[instrument(level = "trace", skip_all)]
     pub fn runtime_type_layout(&self, ty: &TypeTag) -> VMResult<runtime_value::MoveTypeLayout> {
+        tracing::trace!(type_tag = %ty, "Getting runtime layout");
         self.virtual_tables.get_type_layout(ty).map_err(|e| {
             Self::convert_to_external_resolution_error(
                 e,
@@ -265,7 +288,9 @@ impl<'extensions> MoveVM<'extensions> {
     /// errors and not anything else.
     /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
     /// IDs) are not correct here.
+    #[instrument(level = "trace", skip_all)]
     pub fn annotated_type_layout(&self, ty: &TypeTag) -> VMResult<annotated_value::MoveTypeLayout> {
+        tracing::trace!(type_tag = %ty, "Getting annotated layout");
         self.virtual_tables
             .get_fully_annotated_type_layout(ty)
             .map_err(|e| {

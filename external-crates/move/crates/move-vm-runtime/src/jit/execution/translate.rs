@@ -35,6 +35,7 @@ use move_core_types::{
 };
 
 use indexmap::IndexMap;
+use tracing::instrument;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -177,11 +178,17 @@ impl FunctionContext<'_, '_> {
 // Package Translation
 // -------------------------------------------------------------------------------------------------
 
+#[instrument(level = "trace", skip_all)]
 pub fn package(
     natives: &NativeFunctions,
     interner: &IdentifierInterner,
     verified_package: input::Package,
 ) -> PartialVMResult<Package> {
+    tracing::trace!(
+        version_id = %verified_package.version_id,
+        original_id = %verified_package.original_id,
+        "translating package"
+    );
     let version_id = verified_package.version_id;
     let original_id = verified_package.original_id;
     let (module_ids_in_pkg, package_modules): (BTreeSet<_>, Vec<_>) =
@@ -382,11 +389,13 @@ fn modules(
 // -------------------------------------------------------------------------------------------------
 // Module Translation
 
+#[instrument(level = "trace", skip_all)]
 fn module(
     context: &mut PackageContext<'_>,
     version_id: VersionId,
     module: &input::Module,
 ) -> PartialVMResult<Module> {
+    tracing::trace!(version_id = %version_id, module_name = %module.compiled_module.self_id(), "translating module");
     let self_id = module.compiled_module.self_id();
     dbg_println!("Loading module: {}", self_id);
 

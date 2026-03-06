@@ -14,8 +14,16 @@ use move_binary_format::{
     partial_vm_error,
 };
 use std::collections::BTreeMap;
+use tracing::instrument;
 
+#[instrument(level = "trace", skip_all)]
 pub(crate) fn package(pkg: Input::Package) -> PartialVMResult<ast::Package> {
+    tracing::trace!(
+        version_id = %pkg.version_id,
+        original_id = %pkg.original_id,
+        version = %pkg.version,
+        "optimizing package"
+    );
     let Input::Package {
         original_id,
         modules: in_modules,
@@ -37,10 +45,15 @@ pub(crate) fn package(pkg: Input::Package) -> PartialVMResult<ast::Package> {
     })
 }
 
+#[instrument(level = "trace", skip_all)]
 fn module(m: Input::Module) -> PartialVMResult<ast::Module> {
     let Input::Module {
         value: compiled_module,
     } = m;
+    tracing::trace!(
+        module_name = %compiled_module.self_id(),
+        "optimizing module"
+    );
     let functions = compiled_module
         .function_defs()
         .iter()

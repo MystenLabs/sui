@@ -22,9 +22,11 @@ use move_binary_format::{
 };
 use move_bytecode_verifier::{cyclic_dependencies, dependencies};
 use std::collections::{BTreeMap, HashMap};
+use tracing::instrument;
 
 /// Verifies that all packages in the provided map have valid linkage and no cyclic dependencies
 /// between them.
+#[instrument(level = "trace", skip_all)]
 pub fn verify_linkage_and_cyclic_checks(
     cached_packages: &BTreeMap<VersionId, &Package>,
 ) -> VMResult<()> {
@@ -35,6 +37,10 @@ pub fn verify_linkage_and_cyclic_checks(
             (v.original_id, v.version_id)
         })
         .collect();
+    tracing::trace!(
+        linkage_table = ?relocation_map,
+        "verifying linkage and cyclic checks for packages",
+    );
     for package in cached_packages.values() {
         let package_modules = package.as_modules().into_iter().collect::<Vec<_>>();
         verify_package_valid_linkage(&package_modules, cached_packages, &relocation_map)?;
@@ -48,10 +54,17 @@ pub fn verify_linkage_and_cyclic_checks(
 /// is being published so that we can verify that the package can be published before adding it to
 /// the cache (i.e., that at least in the current linking context the package is valid w.r.t. its
 /// dependencies).
+#[instrument(level = "trace", skip_all)]
 pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
     package_to_publish: &Package,
     cached_packages: &BTreeMap<VersionId, &Package>,
 ) -> VMResult<()> {
+    tracing::trace!(
+        version_id = %package_to_publish.version_id,
+        original_id = %package_to_publish.original_id,
+        version = %package_to_publish.version,
+        "verifying linkage and cyclic checks for package publication",
+    );
     let relocation_map: HashMap<OriginalId, VersionId> = cached_packages
         .iter()
         .map(|(k, v)| {
@@ -85,6 +98,7 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
 /// NB: In all cases it is assume the `package` is in the `relocation_map`. In the case of
 /// publication it will simply be a mapping of the package's original package ID to itself (since
 /// they are the same for publication).
+#[instrument(level = "trace", skip_all, ret)]
 fn verify_package_no_cyclic_relationships(
     package: &[&Module],
     cached_packages: &BTreeMap<VersionId, &Package>,
@@ -125,6 +139,7 @@ fn verify_package_no_cyclic_relationships(
 
 // Given the package, the cached packages, and the relocation map, this function verifies that
 // all modules in the provided package have valid linkage to their dependencies.
+#[instrument(level = "trace", skip_all, ret)]
 fn verify_package_valid_linkage(
     package: &[&Module],
     cached_packages: &BTreeMap<VersionId, &Package>,
