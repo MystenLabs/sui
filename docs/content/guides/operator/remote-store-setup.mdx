@@ -85,9 +85,11 @@ sui-checkpoint-blob-indexer \
     --compression-level 3
 ```
 
-No special configuration is needed for steady-state. The framework defaults are sufficient. The fullnode only needs gRPC enabled — JSON-RPC is not required.
+The fullnode only needs gRPC enabled — JSON-RPC is not required.
 
-Writes are idempotent, so you can run multiple indexer instances for redundancy.
+### Running multiple instances
+
+Writes are idempotent, so multiple indexer instances can safely write to the same bucket. Run **2–3 instances** at steady state to enable rolling deployments without ever delaying updates from the chain. During backfill, a single instance is sufficient.
 
 ## CLI reference
 
@@ -123,13 +125,26 @@ Writes are idempotent, so you can run multiple indexer instances for redundancy.
 
 ## Configuration (TOML)
 
-Framework defaults with adaptive concurrency controls handle tuning automatically. In most cases you do not need a config file at all — just use `--pipeline` to run only the two recommended pipelines and exclude the deprecated BCS pipeline:
+Use `--pipeline` to run only the two recommended pipelines and exclude the deprecated BCS pipeline:
 
 ```sh
 --pipeline checkpoint_blob --pipeline epochs
 ```
 
-If you do want to override defaults, pass a TOML file via `--config`. The configuration options (`[ingestion]`, `[committer]`, `[pipeline.<name>]`) are the same as the indexer framework's standard settings. See [Pipeline architecture — Performance tuning](/concepts/data-access/pipeline-architecture#performance-tuning) for the full reference.
+Pass the following TOML configuration file via `--config` to tune the committer for object store workloads:
+
+```toml
+[committer]
+write-concurrency = 500
+watermark-interval-ms = 120000
+watermark-interval-jitter-ms = 120000
+```
+
+- **`write-concurrency`** — Allows up to 500 concurrent writes to the object store. Decrease this if you observe heavy throttling from your storage provider.
+- **`watermark-interval-ms`** — Reduces the frequency of watermark updates from the framework default to avoid hot-key issues on the watermark file in the object store.
+- **`watermark-interval-jitter-ms`** — Adds random jitter to the watermark interval, staggering writes when running multiple indexer instances so they don't write to the same key simultaneously.
+
+The configuration options (`[ingestion]`, `[committer]`, `[pipeline.<name>]`) are the same as the indexer framework's standard settings. See [Pipeline architecture — Performance tuning](/concepts/data-access/pipeline-architecture#performance-tuning) for the full reference.
 
 ## Output format
 
