@@ -3711,7 +3711,7 @@ type Query {
 	- `intentScope` indicates whether `bytes` are to be parsed as a personal message or `TransactionData`.
 	- `author` is the signer's address.
 	"""
-	verifyZkLoginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
+	verifyZkLoginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult
 }
 
 """

@@ -868,16 +868,21 @@ impl Query {
         signature: Base64,
         intent_scope: ZkLoginIntentScope,
         author: SuiAddress,
-    ) -> Result<ZkLoginVerifyResult, RpcError<zklogin::Error>> {
-        zklogin::verify_signature(
-            ctx,
-            self.scope(ctx)?,
-            bytes,
-            signature,
-            intent_scope,
-            author,
+    ) -> Option<Result<ZkLoginVerifyResult, RpcError<zklogin::Error>>> {
+        Some(
+            async {
+                zklogin::verify_signature(
+                    ctx,
+                    self.scope(ctx)?,
+                    bytes,
+                    signature,
+                    intent_scope,
+                    author,
+                )
+                .await
+            }
+            .await,
         )
-        .await
     }
 }
 
