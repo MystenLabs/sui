@@ -48,4 +48,8 @@ module 0x42::m {
     fun i64_hex_overflow() {
         let _x: i64 = 0x8000000000000000i64;
     }
+
+    fun i128_hex_overflow() {
+        let _x: i128 = 0x80000000000000000000000000000000i128;
+    }
 }
