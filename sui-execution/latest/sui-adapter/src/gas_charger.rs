@@ -376,6 +376,8 @@ pub mod checked {
 
                 if !write_gas_coin {
                     temporary_store.delete_created_object(&gas_coin.as_ref().unwrap().id());
+                } else {
+                    temporary_store.mutate_input_object(gas_coin.as_ref().unwrap().clone());
                 }
             }
 
