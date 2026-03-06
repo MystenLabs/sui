@@ -224,6 +224,33 @@ Checkpoint.transactions (filter: affectedObject)
 Checkpoint.transactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
+CircomG1.e0
+  => {}
+
+CircomG1.e1
+  => {}
+
+CircomG1.e2
+  => {}
+
+CircomG2.e00
+  => {}
+
+CircomG2.e01
+  => {}
+
+CircomG2.e10
+  => {}
+
+CircomG2.e11
+  => {}
+
+CircomG2.e20
+  => {}
+
+CircomG2.e21
+  => {}
+
 CoinDenyListStateCreateTransaction._
   => {}
 
@@ -1139,12 +1166,6 @@ MultisigMember.publicKey
 MultisigMember.weight
   => {}
 
-MultisigMemberSignature.scheme
-  => {}
-
-MultisigMemberSignature.signature
-  => {}
-
 MultisigSignature.signatures
   => {}
 
@@ -1766,6 +1787,39 @@ WithdrawMaxAmountU64.amount
 WriteAccumulatorStorageCostTransaction._
   => {}
 
+ZkLoginClaim.value
+  => {}
+
+ZkLoginClaim.indexMod4
+  => {}
+
+ZkLoginInputs.proofPoints
+  => {}
+
+ZkLoginInputs.issBase64Details
+  => {}
+
+ZkLoginInputs.headerBase64
+  => {}
+
+ZkLoginInputs.addressSeed
+  => {}
+
+ZkLoginJwkId.iss
+  => {}
+
+ZkLoginJwkId.kid
+  => {}
+
+ZkLoginProof.a
+  => {}
+
+ZkLoginProof.b
+  => {}
+
+ZkLoginProof.c
+  => {}
+
 ZkLoginPublicIdentifier.iss
   => {}
 
@@ -1776,6 +1830,15 @@ ZkLoginSignature.maxEpoch
   => {}
 
 ZkLoginSignature.signature
+  => {}
+
+ZkLoginSignature.publicIdentifier
+  => {}
+
+ZkLoginSignature.inputs
+  => {}
+
+ZkLoginSignature.jwkId
   => {}
 
 ZkLoginVerifyResult.success
