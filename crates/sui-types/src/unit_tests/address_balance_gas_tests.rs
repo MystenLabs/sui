@@ -559,7 +559,8 @@ fn test_address_balance_budget_zero_rejected() {
 
 #[test]
 fn test_address_balance_gas_price_zero_rejected() {
-    let config = create_config_with_address_balance_gas_payments_enabled();
+    let mut config = create_config_with_address_balance_gas_payments_enabled();
+    config.disable_free_tier_for_testing();
     let tx_data = create_address_balance_tx(0, 1_000_000, None);
 
     let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));

@@ -105,6 +105,9 @@ pub struct SuiInitArgs {
     /// Override the file format version used when serializing compiled modules
     #[clap(long = "file-format")]
     pub file_format_version: Option<u32>,
+    /// Enable free tier feature for testing
+    #[clap(long = "enable-free-tier")]
+    pub enable_free_tier: bool,
 }
 
 #[derive(Debug, clap::Parser)]
