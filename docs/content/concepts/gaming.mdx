@@ -36,7 +36,7 @@ Off-chain computation can also be verified on-chain by using [Nautilus](/guides/
 
 In-game currencies allow users to purchase game features like items, upgrades, and premium content. In Web2 games, these currencies are exclusively in-game, with values set by the developers. 
 
-Using Sui, players can now have [true ownership of their in-game currency](guides/developer/coin/in-game-token.mdx). The currency exists as a [token on the Sui blockchain](/standards/currency.mdx), where players can conceivably buy, sell, or swap that currency for anything else that also lives on-chain. If you create an ecosystem of games, players can purchase currency in one of your games but spend it in another one that also uses that same currency. The possibilities are vast, but you must first learn how to create the currency.
+Using Sui, players can now have [true ownership of their in-game currency](/guides/developer/coin/in-game-token.mdx). The currency exists as a [token on the Sui blockchain](/standards/currency.mdx), where players can conceivably buy, sell, or swap that currency for anything else that also lives on-chain. If you create an ecosystem of games, players can purchase currency in one of your games but spend it in another one that also uses that same currency. The possibilities are vast, but you must first learn how to create the currency.
 
 ### Closed-Loop Tokens
 
@@ -46,7 +46,7 @@ For example, you can create tokens associated with your game that [reward loyalt
 
 ## Game features
 
-[Non-fungible tokens (NFTs)](/guides/developer/nft.mdx) are able to represent many traditional game features such as in-game objects, battle passes, rewards, skins, game cards or keys, and loot boxes.
+[Non-fungible tokens (NFTs)](/guides/developer/nft) are able to represent many traditional game features such as in-game objects, battle passes, rewards, skins, game cards or keys, and loot boxes.
 
 You can think of these NFTs as game assets that are generally categorized as either [dynamic assets](#dynamic-assets) or [soulbound assets](#soulbound-assets).
 
@@ -96,7 +96,7 @@ When an object is sent to another object, the metadata of the parent object rema
 
 #### Deleting assets
 
-On Sui, you can delete an object if the smart contract allows the operation. If the correct smart contract function is present, then you can delete the object in a single transaction. This results in a gas-fee rebate, which happens whenever bytes are freed on-chain. The transaction's gas payer [receives a rebate](/concepts/tokenomics.mdx#storage-fund/) to account for the future storage of the object no longer being necessary but having already been paid for.
+On Sui, you can delete an object if the smart contract allows the operation. If the correct smart contract function is present, then you can delete the object in a single transaction. This results in a gas-fee rebate, which happens whenever bytes are freed on-chain. The transaction's gas payer [receives a rebate](/concepts/tokenomics#storage-fund/) to account for the future storage of the object no longer being necessary but having already been paid for.
 
 ### Soulbound assets {#soulbound-assets}
 
@@ -444,20 +444,3 @@ By integrating these Sui blockchain features, ArcaneBattles not only enhances th
 </TabItem>
 
 </Tabs>
-
-## Related links
-
-<RelatedLink to="/standards/currency.mdx" />
-<RelatedLink to="/guides/developer/currency.mdx" />
-<RelatedLink to="/guides/developer/nft.mdx" />
-<RelatedLink to="/guides/developer/nft/asset-tokenization.mdx" />
-<RelatedLink to="/guides/developer/nft/nft-rental.mdx" />
-<RelatedLink to="/standards/kiosk.mdx" />
-<RelatedLink to="/standards/kiosk-apps.mdx" />
-<RelatedLink to="/concepts/cryptography/zklogin.mdx" />
-<RelatedLink href="https://blog.sui.io/tag/gaming/" label="Sui Foundation blog" desc="Blog posts from the Sui Foundation with the `gaming` tag." />
-<RelatedLink to="/guides/developer/app-examples/coin-flip.mdx" />
-<RelatedLink to="/guides/developer/app-examples/blackjack.mdx" />
-<RelatedLink to="/guides/developer/app-examples/plinko.mdx" />
-<RelatedLink href="https://github.com/MystenLabs/mysticon-legends" label="Mysticon Legends" desc="GitHub repo for a blockchain-based game where players collect, train, and battle with mythical creatures called Mysticons." />
-<RelatedLink href="https://mini-games.sui.io/" label="Web3 Mini Games built on Sui" desc="A collection of mini games, to inspire the community of Sui." />
