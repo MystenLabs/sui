@@ -17621,6 +17621,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "move-binary-format",
+ "move-core-types",
  "mysten-common",
  "prometheus",
  "rand 0.8.5",

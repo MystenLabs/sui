@@ -4,11 +4,12 @@
 use std::{collections::BTreeMap, path::Path};
 
 use crate::{TestCluster, TestClusterBuilder};
+use move_core_types::identifier::Identifier;
 use sui_keys::keystore::AccountKeystore;
 use sui_protocol_config::{OverrideGuard, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
-    TypeTag,
+    SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_metadata::get_accumulator_object_count,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
@@ -18,8 +19,12 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
     gas_coin::GAS,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ChildObjectResolver,
-    transaction::TransactionData,
+    transaction::{
+        FundsWithdrawalArg, GasData, TransactionData, TransactionDataV1, TransactionExpiration,
+        TransactionKind,
+    },
 };
 
 // TODO: Some of this code may be useful for tests other than address balance tests,
@@ -218,6 +223,22 @@ impl TestEnv {
         package_ref.0
     }
 
+    pub async fn setup_custom_coin(&mut self) -> (SuiAddress, TypeTag) {
+        let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.extend(["..", "sui-e2e-tests", "tests", "data", "coins"]);
+        let publisher = self
+            .cluster
+            .wallet
+            .get_one_gas_object()
+            .await
+            .unwrap()
+            .unwrap()
+            .0;
+        let package_id = self.setup_test_package(path).await;
+        let coin_a_type: TypeTag = format!("{}::coin_a::COIN_A", package_id).parse().unwrap();
+        (publisher, coin_a_type)
+    }
+
     pub fn encode_coin_reservation(
         &self,
         sender: SuiAddress,
@@ -322,6 +343,64 @@ impl TestEnv {
 
     pub async fn trigger_reconfiguration(&self) {
         self.cluster.trigger_reconfiguration().await;
+    }
+
+    pub fn create_free_tier_transaction(
+        &self,
+        amount: u64,
+        token_type: TypeTag,
+        sender: SuiAddress,
+        recipient: SuiAddress,
+        nonce: u32,
+        epoch: u64,
+    ) -> TransactionData {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let withdraw_arg = FundsWithdrawalArg::balance_from_sender(amount, token_type.clone());
+        let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+        let balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![token_type.clone()],
+            vec![withdraw_arg],
+        );
+        let recipient_arg = builder.pure(recipient).unwrap();
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("gasless_send_funds").unwrap(),
+            vec![token_type],
+            vec![balance, recipient_arg],
+        );
+        let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+        self.free_tier_transaction_data(tx_kind, sender, nonce, epoch)
+    }
+
+    pub fn free_tier_transaction_data(
+        &self,
+        tx_kind: TransactionKind,
+        sender: SuiAddress,
+        nonce: u32,
+        epoch: u64,
+    ) -> TransactionData {
+        TransactionData::V1(TransactionDataV1 {
+            kind: tx_kind,
+            sender,
+            gas_data: GasData {
+                payment: vec![],
+                owner: sender,
+                price: 0,
+                budget: 0,
+            },
+            expiration: TransactionExpiration::ValidDuring {
+                min_epoch: Some(epoch),
+                max_epoch: Some(epoch),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: self.chain_id,
+                nonce,
+            },
+        })
     }
 
     /// Publishes the `object_balance` example package, creates an owned vault object,
