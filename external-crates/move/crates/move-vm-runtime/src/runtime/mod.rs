@@ -113,7 +113,7 @@ impl MoveRuntime {
         package_store: impl ModuleResolver,
         link_context: LinkageContext,
     ) -> VMResult<MoveVM<'extensions>> {
-        tracing::trace!(linkage_table = ?link_context.linkage_table, "making Move VM");
+        tracing::trace!(linkage_table = ?link_context, "making Move VM");
         self.make_vm_with_native_extensions(
             package_store,
             link_context,
@@ -128,7 +128,7 @@ impl MoveRuntime {
         link_context: LinkageContext,
         native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>> {
-        tracing::trace!(linkage_table = ?link_context.linkage_table, "making Move VM for execution with extensions");
+        tracing::trace!(linkage_table = ?link_context, "making Move VM for execution with extensions");
         self.telemetry.with_transaction_telemetry(|txn_telemetry| {
             let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
@@ -192,7 +192,7 @@ impl MoveRuntime {
         link_context: &LinkageContext,
         linkage_hash: &crate::shared::linkage_context::LinkageHash,
     ) -> Result<VMDispatchTables, move_binary_format::errors::VMError> {
-        tracing::trace!(linkage_table = ?link_context.linkage_table, "loading and caching VTables for linkage context");
+        tracing::trace!(linkage_table = ?link_context, "loading and caching VTables for linkage context");
         let all_packages = link_context.all_packages()?;
         let packages = package_resolution::resolve_packages(
             package_store,

@@ -161,7 +161,7 @@ impl VMDispatchTables {
         loaded_packages: BTreeMap<OriginalId, Arc<Package>>,
     ) -> VMResult<Self> {
         tracing::trace!(
-            linkage_table = ?link_context.linkage_table,
+            linkage_table = ?link_context,
             "creating VM dispatch tables"
         );
         let defining_id_origins = {
