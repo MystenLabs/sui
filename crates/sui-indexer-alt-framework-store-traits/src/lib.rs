@@ -14,7 +14,7 @@ use scoped_futures::ScopedBoxFuture;
 #[async_trait]
 pub trait Connection: Send {
     /// If no existing watermark record exists, initializes it with `default_next_checkpoint`.
-    /// Returns the committer watermark `checkpoint_hi_inclusive`.
+    /// Returns the committer watermark `checkpoint_hi`.
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
@@ -117,12 +117,12 @@ pub trait TransactionalStore: Store {
 }
 
 /// Represents the highest checkpoint for some pipeline that has been processed by the indexer
-/// framework. When read from the `Store`, this represents the inclusive upper bound checkpoint of
+/// framework. When read from the `Store`, this represents the exclusive upper bound checkpoint of
 /// data that has been written to the Store for a pipeline.
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct CommitterWatermark {
     pub epoch_hi_inclusive: u64,
-    pub checkpoint_hi_inclusive: u64,
+    pub checkpoint_hi: u64,
     pub tx_hi: u64,
     pub timestamp_ms_hi_inclusive: u64,
 }
@@ -131,7 +131,7 @@ pub struct CommitterWatermark {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ReaderWatermark {
     /// Within the framework, this value is used to determine the new `reader_lo`.
-    pub checkpoint_hi_inclusive: u64,
+    pub checkpoint_hi: u64,
     /// Within the framework, this value is used to check whether to actually make an update
     /// transaction to the database.
     pub reader_lo: u64,
@@ -165,11 +165,11 @@ impl CommitterWatermark {
     }
 
     /// Convenience function for testing, instantiates a CommitterWatermark with the given
-    /// `checkpoint_hi_inclusive` and sets all other values to 0.
-    pub fn new_for_testing(checkpoint_hi_inclusive: u64) -> Self {
+    /// `checkpoint_hi` and sets all other values to 0.
+    pub fn new_for_testing(checkpoint_hi: u64) -> Self {
         CommitterWatermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive,
+            checkpoint_hi,
             tx_hi: 0,
             timestamp_ms_hi_inclusive: 0,
         }

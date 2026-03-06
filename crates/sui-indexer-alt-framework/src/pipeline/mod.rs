@@ -88,7 +88,7 @@ impl<P: Processor> IndexedCheckpoint<P> {
         Self {
             watermark: CommitterWatermark {
                 epoch_hi_inclusive: epoch,
-                checkpoint_hi_inclusive: cp_sequence_number,
+                checkpoint_hi: cp_sequence_number + 1,
                 tx_hi,
                 timestamp_ms_hi_inclusive: timestamp_ms,
             },
@@ -103,13 +103,20 @@ impl<P: Processor> IndexedCheckpoint<P> {
 
     /// The checkpoint sequence number that this data is from
     fn checkpoint(&self) -> u64 {
-        self.watermark.checkpoint_hi_inclusive
+        let watermark = self.watermark;
+        watermark
+            .checkpoint_hi
+            .checked_sub(1)
+            .unwrap_or_else(|| panic!("Watermark checkpoint_hi underflow {watermark:?}"))
     }
 }
 
 impl WatermarkPart {
     fn checkpoint(&self) -> u64 {
-        self.watermark.checkpoint_hi_inclusive
+        self.watermark
+            .checkpoint_hi
+            .checked_sub(1)
+            .unwrap_or_else(|| panic!("WatermarkPart checkpoint_hi underflow {self:?}"))
     }
 
     fn timestamp_ms(&self) -> u64 {
@@ -177,7 +184,7 @@ mod tests {
     fn test_watermark_part_getters() {
         let watermark = CommitterWatermark {
             epoch_hi_inclusive: 1,
-            checkpoint_hi_inclusive: 100,
+            checkpoint_hi: 101,
             tx_hi: 1000,
             timestamp_ms_hi_inclusive: 1234567890,
         };
@@ -195,7 +202,7 @@ mod tests {
     #[test]
     fn test_watermark_part_is_complete() {
         let part = WatermarkPart {
-            watermark: CommitterWatermark::default(),
+            watermark: CommitterWatermark::new_for_testing(1),
             batch_rows: 200,
             total_rows: 200,
         };
@@ -206,7 +213,7 @@ mod tests {
     #[test]
     fn test_watermark_part_is_not_complete() {
         let part = WatermarkPart {
-            watermark: CommitterWatermark::default(),
+            watermark: CommitterWatermark::new_for_testing(1),
             batch_rows: 199,
             total_rows: 200,
         };
@@ -217,14 +224,14 @@ mod tests {
     #[test]
     fn test_watermark_part_becomes_complete_after_adding_new_batch() {
         let mut part = WatermarkPart {
-            watermark: CommitterWatermark::default(),
+            watermark: CommitterWatermark::new_for_testing(1),
             batch_rows: 199,
             total_rows: 200,
         };
 
         // Add a batch that makes it complete
         part.add(WatermarkPart {
-            watermark: CommitterWatermark::default(),
+            watermark: CommitterWatermark::new_for_testing(1),
             batch_rows: 1,
             total_rows: 200,
         });
@@ -236,7 +243,7 @@ mod tests {
     #[test]
     fn test_watermark_part_becomes_incomplete_after_taking_away_batch() {
         let mut part = WatermarkPart {
-            watermark: CommitterWatermark::default(),
+            watermark: CommitterWatermark::new_for_testing(1),
             batch_rows: 200,
             total_rows: 200,
         };

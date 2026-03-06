@@ -1217,8 +1217,9 @@ async fn test_migration_resume_after_crash() {
         .await
         .expect("Expected watermark after Phase 1");
     assert_eq!(
-        watermark_phase1.checkpoint_hi_inclusive, epoch_0_last,
-        "Phase 1 watermark should be at epoch_0_last"
+        watermark_phase1.checkpoint_hi,
+        epoch_0_last + 1,
+        "Phase 1 watermark should be at epoch_0_last + 1"
     );
     assert_eq!(
         watermark_phase1.epoch_hi_inclusive, 0,
@@ -1243,8 +1244,9 @@ async fn test_migration_resume_after_crash() {
         .await
         .expect("Expected watermark after Phase 2");
     assert_eq!(
-        watermark_phase2.checkpoint_hi_inclusive, last_seq,
-        "Phase 2 watermark should be at last_seq"
+        watermark_phase2.checkpoint_hi,
+        last_seq + 1,
+        "Phase 2 watermark should be at last_seq + 1"
     );
     assert_eq!(
         watermark_phase2.epoch_hi_inclusive, 1,
@@ -1546,7 +1548,8 @@ async fn test_migration_retry_after_partial_failure() {
     );
     let watermark = watermark_final.unwrap();
     assert_eq!(
-        watermark.checkpoint_hi_inclusive, last_seq,
+        watermark.checkpoint_hi,
+        last_seq + 1,
         "Watermark should be at last checkpoint"
     );
     assert_eq!(
@@ -2187,7 +2190,7 @@ async fn test_migration_snap_to_file_start() {
         .read_migration_watermark("snap-test", "checkpoints")
         .await
         .expect("Expected watermark");
-    assert_eq!(watermark.checkpoint_hi_inclusive, last_seq);
+    assert_eq!(watermark.checkpoint_hi, last_seq + 1);
 }
 
 /// Test that migration mode snaps first_checkpoint forward when in a gap between files.
@@ -2256,7 +2259,7 @@ async fn test_migration_snap_forward_in_gap() {
         .read_migration_watermark("gap-test", "checkpoints")
         .await
         .expect("Expected watermark");
-    assert_eq!(watermark.checkpoint_hi_inclusive, last_seq);
+    assert_eq!(watermark.checkpoint_hi, last_seq + 1);
     assert_eq!(
         watermark.epoch_hi_inclusive, 1,
         "Watermark should be at epoch 1"
@@ -2409,11 +2412,13 @@ async fn test_multi_pipeline_different_file_boundaries() {
         .expect("Expected transaction watermark");
 
     assert_eq!(
-        checkpoint_watermark.checkpoint_hi_inclusive, last_seq,
+        checkpoint_watermark.checkpoint_hi,
+        last_seq + 1,
         "Checkpoint pipeline watermark should be at last checkpoint"
     );
     assert_eq!(
-        transaction_watermark.checkpoint_hi_inclusive, last_seq,
+        transaction_watermark.checkpoint_hi,
+        last_seq + 1,
         "Transaction pipeline watermark should be at last checkpoint"
     );
 
@@ -2486,7 +2491,7 @@ async fn test_migration_first_checkpoint_zero() {
         .read_migration_watermark("zero-start-test", "checkpoints")
         .await
         .expect("Expected watermark");
-    assert_eq!(watermark.checkpoint_hi_inclusive, last_seq);
+    assert_eq!(watermark.checkpoint_hi, last_seq + 1);
     assert_eq!(watermark.epoch_hi_inclusive, 0);
 
     // Verify all rows present
@@ -2527,7 +2532,7 @@ async fn test_migration_no_first_checkpoint() {
         .read_migration_watermark("no-start-test", "checkpoints")
         .await
         .expect("Expected watermark");
-    assert_eq!(watermark.checkpoint_hi_inclusive, last_seq);
+    assert_eq!(watermark.checkpoint_hi, last_seq + 1);
 
     // Verify all rows present
     let files = harness.list_files("checkpoints/epoch_0").await;

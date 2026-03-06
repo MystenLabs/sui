@@ -169,7 +169,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
         Ok(self
             .committer_watermark(pipeline_task)
             .await?
-            .map(|w| w.checkpoint_hi_inclusive))
+            .map(|w| w.checkpoint_hi))
     }
 
     async fn committer_watermark(
@@ -282,8 +282,8 @@ mod tests {
 
     fn has_range(store: &Store<TestSchema>, lo: Option<u64>, hi: Option<u64>) -> bool {
         store.db().snapshot_range(u64::MAX).is_some_and(|s| {
-            lo.is_none_or(|lo| lo == s.start().checkpoint_hi_inclusive)
-                && hi.is_none_or(|hi| hi == s.end().checkpoint_hi_inclusive)
+            lo.is_none_or(|lo| lo == s.start().checkpoint_hi)
+                && hi.is_none_or(|hi| hi == s.end().checkpoint_hi)
         })
     }
 
@@ -300,8 +300,11 @@ mod tests {
             .transaction(move |c| {
                 async move {
                     mutator(c.store.schema(), &mut c.batch)?;
-                    c.set_committer_watermark(pipeline, CommitterWatermark::new_for_testing(cp))
-                        .await?;
+                    c.set_committer_watermark(
+                        pipeline,
+                        CommitterWatermark::new_for_testing(cp + 1),
+                    )
+                    .await?;
                     Ok(())
                 }
                 .scope_boxed()
@@ -357,7 +360,7 @@ mod tests {
         .await
         .unwrap();
 
-        wait_until(|| async { has_range(&store, None, Some(0)) })
+        wait_until(|| async { has_range(&store, None, Some(1)) })
             .await
             .unwrap();
 
@@ -401,7 +404,7 @@ mod tests {
         .await
         .unwrap();
 
-        wait_until(|| async { has_range(&store, None, Some(0)) })
+        wait_until(|| async { has_range(&store, None, Some(1)) })
             .await
             .unwrap();
 
@@ -432,7 +435,7 @@ mod tests {
 
             let mut batch = rocksdb::WriteBatch::default();
             schema.b.insert(42, "x".to_owned(), &mut batch).unwrap();
-            db.write("b", CommitterWatermark::new_for_testing(0).into(), batch)
+            db.write("b", CommitterWatermark::new_for_testing(1).into(), batch)
                 .unwrap();
         }
 
@@ -449,7 +452,7 @@ mod tests {
 
         // When there is existing data, the synchronizer will take a snapshot to make it available
         // before the store sees any writes.
-        wait_until(|| async { has_range(&store, None, Some(0)) })
+        wait_until(|| async { has_range(&store, None, Some(1)) })
             .await
             .unwrap();
     }
@@ -476,12 +479,12 @@ mod tests {
 
             let mut batch = rocksdb::WriteBatch::default();
             schema.a.insert("x".to_owned(), 42, &mut batch).unwrap();
-            db.write("a", CommitterWatermark::new_for_testing(0).into(), batch)
+            db.write("a", CommitterWatermark::new_for_testing(1).into(), batch)
                 .unwrap();
 
             let mut batch = rocksdb::WriteBatch::default();
             schema.b.insert(42, "x".to_owned(), &mut batch).unwrap();
-            db.write("b", CommitterWatermark::new_for_testing(0).into(), batch)
+            db.write("b", CommitterWatermark::new_for_testing(1).into(), batch)
                 .unwrap();
         }
 
@@ -499,7 +502,7 @@ mod tests {
 
         // When there is existing data, the synchronizer will take a snapshot to make it available
         // before the store sees any writes.
-        wait_until(|| async { has_range(&store, None, Some(0)) })
+        wait_until(|| async { has_range(&store, None, Some(1)) })
             .await
             .unwrap();
     }
@@ -526,7 +529,7 @@ mod tests {
 
             let mut batch = rocksdb::WriteBatch::default();
             schema.b.insert(42, "x".to_owned(), &mut batch).unwrap();
-            db.write("b", CommitterWatermark::new_for_testing(0).into(), batch)
+            db.write("b", CommitterWatermark::new_for_testing(1).into(), batch)
                 .unwrap();
         }
 
@@ -570,7 +573,7 @@ mod tests {
 
         // After the other pipeline was caught up, the synchronizer will take the snapshot, but it
         // will not yet make the subsequent write to the other pipeline available.
-        wait_until(|| async { has_range(&store, None, Some(0)) })
+        wait_until(|| async { has_range(&store, None, Some(1)) })
             .await
             .unwrap();
 
@@ -580,7 +583,7 @@ mod tests {
 
         // Catch up the first pipeline without writing any further data.
         write(&store, "a", 1, |_, _| Ok(())).await.unwrap();
-        wait_until(|| async { has_range(&store, None, Some(1)) })
+        wait_until(|| async { has_range(&store, None, Some(2)) })
             .await
             .unwrap();
 
@@ -660,7 +663,7 @@ mod tests {
 
         // With the fix, no snapshot is taken until after the first checkpoint is written.
         // The first snapshot will be at checkpoint 100, not 99.
-        wait_until(|| async { has_range(&store, Some(100), Some(100)) })
+        wait_until(|| async { has_range(&store, Some(101), Some(101)) })
             .await
             .unwrap();
 
@@ -696,7 +699,7 @@ mod tests {
         }
 
         // The synchronizer will take a snapshot before every `stride`-th checkpoint.
-        wait_until(|| async { has_range(&store, Some(2), Some(8)) })
+        wait_until(|| async { has_range(&store, Some(3), Some(9)) })
             .await
             .unwrap();
 
@@ -711,16 +714,10 @@ mod tests {
 
         // Querying the snapshot range at the latest checkpoint does the same thing as an unbounded
         // range request.
-        assert_eq!(
-            Some(8),
-            d.snapshot_range(8).map(|r| r.end().checkpoint_hi_inclusive)
-        );
+        assert_eq!(Some(9), d.snapshot_range(8).map(|r| r.end().checkpoint_hi));
 
         // Going one checkpoint back causes the range to drop back by the stride.
-        assert_eq!(
-            Some(5),
-            d.snapshot_range(7).map(|r| r.end().checkpoint_hi_inclusive)
-        );
+        assert_eq!(Some(6), d.snapshot_range(7).map(|r| r.end().checkpoint_hi));
 
         // Going back beyond the first checkpoint results in an empty range.
         assert_eq!(None, d.snapshot_range(1));
@@ -801,9 +798,8 @@ mod tests {
         let db = store.db();
         assert_eq!(db.snapshots(), 1);
         assert_eq!(
-            db.snapshot_range(u64::MAX)
-                .map(|s| s.end().checkpoint_hi_inclusive),
-            Some(0)
+            db.snapshot_range(u64::MAX).map(|s| s.end().checkpoint_hi),
+            Some(1)
         );
         assert_eq!(s.a.get(0, "x".to_owned()).unwrap(), Some(42));
         assert_eq!(s.a.get(0, "y".to_owned()).unwrap(), None);

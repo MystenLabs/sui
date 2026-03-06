@@ -23,7 +23,7 @@ impl LegacyWatermarkTracker {
         }
     }
 
-    /// Record a pipeline's latest checkpoint_hi_inclusive.
+    /// Record a pipeline's latest checkpoint_hi.
     /// Returns `Some((min, prev_last_written))` when all pipelines have reported
     /// AND the min has advanced past `last_written`. Eagerly sets `last_written`
     /// so concurrent callers don't redundantly attempt the same write. Pass

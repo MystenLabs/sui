@@ -167,8 +167,11 @@ pub mod tests {
     async fn test_add_existing_pipeline() {
         let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         {
-            let watermark = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
+            conn.init_watermark(ConcurrentPipeline1::NAME, 0)
+                .await
+                .unwrap();
+            let watermark = CommitterWatermark::new_for_testing(11);
             assert!(
                 conn.set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
                     .await
@@ -186,14 +189,20 @@ pub mod tests {
     async fn test_add_multiple_pipelines() {
         let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         {
-            let watermark1 = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
+            conn.init_watermark(ConcurrentPipeline1::NAME, 0)
+                .await
+                .unwrap();
+            conn.init_watermark(ConcurrentPipeline2::NAME, 0)
+                .await
+                .unwrap();
+            let watermark1 = CommitterWatermark::new_for_testing(11);
             assert!(
                 conn.set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
                     .await
                     .unwrap()
             );
-            let watermark2 = CommitterWatermark::new_for_testing(20);
+            let watermark2 = CommitterWatermark::new_for_testing(21);
             assert!(
                 conn.set_committer_watermark(ConcurrentPipeline2::NAME, watermark2)
                     .await

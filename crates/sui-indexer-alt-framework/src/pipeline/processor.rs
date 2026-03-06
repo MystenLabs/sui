@@ -260,7 +260,7 @@ mod tests {
             .recv()
             .await
             .expect("Should receive first IndexedCheckpoint");
-        assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(indexed1.watermark.checkpoint_hi, 2);
         assert_eq!(indexed1.watermark.epoch_hi_inclusive, 2);
         assert_eq!(indexed1.watermark.tx_hi, 5);
         assert_eq!(indexed1.watermark.timestamp_ms_hi_inclusive, 1000000001);
@@ -273,7 +273,7 @@ mod tests {
             .recv()
             .await
             .expect("Should receive second IndexedCheckpoint");
-        assert_eq!(indexed2.watermark.checkpoint_hi_inclusive, 2);
+        assert_eq!(indexed2.watermark.checkpoint_hi, 3);
         assert_eq!(indexed2.watermark.epoch_hi_inclusive, 2);
         assert_eq!(indexed2.watermark.tx_hi, 10);
         assert_eq!(indexed2.watermark.timestamp_ms_hi_inclusive, 1000000002);
@@ -319,7 +319,7 @@ mod tests {
             .recv()
             .await
             .expect("Should receive first IndexedCheckpoint");
-        assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(indexed1.watermark.checkpoint_hi, 2);
 
         // Shutdown the processor
         svc.shutdown().await.unwrap();
@@ -391,7 +391,7 @@ mod tests {
             .recv()
             .await
             .expect("Should receive first IndexedCheckpoint");
-        assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(indexed1.watermark.checkpoint_hi, 2);
 
         // Send second checkpoint (should fail twice, then succeed on 3rd attempt)
         data_tx.send(checkpoint2.clone()).await.unwrap();
@@ -400,7 +400,7 @@ mod tests {
             .recv()
             .await
             .expect("Should receive second IndexedCheckpoint after retries");
-        assert_eq!(indexed2.watermark.checkpoint_hi_inclusive, 2);
+        assert_eq!(indexed2.watermark.checkpoint_hi, 3);
 
         // Verify that exactly 3 attempts were made (2 failures + 1 success)
         assert_eq!(attempt_count.load(Ordering::Relaxed), 3);

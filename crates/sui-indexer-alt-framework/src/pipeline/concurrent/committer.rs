@@ -373,7 +373,7 @@ mod tests {
                 WatermarkPart {
                     watermark: CommitterWatermark {
                         epoch_hi_inclusive: 0,
-                        checkpoint_hi_inclusive: 1,
+                        checkpoint_hi: 2,
                         tx_hi: 3,
                         timestamp_ms_hi_inclusive: 1000,
                     },
@@ -383,7 +383,7 @@ mod tests {
                 WatermarkPart {
                     watermark: CommitterWatermark {
                         epoch_hi_inclusive: 0,
-                        checkpoint_hi_inclusive: 2,
+                        checkpoint_hi: 3,
                         tx_hi: 6,
                         timestamp_ms_hi_inclusive: 2000,
                     },
@@ -402,7 +402,7 @@ mod tests {
             vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
-                    checkpoint_hi_inclusive: 3,
+                    checkpoint_hi: 4,
                     tx_hi: 9,
                     timestamp_ms_hi_inclusive: 3000,
                 },
@@ -445,7 +445,7 @@ mod tests {
             vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
-                    checkpoint_hi_inclusive: 1,
+                    checkpoint_hi: 2,
                     tx_hi: 3,
                     timestamp_ms_hi_inclusive: 1000,
                 },
@@ -508,7 +508,7 @@ mod tests {
             vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
-                    checkpoint_hi_inclusive: 1,
+                    checkpoint_hi: 2,
                     tx_hi: 3,
                     timestamp_ms_hi_inclusive: 1000,
                 },
@@ -557,7 +557,7 @@ mod tests {
             vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
-                    checkpoint_hi_inclusive: 1,
+                    checkpoint_hi: 2,
                     tx_hi: 0,
                     timestamp_ms_hi_inclusive: 1000,
                 },
@@ -598,7 +598,7 @@ mod tests {
             vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
-                    checkpoint_hi_inclusive: 1,
+                    checkpoint_hi: 2,
                     tx_hi: 3,
                     timestamp_ms_hi_inclusive: 1000,
                 },

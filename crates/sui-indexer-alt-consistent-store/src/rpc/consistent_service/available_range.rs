@@ -12,9 +12,19 @@ pub(super) fn available_range(
     grpc::AvailableRangeRequest {}: grpc::AvailableRangeRequest,
 ) -> Result<grpc::AvailableRangeResponse, RpcError> {
     let range = state.store.db().snapshot_range(checkpoint);
+    let min_checkpoint = range.as_ref().map(|r| {
+        r.start().checkpoint_hi.checked_sub(1).unwrap_or_else(|| {
+            panic!("Snapshot range start checkpoint_hi underflow checkpoint={checkpoint}")
+        })
+    });
+    let max_checkpoint = range.as_ref().map(|r| {
+        r.end().checkpoint_hi.checked_sub(1).unwrap_or_else(|| {
+            panic!("Snapshot range end checkpoint_hi underflow checkpoint={checkpoint}")
+        })
+    });
     Ok(grpc::AvailableRangeResponse {
-        min_checkpoint: range.as_ref().map(|r| r.start().checkpoint_hi_inclusive),
-        max_checkpoint: range.as_ref().map(|r| r.end().checkpoint_hi_inclusive),
+        min_checkpoint,
+        max_checkpoint,
         max_epoch: range.as_ref().map(|r| r.end().epoch_hi_inclusive),
         total_transactions: range.as_ref().map(|r| r.end().tx_hi),
         max_timestamp_ms: range.as_ref().map(|r| r.end().timestamp_ms_hi_inclusive),

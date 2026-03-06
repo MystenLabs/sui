@@ -89,7 +89,7 @@ impl Connection for BigTableConnection<'_> {
             .client
             .get_pipeline_watermark(pipeline_task)
             .await?
-            .map(|wm| wm.checkpoint_hi_inclusive))
+            .map(|wm| wm.checkpoint_hi_inclusive + 1))
     }
 
     async fn committer_watermark(

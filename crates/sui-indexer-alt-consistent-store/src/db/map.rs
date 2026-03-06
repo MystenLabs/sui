@@ -206,7 +206,7 @@ mod tests {
 
         let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
         let map: DbMap<u64, u64> = DbMap::new(db.clone(), "test");
-        db.take_snapshot(wm(0));
+        db.take_snapshot(wm(1));
 
         // Access succeeds at first, but will start to fail after the column family is dropped.
         assert!(map.get(0, 42).unwrap().is_none());
@@ -234,14 +234,14 @@ mod tests {
         let mut batch = rocksdb::WriteBatch::default();
         map.insert(42, 43, &mut batch).unwrap();
         map.insert(44, 45, &mut batch).unwrap();
-        db.write("batch", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("batch", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         let mut batch = rocksdb::WriteBatch::default();
         map.remove(42, &mut batch).unwrap();
         map.insert(43, 42, &mut batch).unwrap();
-        db.write("batch", wm(1), batch).unwrap();
-        db.take_snapshot(wm(1));
+        db.write("batch", wm(2), batch).unwrap();
+        db.take_snapshot(wm(2));
 
         // Point look-ups
         assert_eq!(map.get(0, 42).unwrap(), Some(43));
@@ -333,21 +333,21 @@ mod tests {
         // Successfully perform a merge to counts.
         let mut batch = rocksdb::WriteBatch::default();
         counts.merge(42, 1, &mut batch).unwrap();
-        db.write("counts", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("counts", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         // Merges allow for the accumulation of values.
         let mut batch = rocksdb::WriteBatch::default();
         counts.merge(42, 2, &mut batch).unwrap();
-        db.write("counts", wm(1), batch).unwrap();
-        db.take_snapshot(wm(1));
+        db.write("counts", wm(2), batch).unwrap();
+        db.take_snapshot(wm(2));
 
         // A single batch can include multiple merges for the same key.
         let mut batch = rocksdb::WriteBatch::default();
         counts.merge(42, 3, &mut batch).unwrap();
         counts.merge(42, 4, &mut batch).unwrap();
-        db.write("counts", wm(2), batch).unwrap();
-        db.take_snapshot(wm(2));
+        db.write("counts", wm(3), batch).unwrap();
+        db.take_snapshot(wm(3));
 
         assert_eq!(counts.get(0, 42).unwrap(), Some(1));
         assert_eq!(counts.get(1, 42).unwrap(), Some(3));
@@ -399,8 +399,8 @@ mod tests {
         map.insert(0x0000_0003, 30, &mut batch).unwrap();
         map.insert(0xffff_0004, 40, &mut batch).unwrap();
         map.insert(0x0000_0005, 50, &mut batch).unwrap();
-        db.write("batch", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("batch", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         assert_eq!(
             map.prefix(0, &0x0000u16)

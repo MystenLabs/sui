@@ -361,8 +361,8 @@ mod tests {
         map.insert(0x0000_0005, 50, &mut batch).unwrap();
         map.insert(0x0000_0007, 70, &mut batch).unwrap();
         map.insert(0x0000_0009, 90, &mut batch).unwrap();
-        db.write("batch", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("batch", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         let mut batch = rocksdb::WriteBatch::default();
         map.insert(0x0000_0000, 0, &mut batch).unwrap();
@@ -372,8 +372,8 @@ mod tests {
         map.insert(0x0000_0008, 80, &mut batch).unwrap();
         map.insert(0x0001_0000, 1, &mut batch).unwrap();
         map.insert(0x0001_0002, 21, &mut batch).unwrap();
-        db.write("batch", wm(1), batch).unwrap();
-        db.take_snapshot(wm(1));
+        db.write("batch", wm(2), batch).unwrap();
+        db.take_snapshot(wm(2));
 
         (d, map)
     }
@@ -786,8 +786,8 @@ mod tests {
         map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
         map.insert((0, 2, 0x0004), 40, &mut batch).unwrap();
         map.insert((0, 3, 0x0005), 50, &mut batch).unwrap();
-        db.write("batch", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("batch", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
         // First page: limit 2
         let resp = Page::from_request(&config(), &[], &[], 2, End::Front)
             .paginate_exclude::<_, _, _, _, Infallible>(&map, 0, &0u8, &2u8)
@@ -839,8 +839,8 @@ mod tests {
         map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
         map.insert((0, 2, 0x0004), 40, &mut batch).unwrap();
         map.insert((0, 3, 0x0005), 50, &mut batch).unwrap();
-        db.write("batch", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("batch", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         // Page 1 from back: gets last 2 non-excluded results
         let resp = Page::from_request(&config(), &[], &[], 2, End::Back)
@@ -893,8 +893,8 @@ mod tests {
         map.insert((0, 1, 0x0002), 20, &mut batch).unwrap();
         map.insert((0, 2, 0x0003), 30, &mut batch).unwrap(); // excluded
         map.insert((0, 2, 0x0004), 40, &mut batch).unwrap(); // excluded
-        db.write("batch", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("batch", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         // Request exactly 2 - should get both non-excluded, has_next should be FALSE
         let resp = Page::from_request(&config(), &[], &[], 2, End::Front)
@@ -932,8 +932,8 @@ mod tests {
         map.insert((0, 1, 0x0002), 20, &mut batch).unwrap(); // excluded
         map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
         map.insert((0, 2, 0x0004), 40, &mut batch).unwrap();
-        db.write("batch", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("batch", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         // Request exactly 2 from back - should get both non-excluded, has_prev should be FALSE
         let resp = Page::from_request(&config(), &[], &[], 2, End::Back)

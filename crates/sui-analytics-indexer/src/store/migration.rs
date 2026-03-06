@@ -241,7 +241,7 @@ impl MigrationStore {
                 );
                 Ok(Some(CommitterWatermark {
                     epoch_hi_inclusive: watermark.epoch_hi_inclusive,
-                    checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+                    checkpoint_hi: watermark.checkpoint_hi_inclusive + 1,
                     tx_hi: 0,
                     timestamp_ms_hi_inclusive: 0,
                 }))
@@ -265,7 +265,7 @@ impl MigrationStore {
         Ok(self
             .committer_watermark(pipeline)
             .await?
-            .map(|w| w.checkpoint_hi_inclusive))
+            .map(|w| w.checkpoint_hi))
     }
 
     /// Update watermark for a single pipeline after successful file upload.
@@ -279,9 +279,12 @@ impl MigrationStore {
         &self,
         pipeline: &str,
         epoch_hi_inclusive: u64,
-        checkpoint_hi_inclusive: u64,
+        checkpoint_hi: u64,
     ) -> std::result::Result<(), WatermarkUpdateError> {
         let path = migration_watermark_path(pipeline, &self.migration_id);
+        let checkpoint_hi_inclusive = checkpoint_hi
+            .checked_sub(1)
+            .unwrap_or_else(|| panic!("MigrationWatermark checkpoint_hi underflow pipeline={pipeline} checkpoint_hi={checkpoint_hi} epoch_hi_inclusive={epoch_hi_inclusive}"));
         let json = serde_json::to_vec(&MigrationWatermark {
             checkpoint_hi_inclusive,
             epoch_hi_inclusive,
@@ -330,7 +333,7 @@ impl MigrationStore {
             .unwrap()
             .insert(pipeline.to_string(), (result.e_tag, result.version));
 
-        tracing::debug!(
+        debug!(
             pipeline,
             migration_id = self.migration_id,
             checkpoint = checkpoint_hi_inclusive,
@@ -413,11 +416,11 @@ impl MigrationStore {
         // the boundary detection above.
         if let Some(first) = pending_batch.first_checkpoint()
             && let Some(entry) = ranges.find_containing(first)
-            && watermark.checkpoint_hi_inclusive >= entry.end - 1
+            && watermark.checkpoint_hi >= entry.end
         {
             debug!(
                 pipeline,
-                watermark_cp = watermark.checkpoint_hi_inclusive,
+                watermark_cp = watermark.checkpoint_hi,
                 file_start = entry.start,
                 file_end = entry.end,
                 "File complete per watermark - completing batch"
@@ -737,7 +740,7 @@ mod tests {
         assert!(watermark.is_some());
         let watermark = watermark.unwrap();
         assert_eq!(watermark.epoch_hi_inclusive, 5);
-        assert_eq!(watermark.checkpoint_hi_inclusive, 500);
+        assert_eq!(watermark.checkpoint_hi, 500);
     }
 
     #[test]

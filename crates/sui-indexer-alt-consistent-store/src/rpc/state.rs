@@ -62,7 +62,11 @@ impl State {
             .or_else(|| metadata.get(LEGACY_CHECKPOINT_METADATA))
         else {
             // If a checkpoint hasn't been supplied default to the latest snapshot.
-            return Ok(snapshot_range.end().checkpoint_hi_inclusive);
+            let watermark = snapshot_range.end();
+            return Ok(watermark
+                .checkpoint_hi
+                .checked_sub(1)
+                .unwrap_or_else(|| panic!("Range end checkpoint_hi underflow {watermark:?}")));
         };
 
         let checkpoint = checkpoint
@@ -71,8 +75,8 @@ impl State {
             .parse()
             .map_err(|_| Error::BadCheckpoint(checkpoint.clone()))?;
 
-        if checkpoint < snapshot_range.start().checkpoint_hi_inclusive
-            || checkpoint > snapshot_range.end().checkpoint_hi_inclusive
+        if checkpoint + 1 < snapshot_range.start().checkpoint_hi
+            || checkpoint >= snapshot_range.end().checkpoint_hi
         {
             return Err(RpcError::NotInRange(checkpoint));
         }
@@ -87,7 +91,8 @@ impl State {
     ) -> Result<tonic::Response<T>, tonic::Status> {
         let mut resp = result.map(tonic::Response::new);
 
-        let Some(range) = self.store.db().snapshot_range(u64::MAX) else {
+        let cp_hi_inclusive = u64::MAX;
+        let Some(range) = self.store.db().snapshot_range(cp_hi_inclusive) else {
             return resp;
         };
 
@@ -95,11 +100,21 @@ impl State {
             .as_mut()
             .map_or_else(|s| s.metadata_mut(), |r| r.metadata_mut());
 
-        if let Ok(min) = range.start().checkpoint_hi_inclusive.to_string().parse() {
+        let start = range
+            .start()
+            .checkpoint_hi
+            .checked_sub(1)
+            .unwrap_or_else(|| {
+                panic!("Range start checkpoint_hi underflow cp_hi_inclusive={cp_hi_inclusive}")
+            });
+        if let Ok(min) = start.to_string().parse() {
             meta.insert(LOWEST_AVAILABLE_CHECKPOINT_METADATA, min);
         }
 
-        if let Ok(max) = range.end().checkpoint_hi_inclusive.to_string().parse() {
+        let end = range.end().checkpoint_hi.checked_sub(1).unwrap_or_else(|| {
+            panic!("Range end checkpoint_hi underflow cp_hi_inclusive={cp_hi_inclusive}")
+        });
+        if let Ok(max) = end.to_string().parse() {
             let max: AsciiMetadataValue = max;
             meta.insert(CHECKPOINT_HEIGHT_METADATA, max.clone());
             meta.insert(LEGACY_CHECKPOINT_METADATA, max);

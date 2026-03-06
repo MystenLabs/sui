@@ -402,9 +402,8 @@ mod tests {
         assert_pipeline_metric!(total_collector_rows_received, 10);
         assert_pipeline_metric!(latest_collected_checkpoint, 9);
 
-        // The watermark checkpoint is inclusive, but the transaction is exclusive
-        assert_pipeline_metric!(watermark_checkpoint, 9);
-        assert_pipeline_metric!(watermark_checkpoint_in_db, 9);
+        assert_pipeline_metric!(watermark_checkpoint, 10);
+        assert_pipeline_metric!(watermark_checkpoint_in_db, 10);
         // 10 checkpoints, 2 user transactions + 1 settlement transaction per checkpoint
         assert_pipeline_metric!(watermark_transaction, 30);
         assert_pipeline_metric!(watermark_transaction_in_db, 30);

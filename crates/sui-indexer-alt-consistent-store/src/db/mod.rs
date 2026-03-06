@@ -80,7 +80,7 @@ pub(crate) struct Db(RwLock<Inner>);
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Watermark {
     pub epoch_hi_inclusive: u64,
-    pub checkpoint_hi_inclusive: u64,
+    pub checkpoint_hi: u64,
     pub tx_hi: u64,
     pub timestamp_ms_hi_inclusive: u64,
 }
@@ -319,7 +319,10 @@ impl Db {
     pub(crate) fn take_snapshot(&self, watermark: Watermark) {
         self.0.write().expect("poisoned").with_mut(|f| {
             f.snapshots.insert(
-                watermark.checkpoint_hi_inclusive,
+                watermark
+                    .checkpoint_hi
+                    .checked_sub(1)
+                    .unwrap_or_else(|| panic!("Watermark checkpoint_hi underflow {watermark:?}")),
                 (Arc::new(f.db.snapshot()), watermark),
             );
 
@@ -753,8 +756,7 @@ unsafe impl marker::Send for Db {}
 /// Watermarks are identified by their checkpoint, so comparison can be limited to them.
 impl Ord for Watermark {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.checkpoint_hi_inclusive
-            .cmp(&other.checkpoint_hi_inclusive)
+        self.checkpoint_hi.cmp(&other.checkpoint_hi)
     }
 }
 
@@ -768,7 +770,7 @@ impl From<Watermark> for CommitterWatermark {
     fn from(w: Watermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            checkpoint_hi: w.checkpoint_hi,
             tx_hi: w.tx_hi,
             timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
         }
@@ -779,7 +781,7 @@ impl From<CommitterWatermark> for Watermark {
     fn from(w: CommitterWatermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            checkpoint_hi: w.checkpoint_hi,
             tx_hi: w.tx_hi,
             timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
         }
@@ -841,10 +843,10 @@ pub(crate) mod tests {
         opts
     }
 
-    pub(crate) fn wm(cp: u64) -> Watermark {
+    pub(crate) fn wm(checkpoint_hi: u64) -> Watermark {
         Watermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: cp,
+            checkpoint_hi,
             tx_hi: 0,
             timestamp_ms_hi_inclusive: 0,
         }
@@ -883,7 +885,7 @@ pub(crate) mod tests {
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
-        db.take_snapshot(wm(0));
+        db.take_snapshot(wm(1));
         assert!(db.get::<u64, u64>(0, &cf, &42u64).unwrap().is_none());
     }
 
@@ -893,7 +895,7 @@ pub(crate) mod tests {
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
-        for i in 0..10 {
+        for i in 1..11 {
             db.take_snapshot(wm(i));
         }
 
@@ -919,7 +921,7 @@ pub(crate) mod tests {
         let cf = db.cf("test").unwrap();
 
         // Register an empty snapshot.
-        db.take_snapshot(wm(0));
+        db.take_snapshot(wm(1));
 
         let k = 42u64;
         let v0 = 43u64;
@@ -928,7 +930,7 @@ pub(crate) mod tests {
         // Write a value.
         let mut batch = rocksdb::WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k), bcs::to_bytes(&v0).unwrap());
-        db.write("test", wm(1), batch).unwrap();
+        db.write("test", wm(2), batch).unwrap();
 
         {
             // The snapshot that the write would be in has not been taken yet -- attempting to read it
@@ -948,7 +950,7 @@ pub(crate) mod tests {
 
         {
             // Once the snapshot has been taken, the write is visible.
-            db.take_snapshot(wm(1));
+            db.take_snapshot(wm(2));
             assert_eq!(db.get(1, &cf, &k).unwrap(), Some(v0));
         }
 
@@ -959,8 +961,8 @@ pub(crate) mod tests {
 
         let mut batch = rocksdb::WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k), bcs::to_bytes(&v1).unwrap());
-        db.write("test", wm(2), batch).unwrap();
-        db.take_snapshot(wm(2));
+        db.write("test", wm(3), batch).unwrap();
+        db.take_snapshot(wm(3));
 
         {
             // A new value has been written, and a snapshot taken, we can now read the value at
@@ -986,8 +988,8 @@ pub(crate) mod tests {
         batch.put_cf(&cf, key::encode(&k0), bcs::to_bytes(&v0).unwrap());
         batch.put_cf(&cf, key::encode(&k2), bcs::to_bytes(&v2).unwrap());
         batch.put_cf(&cf, key::encode(&k3), bcs::to_bytes(&v3).unwrap());
-        db.write("test", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("test", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         let mut res = db
             .multi_get(0, &cf, [&k0, &k1, &k2, &k3])
@@ -1008,8 +1010,8 @@ pub(crate) mod tests {
         let mut batch = rocksdb::WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k1), bcs::to_bytes(&v1).unwrap());
         batch.put_cf(&cf, key::encode(&k3), bcs::to_bytes(&v3).unwrap());
-        db.write("test", wm(1), batch).unwrap();
-        db.take_snapshot(wm(1));
+        db.write("test", wm(2), batch).unwrap();
+        db.take_snapshot(wm(2));
 
         let mut res = db
             .multi_get(1, &cf, [&k0, &k1, &k2, &k3])
@@ -1083,13 +1085,13 @@ pub(crate) mod tests {
 
             let mut batch = rocksdb::WriteBatch::default();
             batch.put_cf(&cf, key::encode(&42u64), bcs::to_bytes(&43u64).unwrap());
-            db.write("test", wm(1), batch).unwrap();
+            db.write("test", wm(2), batch).unwrap();
 
             // Check that the watermark was written.
-            assert_eq!(db.commit_watermark("test").unwrap(), Some(wm(1)));
+            assert_eq!(db.commit_watermark("test").unwrap(), Some(wm(2)));
 
             // ...and once there is a snapshot, the data can be read.
-            db.take_snapshot(wm(1));
+            db.take_snapshot(wm(2));
             assert_eq!(db.get(1, &cf, &42u64).unwrap(), Some(43u64));
         }
 
@@ -1099,7 +1101,7 @@ pub(crate) mod tests {
             let cf = db.cf("test").unwrap();
 
             // The `watermark` persists.
-            assert_eq!(db.commit_watermark("test").unwrap(), Some(wm(1)));
+            assert_eq!(db.commit_watermark("test").unwrap(), Some(wm(2)));
 
             // The snapshots do not, however, so reads will fail.
             let err = db.get::<u64, u64>(1, &cf, &42u64).unwrap_err();
@@ -1109,7 +1111,7 @@ pub(crate) mod tests {
             );
 
             // But once the snapshot has been taken, the data is still there.
-            db.take_snapshot(wm(1));
+            db.take_snapshot(wm(2));
             assert_eq!(db.get(1, &cf, &42u64).unwrap(), Some(43u64));
         }
     }
@@ -1128,8 +1130,8 @@ pub(crate) mod tests {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
 
-        db.write("test", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("test", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         let actual: Result<Vec<(u64, u64)>, Error> =
             db.iter(0, &cf, (U::<u64>, U)).unwrap().collect();
@@ -1261,8 +1263,8 @@ pub(crate) mod tests {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
 
-        db.write("test", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("test", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         iter.seek(key::encode(&4u64));
@@ -1306,8 +1308,8 @@ pub(crate) mod tests {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
 
-        db.write("test", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("test", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         // Create an iterator from the first snapshot.
         let mut i0: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
@@ -1322,8 +1324,8 @@ pub(crate) mod tests {
             batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
         }
 
-        db.write("test", wm(1), batch).unwrap();
-        db.take_snapshot(wm(1));
+        db.write("test", wm(2), batch).unwrap();
+        db.take_snapshot(wm(2));
 
         // Create an iterator from the next snapshot.
         let mut i1: iter::FwdIter<u64, u64> = db.iter(1, &cf, (U::<u64>, U)).unwrap();
@@ -1342,8 +1344,8 @@ pub(crate) mod tests {
             batch.delete_cf(&cf, key::encode(&i));
         }
 
-        db.write("test", wm(2), batch).unwrap();
-        db.take_snapshot(wm(2));
+        db.write("test", wm(3), batch).unwrap();
+        db.take_snapshot(wm(3));
 
         // Finish iterating through the second iterator.
         let kv1: Result<Vec<(u64, u64)>, Error> = (&mut i1).collect();
@@ -1386,14 +1388,14 @@ pub(crate) mod tests {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
 
-        db.write("test", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("test", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         // Create an iterator from the first snapshot.
         let iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
 
         // Create more snapshots...
-        for i in 1..5 {
+        for i in 2..6 {
             db.take_snapshot(wm(i));
         }
 
@@ -1425,8 +1427,8 @@ pub(crate) mod tests {
             batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
         }
 
-        db.write("test", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("test", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         let actual: Result<Vec<(u64, u64)>, Error> =
             db.iter_rev(0, &cf, (U::<u64>, U)).unwrap().collect();
@@ -1563,8 +1565,8 @@ pub(crate) mod tests {
             batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
         }
 
-        db.write("test", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("test", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         iter.seek(key::encode(&5u64));
@@ -1735,8 +1737,8 @@ pub(crate) mod tests {
         for i in (0u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
-        db.write("test", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("test", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         // let mut iter = db.iter(0, &cf, (U::<u64>, U::<u64>)).unwrap();
@@ -1768,8 +1770,8 @@ pub(crate) mod tests {
         for i in (1u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
-        db.write("test", wm(0), batch).unwrap();
-        db.take_snapshot(wm(0));
+        db.write("test", wm(1), batch).unwrap();
+        db.take_snapshot(wm(1));
 
         // Create iterator, seek to start
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();

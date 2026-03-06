@@ -178,7 +178,7 @@ impl FormalSnapshot {
 
         let watermark = Watermark {
             epoch_hi_inclusive: epoch,
-            checkpoint_hi_inclusive: summary.sequence_number,
+            checkpoint_hi: summary.sequence_number + 1,
             tx_hi: summary.network_total_transactions,
             timestamp_ms_hi_inclusive: summary.timestamp_ms,
         };

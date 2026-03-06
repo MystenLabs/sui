@@ -120,7 +120,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     break;
                 }
 
-                match next_checkpoint.cmp(&part.watermark.checkpoint_hi_inclusive) {
+                match next_checkpoint.cmp(&part.checkpoint()) {
                     // Next pending checkpoint is from the future.
                     Ordering::Less => break,
 
@@ -157,7 +157,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                 metrics
                     .watermark_checkpoint
                     .with_label_values(&[H::NAME])
-                    .set(watermark.checkpoint_hi_inclusive as i64);
+                    .set(watermark.checkpoint_hi as i64);
 
                 metrics
                     .watermark_transaction
@@ -172,7 +172,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                 debug!(
                     pipeline = H::NAME,
                     elapsed_ms = elapsed * 1000.0,
-                    watermark = watermark.checkpoint_hi_inclusive,
+                    watermark = watermark.checkpoint_hi,
                     timestamp = %watermark.timestamp(),
                     pending = precommitted.len(),
                     "Gathered watermarks",
@@ -279,10 +279,8 @@ async fn write_watermark<H: Handler>(
 
             logger.log::<H>(watermark, elapsed);
 
-            checkpoint_lag_reporter.report_lag(
-                watermark.checkpoint_hi_inclusive,
-                watermark.timestamp_ms_hi_inclusive,
-            );
+            checkpoint_lag_reporter
+                .report_lag(watermark.checkpoint_hi, watermark.timestamp_ms_hi_inclusive);
 
             metrics
                 .watermark_epoch_in_db
@@ -399,7 +397,7 @@ mod tests {
     fn create_watermark_part_for_checkpoint(checkpoint: u64) -> WatermarkPart {
         WatermarkPart {
             watermark: CommitterWatermark {
-                checkpoint_hi_inclusive: checkpoint,
+                checkpoint_hi: checkpoint + 1,
                 ..Default::default()
             },
             batch_rows: 1,
@@ -423,7 +421,7 @@ mod tests {
 
         // Verify watermark progression
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 3);
+        assert_eq!(watermark.checkpoint_hi, 4);
     }
 
     #[tokio::test]
@@ -442,9 +440,9 @@ mod tests {
         // Wait for processing
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // Verify watermark hasn't progressed past 2
+        // Verify watermark hasn't progressed past checkpoint 2
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+        assert_eq!(watermark.checkpoint_hi, 3);
 
         // Send checkpoint 3 to fill the gap
         setup
@@ -456,9 +454,9 @@ mod tests {
         // Wait for the next polling and processing
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        // Verify watermark has progressed to 4
+        // Verify watermark has progressed to checkpoint 4
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 4);
+        assert_eq!(watermark.checkpoint_hi, 5);
     }
 
     #[tokio::test]
@@ -486,7 +484,7 @@ mod tests {
 
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(watermark.checkpoint_hi, 2);
     }
 
     #[tokio::test]
@@ -501,7 +499,7 @@ mod tests {
 
         let part = WatermarkPart {
             watermark: CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
             batch_rows: 1,
@@ -519,7 +517,7 @@ mod tests {
 
         // Verify watermark has progressed after retry
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 10);
+        assert_eq!(watermark.checkpoint_hi, 11);
     }
 
     #[tokio::test]
@@ -533,7 +531,7 @@ mod tests {
 
         let part = WatermarkPart {
             watermark: CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
+                checkpoint_hi: 11,
                 ..Default::default()
             },
             batch_rows: 1,
@@ -548,7 +546,7 @@ mod tests {
 
         let part = WatermarkPart {
             watermark: CommitterWatermark {
-                checkpoint_hi_inclusive: 11,
+                checkpoint_hi: 12,
                 ..Default::default()
             },
             batch_rows: 1,
@@ -560,7 +558,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1_200)).await;
 
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 11);
+        assert_eq!(watermark.checkpoint_hi, 12);
     }
 
     #[tokio::test]
@@ -574,7 +572,7 @@ mod tests {
         // Send the first incomplete watermark part
         let part = WatermarkPart {
             watermark: CommitterWatermark {
-                checkpoint_hi_inclusive: 1,
+                checkpoint_hi: 2,
                 ..Default::default()
             },
             batch_rows: 1,
@@ -601,7 +599,7 @@ mod tests {
 
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(watermark.checkpoint_hi, 2);
     }
 
     #[tokio::test]
@@ -635,6 +633,6 @@ mod tests {
 
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(watermark.checkpoint_hi, 2);
     }
 }

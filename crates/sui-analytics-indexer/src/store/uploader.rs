@@ -274,7 +274,7 @@ struct SequentialUploader {
     last_watermark_update: Option<std::time::Instant>,
     /// Minimum interval between watermark writes
     watermark_update_interval: Duration,
-    /// Latest uploaded watermark (epoch, checkpoint_hi_inclusive).
+    /// Latest uploaded watermark (epoch, checkpoint_hi).
     latest_watermark: Option<(EpochId, u64)>,
 }
 
@@ -351,7 +351,7 @@ impl SequentialUploader {
                 .await
             {
                 Ok(()) => {
-                    let checkpoint_hi = file.checkpoint_range.end - 1;
+                    let checkpoint_hi = file.checkpoint_range.end;
 
                     record_file_metrics(&self.metrics, &self.pipeline_name, file.bytes.len());
                     self.metrics
