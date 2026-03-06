@@ -1,4 +1,5 @@
 name: Run LLM Ingestion Checks for Docs
+
 on:
   deployment_status:
 
@@ -83,7 +84,7 @@ jobs:
                 '```',
               ].join('\n')
             });
-          env:
-            URL: ${{ github.event.deployment_status.environment_url }}
-            OUTPUT: ${{ steps.afdocs.outputs.result }}
-            PR_NUMBER: ${{ steps.find-pr.outputs.result }}
+        env:
+          URL: ${{ github.event.deployment_status.environment_url }}
+          OUTPUT: ${{ steps.afdocs.outputs.result }}
+          PR_NUMBER: ${{ steps.find-pr.outputs.result }}
