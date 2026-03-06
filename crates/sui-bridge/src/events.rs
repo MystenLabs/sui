@@ -309,10 +309,10 @@ impl TryFrom<MoveCommitteeMemberUrlUpdateEvent> for CommitteeMemberUrlUpdateEven
 
     fn try_from(event: MoveCommitteeMemberUrlUpdateEvent) -> BridgeResult<Self> {
         let member = BridgeAuthorityPublicKey::from_bytes(&event.member).map_err(|e|
-            BridgeError::Generic(format!("Failed to convert MoveBlocklistValidatorEvent to BlocklistValidatorEvent. Failed to convert public key to BridgeAuthorityPublicKey: {:?}", e))
+            BridgeError::Generic(format!("Failed to convert MoveCommitteeMemberUrlUpdateEvent to CommitteeMemberUrlUpdateEvent. Failed to convert public key to BridgeAuthorityPublicKey: {:?}", e))
         )?;
         let new_url = String::from_utf8(event.new_url).map_err(|e|
-            BridgeError::Generic(format!("Failed to convert MoveBlocklistValidatorEvent to BlocklistValidatorEvent. Failed to convert new_url to String: {:?}", e))
+            BridgeError::Generic(format!("Failed to convert MoveCommitteeMemberUrlUpdateEvent to CommitteeMemberUrlUpdateEvent. Failed to convert new_url to String: {:?}", e))
         )?;
         Ok(Self { member, new_url })
     }
