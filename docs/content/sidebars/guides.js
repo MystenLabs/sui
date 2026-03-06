@@ -205,6 +205,17 @@ const guides = [
   },
   {
     type: 'category',
+    label: 'Wallets',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/wallets/index',
+    },
+    items: [
+      'guides/developer/wallets/suilink'
+    ],
+  },
+  {
+    type: 'category',
     label: 'On-Chain Primitives',
     link: {
       type: 'doc',
@@ -262,11 +273,6 @@ const guides = [
   },
   {
     type: 'category',
-    label: 'Wallets',
-    items: ['guides/developer/wallets/suilink'],
-  },
-  {
-    type: 'category',
     label: 'App Examples',
     link: {
       type: 'doc',
@@ -295,9 +301,6 @@ const guides = [
       },
     ],
   },
-  'guides/developer/dev-cheat-sheet',
-  'guides/developer/move-best-practices',
-  'guides/developer/common-errors',
   {
     type: 'category',
     label: 'Operator Guides',
@@ -348,6 +351,9 @@ const guides = [
       'guides/suiplay0x1/best-practices',
     ],
   },
+  'guides/developer/dev-cheat-sheet',
+  'guides/developer/move-best-practices',
+  'guides/developer/common-errors',
 ];
 
 export default guides;
