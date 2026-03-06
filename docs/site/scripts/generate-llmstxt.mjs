@@ -205,9 +205,7 @@ for (const file of files) {
   // Skip /design and /dev-guide sections
   if (/^\/?(design|dev-guide)(\/)/.test(urlPath) || urlPath === "/design" || urlPath === "/dev-guide") continue;
 
-  // Ensure URL path starts with /docs
-  const docUrlPath = urlPath.startsWith("/docs") ? urlPath : "/docs" + (urlPath.startsWith("/") ? urlPath : "/" + urlPath);
-  const url = joinUrl(resolvedBaseUrl, docUrlPath) + ".md";
+  const url = joinUrl(resolvedBaseUrl, urlPath) + ".md";
 
   // Skip linear.app URLs
   if (isLinearUrl(url)) continue;
@@ -218,13 +216,10 @@ for (const file of files) {
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const segments = docUrlPath.replace(/^\//, "").split("/");
-  // segments[0] is "docs", so use segments[1] for category grouping
-  const section = segments.length > 2
-    ? toSectionTitle(segments[1])
-    : segments.length > 1 && segments[1]
-      ? toSectionTitle(segments[1])
-      : "General";
+  const segments = urlPath.replace(/^\//, "").split("/");
+  const section = segments.length > 1
+    ? toSectionTitle(segments[0])
+    : "General";
 
   pages.push({ title: derivedTitle, url, description, section });
 }
@@ -250,7 +245,7 @@ function wrapLine(line, indentSpaces = 0) {
 
 // ── Build llms.txt ────────────────────────────────────────────────────────────
 
-const TARGET_CHARS = 120_000;
+const TARGET_CHARS = 100_000;
 
 const sectionOrder = [];
 const grouped = {};
@@ -307,6 +302,19 @@ if (output.length > TARGET_CHARS) {
     finalLines.push("");
   }
   output = finalLines.join("\n");
+}
+
+// Hard cap: truncate at last complete entry if still over limit
+if (output.length > TARGET_CHARS) {
+  const truncated = output.slice(0, TARGET_CHARS);
+  const lastNewline = truncated.lastIndexOf("\n- ");
+  if (lastNewline > 0) {
+    // Find the end of the line before this entry
+    const cutPoint = truncated.lastIndexOf("\n", lastNewline - 1);
+    output = (cutPoint > 0 ? truncated.slice(0, cutPoint) : truncated.slice(0, lastNewline)) + "\n";
+  } else {
+    output = truncated + "\n";
+  }
 }
 
 // Ensure output directory exists
