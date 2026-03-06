@@ -5263,6 +5263,12 @@ min
 diff
 	public fun
 	0x1::u128
+mul_div
+	public fun
+	0x1::u128
+mul_div_ceil
+	public fun
+	0x1::u128
 divide_and_round_up
 	public fun
 	0x1::u128
@@ -5333,6 +5339,12 @@ min
 	public fun
 	0x1::u16
 diff
+	public fun
+	0x1::u16
+mul_div
+	public fun
+	0x1::u16
+mul_div_ceil
 	public fun
 	0x1::u16
 divide_and_round_up
@@ -5464,6 +5476,12 @@ min
 diff
 	public fun
 	0x1::u32
+mul_div
+	public fun
+	0x1::u32
+mul_div_ceil
+	public fun
+	0x1::u32
 divide_and_round_up
 	public fun
 	0x1::u32
@@ -5528,6 +5546,12 @@ min
 	public fun
 	0x1::u64
 diff
+	public fun
+	0x1::u64
+mul_div
+	public fun
+	0x1::u64
+mul_div_ceil
 	public fun
 	0x1::u64
 divide_and_round_up
@@ -5597,6 +5621,12 @@ min
 	public fun
 	0x1::u8
 diff
+	public fun
+	0x1::u8
+mul_div
+	public fun
+	0x1::u8
+mul_div_ceil
 	public fun
 	0x1::u8
 divide_and_round_up
