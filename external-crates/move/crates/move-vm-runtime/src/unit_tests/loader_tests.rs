@@ -161,8 +161,8 @@ impl Adapter {
     }
 
     fn publish_package(&mut self, mut pkg: StoredPackage) {
-        if !self.store.linkage.linkage_table.is_empty() {
-            pkg.0.linkage_table = self.store.linkage.linkage_table.clone();
+        if !self.store.linkage.linkage_table().is_empty() {
+            pkg.0.linkage_table = self.store.linkage.linkage_table().clone();
         }
         if !self.store.type_origin.is_empty() {
             pkg.0.type_origin_table = self.store.type_origin.clone();
@@ -175,8 +175,8 @@ impl Adapter {
     }
 
     fn publish_package_with_error(&mut self, mut pkg: StoredPackage) {
-        if !self.store.linkage.linkage_table.is_empty() {
-            pkg.0.linkage_table = self.store.linkage.linkage_table.clone();
+        if !self.store.linkage.linkage_table().is_empty() {
+            pkg.0.linkage_table = self.store.linkage.linkage_table().clone();
         }
         if !self.store.type_origin.is_empty() {
             pkg.0.type_origin_table = self.store.type_origin.clone();

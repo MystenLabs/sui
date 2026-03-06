@@ -104,9 +104,9 @@ impl StoredPackage {
 
         Ok(Self(SerializedPackage {
             version_id,
-            original_id: Self::original_id(&linkage_context.linkage_table, version_id),
+            original_id: Self::original_id(linkage_context.linkage_table(), version_id),
             modules,
-            linkage_table: linkage_context.linkage_table,
+            linkage_table: linkage_context.into_linkage_table(),
             type_origin_table,
             version: 0,
         }))

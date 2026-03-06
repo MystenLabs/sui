@@ -114,7 +114,7 @@ impl PublishLinkageArgs {
         // 3. Use the sender address
         self.location.unwrap_or(
             linkage
-                .linkage_table
+                .linkage_table()
                 .get(&sender)
                 .copied()
                 .unwrap_or(sender),

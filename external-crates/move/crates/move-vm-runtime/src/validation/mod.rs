@@ -129,25 +129,25 @@ fn validate_against_link_context(
     } else {
         packages.len()
     };
-    if expected_len != link_context.linkage_table.len() {
+    if expected_len != link_context.linkage_table().len() {
         return Err(partial_vm_error!(
             UNKNOWN_INVARIANT_VIOLATION_ERROR,
             "Linkage context contains {} entries, but {} were expected based on resolved packages",
-            link_context.linkage_table.len(),
+            link_context.linkage_table().len(),
             expected_len,
         )
         .finish(Location::Undefined));
     }
 
     for (version_id, pkg) in packages {
-        if link_context.linkage_table.get(&pkg.original_id) != Some(version_id) {
+        if link_context.linkage_table().get(&pkg.original_id) != Some(version_id) {
             return Err(partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 "Linkage context does not match package store: linkage context maps original ID '{}' \
                 to version ID '{}', but package store has version ID '{:?}' for that original ID",
                 pkg.original_id,
                 version_id,
-                link_context.linkage_table.get(&pkg.original_id)
+                link_context.linkage_table().get(&pkg.original_id)
             )
             .finish(Location::Package(*version_id)));
         }

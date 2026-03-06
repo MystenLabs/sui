@@ -22,7 +22,7 @@ pub struct LinkageContext {
     // All calls to P in the root package will call 0xCAFE as the Runtime ID, but during loading
     // and JIT compilation we need to rewrite these. The linkage table here will redirect 0xCAFE to
     // 0xDEAD for this purpose.
-    pub linkage_table: BTreeMap<OriginalId, VersionId>,
+    linkage_table: BTreeMap<OriginalId, VersionId>,
 }
 
 /// A hashable representation of a linkage context, for caching purposes.
@@ -46,6 +46,14 @@ impl LinkageContext {
             }
         }
         Ok(Self { linkage_table })
+    }
+
+    pub fn linkage_table(&self) -> &BTreeMap<OriginalId, VersionId> {
+        &self.linkage_table
+    }
+
+    pub fn into_linkage_table(self) -> BTreeMap<OriginalId, VersionId> {
+        self.linkage_table
     }
 
     pub fn contains_key(&self, address: &OriginalId) -> bool {
