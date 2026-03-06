@@ -49,9 +49,7 @@ impl LinkageContext {
             })
     }
 
-    /// Gives the root package plus transitive dependencies (as published package IDs) of the
-    /// linking context. This is computed as the values of the linkage table, which must
-    /// necessarily include the root package address.
+    /// Returns the package version IDs of the linkage table.
     pub fn all_packages(&self) -> VMResult<BTreeSet<VersionId>> {
         Ok(self
             .linkage_table
@@ -60,8 +58,7 @@ impl LinkageContext {
             .collect::<BTreeSet<_>>())
     }
 
-    /// Gives the transitive dependencies (as published package IDs) of the linking context. This
-    /// is computed as the values of the linkage table, minus the root package address.
+    /// Gives the package version IDs of the linkage table with the specified version ID removed.
     pub fn all_package_dependencies_except(
         &self,
         except: VersionId,
