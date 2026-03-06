@@ -24,6 +24,8 @@ const ENotEnough: u64 = 2;
 const ENotSystemAddress: u64 = 3;
 /// System operation performed for a coin other than SUI
 const ENotSUI: u64 = 4;
+/// Free tier feature is not enabled
+const EFreeTierNotEnabled: u64 = 5;
 
 /// A Supply of T. Used for minting and burning.
 /// Wrapped into a `TreasuryCap` in the `Coin` module.
@@ -100,6 +102,20 @@ public fun destroy_zero<T>(balance: Balance<T>) {
 
 /// Send a `Balance` to an address's funds accumulator.
 public fun send_funds<T>(balance: Balance<T>, recipient: address) {
+    sui::funds_accumulator::add_impl(balance, recipient);
+}
+
+/// Gasless (free tier) transfer:
+/// Send a `Balance` to an address's funds accumulator.
+/// Basis points (BPs) may be charged on the transfer amount
+/// in the future.
+/// Not `public` so that it cannot be called from other Move modules;
+/// only callable from free tier PTBs.
+entry fun gasless_send_funds<T>(balance: Balance<T>, recipient: address) {
+    assert!(
+        sui::protocol_config::is_feature_enabled(b"enable_free_tier"),
+        EFreeTierNotEnabled,
+    );
     sui::funds_accumulator::add_impl(balance, recipient);
 }
 

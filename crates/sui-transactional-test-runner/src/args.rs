@@ -99,6 +99,9 @@ pub struct SuiInitArgs {
     /// Enable using address balance as gas payments feature for testing
     #[clap(long = "enable-address-balance-gas-payments")]
     pub enable_address_balance_gas_payments: bool,
+    /// Enable free tier feature for testing
+    #[clap(long = "enable-free-tier")]
+    pub enable_free_tier: bool,
 }
 
 #[derive(Debug, clap::Parser)]

@@ -60,6 +60,8 @@ mod checked {
         if transaction.kind().is_system_tx() {
             Ok(SuiGasStatus::new_unmetered())
         } else {
+            let is_free_tier =
+                protocol_config.enable_free_tier() && transaction.is_free_tier_transaction();
             check_gas(
                 objects,
                 protocol_config,
@@ -67,6 +69,7 @@ mod checked {
                 gas,
                 transaction,
                 gas_ownership_checks,
+                is_free_tier,
             )
         }
     }
@@ -391,13 +394,17 @@ mod checked {
         gas: &[ObjectRef],
         transaction: &TransactionData,
         gas_ownership_checks: bool,
+        is_free_tier: bool,
     ) -> SuiResult<SuiGasStatus> {
         let gas_budget = transaction.gas_budget();
         let gas_price = transaction.gas_price();
         let gas_paid_from_address_balance = transaction.is_gas_paid_from_address_balance();
 
-        let gas_status =
-            SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
+        let gas_status = if is_free_tier {
+            SuiGasStatus::new_free_tier(reference_gas_price, protocol_config)?
+        } else {
+            SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?
+        };
 
         // check balance and coins consistency
         // load all gas coins

@@ -404,6 +404,16 @@ mod checked {
             Ok((r, t)) => (Ok(r), t),
             Err((e, t)) => (Err(e), t),
         };
+        if gas_charger.is_free_tier()
+            && result.is_ok()
+            && temporary_store.has_non_accumulator_writes()
+        {
+            // safety net - we only allow ptb commands that cannot write objects.
+            result = Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::InsufficientGas,
+                "Free tier transactions cannot write objects",
+            ));
+        }
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
         // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
