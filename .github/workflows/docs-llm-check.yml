@@ -58,7 +58,7 @@ jobs:
         if: steps.check-docs-changed.outputs.result == 'true'
         id: afdocs
         run: |
-          OUTPUT=$(npx --yes afdocs check "$URL" --max-links 1000 --verbose 2>&1) || true
+          OUTPUT=$(npx --yes afdocs check "$URL" --max-links 1000 2>&1) || true
           echo "result<<EOF" >> $GITHUB_OUTPUT
           echo "$OUTPUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
