@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/matching/invalid_malformed_match_25455.move:13:13
+   │
+13 │             N::A'x) => 1,
+   │             ^^^^ Missing pattern for field '0' in '0x0::M::N::A'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/invalid_malformed_match_25455.move:13:17
+   │
+13 │             N::A'x) => 1,
+   │                 ^^
+   │                 │
+   │                 Unexpected ''x'
+   │                 Expected '=>'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/matching/invalid_malformed_match_25455.move:14:18
+   │
+ 2 │     public enum C {
+   │                 - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+ 7 │         A(C),
+   │           - The type '0x0::M::C' does not have the ability 'drop'
+   ·
+14 │             N::A(_) => 2,
+   │                  ^ Cannot ignore values without the 'drop' ability. '_' patterns discard their values
