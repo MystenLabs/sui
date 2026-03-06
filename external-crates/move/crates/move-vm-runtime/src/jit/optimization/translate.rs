@@ -7,13 +7,140 @@ use crate::{
     validation::verification::ast as Input,
 };
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
+
 use move_binary_format::{
     checked_as,
     errors::PartialVMResult,
     file_format::{self as FF, FunctionDefinition, FunctionDefinitionIndex},
     partial_vm_error,
 };
+use move_core_types::gas_algebra::AbstractMemorySize;
 use std::collections::BTreeMap;
+
+/// Accumulated fixed gas costs for a basic block.
+#[derive(Default)]
+struct BlockGasCost {
+    instructions: u64,
+    pushes: u64,
+    pops: u64,
+    push_size: u64,
+    pop_size: u64,
+}
+
+impl BlockGasCost {
+    fn has_fixed_costs(&self) -> bool {
+        self.instructions > 0
+    }
+
+    fn add(&mut self, pops: u64, pushes: u64, pop_size: AbstractMemorySize, push_size: AbstractMemorySize) {
+        self.instructions += 1;
+        self.pushes += pushes;
+        self.pops += pops;
+        self.push_size += u64::from(push_size);
+        self.pop_size += u64::from(pop_size);
+    }
+}
+
+/// Size constants for gas computation (matching the gas meter)
+const REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
+const BOOL_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
+const U8_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
+const U16_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
+const U32_SIZE: AbstractMemorySize = AbstractMemorySize::new(4);
+const U64_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
+const U128_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
+const U256_SIZE: AbstractMemorySize = AbstractMemorySize::new(32);
+
+/// Returns Some((pops, pushes, pop_size, push_size)) for fixed-cost instructions,
+/// None for variable-cost instructions that need runtime charging.
+fn get_fixed_instruction_cost(instr: &ast::Bytecode) -> Option<(u64, u64, AbstractMemorySize, AbstractMemorySize)> {
+    use ast::Bytecode::*;
+    match instr {
+        // No-op instructions
+        Nop | Ret => Some((0, 0, AbstractMemorySize::zero(), AbstractMemorySize::zero())),
+
+        // Branch instructions
+        BrTrue(_) | BrFalse(_) => Some((1, 0, BOOL_SIZE, AbstractMemorySize::zero())),
+        Branch(_) => Some((0, 0, AbstractMemorySize::zero(), AbstractMemorySize::zero())),
+
+        // Load integer constants
+        LdU8(_) => Some((0, 1, AbstractMemorySize::zero(), U8_SIZE)),
+        LdU16(_) => Some((0, 1, AbstractMemorySize::zero(), U16_SIZE)),
+        LdU32(_) => Some((0, 1, AbstractMemorySize::zero(), U32_SIZE)),
+        LdU64(_) => Some((0, 1, AbstractMemorySize::zero(), U64_SIZE)),
+        LdU128(_) => Some((0, 1, AbstractMemorySize::zero(), U128_SIZE)),
+        LdU256(_) => Some((0, 1, AbstractMemorySize::zero(), U256_SIZE)),
+        LdTrue | LdFalse => Some((0, 1, AbstractMemorySize::zero(), BOOL_SIZE)),
+
+        // Reference operations with fixed cost
+        FreezeRef => Some((1, 1, REFERENCE_SIZE, REFERENCE_SIZE)),
+        MutBorrowLoc(_) | ImmBorrowLoc(_) => Some((0, 1, AbstractMemorySize::zero(), REFERENCE_SIZE)),
+        MutBorrowField(_) | ImmBorrowField(_) | MutBorrowFieldGeneric(_) | ImmBorrowFieldGeneric(_) => {
+            Some((1, 1, REFERENCE_SIZE, REFERENCE_SIZE))
+        }
+
+        // Cast operations - conservative estimate: smallest input, actual output
+        CastU8 => Some((1, 1, U8_SIZE, U8_SIZE)),
+        CastU16 => Some((1, 1, U8_SIZE, U16_SIZE)),
+        CastU32 => Some((1, 1, U8_SIZE, U32_SIZE)),
+        CastU64 => Some((1, 1, U8_SIZE, U64_SIZE)),
+        CastU128 => Some((1, 1, U8_SIZE, U128_SIZE)),
+        CastU256 => Some((1, 1, U8_SIZE, U256_SIZE)),
+
+        // Arithmetic operations - conservative: smallest inputs, largest output
+        Add | Sub | Mul | Mod | Div => Some((2, 1, U8_SIZE + U8_SIZE, U256_SIZE)),
+        BitOr | BitAnd | Xor => Some((2, 1, U8_SIZE + U8_SIZE, U256_SIZE)),
+        Shl | Shr => Some((2, 1, U8_SIZE + U8_SIZE, U256_SIZE)),
+
+        // Boolean operations
+        Or | And => Some((2, 1, BOOL_SIZE + BOOL_SIZE, BOOL_SIZE)),
+        Not => Some((1, 1, BOOL_SIZE, BOOL_SIZE)),
+
+        // Comparison operations
+        Lt | Gt | Le | Ge => Some((2, 1, U8_SIZE + U8_SIZE, BOOL_SIZE)),
+
+        // Abort
+        Abort => Some((1, 0, U64_SIZE, AbstractMemorySize::zero())),
+
+        // --- Variable cost instructions (need runtime size info) ---
+        // LdConst: depends on constant size
+        LdConst(_) => None,
+        // CopyLoc, MoveLoc, StLoc: depends on local value size
+        CopyLoc(_) | MoveLoc(_) | StLoc(_) => None,
+        // Pop: depends on value size
+        Pop => None,
+        // ReadRef, WriteRef: depends on referenced value size
+        ReadRef | WriteRef => None,
+        // Eq, Neq: depends on operand sizes
+        Eq | Neq => None,
+        // Pack/Unpack: depends on field count/sizes
+        Pack(_) | PackGeneric(_) | Unpack(_) | UnpackGeneric(_) => None,
+        // Vector operations: depend on element sizes
+        VecPack(_, _) | VecLen(_) | VecImmBorrow(_) | VecMutBorrow(_) |
+        VecPushBack(_) | VecPopBack(_) | VecUnpack(_, _) | VecSwap(_) => None,
+        // Variant operations: depend on field sizes
+        PackVariant(_) | PackVariantGeneric(_) |
+        UnpackVariant(_) | UnpackVariantImmRef(_) | UnpackVariantMutRef(_) |
+        UnpackVariantGeneric(_) | UnpackVariantGenericImmRef(_) | UnpackVariantGenericMutRef(_) => None,
+        // VariantSwitch: depends on value size
+        VariantSwitch(_) => None,
+        // Call operations: handled separately
+        Call(_) | CallGeneric(_) => None,
+        // Charge itself should not be in input
+        Charge(..) => None,
+    }
+}
+
+/// Compute the total fixed gas costs for a basic block.
+fn compute_block_fixed_costs(code: &[ast::Bytecode]) -> BlockGasCost {
+    let mut cost = BlockGasCost::default();
+    for instr in code {
+        if let Some((pops, pushes, pop_size, push_size)) = get_fixed_instruction_cost(instr) {
+            cost.add(pops, pushes, pop_size, push_size);
+        }
+    }
+    cost
+}
 
 pub(crate) fn package(pkg: Input::Package) -> PartialVMResult<ast::Package> {
     let Input::Package {
@@ -86,12 +213,32 @@ fn generate_basic_blocks(
             let end = cfg.block_end(label) as usize;
             let label = label as ast::Label;
             // TODO: Try and make this code a bit nicer
-            let code = input
+            let code: Vec<ast::Bytecode> = input
                 .safe_get(start..(end.safe_add(1)?))?
                 .iter()
                 .map(bytecode)
                 .collect::<PartialVMResult<_>>()?;
-            Ok((label, code))
+
+            // Compute fixed costs for the block
+            let block_cost = compute_block_fixed_costs(&code);
+
+            // Prepend Charge instruction if there are fixed costs
+            let final_code = if block_cost.has_fixed_costs() {
+                let mut new_code = Vec::with_capacity(code.len() + 1);
+                new_code.push(ast::Bytecode::Charge(Box::new(ast::ChargeInfo {
+                    instructions: block_cost.instructions,
+                    pushes: block_cost.pushes,
+                    pops: block_cost.pops,
+                    push_size: block_cost.push_size,
+                    pop_size: block_cost.pop_size,
+                })));
+                new_code.extend(code);
+                new_code
+            } else {
+                code
+            };
+
+            Ok((label, final_code))
         })
         .collect::<PartialVMResult<BTreeMap<ast::Label, Vec<ast::Bytecode>>>>()
 }
@@ -206,4 +353,236 @@ fn bytecode(code: &FF::Bytecode) -> PartialVMResult<ast::Bytecode> {
         }
     };
     Ok(code)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jit::optimization::ast::{Bytecode, ChargeInfo};
+    use move_binary_format::file_format::{FieldHandleIndex, FieldInstantiationIndex};
+
+    fn assert_cost(code: &[Bytecode], expected_instrs: u64, expected_pushes: u64, expected_pops: u64) {
+        let cost = compute_block_fixed_costs(code);
+        assert_eq!(
+            cost.instructions, expected_instrs,
+            "instructions: expected {}, got {}",
+            expected_instrs, cost.instructions
+        );
+        assert_eq!(
+            cost.pushes, expected_pushes,
+            "pushes: expected {}, got {}",
+            expected_pushes, cost.pushes
+        );
+        assert_eq!(
+            cost.pops, expected_pops,
+            "pops: expected {}, got {}",
+            expected_pops, cost.pops
+        );
+    }
+
+    #[test]
+    fn test_all_fixed_arithmetic() {
+        // Each arithmetic op: 2 pops, 1 push
+        let code = vec![
+            Bytecode::Add,
+            Bytecode::Sub,
+            Bytecode::Mul,
+            Bytecode::Div,
+            Bytecode::Mod,
+        ];
+        assert_cost(&code, 5, 5, 10);
+    }
+
+    #[test]
+    fn test_all_variable_cost() {
+        let code = vec![
+            Bytecode::CopyLoc(0),
+            Bytecode::MoveLoc(0),
+            Bytecode::StLoc(0),
+            Bytecode::Pop,
+        ];
+        let cost = compute_block_fixed_costs(&code);
+        assert_eq!(cost.instructions, 0);
+        assert!(!cost.has_fixed_costs());
+    }
+
+    #[test]
+    fn test_mixed_instructions() {
+        // LdU64(42): 0 pops, 1 push
+        // LdU64(7):  0 pops, 1 push
+        // Add:       2 pops, 1 push
+        // StLoc(0):  variable-cost, skipped
+        let code = vec![
+            Bytecode::LdU64(42),
+            Bytecode::LdU64(7),
+            Bytecode::Add,
+            Bytecode::StLoc(0),
+        ];
+        assert_cost(&code, 3, 3, 2);
+    }
+
+    #[test]
+    fn test_loads_and_booleans() {
+        let code = vec![
+            Bytecode::LdU8(1),
+            Bytecode::LdU64(2),
+            Bytecode::LdTrue,
+            Bytecode::LdFalse,
+        ];
+        assert_cost(&code, 4, 4, 0);
+    }
+
+    #[test]
+    fn test_branches() {
+        // BrTrue: 1 pop, 0 push
+        // BrFalse: 1 pop, 0 push
+        // Branch: 0 pop, 0 push
+        let code = vec![
+            Bytecode::BrTrue(5),
+            Bytecode::BrFalse(3),
+            Bytecode::Branch(0),
+        ];
+        assert_cost(&code, 3, 0, 2);
+    }
+
+    #[test]
+    fn test_comparisons_and_boolean_ops() {
+        // Lt: 2 pops, 1 push
+        // Gt: 2 pops, 1 push
+        // Or: 2 pops, 1 push
+        // And: 2 pops, 1 push
+        // Not: 1 pop, 1 push
+        let code = vec![
+            Bytecode::Lt,
+            Bytecode::Gt,
+            Bytecode::Or,
+            Bytecode::And,
+            Bytecode::Not,
+        ];
+        assert_cost(&code, 5, 5, 9);
+    }
+
+    #[test]
+    fn test_casts() {
+        // Each cast: 1 pop, 1 push
+        let code = vec![
+            Bytecode::CastU8,
+            Bytecode::CastU64,
+            Bytecode::CastU256,
+        ];
+        assert_cost(&code, 3, 3, 3);
+    }
+
+    #[test]
+    fn test_empty_block() {
+        let cost = compute_block_fixed_costs(&[]);
+        assert_eq!(cost.instructions, 0);
+        assert!(!cost.has_fixed_costs());
+    }
+
+    #[test]
+    fn test_single_ret() {
+        // Ret: 0 pops, 0 pushes
+        let code = vec![Bytecode::Ret];
+        assert_cost(&code, 1, 0, 0);
+    }
+
+    #[test]
+    fn test_charge_ignored() {
+        let code = vec![Bytecode::Charge(Box::new(ChargeInfo {
+            instructions: 99,
+            pushes: 99,
+            pops: 99,
+            push_size: 99,
+            pop_size: 99,
+        }))];
+        let cost = compute_block_fixed_costs(&code);
+        assert_eq!(cost.instructions, 0);
+        assert!(!cost.has_fixed_costs());
+    }
+
+    #[test]
+    fn test_reference_ops() {
+        // FreezeRef: 1 pop, 1 push
+        // MutBorrowLoc: 0 pops, 1 push
+        // ImmBorrowLoc: 0 pops, 1 push
+        let code = vec![
+            Bytecode::FreezeRef,
+            Bytecode::MutBorrowLoc(0),
+            Bytecode::ImmBorrowLoc(1),
+        ];
+        assert_cost(&code, 3, 3, 1);
+    }
+
+    #[test]
+    fn test_bitwise_ops() {
+        // Each: 2 pops, 1 push
+        let code = vec![
+            Bytecode::BitOr,
+            Bytecode::BitAnd,
+            Bytecode::Xor,
+            Bytecode::Shl,
+            Bytecode::Shr,
+        ];
+        assert_cost(&code, 5, 5, 10);
+    }
+
+    #[test]
+    fn test_abort() {
+        // Abort: 1 pop, 0 pushes
+        let code = vec![Bytecode::Abort];
+        assert_cost(&code, 1, 0, 1);
+    }
+
+    #[test]
+    fn test_field_borrow_ops() {
+        // MutBorrowField: 1 pop, 1 push
+        // ImmBorrowField: 1 pop, 1 push
+        let code = vec![
+            Bytecode::MutBorrowField(FieldHandleIndex::new(0)),
+            Bytecode::ImmBorrowField(FieldHandleIndex::new(0)),
+            Bytecode::MutBorrowFieldGeneric(FieldInstantiationIndex::new(0)),
+            Bytecode::ImmBorrowFieldGeneric(FieldInstantiationIndex::new(0)),
+        ];
+        assert_cost(&code, 4, 4, 4);
+    }
+
+    #[test]
+    fn test_all_load_sizes() {
+        let code = vec![
+            Bytecode::LdU8(0),
+            Bytecode::LdU16(0),
+            Bytecode::LdU32(0),
+            Bytecode::LdU64(0),
+            Bytecode::LdU128(Box::new(0)),
+            Bytecode::LdU256(Box::new(move_core_types::u256::U256::zero())),
+        ];
+        assert_cost(&code, 6, 6, 0);
+    }
+
+    #[test]
+    fn test_all_comparison_ops() {
+        // Each: 2 pops, 1 push
+        let code = vec![
+            Bytecode::Lt,
+            Bytecode::Gt,
+            Bytecode::Le,
+            Bytecode::Ge,
+        ];
+        assert_cost(&code, 4, 4, 8);
+    }
+
+    #[test]
+    fn test_eq_neq_are_variable_cost() {
+        let code = vec![Bytecode::Eq, Bytecode::Neq];
+        let cost = compute_block_fixed_costs(&code);
+        assert_eq!(cost.instructions, 0);
+        assert!(!cost.has_fixed_costs());
+    }
+
+    #[test]
+    fn test_nop() {
+        let code = vec![Bytecode::Nop, Bytecode::Nop, Bytecode::Nop];
+        assert_cost(&code, 3, 0, 0);
+    }
 }

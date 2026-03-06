@@ -364,6 +364,18 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         Ok(())
     }
 
+    fn charge_block(
+        &mut self,
+        instructions: u64,
+        pushes: u64,
+        pops: u64,
+        push_size: u64,
+        pop_size: u64,
+    ) -> PartialVMResult<()> {
+        self.0
+            .charge(instructions, pushes, pops, push_size, pop_size)
+    }
+
     fn remaining_gas(&self) -> InternalGas {
         if !self.0.charge {
             return InternalGas::new(u64::MAX);

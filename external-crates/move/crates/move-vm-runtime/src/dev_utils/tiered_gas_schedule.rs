@@ -699,6 +699,17 @@ impl<'b> GasMeter for GasStatus<'b> {
         Ok(())
     }
 
+    fn charge_block(
+        &mut self,
+        instructions: u64,
+        pushes: u64,
+        pops: u64,
+        push_size: u64,
+        pop_size: u64,
+    ) -> PartialVMResult<()> {
+        self.charge(instructions, pushes, pops, push_size, pop_size)
+    }
+
     fn remaining_gas(&self) -> InternalGas {
         self.gas_left
     }

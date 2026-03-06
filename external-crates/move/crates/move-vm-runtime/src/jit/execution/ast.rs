@@ -354,7 +354,19 @@ pub enum Type {
 ///
 /// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
 /// instruction stream.
+/// Pre-computed gas charge data for a basic block.
+pub(crate) struct ChargeInfo {
+    pub instructions: u64,
+    pub pushes: u64,
+    pub pops: u64,
+    pub push_size: u64,
+    pub pop_size: u64,
+}
+
 pub(crate) enum Bytecode {
+    /// Pre-computed gas charge for a basic block.
+    /// Charges gas for all fixed-cost instructions in the block at once.
+    Charge(ArenaBox<ChargeInfo>),
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be a copyable type.
     ///
@@ -1335,6 +1347,7 @@ impl_count_type_nodes!(ArenaType);
 impl From<&Bytecode> for Opcodes {
     fn from(val: &Bytecode) -> Self {
         match val {
+            Bytecode::Charge(..) => Opcodes::NOP, // Charge has no corresponding opcode
             Bytecode::Pop => Opcodes::POP,
             Bytecode::Ret => Opcodes::RET,
             Bytecode::BrTrue(_) => Opcodes::BR_TRUE,
@@ -1429,6 +1442,11 @@ impl ::std::fmt::Debug for Function {
 impl ::std::fmt::Debug for Bytecode {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match self {
+            Bytecode::Charge(info) => write!(
+                f,
+                "Charge(instrs={}, pushes={}, pops={}, push_size={}, pop_size={})",
+                info.instructions, info.pushes, info.pops, info.push_size, info.pop_size
+            ),
             Bytecode::Pop => write!(f, "Pop"),
             Bytecode::Ret => write!(f, "Ret"),
             Bytecode::BrTrue(a) => write!(f, "BrTrue({})", a),
@@ -1779,6 +1797,11 @@ impl<B: std::fmt::Write> InternedDisplay<B> for VariantInstantiation {
 impl<B: std::fmt::Write> InternedDisplay<B> for Bytecode {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         match self {
+            Bytecode::Charge(info) => write!(
+                f,
+                "Charge(instrs={}, pushes={}, pops={}, push_size={}, pop_size={})",
+                info.instructions, info.pushes, info.pops, info.push_size, info.pop_size
+            ),
             Bytecode::Pop => write!(f, "Pop"),
             Bytecode::Ret => write!(f, "Ret"),
             Bytecode::BrTrue(a) => write!(f, "BrTrue({})", a),

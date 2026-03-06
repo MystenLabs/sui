@@ -58,9 +58,22 @@ pub struct Code {
     pub(crate) code: BTreeMap<Label, Vec<Bytecode>>,
 }
 
+/// Pre-computed gas charge data for a basic block.
+#[derive(Clone)]
+pub struct ChargeInfo {
+    pub instructions: u64,
+    pub pushes: u64,
+    pub pops: u64,
+    pub push_size: u64,
+    pub pop_size: u64,
+}
+
 /// Optimized Bytecode
 #[derive(Clone)]
 pub enum Bytecode {
+    /// Pre-computed gas charge for a basic block.
+    /// Charges gas for all fixed-cost instructions in the block at once.
+    Charge(Box<ChargeInfo>),
     Pop,
     Ret,
     BrTrue(Label),
@@ -142,6 +155,11 @@ pub enum Bytecode {
 impl ::std::fmt::Debug for Bytecode {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match self {
+            Bytecode::Charge(info) => write!(
+                f,
+                "Charge(instrs={}, pushes={}, pops={}, push_size={}, pop_size={})",
+                info.instructions, info.pushes, info.pops, info.push_size, info.pop_size
+            ),
             Bytecode::Pop => write!(f, "Pop"),
             Bytecode::Ret => write!(f, "Ret"),
             Bytecode::BrTrue(a) => write!(f, "BrTrue({})", a),
@@ -253,7 +271,8 @@ impl Bytecode {
                     }
                 }
             }
-            Bytecode::Pop
+            Bytecode::Charge(..)
+            | Bytecode::Pop
             | Bytecode::Ret
             | Bytecode::LdU8(_)
             | Bytecode::LdU64(_)
@@ -334,7 +353,8 @@ impl Bytecode {
             Bytecode::Branch(_) | Bytecode::Abort | Bytecode::Ret => true,
             // True because verifier insists these are exhaustive
             Bytecode::VariantSwitch(_) => true,
-            Bytecode::Pop
+            Bytecode::Charge(..)
+            | Bytecode::Pop
             | Bytecode::BrTrue(_)
             | Bytecode::BrFalse(_)
             | Bytecode::LdU8(_)
