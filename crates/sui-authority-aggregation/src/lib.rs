@@ -166,19 +166,20 @@ where
     Err(accumulated_state)
 }
 
-/// This function takes an initial state, than executes an asynchronous function (FMap) for each
+/// This function takes an initial state, then executes an asynchronous function (FMap) for each
 /// authority, and folds the results as they become available into the state using an async function (FReduce).
 ///
 /// FMap can do io, and returns a result V. An error there may not be fatal, and could be consumed by the
-/// MReduce function to overall recover from it. This is necessary to ensure byzantine authorities cannot
+/// FReduce function to overall recover from it. This is necessary to ensure byzantine authorities cannot
 /// interrupt the logic of this function.
 ///
-/// FReduce returns a result to a ReduceOutput. If the result is Err the function
-/// shortcuts and the Err is returned. An Ok ReduceOutput result can be used to shortcut and return
-/// the resulting state (ReduceOutput::End), continue the folding as new states arrive (ReduceOutput::Continue).
+/// FReduce returns a ReduceOutput, which controls how aggregation proceeds:
+/// ReduceOutput::Continue(state) continues folding with the updated state,
+/// ReduceOutput::Failed(state) stops early and returns Err(state),
+/// and ReduceOutput::Success(result) stops early and returns Ok((result, remaining_futures)).
 ///
 /// This function provides a flexible way to communicate with a quorum of authorities, processing and
-/// processing their results into a safe overall result, and also safely allowing operations to continue
+/// their results into a safe overall result, and also safely allowing operations to continue
 /// past the quorum to ensure all authorities are up to date (up to a timeout).
 pub async fn quorum_map_then_reduce_with_timeout<
     'a,
