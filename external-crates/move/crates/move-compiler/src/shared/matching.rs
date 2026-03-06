@@ -314,10 +314,9 @@ impl PatternArm {
                 if &name == ctor_name =>
             {
                 let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
-                let Some(decl_fields) =
-                    context
-                        .program_info()
-                        .enum_variant_fields(&mident, &enum_, &name)
+                let Some(decl_fields) = context
+                    .program_info()
+                    .enum_variant_fields(&mident, &enum_, &name)
                 else {
                     ice_assert!(
                         context.reporter(),
