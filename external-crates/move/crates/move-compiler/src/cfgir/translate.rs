@@ -482,7 +482,10 @@ fn constant(
             if mv.is_none() {
                 context.add_diag(diag!(
                     CodeGeneration::UnfoldableConstant,
-                    (loc, "Signed integers are not yet supported in constant values")
+                    (
+                        loc,
+                        "Signed integers are not yet supported in constant values"
+                    )
                 ));
             }
             mv

@@ -3662,20 +3662,16 @@ fn has_unsigned_suffix(s: &str) -> bool {
     UNSIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
 }
 
-fn signed_num(
-    context: &mut DefnContext,
-    loc: Loc,
-    s: &str,
-    negated: bool,
-) -> Option<E::Value_> {
+fn signed_num(context: &mut DefnContext, loc: Loc, s: &str, negated: bool) -> Option<E::Value_> {
     use E::Value_ as EV;
     macro_rules! parse_signed {
-        ($parse_fn:ident, $suffix_len:expr, $ctor:ident, $ty:expr) => {{
-            match $parse_fn(&s[..s.len() - $suffix_len], negated) {
+        ($num_str:expr, $parse_fn:ident, $ctor:ident, $ty:expr) => {{
+            match $parse_fn($num_str, negated) {
                 Ok((v, _)) => Some(EV::$ctor(v)),
                 Err(_) => {
                     let msg = format!(
-                        "Invalid number literal. The given literal is too large to fit into {}", $ty
+                        "Invalid number literal. The given literal is too large to fit into {}",
+                        $ty
                     );
                     context.add_diag(diag!(Syntax::InvalidNumber, (loc, msg)));
                     None
@@ -3683,34 +3679,31 @@ fn signed_num(
             }
         }};
     }
-    if s.ends_with("i128") {
-        parse_signed!(parse_i128, 4, I128, "'i128'")
-    } else if s.ends_with("i64") {
-        parse_signed!(parse_i64, 3, I64, "'i64'")
-    } else if s.ends_with("i32") {
-        parse_signed!(parse_i32, 3, I32, "'i32'")
-    } else if s.ends_with("i16") {
-        parse_signed!(parse_i16, 3, I16, "'i16'")
-    } else if s.ends_with("i8") {
-        parse_signed!(parse_i8, 2, I8, "'i8'")
+    if let Some(num) = s.strip_suffix("i128") {
+        parse_signed!(num, parse_i128, I128, "'i128'")
+    } else if let Some(num) = s.strip_suffix("i64") {
+        parse_signed!(num, parse_i64, I64, "'i64'")
+    } else if let Some(num) = s.strip_suffix("i32") {
+        parse_signed!(num, parse_i32, I32, "'i32'")
+    } else if let Some(num) = s.strip_suffix("i16") {
+        parse_signed!(num, parse_i16, I16, "'i16'")
+    } else if let Some(num) = s.strip_suffix("i8") {
+        parse_signed!(num, parse_i8, I8, "'i8'")
     } else {
         panic!("ICE expected signed integer suffix")
     }
 }
 
-fn unsigned_num(
-    context: &mut DefnContext,
-    loc: Loc,
-    s: &str,
-) -> Option<E::Value_> {
+fn unsigned_num(context: &mut DefnContext, loc: Loc, s: &str) -> Option<E::Value_> {
     use E::Value_ as EV;
     macro_rules! parse_unsigned {
-        ($parse_fn:ident, $suffix_len:expr, $ctor:ident, $ty:expr) => {{
-            match $parse_fn(&s[..s.len() - $suffix_len]) {
+        ($num_str:expr, $parse_fn:ident, $ctor:ident, $ty:expr) => {{
+            match $parse_fn($num_str) {
                 Ok((v, _)) => Some(EV::$ctor(v)),
                 Err(_) => {
                     let msg = format!(
-                        "Invalid number literal. The given literal is too large to fit into {}", $ty
+                        "Invalid number literal. The given literal is too large to fit into {}",
+                        $ty
                     );
                     context.add_diag(diag!(Syntax::InvalidNumber, (loc, msg)));
                     None
@@ -3718,18 +3711,18 @@ fn unsigned_num(
             }
         }};
     }
-    if s.ends_with("u256") {
-        parse_unsigned!(parse_u256, 4, U256, "'u256'")
-    } else if s.ends_with("u128") {
-        parse_unsigned!(parse_u128, 4, U128, "'u128'")
-    } else if s.ends_with("u64") {
-        parse_unsigned!(parse_u64, 3, U64, "'u64'")
-    } else if s.ends_with("u32") {
-        parse_unsigned!(parse_u32, 3, U32, "'u32'")
-    } else if s.ends_with("u16") {
-        parse_unsigned!(parse_u16, 3, U16, "'u16'")
-    } else if s.ends_with("u8") {
-        parse_unsigned!(parse_u8, 2, U8, "'u8'")
+    if let Some(num) = s.strip_suffix("u256") {
+        parse_unsigned!(num, parse_u256, U256, "'u256'")
+    } else if let Some(num) = s.strip_suffix("u128") {
+        parse_unsigned!(num, parse_u128, U128, "'u128'")
+    } else if let Some(num) = s.strip_suffix("u64") {
+        parse_unsigned!(num, parse_u64, U64, "'u64'")
+    } else if let Some(num) = s.strip_suffix("u32") {
+        parse_unsigned!(num, parse_u32, U32, "'u32'")
+    } else if let Some(num) = s.strip_suffix("u16") {
+        parse_unsigned!(num, parse_u16, U16, "'u16'")
+    } else if let Some(num) = s.strip_suffix("u8") {
+        parse_unsigned!(num, parse_u8, U8, "'u8'")
     } else {
         panic!("ICE expected unsigned integer suffix")
     }
