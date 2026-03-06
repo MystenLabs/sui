@@ -364,7 +364,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 Ok((m, v_opt))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
-        let gas_for_chain = gas.map(|(_, m, v)| (m, v));
+        // For real coin gas, chain with object_inputs for end-of-transaction transfer.
+        // For ephemeral gas (AddressBalance), handle separately with end_of_transaction=false
+        // to avoid the "untransferred new object" invariant check in ObjectRuntime.
+        let (gas_for_chain, ephemeral_gas) = match gas_payment_location {
+            Some(PaymentLocation::AddressBalance(_)) => (None, gas.map(|(_, m, v)| (m, v))),
+            _ => (gas.map(|(_, m, v)| (m, v)), None),
+        };
         for (metadata, value_opt) in object_inputs.into_iter().chain(gas_for_chain) {
             let InputObjectMetadata {
                 id,
@@ -398,6 +404,33 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 by_value_shared_objects.insert(id);
             } else if matches!(owner, Owner::ConsensusAddressOwner { .. }) {
                 consensus_owner_objects.insert(id, owner.clone());
+            }
+        }
+
+        // Transfer ephemeral gas coin with end_of_transaction=false so the ObjectRuntime
+        // doesn't reject it as an untransferred new object.
+        if let Some((metadata, value_opt)) = ephemeral_gas {
+            let InputObjectMetadata {
+                id,
+                mutability: _,
+                owner,
+                version,
+                type_,
+            } = metadata;
+            loaded_runtime_objects.insert(
+                id,
+                LoadedRuntimeObject {
+                    version,
+                    is_modified: true,
+                },
+            );
+            if let Some(object) = value_opt {
+                self.transfer_object_(
+                    owner,
+                    type_,
+                    CtxValue(object),
+                    /* end of transaction */ false,
+                )?;
             }
         }
 
@@ -1491,11 +1524,13 @@ fn destroy_ephemeral_gas_coin<OType>(
     // Read remaining balance from the coin
     let remaining_balance = Value::from(value).unpack_coin()?.1;
 
-    let amount_consumed = reserved_amount.checked_sub(remaining_balance).ok_or_else(|| {
-        ExecutionError::invariant_violation(
-            "Ephemeral gas coin remaining balance exceeds reserved amount",
-        )
-    })?;
+    let amount_consumed = reserved_amount
+        .checked_sub(remaining_balance)
+        .ok_or_else(|| {
+            ExecutionError::invariant_violation(
+                "Ephemeral gas coin remaining balance exceeds reserved amount",
+            )
+        })?;
     if amount_consumed > 0 {
         let balance_type =
             sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
