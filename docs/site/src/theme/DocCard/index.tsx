@@ -70,7 +70,7 @@ function CategoryFooter({ item }: { item: any }) {
 
   return (
     <div className={styles.childWrap}>
-      <div className={styles.childLabel}>Inside this section</div>
+      <div className={styles.childLabel}>In this section</div>
       <ul className={styles.childList}>
         {items.map((child: any, i: number) => (
           <li key={i} className={styles.childItem} title={child.label}>
