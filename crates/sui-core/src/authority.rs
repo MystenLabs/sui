@@ -4319,9 +4319,9 @@ impl AuthorityState {
         // Verify all checkpointed transactions are present in transactions_seq.
         // This catches any post-processing gaps that could occur if async
         // post-processing failed to complete before persistence.
-        // This runs whenever indexes are enabled (not gated on enable_secondary_index_checks)
-        // because it is cheap and critical for async post-processing correctness.
-        if let Some(indexes) = self.indexes.clone() {
+        if expensive_safety_check_config.enable_secondary_index_checks()
+            && let Some(indexes) = self.indexes.clone()
+        {
             let epoch = cur_epoch_store.epoch();
             // Only verify the current epoch's checkpoints. Previous epoch contents
             // may have been pruned, and we only need to verify that this epoch's
