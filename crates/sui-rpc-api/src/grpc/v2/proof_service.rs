@@ -3,14 +3,14 @@
 
 use crate::RpcError;
 use crate::RpcService;
-use crate::grpc::alpha::proof_service_proto::{
-    GetObjectInclusionProofRequest, GetObjectInclusionProofResponse, OcsInclusionProof,
-    proof_service_server::ProofService,
-};
 use bcs;
 use fastcrypto::hash::Blake2b256;
 use fastcrypto::merkle::MerkleTree;
 use std::str::FromStr;
+use sui_rpc::proto::sui::rpc::v2::{
+    GetObjectInclusionProofRequest, GetObjectInclusionProofResponse, OcsInclusionProof,
+    proof_service_server::ProofService,
+};
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
     digests::Digest,
@@ -99,11 +99,14 @@ fn build_ocs_inclusion_proof(
     let merkle_proof_bytes = bcs::to_bytes(&merkle_proof)
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-    let proto_inclusion_proof = OcsInclusionProof {
-        merkle_proof: Some(merkle_proof_bytes),
-        leaf_index: Some(leaf_index as u64),
-        tree_root: Some(<Digest as AsRef<[u8; 32]>>::as_ref(&tree_root).to_vec()),
-    };
+    let mut proto_inclusion_proof = OcsInclusionProof::default();
+    proto_inclusion_proof.merkle_proof = Some(merkle_proof_bytes.into());
+    proto_inclusion_proof.leaf_index = Some(leaf_index as u64);
+    proto_inclusion_proof.tree_root = Some(
+        <Digest as AsRef<[u8; 32]>>::as_ref(&tree_root)
+            .to_vec()
+            .into(),
+    );
 
     Ok((proto_inclusion_proof, object_ref))
 }
@@ -233,10 +236,10 @@ fn get_object_inclusion_proof_impl(
     obj_ref.version = Some(object_ref.1.value());
     obj_ref.digest = Some(object_ref.2.to_string());
 
-    Ok(GetObjectInclusionProofResponse {
-        object_ref: Some(obj_ref),
-        inclusion_proof: Some(proto_inclusion_proof),
-        object_data: Some(object_data_bytes),
-        checkpoint_summary: Some(checkpoint_summary_bytes),
-    })
+    let mut response = GetObjectInclusionProofResponse::default();
+    response.object_ref = Some(obj_ref);
+    response.inclusion_proof = Some(proto_inclusion_proof);
+    response.object_data = Some(object_data_bytes.into());
+    response.checkpoint_summary = Some(checkpoint_summary_bytes.into());
+    Ok(response)
 }
