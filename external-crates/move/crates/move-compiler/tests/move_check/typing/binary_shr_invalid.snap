@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
 info:
   flavor: core
   edition: legacy
@@ -12,7 +13,7 @@ error[E04003]: built-in operation not supported
   │         ^^^^^
   │         │
   │         Invalid argument to '>>'
-  │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/binary_shr_invalid.move:8:18
@@ -41,7 +42,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^
    │         │
    │         Invalid argument to '>>'
-   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shr_invalid.move:11:9
@@ -50,7 +51,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^
    │         │
    │         Invalid argument to '>>'
-   │         Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shr_invalid.move:11:17
@@ -76,7 +77,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shr_invalid.move:13:9
    │
  7 │     fun t0(r: R, s: S) {
-   │               - Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │               - Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    ·
 13 │         r >> r;
    │         ^ Invalid argument to '>>'
@@ -109,7 +110,7 @@ error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shr_invalid.move:14:9
    │
  7 │     fun t0(r: R, s: S) {
-   │                     - Found: '0x8675309::M::S'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                     - Found: '0x8675309::M::S'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    ·
 14 │         s >> s;
    │         ^ Invalid argument to '>>'
@@ -153,7 +154,7 @@ error[E04003]: built-in operation not supported
    │         ^^
    │         │
    │         Invalid argument to '>>'
-   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shr_invalid.move:16:15
@@ -182,7 +183,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^^^^^^^
    │         │
    │         Invalid argument to '>>'
-   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shr_invalid.move:18:25
@@ -201,7 +202,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^^^^^^^
    │         │
    │         Invalid argument to '>>'
-   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shr_invalid.move:19:25

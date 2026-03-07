@@ -1,0 +1,140 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:7:19
+  │
+7 │         let _x = -1u8;
+  │                   ^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+  ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:7:19
+  │
+7 │         let _x = -1u8;
+  │                   ^^^
+  │                   │
+  │                   Invalid argument to '-'
+  │                   Expected: '_'
+  │                   Given: 'u8'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:11:19
+   │
+11 │         let _x = -1u16;
+   │                   ^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:11:19
+   │
+11 │         let _x = -1u16;
+   │                   ^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'
+   │                   Given: 'u16'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:15:19
+   │
+15 │         let _x = -1u32;
+   │                   ^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:15:19
+   │
+15 │         let _x = -1u32;
+   │                   ^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'
+   │                   Given: 'u32'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:19:19
+   │
+19 │         let _x = -1u64;
+   │                   ^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:19:19
+   │
+19 │         let _x = -1u64;
+   │                   ^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'
+   │                   Given: 'u64'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:23:19
+   │
+23 │         let _x = -1u128;
+   │                   ^^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:23:19
+   │
+23 │         let _x = -1u128;
+   │                   ^^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'
+   │                   Given: 'u128'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:27:19
+   │
+27 │         let _x = -1u256;
+   │                   ^^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:27:19
+   │
+27 │         let _x = -1u256;
+   │                   ^^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'
+   │                   Given: 'u256'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:33:19
+   │
+33 │         let _y = -x;
+   │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/development/typing/signed_int_neg_unsigned_literal.move:33:19
+   │
+32 │         let x: u64 = 5;
+   │                --- Given: 'u64'
+33 │         let _y = -x;
+   │                   ^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Expected: '_'

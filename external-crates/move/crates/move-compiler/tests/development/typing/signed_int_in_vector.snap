@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+warning[W09002]: unused variable
+   ┌─ tests/development/typing/signed_int_in_vector.move:27:13
+   │
+27 │         let x = 5i64;
+   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/development/typing/signed_int_in_vector.move:28:25
+   │
+28 │         let _v = vector[-x, 1i64, -x];
+   │                         ^ Unexpected '-'. Expected a vector argument expression
+
+error[E01002]: unexpected token
+   ┌─ tests/development/typing/signed_int_in_vector.move:28:35
+   │
+28 │         let _v = vector[-x, 1i64, -x];
+   │                                   ^ Unexpected '-'. Expected a vector argument expression

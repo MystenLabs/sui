@@ -1429,7 +1429,12 @@ fn value(
                 | Some(bt @ sp!(_, BT::U32))
                 | Some(bt @ sp!(_, BT::U64))
                 | Some(bt @ sp!(_, BT::U128))
-                | Some(bt @ sp!(_, BT::U256)) => *bt,
+                | Some(bt @ sp!(_, BT::U256))
+                | Some(bt @ sp!(_, BT::I8))
+                | Some(bt @ sp!(_, BT::I16))
+                | Some(bt @ sp!(_, BT::I32))
+                | Some(bt @ sp!(_, BT::I64))
+                | Some(bt @ sp!(_, BT::I128)) => *bt,
                 _ => {
                     context.add_diag(ice!((
                         eloc,
@@ -2601,6 +2606,11 @@ fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
         EV::U64(u) => HV::U64(u),
         EV::U128(u) => HV::U128(u),
         EV::U256(u) => HV::U256(u),
+        EV::I8(u) => HV::I8(u),
+        EV::I16(u) => HV::I16(u),
+        EV::I32(u) => HV::I32(u),
+        EV::I64(u) => HV::I64(u),
+        EV::I128(u) => HV::I128(u),
         EV::Bool(u) => HV::Bool(u),
         EV::Bytearray(bytes) => HV::Vector(
             Box::new(H::BaseType_::u8(loc)),

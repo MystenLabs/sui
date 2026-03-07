@@ -366,6 +366,11 @@ fn inferred_numerical_value(
     let u64_max = U256::from(u64::MAX);
     let u128_max = U256::from(u128::MAX);
     let u256_max = U256::max_value();
+    let i8_max = U256::from(i8::MAX as u64);
+    let i16_max = U256::from(i16::MAX as u64);
+    let i32_max = U256::from(i32::MAX as u64);
+    let i64_max = U256::from(i64::MAX as u64);
+    let i128_max = U256::from(i128::MAX as u128);
     let max = match bt {
         BT::U8 => u8_max,
         BT::U16 => u16_max,
@@ -373,6 +378,11 @@ fn inferred_numerical_value(
         BT::U64 => u64_max,
         BT::U128 => u128_max,
         BT::U256 => u256_max,
+        BT::I8 => i8_max,
+        BT::I16 => i16_max,
+        BT::I32 => i32_max,
+        BT::I64 => i64_max,
+        BT::I128 => i128_max,
         BT::Address | BT::Signer | BT::Vector | BT::Bool => unreachable!(),
     };
     if value > max {
@@ -380,7 +390,19 @@ fn inferred_numerical_value(
             "Expected a literal of type '{}', but the value is too large.",
             bt
         );
-        let fix_bt = if value > u128_max {
+        let fix_bt = if bt.is_signed_numeric() {
+            if value > i64_max {
+                BT::I128
+            } else if value > i32_max {
+                BT::I64
+            } else if value > i16_max {
+                BT::I32
+            } else if value > i8_max {
+                BT::I16
+            } else {
+                BT::I8
+            }
+        } else if value > u128_max {
             BT::U256
         } else if value > u64_max {
             BT::U128
@@ -412,6 +434,11 @@ fn inferred_numerical_value(
             BT::U64 => Value_::U64(value.down_cast_lossy()),
             BT::U128 => Value_::U128(value.down_cast_lossy()),
             BT::U256 => Value_::U256(value),
+            BT::I8 => Value_::I8(value.down_cast_lossy()),
+            BT::I16 => Value_::I16(value.down_cast_lossy()),
+            BT::I32 => Value_::I32(value.down_cast_lossy()),
+            BT::I64 => Value_::I64(value.down_cast_lossy()),
+            BT::I128 => Value_::I128(value.down_cast_lossy()),
             BT::Address | BT::Signer | BT::Vector | BT::Bool => unreachable!(),
         };
         Some(value_)

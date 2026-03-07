@@ -1997,6 +1997,12 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                     subtype(context, rloc, msg, &er.ty, &Type_::bool(rloc));
                     Type_::bool(eloc)
                 }
+                Neg => {
+                    let rloc = er.exp.loc;
+                    let signed_ty = core::make_signed_num_tvar(context, rloc);
+                    subtype(context, rloc, msg, &er.ty, &signed_ty);
+                    er.ty.clone()
+                }
             };
             (ty, TE::UnaryExp(uop, er))
         }

@@ -5,38 +5,45 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04016]: too few arguments
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:5
-  │
-5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │     ^^^^^^^^^^^^^^^^^
-  │     │      │
-  │     │      Found 0 argument(s) here
-  │     Invalid call of 'assert'. The call expected 2 argument(s) but got 0
-
-error[E01002]: unexpected token
+error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:19
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                   ^
-  │                   │
-  │                   Unexpected '-'
-  │                   Expected an expression term
+  │                   ^ Signed integer types are under development and should not be used right now.
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:20
+  │
+5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
+  │                    ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:23
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │     ----------------- ^^ ---- Found: 'u64'. It is not compatible with the other type.
-  │     │                 │   
-  │     │                 Incompatible arguments to '=='
-  │     Found: '()'. It is not compatible with the other type.
+  │                    -  ^^ ---- Found: 'u64'. It is not compatible with the other type.
+  │                    │  │   
+  │                    │  Incompatible arguments to '=='
+  │                    Found: '_'. It is not compatible with the other type.
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:30
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:36
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                              ^
-  │                              │
-  │                              Unexpected ')'
-  │                              Expected ';'
+  │                                    ^ Signed integer types are under development and should not be used right now.
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:38
+  │
+5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
+  │                                      ^^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

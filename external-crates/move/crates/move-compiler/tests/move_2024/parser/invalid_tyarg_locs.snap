@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
 info:
   flavor: core
   edition: 2024.alpha
@@ -212,7 +213,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^^^
    │         │
    │         Invalid argument to '>'
-   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:51:9
@@ -237,7 +238,7 @@ error[E04003]: built-in operation not supported
 51 │         0x42<u64>::m::make_s(0u64)
    │         -------- ^^^^^^^^^^^^^^^^^ Invalid argument to '>'
    │         │         
-   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:51:20
@@ -274,7 +275,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^^^
    │         │
    │         Invalid argument to '>'
-   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:55:9
@@ -299,7 +300,7 @@ error[E04003]: built-in operation not supported
 55 │         0x42<u64>::m<u64>::make_s(0u64)
    │         -------- ^^^^^^^^^^^^^^^^^^^^^^ Invalid argument to '>'
    │         │         
-   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:55:20
@@ -384,7 +385,7 @@ error[E04003]: built-in operation not supported
    │         ^^^^^^^^
    │         │
    │         Invalid argument to '>'
-   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:9
@@ -409,7 +410,7 @@ error[E04003]: built-in operation not supported
 63 │         0x42<u64>::m<u64>::make_s<u64>(0u64)
    │         -------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid argument to '>'
    │         │         
-   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/parser/invalid_tyarg_locs.move:63:20

@@ -2735,6 +2735,20 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             let e = parse_unary_exp(context)?;
             Exp_::UnaryExp(op, Box::new(e))
         }
+        Tok::Minus => {
+            let loc = current_token_loc(context.tokens);
+            context.check_feature(FeatureGate::SignedIntegers, loc);
+            context.tokens.advance()?;
+            let op_end_loc = context.tokens.previous_end_loc();
+            let op = spanned(
+                context.tokens.file_hash(),
+                start_loc,
+                op_end_loc,
+                UnaryOp_::Neg,
+            );
+            let e = parse_unary_exp(context)?;
+            Exp_::UnaryExp(op, Box::new(e))
+        }
         Tok::AmpMut => {
             context.tokens.advance()?;
             let e = parse_unary_exp(context)?;

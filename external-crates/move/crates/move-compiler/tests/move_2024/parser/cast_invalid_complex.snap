@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
 info:
   flavor: core
   edition: 2024.alpha
@@ -45,7 +46,7 @@ error[E04003]: built-in operation not supported
 8 │         *if (cond) { &0u64 } else { &mut 0 } as u32;
   │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │          │           │
-  │          │           Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │          │           Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
   │          Invalid argument to 'as'
 
 error[E01015]: ambiguous 'as'
@@ -82,5 +83,5 @@ error[E04003]: built-in operation not supported
 11 │         (*if (cond) { &0 } else { &mut 0u64 } as u32);
    │           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │           │           │
-   │           │           Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │           │           Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128'
    │           Invalid argument to 'as'
