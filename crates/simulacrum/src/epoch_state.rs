@@ -11,6 +11,7 @@ use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     committee::{Committee, EpochId},
+    digests::ChainIdentifier,
     effects::TransactionEffects,
     execution_params::ExecutionOrEarlyError,
     gas::SuiGasStatus,
@@ -32,21 +33,23 @@ pub struct EpochState {
     limits_metrics: Arc<LimitsMetrics>,
     bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
     executor: Arc<dyn Executor + Send + Sync>,
+    chain_identifier: ChainIdentifier,
     /// A counter that advances each time we advance the clock in order to ensure that each update
     /// txn has a unique digest. This is reset on epoch changes
     next_consensus_round: u64,
 }
 
 impl EpochState {
-    pub fn new(system_state: SuiSystemState) -> Self {
+    pub fn new(system_state: SuiSystemState, chain_identifier: ChainIdentifier) -> Self {
         let protocol_config =
             ProtocolConfig::get_for_version(system_state.protocol_version().into(), Chain::Unknown);
-        Self::new_with_protocol_config(system_state, protocol_config)
+        Self::new_with_protocol_config(system_state, protocol_config, chain_identifier)
     }
 
     pub fn new_with_protocol_config(
         system_state: SuiSystemState,
         protocol_config: ProtocolConfig,
+        chain_identifier: ChainIdentifier,
     ) -> Self {
         let epoch_start_state = system_state.into_epoch_start_state();
         let committee = epoch_start_state.get_sui_committee();
@@ -62,6 +65,7 @@ impl EpochState {
             limits_metrics,
             bytecode_verifier_metrics,
             executor,
+            chain_identifier,
             next_consensus_round: 0,
         }
     }
@@ -94,6 +98,10 @@ impl EpochState {
 
     pub fn protocol_config(&self) -> &ProtocolConfig {
         &self.protocol_config
+    }
+
+    pub fn chain_identifier(&self) -> ChainIdentifier {
+        self.chain_identifier
     }
 
     pub fn execute_transaction(
@@ -138,6 +146,7 @@ impl EpochState {
             &receiving_objects,
             &self.bytecode_verifier_metrics,
             verifier_signing_config,
+            self.chain_identifier,
         )?;
 
         let transaction_data = transaction.data().transaction_data();
@@ -156,6 +165,7 @@ impl EpochState {
                 gas_data,
                 gas_status,
                 kind,
+                None, // compat_args
                 signer,
                 tx_digest,
                 &mut None,

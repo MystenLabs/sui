@@ -48,7 +48,7 @@ use sui_types::{
     DEEPBOOK_PACKAGE_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
-    digests::{ObjectDigest, TransactionDigest},
+    digests::{ChainIdentifier, ObjectDigest, TransactionDigest},
     error::{ExecutionError, SuiError, SuiResult},
     executable_transaction::VerifiedExecutableTransaction,
     gas::SuiGasStatus,
@@ -802,6 +802,8 @@ impl LocalExec {
                 gas_data,
                 gas_status,
                 transaction_kind.clone(),
+                // Replay of coin reservations not supported in replay v1
+                None,
                 tx_info.sender,
                 *tx_digest,
                 &mut None,
@@ -892,6 +894,7 @@ impl LocalExec {
                                 protocol_config,
                             )?,
                             transaction_kind.clone(),
+                            None, // Replay of coin reservations not supported in replay v1
                             tx_info.sender,
                             tx_info.sender_signed_data.digest(),
                             skip_checks,
@@ -967,6 +970,7 @@ impl LocalExec {
             input_objects,
             &protocol_config,
             reference_gas_price,
+            ChainIdentifier::from_chain(pre_run_sandbox.transaction_info.chain),
         )
         .unwrap();
         let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
@@ -994,6 +998,8 @@ impl LocalExec {
             gas_data,
             gas_status,
             kind,
+            // Replay of coin reservations not supported in replay v1
+            None,
             signer,
             *executable.digest(),
             &mut None,

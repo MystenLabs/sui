@@ -465,6 +465,20 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results.deleted_object_ids.insert(*id);
     }
 
+    /// Mutate an object that was created during this transaction.
+    pub fn mutate_created_object(&mut self, object: Object) {
+        let id = object.id();
+        debug_assert!(self.execution_results.created_object_ids.contains(&id));
+        self.execution_results.written_objects.insert(id, object);
+    }
+
+    /// Delete an object that was created during this transaction.
+    pub fn delete_created_object(&mut self, id: &ObjectID) {
+        debug_assert!(self.execution_results.created_object_ids.contains(id));
+        self.execution_results.written_objects.remove(id);
+        self.execution_results.created_object_ids.remove(id);
+    }
+
     pub fn drop_writes(&mut self) {
         self.execution_results.drop_writes();
     }
@@ -582,6 +596,32 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results.accumulator_events.push(event);
     }
 
+    pub fn credit_address_balance_gas(&mut self, address: &SuiAddress, amount: u64) {
+        // Assert is safe because there are only 10B SUI
+        assert!(amount < i64::MAX as u64, "Amount is too large");
+        self.emit_net_address_balance_gas_payment(address, -(amount as i64));
+    }
+
+    /// Make a gas charge against the given SUI address balance.
+    pub fn charge_address_balance_gas(&mut self, address: &SuiAddress, amount: u64) {
+        // Assert is safe because there are only 10B SUI
+        assert!(amount <= i64::MAX as u64, "Amount is too large");
+        self.emit_net_address_balance_gas_payment(address, amount as i64);
+    }
+
+    pub fn emit_net_address_balance_gas_payment(&mut self, address: &SuiAddress, amount: i64) {
+        if amount == 0 {
+            return;
+        }
+        let balance_type =
+            sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
+        let accumulator_event =
+            AccumulatorEvent::from_net_balance_change(*address, balance_type, -amount)
+                .expect("Failed to create accumulator event for gas balance");
+
+        self.add_accumulator_event(accumulator_event);
+    }
+
     /// Given an object ID, if it's not modified, returns None.
     /// Otherwise returns its metadata, including version, digest, owner and storage rebate.
     /// A modified object must be either a mutable input, or a loaded child object.
@@ -624,6 +664,52 @@ impl<'backing> TemporaryStore<'backing> {
         } else {
             None
         }
+    }
+
+    pub(crate) fn get_gas_coin_value_unsafe(&self, id: &ObjectID) -> Result<u64, ExecutionError> {
+        let obj = self.objects().get(id).ok_or_else(|| {
+            ExecutionError::invariant_violation(format!("Gas coin object not found: {id:?}"))
+        })?;
+        let Data::Move(move_obj) = &obj.data else {
+            return Err(ExecutionError::invariant_violation(
+                "Provided non-gas coin object as input for gas!",
+            ));
+        };
+        if !move_obj.type_().is_gas_coin() {
+            return Err(ExecutionError::invariant_violation(
+                "Provided non-gas coin object as input for gas!",
+            ));
+        }
+        Ok(move_obj.get_coin_value_unsafe())
+    }
+
+    pub(crate) fn set_gas_coin_value_unsafe(
+        &mut self,
+        id: &ObjectID,
+        new_balance: u64,
+    ) -> Result<(), ExecutionError> {
+        let mut gas_object = self
+            .objects()
+            .get(id)
+            // unwrap safe because coin either existed or was just created.
+            .ok_or_else(|| {
+                ExecutionError::invariant_violation(format!("Gas coin object not found: {id:?}"))
+            })?
+            .clone();
+
+        gas_object
+            .data
+            .try_as_move_mut()
+            // unwrap should be safe because we checked that the primary gas object was a coin object above.
+            .ok_or_else(|| {
+                ExecutionError::invariant_violation(format!(
+                    "Invalid coin object in txn {}",
+                    self.tx_digest
+                ))
+            })?
+            .set_coin_value_unsafe(new_balance);
+        self.mutate_input_object(gas_object);
+        Ok(())
     }
 }
 

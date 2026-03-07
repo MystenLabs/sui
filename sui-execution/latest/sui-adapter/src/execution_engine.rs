@@ -20,6 +20,7 @@ mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
+    use sui_types::coin_reservation::ParsedDigest;
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
@@ -75,7 +76,7 @@ mod checked {
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
-        WriteAccumulatorStorageCost, is_gas_paid_from_address_balance,
+        WriteAccumulatorStorageCost,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -86,6 +87,51 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
+    fn get_payment_method(gas_data: &GasData, transaction_kind: &TransactionKind) -> PaymentMethod {
+        if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
+            PaymentMethod::Unmetered
+        } else {
+            let primary_coin = gas_data.payment.first().and_then(|obj_ref| {
+                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) {
+                    None
+                } else {
+                    Some(*obj_ref)
+                }
+            });
+
+            let additional_coins = gas_data
+                .payment
+                .iter()
+                .copied()
+                .skip(1)
+                .filter(|obj_ref| !ParsedDigest::is_coin_reservation_digest(&obj_ref.2))
+                .collect::<Vec<_>>();
+
+            let available_address_balance_gas = if gas_data.payment.is_empty() {
+                gas_data.budget
+            } else {
+                gas_data
+                    .payment
+                    .iter()
+                    .filter_map(|obj_ref| {
+                        if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
+                            Some(parsed.reservation_amount())
+                        } else {
+                            None
+                        }
+                    })
+                    .sum::<u64>()
+            };
+
+            PaymentMethod::Metered {
+                primary_coin,
+                additional_coins,
+                address_balance_payer: gas_data.owner,
+                available_address_balance_gas,
+            }
+        }
+    }
+
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
@@ -93,6 +139,7 @@ mod checked {
         gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
+        compat_args: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         move_vm: &Arc<MoveVM>,
@@ -140,13 +187,7 @@ mod checked {
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
 
-        let payment_method = if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
-            PaymentMethod::Unmetered
-        } else if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
-            PaymentMethod::AddressBalance(gas_data.owner)
-        } else {
-            PaymentMethod::Coins(gas_data.payment)
-        };
+        let payment_method = get_payment_method(&gas_data, &transaction_kind);
 
         let mut gas_charger = GasCharger::new(
             transaction_digest,
@@ -174,6 +215,7 @@ mod checked {
             store,
             &mut temporary_store,
             transaction_kind,
+            compat_args,
             &mut gas_charger,
             tx_ctx,
             move_vm,
@@ -322,6 +364,7 @@ mod checked {
         store: &dyn BackingStore,
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
+        compat_args: Option<Vec<bool>>,
         gas_charger: &mut GasCharger,
         tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
@@ -335,7 +378,7 @@ mod checked {
         Result<Mode::ExecutionResults, ExecutionError>,
         Vec<ExecutionTiming>,
     ) {
-        gas_charger.smash_gas(temporary_store);
+        gas_charger.smash_gas(&mut tx_ctx.borrow_mut(), temporary_store);
 
         // At this point no charges have been applied yet
         debug_assert!(
@@ -365,7 +408,8 @@ mod checked {
                             store,
                             temporary_store,
                             transaction_kind,
-                            tx_ctx,
+                            compat_args,
+                            tx_ctx.clone(),
                             move_vm,
                             gas_charger,
                             protocol_config,
@@ -405,7 +449,8 @@ mod checked {
             Err((e, t)) => (Err(e), t),
         };
 
-        let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
+        let cost_summary =
+            gas_charger.charge_gas(&mut tx_ctx.borrow_mut(), temporary_store, &mut result);
         // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
         // information provided to check_sui_conserved, because we mint rewards, and burn
         // the rebates. We also need to pass in the unmetered_storage_rebate because storage
@@ -416,6 +461,7 @@ mod checked {
         temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
 
         if let Err(e) = run_conservation_checks::<Mode>(
+            &mut tx_ctx.borrow_mut(),
             temporary_store,
             gas_charger,
             digest,
@@ -435,6 +481,7 @@ mod checked {
 
     #[instrument(name = "run_conservation_checks", level = "debug", skip_all)]
     fn run_conservation_checks<Mode: ExecutionMode>(
+        tx_ctx: &mut TxContext,
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
         tx_digest: TransactionDigest,
@@ -470,8 +517,8 @@ mod checked {
                 // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
                 // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
                 result = Err(conservation_err);
-                gas_charger.reset(temporary_store);
-                gas_charger.charge_gas(temporary_store, &mut result);
+                gas_charger.reset(tx_ctx, temporary_store);
+                gas_charger.charge_gas(tx_ctx, temporary_store, &mut result);
                 // check conservation once more
                 if let Err(recovery_err) = {
                     temporary_store
@@ -593,6 +640,7 @@ mod checked {
         store: &dyn BackingStore,
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
+        compat_args: Option<Vec<bool>>,
         tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
@@ -707,7 +755,7 @@ mod checked {
                     store.as_backing_package_store(),
                     tx_ctx,
                     gas_charger,
-                    None,
+                    compat_args,
                     pt,
                     trace_builder_opt,
                 )

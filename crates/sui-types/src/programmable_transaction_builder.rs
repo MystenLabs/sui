@@ -48,6 +48,10 @@ impl ProgrammableTransactionBuilder {
         ProgrammableTransaction { inputs, commands }
     }
 
+    pub fn num_commands(&self) -> usize {
+        self.commands.len()
+    }
+
     pub fn pure_bytes(&mut self, bytes: Vec<u8>, force_separate: bool) -> Argument {
         let arg = if force_separate {
             BuilderArg::ForcedNonUniquePure(self.inputs.len())

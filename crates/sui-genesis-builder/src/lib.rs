@@ -934,6 +934,7 @@ fn create_genesis_transaction(
                 gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,
+                None,
                 signer,
                 genesis_digest,
                 &mut None,

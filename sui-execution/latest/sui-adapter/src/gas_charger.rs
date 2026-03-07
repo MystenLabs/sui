@@ -9,23 +9,21 @@ pub mod checked {
 
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::temporary_store::TemporaryStore;
-    use either::Either;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::base_types::{SequenceNumber, TxContext};
     use sui_types::deny_list_v2::CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
-    use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
+    use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas, get_gas_balance};
     use sui_types::gas_model::gas_predicates::{
         charge_upgrades, dont_charge_budget_on_storage_oog,
     };
+    use sui_types::object::{MoveObject, Object, Owner};
     use sui_types::{
-        accumulator_event::AccumulatorEvent,
         base_types::{ObjectID, ObjectRef, SuiAddress},
         digests::TransactionDigest,
         error::ExecutionError,
         gas_model::tables::GasStatus,
         is_system_package,
-        object::Data,
     };
-    use tracing::trace;
 
     /// Tracks all gas operations for a single transaction.
     /// This is the main entry point for gas accounting.
@@ -50,19 +48,17 @@ pub mod checked {
     #[derive(Debug)]
     pub enum PaymentMethod {
         Unmetered,
-        Coins(Vec<ObjectRef>),
-        AddressBalance(SuiAddress),
+        Metered {
+            primary_coin: Option<ObjectRef>,
+            additional_coins: Vec<ObjectRef>,
+            address_balance_payer: SuiAddress,
+            available_address_balance_gas: u64,
+        },
     }
 
     impl PaymentMethod {
         pub fn is_unmetered(&self) -> bool {
             matches!(self, PaymentMethod::Unmetered)
-        }
-        pub fn is_address_balance(&self) -> bool {
-            matches!(self, PaymentMethod::AddressBalance(_))
-        }
-        pub fn is_coins(&self) -> bool {
-            matches!(self, PaymentMethod::Coins(_))
         }
     }
 
@@ -97,10 +93,12 @@ pub mod checked {
         //       Explore way to remove it.
         pub(crate) fn gas_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
             match &self.payment_method {
-                PaymentMethod::Coins(gas_coins) => Either::Left(gas_coins.iter()),
-                PaymentMethod::AddressBalance(_) | PaymentMethod::Unmetered => {
-                    Either::Right(std::iter::empty())
-                }
+                PaymentMethod::Unmetered => None.iter().chain([].iter()),
+                PaymentMethod::Metered {
+                    primary_coin,
+                    additional_coins,
+                    ..
+                } => primary_coin.iter().chain(additional_coins.iter()),
             }
         }
 
@@ -145,84 +143,91 @@ pub mod checked {
         }
 
         // This function is called when the transaction is about to be executed.
-        // It will smash all gas coins into a single one and set the logical gas coin
-        // to be the first one in the list.
-        // After this call, `gas_coin` will return it id of the gas coin.
-        // This function panics if errors are found while operation on the gas coins.
-        // Transaction and certificate input checks must have insured that all gas coins
+        // It will create a synthesized gas coin and smash all gas sources into it.
+        // After this call, `gas_coin` will return the id of the synthesized gas coin.
+        // This function panics if errors are found while operating on the gas coins.
+        // Transaction and certificate input checks must have ensured that all gas coins
         // are correct.
-        pub fn smash_gas(&mut self, temporary_store: &mut TemporaryStore<'_>) {
-            if let PaymentMethod::Coins(gas_coins) = &mut self.payment_method {
-                let gas_coin_count = gas_coins.len();
-                if gas_coin_count == 0 || (gas_coin_count == 1 && gas_coins[0].0 == ObjectID::ZERO)
-                {
-                    return; // self.smashed_gas_coin is None
-                }
-                // set the first coin to be the transaction only gas coin.
-                // All others will be smashed into this one.
-                let gas_coin_id = gas_coins[0].0;
-                self.smashed_gas_coin = Some(gas_coin_id);
-                if gas_coin_count == 1 {
-                    return;
-                }
+        pub fn smash_gas(
+            &mut self,
+            tx_ctx: &mut TxContext,
+            temporary_store: &mut TemporaryStore<'_>,
+        ) {
+            let PaymentMethod::Metered {
+                primary_coin,
+                additional_coins,
+                available_address_balance_gas,
+                address_balance_payer,
+            } = &mut self.payment_method
+            else {
+                // transaction is unmetered.
+                return;
+            };
 
-                // sum the value of all gas coins
-                let new_balance = gas_coins
+            // 1. Ensure there is a gas coin.
+            let (primary_coin_id, primary_coin_balance) = match primary_coin {
+                Some(primary_coin) => (
+                    primary_coin.0,
+                    temporary_store
+                        .get_gas_coin_value_unsafe(&primary_coin.0)
+                        .unwrap(),
+                ),
+                None => {
+                    let primary_coin_id = tx_ctx.fresh_id();
+
+                    // create object
+                    let primary_gas_object = Object::new_move(
+                        MoveObject::new_gas_coin(SequenceNumber::new(), primary_coin_id, 0),
+                        Owner::AddressOwner(tx_ctx.sender()),
+                        tx_ctx.digest(),
+                    );
+                    temporary_store.create_object(primary_gas_object);
+                    (primary_coin_id, 0)
+                }
+            };
+
+            assert!(primary_coin_id != ObjectID::ZERO);
+
+            // 2. record the primary coin id
+            self.smashed_gas_coin = Some(primary_coin_id);
+
+            // 3. Smash additional coins into the primary coin and delete them.
+            let total_gas_coin_balance = primary_coin_balance
+                + additional_coins
                     .iter()
                     .map(|obj_ref| {
-                        let obj = temporary_store.objects().get(&obj_ref.0).unwrap();
-                        let Data::Move(move_obj) = &obj.data else {
-                            return Err(ExecutionError::invariant_violation(
-                                "Provided non-gas coin object as input for gas!",
-                            ));
-                        };
-                        if !move_obj.type_().is_gas_coin() {
-                            return Err(ExecutionError::invariant_violation(
-                                "Provided non-gas coin object as input for gas!",
-                            ));
-                        }
-                        Ok(move_obj.get_coin_value_unsafe())
+                        // transaction and certificate input checks must have insured that all gas coins
+                        // are valid
+                        temporary_store.get_gas_coin_value_unsafe(&obj_ref.0)
+                            .unwrap_or_else(|_| {
+                                panic!(
+                                    "Invariant violation: non-gas coin object as input for gas in txn {}",
+                                    self.tx_digest
+                                )
+                            })
                     })
-                    .collect::<Result<Vec<u64>, ExecutionError>>()
-                    // transaction and certificate input checks must have insured that all gas coins
-                    // are valid
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Invariant violation: non-gas coin object as input for gas in txn {}",
-                            self.tx_digest
-                        )
-                    })
-                    .iter()
                     .sum();
-                let mut primary_gas_object = temporary_store
-                    .objects()
-                    .get(&gas_coin_id)
-                    // unwrap should be safe because we checked that this exists in `self.objects()` above
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Invariant violation: gas coin not found in store in txn {}",
-                            self.tx_digest
-                        )
-                    })
-                    .clone();
-                // delete all gas objects except the primary_gas_object
-                for (id, _version, _digest) in &gas_coins[1..] {
-                    debug_assert_ne!(*id, primary_gas_object.id());
-                    temporary_store.delete_input_object(id);
-                }
-                primary_gas_object
-                    .data
-                    .try_as_move_mut()
-                    // unwrap should be safe because we checked that the primary gas object was a coin object above.
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Invariant violation: invalid coin object in txn {}",
-                            self.tx_digest
-                        )
-                    })
-                    .set_coin_value_unsafe(new_balance);
-                temporary_store.mutate_input_object(primary_gas_object);
+
+            for (id, _, _) in additional_coins {
+                debug_assert_ne!(*id, primary_coin_id);
+                temporary_store.delete_input_object(id);
             }
+
+            // 4. Sweep address balance funds into primary coin
+            //    Conservation: Charge against address balance is equal to amount minted into coin.
+            temporary_store
+                .charge_address_balance_gas(address_balance_payer, *available_address_balance_gas);
+            let new_balance = total_gas_coin_balance + *available_address_balance_gas;
+
+            // 6. Set the balance of the primary coin.
+            temporary_store
+                .set_gas_coin_value_unsafe(&primary_coin_id, new_balance)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Invariant violation: failed to set gas coin value in txn {}",
+                        self.tx_digest,
+                    )
+                });
         }
 
         //
@@ -293,10 +298,24 @@ pub mod checked {
 
         /// Resets any mutations, deletions, and events recorded in the store, as well as any storage costs and
         /// rebates, then Re-runs gas smashing. Effects on store are now as if we were about to begin execution
-        pub fn reset(&mut self, temporary_store: &mut TemporaryStore<'_>) {
+        pub fn reset(&mut self, tx_ctx: &mut TxContext, temporary_store: &mut TemporaryStore<'_>) {
             temporary_store.drop_writes();
             self.gas_status.reset_storage_cost_and_rebate();
-            self.smash_gas(temporary_store);
+            self.smash_gas(tx_ctx, temporary_store);
+        }
+
+        fn should_write_gas_coin(&self, gas_coin: &Object) -> bool {
+            if let PaymentMethod::Metered {
+                primary_coin,
+                address_balance_payer,
+                ..
+            } = &self.payment_method
+            {
+                primary_coin.is_some()
+                    || gas_coin.owner() != &Owner::AddressOwner(*address_balance_payer)
+            } else {
+                false
+            }
         }
 
         /// Entry point for gas charging.
@@ -311,6 +330,7 @@ pub mod checked {
         ///   re-smash gas, then charge for storage again
         pub fn charge_gas<T>(
             &mut self,
+            tx_ctx: &mut TxContext,
             temporary_store: &mut TemporaryStore<'_>,
             execution_result: &mut Result<T, ExecutionError>,
         ) -> GasCostSummary {
@@ -319,96 +339,84 @@ pub mod checked {
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
 
-            if self.smashed_gas_coin.is_some() || self.payment_method.is_address_balance() {
-                // bucketize computation cost
-                let is_move_abort = execution_result
-                    .as_ref()
-                    .err()
-                    .map(|err| {
-                        matches!(
-                            err.kind(),
-                            sui_types::execution_status::ExecutionFailureStatus::MoveAbort(_, _)
-                        )
-                    })
-                    .unwrap_or(false);
-                // bucketize computation cost
-                if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
-                    && execution_result.is_ok()
-                {
-                    *execution_result = Err(err);
-                }
+            let PaymentMethod::Metered {
+                address_balance_payer,
+                ..
+            } = self.payment_method
+            else {
+                // compute and collect storage charges
+                temporary_store.ensure_active_inputs_mutated();
+                temporary_store.collect_storage_and_rebate(self);
+                return GasCostSummary::default();
+            };
 
-                // On error we need to dump writes, deletes, etc before charging storage gas
-                if execution_result.is_err() {
-                    self.reset(temporary_store);
-                }
+            let gas_coin_id = self.smashed_gas_coin.unwrap();
+            let gas_coin = temporary_store.read_object(&gas_coin_id).unwrap().clone();
+            let write_gas_coin = self.should_write_gas_coin(&gas_coin);
+
+            if write_gas_coin {
+                // Must mutate before storage charging so that storage costs of coin are
+                // updated and charged.
+                temporary_store.mutate_input_object(gas_coin.clone());
+            } else {
+                // Remove from store before charging so we don't charge for storage of the coin.
+                temporary_store.delete_created_object(&gas_coin.id());
+            }
+
+            // bucketize computation cost
+            let is_move_abort = execution_result
+                .as_ref()
+                .err()
+                .map(|err| {
+                    matches!(
+                        err.kind(),
+                        sui_types::execution_status::ExecutionFailureStatus::MoveAbort(_, _)
+                    )
+                })
+                .unwrap_or(false);
+            if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
+                && execution_result.is_ok()
+            {
+                *execution_result = Err(err);
+            }
+
+            // On error we need to dump writes, deletes, etc before charging storage gas
+            if execution_result.is_err() {
+                self.reset(tx_ctx, temporary_store);
             }
 
             // compute and collect storage charges
             temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
 
-            if self.smashed_gas_coin.is_some() {
-                #[skip_checked_arithmetic]
-                trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
-            }
-
-            if self.payment_method.is_unmetered() {
-                return GasCostSummary::default();
-            }
-
-            if execution_result
-                .as_ref()
-                .err()
-                .map(|err| {
-                    matches!(
-                        err.kind(),
-                        sui_types::execution_status::ExecutionFailureStatus::InsufficientFundsForWithdraw
-                    )
-                })
-                .unwrap_or(false)
-                && self.payment_method.is_address_balance() {
-                    // If we don't have enough balance to withdraw, don't charge for gas
-                    // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
-                    return GasCostSummary::default();
-            }
-
-            self.compute_storage_and_rebate(temporary_store, execution_result);
+            // charge storage and rebate
+            self.compute_storage_and_rebate(tx_ctx, temporary_store, execution_result);
             let cost_summary = self.gas_status.summary();
-            let net_change = cost_summary.net_gas_usage();
+            let net_change: i64 = cost_summary.net_gas_usage();
 
-            match self.payment_method {
-                PaymentMethod::AddressBalance(payer_address) => {
-                    if net_change != 0 {
-                        let balance_type = sui_types::balance::Balance::type_tag(
-                            sui_types::gas_coin::GAS::type_tag(),
-                        );
-                        let accumulator_event = AccumulatorEvent::from_balance_change(
-                            payer_address,
-                            balance_type,
-                            net_change,
-                        )
-                        .expect("Failed to create accumulator event for gas balance");
+            // If gas coin is written, re-read it from store to get the version that includes
+            // storage rebate field.
+            let mut gas_coin = if write_gas_coin {
+                temporary_store.read_object(&gas_coin_id).unwrap().clone()
+            } else {
+                gas_coin
+            };
 
-                        temporary_store.add_accumulator_event(accumulator_event);
-                    }
+            deduct_gas(&mut gas_coin, net_change);
 
-                    cost_summary
-                }
-                PaymentMethod::Coins(_) => {
-                    let gas_object_id = self.smashed_gas_coin.unwrap();
-
-                    let mut gas_object =
-                        temporary_store.read_object(&gas_object_id).unwrap().clone();
-                    deduct_gas(&mut gas_object, net_change);
-                    #[skip_checked_arithmetic]
-                    trace!(net_change, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
-
-                    temporary_store.mutate_input_object(gas_object);
-                    cost_summary
-                }
-                PaymentMethod::Unmetered => unreachable!(),
+            // If the primary coin was initially real, or if it was synthesized but
+            // transferred away, then the object must be mutated so it is written
+            // in effects.
+            if write_gas_coin {
+                temporary_store.mutate_input_object(gas_coin);
+            } else {
+                let remaining_balance = get_gas_balance(&gas_coin).unwrap();
+                // gas_coin has been deleted from store, so its remaining balance must be credited to the address balance.
+                temporary_store
+                    .credit_address_balance_gas(&address_balance_payer, remaining_balance);
             }
+
+            cost_summary
         }
 
         /// Calculate total gas cost considering storage and rebate.
@@ -424,23 +432,25 @@ pub mod checked {
         ///     so we charge net (gas_budget - storage_rebates)
         fn compute_storage_and_rebate<T>(
             &mut self,
+            tx_ctx: &mut TxContext,
             temporary_store: &mut TemporaryStore<'_>,
             execution_result: &mut Result<T, ExecutionError>,
         ) {
             if dont_charge_budget_on_storage_oog(self.gas_model_version) {
-                self.handle_storage_and_rebate_v2(temporary_store, execution_result)
+                self.handle_storage_and_rebate_v2(tx_ctx, temporary_store, execution_result)
             } else {
-                self.handle_storage_and_rebate_v1(temporary_store, execution_result)
+                self.handle_storage_and_rebate_v1(tx_ctx, temporary_store, execution_result)
             }
         }
 
         fn handle_storage_and_rebate_v1<T>(
             &mut self,
+            tx_ctx: &mut TxContext,
             temporary_store: &mut TemporaryStore<'_>,
             execution_result: &mut Result<T, ExecutionError>,
         ) {
             if let Err(err) = self.gas_status.charge_storage_and_rebate() {
-                self.reset(temporary_store);
+                self.reset(tx_ctx, temporary_store);
                 self.gas_status.adjust_computation_on_out_of_gas();
                 temporary_store.ensure_active_inputs_mutated();
                 temporary_store.collect_rebate(self);
@@ -452,6 +462,7 @@ pub mod checked {
 
         fn handle_storage_and_rebate_v2<T>(
             &mut self,
+            tx_ctx: &mut TxContext,
             temporary_store: &mut TemporaryStore<'_>,
             execution_result: &mut Result<T, ExecutionError>,
         ) {
@@ -459,13 +470,13 @@ pub mod checked {
                 // we run out of gas charging storage, reset and try charging for storage again.
                 // Input objects are touched and so they have a storage cost
                 // Attempt to charge just for computation + input object storage costs - storage_rebate
-                self.reset(temporary_store);
+                self.reset(tx_ctx, temporary_store);
                 temporary_store.ensure_active_inputs_mutated();
                 temporary_store.collect_storage_and_rebate(self);
                 if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                     // we run out of gas attempting to charge for the input objects exclusively,
                     // deal with this edge case by not charging for storage: we charge (gas_budget - rebates).
-                    self.reset(temporary_store);
+                    self.reset(tx_ctx, temporary_store);
                     self.gas_status.adjust_computation_on_out_of_gas();
                     temporary_store.ensure_active_inputs_mutated();
                     temporary_store.collect_rebate(self);
