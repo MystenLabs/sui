@@ -1,0 +1,18 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_scan_limit_tests.rs
+expression: "result[\"errors\"]"
+---
+[
+  {
+    "message": "Failed to parse \"TransactionFilter\": Scan of 20 checkpoints exceeds maximum of 10. Use afterCheckpoint and beforeCheckpoint or atCheckpoint filters to reduce the range.",
+    "locations": [
+      {
+        "line": 3,
+        "column": 38
+      }
+    ],
+    "path": [
+      "scanTransactions"
+    ]
+  }
+]
