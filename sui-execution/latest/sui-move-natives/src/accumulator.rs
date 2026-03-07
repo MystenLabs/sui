@@ -7,10 +7,9 @@ use crate::{
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
-};
+use move_vm_runtime::execution::{Type, values::Value};
+use move_vm_runtime::native_charge_gas_early_exit;
+use move_vm_runtime::natives::functions::{NativeContext, NativeResult};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::base_types::ObjectID;

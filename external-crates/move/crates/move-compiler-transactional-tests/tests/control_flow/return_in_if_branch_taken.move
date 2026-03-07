@@ -12,10 +12,10 @@ module 0x42::Test {
 }
 
 //# run
-module 0x42::m {
-use 0x42::Test;
+module 0x43::m {
+    use 0x42::Test;
 
-fun main() {
-    assert!(Test::t() == 100, 42);
-}
+    fun main() {
+        assert!(Test::t() == 100, 42);
+    }
 }

@@ -19,12 +19,12 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver},
+    resolver::{ModuleResolver, SerializedPackage},
     runtime_value::{serialize_values, MoveValue},
     u256::U256,
     vm_status::{StatusCode, StatusType},
 };
-use move_vm_types::gas::UnmeteredGasMeter;
+use move_vm_types::{data_store::LinkageResolver, gas::UnmeteredGasMeter};
 
 fn make_module_with_function(
     visibility: Visibility,
@@ -156,6 +156,20 @@ impl ModuleResolver for RemoteStore {
     type Error = VMError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.modules.get(module_id).cloned())
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        _ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        unreachable!("Should never be called in v1")
+    }
+
+    fn get_packages<'a>(
+        &self,
+        _ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        unreachable!("Should never be called in v1")
     }
 }
 

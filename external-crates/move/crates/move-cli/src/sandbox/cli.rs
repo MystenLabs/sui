@@ -16,6 +16,7 @@ use move_core_types::{language_storage::TypeTag, runtime_value::MoveValue};
 use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::layout::CompiledPackageLayout;
 use move_unit_test::vm_test_setup::VMTestSetup;
+use move_vm_runtime::shared::types::VersionId;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -31,26 +32,9 @@ pub enum SandboxCommand {
     /// Compile the modules in this package and its dependencies and publish the resulting bytecodes in global storage.
     #[clap(name = "publish")]
     Publish {
-        /// By default, code that might cause breaking changes for bytecode
-        /// linking or data layout compatibility checks will not be published.
-        /// Set this flag to ignore breaking changes checks and publish anyway.
-        #[clap(long = "ignore-breaking-changes")]
-        ignore_breaking_changes: bool,
-        /// If set, publish not only the modules in this package but also
-        /// modules in all its dependencies.
-        #[clap(long = "with-deps")]
-        with_deps: bool,
-        /// If set, all modules at once as a bundle. The default is to publish
-        /// modules sequentially.
-        #[clap(long = "bundle")]
-        bundle: bool,
-        /// Manually specify the publishing order of modules.
-        #[clap(
-            long = "override-ordering",
-            num_args(1..),
-            action = clap::ArgAction::Append,
-        )]
-        override_ordering: Option<Vec<String>>,
+        /// Publish this package at the specified address.
+        #[clap(long = "publish-at")]
+        at: Option<VersionId>,
     },
     /// Run a Move script that reads/writes resources stored on disk in `storage-dir`.
     /// The script must be defined in the package.
@@ -186,12 +170,7 @@ impl SandboxCommand {
         storage_dir: &Path,
     ) -> Result<()> {
         match self {
-            SandboxCommand::Publish {
-                ignore_breaking_changes,
-                with_deps,
-                bundle,
-                override_ordering,
-            } => {
+            SandboxCommand::Publish { at } => {
                 let context =
                     PackageContext::new::<F>(&move_args.package_path, &move_args.build_config)
                         .await?;
@@ -200,10 +179,7 @@ impl SandboxCommand {
                     vm_test_setup,
                     &state,
                     context.package(),
-                    *ignore_breaking_changes,
-                    *with_deps,
-                    *bundle,
-                    override_ordering.as_ref().map(|o| o.as_slice()),
+                    at,
                     move_args.verbose,
                 )
             }

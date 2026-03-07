@@ -13,14 +13,13 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
-    effects::ChangeSet,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    resolver::MoveResolver,
     runtime_value as R,
 };
 use move_vm_types::{
-    data_store::DataStore,
+    data_store::MoveResolver,
+    effects::ChangeSet,
     gas::GasMeter,
     loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
 };
@@ -269,11 +268,6 @@ impl<'r, S: MoveResolver> Session<'r, '_, S> {
 
     pub fn get_resolver_mut(&mut self) -> &mut S {
         self.data_cache.get_remote_resolver_mut()
-    }
-
-    /// Gets the underlying data store
-    pub fn get_data_store(&mut self) -> &mut dyn DataStore {
-        &mut self.data_cache
     }
 
     /// Gets the underlying native extensions.

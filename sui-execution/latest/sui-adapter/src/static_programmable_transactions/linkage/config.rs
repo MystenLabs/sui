@@ -68,8 +68,8 @@ impl LinkageConfig {
                 {
                     use crate::static_programmable_transactions::linkage::resolution::get_package;
                     let package = get_package(id, store)?;
-                    debug_assert_eq!(package.id(), *id);
-                    debug_assert_eq!(package.original_package_id(), *id);
+                    debug_assert_eq!(package.version_id(), **id);
+                    debug_assert_eq!(package.original_id(), **id);
                 }
                 add_and_unify(id, store, &mut resolution_table, VersionConstraint::exact)?;
             }

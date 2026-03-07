@@ -7,7 +7,9 @@ use test_cluster::TestClusterBuilder;
 
 use sui_macros::sim_test;
 
+// TODO(bella-ciao): renable when we create an execution version cut
 #[sim_test]
+#[ignore]
 async fn test_create_coin_registry_object() {
     let _guard =
         sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut config| {

@@ -12,34 +12,57 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow.workspace = true
+bcs.workspace = true
 better_any.workspace = true
+bumpalo.workspace = true
+dashmap.workspace = true
 fail.workspace = true
+hex.workspace = true
+indexmap.workspace = true
+lasso.workspace = true
+lru.workspace = true
 parking_lot.workspace = true
-tracing.workspace = true
+petgraph.workspace = true
+quick_cache.workspace = true
+serde.workspace = true
+sha2.workspace = true
+sha3.workspace = true
 smallvec.workspace = true
+tracing.workspace = true
 
 # referred to via path for execution versioning
+move-abstract-interpreter.workspace = true
+move-binary-format.workspace = true
 move-bytecode-verifier = { path = "../move-bytecode-verifier" }
 move-core-types.workspace = true
-move-vm-config.workspace = true
-# referred to via path for execution versioning
-move-vm-types = { path = "../move-vm-types" }
-move-binary-format.workspace = true
 move-trace-format.workspace = true
+move-vm-config.workspace = true
+move-vm-profiler.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
 hex.workspace = true
 proptest.workspace = true
 move-ir-compiler.workspace = true
+move-ir-to-bytecode.workspace = true
 move-compiler.workspace = true
+memory-stats.workspace = true
+tempfile.workspace = true
+move-stdlib.workspace = true
+move-proc-macros.workspace = true
+insta.workspace = true
+
+[lints.clippy]
+indexing_slicing = "warn"
 
 [features]
 default = []
-fuzzing = ["move-vm-types/fuzzing"]
+fuzzing = []
 failpoints = ["fail/failpoints"]
 testing = []
 lazy_natives = []
+tiered-gas = []
 tracing = [
     "move-vm-config/tracing",
 ]

@@ -11,10 +11,10 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
 };
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+use move_vm_runtime::{
+    execution::Type, execution::values::Value, natives::functions::NativeResult, pop_arg,
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{
@@ -60,7 +60,7 @@ pub fn receive_object_internal(
     let child_receiver_object_id = args.pop_back().unwrap();
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
-    let child_id: ObjectID = get_receiver_object_id(child_receiver_object_id.copy_value().unwrap())
+    let child_id: ObjectID = get_receiver_object_id(child_receiver_object_id.copy_value())
         .unwrap()
         .value_as::<AccountAddress>()
         .unwrap()

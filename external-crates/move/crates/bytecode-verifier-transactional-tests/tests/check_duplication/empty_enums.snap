@@ -8,7 +8,7 @@ task 0, lines 1-6:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::EmptyStruct'. Got VMError: {
     major_status: MALFORMED,
     sub_status: None,
-    location: undefined,
+    location: 0x1,
     indices: [],
     offsets: [],
     message: "Enum type with no variants",

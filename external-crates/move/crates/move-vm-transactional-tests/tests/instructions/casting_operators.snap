@@ -330,7 +330,7 @@ Error: Function execution failed with VMError: {
     location: 0x3b::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "Cannot cast u128(18446744073709551647) to u32",
+    message: "Cannot cast u256(18446744073709551647) to u32",
 }
 
 task 36, lines 526-535:
@@ -352,5 +352,5 @@ Error: Function execution failed with VMError: {
     location: 0x3d::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "Cannot cast u128(57896044618658097711785492504343953926634992332820282019728792003956564819967) to u32",
+    message: "Cannot cast u256(57896044618658097711785492504343953926634992332820282019728792003956564819967) to u32",
 }

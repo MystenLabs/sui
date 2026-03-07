@@ -51,18 +51,14 @@ exclude = [
   "external-crates/move/crates/move-stackless-bytecode",
   "external-crates/move/crates/move-stackless-bytecode-2",
   "external-crates/move/crates/move-stdlib",
-  "external-crates/move/crates/move-stdlib-natives",
   "external-crates/move/crates/move-symbol-pool",
   "external-crates/move/crates/move-transactional-test-runner",
   "external-crates/move/crates/move-trace-format",
   "external-crates/move/crates/move-unit-test",
   "external-crates/move/crates/move-vm-config",
-  "external-crates/move/crates/move-vm-integration-tests",
   "external-crates/move/crates/move-vm-profiler",
   "external-crates/move/crates/move-vm-runtime",
-  "external-crates/move/crates/move-vm-test-utils",
   "external-crates/move/crates/move-vm-transactional-tests",
-  "external-crates/move/crates/move-vm-types",
   "external-crates/move/crates/serializer-tests",
   "external-crates/move/crates/test-generation",
   "external-crates/move/move-execution/v0/crates/move-bytecode-verifier",
@@ -622,9 +618,6 @@ move-package-alt = { path = "external-crates/move/crates/move-package-alt" }
 move-package-alt-compilation = { path = "external-crates/move/crates/move-package-alt-compilation" }
 move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
 move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
-move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
-  "tiered-gas",
-] }
 move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
@@ -648,6 +641,7 @@ passkey-client = { version = "0.4.0" }
 passkey-authenticator = { version = "0.4.0" }
 coset = "0.3"
 p256 = { version = "0.13.2", features = ["ecdsa"] }
+quick_cache = { version = "0.6.18", features = ["stats"] }
 
 p384 = { version = "0.13.0", default-features = false, features = [
   "ecdsa",

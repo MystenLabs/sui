@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_mode::ExecutionMode;
-use crate::programmable_transactions::execution::check_private_generics_v2;
 use crate::sp;
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
-use move_binary_format::{CompiledModule, file_format::Visibility};
+use move_binary_format::file_format::Visibility;
+use move_core_types::identifier::IdentStr;
+use move_core_types::language_storage::ModuleId;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
+use sui_verifier::private_generics_verifier_v2;
 
 /// Checks the following
 /// - valid visibility for move function calls
@@ -51,7 +53,7 @@ fn move_call<Mode: ExecutionMode>(env: &Env, call: &T::MoveCall) -> Result<(), E
         arguments: _,
     } = call;
     check_signature::<Mode>(env, function)?;
-    check_private_generics_v2(&function.runtime_id, function.name.as_ident_str())?;
+    check_private_generics_v2(&function.original_mid, function.name.as_ident_str())?;
     check_visibility::<Mode>(env, function)?;
     Ok(())
 }
@@ -87,21 +89,11 @@ fn check_signature<Mode: ExecutionMode>(
 }
 
 fn check_visibility<Mode: ExecutionMode>(
-    env: &Env,
+    _env: &Env,
     function: &T::LoadedFunction,
 ) -> Result<(), ExecutionError> {
-    let module = env.module_definition(&function.runtime_id, &function.linkage)?;
-    let module: &CompiledModule = module.as_ref();
-    let Some((_index, fdef)) = module.find_function_def_by_name(function.name.as_str()) else {
-        invariant_violation!(
-            "Could not resolve function '{}' in module {}. \
-            This should have been checked when linking",
-            &function.name,
-            module.self_id(),
-        );
-    };
-    let visibility = fdef.visibility;
-    let is_entry = fdef.is_entry;
+    let visibility = function.visibility;
+    let is_entry = function.is_entry;
     match (visibility, is_entry) {
         // can call entry
         (Visibility::Private | Visibility::Friend, true) => (),
@@ -120,4 +112,41 @@ fn check_visibility<Mode: ExecutionMode>(
         }
     };
     Ok(())
+}
+
+fn check_private_generics_v2(
+    callee_package: &ModuleId,
+    callee_function: &IdentStr,
+) -> Result<(), ExecutionError> {
+    let callee_address = *callee_package.address();
+    let callee_module = callee_package.name();
+    let callee = (callee_address, callee_module, callee_function);
+    let Some((_f, internal_type_parameters)) = private_generics_verifier_v2::FUNCTIONS_TO_CHECK
+        .iter()
+        .find(|(f, _)| &callee == f)
+    else {
+        return Ok(());
+    };
+    // If we find an internal type parameter, the call is automatically invalid--since we
+    // are not in a module and cannot define any types to satisfy the internal constraint.
+    let Some((internal_idx, _)) = internal_type_parameters
+        .iter()
+        .enumerate()
+        .find(|(_, is_internal)| **is_internal)
+    else {
+        // No `internal` type parameters, so it is ok to call
+        return Ok(());
+    };
+    let callee_package_name = private_generics_verifier_v2::callee_package_name(&callee_address);
+    let help =
+        private_generics_verifier_v2::help_message(&callee_address, callee_module, callee_function);
+    let msg = format!(
+        "Cannot directly call function '{}::{}::{}' since type parameter #{} can \
+                 only be instantiated with types defined within the caller's module.{}",
+        callee_package_name, callee_module, callee_function, internal_idx, help,
+    );
+    Err(ExecutionError::new_with_source(
+        ExecutionErrorKind::NonEntryFunctionInvoked,
+        msg,
+    ))
 }

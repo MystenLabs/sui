@@ -1,0 +1,289 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::{
+    shared::{
+        linkage_context::LinkageContext,
+        types::{DefiningTypeId, OriginalId, VersionId},
+    },
+    validation::verification::ast as verif_ast,
+};
+use anyhow::Result;
+use indexmap::IndexMap;
+use move_binary_format::CompiledModule;
+use move_core_types::{
+    account_address::AccountAddress,
+    identifier::Identifier,
+    resolver::{IntraPackageName, ModuleResolver, SerializedPackage},
+};
+use std::collections::BTreeMap;
+
+// -------------------------------------------------------------------------------------------------
+// Types
+// -------------------------------------------------------------------------------------------------
+
+/// Simple in-memory representation of packages. This is a wrapper around `SerializedPackage` to
+/// allow for additional helper methods for testing purposes.
+#[derive(Debug, Clone)]
+pub struct StoredPackage(pub SerializedPackage);
+
+/// Simple in-memory storage that can be used as a Move VM storage backend for testing purposes.
+#[derive(Debug, Clone)]
+pub struct InMemoryStorage {
+    accounts: BTreeMap<VersionId, StoredPackage>,
+}
+
+// -------------------------------------------------------------------------------------------------
+// Impls
+// -------------------------------------------------------------------------------------------------
+
+impl StoredPackage {
+    fn empty(original_id: OriginalId, version_id: VersionId, version: u64) -> Self {
+        Self(SerializedPackage {
+            version_id,
+            original_id,
+            modules: BTreeMap::new(),
+            linkage_table: BTreeMap::new(),
+            type_origin_table: IndexMap::new(),
+            version,
+        })
+    }
+
+    pub fn from_modules_for_testing(
+        version_id: VersionId,
+        modules: Vec<CompiledModule>,
+    ) -> Result<Self> {
+        assert!(!modules.is_empty());
+        // Map the modules in this package to `version_id` and generate the identity linkage for
+        // all deps.
+        let mut linkage_table = BTreeMap::new();
+        let type_origin_table = generate_type_origins(version_id, &modules);
+        let modules: BTreeMap<_, _> = modules
+            .into_iter()
+            .map(|m| {
+                let mut bin = vec![];
+                linkage_table.insert(*m.self_id().address(), version_id);
+                for addr in m
+                    .immediate_dependencies()
+                    .iter()
+                    .map(|dep| *dep.address())
+                    .filter(|addr| *addr != *m.self_id().address())
+                {
+                    linkage_table.insert(addr, addr);
+                }
+                m.serialize_with_version(m.version, &mut bin)?;
+                Ok((m.self_id().name().to_owned(), bin))
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(Self(SerializedPackage {
+            version_id,
+            original_id: Self::original_id(&linkage_table, version_id),
+            modules,
+            linkage_table,
+            type_origin_table,
+            version: 0,
+        }))
+    }
+
+    pub fn from_module_for_testing_with_linkage(
+        version_id: VersionId,
+        linkage_context: LinkageContext,
+        modules: Vec<CompiledModule>,
+    ) -> Result<Self> {
+        let type_origin_table = generate_type_origins(version_id, &modules);
+        let modules: BTreeMap<_, _> = modules
+            .into_iter()
+            .map(|m| {
+                let mut bin = vec![];
+                m.serialize_with_version(m.version, &mut bin)?;
+                Ok((m.self_id().name().to_owned(), bin))
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(Self(SerializedPackage {
+            version_id,
+            original_id: Self::original_id(&linkage_context.linkage_table, version_id),
+            modules,
+            linkage_table: linkage_context.linkage_table,
+            type_origin_table,
+            version: 0,
+        }))
+    }
+
+    pub fn from_verified_package(verified_package: verif_ast::Package) -> Self {
+        Self(SerializedPackage {
+            version_id: verified_package.version_id,
+            original_id: verified_package.original_id,
+            modules: verified_package
+                .as_modules()
+                .into_iter()
+                .map(|m| {
+                    let dm = m.to_compiled_module();
+                    let name = dm.self_id().name().to_owned();
+                    let mut serialized = vec![];
+                    dm.serialize_with_version(dm.version, &mut serialized)
+                        .unwrap();
+                    (name, serialized)
+                })
+                .collect(),
+            linkage_table: verified_package.linkage_table,
+            type_origin_table: verified_package.type_origin_table,
+            version: verified_package.version,
+        })
+    }
+
+    pub fn into_serialized_package(self) -> SerializedPackage {
+        self.0
+    }
+
+    fn original_id(linkage: &BTreeMap<OriginalId, VersionId>, version_id: VersionId) -> OriginalId {
+        linkage
+            .iter()
+            .find_map(|(k, v)| if *v == version_id { Some(*k) } else { None })
+            .expect("address not found in linkage table")
+    }
+}
+
+pub fn generate_type_origins(
+    version_id: VersionId,
+    modules: &[CompiledModule],
+) -> IndexMap<IntraPackageName, DefiningTypeId> {
+    modules
+        .iter()
+        .flat_map(|module| {
+            module
+                .struct_defs()
+                .iter()
+                .map(|def| {
+                    let mid = module.self_id();
+                    let handle = module.datatype_handle_at(def.struct_handle);
+                    let struct_name = module.identifier_at(handle.name).to_owned();
+                    (
+                        IntraPackageName {
+                            module_name: mid.name().to_owned(),
+                            type_name: struct_name.clone(),
+                        },
+                        version_id,
+                    )
+                })
+                .chain(module.enum_defs().iter().map(|def| {
+                    let mid = module.self_id();
+                    let handle = module.datatype_handle_at(def.enum_handle);
+                    let enum_name = module.identifier_at(handle.name);
+                    (
+                        IntraPackageName {
+                            module_name: mid.name().to_owned(),
+                            type_name: enum_name.to_owned(),
+                        },
+                        version_id,
+                    )
+                }))
+        })
+        .collect()
+}
+
+impl InMemoryStorage {
+    pub fn new() -> Self {
+        Self {
+            accounts: BTreeMap::new(),
+        }
+    }
+
+    pub fn publish_package(&mut self, stored_package: StoredPackage) {
+        self.accounts
+            .insert(stored_package.0.version_id, stored_package);
+    }
+
+    pub fn publish_or_overwrite_module(
+        &mut self,
+        original_id: OriginalId,
+        version_id: VersionId,
+        module_name: Identifier,
+        blob: Vec<u8>,
+    ) {
+        let account = self
+            .accounts
+            .entry(version_id)
+            .or_insert_with(|| StoredPackage::empty(original_id, version_id, 0));
+        account.0.modules.insert(module_name, blob);
+    }
+
+    pub fn debug_dump(&self) {
+        for (version_id, stored_package) in &self.accounts {
+            println!("Version ID: {:?}", version_id);
+            println!("Linkage context: {:?}", stored_package.0.linkage_table);
+            println!("Type origins: {:?}", stored_package.0.type_origin_table);
+            println!("Modules:");
+            for module_name in stored_package.0.modules.keys() {
+                println!("\tModule: {:?}", module_name);
+            }
+        }
+    }
+}
+
+// -----------------------------------------------
+// Module Resolvers
+// -----------------------------------------------
+
+impl ModuleResolver for InMemoryStorage {
+    type Error = ();
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        self.get_packages(ids.iter()).map(|packages| {
+            packages
+                .try_into()
+                .expect("Impossible to get a length mismatch")
+        })
+    }
+
+    fn get_packages<'a>(
+        &self,
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.into_iter()
+            .map(|version_id| {
+                if let Some(stored_package) = self.accounts.get(version_id) {
+                    Ok(Some(stored_package.clone().into_serialized_package()))
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect::<Result<Vec<_>, Self::Error>>()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn original_id_returns_key_not_value() {
+        let orig = AccountAddress::new([0xAA; 32]);
+        let ver = AccountAddress::new([0xBB; 32]);
+        let mut linkage = BTreeMap::new();
+        linkage.insert(orig, ver);
+
+        let result = StoredPackage::original_id(&linkage, ver);
+        assert_eq!(
+            result, orig,
+            "original_id should return the OriginalId (key), not the VersionId (value)"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "address not found in linkage table")]
+    fn original_id_panics_when_version_id_not_found() {
+        let orig = AccountAddress::new([0xAA; 32]);
+        let ver = AccountAddress::new([0xBB; 32]);
+        let missing = AccountAddress::new([0xCC; 32]);
+        let mut linkage = BTreeMap::new();
+        linkage.insert(orig, ver);
+
+        StoredPackage::original_id(&linkage, missing);
+    }
+}

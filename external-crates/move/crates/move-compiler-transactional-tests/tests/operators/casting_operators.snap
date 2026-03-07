@@ -275,7 +275,7 @@ Error: Function execution failed with VMError: {
     location: 0x20::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "Cannot cast u128(115792089237316195423570985008687907853269984665640564039457584007913129639) to u32",
+    message: "Cannot cast u256(115792089237316195423570985008687907853269984665640564039457584007913129639) to u32",
 }
 
 task 32, lines 393-399:

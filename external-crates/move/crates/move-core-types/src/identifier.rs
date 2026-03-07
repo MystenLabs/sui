@@ -155,6 +155,11 @@ impl Identifier {
     pub fn into_bytes(self) -> Vec<u8> {
         self.into_string().into_bytes()
     }
+
+    /// Returns a borrow of the underlying string.
+    pub fn borrow_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl FromStr for Identifier {
@@ -241,6 +246,11 @@ impl IdentStr {
     /// TODO (ade): use macro to enfornce determinism
     pub fn abstract_size_for_gas_metering(&self) -> AbstractMemorySize {
         AbstractMemorySize::new((self.len()) as u64)
+    }
+
+    /// Returns a borrow of the underlying string.
+    pub fn borrow_str(&self) -> &str {
+        &self.0
     }
 }
 

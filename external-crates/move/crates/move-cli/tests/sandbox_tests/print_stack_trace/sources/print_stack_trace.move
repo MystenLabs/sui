@@ -1,4 +1,4 @@
-module 0x42::print_stack_trace {
+module 0x7::print_stack_trace {
     use std::debug;
     use 0x7::N;
 

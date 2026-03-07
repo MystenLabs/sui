@@ -12,7 +12,6 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 bcs.workspace = true
-colored.workspace = true
 dirs-next.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["serde"] }

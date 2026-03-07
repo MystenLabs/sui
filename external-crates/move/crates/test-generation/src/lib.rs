@@ -28,16 +28,17 @@ use move_binary_format::{
 use move_bytecode_verifier::verify_module_unmetered;
 use move_compiler::Compiler;
 use move_core_types::{
-    account_address::AccountAddress,
-    effects::{ChangeSet, Op},
-    language_storage::TypeTag,
-    resolver::MoveResolver,
-    runtime_value::MoveValue,
-    vm_status::StatusCode,
+    account_address::AccountAddress, language_storage::TypeTag, vm_status::StatusCode,
 };
-use move_vm_runtime::move_vm::MoveVM;
-use move_vm_test_utils::{DeltaStorage, InMemoryStorage};
-use move_vm_types::gas::UnmeteredGasMeter;
+use move_vm_runtime::{
+    dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage},
+    execution::values::{Value, Vector},
+    runtime::MoveRuntime,
+};
+use move_vm_runtime::{
+    dev_utils::{storage::InMemoryStorage, vm_test_adapter::VMTestAdapter},
+    shared::gas::UnmeteredGasMeter,
+};
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use tracing::{debug, error, info};
 
@@ -64,11 +65,10 @@ static STORAGE_WITH_MOVE_STDLIB: LazyLock<InMemoryStorage> = LazyLock::new(|| {
     let compiled_modules = compiled_units
         .into_iter()
         .map(|annot_module| annot_module.named_module.module);
-    for module in compiled_modules {
-        let mut blob = vec![];
-        module.serialize(&mut blob).unwrap();
-        storage.publish_or_overwrite_module(module.self_id(), blob);
-    }
+    let pkg =
+        StoredPackage::from_modules_for_testing(AccountAddress::ONE, compiled_modules.collect())
+            .unwrap();
+    storage.publish_package(pkg);
     storage
 });
 
@@ -82,18 +82,18 @@ fn run_vm(module: CompiledModule) -> Result<(), VMError> {
         let sig_idx = module.function_handle_at(handle).parameters;
         module.signature_at(sig_idx).clone()
     };
-    let main_args: Vec<Vec<u8>> = function_signature
+    let main_args: Vec<Value> = function_signature
         .0
         .iter()
         .map(|sig_tok| match sig_tok {
-            SignatureToken::Address => MoveValue::Address(AccountAddress::ZERO)
-                .simple_serialize()
-                .unwrap(),
-            SignatureToken::U64 => MoveValue::U64(0).simple_serialize().unwrap(),
-            SignatureToken::Bool => MoveValue::Bool(true).simple_serialize().unwrap(),
-            SignatureToken::Vector(inner_tok) if **inner_tok == SignatureToken::U8 => {
-                MoveValue::Vector(vec![]).simple_serialize().unwrap()
-            }
+            SignatureToken::Address => Value::Address(Box::new(AccountAddress::ZERO)),
+            SignatureToken::U64 => Value::U64(0),
+            SignatureToken::Bool => Value::Bool(true),
+            SignatureToken::Vector(inner_tok) if **inner_tok == SignatureToken::U8 => Vector::pack(
+                move_vm_runtime::execution::values::VectorSpecialization::U8,
+                vec![],
+            )
+            .unwrap(),
             SignatureToken::Vector(_)
             | SignatureToken::U8
             | SignatureToken::U128
@@ -109,13 +109,7 @@ fn run_vm(module: CompiledModule) -> Result<(), VMError> {
         })
         .collect();
 
-    execute_function_in_module(
-        module,
-        entry_idx,
-        vec![],
-        main_args,
-        &*STORAGE_WITH_MOVE_STDLIB,
-    )
+    execute_function_in_module(module, entry_idx, vec![], main_args)
 }
 
 /// Execute the first function in a module
@@ -123,31 +117,36 @@ fn execute_function_in_module(
     module: CompiledModule,
     idx: FunctionDefinitionIndex,
     ty_arg_tags: Vec<TypeTag>,
-    args: Vec<Vec<u8>>,
-    storage: &impl MoveResolver,
+    args: Vec<Value>,
 ) -> Result<(), VMError> {
     let module_id = module.self_id();
     let entry_name = {
         let entry_func_idx = module.function_def_at(idx).function;
         let entry_name_idx = module.function_handle_at(entry_func_idx).name;
-        module.identifier_at(entry_name_idx)
+        module.identifier_at(entry_name_idx).to_owned()
     };
     {
-        let vm = MoveVM::new(move_stdlib_natives::all_natives(
-            AccountAddress::from_hex_literal("0x1").unwrap(),
-            move_stdlib_natives::GasParameters::zeros(),
-            /* silent debug */ true,
-        ))
-        .unwrap();
+        let move_runtime = MoveRuntime::new_with_default_config(
+            move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
+                AccountAddress::from_hex_literal("0x1").unwrap(),
+                move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
+                /* silent debug */ true,
+            )
+            .unwrap(),
+        );
 
-        let mut changeset = ChangeSet::new();
-        let mut blob = vec![];
-        module.serialize(&mut blob).unwrap();
-        changeset
-            .add_module_op(module_id.clone(), Op::New(blob))
-            .unwrap();
-        let delta_storage = DeltaStorage::new(storage, &changeset);
-        let mut sess = vm.new_session(&delta_storage);
+        let mut vm = InMemoryTestAdapter::new_with_runtime_and_storage(
+            move_runtime,
+            STORAGE_WITH_MOVE_STDLIB.clone(),
+        );
+
+        let pkg =
+            StoredPackage::from_modules_for_testing(*module.self_id().address(), vec![module])
+                .unwrap();
+        vm.insert_package_into_storage(pkg);
+
+        let linkage = vm.get_linkage_context(*module_id.address()).unwrap();
+        let mut sess = vm.make_vm(linkage).unwrap();
 
         let ty_args = ty_arg_tags
             .into_iter()
@@ -156,7 +155,7 @@ fn execute_function_in_module(
 
         sess.execute_function_bypass_visibility(
             &module_id,
-            entry_name,
+            &entry_name,
             ty_args,
             args,
             &mut UnmeteredGasMeter,

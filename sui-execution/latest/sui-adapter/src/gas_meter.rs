@@ -8,10 +8,12 @@ use move_core_types::{
     gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes},
     language_storage::ModuleId,
 };
-use move_vm_types::{
-    gas::{GasMeter, SimpleInstruction},
-    loaded_data::runtime_types::Type,
-    views::{SizeConfig, TypeView, ValueView},
+use move_vm_runtime::{
+    execution::Type,
+    shared::{
+        gas::{GasMeter, SimpleInstruction},
+        views::{SizeConfig, ValueView},
+    },
 };
 use sui_types::gas_model::{
     gas_predicates::{native_function_threshold_exceeded, use_legacy_abstract_size},
@@ -124,7 +126,6 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_native_function_before_execution(
         &mut self,
-        _ty_args: impl ExactSizeIterator<Item = impl TypeView>,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         // Determine the number of pops that are going to be needed for this function call, and
@@ -163,7 +164,6 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         &mut self,
         _module_id: &ModuleId,
         _func_name: &str,
-        _ty_args: impl ExactSizeIterator<Item = impl TypeView>,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
@@ -303,7 +303,6 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_vec_pack<'a>(
         &mut self,
-        _ty: impl TypeView + 'a,
         args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         // We will perform `num_args` number of pops.
@@ -313,17 +312,12 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         self.0.charge(1, 1, num_args, VEC_SIZE.into(), 0)
     }
 
-    fn charge_vec_len(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
+    fn charge_vec_len(&mut self) -> PartialVMResult<()> {
         self.0
             .charge(1, 1, 1, Type::U64.size().into(), REFERENCE_SIZE.into())
     }
 
-    fn charge_vec_borrow(
-        &mut self,
-        _is_mut: bool,
-        _ty: impl TypeView,
-        _is_success: bool,
-    ) -> PartialVMResult<()> {
+    fn charge_vec_borrow(&mut self, _is_mut: bool, _is_success: bool) -> PartialVMResult<()> {
         self.0.charge(
             1,
             1,
@@ -333,26 +327,17 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         )
     }
 
-    fn charge_vec_push_back(
-        &mut self,
-        _ty: impl TypeView,
-        _val: impl ValueView,
-    ) -> PartialVMResult<()> {
+    fn charge_vec_push_back(&mut self, _val: impl ValueView) -> PartialVMResult<()> {
         // The value was already on the stack, so we aren't increasing the number of bytes on the stack.
         self.0.charge(1, 0, 2, 0, REFERENCE_SIZE.into())
     }
 
-    fn charge_vec_pop_back(
-        &mut self,
-        _ty: impl TypeView,
-        _val: Option<impl ValueView>,
-    ) -> PartialVMResult<()> {
+    fn charge_vec_pop_back(&mut self, _val: Option<impl ValueView>) -> PartialVMResult<()> {
         self.0.charge(1, 1, 1, 0, REFERENCE_SIZE.into())
     }
 
     fn charge_vec_unpack(
         &mut self,
-        _ty: impl TypeView,
         expect_num_elements: NumArgs,
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
@@ -362,7 +347,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         self.0.charge(1, pushes, 1, 0, VEC_SIZE.into())
     }
 
-    fn charge_vec_swap(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
+    fn charge_vec_swap(&mut self) -> PartialVMResult<()> {
         let size_decrease = REFERENCE_SIZE + Type::U64.size() + Type::U64.size();
         let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
             (0, 3)
@@ -422,10 +407,6 @@ fn reduce_stack_size(gas_model_version: u64) -> bool {
     gas_model_version > 10
 }
 
-fn enable_fine_grained_value_size(gas_model_version: u64) -> bool {
-    gas_model_version > 10
-}
-
 fn size_config_for_gas_model_version(
     gas_model_version: u64,
     should_traverse_refs: bool,
@@ -434,19 +415,16 @@ fn size_config_for_gas_model_version(
         SizeConfig {
             traverse_references: false,
             include_vector_size: false,
-            fine_grained_value_size: false,
         }
     } else if should_traverse_refs {
         SizeConfig {
             traverse_references: enable_traverse_refs(gas_model_version),
             include_vector_size: true,
-            fine_grained_value_size: enable_fine_grained_value_size(gas_model_version),
         }
     } else {
         SizeConfig {
             traverse_references: false,
             include_vector_size: true,
-            fine_grained_value_size: enable_fine_grained_value_size(gas_model_version),
         }
     }
 }

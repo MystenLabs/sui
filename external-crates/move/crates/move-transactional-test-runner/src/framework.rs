@@ -5,8 +5,8 @@
 #![forbid(unsafe_code)]
 
 use crate::tasks::{
-    InitCommand, PrintBytecodeCommand, PublishCommand, RunCommand, SyntaxChoice, TaskCommand,
-    TaskInput, taskify,
+    InitCommand, PrintBytecodeCommand, PublishAndCallsCommand, PublishCommand, PublishRunCommand,
+    RunCommand, SyntaxChoice, TaskCommand, TaskInput, taskify,
 };
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
@@ -38,7 +38,7 @@ use move_core_types::{
 };
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 use move_symbol_pool::Symbol;
-use move_vm_runtime::session::SerializedReturnValues;
+use move_vm_runtime::dev_utils::vm_arguments::ValueFrame;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::{Debug, Write as FmtWrite},
@@ -132,6 +132,22 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
     ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)>;
+    async fn publish_modules_with_calls(
+        &mut self,
+        modules: Vec<MaybeNamedCompiledModule>,
+        calls: Vec<(
+            ModuleId,
+            Identifier,
+            Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>,
+        )>,
+        signers: Vec<ParsedAddress>,
+        gas_budget: Option<u64>,
+        extra_args: Self::ExtraPublishArgs,
+    ) -> Result<(
+        Option<String>,
+        Vec<MaybeNamedCompiledModule>,
+        Vec<ValueFrame>,
+    )>;
     async fn call_function(
         &mut self,
         module: &ModuleId,
@@ -141,7 +157,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         args: Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues)>;
+    ) -> Result<(Option<String>, ValueFrame)>;
 
     async fn handle_subcommand(
         &mut self,
@@ -197,7 +213,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
             TaskCommand::PrintBytecode(PrintBytecodeCommand { syntax }) => {
                 // TODO this should really work over published modules, not source
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
-                let (warnings_opt, output, _data, modules) = compile_any(
+                let (warnings_opt, _data, (output, modules)) = compile_any(
                     self,
                     "publish",
                     syntax,
@@ -228,9 +244,10 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                 })?;
                 Ok(output)
             }
+
             TaskCommand::Publish(PublishCommand { gas_budget, syntax }, extra_args) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
-                let (warnings_opt, output, data, modules) = compile_any(
+                let (warnings_opt, data, (output, modules)) = compile_any(
                     self,
                     "publish",
                     syntax,
@@ -246,6 +263,61 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                 store_modules(self, syntax, data, modules);
                 Ok(merge_output(warnings_opt, output))
             }
+
+            TaskCommand::PublishAndCall(
+                PublishAndCallsCommand {
+                    gas_budget,
+                    syntax,
+                    signers,
+                    calls,
+                },
+                extra_args,
+            ) => {
+                let syntax = syntax.unwrap_or_else(|| self.default_syntax());
+                let calls = PublishRunCommand::<Self::ExtraValueArgs>::from_calls(calls)?;
+                let calls = calls
+                    .into_iter()
+                    .map(|run_command| {
+                        let PublishRunCommand {
+                            // type_args: _,
+                            args,
+                            name,
+                        } = run_command;
+                        println!("name: {name:#?}");
+                        let (raw_addr, module_name, function) = name;
+                        let addr = self.compiled_state().resolve_address(&raw_addr);
+                        let module_id = ModuleId::new(addr, module_name);
+                        let function = function.as_ident_str().to_owned();
+                        let args = self.compiled_state().resolve_args(args)?;
+                        let result: anyhow::Result<_> = Ok((module_id, function, args));
+                        result
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+                let (warnings_opt, data, (output, modules, return_values)) = compile_any(
+                    self,
+                    "publish",
+                    syntax,
+                    name,
+                    number,
+                    start_line,
+                    command_lines_stop,
+                    stop_line,
+                    data,
+                    |adapter, modules| {
+                        adapter.publish_modules_with_calls(
+                            modules, calls, signers, gas_budget, extra_args,
+                        )
+                    },
+                )
+                .await?;
+                store_modules(self, syntax, data, modules);
+                let mut output = merge_output(warnings_opt, output);
+                for values in return_values {
+                    output = merge_output(output, display_return_values(values));
+                    output = merge_output(output, Some("\n".to_string()));
+                }
+                Ok(output)
+            }
             TaskCommand::Run(
                 RunCommand {
                     signers,
@@ -259,7 +331,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
             ) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 let empty_publish_args = <Self::ExtraPublishArgs as Default>::default();
-                let (warnings_opt, output, data, modules) = compile_any(
+                let (warnings_opt, data, (output, modules)) = compile_any(
                     self,
                     "publish",
                     syntax,
@@ -371,18 +443,39 @@ fn single_entry_function(
     Ok((module.self_id(), name))
 }
 
-fn display_return_values(return_values: SerializedReturnValues) -> Option<String> {
-    let SerializedReturnValues {
-        mutable_reference_outputs,
-        return_values,
-    } = return_values;
+fn display_return_values(
+    ValueFrame {
+        mut heap,
+        heap_mut_refs,
+        heap_imm_refs: _,
+        values: return_values,
+    }: ValueFrame,
+) -> Option<String> {
     let mut output = vec![];
-    if !mutable_reference_outputs.is_empty() {
-        let values = mutable_reference_outputs
+    // Values first so we can drop them before grabbing values from the base heap.
+    let printed = if !return_values.is_empty() {
+        Some(
+            return_values
+                .iter()
+                .map(|v| {
+                    let mut buf = String::new();
+                    move_vm_runtime::execution::values::debug::print_value(&mut buf, v).unwrap();
+                    buf
+                })
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    } else {
+        None
+    };
+
+    drop(return_values);
+
+    if !heap_mut_refs.is_empty() {
+        let values = heap_mut_refs
             .iter()
-            .map(|(idx, bytes, layout)| {
-                let value =
-                    move_vm_types::values::Value::simple_deserialize(bytes, layout).unwrap();
+            .map(|(idx, heap_id)| {
+                let value = heap.take_loc(*heap_id).unwrap();
                 (idx, value)
             })
             .collect::<Vec<_>>();
@@ -390,31 +483,18 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
             .iter()
             .map(|(idx, v)| {
                 let mut buf = String::new();
-                move_vm_types::values::debug::print_value(&mut buf, v).unwrap();
+                move_vm_runtime::execution::values::debug::print_value(&mut buf, v).unwrap();
                 format!("local#{}: {}", idx, buf)
             })
             .collect::<Vec<_>>()
             .join(", ");
         output.push(format!("mutable inputs after call: {}", printed))
     };
-    if !return_values.is_empty() {
-        let values = return_values
-            .iter()
-            .map(|(bytes, layout)| {
-                move_vm_types::values::Value::simple_deserialize(bytes, layout).unwrap()
-            })
-            .collect::<Vec<_>>();
-        let printed = values
-            .iter()
-            .map(|v| {
-                let mut buf = String::new();
-                move_vm_types::values::debug::print_value(&mut buf, v).unwrap();
-                buf
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
+
+    if let Some(printed) = printed {
         output.push(format!("return values: {}", printed))
-    };
+    }
+
     if output.is_empty() {
         None
     } else {
@@ -565,7 +645,7 @@ pub struct MaybeNamedCompiledModule {
     pub source_map: Option<SourceMap>,
 }
 
-pub async fn compile_any<'state, 'adapter: 'result, 'result, F, A, R>(
+pub async fn compile_any<'state, 'adapter: 'result, 'result, F, A, FR, Output>(
     test_adapter: &'adapter mut A,
     command: &str,
     syntax: SyntaxChoice,
@@ -576,16 +656,11 @@ pub async fn compile_any<'state, 'adapter: 'result, 'result, F, A, R>(
     _stop_line: usize,
     data: Option<NamedTempFile>,
     handler: F,
-) -> Result<(
-    Option<String>,
-    Option<String>,
-    NamedTempFile,
-    Vec<MaybeNamedCompiledModule>,
-)>
+) -> Result<(Option<String>, NamedTempFile, Output)>
 where
     A: MoveTestAdapter<'state> + 'adapter,
-    F: FnOnce(&'adapter mut A, Vec<MaybeNamedCompiledModule>) -> R,
-    R: Future<Output = Result<(Option<String>, Vec<MaybeNamedCompiledModule>)>> + 'result,
+    F: FnOnce(&'adapter mut A, Vec<MaybeNamedCompiledModule>) -> FR,
+    FR: Future<Output = Result<Output>> + 'result,
 {
     let data = match data {
         Some(f) => f,
@@ -626,8 +701,8 @@ where
             )
         }
     };
-    let (output, modules) = handler(test_adapter, modules).await?;
-    Ok((warnings_opt, output, data, modules))
+    let handler_result = handler(test_adapter, modules).await?;
+    Ok((warnings_opt, data, handler_result))
 }
 
 pub fn store_modules<'a, A: MoveTestAdapter<'a>>(

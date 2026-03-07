@@ -4,12 +4,14 @@
 use crate::get_extension;
 use crate::object_runtime::ObjectRuntime;
 use move_binary_format::errors::PartialVMResult;
-use move_vm_runtime::native_functions::NativeContext;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::natives::functions::NativeContext;
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Value, Vector},
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{Value, Vector},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;

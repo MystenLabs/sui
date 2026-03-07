@@ -6,8 +6,8 @@
 use crate::interface::{NopTracer, Tracer, Writer};
 use crate::value::SerializableMoveValue;
 use move_binary_format::{
-    file_format::{Bytecode, FunctionDefinitionIndex as BinaryFunctionDefinitionIndex},
-    file_format_common::instruction_opcode,
+    file_format::FunctionDefinitionIndex as BinaryFunctionDefinitionIndex,
+    file_format_common::Opcodes,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -376,20 +376,23 @@ impl MoveTraceBuilder {
     }
 
     /// Record an `Instruction` event in the trace along with the effects of the instruction.
-    pub fn instruction(
+    pub fn instruction<T: Into<Opcodes>>(
         &mut self,
-        instruction: &Bytecode,
+        instruction: T,
         type_parameters: Vec<TypeTag>,
         effects: Vec<Effect>,
         gas_left: u64,
         pc: u16,
     ) {
+        let opcode: Opcodes = instruction.into();
+
         self.push_event(TraceEvent::Instruction {
             type_parameters,
             pc,
             gas_left,
-            instruction: Box::new(format!("{:?}", instruction_opcode(instruction))),
+            instruction: Box::new(format!("{:?}", opcode)),
         });
+
         for effect in effects {
             self.push_event(TraceEvent::Effect(Box::new(effect)));
         }

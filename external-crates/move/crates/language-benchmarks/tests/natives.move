@@ -35,7 +35,7 @@ module 0x1::bench {
         test_vector_ops<vector<u8>>(vector::empty(), vector::empty());
     }
 
-    public fun bench() {
+    public fun bench_vector_ops() {
         let mut i = 0;
         // 300 is the number of loops to make the benchmark run for a couple of minutes,
         // which is an eternity.

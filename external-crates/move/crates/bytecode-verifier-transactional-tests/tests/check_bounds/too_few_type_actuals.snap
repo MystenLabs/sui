@@ -8,7 +8,7 @@ task 0, lines 1-11:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
     sub_status: None,
-    location: undefined,
+    location: 0x1,
     indices: [],
     offsets: [],
     message: "expected 1 type parameters got 0 (Struct)",

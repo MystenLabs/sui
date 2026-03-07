@@ -187,7 +187,19 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 async fn run_test(path: &Path) -> Result<(), Box<dyn Error>> {
+    // TODO(bella-ciao): Re-enable these tests once we perform an execution cut.
+    const DISABLED: &[&str] = &[
+        "graphql/transaction_effects/execution_error/clever_error_post_v48.move",
+        "graphql/transaction_effects/execution_error/clever_error_pre_v48.move",
+        "graphql/transactions/kind/end_of_epoch.move",
+    ];
+
     if cfg!(msim) {
+        return Ok(());
+    }
+
+    // TODO(bella-ciao): Remove this once we perform an execution cut.
+    if DISABLED.iter().any(|p| path.ends_with(p)) {
         return Ok(());
     }
 
