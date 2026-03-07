@@ -57,25 +57,20 @@ impl LiveStore {
             find_all_files_with_epoch_prefix(&self.object_store, Some(epoch_path)).await?;
 
         // Watermark = max(end) across all files
-        let checkpoint_hi = checkpoint_ranges.iter().map(|r| r.end).max().unwrap_or(0);
-
-        // Need checkpoint_hi - 1 since ranges are exclusive and watermark is inclusive
-        if checkpoint_hi == 0 {
+        let Some(checkpoint_hi) = checkpoint_ranges.iter().map(|r| r.end).max() else {
             return Ok(None);
-        }
+        };
 
         info!(
             pipeline,
-            epoch,
-            checkpoint = checkpoint_hi - 1,
-            "Determined watermark from bucket iteration"
+            epoch, checkpoint_hi, "Determined watermark from bucket iteration"
         );
 
         Ok(Some(CommitterWatermark {
             epoch_hi_inclusive: epoch,
-            checkpoint_hi_inclusive: checkpoint_hi - 1, // Convert exclusive end to inclusive
-            tx_hi: 0,                                   // Not stored in filenames
-            timestamp_ms_hi_inclusive: 0,               // Not stored in filenames
+            checkpoint_hi,
+            tx_hi: 0,                     // Not stored in filenames
+            timestamp_ms_hi_inclusive: 0, // Not stored in filenames
         }))
     }
 
@@ -242,6 +237,6 @@ mod tests {
         let watermark = watermark.unwrap();
         // Should use latest epoch (1) and max checkpoint from that epoch
         assert_eq!(watermark.epoch_hi_inclusive, 1);
-        assert_eq!(watermark.checkpoint_hi_inclusive, 399); // max(300, 400) - 1
+        assert_eq!(watermark.checkpoint_hi, 400); // max(300, 400)
     }
 }

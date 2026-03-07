@@ -96,7 +96,7 @@ pub(crate) struct Pipeline {
     timestamp_ms_hi_inclusive: i64,
 }
 
-#[derive(QueryableByName, Clone)]
+#[derive(QueryableByName, Clone, Debug)]
 struct WatermarkRow {
     #[diesel(sql_type = Text)]
     pipeline: String,
@@ -105,7 +105,7 @@ struct WatermarkRow {
     epoch_hi_inclusive: i64,
 
     #[diesel(sql_type = BigInt)]
-    checkpoint_hi_inclusive: i64,
+    checkpoint_hi: i64,
 
     #[diesel(sql_type = BigInt)]
     tx_hi: i64,
@@ -265,7 +265,10 @@ impl Watermarks {
         let pipeline = Pipeline {
             hi: Watermark {
                 epoch: row.epoch_hi_inclusive,
-                checkpoint: row.checkpoint_hi_inclusive,
+                checkpoint: row
+                    .checkpoint_hi
+                    .checked_sub(1)
+                    .unwrap_or_else(|| panic!("WatermarkRow checkpoint_hi underflow {row:?}")),
                 transaction: row.tx_hi,
             },
             lo: Watermark {
@@ -351,7 +354,7 @@ impl WatermarkRow {
         metrics
             .watermark_checkpoint
             .with_label_values(&[&self.pipeline])
-            .set(self.checkpoint_hi_inclusive);
+            .set(self.checkpoint_hi);
 
         metrics
             .watermark_transaction
@@ -404,7 +407,7 @@ async fn watermark_from_bigtable(bigtable_reader: &BigtableReader) -> anyhow::Re
     Ok(WatermarkRow {
         pipeline: "bigtable".to_owned(),
         epoch_hi_inclusive: wm.epoch_hi_inclusive as i64,
-        checkpoint_hi_inclusive: wm.checkpoint_hi_inclusive as i64,
+        checkpoint_hi: wm.checkpoint_hi as i64,
         tx_hi: wm.tx_hi as i64,
         timestamp_ms_hi_inclusive: wm.timestamp_ms_hi_inclusive as i64,
         epoch_lo: 0,
@@ -424,7 +427,7 @@ async fn watermark_from_ledger_grpc(
     Ok(WatermarkRow {
         pipeline: "ledger_grpc".to_owned(),
         epoch_hi_inclusive: summary.epoch as i64,
-        checkpoint_hi_inclusive: summary.sequence_number as i64,
+        checkpoint_hi: summary.sequence_number as i64 + 1,
         tx_hi: summary.network_total_transactions as i64,
         timestamp_ms_hi_inclusive: summary.timestamp_ms as i64,
         epoch_lo: 0,
@@ -448,7 +451,7 @@ async fn watermarks_from_pg(
             SELECT
                 w.pipeline,
                 w.epoch_hi_inclusive,
-                w.checkpoint_hi_inclusive,
+                w.checkpoint_hi,
                 w.tx_hi,
                 w.timestamp_ms_hi_inclusive,
                 c.epoch AS epoch_lo,
@@ -461,6 +464,7 @@ async fn watermarks_from_pg(
             ON (w.reader_lo = c.cp_sequence_number)
             WHERE
                 pipeline = ANY({Array<Text>})
+                AND w.checkpoint_hi > 0
             "#,
             pg_pipelines,
         ))
@@ -499,7 +503,7 @@ async fn watermark_from_consistent(
         }) => Ok(Some(WatermarkRow {
             pipeline: "consistent".to_owned(),
             epoch_hi_inclusive: max_epoch as i64,
-            checkpoint_hi_inclusive: max_checkpoint as i64,
+            checkpoint_hi: max_checkpoint as i64 + 1,
             tx_hi: total_transactions as i64,
             timestamp_ms_hi_inclusive: max_timestamp_ms as i64,
             epoch_lo: 0,

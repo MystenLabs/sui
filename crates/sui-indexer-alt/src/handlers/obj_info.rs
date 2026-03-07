@@ -158,9 +158,9 @@ impl Handler for ObjInfo {
 
     /// To prune `obj_info`, entries between `[from, to_exclusive)` are read from the reference
     /// table, and the previous versions of the objects are deleted from the main table. Finally,
-    /// the reference entries themselves are deleted. The framework guarantees that `to_exclusive <=
-    /// checkpoint_hi_inclusive - retention`, so we only prune data that has been committed but is
-    /// beyond the retention window.
+    /// the reference entries themselves are deleted. The framework guarantees that
+    /// `to_exclusive < checkpoint_hi - retention`, so we only prune data that has been committed
+    /// but is beyond the retention window.
     async fn prune<'a>(
         &self,
         from: u64,

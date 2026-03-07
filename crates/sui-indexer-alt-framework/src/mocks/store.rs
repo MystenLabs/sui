@@ -25,7 +25,7 @@ use crate::store::TransactionalStore;
 #[derive(Default, Clone)]
 pub struct MockWatermark {
     pub epoch_hi_inclusive: u64,
-    pub checkpoint_hi_inclusive: u64,
+    pub checkpoint_hi: u64,
     pub tx_hi: u64,
     pub timestamp_ms_hi_inclusive: u64,
     pub reader_lo: u64,
@@ -91,24 +91,13 @@ impl Connection for MockConnection<'_> {
         pipeline_task: &str,
         default_next_checkpoint: u64,
     ) -> anyhow::Result<Option<u64>> {
-        let Some(checkpoint_hi_inclusive) = default_next_checkpoint.checked_sub(1) else {
-            // Do not create a watermark record with checkpoint_hi_inclusive = -1.
-            return Ok(self
-                .committer_watermark(pipeline_task)
-                .await?
-                .map(|w| w.checkpoint_hi_inclusive));
-        };
-
-        let &MockWatermark {
-            checkpoint_hi_inclusive,
-            ..
-        } = self
+        let &MockWatermark { checkpoint_hi, .. } = self
             .0
             .watermarks
             .entry(pipeline_task.to_string())
             .or_insert(MockWatermark {
                 epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive,
+                checkpoint_hi: default_next_checkpoint,
                 tx_hi: 0,
                 timestamp_ms_hi_inclusive: 0,
                 reader_lo: default_next_checkpoint,
@@ -117,7 +106,7 @@ impl Connection for MockConnection<'_> {
             })
             .deref();
 
-        Ok(Some(checkpoint_hi_inclusive))
+        Ok(Some(checkpoint_hi))
     }
 
     async fn committer_watermark(
@@ -127,7 +116,7 @@ impl Connection for MockConnection<'_> {
         let watermark = self.0.watermarks.get(pipeline_task);
         Ok(watermark.map(|w| CommitterWatermark {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            checkpoint_hi: w.checkpoint_hi,
             tx_hi: w.tx_hi,
             timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
         }))
@@ -139,7 +128,7 @@ impl Connection for MockConnection<'_> {
     ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
         let watermark = self.0.watermarks.get(pipeline);
         Ok(watermark.map(|w| ReaderWatermark {
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            checkpoint_hi: w.checkpoint_hi,
             reader_lo: w.reader_lo,
         }))
     }
@@ -189,7 +178,7 @@ impl Connection for MockConnection<'_> {
             .or_default();
 
         wm.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
-        wm.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;
+        wm.checkpoint_hi = watermark.checkpoint_hi;
         wm.tx_hi = watermark.tx_hi;
         wm.timestamp_ms_hi_inclusive = watermark.timestamp_ms_hi_inclusive;
         Ok(true)
@@ -563,7 +552,7 @@ impl MockStore {
         let start = tokio::time::Instant::now();
         while start.elapsed() < timeout_duration {
             if let Some(watermark) = self.watermark(pipeline_task)
-                && watermark.checkpoint_hi_inclusive >= checkpoint
+                && watermark.checkpoint_hi > checkpoint
             {
                 return watermark;
             }

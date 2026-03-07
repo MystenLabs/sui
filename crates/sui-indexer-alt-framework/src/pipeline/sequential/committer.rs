@@ -212,7 +212,7 @@ where
                     metrics
                         .watermark_checkpoint
                         .with_label_values(&[H::NAME])
-                        .set(watermark.checkpoint_hi_inclusive as i64);
+                        .set(watermark.checkpoint_hi as i64);
 
                     metrics
                         .watermark_transaction
@@ -274,7 +274,7 @@ where
                     logger.log::<H>(&watermark, elapsed);
 
                     checkpoint_lag_reporter.report_lag(
-                        watermark.checkpoint_hi_inclusive,
+                        watermark.checkpoint_hi,
                         watermark.timestamp_ms_hi_inclusive
                     );
 
@@ -306,7 +306,7 @@ where
                     metrics
                         .watermark_checkpoint_in_db
                         .with_label_values(&[H::NAME])
-                        .set(watermark.checkpoint_hi_inclusive as i64);
+                        .set(watermark.checkpoint_hi as i64);
 
                     metrics
                         .watermark_transaction_in_db
@@ -322,7 +322,7 @@ where
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
                     // processing.
-                    let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive + 1));
+                    let _ = tx.send((H::NAME, watermark.checkpoint_hi));
                     // docs::/#send
 
                     let _ = std::mem::take(&mut batch);
@@ -535,14 +535,17 @@ mod tests {
         // Verify watermark was updated
         {
             let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+            assert_eq!(watermark.checkpoint_hi, 3);
             assert_eq!(watermark.tx_hi, 2);
         }
 
         // Verify commit_hi was sent to ingestion
         let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
+        assert_eq!(
+            commit_hi.1, 3,
+            "commit_hi should be 3 (checkpoint_hi of last processed)"
+        );
     }
 
     /// Configure the MockStore with no watermark, and emulate `first_checkpoint` by passing the
@@ -581,7 +584,7 @@ mod tests {
         // Verify watermark was updated
         {
             let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 7);
+            assert_eq!(watermark.checkpoint_hi, 8);
             assert_eq!(watermark.tx_hi, 7);
         }
     }
@@ -609,14 +612,17 @@ mod tests {
         // Verify watermark was updated
         {
             let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+            assert_eq!(watermark.checkpoint_hi, 3);
             assert_eq!(watermark.tx_hi, 2);
         }
 
         // Verify commit_hi was sent to ingestion
         let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
+        assert_eq!(
+            commit_hi.1, 3,
+            "commit_hi should be 3 (checkpoint_hi of last processed)"
+        );
     }
 
     #[tokio::test]

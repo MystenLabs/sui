@@ -67,17 +67,17 @@ The `Processor` component works identically in both sequential and concurrent pi
 
 Before diving into pipeline-specific architectures, understand the three types of watermarks used for coordination:
 
-| Watermark | Purpose | Used by |
-|-----------|---------|---------|
-| `checkpoint_hi_inclusive` | Highest checkpoint where all data is committed (no gaps) | Both pipelines for recovery and progress tracking |
-| `reader_lo` | Lowest checkpoint guaranteed to be available for queries | Concurrent pipelines with pruning enabled |
-| `pruner_hi` | Highest checkpoint that has been pruned (deleted) | Concurrent pipelines with pruning enabled |
+| Watermark       | Purpose                                                                          | Used by                                           |
+|-----------------|----------------------------------------------------------------------------------|---------------------------------------------------|
+| `checkpoint_hi` | Exclusive upper bound — all checkpoints below this value are committed (no gaps) | Both pipelines for recovery and progress tracking |
+| `reader_lo`     | Lowest checkpoint guaranteed to be available for queries                         | Concurrent pipelines with pruning enabled         |
+| `pruner_hi`     | Highest checkpoint that has been pruned (deleted)                                | Concurrent pipelines with pruning enabled         |
 
 These watermarks work together to enable safe out-of-order processing, automatic data cleanup, and recovery from failures.
 
 ## The watermark system {#watermark-system}
 
-For each pipeline, the indexer minimally tracks the highest checkpoint where all data up to that point is committed. Tracking is done through the `checkpoint_hi_inclusive` committer watermark. Both concurrent and sequential pipelines rely on `checkpoint_hi_inclusive` to understand where to resume processing on restarts.
+For each pipeline, the indexer minimally tracks the exclusive upper bound of committed checkpoints — all checkpoints below this value are committed. Tracking is done through the `checkpoint_hi` committer watermark. Both concurrent and sequential pipelines rely on `checkpoint_hi` to understand where to resume processing on restarts.
 
 Optionally, the pipeline tracks `reader_lo` and `pruner_hi`, which define safe lower bounds for reading and pruning operations, if pruning is enabled. These watermarks are particularly crucial for concurrent pipelines to enable out-of-order processing while maintaining data integrity.
 
@@ -97,56 +97,56 @@ This watermark system is what makes concurrent pipelines both high-performance a
 
 ### Scenario 1: Basic watermark (no pruning)
 
-With pruning disabled, the indexer reports each pipeline committer `checkpoint_hi_inclusive` only. Consider the following timeline, where a number of checkpoints are being processed and some are committed out of order.
+With pruning disabled, the indexer reports each pipeline committer `checkpoint_hi` only. Consider the following timeline, where a number of checkpoints are being processed and some are committed out of order.
 
 ```sh
 Checkpoint Processing Timeline:
 
 [1000] [1001] [1002] [1003] [1004] [1005]
   ✓      ✓      ✗      ✓      ✗      ✗
-         ^
-  checkpoint_hi_inclusive = 1001
+                ^
+  checkpoint_hi = 1002
 
 ✓ = Committed (all data written)
 ✗ = Not Committed (processing or failed)
 ```
 
-In this scenario, the `checkpoint_hi_inclusive` is at 1001, even though checkpoint 1003 is committed, because there is still a gap at 1002. The indexer must report the high watermark at 1001 to satisfy the guarantee that all data from start to `checkpoint_hi_inclusive` is available.
+In this scenario, `checkpoint_hi` is at 1002, even though checkpoint 1003 is committed, because there is still a gap at 1002. The indexer must report the high watermark at 1002 to satisfy the guarantee that all checkpoints below `checkpoint_hi` are available.
 
-After the checkpoint 1002 is committed, you can safely read data up to 1003.
+After checkpoint 1002 is committed, you can safely read data up to and including 1003.
 
 ```sh
 [1000] [1001] [1002] [1003] [1004] [1005]
   ✓      ✓      ✓      ✓      ✗       ✗
 [---- SAFE TO READ -------]
-(start   →   checkpoint_hi_inclusive at 1003)
+(start   →   checkpoint_hi = 1004)
 ```
 
 ### Scenario 2: Pruning enabled
 
-Pruning is enabled for pipelines configured with a retention policy. For example, if your table is growing too large and you want to keep only the last 4 checkpoints, then `retention = 4`. This means that the indexer periodically updates `reader_lo` as the difference between `checkpoint_hi_inclusive` and the configured retention. A separate pruning task is responsible for pruning data between `[pruner_hi, reader_lo]`.
+Pruning is enabled for pipelines configured with a retention policy. For example, if your table is growing too large and you want to keep only the last 4 checkpoints, then `retention = 4`. This means that the indexer periodically updates `reader_lo` as the difference between `checkpoint_hi` and the configured retention. A separate pruning task is responsible for pruning data between `[pruner_hi, reader_lo]`.
 
 ```sh
 [998] [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006]
  🗑️    🗑️     ✓      ✓      ✓      ✓      ✗      ✗      ✗
-              ^                    ^
-       reader_lo = 1000       checkpoint_hi_inclusive = 1003
+              ^                           ^
+       reader_lo = 1000            checkpoint_hi = 1004
 
 🗑️ = Pruned (deleted)
-✓ = Committed  
+✓ = Committed
 ✗ = Not Committed
 ```
 
 Current watermarks:
 
-- `checkpoint_hi_inclusive` = 1003:
-       - All data from start to 1003 is complete (no gaps).
+- `checkpoint_hi` = 1004:
+       - All checkpoints below 1004 are committed (no gaps).
        - Cannot advance to 1005 because 1004 is not committed yet (gap).
 
 - `reader_lo` = 1000:
        - Lowest checkpoint guaranteed to be available.
-       - Calculated as: `reader_lo = checkpoint_hi_inclusive - retention + 1`.
-       - `reader_lo` = 1003 - 4 + 1 = 1000.
+       - Calculated as: `reader_lo = checkpoint_hi - retention`.
+       - `reader_lo` = 1004 - 4 = 1000.
 
 - `pruner_hi` = 1000:
        - Highest exclusive checkpoint that has been deleted.
@@ -168,34 +168,34 @@ Clear safe zones:
 ```sh
 [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006] [1007]
  🗑️     ✓      ✓      ✓      ✓      ✓      ✗      ✓      ✗
-        ^                           ^
- reader_lo = 1000           checkpoint_hi_inclusive = 1004 (advanced by 1)
+        ^                                  ^
+ reader_lo = 1000                  checkpoint_hi = 1005 (advanced by 1)
  pruner_hi = 1000
 ```
 
-With checkpoint 1004 now committed, `checkpoint_hi_inclusive` can advance from 1003 to 1004 because there are no gaps up to 1004. Note that `reader_lo` and `pruner_hi` have not changed yet.
+With checkpoint 1004 now committed, `checkpoint_hi` can advance from 1004 to 1005 because all checkpoints below 1005 are committed. Note that `reader_lo` and `pruner_hi` have not changed yet.
 
 **Step 2:** Reader watermark updates periodically.
 
 ```sh
 [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006] [1007]
  🗑️     ✓      ✓      ✓      ✓      ✓      ✗      ✓      ✗
-               ^                   ^
-        reader_lo = 1001    checkpoint_hi_inclusive = 1004
-        (1004 - 4 + 1 = 1001)
+               ^                           ^
+        reader_lo = 1001           checkpoint_hi = 1005
+        (1005 - 4 = 1001)
 
 pruner_hi = 1000 (unchanged as pruner hasn't run yet)
 ```
 
-A separate reader watermark update task (running periodically, configurable) advances `reader_lo` to 1001 (calculated as `1004 - 4 + 1 = 1001`) based on the retention policy. However, the pruner hasn't run yet, so `pruner_hi` remains at 1000.
+A separate reader watermark update task (running periodically, configurable) advances `reader_lo` to 1001 (calculated as `1005 - 4 = 1001`) based on the retention policy. However, the pruner hasn't run yet, so `pruner_hi` remains at 1000.
 
 **Step 3:** Pruner runs after safety delay.
 
 ```sh
 [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006] [1007]
  🗑️     🗑️     ✓      ✓      ✓      ✓      ✗      ✓      ✗
-               ^                   ^
-        reader_lo = 1001    checkpoint_hi_inclusive = 1004
+               ^                           ^
+        reader_lo = 1001           checkpoint_hi = 1005
         pruner_hi = 1001
 ```
 
@@ -386,15 +386,15 @@ The `Committer` tasks don't actually perform database operations. Rather, it cal
 
 #### `CommitterWatermark` {#con-commit-watermark}
 
-The primary responsibility of the `CommitterWatermark` is to track which checkpoints are fully committed and update `checkpoint_hi_inclusive` in the `Watermark` table.
+The primary responsibility of the `CommitterWatermark` is to track which checkpoints are fully committed and update `checkpoint_hi` in the `Watermark` table.
 
 The `CommitterWatermark` receives `WatermarkParts` from successful `Committer` writes.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/pipeline/mod.rs" struct="WatermarkPart"/>
     
-The `CommitterWatermark` maintains an in-memory map of checkpoint completion status, advancing `checkpoint_hi_inclusive` only when there are no gaps in the sequence. Periodically, it writes the new `checkpoint_hi_inclusive` to the `Watermark` database.
+The `CommitterWatermark` maintains an in-memory map of checkpoint completion status, advancing `checkpoint_hi` only when there are no gaps in the sequence. Periodically, it writes the new `checkpoint_hi` to the `Watermark` database.
 
-This component enforces the critical rule that `checkpoint_hi_inclusive` can advance only when all data up to that point is committed with no gaps. See the [watermark system](#watermark-system) for details on how this enables safe out-of-order processing.
+This component enforces the critical rule that `checkpoint_hi` can advance only when all checkpoints below it are committed with no gaps. See the [watermark system](#watermark-system) for details on how this enables safe out-of-order processing.
 
 By using polling, updates happen on a configurable interval (`watermark_interval_ms`) rather than immediately, balancing consistency with performance.
 
@@ -404,7 +404,7 @@ By using polling, updates happen on a configurable interval (`watermark_interval
 
 The primary responsibility of the `ReaderWatermark` is to calculate and update `reader_lo` to maintain the retention policy and provide safe pruning boundaries.
 
-The `ReaderWatermark` polls the `Watermark` database periodically (`interval_ms`) to check current `checkpoint_hi_inclusive`. It then calculates the new `reader_lo = checkpoint_hi_inclusive - retention + 1` value and updates the `reader_lo` and `pruner_timestamp` in the `Watermark` database. This behavior provides the safety buffer that prevents premature pruning.
+The `ReaderWatermark` polls the `Watermark` database periodically (`interval_ms`) to check current `checkpoint_hi`. It then calculates the new `reader_lo = checkpoint_hi - retention` value and updates the `reader_lo` and `pruner_timestamp` in the `Watermark` database. This behavior provides the safety buffer that prevents premature pruning.
 
 The `reader_lo` value represents the lowest checkpoint guaranteed to be available. This component ensures your retention policy is maintained. See the [watermark system](#watermark-system) section for details on how `reader_lo` creates safe reading zones.
 

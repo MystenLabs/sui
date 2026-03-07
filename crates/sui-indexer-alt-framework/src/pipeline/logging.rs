@@ -95,7 +95,9 @@ impl WatermarkLogger {
 impl From<&CommitterWatermark> for LoggerWatermark {
     fn from(watermark: &CommitterWatermark) -> Self {
         Self {
-            checkpoint: watermark.checkpoint_hi_inclusive as i64,
+            checkpoint: watermark.checkpoint_hi.checked_sub(1).unwrap_or_else(|| {
+                panic!("CommitterWatermark checkpoint_hi underflow {watermark:?}")
+            }) as i64,
             transaction: Some(watermark.tx_hi as i64),
         }
     }
