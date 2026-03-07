@@ -17,7 +17,7 @@ use sui_types::{
     effects::TransactionEffectsAPI,
     executable_transaction::VerifiedExecutableTransaction,
     execution::ExecutionOutput,
-    execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus},
+    execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
     gas_coin::GAS,
     object::Object,
 };
@@ -275,7 +275,7 @@ async fn test_object_withdraw_multiple_withdraws() {
             assert!(matches!(
                 effects.status(),
                 ExecutionStatus::Failure(ExecutionFailure {
-                    error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+                    error: ExecutionErrorKind::InsufficientFundsForWithdraw,
                     ..
                 })
             ));
@@ -331,7 +331,7 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
     assert!(matches!(
         effects.status(),
         ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+            error: ExecutionErrorKind::InsufficientFundsForWithdraw,
             ..
         })
     ));
@@ -392,7 +392,7 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
     assert!(matches!(
         effects.status(),
         ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+            error: ExecutionErrorKind::InsufficientFundsForWithdraw,
             ..
         })
     ));

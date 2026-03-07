@@ -15,7 +15,7 @@ use sui_types::crypto::get_authority_key_pair;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
-use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::object::Object;
 use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
 use sui_types::utils::to_sender_signed_transaction;
@@ -42,7 +42,7 @@ fn build_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
 pub fn assert_is_acceptable_result(result: &ExecutionResult) {
     if let Ok(
         e @ ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::InvariantViolation,
+            error: ExecutionErrorKind::InvariantViolation,
             ..
         }),
     ) = result

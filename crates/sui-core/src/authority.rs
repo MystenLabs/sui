@@ -132,9 +132,10 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,

@@ -79,7 +79,7 @@ use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest, TransactionDige
 use sui_types::effects::{
     AccumulatorOperation, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
 };
-use sui_types::execution_status::ExecutionFailureStatus;
+use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
@@ -1979,7 +1979,7 @@ impl SuiTestAdapter {
                     format!("Execution Error: {}", error_opt.unwrap())
                 };
                 let error = match error {
-                    ExecutionFailureStatus::MoveAbort(loc, code)
+                    ExecutionErrorKind::MoveAbort(loc, code)
                         if ErrorBitset::from_u64(*code).is_some() =>
                     {
                         let clever_code = ErrorBitset::from_u64(*code).unwrap();

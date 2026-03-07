@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::ExecutionErrorKind;
 use crate::error::{SuiError, SuiErrorKind};
+use crate::execution_status::ExecutionErrorKind;
 use crate::{
     SUI_FRAMEWORK_ADDRESS,
     base_types::ObjectID,

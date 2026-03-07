@@ -8,8 +8,8 @@ use serde::Deserialize;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind},
-    execution_status::CommandArgumentError,
+    error::ExecutionError,
+    execution_status::{CommandArgumentError, ExecutionErrorKind},
     object::Owner,
     storage::{BackingPackageStore, ChildObjectResolver, StorageView},
     transfer::Receiving,

@@ -6,7 +6,8 @@ use crate::{
     SUI_FRAMEWORK_ADDRESS,
     base_types::{ObjectID, SequenceNumber},
     crypto::DefaultHash,
-    error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, SuiResult},
+    error::{ExecutionError, SuiErrorKind, SuiResult},
+    execution_status::ExecutionErrorKind,
     id::{ID, UID},
     object::OBJECT_START_VERSION,
 };

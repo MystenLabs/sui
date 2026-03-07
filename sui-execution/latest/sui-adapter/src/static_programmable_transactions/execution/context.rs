@@ -50,8 +50,9 @@ use sui_move_natives::object_runtime::{
 use sui_types::{
     TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, TxContext},
-    error::{ExecutionError, ExecutionErrorKind, SafeIndex},
+    error::{ExecutionError, SafeIndex},
     execution::ExecutionResults,
+    execution_status::ExecutionErrorKind,
     metrics::LimitsMetrics,
     move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::{MoveObject, Object, Owner},

@@ -7,8 +7,8 @@ use mysten_common::assert_reachable;
 use once_cell::sync::Lazy;
 
 use crate::{
-    base_types::SequenceNumber, digests::TransactionDigest, error::ExecutionErrorKind,
-    execution_status::CongestedObjects, transaction::CheckedInputObjects,
+    base_types::SequenceNumber, digests::TransactionDigest, execution_status::CongestedObjects,
+    execution_status::ExecutionErrorKind, transaction::CheckedInputObjects,
 };
 
 pub type ExecutionOrEarlyError = Result<(), ExecutionErrorKind>;

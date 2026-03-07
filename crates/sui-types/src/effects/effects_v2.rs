@@ -13,7 +13,7 @@ use crate::digests::{EffectsAuxDataDigest, TransactionEventsDigest};
 use crate::effects::{InputConsensusObject, TransactionEffectsAPI};
 use crate::execution::SharedInput;
 use crate::execution_status::{
-    ExecutionFailure, ExecutionFailureStatus, ExecutionStatus, MoveLocation,
+    ExecutionErrorKind, ExecutionFailure, ExecutionStatus, MoveLocation,
 };
 use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
@@ -94,7 +94,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
 
     fn move_abort(&self) -> Option<(MoveLocation, u64)> {
         let ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::MoveAbort(move_location, code),
+            error: ExecutionErrorKind::MoveAbort(move_location, code),
             ..
         }) = self.status()
         else {

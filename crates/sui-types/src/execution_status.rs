@@ -23,7 +23,7 @@ pub enum ExecutionStatus {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutionFailure {
-    pub error: ExecutionFailureStatus,
+    pub error: ExecutionErrorKind,
     pub command: Option<CommandIndex>,
 }
 
@@ -40,7 +40,7 @@ impl fmt::Display for CongestedObjects {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, EnumVariantOrder)]
-pub enum ExecutionFailureStatus {
+pub enum ExecutionErrorKind {
     //
     // General transaction errors
     //
@@ -374,7 +374,7 @@ pub enum TypeArgumentError {
     ConstraintNotSatisfied,
 }
 
-impl ExecutionFailureStatus {
+impl ExecutionErrorKind {
     pub fn command_argument_error(kind: CommandArgumentError, arg_idx: u16) -> Self {
         Self::CommandArgumentError { arg_idx, kind }
     }
@@ -413,7 +413,7 @@ impl Display for MoveLocation {
 
 impl ExecutionStatus {
     pub fn new_failure(
-        error: ExecutionFailureStatus,
+        error: ExecutionErrorKind,
         command: Option<CommandIndex>,
     ) -> ExecutionStatus {
         ExecutionStatus::Failure(ExecutionFailure { error, command })
@@ -436,7 +436,7 @@ impl ExecutionStatus {
         }
     }
 
-    pub fn unwrap_err(self) -> (ExecutionFailureStatus, Option<CommandIndex>) {
+    pub fn unwrap_err(self) -> (ExecutionErrorKind, Option<CommandIndex>) {
         match self {
             ExecutionStatus::Success => {
                 panic!("Unable to unwrap() on {:?}", self);
@@ -448,9 +448,7 @@ impl ExecutionStatus {
     pub fn get_congested_objects(&self) -> Option<&CongestedObjects> {
         if let ExecutionStatus::Failure(ExecutionFailure {
             error:
-                ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
-                    congested_objects,
-                },
+                ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { congested_objects },
             ..
         }) = self
         {
@@ -464,7 +462,7 @@ impl ExecutionStatus {
         matches!(
             self,
             ExecutionStatus::Failure(ExecutionFailure {
-                error: ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { .. },
+                error: ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. },
                 ..
             })
         )

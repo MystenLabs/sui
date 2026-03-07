@@ -8,7 +8,7 @@ use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
     effects::TransactionEffects,
-    execution_status::{CommandArgumentError, ExecutionFailureStatus},
+    execution_status::{CommandArgumentError, ExecutionErrorKind},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::FullObjectKey,
@@ -38,7 +38,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_status::ExecutionFailureStatus::{
+use sui_types::execution_status::ExecutionErrorKind::{
     InputObjectDeleted, SharedObjectOperationNotAllowed,
 };
 use sui_types::transaction::ObjectArg;
@@ -621,7 +621,7 @@ async fn test_delete_shared_object_immut() {
 
     assert!(matches!(
         effects.status().clone().unwrap_err().0,
-        ExecutionFailureStatus::CommandArgumentError {
+        ExecutionErrorKind::CommandArgumentError {
             arg_idx: 0,
             kind: CommandArgumentError::InvalidObjectByValue
         }
@@ -674,7 +674,7 @@ async fn test_delete_shared_object_immut_mut_mut_interleave() {
 
     assert!(matches!(
         effects.status().clone().unwrap_err().0,
-        ExecutionFailureStatus::CommandArgumentError {
+        ExecutionErrorKind::CommandArgumentError {
             arg_idx: 0,
             kind: CommandArgumentError::InvalidObjectByValue
         }
@@ -722,7 +722,7 @@ async fn test_delete_shared_object_immut_mut_mut_interleave() {
     assert!(effects.status().is_err());
     assert_eq!(
         effects.status().clone().unwrap_err().0,
-        ExecutionFailureStatus::InputObjectDeleted
+        ExecutionErrorKind::InputObjectDeleted
     );
 }
 
@@ -761,7 +761,7 @@ async fn test_delete_shared_object_immut_mut_immut_interleave() {
 
     assert!(matches!(
         effects.status().clone().unwrap_err().0,
-        ExecutionFailureStatus::CommandArgumentError {
+        ExecutionErrorKind::CommandArgumentError {
             arg_idx: 0,
             kind: CommandArgumentError::InvalidObjectByValue
         }
@@ -1016,7 +1016,7 @@ async fn test_shifting_mutate_and_deletes_multiple_objects() {
         assert!(effects.status().is_err());
         assert_eq!(
             effects.status().clone().unwrap_err().0,
-            ExecutionFailureStatus::InputObjectDeleted
+            ExecutionErrorKind::InputObjectDeleted
         );
         assert!(effects.dependencies().contains(txs[0].digest()));
     }
@@ -1027,7 +1027,7 @@ async fn test_shifting_mutate_and_deletes_multiple_objects() {
         assert!(effects.status().is_err());
         assert_eq!(
             effects.status().clone().unwrap_err().0,
-            ExecutionFailureStatus::InputObjectDeleted
+            ExecutionErrorKind::InputObjectDeleted
         );
         assert!(effects.dependencies().contains(txs[0].digest()));
         assert!(effects.dependencies().contains(txs[1].digest()));
@@ -1039,7 +1039,7 @@ async fn test_shifting_mutate_and_deletes_multiple_objects() {
         assert!(effects.status().is_err());
         assert_eq!(
             effects.status().clone().unwrap_err().0,
-            ExecutionFailureStatus::InputObjectDeleted
+            ExecutionErrorKind::InputObjectDeleted
         );
         assert!(effects.dependencies().contains(txs[2].digest()));
         assert!(effects.dependencies().contains(txs[1].digest()));
@@ -1070,7 +1070,7 @@ async fn test_shifting_mutate_and_deletes_multiple_objects() {
         assert!(effects.status().is_err());
         assert_eq!(
             effects.status().clone().unwrap_err().0,
-            ExecutionFailureStatus::InputObjectDeleted
+            ExecutionErrorKind::InputObjectDeleted
         );
         assert!(effects.dependencies().contains(txs[2].digest()));
         assert!(effects.dependencies().contains(txs[5].digest()));
