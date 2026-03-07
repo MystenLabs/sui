@@ -7,7 +7,11 @@ pagination_prev: null
 
 :::caution 
 
-Sui Object Display V2 will replace Object Display V1. [Learn more](/standards/display-v2).
+Sui Object Display V2 will replace Object Display V1. [Learn more](/standards/display/v2).
+
+Object Display V1 will keep being supported by RPCs that already had support for it (JSON-RPC, GraphQL) until **end of July**. After that, on-chain Object Display V1 code will be decommissioned and will start aborting.
+
+**Recommendation:** Use the `sui::display_registry` APIs when creating display from Move code. For the intermediate phase, use the `**migrate_v1_to_v2`** function to migrate a legacy display and receive the V2 `Display<T>` and `DisplayCap<T>`.
 
 :::
 

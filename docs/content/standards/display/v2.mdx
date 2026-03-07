@@ -12,47 +12,48 @@ All existing V1 displays will be migrated to V2 in a **system snapshot migration
 
 ## What's new in V2
 
-Display V2 brings a richer templating model and better tooling:
+Display V2 brings a richer templating model, improved rendering pipeline, and better tooling, including:
 
-- **Collection access** — Use vectors, sets, and maps directly in your display templates.
-- **Dynamic field access** — Reference dynamic fields on objects in your templates.
-- **Object loading** — Load and reference objects when resolving display.
-- **GraphQL** — Rich APIs to use display as a **querying tool**, not just for rendering
-- **And more** — A more expressive templating language and improved rendering pipeline.
+- **Collection access**: Use vectors, sets, and maps directly in your display templates.
 
-[Read more about the new templating language and try the visual display builder](https://mystenlabs.github.io/display-preview/#editor).
+- **Dynamic field access**: Reference dynamic fields on objects in your templates.
 
-## Why V2
+- **Object loading**: Load and reference objects when resolving display.
 
-**V1:** Discovering "the" display for a type relied on **events** (e.g. `DisplayCreated<T>`). Clients had to query historical events (by type) and infer which object(s) represented the display. That approach depends on historical event data, doesn't scale for full nodes that may not retain full history, and is a poor fit for RPC APIs (JSON-RPC, gRPC, etc.) that need a stable, cheap way to resolve "display for type T" without scanning events.
+- **GraphQL**: Rich APIs to use display as a querying tool, not just for rendering.
 
-**V2:** The display for type `T` has a **single, deterministic ID** derived from the global registry and the type. That ID can be computed offline (no events, no history). RPCs can resolve "display for type T" by derivation only, which is sustainable for full nodes. This is the main gain for JSON-RPC and gRPC. (GraphQL is less affected, as it maintains its own indexed state.)
+[Read more about the new templating language and try the visual display builder](/standards/display/display-preview).
+
+## Differences between V1 and V2
+
+In V1, discovering the display for a type relied on events, for example, `DisplayCreated<T>`. Clients had to query historical events by type and infer which object(s) represented the display. This approach depends on historical event data, doesn't scale for full nodes that may not retain full history, and is a poor fit for RPC APIs like JSON-RPC, gRPC, and others that need a stable, cheap way to resolve "display for type T" without scanning events.
+
+In V2, the display for type `T` has a single, deterministic ID derived from the global registry and the type. That ID can be computed offline without using events or history. RPCs can resolve "display for type T" by derivation only, which is sustainable for full nodes. This is the main gain for JSON-RPC and gRPC. GraphQL is less affected, as it maintains its own indexed state.
 
 ## Structural change: N → 1, and derived
 
+In Object Display V1, you could have `N` displays per type and had to use events to query them. In Object Display V2, there is only 1 per type and you get it by derivation.
 
-|                       | **V1**                                              | **V2**                                                                                                                                                           |
-| --------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Displays per type** | **N** — multiple `Display<T>` could exist.          | **1** — exactly one `Display<T>` per type `T`.                                                                                                                   |
-| **How you find it**   | Query events (by type); requires historical events. | **Offline derivation**: `Display<T>` is a derived object from `(DisplayRegistry UID, DisplayKey<T>)`. ID is computable from registry + type; no events, no scan. |
-| **Identity**          | Unpredictable (per creation tx).                    | **Deterministic** — same registry + same `T` ⇒ same display ID everywhere.                                                                                       |
+|                       | **V1** | **V2** | --------------------- | ---------------------------------|
+| **Displays per type** | Multiple `Display<T>` could exist. | Exactly one `Display<T>` per type `T`.  |
+| **How you find `Display<T>`**   | Query events by type; requires historical events. | Offline derivation. `Display<T>` is a derived object from `(DisplayRegistry UID, DisplayKey<T>)`. ID is computable from registry and type; no events, no scan. |
+| **Identity**          | Unpredictable (per creation tx).   | Deterministic. The same registry and same `T` result in the same display ID everywhere.  |
 
-
-**TL;DR:** Before you could have N displays per type and had to use events; now there is only 1 per type and you get it by derivation.
 
 ## Migration and claiming
 
-All V1 displays will be migrated to V2 in a **system snapshot migration**. After that, for each type the single V2 `Display<T>` exists (with `cap_id: none`) until the capability is claimed.
+All V1 displays will be migrated to V2 in a system snapshot migration. After that, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
 
 The capability can be claimed in either of two ways:
 
-- **Publisher** — `claim_with_publisher`: use this if you hold the Publisher object (it proves type ownership via `publisher.from_package<T>()`).
-- **Legacy Display** — `claim`: use this if you hold the V1 `Display<T>` object. Pass it in; it is consumed and you receive the `DisplayCap<T>`.
+- **Publisher** using `claim_with_publisher`: Use this if you hold the `Publisher` object. It proves type ownership via `publisher.from_package<T>()`.
 
-Once claimed, the holder of `DisplayCap<T>` can update the display fields (`set`, `unset`, `clear`). `**delete_legacy`** is permissionless as long as the V2 cap has been claimed: anyone who holds a V1 `Display<T>` can call `delete_legacy(display, legacy)` to burn their legacy object (no need to be the cap holder).
+- **Legacy Display** using `claim`: Use this if you hold the V1 `Display<T>` object. Pass it in; it is consumed and you receive the `DisplayCap<T>`.
 
-## End of life (V1)
+Once claimed, the holder of `DisplayCap<T>` can update the display fields (`set`, `unset`, `clear`). `delete_legacy` is permissionless as long as the V2 cap has been claimed. Anyone who holds a V1 `Display<T>` can call `delete_legacy(display, legacy)` to burn their legacy object, no need to be the cap holder.
 
-V1 display will keep being supported by RPCs that already had support for it (JSON-RPC, GraphQL) until **end of July**. After that, on-chain V1 display code will be decommissioned and will start aborting.
+## V1 end of life 
 
-**Recommendation:** Use the `sui::display_registry` APIs when creating display from Move code. For the intermediate phase, use the `**migrate_v1_to_v2`** function to migrate a legacy display and receive the V2 `Display<T>` and `DisplayCap<T>`.
+Object Display V1 will be supported by RPCs that already have support for it (JSON-RPC, GraphQL) until the **end of July 2026**. After that, on-chain V1 display code will be decommissioned and will start aborting.
+
+It is recommended to use the `sui::display_registry` APIs when creating display from Move code. For the intermediate phase, use the `migrate_v1_to_v2` function to migrate a legacy display and receive the V2 `Display<T>` and `DisplayCap<T>`.

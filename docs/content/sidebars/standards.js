@@ -115,8 +115,15 @@ const standards = [
 			},
 		],
 	},
-	'standards/display',
-	'standards/display-v2',
+	{
+		type: 'category',
+		label: 'Object Display',
+		items: [
+		'standards/display/v1',
+		'standards/display/v2',
+		'standards/display/display-preview'
+		],
+	},
 	'standards/payment-kit',
 	'standards/sagat',
 	'standards/wallet-standard',
