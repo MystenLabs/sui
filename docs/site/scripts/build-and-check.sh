@@ -44,7 +44,7 @@ docusaurus build 2>&1 | while IFS= read -r line; do
 done
 
 ## Generate markdown, llms.txt, and check relative link files 
-node src/js/copy-markdown-files.js || { echo "❌ copy-markdown-files failed"; exit 1; }
+node scripts/copy-markdown-files.js || { echo "❌ copy-markdown-files failed"; exit 1; }
 
 node scripts/generate-llmstxt.mjs build/markdown/ --output static/llms.txt || { echo "❌ generate-llmstxt failed"; exit 1; }
 
