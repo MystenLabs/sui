@@ -69,6 +69,7 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-tbls.workspace = true
 fastcrypto-zkp.workspace = true
 passkey-types.workspace = true
+sui-crypto.workspace = true
 
 typed-store-error.workspace = true
 derive_more = { workspace = true, features = [
