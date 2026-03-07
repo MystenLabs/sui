@@ -199,7 +199,7 @@ impl AuthorityPerpetualTables {
             Bytes, Decision, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
             default_cells_per_mutex, default_mutex_count, default_value_cache_size,
         };
-        let mutexes = default_mutex_count() * 2;
+        let mutexes = default_mutex_count();
         let value_cache_size = default_value_cache_size();
         // effectively disables pruning if not set
         let pruner_watermark = pruner_watermark.unwrap_or(Arc::new(AtomicU64::new(0)));
