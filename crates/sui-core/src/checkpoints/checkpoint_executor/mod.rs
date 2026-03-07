@@ -405,12 +405,17 @@ impl CheckpointExecutor {
 
         let seq = ckpt_state.data.checkpoint.sequence_number;
 
-        let batch = self
+        let (all_outputs, db_batch) = self
             .state
             .get_cache_commit()
             .build_db_batch(self.epoch_store.epoch(), &ckpt_state.data.tx_digests);
 
         finish_stage!(pipeline_handle, BuildDbBatch);
+        self.state
+            .get_cache_commit()
+            .write_db_batch(db_batch, &ckpt_state.data.tx_digests);
+
+        finish_stage!(pipeline_handle, WriteDbBatch);
 
         let object_funds_checker = self.state.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref() {
@@ -423,9 +428,9 @@ impl CheckpointExecutor {
                 // Commit all transaction effects to disk
                 let cache_commit = this.state.get_cache_commit();
                 debug!(?seq, "committing checkpoint transactions to disk");
-                cache_commit.commit_transaction_outputs(
+                cache_commit.flush_cache(
                     this.epoch_store.epoch(),
-                    batch,
+                    all_outputs,
                     &ckpt_state.data.tx_digests,
                 );
                 ckpt_state
@@ -434,7 +439,7 @@ impl CheckpointExecutor {
         .await
         .unwrap();
 
-        finish_stage!(pipeline_handle, CommitTransactionOutputs);
+        finish_stage!(pipeline_handle, FlushCache);
 
         self.epoch_store
             .handle_finalized_checkpoint(&ckpt_state.data.checkpoint, &ckpt_state.data.tx_digests)
