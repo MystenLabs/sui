@@ -16,7 +16,6 @@ use crate::{
     editions::Flavor,
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
-    ice_assert,
     parser::ast::{Ability_, TargetKind},
     shared::{Identifier, program_info::TypingProgramInfo},
     sui_mode::{
@@ -212,7 +211,8 @@ impl SimpleAbsInt for IDLeakVerifierAI<'_> {
 
         let mut fields_iter = fields.iter();
         let Some((f, _, first_e)) = fields_iter.next() else {
-            // All structs must have at least one field, but this lowering is done later.
+            // All structs must have at least one field and for an object the first must be a UID,
+            // but the construction/pack might be ill-typed
             return None;
         };
         let first_value = self.exp(context, state, first_e).pop().unwrap_or_default();
