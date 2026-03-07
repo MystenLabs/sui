@@ -1314,3 +1314,122 @@ async fn test_address_source_clear_all() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn peer_failure_report_adds_cooldown() -> Result<()> {
+    let config = P2pConfig::default();
+    let (builder, _server, _em) = Builder::new().config(config).build();
+    let (network, keypair) = build_network_and_key(|router| router);
+    let (mut event_loop, _handle) = builder.build(network.clone(), keypair);
+
+    let peer_id = PeerId([42; 32]);
+
+    assert!(!event_loop.peer_cooldowns.contains_key(&peer_id));
+
+    event_loop.handle_peer_failure_report(peer_id);
+
+    assert!(event_loop.peer_cooldowns.contains_key(&peer_id));
+    Ok(())
+}
+
+#[tokio::test]
+async fn cooldown_peers_deprioritized_in_handle_tick() -> Result<()> {
+    let mut config = P2pConfig::default();
+    let (builder, server, _em) = Builder::new().config(config.clone()).build();
+    let (network_1, key_1) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (_event_loop_1, _handle_1) = builder.build(network_1.clone(), key_1);
+
+    config.seed_peers.push(SeedPeer {
+        peer_id: Some(network_1.peer_id()),
+        address: format!("/dns/localhost/udp/{}", network_1.local_addr().port()).parse()?,
+    });
+    let (builder, server, _em) = Builder::new().config(config).build();
+    let (network_2, key_2) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (mut event_loop_2, _handle_2) = builder.build(network_2.clone(), key_2);
+
+    // Put network_1's peer on cooldown
+    event_loop_2
+        .peer_cooldowns
+        .insert(network_1.peer_id(), std::time::Instant::now());
+
+    // Add network_1 as a known peer so it's eligible for dialing
+    let peer_info = NodeInfo {
+        peer_id: network_1.peer_id(),
+        addresses: vec![format!("/dns/localhost/udp/{}", network_1.local_addr().port()).parse()?],
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    };
+    event_loop_2.state.write().unwrap().known_peers.insert(
+        network_1.peer_id(),
+        VerifiedSignedNodeInfo::new_unchecked(SignedNodeInfo::new_from_data_and_sig(
+            peer_info,
+            Ed25519Signature::default(),
+        )),
+    );
+
+    // Since the peer is on cooldown and it's the only peer, it should still be dialed
+    // (cooldown peers are deprioritized, not blocked)
+    event_loop_2.handle_tick(std::time::Instant::now(), now_unix());
+
+    assert!(
+        event_loop_2
+            .pending_dials
+            .contains_key(&network_1.peer_id()),
+        "cooldown peer should still be dialed when no preferred peers exist"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn expired_cooldown_moves_peer_to_preferred() -> Result<()> {
+    let config = P2pConfig {
+        discovery: Some(DiscoveryConfig {
+            peer_failure_cooldown_ms: Some(1),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let (builder, _server, _em) = Builder::new().config(config).build();
+    let (network, keypair) = build_network_and_key(|router| router);
+    let (mut event_loop, _handle) = builder.build(network, keypair);
+
+    let peer_id = PeerId([42; 32]);
+    event_loop.peer_cooldowns.insert(
+        peer_id,
+        std::time::Instant::now() - Duration::from_millis(10),
+    );
+
+    // After a tick, the expired cooldown should be cleaned up
+    event_loop.handle_tick(std::time::Instant::now(), now_unix());
+
+    assert!(
+        !event_loop.peer_cooldowns.contains_key(&peer_id),
+        "expired cooldown should be removed"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn configured_peer_exempt_from_failure_report() -> Result<()> {
+    let peer_id = PeerId([42; 32]);
+    let config = P2pConfig {
+        seed_peers: vec![SeedPeer {
+            peer_id: Some(peer_id),
+            address: "/dns/localhost/udp/8080".parse()?,
+        }],
+        ..Default::default()
+    };
+    let (builder, _server, _em) = Builder::new().config(config).build();
+    let (network, keypair) = build_network_and_key(|router| router);
+    let (mut event_loop, _handle) = builder.build(network, keypair);
+
+    event_loop.handle_peer_failure_report(peer_id);
+
+    assert!(
+        !event_loop.peer_cooldowns.contains_key(&peer_id),
+        "configured peer should not be placed on cooldown"
+    );
+    Ok(())
+}

@@ -162,6 +162,10 @@ pub struct UnstartedDiscovery {
 }
 
 impl UnstartedDiscovery {
+    pub fn sender(&self) -> super::Sender {
+        self.handle.sender()
+    }
+
     pub(super) fn build(
         self,
         network: anemo::Network,
@@ -205,6 +209,7 @@ impl UnstartedDiscovery {
                 metrics,
                 consensus_external_address,
                 endpoint_manager,
+                peer_cooldowns: HashMap::new(),
             },
             handle,
         )

@@ -104,6 +104,7 @@ use sui_storage::verify_checkpoint;
 pub struct Handle {
     sender: mpsc::Sender<StateSyncMessage>,
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
+    metrics: Metrics,
 }
 
 impl Handle {
@@ -126,6 +127,11 @@ impl Handle {
     pub fn subscribe_to_synced_checkpoints(&self) -> broadcast::Receiver<VerifiedCheckpoint> {
         self.checkpoint_event_sender.subscribe()
     }
+
+    /// Returns the number of peers disconnected due to consistent state sync failures.
+    pub fn get_peers_disconnected_for_failure(&self) -> u64 {
+        self.metrics.get_peers_disconnected_for_failure()
+    }
 }
 
 pub(super) fn compute_adaptive_timeout(
@@ -136,6 +142,7 @@ pub(super) fn compute_adaptive_timeout(
     const MAX_TRANSACTIONS_PER_CHECKPOINT: u64 = 10_000;
     const JITTER_FRACTION: f64 = 0.1;
 
+    let max_timeout = max_timeout.max(min_timeout);
     let ratio = (tx_count as f64 / MAX_TRANSACTIONS_PER_CHECKPOINT as f64).min(1.0);
     let extra = Duration::from_secs_f64((max_timeout - min_timeout).as_secs_f64() * ratio);
     let base = min_timeout + extra;
@@ -151,6 +158,7 @@ pub(super) struct PeerScore {
     failures: VecDeque<Instant>,
     window: Duration,
     failure_rate: f64,
+    failing_since: Option<Instant>,
 }
 
 impl PeerScore {
@@ -163,6 +171,7 @@ impl PeerScore {
             failures: VecDeque::new(),
             window,
             failure_rate,
+            failing_since: None,
         }
     }
 
@@ -172,6 +181,7 @@ impl PeerScore {
         while self.successes.len() > Self::MAX_SAMPLES {
             self.successes.pop_front();
         }
+        self.failing_since = None;
     }
 
     pub(super) fn record_failure(&mut self) {
@@ -202,6 +212,19 @@ impl PeerScore {
 
         let rate = recent_failures as f64 / total as f64;
         rate >= self.failure_rate
+    }
+
+    pub(super) fn update_failing_state(&mut self) {
+        if self.is_failing() && self.failing_since.is_none() {
+            self.failing_since = Some(Instant::now());
+        }
+    }
+
+    pub(super) fn consistently_failing(&self, threshold: Duration) -> bool {
+        match self.failing_since {
+            Some(since) => since.elapsed() >= threshold,
+            None => false,
+        }
     }
 
     pub(super) fn effective_throughput(&self) -> Option<f64> {
@@ -321,6 +344,7 @@ impl PeerHeights {
         if let Some(info) = self.peers.get_mut(&peer_id) {
             info.on_same_chain_as_us = false;
         }
+        self.scores.remove(&peer_id);
     }
 
     /// Updates the peer's height without storing any checkpoint data.
@@ -409,6 +433,9 @@ impl PeerHeights {
     }
 
     pub fn record_success(&mut self, peer_id: PeerId, size: u64, response_time: Duration) {
+        if !self.peers.contains_key(&peer_id) {
+            return;
+        }
         self.scores
             .entry(peer_id)
             .or_insert_with(|| PeerScore::new(self.peer_scoring_window, self.peer_failure_rate))
@@ -416,6 +443,9 @@ impl PeerHeights {
     }
 
     pub fn record_failure(&mut self, peer_id: PeerId) {
+        if !self.peers.contains_key(&peer_id) {
+            return;
+        }
         self.scores
             .entry(peer_id)
             .or_insert_with(|| PeerScore::new(self.peer_scoring_window, self.peer_failure_rate))
@@ -433,6 +463,31 @@ impl PeerHeights {
             .get(peer_id)
             .map(|s| s.is_failing())
             .unwrap_or(false)
+    }
+
+    pub fn update_failing_states(&mut self) {
+        for score in self.scores.values_mut() {
+            score.update_failing_state();
+        }
+    }
+
+    pub fn find_peer_to_disconnect(&self, threshold: Duration) -> Option<PeerId> {
+        self.scores
+            .iter()
+            .filter(|(peer_id, score)| {
+                score.consistently_failing(threshold)
+                    && self
+                        .peers
+                        .get(peer_id)
+                        .is_some_and(|info| info.on_same_chain_as_us)
+            })
+            .max_by_key(|(_, score)| {
+                score
+                    .failing_since
+                    .map(|since| since.elapsed())
+                    .unwrap_or(Duration::ZERO)
+            })
+            .map(|(peer_id, _)| *peer_id)
     }
 }
 
@@ -627,6 +682,7 @@ struct StateSyncEventLoop<S> {
 
     sync_checkpoint_from_archive_task: Option<AbortHandle>,
     archive_config: Option<ArchiveReaderConfig>,
+    discovery_sender: Option<crate::discovery::Sender>,
 }
 
 impl<S> StateSyncEventLoop<S>
@@ -867,7 +923,9 @@ where
                 self.spawn_get_latest_from_peer(peer_id);
             }
             Ok(PeerEvent::LostPeer(peer_id, _)) => {
-                self.peer_heights.write().unwrap().peers.remove(&peer_id);
+                let mut heights = self.peer_heights.write().unwrap();
+                heights.peers.remove(&peer_id);
+                heights.scores.remove(&peer_id);
             }
 
             Err(RecvError::Closed) => {
@@ -909,6 +967,41 @@ where
         if let Some(layer) = self.download_limit_layer.as_ref() {
             layer.maybe_prune_map();
         }
+
+        self.maybe_disconnect_failing_peer();
+    }
+
+    fn maybe_disconnect_failing_peer(&mut self) {
+        let threshold = self.config.peer_disconnect_threshold();
+        if threshold.is_zero() {
+            return;
+        }
+
+        let min_peers = self.config.min_peers_for_disconnect();
+
+        let mut peer_heights = self.peer_heights.write().unwrap();
+        peer_heights.update_failing_states();
+
+        let same_chain_connected_count = peer_heights
+            .peers_on_same_chain()
+            .filter(|(peer_id, _)| self.network.peer(**peer_id).is_some())
+            .count();
+        if same_chain_connected_count <= min_peers {
+            return;
+        }
+
+        let Some(peer_id) = peer_heights.find_peer_to_disconnect(threshold) else {
+            return;
+        };
+        drop(peer_heights);
+
+        info!("disconnecting peer {peer_id} for consistent state sync failures");
+        if let Some(sender) = &self.discovery_sender {
+            sender.report_peer_failure(peer_id);
+        } else {
+            let _ = self.network.disconnect(peer_id);
+        }
+        self.metrics.inc_peers_disconnected_for_failure();
     }
 
     fn maybe_start_checkpoint_summary_sync_task(&mut self) {
