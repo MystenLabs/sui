@@ -3,11 +3,11 @@ source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility
 expression: normalize_path(output)
 ---
 error[Compatibility E01006]: module missing
-  ┌─ /fixtures/upgrade_errors/missing_module_toml/starts_second_line/Move.toml:2:1
+  ┌─ /fixtures/upgrade_errors/missing_module_toml/starts_second_line/Move.toml:1:1
   │  
-2 │ ╭ [package]
-3 │ │ name = "upgrades"
-4 │ │ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+1 │ ╭ [package]
+2 │ │ name = "upgrades"
+3 │ │ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
   │ ╰────────────────────────────────────────────────────────────────────────^ Package is missing module 'identifier'
   │  
   = Modules which are part package cannot be removed during an upgrade.

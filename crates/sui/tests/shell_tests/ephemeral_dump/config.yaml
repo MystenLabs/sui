@@ -1,0 +1,9 @@
+keystore:
+  File: ~
+envs:
+  - alias: localnet
+    rpc: "https://custom.rpc.node.base:443"
+    ws: ~
+    basic_auth: ~
+active_env: localnet
+active_address: "0x0000000000000000000000000000000000000000000000000000000000000000"

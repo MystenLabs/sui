@@ -5,41 +5,27 @@ source: crates/sui/tests/shell_tests.rs
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# TODO DVX-2008: this should not be in with_network, but currently still tries to hit the RPC
-#
 # Test sui move build --dump with --pubfile-path for ephemeral publication
+#
+# This is important because it should be possible (esp with no dependencies) to
+# dump bytecode without contacting a network at all
 #
 # This test verifies that when building with --dump and --pubfile-path, the
 # dependency's original-id from the ephemeral pubfile appears in the compiled
 # bytecode.
 
-# Get the chain ID from the network
-chain_id=$(sui client --client.config $CONFIG chain-identifier)
-
 # Generate the ephemeral pubfile (local source paths must be absolute)
-cat > Pub.test.toml <<EOF
-build-env = "testnet"
-chain-id = "$chain_id"
-
-[[published]]
-source = { local = "$PWD/dep_pkg" }
-published-at = "0x00000000000000000000000000000000000000000000000000000000CAFECAFE"
-original-id = "0x00000000000000000000000000000000000000000000000000000000CAFE0001"
-version = 1
-
-[[published]]
-source = { local = "$PWD/main_pkg" }
-published-at = "0x00000000000000000000000000000000000000000000000000000000BEEFBEEF"
-original-id = "0x00000000000000000000000000000000000000000000000000000000BEEF0001"
-version = 1
-EOF
+sed "s|<PWD>|$PWD|g" Pub.template.toml > Pub.localnet.toml
 
 # Build with --dump using the ephemeral pubfile
-sui move --client.config "$CONFIG" \
-  build -p main_pkg --dump --pubfile-path Pub.test.toml -e testnet --no-tree-shaking > output.json
+sui move --client.config config.yaml \
+  build -p main_pkg --dump --pubfile-path Pub.localnet.toml -e testnet --no-tree-shaking > output.json
 
-cat output.json | sed 's/.*"modules":\["\([^"]*\)".*/\1/' | base64 -d > main.mv
+cat output.json
+cat output.json | jq -r '.modules[0]' | base64 -d > main.mv
 sui move disassemble main.mv > main.move
+
+cat main.move
 
 echo
 echo "=== decompiled bytecode should have main module at address 0 ==="
@@ -58,6 +44,19 @@ grep beef main.mv || echo "no beef"
 success: true
 exit_code: 0
 ----- stdout -----
+{"modules":["oRzrCwYAAAAGAQAEAwQKBQ4DBxEYCClADGkJAAMBAQAAAAEAAQIAAQAAAQMIY2FsbF9kZXADZGVwBWhlbGxvBG1haW4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADK/gABAAEAAAACEQECAA=="],"dependencies":["0x00000000000000000000000000000000000000000000000000000000cafecafe"],"digest":[45,41,146,22,105,95,197,74,240,10,250,126,131,168,26,8,3,132,162,53,58,168,245,212,12,215,196,151,248,157,180,116]}
+// Move bytecode v6
+module 0.main {
+use 00000000000000000000000000000000000000000000000000000000cafe0001::dep;
+
+public call_dep(): u64 {
+B0:
+	0: Call dep::hello(): u64
+	1: Ret
+}
+
+}
+
 
 === decompiled bytecode should have main module at address 0 ===
 module 0.main {

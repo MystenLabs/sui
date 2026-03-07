@@ -79,7 +79,7 @@ impl Test {
         // it as the optional argument in the build-config, which then looks it up again, but it
         // should be ok.
         let environment =
-            find_environment(&rerooted_path, build_config.environment, wallet).await?;
+            find_environment(&rerooted_path, build_config.environment, wallet, false).await?;
         build_config.environment = Some(environment.name);
 
         run_move_unit_tests(

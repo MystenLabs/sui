@@ -628,19 +628,19 @@ impl SuiCommand {
                             &rerooted_path,
                             build_config.environment.clone(),
                             &context,
+                            false,
                         )
                         .await?;
 
                         let mut root_pkg = if let Some(pubfile_path) = pubfile_path {
-                            let chain_id = context
-                                .grpc_client()?
-                                .get_chain_identifier()
-                                .await?
-                                .to_string();
+                            // for ephemeral dumping, we take the chain ID from the real
+                            // environment.
+                            let chain_id = environment.id();
+
                             let modes = build_config.mode_set();
                             load_root_pkg_for_ephemeral_publish_or_upgrade(
                                 &rerooted_path,
-                                &chain_id,
+                                chain_id,
                                 build_config.environment.clone(),
                                 pubfile_path,
                                 modes,

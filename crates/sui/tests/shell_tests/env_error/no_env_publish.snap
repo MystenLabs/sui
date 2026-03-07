@@ -1,0 +1,26 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# This tests the error message when you set your local client to an ephemeral network and then do `sui client publish`
+
+echo "== should fail and suggest test-publish or adding env to manifest =="
+sui client --client.config client.yaml publish
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+== should fail and suggest test-publish or adding env to manifest ==
+Your current environment is `devnet`, but the package does not define an `devnet` environment.
+
+To publish on a different environment, you can use `sui client switch --env <env>` before publishing.
+
+To make a temporary publication on `devnet`, use the `sui client test-publish` command instead.
+
+It is also possible to add a new environment to `Move.toml` if you want to maintain a persistent publication on `devnet`; see https://docs.sui.io/guides/developer/packages/move-package-management#environments for more details.
+
+----- stderr -----

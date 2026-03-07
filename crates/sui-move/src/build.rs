@@ -62,7 +62,7 @@ impl Build {
         wallet: &WalletContext,
     ) -> anyhow::Result<()> {
         let environment =
-            find_environment(rerooted_path, config.environment.clone(), wallet).await?;
+            find_environment(rerooted_path, config.environment.clone(), wallet, false).await?;
         let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
