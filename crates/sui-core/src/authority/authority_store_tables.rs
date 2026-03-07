@@ -416,6 +416,7 @@ impl AuthorityPerpetualTables {
         )
     }
 
+    #[cfg(not(tidehunter))]
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
         Self::get_read_only_handle(
             Self::path(parent_path),
@@ -423,6 +424,11 @@ impl AuthorityPerpetualTables {
             None,
             MetricConf::new("perpetual_readonly"),
         )
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_readonly(parent_path: &Path) -> Self {
+        Self::open(parent_path, None, None)
     }
 
     // This is used by indexer to find the correct version of dynamic field child object.

@@ -329,6 +329,7 @@ impl CheckpointStoreTables {
         )
     }
 
+    #[cfg(not(tidehunter))]
     pub fn open_readonly(path: &Path) -> CheckpointStoreTablesReadOnly {
         Self::get_read_only_handle(
             path.to_path_buf(),
@@ -336,6 +337,11 @@ impl CheckpointStoreTables {
             None,
             MetricConf::new("checkpoint_readonly"),
         )
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_readonly(path: &Path) -> Self {
+        Self::new(path, "checkpoint", Arc::new(PrunerWatermarks::default()))
     }
 }
 
@@ -373,7 +379,13 @@ impl CheckpointStore {
         })
     }
 
+    #[cfg(not(tidehunter))]
     pub fn open_readonly(path: &Path) -> CheckpointStoreTablesReadOnly {
+        CheckpointStoreTables::open_readonly(path)
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_readonly(path: &Path) -> CheckpointStoreTables {
         CheckpointStoreTables::open_readonly(path)
     }
 

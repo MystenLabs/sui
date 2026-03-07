@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(not(tidehunter))]
 use crate::db_tool::{DbToolCommand, execute_db_tool_command, print_db_all_tables};
 use crate::{
     ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
@@ -133,7 +132,6 @@ pub enum ToolCommand {
     },
 
     /// Tool to read validator & node db.
-    #[cfg(not(tidehunter))]
     #[command(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
@@ -554,7 +552,6 @@ impl ToolCommand {
                     get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
                 );
             }
-            #[cfg(not(tidehunter))]
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
                 match cmd {

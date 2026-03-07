@@ -659,6 +659,11 @@ impl AuthorityEpochTables {
 
     #[cfg(tidehunter)]
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
+        Self::open_with_path(&Self::path(epoch, parent_path), db_options)
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_with_path(path: &PathBuf, db_options: Option<Options>) -> Self {
         tracing::warn!("AuthorityEpochTables using tidehunter");
         use typed_store::tidehunter_util::{
             KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,
@@ -900,12 +905,13 @@ impl AuthorityEpochTables {
             ),
         ];
         Self::open_tables_read_write(
-            Self::path(epoch, parent_path),
+            path.to_path_buf(),
             MetricConf::new("epoch"),
             configs.into_iter().collect(),
         )
     }
 
+    #[cfg(not(tidehunter))]
     pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> AuthorityEpochTablesReadOnly {
         Self::get_read_only_handle(
             Self::path(epoch, parent_path),
@@ -913,6 +919,11 @@ impl AuthorityEpochTables {
             None,
             MetricConf::new("epoch_readonly"),
         )
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> Self {
+        Self::open(epoch, parent_path, None)
     }
 
     pub fn path(epoch: EpochId, parent_path: &Path) -> PathBuf {

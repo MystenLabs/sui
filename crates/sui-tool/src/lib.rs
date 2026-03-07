@@ -68,7 +68,6 @@ use tracing::{info, warn};
 use typed_store::DBMetrics;
 
 pub mod commands;
-#[cfg(not(tidehunter))]
 pub mod db_tool;
 mod formal_snapshot_util;
 
