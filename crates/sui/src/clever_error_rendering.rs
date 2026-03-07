@@ -113,11 +113,14 @@ pub(crate) async fn render_clever_error_opt(error_string: &str, client: &Client)
 
     // Convert the command index into an ordinal.
     let command = command_index + 1;
-    let suffix = match command % 10 {
-        1 => "st",
-        2 => "nd",
-        3 => "rd",
-        _ => "th",
+    let suffix = match command % 100 {
+        11 | 12 | 13 => "th",
+        _ => match command % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        },
     };
 
     Some(format!("{command}{suffix} command aborted within {error}"))
