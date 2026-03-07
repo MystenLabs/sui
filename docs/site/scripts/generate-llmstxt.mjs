@@ -217,12 +217,9 @@ for (const file of files) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
   const segments = urlPath.replace(/^\//, "").split("/");
-  // segments[0] is "docs", so use segments[1] for category grouping
-  const section = segments.length > 2
-    ? toSectionTitle(segments[1])
-    : segments.length > 1 && segments[1]
-      ? toSectionTitle(segments[1])
-      : "General";
+  const section = segments.length > 1
+    ? toSectionTitle(segments[0])
+    : "General";
 
   pages.push({ title: derivedTitle, url, description, section });
 }

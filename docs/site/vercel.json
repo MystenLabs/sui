@@ -3351,7 +3351,20 @@
       "source": "/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature",
       "destination": "/references/sui-api/sui-graphql/beta/reference",
       "permanent": true
-    }
+    },
+    { "source": "/concepts/cryptography.md", "destination": "/concepts/cryptography/index.md" },
+    { "source": "/guides/developer/accessing-data/custom-indexer.md", "destination": "/guides/developer/accessing-data/custom-indexer/index.md" },
+    { "source": "/guides/developer/app-examples.md", "destination": "/guides/developer/app-examples/index.md" },
+    { "source": "/guides/developer/coin.md", "destination": "/guides/developer/coin/index.md" },
+    { "source": "/guides/developer/cryptography.md", "destination": "/guides/developer/cryptography/index.md" },
+    { "source": "/guides/developer/cryptography/zklogin-integration.md", "destination": "/guides/developer/cryptography/zklogin-integration/index.md" },
+    { "source": "/guides/developer/getting-started.md", "destination": "/guides/developer/getting-started/index.md" },
+    { "source": "/guides/developer/nautilus.md", "destination": "/guides/developer/nautilus/index.md" },
+    { "source": "/references/framework/sui_bridge.md", "destination": "/references/framework/sui_bridge/index.md" },
+    { "source": "/references/framework/sui_std.md", "destination": "/references/framework/sui_std/index.md" },
+    { "source": "/references/framework/sui_sui.md", "destination": "/references/framework/sui_sui/index.md" },
+    { "source": "/references/framework/sui_sui_system.md", "destination": "/references/framework/sui_sui_system/index.md" },
+    { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" }
   ],
   "rewrites": [
     {
