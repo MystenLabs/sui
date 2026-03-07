@@ -526,12 +526,6 @@ ExecutionDigests:
         TYPENAME: TransactionDigest
     - effects:
         TYPENAME: TransactionEffectsDigest
-ExecutionFailure:
-  STRUCT:
-    - error:
-        TYPENAME: ExecutionErrorKind
-    - command:
-        OPTION: U64
 ExecutionErrorKind:
   ENUM:
     0:
@@ -672,6 +666,12 @@ ExecutionErrorKind:
         STRUCT:
           - id:
               TYPENAME: ObjectID
+ExecutionFailure:
+  STRUCT:
+    - error:
+        TYPENAME: ExecutionErrorKind
+    - command:
+        OPTION: U64
 ExecutionStatus:
   ENUM:
     0:

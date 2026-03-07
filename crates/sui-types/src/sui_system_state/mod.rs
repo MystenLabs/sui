@@ -459,9 +459,8 @@ pub struct AdvanceEpochParams {
 #[cfg(msim)]
 pub mod advance_epoch_result_injection {
     use crate::{
-        committee::EpochId,
-        error::{ExecutionError, ExecutionErrorKind},
-        execution::ResultWithTimings,
+        committee::EpochId, error::ExecutionError, execution::ResultWithTimings,
+        execution_status::ExecutionErrorKind,
     };
     use std::cell::RefCell;
 
