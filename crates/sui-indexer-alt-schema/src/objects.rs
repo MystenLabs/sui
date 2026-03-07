@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context;
 use diesel::FromSqlRow;
 use diesel::backend::Backend;
 use diesel::deserialize;
@@ -10,14 +9,10 @@ use diesel::prelude::*;
 use diesel::serialize;
 use diesel::sql_types::SmallInt;
 use sui_field_count::FieldCount;
-use sui_types::object::Object;
-use sui_types::object::Owner;
 
 use crate::schema::coin_balance_buckets;
 use crate::schema::coin_balance_buckets_deletion_reference;
 use crate::schema::kv_objects;
-use crate::schema::obj_info;
-use crate::schema::obj_info_deletion_reference;
 use crate::schema::obj_versions;
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
@@ -58,27 +53,6 @@ pub enum StoredCoinOwnerKind {
     Consensus = 1,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
-#[diesel(table_name = obj_info, primary_key(object_id, cp_sequence_number))]
-#[diesel(treat_none_as_default_value = false)]
-pub struct StoredObjInfo {
-    pub object_id: Vec<u8>,
-    pub cp_sequence_number: i64,
-    pub owner_kind: Option<StoredOwnerKind>,
-    pub owner_id: Option<Vec<u8>>,
-    pub package: Option<Vec<u8>>,
-    pub module: Option<String>,
-    pub name: Option<String>,
-    pub instantiation: Option<Vec<u8>>,
-}
-
-#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
-#[diesel(table_name = obj_info_deletion_reference, primary_key(cp_sequence_number, object_id))]
-pub struct StoredObjInfoDeletionReference {
-    pub object_id: Vec<u8>,
-    pub cp_sequence_number: i64,
-}
-
 #[derive(Insertable, Queryable, Debug, Clone, FieldCount, Eq, PartialEq)]
 #[diesel(table_name = coin_balance_buckets, primary_key(object_id, cp_sequence_number))]
 #[diesel(treat_none_as_default_value = false)]
@@ -96,45 +70,6 @@ pub struct StoredCoinBalanceBucket {
 pub struct StoredCoinBalanceBucketDeletionReference {
     pub object_id: Vec<u8>,
     pub cp_sequence_number: i64,
-}
-
-impl StoredObjInfo {
-    pub fn from_object(object: &Object, cp_sequence_number: i64) -> anyhow::Result<Self> {
-        let type_ = object.type_();
-        Ok(Self {
-            object_id: object.id().to_vec(),
-            cp_sequence_number,
-            owner_kind: Some(match object.owner() {
-                Owner::AddressOwner(_) => StoredOwnerKind::Address,
-                Owner::ObjectOwner(_) => StoredOwnerKind::Object,
-                Owner::Shared { .. } => StoredOwnerKind::Shared,
-                Owner::Immutable => StoredOwnerKind::Immutable,
-                // We do not distinguish between fastpath owned and consensus owned
-                // objects.
-                Owner::ConsensusAddressOwner { .. } => StoredOwnerKind::Address,
-            }),
-
-            owner_id: match object.owner() {
-                Owner::AddressOwner(a) => Some(a.to_vec()),
-                Owner::ObjectOwner(o) => Some(o.to_vec()),
-                Owner::Shared { .. } | Owner::Immutable => None,
-                Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_vec()),
-            },
-
-            package: type_.map(|t| t.address().to_vec()),
-            module: type_.map(|t| t.module().to_string()),
-            name: type_.map(|t| t.name().to_string()),
-            instantiation: type_
-                .map(|t| bcs::to_bytes(&t.type_params()))
-                .transpose()
-                .with_context(|| {
-                    format!(
-                        "Failed to serialize type parameters for {}",
-                        object.id().to_canonical_display(/* with_prefix */ true),
-                    )
-                })?,
-        })
-    }
 }
 
 impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind
