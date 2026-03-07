@@ -1162,6 +1162,69 @@ type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub type ExecutionErrorKind = ExecutionFailureStatus;
 
+impl ExecutionErrorTrait for ExecutionErrorKind {
+    fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, _source: E) -> Self {
+        kind
+    }
+
+    fn with_command_index(self, _command: CommandIndex) -> Self {
+        self
+    }
+
+    fn from_kind(kind: ExecutionErrorKind) -> Self {
+        kind
+    }
+
+    fn kind(&self) -> &ExecutionErrorKind {
+        self
+    }
+
+    fn command(&self) -> Option<CommandIndex> {
+        None
+    }
+}
+
+impl From<ExecutionError> for ExecutionErrorKind {
+    fn from(error: ExecutionError) -> Self {
+        error.kind().clone()
+    }
+}
+
+/// A trait for execution errors that provides common methods for accessing error information and creating new errors.
+pub trait ExecutionErrorTrait:
+    From<ExecutionError> + Into<ExecutionError> + Debug + std::error::Error + Send + Sync + Sized
+{
+    fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self;
+
+    fn with_command_index(self, command: CommandIndex) -> Self;
+
+    fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> Self
+    where
+        Self: Sized,
+    {
+        Self::new_with_source(
+            ExecutionErrorKind::command_argument_error(e, arg_idx as u16),
+            Box::new(e),
+        )
+    }
+
+    fn invariant_violation<E: Into<BoxError>>(source: E) -> Self
+    where
+        Self: Sized,
+    {
+        Self::new_with_source(ExecutionErrorKind::InvariantViolation, source.into())
+    }
+
+    fn from_kind(kind: ExecutionErrorKind) -> Self;
+
+    fn kind(&self) -> &ExecutionErrorKind;
+    fn command(&self) -> Option<CommandIndex>;
+
+    fn to_execution_status(&self) -> (ExecutionFailureStatus, Option<CommandIndex>) {
+        (self.kind().clone(), self.command())
+    }
+}
+
 #[derive(Debug)]
 pub struct ExecutionError {
     inner: Box<ExecutionErrorInner>,
@@ -1234,6 +1297,28 @@ impl std::error::Error for ExecutionError {
 impl From<ExecutionErrorKind> for ExecutionError {
     fn from(kind: ExecutionErrorKind) -> Self {
         Self::from_kind(kind)
+    }
+}
+
+impl ExecutionErrorTrait for ExecutionError {
+    fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
+        Self::new_with_source(kind, source)
+    }
+
+    fn with_command_index(self, command: CommandIndex) -> Self {
+        self.with_command_index(command)
+    }
+
+    fn from_kind(kind: ExecutionErrorKind) -> Self {
+        Self::from_kind(kind)
+    }
+
+    fn kind(&self) -> &ExecutionErrorKind {
+        self.kind()
+    }
+
+    fn command(&self) -> Option<CommandIndex> {
+        self.command()
     }
 }
 
