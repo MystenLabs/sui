@@ -29,9 +29,9 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 
 git subtree pull --prefix=docs/site/src/shared git@github.com:MystenLabs/ML-Shared-Docusaurus.git master --squash
 echo "✅ Shared component content updated"
-git subtree pull --prefix=docs/subtree/awesome-sui git@github.com:sui-foundation/awesome-sui.git main --squash
+git subtree pull --prefix=docs/subtree/awesome-sui https://github.com/sui-foundation/awesome-sui.git main --squash
 echo "✅ Awesome Sui content updated"
-git subtree pull --prefix=docs/subtree/awesome-gaming git@github.com:becky-sui/awesome-sui-gaming.git main --squash
+git subtree pull --prefix=docs/subtree/awesome-gaming https://github.com/becky-sui/awesome-sui-gaming.git main --squash
 echo "✅ Awesome Sui Gaming content updated"
 
 echo "✅ All subtree content updated"
@@ -44,7 +44,7 @@ SITE_DIR="$(pwd)"
 ## Build displayV2 app - only download during build process, do not commit files locally
 
 TEMP_DIR=$(mktemp -d)
-git clone --depth 1 git@github.com:MystenLabs/display-preview.git "$TEMP_DIR/display-preview"
+git clone --depth 1 https://github.com/MystenLabs/display-preview.git "$TEMP_DIR/display-preview"
 cd "$TEMP_DIR/display-preview"
 pnpm install
 pnpm build
@@ -54,7 +54,7 @@ rm -rf "$TEMP_DIR"
 
 ## Begin Docusaurus build
 
-pnpm docusaurus build 2>&1 | while IFS= read -r line; do
+docusaurus build 2>&1 | while IFS= read -r line; do
   echo "$line"
   echo "$line" >> "$LOG"
 done
