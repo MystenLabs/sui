@@ -12,11 +12,11 @@ const __dirname = path.dirname(__filename);
 // Paths (adjusted for new location)
 const readmePath = path.join(
   __dirname,
-  "../../../subtree/awesome-sui-gaming/README.md",
+  "../../subtree/awesome-sui-gaming/README.md",
 );
 const readmeTargetPath = path.join(
   __dirname,
-  "../../../content/references/awesome-sui-gaming.mdx",
+  "../../content/references/awesome-sui-gaming.mdx",
 );
 
 // Process the content for the awesome-sui-gaming README structure:

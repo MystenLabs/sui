@@ -24,6 +24,7 @@ node scripts/massagegraphql.js || { echo "❌ massagegraphql failed"; exit 1; }
 echo "✅ Pre-build generation complete"
 
 ## Update subtrees
+## must be run from top level of repo
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
 git subtree pull --prefix=docs/site/src/shared git@github.com:MystenLabs/ML-Shared-Docusaurus.git master --squash
@@ -35,9 +36,23 @@ echo "✅ Awesome Sui Gaming content updated"
 
 echo "✅ All subtree content updated"
 
-## Begin Docusaurus build
+## Back to site dir 
 
 cd docs/site || exit 1
+SITE_DIR="$(pwd)"
+
+## Build displayV2 app - only download during build process, do not commit files locally
+
+TEMP_DIR=$(mktemp -d)
+git clone --depth 1 git@github.com:MystenLabs/display-preview.git "$TEMP_DIR/display-preview"
+cd "$TEMP_DIR/display-preview"
+pnpm install
+pnpm build
+cp -r dist/ "$SITE_DIR/static/display-preview"
+cd "$SITE_DIR"
+rm -rf "$TEMP_DIR"
+
+## Begin Docusaurus build
 
 pnpm docusaurus build 2>&1 | while IFS= read -r line; do
   echo "$line"

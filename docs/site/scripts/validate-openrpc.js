@@ -5,9 +5,9 @@ const fs = require("fs");
 const path = require("path");
 
 const SPECS = [
-  { network: "mainnet", relPath: "../../src/open-spec/mainnet/openrpc.json", strictJson: true },
-  { network: "testnet", relPath: "../../src/open-spec/testnet/openrpc.json", strictJson: false },
-  { network: "devnet", relPath: "../../src/open-spec/devnet/openrpc.json", strictJson: false },
+  { network: "mainnet", relPath: "../../crates/sui-open-rpc/spec/openrpc.json", strictJson: true },
+  { network: "testnet", relPath: "../../crates/sui-open-rpc/spec/openrpc.json", strictJson: true },
+  { network: "devnet", relPath: "../../crates/sui-open-rpc/spec/openrpc.json", strictJson: true },
 ];
 
 // Treat these as "expected non-JSON stubs".
