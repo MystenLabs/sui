@@ -1172,6 +1172,3 @@
     Referral](https://docs.sui.io/standards/deepbook-margin/contract-information/supply-referral.md)
     Description: Learn how supply referrals work in DeepBook Margin and how to earn fees by
         referring liquidity suppliers.
-- [Take Profit Stop
-    Loss](https://docs.sui.io/standards/deepbook-margin/contract-information/tpsl.md)
-    Description: Learn about conditional orders for automated trading strategies on DeepBook Margin.

@@ -13,7 +13,7 @@ const repo = {
 };
 const PROTOCOL_PATH = path.join(
   __dirname,
-  "../../../content/documentation.json",
+  "../../content/documentation.json",
 );
 
 const url = `https://raw.githubusercontent.com/${repo.owner}/${repo.name}/${repo.branch}/${repo.filePath}`;
