@@ -155,14 +155,15 @@ fn unused_mut_borrows(context: &super::CFGContext, mutably_used: RefExpInfoMap) 
 // Command
 //**************************************************************************************************
 
-macro_rules! assert_single_value {
-    ($context:ident, $values:expr, $loc:expr) => {{
+macro_rules! single_value_exp {
+    ($context:ident, $e:expr) => {{
+        let e = $e;
         let has_errors = $context.outer_env_has_errors;
-        let values = $values;
+        let values = exp($context, e);
         ice_assert!(
             $context,
             values.len() == 1 || has_errors,
-            $loc,
+            e.exp.loc,
             "Expected a single value",
         );
         let mut iter = values.into_iter();
@@ -171,14 +172,6 @@ macro_rules! assert_single_value {
             $context.borrow_state.release_value(extra);
         }
         v
-    }};
-}
-
-macro_rules! single_value_exp {
-    ($context:ident, $e:expr) => {{
-        let e = $e;
-        let values = exp($context, e);
-        assert_single_value!($context, values, e.exp.loc)
     }};
 }
 
