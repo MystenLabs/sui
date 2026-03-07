@@ -6,8 +6,9 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 use move_vm_runtime::native_extensions::NativeExtensionMarker;
 use std::{cell::RefCell, rc::Rc};
+use sui_execution_types::TxContext;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress, TxContext},
+    base_types::{ObjectID, SuiAddress},
     committee::EpochId,
     digests::TransactionDigest,
 };

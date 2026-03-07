@@ -48,14 +48,14 @@ mod checked {
         sync::Arc,
         time::Instant,
     };
+    use sui_execution_types::{MoveLegacyTxContext, TxContext};
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         SUI_FRAMEWORK_ADDRESS,
         base_types::{
-            MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
-            RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
-            TxContext, TxContextKind,
+            MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
+            SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, TxContextKind,
         },
         coin::Coin,
         error::{ExecutionError, ExecutionErrorKind, command_argument_error},

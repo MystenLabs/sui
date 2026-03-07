@@ -13887,6 +13887,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "serde",
  "serde_json",
+ "sui-execution-types",
  "sui-macros",
  "sui-move-natives-latest",
  "sui-protocol-config",
@@ -13922,6 +13923,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.3",
  "serde",
+ "sui-execution-types",
  "sui-macros",
  "sui-move-natives-v0",
  "sui-protocol-config",
@@ -13948,6 +13950,7 @@ dependencies = [
  "move-vm-types-v1",
  "parking_lot 0.12.3",
  "serde",
+ "sui-execution-types",
  "sui-macros",
  "sui-move-natives-v1",
  "sui-protocol-config",
@@ -13974,6 +13977,7 @@ dependencies = [
  "move-vm-types-v2",
  "parking_lot 0.12.3",
  "serde",
+ "sui-execution-types",
  "sui-macros",
  "sui-move-natives-v2",
  "sui-protocol-config",
@@ -14459,6 +14463,7 @@ dependencies = [
  "sui-authority-aggregation",
  "sui-config",
  "sui-execution",
+ "sui-execution-types",
  "sui-framework",
  "sui-genesis-builder",
  "sui-json-rpc-types",
@@ -14720,6 +14725,7 @@ dependencies = [
  "sui-adapter-v0",
  "sui-adapter-v1",
  "sui-adapter-v2",
+ "sui-execution-types",
  "sui-move-natives-latest",
  "sui-move-natives-v0",
  "sui-move-natives-v1",
@@ -14743,6 +14749,17 @@ dependencies = [
  "thiserror 1.0.69",
  "toml 0.7.4",
  "toml_edit 0.19.10",
+]
+
+[[package]]
+name = "sui-execution-types"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-core-types",
+ "serde",
+ "sui-protocol-config",
+ "sui-types",
 ]
 
 [[package]]
@@ -15754,6 +15771,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "sui-adapter-latest",
  "sui-config",
+ "sui-execution-types",
  "sui-macros",
  "sui-move-build",
  "sui-move-natives-latest",
@@ -15831,6 +15849,7 @@ dependencies = [
  "move-vm-types",
  "rand 0.8.5",
  "smallvec",
+ "sui-execution-types",
  "sui-protocol-config",
  "sui-types",
  "tracing",
@@ -15851,6 +15870,7 @@ dependencies = [
  "move-vm-runtime-v0",
  "move-vm-types-v0",
  "smallvec",
+ "sui-execution-types",
  "sui-protocol-config",
  "sui-types",
  "tracing",
@@ -15871,6 +15891,7 @@ dependencies = [
  "move-vm-runtime-v1",
  "move-vm-types-v1",
  "smallvec",
+ "sui-execution-types",
  "sui-protocol-config",
  "sui-types",
  "tracing",
@@ -15891,6 +15912,7 @@ dependencies = [
  "move-vm-runtime-v2",
  "move-vm-types-v2",
  "smallvec",
+ "sui-execution-types",
  "sui-protocol-config",
  "sui-types",
  "tracing",
@@ -17238,6 +17260,7 @@ dependencies = [
  "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
+ "sui-execution-types",
  "sui-protocol-config",
  "sui-types",
 ]
@@ -17261,6 +17284,7 @@ dependencies = [
  "move-bytecode-verifier-v0",
  "move-core-types",
  "move-vm-config",
+ "sui-execution-types",
  "sui-protocol-config",
  "sui-types",
 ]
@@ -17276,6 +17300,7 @@ dependencies = [
  "move-bytecode-verifier-v1",
  "move-core-types",
  "move-vm-config",
+ "sui-execution-types",
  "sui-types",
 ]
 
@@ -17290,6 +17315,7 @@ dependencies = [
  "move-bytecode-verifier-v2",
  "move-core-types",
  "move-vm-config",
+ "sui-execution-types",
  "sui-protocol-config",
  "sui-types",
 ]

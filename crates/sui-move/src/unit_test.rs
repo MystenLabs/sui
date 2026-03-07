@@ -19,6 +19,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 use sui_adapter::gas_meter::SuiGasMeter;
+use sui_execution_types::TxContext;
 use sui_move_build::decorate_warnings;
 use sui_move_natives::{
     NativesCostTable, object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
@@ -28,7 +29,7 @@ use sui_package_alt::find_environment;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
-    base_types::{SuiAddress, TxContext},
+    base_types::SuiAddress,
     digests::TransactionDigest,
     gas::{SuiGasStatus, SuiGasStatusAPI},
     gas_model::{tables::GasStatus, units_types::Gas},

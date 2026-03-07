@@ -79,6 +79,8 @@ use crate::{
     consensus_test_utils::CapturedTransactions,
 };
 
+use sui_execution_types::TxContext;
+
 use super::*;
 
 pub use crate::authority::authority_test_utils::*;

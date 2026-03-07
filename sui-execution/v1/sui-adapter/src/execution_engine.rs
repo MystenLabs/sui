@@ -25,6 +25,7 @@ mod checked {
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
+    use sui_execution_types::TxContext;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
@@ -49,7 +50,7 @@ mod checked {
         TransactionKind,
     };
     use sui_types::{
-        base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
+        base_types::{ObjectRef, SuiAddress, TransactionDigest},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,

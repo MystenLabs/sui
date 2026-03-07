@@ -83,6 +83,7 @@ sui-config.workspace = true
 sui-rpc.workspace = true
 sui-authority-aggregation.workspace = true
 sui-execution.workspace = true
+sui-execution-types.workspace = true
 sui-framework.workspace = true
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true

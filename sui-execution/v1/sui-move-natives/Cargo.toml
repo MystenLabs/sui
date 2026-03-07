@@ -23,5 +23,6 @@ move-vm-runtime = { path = "../../../external-crates/move/move-execution/v1/crat
 move-vm-types = { path = "../../../external-crates/move/move-execution/v1/crates/move-vm-types", package = "move-vm-types-v1" }
 
 sui-protocol-config.workspace = true
+sui-execution-types.workspace = true
 sui-types.workspace = true
 tracing.workspace = true

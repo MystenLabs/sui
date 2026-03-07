@@ -20,5 +20,6 @@ move-abstract-stack.workspace = true
 
 move-bytecode-verifier = { path = "../../../external-crates/move/move-execution/v0/crates/move-bytecode-verifier", package = "move-bytecode-verifier-v0" }
 
+sui-execution-types.workspace = true
 sui-types.workspace = true
 sui-protocol-config.workspace = true

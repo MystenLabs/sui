@@ -53,6 +53,7 @@ mod checked {
         rc::Rc,
         sync::Arc,
     };
+    use sui_execution_types::TxContext;
     use sui_move_natives::object_runtime::{
         self, LoadedRuntimeObject, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
         RuntimeResults, get_all_uids, max_event_error,
@@ -62,7 +63,7 @@ mod checked {
         accumulator_event::AccumulatorEvent,
         accumulator_root::AccumulatorObjId,
         balance::Balance,
-        base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
+        base_types::{MoveObjectType, ObjectID, SuiAddress},
         coin::Coin,
         effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
         error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},

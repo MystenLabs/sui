@@ -8,6 +8,7 @@ publish = false
 edition = "2024"
 
 [dependencies]
+sui-execution-types.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 

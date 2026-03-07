@@ -13,6 +13,7 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use std::sync::Arc;
+    use sui_execution_types::TxContext;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -43,7 +44,7 @@ mod checked {
         TransactionKind,
     };
     use sui_types::{
-        base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
+        base_types::{ObjectRef, SuiAddress, TransactionDigest},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_FRAMEWORK_ADDRESS,
