@@ -59,6 +59,20 @@ const config = {
   
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
+     function aliasPlugin() {
+      return {
+        name: 'custom-aliases',
+        configureWebpack() {
+          return {
+            resolve: {
+              alias: {
+                '@generated-imports': path.resolve(__dirname, '.generated'),
+              },
+            },
+          };
+        },
+      };
+    },
     //require.resolve('./src/plugins/framework'),
     "docusaurus-plugin-copy-page-button",
     require.resolve("./src/plugins/validate-openrpc"),
