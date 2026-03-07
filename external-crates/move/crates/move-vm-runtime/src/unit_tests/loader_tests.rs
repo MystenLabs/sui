@@ -119,7 +119,7 @@ impl Adapter {
         let vm = Arc::new(RwLock::new(
             InMemoryTestAdapter::new_with_runtime_and_storage(runtime, store),
         ));
-        let linkage = LinkageContext::new(BTreeMap::new());
+        let linkage = LinkageContext::new(BTreeMap::new()).unwrap();
         Self {
             store: {
                 RelinkingStore {
@@ -138,9 +138,7 @@ impl Adapter {
     ) -> Self {
         Self {
             store: {
-                let linkage = LinkageContext {
-                    linkage_table: linkage,
-                };
+                let linkage = LinkageContext::new(linkage).unwrap();
                 let type_origin = type_origin
                     .into_iter()
                     .map(|((module, type_name), origin)| {
@@ -163,8 +161,8 @@ impl Adapter {
     }
 
     fn publish_package(&mut self, mut pkg: StoredPackage) {
-        if !self.store.linkage.linkage_table.is_empty() {
-            pkg.0.linkage_table = self.store.linkage.linkage_table.clone();
+        if !self.store.linkage.linkage_table().is_empty() {
+            pkg.0.linkage_table = self.store.linkage.linkage_table().clone();
         }
         if !self.store.type_origin.is_empty() {
             pkg.0.type_origin_table = self.store.type_origin.clone();
@@ -177,8 +175,8 @@ impl Adapter {
     }
 
     fn publish_package_with_error(&mut self, mut pkg: StoredPackage) {
-        if !self.store.linkage.linkage_table.is_empty() {
-            pkg.0.linkage_table = self.store.linkage.linkage_table.clone();
+        if !self.store.linkage.linkage_table().is_empty() {
+            pkg.0.linkage_table = self.store.linkage.linkage_table().clone();
         }
         if !self.store.type_origin.is_empty() {
             pkg.0.type_origin_table = self.store.type_origin.clone();

@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_binary_format::{
-    errors::{PartialVMResult, VMResult},
+    errors::{Location, PartialVMResult, VMResult},
     partial_vm_error,
 };
 use move_core_types::language_storage::{ModuleId, TypeTag};
@@ -22,7 +22,7 @@ pub struct LinkageContext {
     // All calls to P in the root package will call 0xCAFE as the Runtime ID, but during loading
     // and JIT compilation we need to rewrite these. The linkage table here will redirect 0xCAFE to
     // 0xDEAD for this purpose.
-    pub linkage_table: BTreeMap<OriginalId, VersionId>,
+    linkage_table: BTreeMap<OriginalId, VersionId>,
 }
 
 /// A hashable representation of a linkage context, for caching purposes.
@@ -32,8 +32,28 @@ pub struct LinkageContext {
 pub struct LinkageHash(BTreeMap<OriginalId, VersionId>);
 
 impl LinkageContext {
-    pub fn new(linkage_table: BTreeMap<OriginalId, VersionId>) -> Self {
-        Self { linkage_table }
+    /// Creates a new `LinkageContext` from the given linkage table.
+    /// Validates that the mapping is injective: no two original IDs may map to the same version ID.
+    pub fn new(linkage_table: BTreeMap<OriginalId, VersionId>) -> VMResult<Self> {
+        let mut seen_version_ids = BTreeSet::new();
+        for version_id in linkage_table.values() {
+            if !seen_version_ids.insert(version_id) {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Version ID {version_id} appears more than once in the linkage table"
+                )
+                .finish(Location::Package(*version_id)));
+            }
+        }
+        Ok(Self { linkage_table })
+    }
+
+    pub fn linkage_table(&self) -> &BTreeMap<OriginalId, VersionId> {
+        &self.linkage_table
+    }
+
+    pub fn into_linkage_table(self) -> BTreeMap<OriginalId, VersionId> {
+        self.linkage_table
     }
 
     pub fn contains_key(&self, address: &OriginalId) -> bool {

@@ -24,7 +24,7 @@ const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGT
 #[test]
 fn call_non_existent_module() {
     let mut adapter = InMemoryTestAdapter::new();
-    let linkage = LinkageContext::new(BTreeMap::new());
+    let linkage = LinkageContext::new(BTreeMap::new()).unwrap();
     let mut vm = adapter.make_vm(linkage).unwrap();
 
     let before = adapter.runtime().cache().to_cache_telemetry().interner_size;

@@ -69,7 +69,9 @@ fn leak_with_abort() {
         .publish_package(*module_id.address(), pkg.into_serialized_package())
         .unwrap();
 
-    let mut session = adapter.make_vm(LinkageContext::new(linkage)).unwrap();
+    let mut session = adapter
+        .make_vm(LinkageContext::new(linkage).unwrap())
+        .unwrap();
 
     for _ in 0..100_000 {
         let _ = session.execute_entry_function(
