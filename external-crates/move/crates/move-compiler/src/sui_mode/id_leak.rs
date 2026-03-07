@@ -16,6 +16,7 @@ use crate::{
     editions::Flavor,
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
+    ice_assert,
     parser::ast::{Ability_, TargetKind},
     shared::{Identifier, program_info::TypingProgramInfo},
     sui_mode::{
@@ -197,6 +198,7 @@ impl SimpleAbsInt for IDLeakVerifierAI<'_> {
 
         let e__ = &e.exp.value;
         let E::Pack(s, _tys, fields) = e__ else {
+            // not a struct
             return None;
         };
         let abilities = {
@@ -204,11 +206,15 @@ impl SimpleAbsInt for IDLeakVerifierAI<'_> {
             &minfo.structs.get(s)?.abilities
         };
         if !abilities.has_ability_(Ability_::Key) {
+            // not an object
             return None;
         }
 
         let mut fields_iter = fields.iter();
-        let (f, _, first_e) = fields_iter.next().unwrap();
+        let Some((f, _, first_e)) = fields_iter.next() else {
+            // All structs must have at least one field, but this lowering is done later.
+            return None;
+        };
         let first_value = self.exp(context, state, first_e).pop().unwrap_or_default();
         if !matches!(first_value, Value::FreshID(_)) {
             let msg = "Invalid object creation without a newly created UID.".to_string();
