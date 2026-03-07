@@ -81,11 +81,6 @@ pub struct BorrowState {
 // impls
 //**************************************************************************************************
 
-pub fn assert_single_value(mut values: Values) -> Value {
-    assert!(values.len() == 1);
-    values.pop().unwrap()
-}
-
 impl Value {
     pub fn is_ref(&self) -> bool {
         match self {
