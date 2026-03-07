@@ -20,6 +20,8 @@ use sui_indexer_alt_framework_store_traits::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
 use tracing::info;
 
+use crate::AddPipelineResult::Disabled;
+use crate::AddPipelineResult::Enabled;
 use crate::metrics::IngestionMetrics;
 use crate::pipeline::Processor;
 use crate::pipeline::concurrent::ConcurrentConfig;
@@ -118,17 +120,23 @@ pub struct Indexer<S: Store> {
     /// Service for downloading and disseminating checkpoint data.
     ingestion_service: IngestionService,
 
-    /// The next checkpoint for a pipeline without a committer watermark to start processing from,
-    /// which will be 0 by default. Pipelines with existing watermarks will ignore this setting and
-    /// always resume from their committer watermark + 1.
-    ///
-    /// Setting this value indirectly affects ingestion, as the checkpoint to start ingesting from
-    /// is the minimum across all pipelines' next checkpoints.
-    default_next_checkpoint: u64,
+    /// Optional override of the checkpoint lowerbound. When set, the indexer will stop ingestion at
+    /// this checkpoint.
+    first_checkpoint: Option<u64>,
 
     /// Optional override of the checkpoint upperbound. When set, the indexer will stop ingestion at
     /// this checkpoint.
     last_checkpoint: Option<u64>,
+
+    /// The store's latest checkpoint, if one exists, when the indexer was started.
+    latest_checkpoint: Option<u64>,
+
+    /// The minimum next_checkpoint across all pipelines.
+    min_next_checkpoint: u64,
+
+    /// The minimum next_checkpoint across all sequential pipelines. This is used to initialize
+    /// the regulator to prevent ingestion from running too far ahead of sequential pipelines.
+    sequential_min_next_checkpoint: Option<u64>,
 
     /// An optional task name for this indexer. When set, pipelines will record watermarks using the
     /// delimiter defined on the store. This allows the same pipelines to run under multiple
@@ -152,15 +160,6 @@ pub struct Indexer<S: Store> {
     /// with the same name isn't added twice.
     added_pipelines: BTreeSet<&'static str>,
 
-    /// The checkpoint for the indexer to start ingesting from. This is derived from the committer
-    /// watermarks of pipelines added to the indexer. Pipelines without watermarks default to 0,
-    /// unless overridden by [Self::default_next_checkpoint].
-    first_ingestion_checkpoint: u64,
-
-    /// The minimum next_checkpoint across all sequential pipelines. This is used to initialize
-    /// the regulator to prevent ingestion from running too far ahead of sequential pipelines.
-    next_sequential_checkpoint: Option<u64>,
-
     /// The service handles for every pipeline, used to manage lifetimes and graceful shutdown.
     pipelines: Vec<Service>,
 }
@@ -174,6 +173,11 @@ pub(crate) struct Task {
     /// The interval at which each of the pipelines on a tasked indexer should refecth its main
     /// pipeline's reader watermark.
     reader_interval: Duration,
+}
+
+enum AddPipelineResult {
+    Disabled,
+    Enabled(Option<u64>),
 }
 
 impl TaskArgs {
@@ -224,12 +228,22 @@ impl<S: Store> Indexer<S> {
         let ingestion_service =
             IngestionService::new(client_args, ingestion_config, metrics_prefix, registry)?;
 
+        let latest_checkpoint = ingestion_service
+            .ingestion_client()
+            .fetch_latest_checkpoint_number()
+            .await?;
+
+        info!(latest_checkpoint, "Ingestion store state");
+
         Ok(Self {
             store,
             metrics,
             ingestion_service,
-            default_next_checkpoint: first_checkpoint.unwrap_or_default(),
+            latest_checkpoint,
+            first_checkpoint,
             last_checkpoint,
+            min_next_checkpoint: u64::MAX,
+            sequential_min_next_checkpoint: None,
             task: task.into_task(),
             enabled_pipelines: if pipeline.is_empty() {
                 None
@@ -237,8 +251,6 @@ impl<S: Store> Indexer<S> {
                 Some(pipeline.into_iter().collect())
             },
             added_pipelines: BTreeSet::new(),
-            first_ingestion_checkpoint: u64::MAX,
-            next_sequential_checkpoint: None,
             pipelines: vec![],
         })
     }
@@ -275,8 +287,8 @@ impl<S: Store> Indexer<S> {
     /// The minimum next checkpoint across all sequential pipelines. This value is used to
     /// initialize the ingestion regulator's high watermark to prevent ingestion from running
     /// too far ahead of sequential pipelines.
-    pub fn next_sequential_checkpoint(&self) -> Option<u64> {
-        self.next_sequential_checkpoint
+    pub fn sequential_min_next_checkpoint(&self) -> Option<u64> {
+        self.sequential_min_next_checkpoint
     }
 
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
@@ -293,9 +305,23 @@ impl<S: Store> Indexer<S> {
     where
         H: concurrent::Handler<Store = S> + Send + Sync + 'static,
     {
-        let Some(next_checkpoint) = self.add_pipeline::<H>().await? else {
+        let Enabled(checkpoint_hi_inclusive) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
+
+        let next_checkpoint = if let Some(checkpoint_hi_inclusive) = checkpoint_hi_inclusive {
+            checkpoint_hi_inclusive + 1 // checkpoint after last ingested checkpoint based on watermark
+        } else if let Some(first_checkpoint) = self.first_checkpoint {
+            first_checkpoint // --first-checkpoint flag
+        } else if let Some(latest_checkpoint) = self.latest_checkpoint
+            && let Some(pruner) = &config.pruner
+        {
+            latest_checkpoint - pruner.retention // network tip - retention period
+        } else {
+            0 // fall back to genesis
+        };
+
+        self.min_next_checkpoint = self.min_next_checkpoint.min(next_checkpoint);
 
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
@@ -324,15 +350,16 @@ impl<S: Store> Indexer<S> {
             );
         }
 
+        let first_checkpoint = self.min_next_checkpoint;
         let last_checkpoint = self.last_checkpoint.unwrap_or(u64::MAX);
 
-        info!(self.first_ingestion_checkpoint, last_checkpoint = ?self.last_checkpoint, "Ingestion range");
+        info!(first_checkpoint, last_checkpoint = ?self.last_checkpoint, "Ingestion range");
 
         let mut service = self
             .ingestion_service
             .run(
-                self.first_ingestion_checkpoint..=last_checkpoint,
-                self.next_sequential_checkpoint,
+                first_checkpoint..=last_checkpoint,
+                self.sequential_min_next_checkpoint,
             )
             .await
             .context("Failed to start ingestion service")?;
@@ -352,7 +379,7 @@ impl<S: Store> Indexer<S> {
     /// calculated above.
     ///
     /// Returns `Ok(None)` if the pipeline is disabled.
-    async fn add_pipeline<P: Processor + 'static>(&mut self) -> Result<Option<u64>> {
+    async fn add_pipeline<P: Processor + 'static>(&mut self) -> Result<AddPipelineResult> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
             "Pipeline {:?} already added",
@@ -363,7 +390,7 @@ impl<S: Store> Indexer<S> {
             && !enabled_pipelines.remove(P::NAME)
         {
             info!(pipeline = P::NAME, "Skipping");
-            return Ok(None);
+            return Ok(Disabled);
         }
 
         let mut conn = self
@@ -375,17 +402,13 @@ impl<S: Store> Indexer<S> {
         let pipeline_task =
             pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
 
-        let checkpoint_hi_inclusive = conn
-            .init_watermark(&pipeline_task, self.default_next_checkpoint)
+        let committer_watermark = conn
+            .committer_watermark(&pipeline_task)
             .await
             .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
 
-        let next_checkpoint =
-            checkpoint_hi_inclusive.map_or(self.default_next_checkpoint, |c| c + 1);
-
-        self.first_ingestion_checkpoint = next_checkpoint.min(self.first_ingestion_checkpoint);
-
-        Ok(Some(next_checkpoint))
+        let checkpoint_hi_inclusive = committer_watermark.map(|w| w.checkpoint_hi_inclusive);
+        Ok(Enabled(checkpoint_hi_inclusive))
     }
 }
 
@@ -408,7 +431,7 @@ impl<T: TransactionalStore> Indexer<T> {
     where
         H: Handler<Store = T> + Send + Sync + 'static,
     {
-        let Some(next_checkpoint) = self.add_pipeline::<H>().await? else {
+        let Enabled(checkpoint_hi_inclusive) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
 
@@ -420,9 +443,13 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
+        let next_checkpoint = checkpoint_hi_inclusive.map_or(0, |c| c + 1);
+
+        self.min_next_checkpoint = self.min_next_checkpoint.min(next_checkpoint);
+
         // Track the minimum next_checkpoint across all sequential pipelines
-        self.next_sequential_checkpoint = Some(
-            self.next_sequential_checkpoint
+        self.sequential_min_next_checkpoint = Some(
+            self.sequential_min_next_checkpoint
                 .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
         );
 
@@ -448,7 +475,6 @@ mod tests {
 
     use async_trait::async_trait;
     use clap::Parser;
-    use sui_indexer_alt_framework_store_traits::PrunerWatermark;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tokio::sync::watch;
 
@@ -503,7 +529,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl crate::pipeline::concurrent::Handler for ControllableHandler {
+    impl concurrent::Handler for ControllableHandler {
         type Store = MockStore;
         type Batch = Vec<MockValue>;
 
@@ -511,9 +537,9 @@ mod tests {
             &self,
             batch: &mut Self::Batch,
             values: &mut std::vec::IntoIter<Self::Value>,
-        ) -> crate::pipeline::concurrent::BatchStatus {
+        ) -> concurrent::BatchStatus {
             batch.extend(values);
-            crate::pipeline::concurrent::BatchStatus::Ready
+            concurrent::BatchStatus::Ready
         }
 
         async fn commit<'a>(
@@ -598,60 +624,16 @@ mod tests {
     test_pipeline!(SequentialHandler, "sequential_handler");
     test_pipeline!(MockCheckpointSequenceNumberHandler, "test");
 
-    async fn test_init_watermark(
-        first_checkpoint: Option<u64>,
-        is_concurrent: bool,
-    ) -> (Option<CommitterWatermark>, Option<PrunerWatermark>) {
-        let registry = Registry::new();
-        let store = MockStore::default();
-
-        test_pipeline!(A, "pipeline_name");
-
-        let mut conn = store.connect().await.unwrap();
-
-        let indexer_args = IndexerArgs {
-            first_checkpoint,
-            ..IndexerArgs::default()
-        };
-        let temp_dir = tempfile::tempdir().unwrap();
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let ingestion_config = IngestionConfig::default();
-
-        let mut indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
+    // Return a test ingestion dir with an epochs.json file to prevent an error attempting to read
+    // this file in tests.
+    fn init_ingestion_dir(epochs: &[u64]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("epochs.json"),
+            serde_json::to_string(epochs).unwrap(),
         )
-        .await
-        .unwrap();
-
-        if is_concurrent {
-            indexer
-                .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-                .await
-                .unwrap();
-        } else {
-            indexer
-                .sequential_pipeline::<A>(A, SequentialConfig::default())
-                .await
-                .unwrap();
-        }
-
-        (
-            conn.committer_watermark(A::NAME).await.unwrap(),
-            conn.pruner_watermark(A::NAME, Duration::ZERO)
-                .await
-                .unwrap(),
-        )
+            .unwrap();
+        dir
     }
 
     #[test]
@@ -736,7 +718,7 @@ mod tests {
         .unwrap();
 
         let indexer_args = IndexerArgs::default();
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: Some(temp_dir.path().to_owned()),
@@ -774,7 +756,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(indexer.first_ingestion_checkpoint, 2);
+        assert_eq!(indexer.first_checkpoint, None);
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_next_checkpoint, 2);
+        assert_eq!(indexer.sequential_min_next_checkpoint, Some(2));
     }
 
     /// first_ingestion_checkpoint is 0 when at least one pipeline has no watermark.
@@ -809,7 +795,7 @@ mod tests {
         .unwrap();
 
         let indexer_args = IndexerArgs::default();
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: Some(temp_dir.path().to_owned()),
@@ -847,7 +833,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(indexer.first_ingestion_checkpoint, 0);
+        assert_eq!(indexer.first_checkpoint, None);
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_next_checkpoint, 0);
+        assert_eq!(indexer.sequential_min_next_checkpoint, Some(0));
     }
 
     /// first_ingestion_checkpoint is 1 when smallest committer watermark is 0.
@@ -894,7 +884,7 @@ mod tests {
             .unwrap();
 
         let indexer_args = IndexerArgs::default();
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: Some(temp_dir.path().to_owned()),
@@ -932,7 +922,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(indexer.first_ingestion_checkpoint, 1);
+        assert_eq!(indexer.first_checkpoint, None);
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_next_checkpoint, 1);
+        assert_eq!(indexer.sequential_min_next_checkpoint, Some(1));
     }
 
     /// first_ingestion_checkpoint is first_checkpoint when at least one pipeline has no
@@ -971,7 +965,7 @@ mod tests {
             first_checkpoint: Some(5),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: Some(temp_dir.path().to_owned()),
@@ -1009,7 +1003,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(indexer.first_ingestion_checkpoint, 5);
+        assert_eq!(indexer.first_checkpoint, Some(5));
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_next_checkpoint, 0);
+        assert_eq!(indexer.sequential_min_next_checkpoint, Some(0));
     }
 
     /// first_ingestion_checkpoint is smallest among existing watermarks + 1 if
@@ -1046,7 +1044,7 @@ mod tests {
             first_checkpoint: Some(5),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: Some(temp_dir.path().to_owned()),
@@ -1076,7 +1074,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(indexer.first_ingestion_checkpoint, 11);
+        assert_eq!(indexer.first_checkpoint, Some(5));
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_next_checkpoint, 11);
+        assert_eq!(indexer.sequential_min_next_checkpoint, Some(11));
     }
 
     /// If the first_checkpoint is being considered, because pipelines are missing watermarks, it
@@ -1115,7 +1117,7 @@ mod tests {
             first_checkpoint: Some(24),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: Some(temp_dir.path().to_owned()),
@@ -1151,7 +1153,238 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(indexer.first_ingestion_checkpoint, 11);
+        assert_eq!(indexer.first_checkpoint, Some(24));
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, None);
+        assert_eq!(indexer.min_next_checkpoint, 11);
+        assert_eq!(indexer.sequential_min_next_checkpoint, Some(11));
+    }
+
+    /// latest_checkpoint is the max value from epochs.json.
+    #[tokio::test]
+    async fn test_latest_checkpoint_from_epochs() {
+        let registry = Registry::new();
+        let store = MockStore::default();
+        let temp_dir = init_ingestion_dir(&[10, 50, 30]);
+        let indexer = Indexer::new(
+            store,
+            IndexerArgs::default(),
+            ClientArgs {
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(temp_dir.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            IngestionConfig::default(),
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(indexer.latest_checkpoint, Some(50));
+    }
+
+    /// When latest_checkpoint is set and a concurrent pipeline has no watermark, no
+    /// first_checkpoint, but has a pruner config, min_next_checkpoint is
+    /// latest_checkpoint - retention.
+    #[tokio::test]
+    async fn test_latest_checkpoint_with_pruner_sets_min_next_checkpoint() {
+        let registry = Registry::new();
+        let store = MockStore::default();
+
+        test_pipeline!(A, "concurrent_a");
+
+        let temp_dir = init_ingestion_dir(&[100]);
+        let indexer_args = IndexerArgs::default();
+        let client_args = ClientArgs {
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            IngestionConfig::default(),
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(indexer.latest_checkpoint, Some(100));
+
+        let config = ConcurrentConfig {
+            pruner: Some(concurrent::PrunerConfig {
+                retention: 30,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        indexer
+            .concurrent_pipeline::<A>(A, config)
+            .await
+            .unwrap();
+
+        // No watermark, no first_checkpoint, but latest_checkpoint=100 and retention=30
+        // so next_checkpoint = 100 - 30 = 70
+        assert_eq!(indexer.min_next_checkpoint, 70);
+    }
+
+    /// When latest_checkpoint is set but the pipeline has no pruner, min_next_checkpoint
+    /// falls back to 0.
+    #[tokio::test]
+    async fn test_latest_checkpoint_without_pruner_falls_back_to_genesis() {
+        let registry = Registry::new();
+        let store = MockStore::default();
+
+        test_pipeline!(A, "concurrent_a");
+
+        let temp_dir = init_ingestion_dir(&[100]);
+        let indexer_args = IndexerArgs::default();
+        let client_args = ClientArgs {
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            IngestionConfig::default(),
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(indexer.latest_checkpoint, Some(100));
+
+        indexer
+            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
+            .await
+            .unwrap();
+
+        // No watermark, no first_checkpoint, latest_checkpoint exists but no pruner
+        assert_eq!(indexer.min_next_checkpoint, 0);
+    }
+
+    /// Watermark takes priority over latest_checkpoint for min_next_checkpoint.
+    #[tokio::test]
+    async fn test_latest_checkpoint_watermark_takes_priority() {
+        let registry = Registry::new();
+        let store = MockStore::default();
+
+        test_pipeline!(A, "concurrent_a");
+        let mut conn = store.connect().await.unwrap();
+        conn.set_committer_watermark(
+            A::NAME,
+            CommitterWatermark {
+                checkpoint_hi_inclusive: 50,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let temp_dir = init_ingestion_dir(&[100]);
+        let client_args = ClientArgs {
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut indexer = Indexer::new(
+            store,
+            IndexerArgs::default(),
+            client_args,
+            IngestionConfig::default(),
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(indexer.latest_checkpoint, Some(100));
+
+        let config = ConcurrentConfig {
+            pruner: Some(concurrent::PrunerConfig {
+                retention: 30,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        indexer
+            .concurrent_pipeline::<A>(A, config)
+            .await
+            .unwrap();
+
+        // Watermark exists (50), so next_checkpoint = 51, regardless of latest_checkpoint/pruner
+        assert_eq!(indexer.min_next_checkpoint, 51);
+    }
+
+    /// first_checkpoint takes priority over latest_checkpoint when there's no watermark.
+    #[tokio::test]
+    async fn test_first_checkpoint_takes_priority_over_latest_checkpoint() {
+        let registry = Registry::new();
+        let store = MockStore::default();
+
+        test_pipeline!(A, "concurrent_a");
+
+        let temp_dir = init_ingestion_dir(&[100]);
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(20),
+            ..Default::default()
+        };
+        let client_args = ClientArgs {
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            IngestionConfig::default(),
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(indexer.latest_checkpoint, Some(100));
+
+        let config = ConcurrentConfig {
+            pruner: Some(concurrent::PrunerConfig {
+                retention: 30,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        indexer
+            .concurrent_pipeline::<A>(A, config)
+            .await
+            .unwrap();
+
+        // No watermark, but first_checkpoint=20 takes priority over latest_checkpoint - retention
+        assert_eq!(indexer.first_checkpoint, Some(20));
+        assert_eq!(indexer.min_next_checkpoint, 20);
     }
 
     // test ingestion, all pipelines have watermarks, no first_checkpoint provided
@@ -1204,7 +1437,7 @@ mod tests {
         .unwrap();
 
         // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: 5,
@@ -1346,7 +1579,7 @@ mod tests {
         .unwrap();
 
         // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: 5,
@@ -1479,7 +1712,7 @@ mod tests {
         .unwrap();
 
         // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: 0,
@@ -1611,7 +1844,7 @@ mod tests {
         .unwrap();
 
         // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: 5,
@@ -1704,46 +1937,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_watermark_concurrent_no_first_checkpoint() {
-        let (committer_watermark, pruner_watermark) = test_init_watermark(None, true).await;
-        // Indexer will not init the watermark, pipeline tasks will write commit watermarks as normal.
-        assert_eq!(committer_watermark, None);
-        assert_eq!(pruner_watermark, None);
-    }
-
-    #[tokio::test]
-    async fn test_init_watermark_concurrent_first_checkpoint_0() {
-        let (committer_watermark, pruner_watermark) = test_init_watermark(Some(0), true).await;
-        // Indexer will not init the watermark, pipeline tasks will write commit watermarks as normal.
-        assert_eq!(committer_watermark, None);
-        assert_eq!(pruner_watermark, None);
-    }
-
-    #[tokio::test]
-    async fn test_init_watermark_concurrent_first_checkpoint_1() {
-        let (committer_watermark, pruner_watermark) = test_init_watermark(Some(1), true).await;
-
-        let committer_watermark = committer_watermark.unwrap();
-        assert_eq!(committer_watermark.checkpoint_hi_inclusive, 0);
-
-        let pruner_watermark = pruner_watermark.unwrap();
-        assert_eq!(pruner_watermark.reader_lo, 1);
-        assert_eq!(pruner_watermark.pruner_hi, 1);
-    }
-
-    #[tokio::test]
-    async fn test_init_watermark_sequential() {
-        let (committer_watermark, pruner_watermark) = test_init_watermark(Some(1), false).await;
-
-        let committer_watermark = committer_watermark.unwrap();
-        assert_eq!(committer_watermark.checkpoint_hi_inclusive, 0);
-
-        let pruner_watermark = pruner_watermark.unwrap();
-        assert_eq!(pruner_watermark.reader_lo, 1);
-        assert_eq!(pruner_watermark.pruner_hi, 1);
-    }
-
-    #[tokio::test]
     async fn test_multiple_sequential_pipelines_next_checkpoint() {
         let registry = Registry::new();
         let store = MockStore::default();
@@ -1778,7 +1971,7 @@ mod tests {
         .unwrap();
 
         // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: 0,
@@ -1819,14 +2012,14 @@ mod tests {
         indexer
             .sequential_pipeline(
                 MockHandler,
-                pipeline::sequential::SequentialConfig::default(),
+                SequentialConfig::default(),
             )
             .await
             .unwrap();
 
         // Verify next_sequential_checkpoint is set correctly (10 + 1 = 11)
         assert_eq!(
-            indexer.next_sequential_checkpoint(),
+            indexer.sequential_min_next_checkpoint(),
             Some(11),
             "next_sequential_checkpoint should be 11"
         );
@@ -1835,14 +2028,14 @@ mod tests {
         indexer
             .sequential_pipeline(
                 SequentialHandler,
-                pipeline::sequential::SequentialConfig::default(),
+                SequentialConfig::default(),
             )
             .await
             .unwrap();
 
         // Should change to 6 (minimum of 6 and 11)
         assert_eq!(
-            indexer.next_sequential_checkpoint(),
+            indexer.sequential_min_next_checkpoint(),
             Some(6),
             "next_sequential_checkpoint should still be 6"
         );
@@ -1893,7 +2086,7 @@ mod tests {
             task: TaskArgs::tasked("task".to_string(), 10),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: 0,
@@ -1983,7 +2176,7 @@ mod tests {
             task: TaskArgs::tasked("task".to_string(), 10),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: 9,
@@ -2057,7 +2250,7 @@ mod tests {
         assert_eq!(main_pipeline_watermark.reader_lo, 5);
         let tasked_pipeline_watermark = store.watermark("test@task").unwrap();
         assert_eq!(tasked_pipeline_watermark.checkpoint_hi_inclusive, 25);
-        assert_eq!(tasked_pipeline_watermark.reader_lo, 9);
+        assert_eq!(tasked_pipeline_watermark.reader_lo, 0);
     }
 
     /// Test that when the collector observes `reader_lo = X`, that all checkpoints >= X will be
@@ -2079,7 +2272,7 @@ mod tests {
         .unwrap();
 
         // Generate 500 checkpoints upfront, for the indexer to process all at once.
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = init_ingestion_dir(&[]);
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
             starting_checkpoint: 0,
@@ -2141,7 +2334,7 @@ mod tests {
             .wait_for_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
                 10,
-                std::time::Duration::from_secs(10),
+                Duration::from_secs(10),
             )
             .await;
 
@@ -2160,7 +2353,7 @@ mod tests {
         // Send checkpoints one at a time at 10ms intervals. The tasked indexer has a reader refresh
         // interval of 10ms as well, so the collector should pick up the new reader_lo after a few
         // checkpoints have been processed.
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
+        let mut interval = tokio::time::interval(Duration::from_millis(10));
         while reader_lo.get() != 250 {
             interval.tick().await;
             // allow_process is initialized to 11, bump to 11 for the next checkpoint

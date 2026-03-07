@@ -10,6 +10,7 @@ use serde::Serialize;
 use sui_futures::service::Service;
 use tokio::sync::SetOnce;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tracing::info;
 
 use crate::Task;
@@ -278,6 +279,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let committer_channel_size = committer_channel_size.unwrap_or(num_cpus::get());
     let (committer_tx, watermark_rx) = mpsc::channel(committer_channel_size);
     let main_reader_lo = Arc::new(SetOnce::new());
+    let (watermark_written_tx, watermark_written_rx) = watch::channel(false);
 
     let handler = Arc::new(handler);
 
@@ -317,6 +319,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         store.clone(),
         task.as_ref().map(|t| t.task.clone()),
         metrics.clone(),
+        watermark_written_tx,
     );
 
     let s_track_reader_lo = track_main_reader_lo::<H>(
@@ -325,10 +328,16 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         store.clone(),
     );
 
-    let s_reader_watermark =
-        reader_watermark::<H>(pruner_config.clone(), store.clone(), metrics.clone());
+    let low_boundry = low_boundry(...);
 
-    let s_pruner = pruner(handler, pruner_config, store, metrics);
+    let s_reader_watermark = reader_watermark::<H>(
+        pruner_config.clone(),
+        store.clone(),
+        metrics.clone(),
+        watermark_written_rx.clone(),
+    );
+
+    let s_pruner = pruner(handler, pruner_config, store, metrics, watermark_written_rx);
 
     s_processor
         .merge(s_collector)
@@ -352,6 +361,7 @@ mod tests {
     use crate::metrics::IndexerMetrics;
     use crate::mocks::store::MockConnection;
     use crate::mocks::store::MockStore;
+    use crate::mocks::store::MockWatermark;
     use crate::pipeline::Processor;
     use crate::types::full_checkpoint_content::Checkpoint;
     use crate::types::test_checkpoint_data_builder::TestCheckpointBuilder;
@@ -502,6 +512,10 @@ mod tests {
     #[tokio::test]
     async fn test_e2e_pipeline() {
         let config = ConcurrentConfig {
+            committer: CommitterConfig {
+                watermark_interval_ms: 100, // Short interval to unblock pruner quickly
+                ..Default::default()
+            },
             pruner: Some(PrunerConfig {
                 interval_ms: 5_000, // Long interval to test states before pruning
                 delay_ms: 100,      // Short delay for faster tests
@@ -510,7 +524,16 @@ mod tests {
             }),
             ..Default::default()
         };
-        let store = MockStore::default();
+        // Pre-configure the watermark with pruner_hi = 0 to get deterministic pruning behavior.
+        // Without this, pruner_hi is initialized to the first committed checkpoint_hi_inclusive,
+        // which depends on timing and could skip pruning early checkpoints.
+        let store = MockStore::default().with_watermark(
+            DataPipeline::NAME,
+            MockWatermark {
+                pruner_hi: 0,
+                ..Default::default()
+            },
+        );
         let setup = TestSetup::new(config, store, 0).await;
 
         // Send initial checkpoints
@@ -548,22 +571,32 @@ mod tests {
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
-        // Wait for pruning to occur (5s + delay + processing time)
-        tokio::time::sleep(Duration::from_millis(5_200)).await;
+        // Wait for pruning to occur. The pruner and reader_watermark tasks both run on
+        // the same interval, so poll until the pruner has caught up rather instead of using a
+        // fixed sleep.
+        let pruning_deadline = Duration::from_secs(15);
+        let start = tokio::time::Instant::now();
+        loop {
+            let pruned = {
+                let data = setup.store.data.get(DataPipeline::NAME).unwrap();
+                !data.contains_key(&0) && !data.contains_key(&1) && !data.contains_key(&2)
+            };
+            if pruned {
+                break;
+            }
+            assert!(
+                start.elapsed() < pruning_deadline,
+                "Timed out waiting for pruning to occur"
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
 
-        // Verify pruning has occurred
+        // Verify recent checkpoints are still available
         {
             let data = setup.store.data.get(DataPipeline::NAME).unwrap();
-
-            // Verify recent checkpoints are still available
             assert!(data.contains_key(&3));
             assert!(data.contains_key(&4));
             assert!(data.contains_key(&5));
-
-            // Verify old checkpoints are pruned
-            assert!(!data.contains_key(&0));
-            assert!(!data.contains_key(&1));
-            assert!(!data.contains_key(&2));
         };
     }
 
@@ -873,8 +906,17 @@ mod tests {
             ..Default::default()
         };
 
-        // Configure prune failures for range [0, 2) - fail twice then succeed
-        let store = MockStore::default().with_prune_failures(0, 2, 1);
+        // Pre-configure the watermark with pruner_hi = 0 for deterministic pruning behavior.
+        // Configure prune failures for range [0, 2) - fail once then succeed
+        let store = MockStore::default()
+            .with_watermark(
+                DataPipeline::NAME,
+                MockWatermark {
+                    pruner_hi: 0,
+                    ..Default::default()
+                },
+            )
+            .with_prune_failures(0, 2, 1);
         let setup = TestSetup::new(config, store, 0).await;
 
         // Send enough checkpoints to trigger pruning

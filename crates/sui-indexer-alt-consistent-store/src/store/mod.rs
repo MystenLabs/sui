@@ -165,13 +165,6 @@ impl<S: Send + Sync + 'static> store::TransactionalStore for Store<S> {
 
 #[async_trait::async_trait]
 impl<S: Send + Sync> store::Connection for Connection<'_, S> {
-    async fn init_watermark(&mut self, pipeline_task: &str, _: u64) -> anyhow::Result<Option<u64>> {
-        Ok(self
-            .committer_watermark(pipeline_task)
-            .await?
-            .map(|w| w.checkpoint_hi_inclusive))
-    }
-
     async fn committer_watermark(
         &mut self,
         pipeline_task: &str,
