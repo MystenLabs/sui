@@ -1,14 +1,14 @@
 ---
 title: Object Display V2
-description: placheolder 
-keywords: [ placeholder ]
-pagination_prev: null
-hide_table_of_contents: true
+description: The Sui Object Display standard is a template engine that enables on-chain management of off-chain representation (display) for a type.
+keywords: [ Object Display, object, display, display properties, object properties, sui::display, display<T>, Sui utility objects, Unique objects with dynamic representation, objects with unique static content ]
 ---
 
-# Display registry (V2)
+:::caution 
 
-**Note:** All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You don't need to do anything upfront; after the snapshot, you can claim the capability when you're ready (see [Migration and claiming](#migration-and-claiming)).
+All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You don't need to do anything upfront; after the snapshot, you can claim the capability when you're ready (see [Migration and claiming](#migration-and-claiming)).
+
+:::
 
 ## What's new in V2
 
@@ -56,7 +56,3 @@ Once claimed, the holder of `DisplayCap<T>` can update the display fields (`set`
 V1 display will keep being supported by RPCs that already had support for it (JSON-RPC, GraphQL) until **end of July**. After that, on-chain V1 display code will be decommissioned and will start aborting.
 
 **Recommendation:** Use the `sui::display_registry` APIs when creating display from Move code. For the intermediate phase, use the `**migrate_v1_to_v2`** function to migrate a legacy display and receive the V2 `Display<T>` and `DisplayCap<T>`.
-
-<div className="full-width-iframe">
-  <iframe src="/display-preview/index.html" />
-</div>
