@@ -128,6 +128,14 @@ pub mod checked {
             self.gas_status.is_unmetered()
         }
 
+        pub fn is_address_balance(&self) -> bool {
+            self.payment_method.is_address_balance()
+        }
+
+        pub fn is_free_tier(&self) -> bool {
+            self.gas_status.gas_price() == 0 && self.payment_method.is_address_balance()
+        }
+
         pub fn move_gas_status(&self) -> &GasStatus {
             self.gas_status.move_gas_status()
         }

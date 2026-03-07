@@ -1017,6 +1017,9 @@ struct FeatureFlags {
     // If true, mark the gas coin as uninitialized in drop safety when there is no gas coin.
     #[serde(skip_serializing_if = "is_false")]
     gasless_transaction_drop_safety: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    enable_free_tier: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1884,6 +1887,9 @@ pub struct ProtocolConfig {
 
     /// The maximum number of updates per settlement transaction.
     max_updates_per_settlement_txn: Option<u32>,
+
+    /// Maximum computation units allowed for a free tier transaction.
+    free_tier_max_computation_units: Option<u64>,
 }
 
 /// An aliased address.
@@ -2650,6 +2656,10 @@ impl ProtocolConfig {
     pub fn gasless_transaction_drop_safety(&self) -> bool {
         self.feature_flags.gasless_transaction_drop_safety
     }
+
+    pub fn enable_free_tier(&self) -> bool {
+        self.feature_flags.enable_free_tier
+    }
 }
 
 #[cfg(not(msim))]
@@ -3236,6 +3246,8 @@ impl ProtocolConfig {
             translation_per_linkage_entry_charge: None,
 
             max_updates_per_settlement_txn: None,
+
+            free_tier_max_computation_units: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4658,6 +4670,10 @@ impl ProtocolConfig {
                     cfg.feature_flags.gasless_transaction_drop_safety = true;
                     cfg.feature_flags.address_aliases = true;
                     cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_free_tier = true;
+                        cfg.free_tier_max_computation_units = Some(50_000);
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -4996,6 +5012,16 @@ impl ProtocolConfig {
 
     pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
         self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
+    pub fn enable_free_tier_for_testing(&mut self) {
+        self.enable_address_balance_gas_payments_for_testing();
+        self.feature_flags.enable_free_tier = true;
+        self.free_tier_max_computation_units = Some(50_000);
+    }
+
+    pub fn disable_free_tier_for_testing(&mut self) {
+        self.feature_flags.enable_free_tier = false;
     }
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {

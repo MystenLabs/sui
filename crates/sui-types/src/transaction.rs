@@ -5,7 +5,11 @@
 use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
-use crate::balance::Balance;
+use crate::balance::{
+    BALANCE_GASLESS_SEND_FUNDS_FUNCTION_NAME, BALANCE_MODULE_NAME,
+    BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_STRUCT_NAME, Balance,
+    FUNDS_ACCUMULATOR_MODULE_NAME, FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME,
+};
 use crate::coin_reservation::{
     CoinReservationResolverTrait, ParsedDigest, ParsedObjectRefWithdrawal,
 };
@@ -36,8 +40,9 @@ use crate::signature_verification::{
 use crate::type_input::TypeInput;
 use crate::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
-    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -58,6 +63,7 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
+use sui_macros::fail_point_arg;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use tap::Pipe;
 use tracing::trace;
@@ -964,6 +970,98 @@ impl ProgrammableTransaction {
             .iter()
             .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
     }
+
+    pub fn validate_free_tier_commands(&self) -> UserInputResult {
+        #[allow(unused_mut)]
+        let mut allowed_token_types: HashSet<TypeInput> =
+            HashSet::from([TypeInput::from(GAS::type_tag())]);
+        fail_point_arg!("free_tier_extra_token_types", |extra: HashSet<
+            TypeInput,
+        >| {
+            allowed_token_types.extend(extra);
+        });
+        for command in &self.commands {
+            match command {
+                Command::MoveCall(call) if call.package == SUI_FRAMEWORK_PACKAGE_ID => {
+                    let is_balance_call = call.module.as_str() == BALANCE_MODULE_NAME.as_str()
+                        && (call.function.as_str()
+                            == BALANCE_GASLESS_SEND_FUNDS_FUNCTION_NAME.as_str()
+                            || call.function.as_str()
+                                == BALANCE_REDEEM_FUNDS_FUNCTION_NAME.as_str());
+                    let is_withdrawal_split = call.module.as_str()
+                        == FUNDS_ACCUMULATOR_MODULE_NAME.as_str()
+                        && call.function.as_str()
+                            == FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME.as_str();
+                    fp_ensure!(
+                        is_balance_call || is_withdrawal_split,
+                        UserInputError::Unsupported(
+                            "Free tier transactions can only call balance::gasless_send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string()
+                        )
+                    );
+
+                    fp_ensure!(
+                        call.type_arguments.len() == 1,
+                        UserInputError::Unsupported(
+                            "Free tier MoveCall must have exactly one type argument".to_string()
+                        )
+                    );
+                    let token_type = if is_withdrawal_split {
+                        extract_balance_inner_type(&call.type_arguments[0]).ok_or_else(|| {
+                            UserInputError::Unsupported(
+                                "Free tier withdrawal_split must use Balance<T> type argument"
+                                    .to_string(),
+                            )
+                        })?
+                    } else {
+                        &call.type_arguments[0]
+                    };
+                    fp_ensure!(
+                        allowed_token_types.contains(token_type),
+                        UserInputError::Unsupported(
+                            "Free tier transactions only support whitelisted token types"
+                                .to_string()
+                        )
+                    );
+                }
+                _ => {
+                    return Err(UserInputError::Unsupported(
+                        "Free tier transactions can only call balance::gasless_send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string(),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate_no_gasless_commands(&self) -> UserInputResult {
+        for command in &self.commands {
+            if let Command::MoveCall(call) = command {
+                let is_gasless_send = call.package == SUI_FRAMEWORK_PACKAGE_ID
+                    && call.module.as_str() == BALANCE_MODULE_NAME.as_str()
+                    && call.function.as_str() == BALANCE_GASLESS_SEND_FUNDS_FUNCTION_NAME.as_str();
+                fp_ensure!(
+                    !is_gasless_send,
+                    UserInputError::Unsupported(
+                        "balance::gasless_send_funds can only be called from free tier transactions"
+                            .to_string()
+                    )
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+fn extract_balance_inner_type(ti: &TypeInput) -> Option<&TypeInput> {
+    if let TypeInput::Struct(s) = ti
+        && s.address == SUI_FRAMEWORK_ADDRESS
+        && s.module == BALANCE_MODULE_NAME.as_str()
+        && s.name == BALANCE_STRUCT_NAME.as_str()
+        && s.type_params.len() == 1
+    {
+        return Some(&s.type_params[0]);
+    }
+    None
 }
 
 /// A single command in a programmable transaction.
@@ -1977,6 +2075,10 @@ pub fn is_gas_paid_from_address_balance(
         )
 }
 
+pub fn is_free_tier_transaction(gas_data: &GasData, transaction_kind: &TransactionKind) -> bool {
+    is_gas_paid_from_address_balance(gas_data, transaction_kind) && gas_data.price == 0
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum TransactionExpiration {
     /// The transaction has no expiration
@@ -2576,6 +2678,8 @@ pub trait TransactionDataAPI {
 
     fn is_gas_paid_from_address_balance(&self) -> bool;
 
+    fn is_free_tier_transaction(&self) -> bool;
+
     fn sender_mut_for_testing(&mut self) -> &mut SuiAddress;
 
     fn gas_data_mut(&mut self) -> &mut GasData;
@@ -2777,7 +2881,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn has_funds_withdrawals(&self) -> bool {
-        if self.is_gas_paid_from_address_balance() {
+        if self.is_gas_paid_from_address_balance() && self.gas_data().budget > 0 {
             return true;
         }
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
@@ -2970,7 +3074,8 @@ impl TransactionDataAPI for TransactionDataV1 {
                 );
             }
 
-            if config.address_balance_gas_check_rgp_at_signing() {
+            let is_free_tier = config.enable_free_tier() && self.is_free_tier_transaction();
+            if config.address_balance_gas_check_rgp_at_signing() && !is_free_tier {
                 fp_ensure!(
                     self.gas_data.price >= context.reference_gas_price,
                     UserInputError::GasPriceUnderRGP {
@@ -3056,14 +3161,25 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
                 .into()
             );
-            fp_ensure!(
-                self.gas_data.budget >= cost_table.min_transaction_cost,
-                UserInputError::GasBudgetTooLow {
-                    gas_budget: self.gas_data.budget,
-                    min_budget: cost_table.min_transaction_cost,
-                }
-                .into()
-            );
+            let is_free_tier = config.enable_free_tier() && self.is_free_tier_transaction();
+            if is_free_tier {
+                fp_ensure!(
+                    self.gas_data.budget == 0,
+                    UserInputError::Unsupported(
+                        "gas_budget must be 0 for free tier transactions".to_string()
+                    )
+                    .into()
+                );
+            } else {
+                fp_ensure!(
+                    self.gas_data.budget >= cost_table.min_transaction_cost,
+                    UserInputError::GasBudgetTooLow {
+                        gas_budget: self.gas_data.budget,
+                        min_budget: cost_table.min_transaction_cost,
+                    }
+                    .into()
+                );
+            }
         }
 
         self.validity_check_no_gas_check(config)?;
@@ -3074,6 +3190,15 @@ impl TransactionDataAPI for TransactionDataV1 {
     // may not be provided and created "on the fly"
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
+
+        if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
+            if config.enable_free_tier() && self.is_free_tier_transaction() {
+                pt.validate_free_tier_commands()?;
+            } else {
+                pt.validate_no_gasless_commands()?;
+            }
+        }
+
         self.check_sponsorship()
     }
 
@@ -3084,6 +3209,10 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn is_gas_paid_from_address_balance(&self) -> bool {
         is_gas_paid_from_address_balance(&self.gas_data, &self.kind)
+    }
+
+    fn is_free_tier_transaction(&self) -> bool {
+        is_free_tier_transaction(&self.gas_data, &self.kind)
     }
 
     /// Check if the transaction is compliant with sponsorship.
@@ -3145,7 +3274,7 @@ impl TransactionDataAPI for TransactionDataV1 {
 
 impl TransactionDataV1 {
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
-        if self.is_gas_paid_from_address_balance() {
+        if self.is_gas_paid_from_address_balance() && self.gas_data().budget > 0 {
             Some(if self.sender() != self.gas_owner() {
                 FundsWithdrawalArg::balance_from_sponsor(self.gas_data().budget, GAS::type_tag())
             } else {

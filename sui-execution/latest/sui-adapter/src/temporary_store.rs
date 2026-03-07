@@ -551,6 +551,11 @@ impl<'backing> TemporaryStore<'backing> {
             .fold(0, |sum, obj| sum + obj.object_size_for_gas_metering())
     }
 
+    pub fn has_non_accumulator_writes(&self) -> bool {
+        !self.execution_results.written_objects.is_empty()
+            || !self.execution_results.deleted_object_ids.is_empty()
+    }
+
     /// If there are unmetered storage rebate (due to system transaction), we put them into
     /// the storage rebate of 0x5 object.
     /// TODO: This will not work for potential future new system transactions if 0x5 is not in the input.

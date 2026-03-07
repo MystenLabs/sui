@@ -157,6 +157,7 @@ feature_flags:
   validator_metadata_verify_v2: true
   randomize_checkpoint_tx_limit_in_tests: true
   gasless_transaction_drop_safety: true
+  enable_free_tier: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -478,3 +479,4 @@ translation_per_type_node_charge: 1
 translation_per_reference_node_charge: 1
 translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
+free_tier_max_computation_units: 50000

@@ -21,6 +21,7 @@ custom coins with <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a
 -  [Function `withdraw_all`](#sui_balance_withdraw_all)
 -  [Function `destroy_zero`](#sui_balance_destroy_zero)
 -  [Function `send_funds`](#sui_balance_send_funds)
+-  [Function `gasless_send_funds`](#sui_balance_gasless_send_funds)
 -  [Function `redeem_funds`](#sui_balance_redeem_funds)
 -  [Function `withdraw_funds_from_object`](#sui_balance_withdraw_funds_from_object)
 -  [Function `settled_funds_value`](#sui_balance_settled_funds_value)
@@ -161,6 +162,16 @@ System operation performed for a coin other than SUI
 
 
 <pre><code><b>const</b> <a href="../sui/balance.md#sui_balance_ENotSUI">ENotSUI</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="sui_balance_EFreeTierNotEnabled"></a>
+
+Free tier feature is not enabled
+
+
+<pre><code><b>const</b> <a href="../sui/balance.md#sui_balance_EFreeTierNotEnabled">EFreeTierNotEnabled</a>: u64 = 5;
 </code></pre>
 
 
@@ -452,6 +463,40 @@ Send a <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code> 
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, recipient: <b>address</b>) {
+    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_impl">sui::funds_accumulator::add_impl</a>(<a href="../sui/balance.md#sui_balance">balance</a>, recipient);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_balance_gasless_send_funds"></a>
+
+## Function `gasless_send_funds`
+
+Gasless (free tier) transfer:
+Send a <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code> to an address's funds accumulator.
+Basis points (BPs) may be charged on the transfer amount
+in the future.
+Not <code><b>public</b></code> so that it cannot be called from other Move modules;
+only callable from free tier PTBs.
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_gasless_send_funds">gasless_send_funds</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, recipient: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_gasless_send_funds">gasless_send_funds</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, recipient: <b>address</b>) {
+    <b>assert</b>!(
+        <a href="../sui/protocol_config.md#sui_protocol_config_is_feature_enabled">sui::protocol_config::is_feature_enabled</a>(b"enable_free_tier"),
+        <a href="../sui/balance.md#sui_balance_EFreeTierNotEnabled">EFreeTierNotEnabled</a>,
+    );
     <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_impl">sui::funds_accumulator::add_impl</a>(<a href="../sui/balance.md#sui_balance">balance</a>, recipient);
 }
 </code></pre>
