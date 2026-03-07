@@ -2,6 +2,58 @@
 
 This directory contains the assets required to build and update the [Sui documentation](https://docs.sui.io). The directory is split between `content` and `site`.
 
+## For AI agents and LLMs
+
+If you are an AI agent, coding assistant, or LLM parsing this repository, start here.
+
+### `llms.txt`
+
+The Sui documentation build generates an `llms.txt` file at `https://docs.sui.io/llms.txt`. Use it as your entry point for understanding the documentation structure and locating specific topics. 
+
+### Style guide skill file
+
+A condensed, machine-readable version of the Sui Documentation Style Guide is available as a skill file at `SUI_STYLE_GUIDE_SKILL.md`. This file contains all style rules from the [full style guide](https://docs.sui.io/references/contribute/style-guide) in a format optimized for agent ingestion. Use it when writing or revising any documentation for this repository.
+
+### Repository layout for documentation
+
+```
+docs/
+├── content/              # All documentation source files (.mdx)
+│   ├── concepts/         # Sui architecture, objects, transactions, cryptography
+│   ├── guides/           # Developer guides, tutorials, app examples
+│   ├── references/       # API references, framework docs, CLI reference, contribution guides
+│   ├── standards/        # Sui standards (Closed-Loop Token, DeepBook, Kiosk, Wallet)
+│   └── sidebars.js       # Navigation structure / page hierarchy
+├── site/                 # Docusaurus site configuration, plugins, and build output
+│   ├── src/              # Custom components, plugins, utilities
+│   ├── docusaurus.config.js
+├── snippets/             # Reusable code snippets referenced by ImportContent
+```
+
+### Key files for agents
+
+- **`docs/content/sidebars.js`**: Defines the full navigation tree. Parse this to understand page hierarchy and relationships.
+- **`docs/SUI_STYLE_GUIDE_SKILL.md`**: Condensed style guide rules. Ingest before writing or editing documentation.
+- **`docs/content/references/contribute/style-guide.mdx`**: The full human-readable style guide source.
+- **`docs/content/references/contribute/mdx-components.mdx`**: Reference for all custom MDX components and Docusaurus plugins.
+
+### What not to edit
+
+Several sections are auto-generated during the build and must not be edited directly:
+
+- **Framework reference** (`/references/framework`): Generated from `cargo-doc` Markdown in `/sui/crates`.
+- **GraphQL reference** (`/references/sui-api/sui-graphql`): Generated from the GraphQL schema.
+- **OpenRPC and gRPC specifications**: Downloaded during build by utility scripts.
+
+### Documentation content conventions
+
+- All documentation pages are `.mdx` files with YAML frontmatter (`title`, `description`, `keywords`).
+- Pages use Docusaurus admonitions (`:::info`, `:::tip`, `:::caution`, `:::danger`) for callouts.
+- Code samples should be sourced from GitHub using the `<ImportContent>` component when possible, rather than copied inline. See the [MDX Components page](https://docs.sui.io/references/contribute/mdx-components) for component reference.
+- Every sidebar category must have a corresponding `index.mdx` page using `link.type: 'doc'`
+
+---
+
 ## Build the site locally
 
 To run `docs.sui.io` locally, open the `site` directory in a terminal or console. Use a package manager to install the required modules:
@@ -67,7 +119,7 @@ To view the Vercel preview before your changes are ready for review, [mark your 
 
 ## Style guide
 
-All documentation contributions must follow the [Sui Documentation Style Guide](https://docs.sui.io/references/contribute/style-guide). Key requirements include:
+All documentation contributions must follow the [Sui Documentation Style Guide](https://docs.sui.io/references/contribute/style-guide). A machine-readable version is available in `SKILL.md` at the root of this directory. Key requirements include:
 
 - Use US English spelling and active voice.
 - Use second person ("you") instead of first or third person.
