@@ -83,11 +83,7 @@ A full build is necessary after a fresh clone because it downloads specification
 
 The build fails on errors like bad internal links or missing imports, and displays the cause of the error in the console.
 
-:::info
-
 If you get an error about missing `open-rpc` specs when running the site locally, run `pnpm build` first. It downloads and prepares the required files.
-
-:::
 
 ### Development preview
 
