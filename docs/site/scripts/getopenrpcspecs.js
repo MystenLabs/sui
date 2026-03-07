@@ -13,35 +13,41 @@ if (!fs.existsSync(topdir)){
     fs.mkdirSync(topdir);
 }
 
-const downloadFile = (branch) => {
-    const branchdir = path.join(topdir,branch);
-    if (!fs.existsSync(branchdir)){
-        fs.mkdirSync(branchdir);
+const downloadFile = async (branch) => {
+  const branchDir = path.join(topdir, branch);
+  const specDir = path.join(__dirname, `../open-spec/${branch}`);
+  const specFile = path.join(specDir, "openrpc.json");
+  const backupFile = path.join(specDir, "openrpc_backup.json");
+
+  if (!fs.existsSync(branchDir)) {
+    fs.mkdirSync(branchDir, { recursive: true });
+  }
+
+  if (!fs.existsSync(specDir)) {
+    fs.mkdirSync(specDir, { recursive: true });
+  }
+
+  try {
+    const res = await axios.get(
+      `https://raw.githubusercontent.com/MystenLabs/sui/${branch}/crates/sui-open-rpc/spec/openrpc.json`
+    );
+
+    if (fs.existsSync(backupFile)) {
+      fs.unlinkSync(backupFile);
+      console.log(`Deleted ${branch} backup spec.`);
     }
-    axios({
-        method: "get",
-        url: `https://raw.githubusercontent.com/MystenLabs/sui/${branch}/crates/sui-open-rpc/spec/openrpc.json`,
-        responseType: "blob"
-    }).then((res) => {
-        if (fs.existsSync(path.join(__dirname, `../open-spec/${branch}/openrpc_backup.json`))){
-            fs.unlink(path.join(__dirname, `../open-spec/${branch}/openrpc_backup.json`), (err) => {
-                if (err) {
-                    return console.log(err);
-                }
-                console.log(`Deleted ${branch} backup spec.`)
-            } )
-        } else {
-            console.log(`Backup file for ${branch} does not exist.`)
-        }
-        if (fs.existsSync(path.join(__dirname, `../open-spec/${branch}/openrpc.json`))){
-            fs.renameSync(path.join(__dirname, `../open-spec/${branch}/openrpc.json`), path.join(__dirname, `../open-spec/${branch}/openrpc_backup.json`));
-        }
-        fs.writeFileSync(path.join(__dirname, `../open-spec/${branch}/openrpc.json`), res.data, 'utf8');
-    }).catch(err => {
-        console.log(`Error downloading ${branch} openrpc spec.`);
-        console.error(err);
-    })
-}
+
+    if (fs.existsSync(specFile)) {
+      fs.renameSync(specFile, backupFile);
+      console.log(`Moved ${branch} spec to backup.`);
+    }
+
+    fs.writeFileSync(specFile, JSON.stringify(res.data, null, 2), "utf8");
+    console.log(`Downloaded ${branch} spec.`);
+  } catch (err) {
+    console.error(`Error downloading ${branch} openrpc spec.`, err.message);
+  }
+};
 
 // Download Mainnet OpenRPC spec
 downloadFile("mainnet");
