@@ -6,8 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Create directory
-
-const topdir = path.join(__dirname, "../open-spec");
+const topdir = path.join(__dirname, "../src/open-spec");
 
 if (!fs.existsSync(topdir)){
     fs.mkdirSync(topdir);
