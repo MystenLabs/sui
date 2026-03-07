@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const glob = require("glob");
 
-const SITE_ROOT = path.resolve(__dirname, "../"); // docusaurus site root
+const SITE_ROOT = path.resolve(__dirname, "."); // docusaurus site root
 const REPO_ROOT = path.resolve(SITE_ROOT, "../../.."); // monorepo root
 const OUT_FILE = path.join(SITE_ROOT, ".generated/ImportContentMap.ts");
 
