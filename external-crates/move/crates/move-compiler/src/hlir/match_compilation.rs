@@ -64,7 +64,12 @@ pub(super) fn compile_match(
     let loc = arms.loc;
     match subject.ty.value.inner() {
         TypeInner::Anything | TypeInner::Void | TypeInner::UnresolvedError => {
-            assert!(context.env.has_errors());
+            ice_assert!(
+                context.reporter,
+                context.env.has_errors(),
+                loc,
+                "Divergent or error match subject reached match compilation without a prior error"
+            );
             let exp_value = sp(loc, T::UnannotatedExp_::UnresolvedError);
             return T::exp(result_type.clone(), exp_value);
         }
@@ -254,7 +259,15 @@ fn compile_match_struct(
     mident: ModuleIdent,
     datatype_name: DatatypeName,
 ) -> MatchTree {
-    let decl_fields = context.info.struct_fields(&mident, &datatype_name).unwrap();
+    let Some(decl_fields) = context.info.struct_fields(&mident, &datatype_name) else {
+        ice_assert!(
+            context.reporter,
+            context.env.has_errors(),
+            subject.var.loc,
+            "Native struct reached match compilation without a prior error"
+        );
+        return MatchTree::Failure;
+    };
     let (subject_binders, unpack) = if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
         let fringe_binders = context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
         let fringe_exps = make_fringe_entries(&fringe_binders);
@@ -797,7 +810,7 @@ fn arm_struct_unpack(
     }
 
     let (queue_entries, fields) =
-        make_arm_struct_unpack_fields(context, mut_ref, pat_loc, mident, struct_, fields);
+        make_arm_struct_unpack_fields(context, mut_ref, pat_loc, mident, struct_, fields)?;
     let unpack = make_arm_struct_unpack_stmt(mut_ref, mident, struct_, tyargs, fields, rhs);
     Some((queue_entries, unpack))
 }
@@ -871,13 +884,17 @@ fn make_arm_struct_unpack_fields(
     mident: ModuleIdent,
     struct_: DatatypeName,
     fields: Fields<(Type, MatchPattern)>,
-) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>) {
+) -> Option<(Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>)> {
     let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
-    let decl_fields = context
-        .hlir_context
-        .info
-        .struct_fields(&mident, &struct_)
-        .unwrap();
+    let Some(decl_fields) = context.hlir_context.info.struct_fields(&mident, &struct_) else {
+        ice_assert!(
+            context.hlir_context.reporter,
+            context.hlir_context.env.has_errors(),
+            pat_loc,
+            "Native struct reached match arm compilation without a prior error"
+        );
+        return None;
+    };
 
     let field_tys = {
         let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
@@ -917,7 +934,7 @@ fn make_arm_struct_unpack_fields(
         )
         .collect::<Vec<_>>();
 
-    (queue_entries, unpack_fields)
+    Some((queue_entries, unpack_fields))
 }
 
 //------------------------------------------------

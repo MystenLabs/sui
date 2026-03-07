@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/move_2024/matching/param_test.move:9:17
+  │
+9 │     let mut x = 1;
+  │                 ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_2024/matching/param_test.move:11:13
+   │
+10 │     let y = &mut x;
+   │             ------ Expected a single non-reference type, but found: '&mut {integer}'
+11 │     let z = t(y);
+   │             ^^^^ Invalid type argument

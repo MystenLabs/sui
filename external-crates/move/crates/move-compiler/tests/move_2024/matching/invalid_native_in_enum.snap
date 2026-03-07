@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04015]: invalid use of native item
+   ┌─ tests/move_2024/matching/invalid_native_in_enum.move:16:18
+   │
+ 7 │     public native struct N;
+   │            ------ Struct declared 'native' here
+   ·
+16 │             E::X(N {}) => 1,
+   │                  ^^^^ Invalid pattern usage for native struct '0x0::M::N'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed

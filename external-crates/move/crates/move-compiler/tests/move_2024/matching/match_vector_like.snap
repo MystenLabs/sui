@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04018]: cyclic data
+  ┌─ tests/move_2024/matching/match_vector_like.move:8:17
+  │
+8 │     Cons(T, Box<List<T>>),
+  │                 ^^^^^^^
+  │                 │
+  │                 Invalid field containing 'List' in struct 'List'.
+  │                 Using this struct creates a cycle: 'List' contains 'List'

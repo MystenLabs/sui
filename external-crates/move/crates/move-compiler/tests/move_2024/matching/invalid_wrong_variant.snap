@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/invalid_wrong_variant.move:13:16
+   │
+13 │         match (e) {
+   │                ^ Pattern 'E::B' not covered
+
+error[E03020]: unbound variant
+   ┌─ tests/move_2024/matching/invalid_wrong_variant.move:15:13
+   │  
+ 7 │ ╭     public enum E {
+ 8 │ │         A,
+ 9 │ │         B,
+10 │ │     }
+   │ ╰─────' Enum 'E' is defined here
+   · │
+15 │               E::C => 2,
+   │               ^^^^ Invalid construction. Variant 'C' is not part of this enum
