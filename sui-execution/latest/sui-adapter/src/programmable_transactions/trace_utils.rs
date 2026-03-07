@@ -23,7 +23,8 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use sui_types::{
     base_types::ObjectID,
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind},
+    error::ExecutionError,
+    execution_status::ExecutionErrorKind,
     object::bounded_visitor::BoundedVisitor,
     ptb_trace::{
         ExtMoveValue, ExtMoveValueInfo, ExternalEvent, PTBCommandInfo, PTBEvent, SummaryEvent,

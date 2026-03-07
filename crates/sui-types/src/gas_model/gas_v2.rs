@@ -13,7 +13,8 @@ mod checked {
     use crate::transaction::ObjectReadResult;
     use crate::{
         ObjectID,
-        error::{ExecutionError, ExecutionErrorKind},
+        error::ExecutionError,
+        execution_status::ExecutionErrorKind,
         gas_model::tables::{GasStatus, ZERO_COST_SCHEDULE},
     };
     use move_core_types::vm_status::StatusCode;

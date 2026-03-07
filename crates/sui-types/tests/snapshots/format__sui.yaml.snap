@@ -529,10 +529,10 @@ ExecutionDigests:
 ExecutionFailure:
   STRUCT:
     - error:
-        TYPENAME: ExecutionFailureStatus
+        TYPENAME: ExecutionErrorKind
     - command:
         OPTION: U64
-ExecutionFailureStatus:
+ExecutionErrorKind:
   ENUM:
     0:
       InsufficientGas: UNIT

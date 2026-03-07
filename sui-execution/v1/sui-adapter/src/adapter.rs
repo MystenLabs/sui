@@ -28,11 +28,8 @@ mod checked {
     use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
-        base_types::*,
-        error::ExecutionError,
-        error::{ExecutionErrorKind, SuiError},
-        metrics::LimitsMetrics,
-        storage::ChildObjectResolver,
+        base_types::*, error::ExecutionError, error::SuiError,
+        execution_status::ExecutionErrorKind, metrics::LimitsMetrics, storage::ChildObjectResolver,
     };
     use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
 
