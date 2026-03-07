@@ -14,7 +14,7 @@ if (!fs.existsSync(topdir)){
 
 const downloadFile = async (branch) => {
   const branchDir = path.join(topdir, branch);
-  const specDir = path.join(__dirname, `../open-spec/${branch}`);
+  const specDir = path.join(__dirname, `../src/open-spec/${branch}`);
   const specFile = path.join(specDir, "openrpc.json");
   const backupFile = path.join(specDir, "openrpc_backup.json");
 
