@@ -23,11 +23,27 @@ node src/utils/massagegraphql.js || { echo "❌ massagegraphql failed"; exit 1; 
 
 echo "✅ Pre-build generation complete"
 
-pnpm docusaurus build 2>&1 | while IFS= read -r line; do
+## Build displayV2 app - only download during build process, do not commit files locally
+
+SITE_DIR="$(pwd)"
+
+TEMP_DIR=$(mktemp -d)
+git clone --depth 1 https://github.com/MystenLabs/display-preview.git "$TEMP_DIR/display-preview"
+cd "$TEMP_DIR/display-preview"
+pnpm install
+pnpm build
+cp -r dist/ "$SITE_DIR/static/display-preview"
+cd "$SITE_DIR"
+rm -rf "$TEMP_DIR"
+
+## Begin Docusaurus build
+
+docusaurus build 2>&1 | while IFS= read -r line; do
   echo "$line"
   echo "$line" >> "$LOG"
 done
 
+## Generate markdown, llms.txt, and check relative link files 
 node scripts/copy-markdown-files.js || { echo "❌ copy-markdown-files failed"; exit 1; }
 
 node scripts/generate-llmstxt.mjs build/markdown/ --output static/llms.txt || { echo "❌ generate-llmstxt failed"; exit 1; }

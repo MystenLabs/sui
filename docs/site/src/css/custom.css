@@ -2582,3 +2582,22 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 [data-theme='dark'] .theme-doc-sidebar-item-category .menu__list > .theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link {
   color: #A1A7B2;
 }
+
+.full-width-iframe {
+  max-width: none !important;
+  width: 99vw;
+  height: 100%;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -49vw;
+  margin-right: -50vw;
+}
+
+.full-width-iframe iframe {
+  width: 100%;
+  height: 125vh;
+  border: none;
+  display: block;
+  overflow: hidden;
+}
