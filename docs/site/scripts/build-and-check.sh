@@ -23,35 +23,6 @@ node scripts/massagegraphql.js || { echo "❌ massagegraphql failed"; exit 1; }
 
 echo "✅ Pre-build generation complete"
 
-## Update subtrees
-## must be run from top level of repo
-cd "$(git rev-parse --show-toplevel)" || exit 1
-
-git subtree pull --prefix=docs/site/src/shared git@github.com:MystenLabs/ML-Shared-Docusaurus.git master --squash
-echo "✅ Shared component content updated"
-git subtree pull --prefix=docs/subtree/awesome-sui https://github.com/sui-foundation/awesome-sui.git main --squash
-echo "✅ Awesome Sui content updated"
-git subtree pull --prefix=docs/subtree/awesome-gaming https://github.com/becky-sui/awesome-sui-gaming.git main --squash
-echo "✅ Awesome Sui Gaming content updated"
-
-echo "✅ All subtree content updated"
-
-## Back to site dir 
-
-cd docs/site || exit 1
-SITE_DIR="$(pwd)"
-
-## Build displayV2 app - only download during build process, do not commit files locally
-
-TEMP_DIR=$(mktemp -d)
-git clone --depth 1 https://github.com/MystenLabs/display-preview.git "$TEMP_DIR/display-preview"
-cd "$TEMP_DIR/display-preview"
-pnpm install
-pnpm build
-cp -r dist/ "$SITE_DIR/static/display-preview"
-cd "$SITE_DIR"
-rm -rf "$TEMP_DIR"
-
 ## Begin Docusaurus build
 
 docusaurus build 2>&1 | while IFS= read -r line; do
