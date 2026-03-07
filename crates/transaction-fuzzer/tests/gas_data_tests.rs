@@ -385,6 +385,32 @@ fn test_gas_budget_exceeds_max() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// Address balance gas payment fuzz tests
+// ---------------------------------------------------------------------------
+
+#[test]
+#[cfg_attr(msim, ignore)]
+fn test_gas_data_address_balance_fuzz() {
+    let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::with_address_balance());
+    run_proptest(1000, strategy, |gas_data_test, mut executor| {
+        test_with_random_gas_data(gas_data_test, &mut executor)
+    });
+}
+
+#[test]
+#[cfg_attr(msim, ignore)]
+fn test_gas_data_address_balance_dry_run_fuzz() {
+    let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::with_address_balance());
+    run_proptest_with_fullnode(1000, strategy, |gas_data_test, mut executor| {
+        test_with_random_gas_data_dry_run(gas_data_test, &mut executor)
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic edge case tests
+// ---------------------------------------------------------------------------
+
 /// Gas coin balance < budget fails in all modes.
 #[test]
 #[cfg_attr(msim, ignore)]
