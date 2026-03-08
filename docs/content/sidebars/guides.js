@@ -140,6 +140,7 @@ const guides = [
           'guides/developer/transactions/transaction-auth/intent-signing',
           'guides/developer/transactions/transaction-auth/multisig',
           'guides/developer/transactions/transaction-auth/offline-signing',
+		  'guides/developer/transactions/transaction-auth/address-aliases',
         ],
       },
       'guides/developer/transactions/sponsor-txn',
