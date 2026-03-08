@@ -2043,7 +2043,8 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
 
 #[cfg(tidehunter)]
 pub async fn safe_drop_db(path: PathBuf, _: Duration) -> Result<(), std::io::Error> {
-    std::fs::remove_dir_all(path)
+    // std::fs::remove_dir_all(path)
+    Ok(())
 }
 
 fn populate_missing_cfs(
