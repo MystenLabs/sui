@@ -503,6 +503,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         } else {
             Some(output)
         };
+
         (test_adapter, output)
     }
 
@@ -2569,13 +2570,36 @@ async fn create_validator_fullnode(
     protocol_config: &ProtocolConfig,
     objects: &[Object],
 ) -> (Arc<AuthorityState>, Arc<AuthorityState>) {
-    let builder = TestAuthorityBuilder::new()
+    // Build network config once and share it between validator and fullnode
+    let network_config = {
+        let mut builder =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_reference_gas_price(500);
+        builder = builder.with_protocol_version(protocol_config.version);
+        builder.build()
+    };
+
+    let validator = TestAuthorityBuilder::new()
         .with_protocol_config(protocol_config.clone())
-        .with_starting_objects(objects);
-    let state = builder.clone().build().await;
+        .with_starting_objects(objects)
+        .with_shared_network_config(&network_config)
+        .skip_rpc_index_init()
+        .skip_genesis_owner_index()
+        .build()
+        .await;
+
     let fullnode_key_pair = get_authority_key_pair().1;
-    let fullnode = builder.with_keypair(&fullnode_key_pair).build().await;
-    (state, fullnode)
+    let fullnode = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config.clone())
+        .with_starting_objects(objects)
+        .with_shared_network_config(&network_config)
+        .with_keypair(&fullnode_key_pair)
+        .skip_rpc_index_init()
+        .skip_genesis_owner_index()
+        .build()
+        .await;
+
+    (validator, fullnode)
 }
 
 async fn create_val_fullnode_executor(
@@ -2590,6 +2614,7 @@ async fn create_val_fullnode_executor(
         metrics,
         validator.clone(),
     ));
+
     ValidatorWithFullnode {
         validator,
         fullnode,
