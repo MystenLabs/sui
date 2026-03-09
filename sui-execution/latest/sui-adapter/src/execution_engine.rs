@@ -588,6 +588,33 @@ mod checked {
         Ok(())
     }
 
+    /// SIP-70 v2: Build a map from PTB input index to (TypeTag, balance) for coin inputs.
+    /// This enables coin normalization — hashing coins by TypeName + Balance instead of ObjectID.
+    fn build_coin_info_map(
+        pt: &ProgrammableTransaction,
+        objects: &BTreeMap<sui_types::base_types::ObjectID, Object>,
+    ) -> BTreeMap<usize, (move_core_types::language_storage::TypeTag, u64)> {
+        let mut coin_info = BTreeMap::new();
+        for (idx, input) in pt.inputs.iter().enumerate() {
+            let obj_id = match input {
+                CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))) => Some(id),
+                CallArg::Object(ObjectArg::Receiving((id, _, _))) => Some(id),
+                _ => None,
+            };
+            if let Some(id) = obj_id {
+                if let Some(obj) = objects.get(id) {
+                    if obj.is_coin() {
+                        if let Some(type_tag) = obj.coin_type_maybe() {
+                            let balance = obj.get_coin_value_unsafe();
+                            coin_info.insert(idx, (type_tag, balance));
+                        }
+                    }
+                }
+            }
+        }
+        coin_info
+    }
+
     #[instrument(level = "debug", skip_all)]
     fn execution_loop<Mode: ExecutionMode>(
         store: &dyn BackingStore,
@@ -699,9 +726,26 @@ mod checked {
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::ProgrammableTransaction(pt) => {
-                // SIP-70: Compute and store the structural digest before execution
-                let structural_digest = pt.structural_digest();
-                tx_ctx.borrow_mut().set_structural_digest(structural_digest);
+                // SIP-70 v2: Build coin_info map from input objects for coin normalization
+                let coin_info = build_coin_info_map(&pt, temporary_store.objects());
+
+                // Compute structural digest with coin normalization
+                let structural_digest = pt.structural_digest_with_options(
+                    Some(&coin_info),
+                    &std::collections::BTreeSet::new(),
+                );
+
+                {
+                    let mut ctx = tx_ctx.borrow_mut();
+                    ctx.set_structural_digest(structural_digest);
+                    // Store PT + coin_info for masked digest recomputation
+                    ctx.set_structural_digest_data(
+                        sui_types::transaction::StructuralDigestData {
+                            pt: pt.clone(),
+                            coin_info,
+                        },
+                    );
+                }
 
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,

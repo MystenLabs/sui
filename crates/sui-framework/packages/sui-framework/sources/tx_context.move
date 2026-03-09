@@ -86,10 +86,24 @@ native fun native_gas_price(): u64;
 /// even if coin object IDs differ due to splits/merges.
 /// Enables governance contracts to vote on a PTB template hash
 /// and verify at execution time that the executor's PTB matches.
+/// Output: [version_byte | blake2b256_hash] (33 bytes, version 0x01).
 public fun structural_digest(_self: &TxContext): vector<u8> {
     native_structural_digest()
 }
 native fun native_structural_digest(): vector<u8>;
+
+/// Return the structural digest with specified Pure inputs treated as wildcards (SIP-70 v2).
+/// Wildcarded inputs are hashed as a marker (0xFF) instead of their actual value,
+/// allowing governance contracts to verify PTB structure while letting the executor
+/// vary certain parameters (e.g. slippage tolerance, deadline timestamp).
+/// `wildcard_pure_indices` contains the input indices to wildcard.
+public fun structural_digest_masked(
+    _self: &TxContext,
+    wildcard_pure_indices: vector<u64>,
+): vector<u8> {
+    native_structural_digest_masked(wildcard_pure_indices)
+}
+native fun native_structural_digest_masked(wildcard_pure_indices: vector<u64>): vector<u8>;
 
 // ==== test-only functions ====
 #[test_only]

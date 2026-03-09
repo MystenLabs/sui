@@ -83,6 +83,11 @@ impl TransactionContext {
         self.tx_context.borrow().structural_digest().to_vec()
     }
 
+    /// Returns the structural digest with specified Pure inputs wildcarded (SIP-70 v2).
+    pub fn structural_digest_masked(&self, wildcard_indices: &std::collections::BTreeSet<u16>) -> Vec<u8> {
+        self.tx_context.borrow().structural_digest_masked(wildcard_indices)
+    }
+
     //
     // Test only function
     //

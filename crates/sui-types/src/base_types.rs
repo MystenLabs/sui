@@ -1239,6 +1239,9 @@ pub struct TxContext {
     // Normalized structural digest of the PTB (SIP-70)
     #[serde(default)]
     structural_digest: Vec<u8>,
+    // Data for structural_digest_masked recomputation (SIP-70 v2, not serialized)
+    #[serde(skip)]
+    structural_digest_data: Option<crate::transaction::StructuralDigestData>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -1298,6 +1301,7 @@ impl TxContext {
             sponsor: sponsor.map(|s| s.into()),
             is_native: protocol_config.move_native_context(),
             structural_digest: Vec::new(),
+            structural_digest_data: None,
         }
     }
 
@@ -1361,6 +1365,29 @@ impl TxContext {
         self.structural_digest = digest;
     }
 
+    /// Stores the PT + coin_info for masked digest recomputation (SIP-70 v2).
+    pub fn set_structural_digest_data(
+        &mut self,
+        data: crate::transaction::StructuralDigestData,
+    ) {
+        self.structural_digest_data = Some(data);
+    }
+
+    /// Recompute the structural digest with the given Pure input indices wildcarded.
+    pub fn structural_digest_masked(
+        &self,
+        wildcard_indices: &std::collections::BTreeSet<u16>,
+    ) -> Vec<u8> {
+        match &self.structural_digest_data {
+            Some(data) => data.pt.structural_digest_with_options(
+                Some(&data.coin_info),
+                wildcard_indices,
+            ),
+            // No PT data stored — fall back to the pre-computed full digest
+            None => self.structural_digest.clone(),
+        }
+    }
+
     pub fn rgp(&self) -> u64 {
         self.rgp
     }
@@ -1399,6 +1426,7 @@ impl TxContext {
                 sponsor: None,
                 is_native: true,
                 structural_digest: Vec::new(),
+                structural_digest_data: None,
             };
             tx_context.into()
         } else {

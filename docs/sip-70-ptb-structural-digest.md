@@ -1,8 +1,13 @@
-# SIP-70: PTB Structural Digest
+# SIP-70: PTB Structural Digest (v2)
 
 ## Summary
 
-Add a single native function `sui::tx_context::structural_digest(&TxContext): vector<u8>` that returns a deterministic, normalized SHA2-256 hash of the current PTB's structure. This enables DAOs, smart accounts, and governance contracts to vote on "what will be executed" and verify at execution time that the PTB matches the approved template.
+Two native functions on `sui::tx_context`:
+
+1. `structural_digest(&TxContext): vector<u8>` — returns a versioned, deterministic hash of the current PTB's normalized structure with coin normalization.
+2. `structural_digest_masked(&TxContext, wildcard_pure_indices: vector<u64>): vector<u8>` — same, but specified Pure inputs are treated as wildcards.
+
+This enables DAOs, smart accounts, and governance contracts to vote on "what will be executed" and verify at execution time that the PTB matches the approved template.
 
 ## Motivation
 
@@ -19,69 +24,51 @@ DAOs and smart accounts need to vote on a transaction before it is executed. But
 Hash the **structure and argument provenance**, not the runtime identity. A structural digest captures:
 - Which commands call which targets, in what order
 - How results flow between commands (`Result(n)` / `NestedResult(n, m)`)
-- What values are passed (Pure bytes, shared object IDs, owned object refs)
+- What values are passed (Pure bytes, shared object IDs, owned object IDs)
 - Type arguments for each call
+- Coin inputs normalized by TypeName + Balance (not ObjectID)
 
-Two PTBs that differ only in which specific coin objects are used (but have the same type, balance, and flow) can produce the same digest.
+Two PTBs that differ only in which specific coin objects are used (but have the same type and balance) produce the same digest.
 
 ## Specification
+
+### Output Format
+
+```
+[version_byte | blake2b256_hash]
+```
+
+- Version `0x01` = current scheme
+- Total output: 33 bytes (1 + 32)
 
 ### Normalization Rules
 
 Each PTB argument type is normalized before hashing:
 
-| Argument Type | What Gets Hashed | Rationale |
-|---|---|---|
-| `GasCoin` | `0x00` marker byte | Gas coin ID is sender-dependent |
-| `Input(n)` → `CallArg::Pure(bytes)` | `0x01` + BCS bytes | Exact parameter values |
-| `Input(n)` → `ObjectArg::SharedObject` | `0x02` + ObjectID | Static anchors (pools, governance objects) |
-| `Input(n)` → `ObjectArg::ImmOrOwnedObject` | `0x03` + ObjectID + version | Identity-stable for non-fungible objects |
-| `Input(n)` → `ObjectArg::Receiving` | `0x04` + ObjectID + version | Receiving objects |
-| `Result(n)` | `0x05` + command_index(u16) | Provenance — which command produced this |
-| `NestedResult(n, m)` | `0x06` + command_index(u16) + result_index(u16) | Provenance with tuple element |
+| Argument Type | Discriminator | What Gets Hashed | Rationale |
+|---|---|---|---|
+| `GasCoin` | `0x00` | marker only | Gas coin ID is sender-dependent |
+| `Pure(bytes)` | `0x01` | BCS bytes | Exact parameter values |
+| `SharedObject` | `0x02` | ObjectID | Version-independent anchor |
+| `ImmOrOwnedObject` | `0x03` | ObjectID | Version dropped — drifts between vote and execution |
+| `Receiving` | `0x04` | ObjectID | Version dropped |
+| `Result(n)` | `0x05` | command_index | Provenance, not runtime identity |
+| `NestedResult(n,m)` | `0x06` | cmd_index + result_index | Provenance with tuple element |
+| `Coin (normalized)` | `0x08` | TypeTag BCS + balance LE | Fungible across split/merge |
+| `Coin Receiving (normalized)` | `0x09` | TypeTag BCS + balance LE | Fungible receiving coin |
+| `Wildcard Pure` | `0xFF` | marker only | Executor-discretion parameter |
+
+**Coin normalization:** The execution engine resolves each object input from the loaded objects. If it's a `Coin<T>`, it hashes by TypeTag + balance instead of ObjectID. This makes the digest stable across coin split/merge — any coin of the right type and amount satisfies the template.
+
+**Wildcard slots:** When `structural_digest_masked` is called with wildcard indices, Pure inputs at those positions are hashed as `0xFF` instead of their actual bytes. This lets a DAO approve "swap on this DEX at this amount" while leaving slippage tolerance to the executor.
 
 ### Hash Construction
 
 ```
-structural_digest = SHA2-256(
+digest = 0x01 || Blake2b256(
     for each command in order:
-        SHA2-256(command_discriminator || command_specific_data || normalized_arguments)
+        Blake2b256(command_discriminator || command_specific_data || normalized_arguments)
 )
-```
-
-For `Command::MoveCall`:
-```
-SHA2-256(0x00 || package_id || module_name || function_name || type_args_bcs || normalized_args)
-```
-
-For `Command::TransferObjects`:
-```
-SHA2-256(0x01 || normalized_objects || normalized_recipient)
-```
-
-For `Command::SplitCoins`:
-```
-SHA2-256(0x02 || normalized_coin || normalized_amounts)
-```
-
-For `Command::MergeCoins`:
-```
-SHA2-256(0x03 || normalized_target || normalized_sources)
-```
-
-For `Command::Publish`:
-```
-SHA2-256(0x04 || module_bytes || dependency_ids)
-```
-
-For `Command::MakeMoveVec`:
-```
-SHA2-256(0x05 || type_tag_bcs || normalized_elements)
-```
-
-For `Command::Upgrade`:
-```
-SHA2-256(0x06 || module_bytes || dependency_ids || package_id || normalized_ticket)
 ```
 
 ### Move API
@@ -89,12 +76,15 @@ SHA2-256(0x06 || module_bytes || dependency_ids || package_id || normalized_tick
 ```move
 module sui::tx_context {
     /// Returns the normalized structural digest of the current PTB.
-    /// Deterministic: same logical PTB structure -> same digest,
-    /// even if coin object IDs differ due to splits/merges.
-    public fun structural_digest(_self: &TxContext): vector<u8> {
-        native_structural_digest()
-    }
-    native fun native_structural_digest(): vector<u8>;
+    /// Output: [0x01 | blake2b256_hash] (33 bytes).
+    public fun structural_digest(_self: &TxContext): vector<u8>;
+
+    /// Returns the structural digest with specified Pure inputs wildcarded.
+    /// Wildcarded inputs hash as 0xFF marker instead of their value.
+    public fun structural_digest_masked(
+        _self: &TxContext,
+        wildcard_pure_indices: vector<u64>,
+    ): vector<u8>;
 }
 ```
 
@@ -104,8 +94,19 @@ module sui::tx_context {
 module dao::executor {
     use sui::tx_context;
 
+    /// Verify exact PTB structure matches what was approved.
     public fun execute_approved(ctx: &TxContext, proposal: &Proposal) {
         let digest = tx_context::structural_digest(ctx);
+        assert!(proposal.approved_digest() == digest, EDigestMismatch);
+    }
+
+    /// Verify PTB structure with executor-discretion parameters.
+    /// Proposal stores: approved_digest + wildcard_indices.
+    public fun execute_with_wildcards(ctx: &TxContext, proposal: &Proposal) {
+        let digest = tx_context::structural_digest_masked(
+            ctx,
+            proposal.wildcard_indices(),
+        );
         assert!(proposal.approved_digest() == digest, EDigestMismatch);
     }
 }
@@ -128,14 +129,24 @@ const digest = tx.computeStructuralDigest();
 
 ### Files Changed
 
-1. **`crates/sui-types/src/transaction.rs`** — `ProgrammableTransaction::structural_digest()` method
-2. **`crates/sui-types/src/base_types.rs`** — `structural_digest` field on `TxContext`
-3. **`sui-execution/latest/sui-adapter/src/execution_engine.rs`** — Compute digest before PTB execution
-4. **`sui-execution/latest/sui-move-natives/src/transaction_context.rs`** — Accessor
-5. **`sui-execution/latest/sui-move-natives/src/tx_context.rs`** — Native function impl
-6. **`sui-execution/latest/sui-move-natives/src/lib.rs`** — Registration + cost params
-7. **`crates/sui-framework/packages/sui-framework/sources/tx_context.move`** — Move declaration
-8. **`crates/sui-protocol-config/src/lib.rs`** — Feature gate + gas cost
+1. **`crates/sui-types/src/transaction.rs`** — `structural_digest()` + `structural_digest_with_options()` algorithm, `StructuralDigestData` type
+2. **`crates/sui-types/src/base_types.rs`** — `structural_digest` + `structural_digest_data` fields on `TxContext`, `structural_digest_masked()` method
+3. **`sui-execution/latest/sui-adapter/src/execution_engine.rs`** — `build_coin_info_map()` resolves coins from input objects, stores `StructuralDigestData` on TxContext
+4. **`sui-execution/latest/sui-move-natives/src/transaction_context.rs`** — `structural_digest_masked()` accessor
+5. **`sui-execution/latest/sui-move-natives/src/tx_context.rs`** — Two native function impls
+6. **`sui-execution/latest/sui-move-natives/src/lib.rs`** — Registration + cost params for both natives
+7. **`crates/sui-framework/packages/sui-framework/sources/tx_context.move`** — Move declarations for both functions
+8. **`crates/sui-protocol-config/src/lib.rs`** — Feature gate + gas costs (protocol v113)
+
+### Design Decisions
+
+1. **Version prefix (0x01):** Future changes to the digest scheme bump this byte. Contracts storing digests can check `digest[0]` for compatibility.
+
+2. **Owned object version dropped:** Version increments between proposal vote and execution. Hashing by ObjectID only (same as shared objects) makes the digest stable across this gap.
+
+3. **Coin normalization at execution engine level:** The `ProgrammableTransaction` struct doesn't carry object types/balances. The execution engine resolves coins from the loaded input objects and passes a `coin_info` map to the digest function.
+
+4. **Wildcard recomputation:** The full PT + coin_info is stored (transient, `#[serde(skip)]`) on TxContext so `structural_digest_masked` can recompute with wildcard substitution at runtime.
 
 ### Security Considerations
 
@@ -143,13 +154,12 @@ const digest = tx.computeStructuralDigest();
 - **Order-sensitive** — adding/removing/reordering commands changes the digest
 - **Flow-sensitive** — redirecting a `Result` to a different command changes the digest
 - **No censorship vector** — contracts cannot inspect individual commands
+- **Wildcards are caller-specified** — the contract decides which indices are wildcards, not the executor
 
 ### Backwards Compatibility
 
-Purely additive. One new native function gated behind a protocol version bump.
+Purely additive. Two new native functions gated behind a protocol version bump. The version prefix byte ensures old and new digests are distinguishable.
 
 ## Future Work
 
-- **Coin normalization** — Hash coins by `TypeName + Balance` instead of ObjectID, making the digest stable across coin split/merge. Requires input object resolution during digest computation.
-- **Client SDK** — `computeStructuralDigest()` in `@mysten/sui/transactions`
-- **Wildcard slots** — Allow certain argument positions to be "any value" in the digest template
+- **Client SDK** — `computeStructuralDigest()` / `computeStructuralDigestMasked()` in `@mysten/sui/transactions`

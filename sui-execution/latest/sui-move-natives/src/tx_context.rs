@@ -499,3 +499,43 @@ pub fn structural_digest(
         smallvec![Value::vector_u8(digest)],
     ))
 }
+
+#[derive(Clone)]
+pub struct TxContextStructuralDigestMaskedCostParams {
+    pub tx_context_structural_digest_masked_cost_base: InternalGas,
+}
+/***************************************************************************************************
+ * native fun native_structural_digest_masked
+ * Implementation of `fun native_structural_digest_masked(wildcard_pure_indices: vector<u64>): vector<u8>`
+ * Returns the structural digest with specified Pure inputs treated as wildcards (SIP-70 v2).
+ *   gas cost: tx_context_structural_digest_masked_cost_base    | recomputation cost
+ **************************************************************************************************/
+pub fn structural_digest_masked(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 1);
+
+    let cost_params = get_extension!(context, NativesCostTable)?
+        .tx_context_structural_digest_masked_cost_params
+        .clone();
+    native_charge_gas_early_exit!(
+        context,
+        cost_params.tx_context_structural_digest_masked_cost_base
+    );
+
+    // Pop wildcard_pure_indices: vector<u64>, convert to BTreeSet<u16>
+    let wildcard_vec = pop_arg!(args, Vec<u64>);
+    let wildcard_indices: std::collections::BTreeSet<u16> =
+        wildcard_vec.into_iter().map(|v| v as u16).collect();
+
+    let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
+    let digest = transaction_context.structural_digest_masked(&wildcard_indices);
+
+    Ok(NativeResult::ok(
+        context.gas_used(),
+        smallvec![Value::vector_u8(digest)],
+    ))
+}
