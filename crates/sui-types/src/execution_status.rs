@@ -39,6 +39,8 @@ impl fmt::Display for CongestedObjects {
     }
 }
 
+pub type ExecutionFailureStatus = ExecutionErrorKind;
+
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, EnumVariantOrder)]
 pub enum ExecutionErrorKind {
     //
