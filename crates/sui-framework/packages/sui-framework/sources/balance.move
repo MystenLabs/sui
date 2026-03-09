@@ -112,10 +112,7 @@ public fun send_funds<T>(balance: Balance<T>, recipient: address) {
 /// Not `public` so that it cannot be called from other Move modules;
 /// only callable from free tier PTBs.
 entry fun gasless_send_funds<T>(balance: Balance<T>, recipient: address) {
-    assert!(
-        sui::protocol_config::is_feature_enabled(b"enable_free_tier"),
-        EFreeTierNotEnabled,
-    );
+    assert!(sui::protocol_config::is_feature_enabled(b"enable_free_tier"), EFreeTierNotEnabled);
     sui::funds_accumulator::add_impl(balance, recipient);
 }
 
