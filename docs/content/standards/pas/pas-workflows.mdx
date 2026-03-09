@@ -1,0 +1,298 @@
+---
+title: Using Permissioned Assets
+description: Learn how to move assets through the Permissioned Asset Standard (PAS) on Sui using Chests, Requests, and Policies.
+keywords: [ PAS, Permissioned Asset Standard, Chest, Policy, Request, permissioned assets, clawback, transfer ]
+---
+
+The Permissioned Asset Standard (PAS) is a permissioned asset framework on Sui. Assets of different types live under **Chests** (one per address, independent of types) and can only move between Chests through hot potato requests that must be approved and resolved in the same programmable transaction block (PTB).
+
+Every action follows the same pattern: 
+
+flowchart LR
+    A["Create Request"] --> B["Approve"] --> C["Resolve"]
+
+## Integrating with PAS
+
+When building on PAS:
+
+1. Define your approval witness using `public struct MyApproval() has drop;`
+
+2. Create a policy with `policy::new_for_currency` and set required approvals per action.
+
+3. Build your approval logic using a function that takes `&mut Request<...>`, validates, and calls `request.approve(MyApproval())`.
+
+4. Set template commands so clients can build PTBs automatically.
+
+### Define an approval witness 
+
+[needs example]
+
+### Set up a policy for a currency
+
+A `Policy<Balance<C>>` defines which approvals are required for each action type. You need a `TreasuryCap<C>` to prove ownership of the currency.
+
+Use in a package:
+
+```move
+let (mut policy, policy_cap) = policy::new_for_currency(
+    &mut namespace,
+    &mut treasury_cap,
+    true, // clawback_allowed
+);
+
+// Require `MyApproval` witness for transfers
+policy.set_required_approval<Balance<T>, MyApproval>(&policy_cap, "send_funds");
+
+// Require `MyApproval` witness for clawbacks
+policy.set_required_approval<Balance<T>, MyApproval>(&policy_cap, "clawback_funds");
+
+policy.share();
+```
+
+Supported actions: `"send_funds"`, `"unlock_funds"`, `"clawback_funds"`.
+
+### Define approval logic 
+
+[needs example]
+
+### Set template commands
+
+Templates store pre-built Move call command structures on-chain for client-side automation. They allow SDKs to construct the correct Move calls for approval resolution without hardcoding package IDs or function signatures.
+
+:::tip
+
+Templates are purely an off-chain utility. They do not affect on-chain execution or security. They describe which Move calls an SDK should make. This is what allows a single
+generic SDK to support any PAS-managed asset, regardless of its specific approval logic.
+
+:::
+
+Templates are useful because when a transfer happens, the PAS SDK needs to know:
+
+1. Which contract to call for approval
+
+2. What arguments that contract expects
+
+3. What type parameters to use
+
+Templates store this as an on-chain `Command` object keyed by the approval witness type.
+
+When an issuer upgrades their approval logic (for example, from `TransferApproval` to `TransferApprovalV2`), they update the template on-chain. All clients automatically pick up the new resolution path without client-side updates, redeployments, or coordination across wallets and frontends.
+
+#### Setting a template
+
+A template command is a `MoveCall` that describes the approval function to call. You build it with `ptb::move_call` and register it through `set_template_command`:
+
+```move
+public fun set_template_command<A: drop>(
+    templates: &mut Templates,
+    _: internal::Permit<A>,
+    command: Command,
+)
+```
+
+The template is keyed by `A`, the witness type used to approve requests. This creates a 1:1 mapping: for each approval type, there is exactly one template command.
+
+#### Example
+
+Given an example approval function in your package:
+
+```move
+public fun approve_transfer(request: &mut Request<SendFunds<Balance<MY_ASSET>>>, _clock: &Clock) {
+    // Your validation logic here
+    request.approve(TransferApproval());
+}
+```
+
+You register a template that describes how to call it:
+
+```move
+let type_name = type_name::with_defining_ids<MY_ASSET>();
+
+let cmd = ptb::move_call(
+    type_name.address_string().to_string(),             // package ID
+    "my_module",                                        // module
+    "approve_transfer",                                 // function
+    vector[
+        ptb::ext_input("pas:request"),                  // the request (resolved by SDK)
+        ptb::object_by_id(@0x6.to_id()),                // Clock object
+    ],
+    vector[(*type_name.as_string()).to_string()],       // type arguments
+);
+
+templates.set_template_command(internal::permit<TransferApproval>(), cmd);
+```
+
+#### Common argument types for templates
+
+| **Constructor** | **Description** |
+|---|---|
+| `ptb::ext_input(name)` | Custom input resolved off-chain by the SDK. |
+| `ptb::object_by_id(id)` | Object resolved off-chain by its ID. |
+| `ptb::object_by_type<T>()` | Object resolved off-chain by its Move type. |
+| `ptb::receiving_object_by_id(id)` | Receiving object resolved off-chain by its ID. |
+| `ptb::pure(value)` | BCS-encoded pure value. |
+
+For the full list of `ptb` constructors (including system shorthands and fully-resolved refs), see the PTB package.
+
+#### Supported `ext_input` names
+
+The following are the custom input names the PAS SDK resolves at PTB construction time:
+
+| **Name** | **Resolves to** |
+|---|---|
+| `"pas:request"` | The active `Request` object being approved. |
+| `"pas:policy"` | The `Policy` object for the managed asset. |
+| `"pas:sender_chest"` | The sender's `Chest` object. |
+| `"pas:receiver_chest"` | The receiver's `Chest` object. |
+
+#### How clients use templates
+
+1. The client reads the template from the `Templates` shared object.
+
+2. The template describes the Move call needed (package, module, function, arguments).
+
+3. The client builds the PTB: create request, template command (approval), resolve.
+
+This enables generic wallets and frontends to execute compliant transfers without knowing the specific compliance contract details.
+
+### Balance tracking
+
+PAS uses Sui's [address balances](https://docs.sui.io/guides/developer/address-balances-migration):
+
+#### How balances are stored
+```
+Chest (shared object)
+  └── UID
+       └── Balance<MyCoin> stored via balance::send_funds(balance, chest_object_address)
+```
+
+Balances are **not** stored as fields on the Chest struct. They are stored as object balance on the Chest's `UID`, using `balance::send_funds` to send funds to the Chest's object address and `balance::withdraw_funds_from_object` (through `UID.withdraw_funds_from_object`) to pull them out.
+
+#### Balance flow
+
+```
+Deposit:  Balance<C> → balance::send_funds(balance, chest_addr) → stored on Chest UID
+Withdraw: Chest UID → balance::withdraw_funds_from_object(amount) → Balance<C>
+```
+
+Deposits are permissionless (anyone can deposit into any Chest).
+Withdrawals are internal (`public(package)`). Only PAS modules can withdraw, and only through Requests.
+
+## Creating and managing assets 
+
+Use the following workflows to create and manage permissioned assets.
+
+### Create Chests
+
+Chest creation is permissionless. There is one Chest per address, and a Chest can hold any asset type:
+
+```move
+chest::create_and_share(&mut namespace, @0xAlice);
+chest::create_and_share(&mut namespace, @0xBob);
+```
+
+### Transfer a balance
+
+Transfer balance of permissioned assets from one Chest to another. Requires the owner's `Auth` proof.
+
+```move
+// 1. Create auth proof
+let auth = chest::new_auth(ctx);
+
+// 2. Create the transfer request (withdraws Balance from sender chest)
+let request = from_chest.send_balance<MyCoin>(
+    &auth,
+    &to_chest,
+    amount,
+    ctx,
+);
+
+// 3. Approve with your witness
+request.approve(MyApproval());
+
+// 4. Resolve — sends Balance to recipient chest
+send_funds::resolve_balance(request, &policy);
+```
+
+### Clawback a balance
+
+Forcibly withdraw tokens from a Chest. No `Auth` is required because this is an admin action. The policy must have `clawback_allowed: true`.
+
+```move
+// 1. Create clawback request (no Auth needed)
+let mut request = from_chest.clawback_balance<MyCoin>(amount, ctx);
+
+// 2. Approve
+request.approve(MyApproval());
+
+// 3. Resolve — returns the Balance to the caller
+let balance: Balance<MyCoin> = clawback_funds::resolve(request, &policy);
+
+// 4. Do something with the balance (deposit elsewhere, burn, and so on)
+to_chest.deposit_balance(balance);
+```
+
+### Unlock a balance
+
+Remove tokens from the closed-loop system entirely.
+
+#### Managed assets (policy exists)
+
+```move
+let auth = chest::new_auth(ctx);
+let mut request = chest.unlock_balance<MyCoin>(&auth, amount, ctx);
+
+request.approve(MyApproval());
+let balance: Balance<MyCoin> = unlock_funds::resolve(request, &policy);
+// Balance is now outside the system
+```
+
+#### Unmanaged assets (no policy)
+
+For example, if SUI is accidentally sent to a Chest:
+
+```move
+let auth = chest::new_auth(ctx);
+let request = chest.unlock_balance<SUI>(&auth, amount, ctx);
+
+// No approval needed — resolves with empty approval set
+let balance: Balance<SUI> = unlock_funds::resolve_unrestricted_balance(request, &namespace);
+```
+
+### Deposit a balance
+
+Deposit tokens into a Chest. No request is needed:
+
+```move
+chest.deposit_balance(balance);
+```
+
+Or send to a Chest address directly. This is useful before the Chest object is available in the transaction:
+
+```move
+balance.send_funds(namespace.chest_address(owner));
+```
+
+## Wallet ownership compared to object ownership
+
+Chests can be owned by wallet addresses or objects.
+
+```move
+// Wallet-owned: proves ownership via transaction sender
+let auth = chest::new_auth(ctx);
+
+// Object-owned: proves ownership via UID reference
+let auth = chest::new_auth_as_object(&mut my_object_uid);
+```
+
+## Derived object addresses
+
+All PAS objects (Chests, policies) use deterministic derived addresses. You can compute them off-chain:
+
+```move
+// Get the chest address for an owner
+let chest_addr: address = namespace.chest_address(@0xAlice);
+
+// Get the policy address for a type
+let policy_addr: address = namespace.policy_address<Balance<MyCoin>>();
+```

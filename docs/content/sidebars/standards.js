@@ -20,6 +20,18 @@ const standards = [
 			'standards/closed-loop-token/coin-token-comparison',
 		],
 	},
+	{
+	type: 'category',
+	label: 'Permissioned Asset Standard',
+	link: {
+			type: 'doc',
+			id: 'standards/pas/pas-architecture',
+		},
+	items: [
+		'standards/pas/pas-workflows',
+		'standards/pas/pas-actions',
+	],
+	},
 	'standards/kiosk',
 	'standards/kiosk-apps',
 	{
