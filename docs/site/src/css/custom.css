@@ -2585,13 +2585,13 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 
 .full-width-iframe {
   max-width: none !important;
-  width: 99vw;
+  width: 58vw;
   height: 100%;
   position: relative;
   left: 50%;
   right: 50%;
-  margin-left: -49vw;
-  margin-right: -50vw;
+  margin-left: -30vw;
+  margin-right: -30vw;
 }
 
 .full-width-iframe iframe {

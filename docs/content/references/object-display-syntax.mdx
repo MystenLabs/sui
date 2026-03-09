@@ -1,0 +1,414 @@
+---
+title: Object Display V2 Syntax
+description: Learn how to use Display V2 format strings to render Sui Move object values into human-readable strings, JSON, or encoded representations.
+keywords: [ display, template, format string, move, rendering ]
+---
+
+Display V2 is a template language for rendering Sui Move object values into human-readable strings, JSON, or encoded representations. A `Display` object defines a set of key-value pairs where both keys and values are **format strings**.
+
+## Format strings
+
+A format string is a mix of literal text and **expressions** delimited by `{` and `}`.
+
+```
+Hello, {name}! You have {balance} SUI.
+```
+
+To output a literal brace, double it: `{{` produces `{`, `}}` produces `}`.
+
+## Expressions
+
+Each expression inside `{...}` has 3 parts:
+
+```
+{ chain | alternate | ... : transform }
+  ^^^^^   ^^^^^^^^^         ^^^^^^^^^
+  primary fallbacks         output format
+```
+
+- **Chains:** Separated by `|`, evaluated left-to-right. The first non-null result is used.
+- **Transform:** An optional output format prefixed with `:` that controls how the value renders.
+
+If all chains evaluate to null, the entire format string evaluates to `null`.
+
+## Access chains
+
+A chain navigates into an object's data. It starts from either the root object or a literal value, then follows a sequence of accessors.
+
+### Field access
+
+Access named fields with dot notation:
+
+```
+{name}                  — top-level field "name"
+{inner.value}           — nested field
+{url.url.bytes}         — deeply nested field
+```
+
+### Positional access
+
+Access unnamed (positional) fields by numeric index:
+
+```
+{pos.0}                 — first positional field
+{tuple.0.1}             — nested positional access
+```
+
+### Vector and array indexing
+
+Index into a `vector` or `VecMap` with `[...]`:
+
+```
+{items[0u64]}           — first element
+{items[2u32]}           — third element (any numeric type works)
+{items[idx]}            — use another field's value as the index
+{items[ns[0u64]]}       — nested: use element of `ns` as index into `items`
+```
+
+For `VecMap<K, V>`, the index matches against keys:
+
+```
+{scores[6u32]}          — look up key 6u32 in the VecMap, returns the value
+```
+
+### Dynamic field access (`->`)
+
+Load a dynamic field from on-chain storage:
+
+```
+{parent->['key']}       — dynamic field with string key 'key'
+{parent->['key'].x}     — access field 'x' on the loaded dynamic field value
+{parent.id->['key']}    — explicit UID access (equivalent if parent starts with UID)
+{parent->[field]}       — use a field's evaluated value as the dynamic field name
+```
+
+Each `->` access costs 1 object load from the budget.
+
+### Dynamic object field access (`=>`)
+
+Load a dynamic object field (the value is a full Sui object):
+
+```
+{parent=>['key']}       — dynamic object field with string key 'key'
+{parent=>['key'].x}     — access field 'x' on the loaded object
+{parent.id=>['key'].id} — load the object and read its UID
+```
+
+Each `=>` access costs 2 object loads (1 for the wrapper `Field`, 1 for the object).
+
+## Literal values
+
+Literals can appear as expression roots or as dynamic field name keys.
+
+### Scalars
+
+| **Syntax** | **Type** | **Example** |
+|--------|------|---------|
+| `true` or `false` | `bool` | `{true}` |
+| `42u8` | `u8` | `{255u8}` |
+| `1000u16` | `u16` | `{1000u16}` |
+| `100000u32` | `u32` | `{100000u32}` |
+| `999u64` | `u64` | `{999u64}` |
+| `123u128` | `u128` | `{123u128}` |
+| `42u256` | `u256` | `{42u256}` |
+| `@0x1abc` | `address` | `{@0x1abc}` |
+
+Bare numbers like `42` are not valid. A type suffix is always required.
+
+### Strings
+
+| **Syntax** | **Description** |
+|--------|-------------|
+| `'hello'` | UTF-8 string (`0x1::string::String`) |
+| `b'hello'` | Byte string (UTF-8 encoded bytes, `vector<u8>`) |
+| `x'48656c6c6f'` | Hex byte string (`vector<u8>`) |
+
+Strings use single quotes. Access individual bytes with `.bytes[i]` (for string literals) or direct indexing `[i]` (for byte literals):
+
+```
+{'ABC'.bytes[0u64]}     — 65 (ASCII 'A')
+{b'ABC'[1u64]}          — 66 (ASCII 'B')
+```
+
+### Vectors
+
+```
+{vector[1u8, 2u8, 3u8]}             — inferred element type
+{vector<u64>[5u64, 6u64]}           — explicit element type
+{vector<u32>}                        — empty vector with type annotation
+```
+
+### Struct literals
+
+Positional fields:
+
+```
+{0x1::m::MyStruct(42u64, 'hello')}
+{0x2::table::Table<address, u64>(a, b)}    — with type parameters
+```
+
+Named fields:
+
+```
+{0x1::m::MyStruct { id: @0x123, value: 42u64 }}
+```
+
+### Enum and variant literals
+
+```
+{0x1::option::Option<u64>::Some#1(42u64)}          — variant name + index
+{0x1::m::MyEnum::Variant#0(field1, field2)}        — positional fields
+```
+
+The `#N` suffix after the variant name is the variant's discriminant index.
+
+## Alternates (fallbacks)
+
+Use `|` to provide fallback chains. If the first chain returns null (missing field, out-of-bounds index, and so on), the next alternate is tried:
+
+```
+{name | 'Unknown'}              — fall back to literal string
+{preferred_name | name}         — try preferred_name first
+{a | b | c}                     — try three options in order
+{bar | 42u64}                   — fall back to numeric literal
+```
+
+If all alternates fail, the expression evaluates to null, and the entire format string becomes `null`.
+
+## Transforms
+
+A transform is applied to the final value with `:transform` syntax. It controls how the value serializes into the output.
+
+### `str` (default)
+
+Renders the value as a human-readable string. This is the default when you do not specify a transform.
+
+```
+{amount}           — same as {amount:str}
+{amount:str}       — explicit
+```
+
+| **Value type** | **Output** |
+|-----------|--------|
+| `u8`-`u256` | Decimal number: `42` |
+| `bool` | `true` or `false` |
+| `address` | `0x`-prefixed canonical hex: `0x0000...1234` |
+| `String` or `vector<u8>` | UTF-8 decoded string |
+
+### `hex`
+
+Renders the value as lowercase hexadecimal, zero-padded to the type's width.
+
+```
+{value:hex}
+```
+
+| **Value type** | **Output** |
+|-----------|--------|
+| `u8` | 2 characters: `2a` |
+| `u16` | 4 characters: `002a` |
+| `u32` | 8 characters: `0000002a` |
+| `u64` | 16 characters: `000000000000002a` |
+| `u128` | 32 characters |
+| `u256` | 64 characters |
+| `address` | 64 characters (no `0x` prefix) |
+| `vector<u8>` | Each byte as 2 hex characters |
+
+### `base64`
+
+Base64-encodes the byte representation of the value.
+
+```
+{value:base64}                  — standard base64, with padding
+{value:base64(nopad)}           — without padding
+{value:base64(url)}             — URL-safe alphabet
+{value:base64(url, nopad)}      — URL-safe, without padding
+```
+
+### `bcs`
+
+BCS-serializes the entire value, then base64-encodes the result. Supports the same modifiers as `base64`:
+
+```
+{value:bcs}                     — BCS bytes, standard base64
+{value:bcs(url, nopad)}         — BCS bytes, URL-safe base64 without padding
+```
+
+This is useful for aggregate types (structs, enums, vectors) that you cannot render with `str` or `hex`.
+
+### `json`
+
+Outputs the value as a structured JSON value (not a quoted string). This is only valid when the expression is the **sole content** of the format string.
+
+```
+{inner:json}
+```
+
+| **Value type** | **JSON output** |
+|-----------|-------------|
+| `bool` | `true` or `false` |
+| `u8`, `u16`, `u32` | Number: `42` |
+| `u64`, `u128`, `u256` | String: `"42"` |
+| `address` | String: `"0x0000...1234"` |
+| `String` | String: `"hello"` |
+| `vector<u8>` | String (base64): `"AQID"` |
+| struct | Object: `{ "field": value, ... }` |
+| enum | Object: `{ "@variant": "Name", "field": value, ... }` |
+| vector | Array: `[v1, v2, ...]` |
+
+### `timestamp` (alias: `ts`)
+
+Interprets a numeric value as Unix milliseconds and formats as ISO 8601:
+
+```
+{created_at:ts}                 — "2023-04-12T17:00:00Z"
+{1681318800000u64:ts}           — literal timestamp
+```
+
+Only works with numeric types that fit in `i64`.
+
+### `url`
+
+Like `str`, but percent-encodes reserved URL characters (RFC 3986 unreserved set: `A-Z a-z 0-9 - . _ ~`):
+
+```
+{label:url}                     — "hello%20world" for "hello world"
+```
+
+Numeric and address types pass through unchanged because they contain no reserved characters.
+
+## Option auto-unwrapping
+
+`Option<T>` values are automatically unwrapped. If the option is `Some(v)`, the access continues into `v`. If it is `None`, the chain evaluates to null.
+
+```
+{maybe_name}       — null if None, the string value if Some("...")
+```
+
+## Enum variant field access
+
+When you access fields on an enum, the access succeeds only if the current variant has the requested field. Otherwise it evaluates to null. This allows a single Display definition to handle multiple variants gracefully:
+
+```move
+enum Status {
+    Pending { message: String },
+    Active  { progress: u32 },
+    Done    { count: u128, timestamp: u64 },
+}
+```
+
+```
+("pending",  "message = {message}")
+("active",   "progress = {progress}")
+("complete", "count = {count}, timestamp = {timestamp}")
+```
+
+For a `Pending` value, only the `"pending"` key produces output. The others are `null`.
+
+## Escaped braces
+
+To include literal `{` or `}` in the output, double them:
+
+```
+{{{ns[0u8]}, {ns[1u16]}, {ns[2u8]}}}
+```
+
+This outputs `{2, 1, 0}`. The outer `{{` and `}}` are literal braces, while the inner `{...}` are expressions.
+
+## Display object structure
+
+A Display object is a list of (key, value) format string pairs. Both keys and values are parsed as format strings, allowing computed keys.
+
+```
+("name",        "{name}")
+("description",  "{desc | 'No description'}")
+("image_url",    "https://example.com/images/{image_id}")
+("balance",      "{amount:hex}")
+("data",         "{inner:json}")
+```
+
+Result (for a given object):
+
+```json
+{
+  "name": "My NFT",
+  "description": "A cool NFT",
+  "image_url": "https://example.com/images/42",
+  "balance": "000000000000002a",
+  "data": { "x": 100, "y": 200 }
+}
+```
+
+Keys must evaluate to unique, non-null strings. Values that fail to evaluate produce `null` (partial failure is allowed).
+
+## Limits
+
+Parsing and evaluation are bounded by configurable limits:
+
+| **Limit** | **Default** | **Description** |
+|-------|---------|-------------|
+| `max_depth` | 32 | Maximum nesting depth during parsing |
+| `max_nodes` | 32,768 | Maximum AST nodes across all format strings in a Display |
+| `max_loads` | 8 | Maximum object loads (`->` costs 1, `=>` costs 2) |
+
+Exceeding any limit produces an error (`TooDeep`, `TooBig`, or `TooManyLoads`).
+
+## Formal grammar
+
+```
+format   ::= strand*
+
+strand   ::= text | expr
+
+text     ::= part+
+part     ::= TEXT | '{{' | '}}'
+
+expr     ::= '{' chain ('|' chain)* (':' xform)? '}'
+
+chain    ::= (literal | IDENT) accessor*
+
+accessor ::= '.' IDENT
+           | '.' NUM_DEC
+           | '[' chain ']'
+           | '->' '[' chain ']'
+           | '=>' '[' chain ']'
+
+literal  ::= address | bool | number | string | vector | struct | enum
+
+address  ::= '@' (NUM_DEC | NUM_HEX)
+bool     ::= 'true' | 'false'
+number   ::= (NUM_DEC | NUM_HEX) numeric
+string   ::= ('b' | 'x')? STRING
+vector   ::= 'vector'  '<' type ','? '>' ('[' ']')?
+           | 'vector' ('<' type ','? '>')?  array
+array    ::= '[' chain (',' chain)* ','? ']'
+struct   ::= datatype fields
+enum     ::= datatype '::' (IDENT '#')? NUM_DEC fields
+
+fields   ::= '(' chain (',' chain)* ','? ')'
+           | '{' named (',' named)* ','? '}'
+named    ::= IDENT ':' chain
+
+type     ::= 'address' | 'bool' | 'vector' '<' type '>' | numeric | datatype
+datatype ::= NUM_HEX '::' IDENT ('<' type (',' type)* ','? '>')?
+numeric  ::= 'u8' | 'u16' | 'u32' | 'u64' | 'u128' | 'u256'
+
+xform    ::= 'str' | 'hex' | 'json' | 'timestamp' | 'url'
+           | 'base64' xmod?
+           | 'bcs' xmod?
+xmod     ::= '(' b64mod (',' b64mod)* ','? ')'
+b64mod   ::= 'url' | 'nopad'
+```
+
+## Error reference
+
+| **Error** | **Cause** |
+|-------|-------|
+| `UnexpectedToken` | Syntax error from an unexpected token during parsing |
+| `UnexpectedEos` | Syntax error from an unexpected end of input |
+| `TooBig` | AST node budget (`max_nodes`) exceeded |
+| `TooDeep` | Nesting depth (`max_depth`) exceeded |
+| `TooManyLoads` | Object load budget (`max_loads`) exceeded |
+| `TooMuchOutput` | Output size limit exceeded during rendering |
+| `TransformInvalid` | Transform cannot be applied to the value type (for example, `:hex` on a struct) |
+| `VectorTypeMismatch` | Mixed element types in a vector literal |

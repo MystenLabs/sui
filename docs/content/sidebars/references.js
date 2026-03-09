@@ -166,6 +166,7 @@ const references = [
 			},
 		],
 	},
+	'references/object-display-syntax',
 	'references/awesome-sui',
 	'references/awesome-sui-gaming',
 	'references/sui-glossary',

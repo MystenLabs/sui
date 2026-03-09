@@ -23,6 +23,19 @@ node scripts/massagegraphql.js || { echo "❌ massagegraphql failed"; exit 1; }
 
 echo "✅ Pre-build generation complete"
 
+## Build displayV2 app - only download during build process, do not commit files locally
+
+SITE_DIR="$(pwd)"
+
+TEMP_DIR=$(mktemp -d)
+git clone --depth 1 https://github.com/MystenLabs/display-preview.git "$TEMP_DIR/display-preview"
+cd "$TEMP_DIR/display-preview"
+pnpm install
+pnpm build
+cp -r dist/ "$SITE_DIR/static/display-preview"
+cd "$SITE_DIR"
+rm -rf "$TEMP_DIR"
+
 ## Begin Docusaurus build
 
 docusaurus build 2>&1 | while IFS= read -r line; do
