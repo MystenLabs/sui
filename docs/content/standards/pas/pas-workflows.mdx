@@ -157,7 +157,7 @@ The following are the custom input names the PAS SDK resolves at PTB constructio
 
 This enables generic wallets and frontends to execute compliant transfers without knowing the specific compliance contract details.
 
-### Balance tracking
+## Balance tracking
 
 PAS uses Sui's [address balances](https://docs.sui.io/guides/developer/address-balances-migration):
 
@@ -170,15 +170,14 @@ Chest (shared object)
 
 Balances are **not** stored as fields on the Chest struct. They are stored as object balance on the Chest's `UID`, using `balance::send_funds` to send funds to the Chest's object address and `balance::withdraw_funds_from_object` (through `UID.withdraw_funds_from_object`) to pull them out.
 
-#### Balance flow
+### Balance flow
 
 ```
 Deposit:  Balance<C> → balance::send_funds(balance, chest_addr) → stored on Chest UID
 Withdraw: Chest UID → balance::withdraw_funds_from_object(amount) → Balance<C>
 ```
 
-Deposits are permissionless (anyone can deposit into any Chest).
-Withdrawals are internal (`public(package)`). Only PAS modules can withdraw, and only through Requests.
+Deposits are permissionless (anyone can deposit into any Chest). Withdrawals are internal (`public(package)`). Only PAS modules can withdraw, and only through Requests.
 
 ## Creating and managing assets 
 
