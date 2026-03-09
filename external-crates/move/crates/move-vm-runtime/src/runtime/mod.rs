@@ -113,7 +113,7 @@ impl MoveRuntime {
         package_store: impl ModuleResolver,
         link_context: LinkageContext,
     ) -> VMResult<MoveVM<'extensions>> {
-        tracing::trace!(linkage_table = ?link_context.linkage_table, "making Move VM");
+        tracing::trace!(linkage_table = ?link_context, "making Move VM");
         self.make_vm_with_native_extensions(
             package_store,
             link_context,
@@ -128,7 +128,7 @@ impl MoveRuntime {
         link_context: LinkageContext,
         native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>> {
-        tracing::trace!(linkage_table = ?link_context.linkage_table, "making Move VM for execution with extensions");
+        tracing::trace!(linkage_table = ?link_context, "making Move VM for execution with extensions");
         self.telemetry.with_transaction_telemetry(|txn_telemetry| {
             let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
@@ -192,7 +192,7 @@ impl MoveRuntime {
         link_context: &LinkageContext,
         linkage_hash: &crate::shared::linkage_context::LinkageHash,
     ) -> Result<VMDispatchTables, move_binary_format::errors::VMError> {
-        tracing::trace!(linkage_table = ?link_context.linkage_table, "loading and caching VTables for linkage context");
+        tracing::trace!(linkage_table = ?link_context, "loading and caching VTables for linkage context");
         let all_packages = link_context.all_packages()?;
         let packages = package_resolution::resolve_packages(
             package_store,
@@ -205,7 +205,7 @@ impl MoveRuntime {
             .iter()
             .map(|(id, pkg)| (*id, &*pkg.verified))
             .collect();
-        validate_for_vm_execution(validation_packages)?;
+        validate_for_vm_execution(validation_packages, link_context)?;
         let runtime_packages = packages
             .into_values()
             .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
@@ -258,7 +258,7 @@ impl MoveRuntime {
             let result = try_block! {
                 dbg_println!("\n\nPublishing module at {} (=> {original_id})\n\n", pkg.version_id);
 
-                let link_context = LinkageContext::new(pkg.linkage_table.clone());
+                let link_context = LinkageContext::new(pkg.linkage_table.clone())?;
 
                 // Verify a provided serialized package. This will validate the provided serialized
                 // package, including attempting to jit-compile the package and verify linkage with
@@ -282,7 +282,7 @@ impl MoveRuntime {
                         .iter()
                         .map(|(id, pkg)| (*id, &*pkg.verified))
                         .collect();
-                    validate_for_publish(&self.natives, &self.vm_config, original_id, pkg, deps)
+                    validate_for_publish(&self.natives, &self.vm_config, original_id, pkg, deps, &link_context)
                 };
                 txn_telemetry.report_time(valdation_timer);
                 let verified_pkg = verified_pkg?;

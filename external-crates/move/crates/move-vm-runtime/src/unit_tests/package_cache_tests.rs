@@ -837,7 +837,7 @@ fn relink() {
     assert_eq!(adapter.runtime().cache().package_cache().len(), 0);
 
     // Load B v0's dependency tree: B v0 + C v0
-    let link_b = LinkageContext::new(BTreeMap::from([(c_orig, c_orig), (b_orig, b_orig)]));
+    let link_b = LinkageContext::new(BTreeMap::from([(c_orig, c_orig), (b_orig, b_orig)])).unwrap();
     load_linkage_packages_into_runtime(&mut adapter, &link_b).unwrap();
     assert_eq!(adapter.runtime().cache().package_cache().len(), 2);
 
@@ -855,7 +855,8 @@ fn relink() {
         (c_orig, c_v1_addr),
         (b_orig, b_orig),
         (a_orig, a_orig),
-    ]));
+    ]))
+    .unwrap();
     load_linkage_packages_into_runtime(&mut adapter, &link_a).unwrap();
     // Cache now has: C v0 (0x2), C v1 (0x5), B v0 (0x3), A v0 (0x4)
     assert_eq!(adapter.runtime().cache().package_cache().len(), 4);

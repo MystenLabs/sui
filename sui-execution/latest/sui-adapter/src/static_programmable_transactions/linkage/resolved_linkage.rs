@@ -32,8 +32,13 @@ impl ExecutableLinkage {
         )))
     }
 
-    pub fn linkage_context(&self) -> LinkageContext {
-        LinkageContext::new(self.0.linkage.iter().map(|(k, v)| (**k, **v)).collect())
+    pub fn linkage_context(&self) -> Result<LinkageContext, ExecutionError> {
+        LinkageContext::new(self.0.linkage.iter().map(|(k, v)| (**k, **v)).collect()).map_err(|e| {
+            make_invariant_violation!(
+                "Failed to create linkage context from resolved linkage: {:?}",
+                e
+            )
+        })
     }
 }
 

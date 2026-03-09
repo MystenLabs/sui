@@ -153,7 +153,7 @@ macro_rules! charge_gas {
 // found the VM is reused, otherwise a new VM is created and inserted into the cache.
 macro_rules! with_vm {
     ($self:ident, $linkage:expr, $body:expr) => {{
-        let link_context = $linkage.linkage_context();
+        let link_context = $linkage.linkage_context()?;
         let linkage_hash = link_context.to_linkage_hash();
         let mut vm = if let Some((_, vm)) = $self.executable_vm_cache.remove(&linkage_hash) {
             vm
@@ -616,7 +616,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         env.vm
             .make_vm(
                 &env.linkable_store.package_store,
-                ty_linkage.linkage_context(),
+                ty_linkage.linkage_context()?,
             )
             .map_err(|e| env.convert_linked_vm_error(e, &ty_linkage))
             .map(|vm| (vm, ty_linkage))

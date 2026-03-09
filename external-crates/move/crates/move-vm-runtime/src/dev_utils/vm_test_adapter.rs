@@ -78,7 +78,7 @@ pub trait VMTestAdapter<Storage: ModuleResolver + Sync + Send> {
     /// Retrieve the linkage context for the given package in `Storage`.
     fn get_linkage_context(&self, version_id: VersionId) -> VMResult<LinkageContext> {
         let pkg = self.get_package_from_store(&version_id)?;
-        Ok(LinkageContext::new(pkg.linkage_table))
+        LinkageContext::new(pkg.linkage_table)
     }
 
     fn get_package_from_store(&self, version_id: &VersionId) -> VMResult<SerializedPackage>;

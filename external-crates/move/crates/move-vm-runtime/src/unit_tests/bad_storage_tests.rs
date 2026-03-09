@@ -83,9 +83,7 @@ fn test_malformed_module() {
             m.self_id().name().to_owned(),
             blob,
         );
-        let linkage = LinkageContext {
-            linkage_table: [(TEST_ADDR, TEST_ADDR)].into_iter().collect(),
-        };
+        let linkage = LinkageContext::new([(TEST_ADDR, TEST_ADDR)].into_iter().collect()).unwrap();
 
         let Err(err) = adapter.make_vm(linkage) else {
             panic!("Expected an error, but passed");
@@ -207,7 +205,7 @@ fn test_missing_module_dependency() {
             StoredPackage::from_modules_for_testing(TEST_ADDR, vec![n]).unwrap(),
         );
 
-        let linkage = LinkageContext::new([(TEST_ADDR, TEST_ADDR)].into_iter().collect());
+        let linkage = LinkageContext::new([(TEST_ADDR, TEST_ADDR)].into_iter().collect()).unwrap();
         let Err(err) = adapter.make_vm(linkage) else {
             panic!("Expected an error, but passed");
         };
@@ -276,7 +274,7 @@ fn test_malformed_module_dependency() {
             StoredPackage::from_modules_for_testing(TEST_ADDR, vec![n.clone()]).unwrap(),
         );
 
-        let linkage = LinkageContext::new([(TEST_ADDR, TEST_ADDR)].into_iter().collect());
+        let linkage = LinkageContext::new([(TEST_ADDR, TEST_ADDR)].into_iter().collect()).unwrap();
         adapter.storage.publish_or_overwrite_module(
             *n.self_id().address(),
             *n.self_id().address(),
@@ -350,7 +348,7 @@ fn test_unverifiable_module_dependency() {
             StoredPackage::from_modules_for_testing(TEST_ADDR, vec![n.clone()]).unwrap(),
         );
 
-        let linkage = LinkageContext::new([(TEST_ADDR, TEST_ADDR)].into_iter().collect());
+        let linkage = LinkageContext::new([(TEST_ADDR, TEST_ADDR)].into_iter().collect()).unwrap();
         adapter.storage.publish_or_overwrite_module(
             *n.self_id().address(),
             *n.self_id().address(),

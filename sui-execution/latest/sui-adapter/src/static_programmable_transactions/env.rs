@@ -228,7 +228,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
             .vm
             .make_vm(
                 &self.linkable_store.package_store,
-                linkage.linkage_context(),
+                linkage.linkage_context()?,
             )
             .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
         let runtime_signature = vm
