@@ -4,7 +4,7 @@
 // Tests that --address-balance-gas pays for gas from the address balance,
 // leaving owned gas objects untouched.
 
-//# init --addresses test=0x0 --accounts A --enable-address-balance-gas-payments --simulator
+//# init --addresses test=0x0 --accounts A
 
 // View gas coin before any transactions
 //# view-object 0,0

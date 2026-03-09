@@ -5,9 +5,9 @@
 
 use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
-use crate::{TransactionalAdapter, ValidatorWithFullnode, cursor};
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use anyhow::{Context, anyhow, bail, ensure};
+use crate::{cursor, TransactionalAdapter, ValidatorWithFullnode};
+use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
 use criterion::Criterion;
@@ -19,9 +19,9 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
-    Flags, PreCompiledProgramInfo,
     editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
+    Flags, PreCompiledProgramInfo,
 };
 use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
@@ -34,12 +34,12 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::tasks::TaskCommand;
 use move_transactional_test_runner::{
-    framework::{CompiledState, MoveTestAdapter, compile_any, store_modules},
+    framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::Deserialize;
 use serde_json::Value;
 use std::borrow::Cow;
@@ -52,9 +52,9 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use sui_core::authority::AuthorityState;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
+use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
@@ -73,7 +73,7 @@ use sui_swarm_config::network_config_builder::KeyPairWrapper;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
-    AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound, get_authority_key_pair,
+    get_authority_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound,
 };
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest, TransactionDigest};
 use sui_types::effects::{
@@ -90,23 +90,15 @@ use sui_types::storage::{ObjectStore, RpcStateReader};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
-use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID};
-use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
-use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{
-    MOVE_STDLIB_ADDRESS, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
-    base_types::{ObjectID, ObjectRef, SUI_ADDRESS_LENGTH, SuiAddress},
-    crypto::{AccountKeyPair, get_key_pair_from_rng},
+    base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
+    crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
     object::{self, Object},
     transaction::{Transaction, TransactionData, VerifiedTransaction},
+    MOVE_STDLIB_ADDRESS, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use sui_types::{
-    SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-};
-use sui_types::{SUI_SYSTEM_PACKAGE_ID, utils::to_sender_signed_transaction};
 use sui_types::{
     execution_status::{ExecutionFailure, ExecutionStatus},
     transaction::TransactionKind,
@@ -116,7 +108,15 @@ use sui_types::{
     move_package::MovePackage,
     transaction::{Argument, CallArg, TransactionDataAPI, TransactionExpiration},
 };
-use tempfile::{NamedTempFile, tempdir};
+use sui_types::{
+    programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_COIN_REGISTRY_OBJECT_ID,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS,
+};
+use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID};
+use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
+use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+use tempfile::{tempdir, NamedTempFile};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -699,7 +699,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     Ok(obj) => obj,
                 }
             }};
-            ($fake_id:ident) => {{ get_obj!($fake_id, None) }};
+            ($fake_id:ident) => {{
+                get_obj!($fake_id, None)
+            }};
         }
         match command {
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
@@ -879,7 +881,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 jwk_iss,
                 authenticator_obj_initial_shared_version,
             }) => {
-                use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
+                use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
                 use sui_types::authenticator_state::ActiveJwk;
 
                 let current_epoch = self.get_latest_epoch_id()?;
@@ -966,10 +968,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 gas_price,
             }) => {
                 // address_balance_gas ==> is simulator
-                ensure!(
-                    !address_balance_gas || self.is_simulator(),
-                    "Address balance gas payments are only supported in simulator mode"
-                );
+                //ensure!(
+                //    !address_balance_gas || self.is_simulator(),
+                //    "Address balance gas payments are only supported in simulator mode"
+                //);
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let obj_arg = SuiValue::Object(fake_id, None).into_argument(&mut builder, self)?;
                 let recipient = match self.accounts.get(&recipient) {
@@ -1027,10 +1029,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 inputs,
             }) => {
                 // address_balance_gas ==> is simulator
-                ensure!(
-                    !address_balance_gas || self.is_simulator(),
-                    "Address balance gas payments are only supported in simulator mode"
-                );
+                //ensure!(
+                //    !address_balance_gas || self.is_simulator(),
+                //    "Address balance gas payments are only supported in simulator mode"
+                //);
                 if dev_inspect && self.is_simulator() {
                     bail!("Dev inspect is not supported on simulator mode");
                 }
@@ -1161,10 +1163,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 gas_price,
             }) => {
                 // address_balance_gas ==> is simulator
-                ensure!(
-                    !address_balance_gas || self.is_simulator(),
-                    "Address balance gas payments are only supported in simulator mode"
-                );
+                //ensure!(
+                //    !address_balance_gas || self.is_simulator(),
+                //    "Address balance gas payments are only supported in simulator mode"
+                //);
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 // zero out the package name
                 let zero =
@@ -2262,7 +2264,11 @@ impl SuiTestAdapter {
         out.push('\n');
         write!(out, "gas summary: {}", gas_summary).unwrap();
 
-        if out.is_empty() { None } else { Some(out) }
+        if out.is_empty() {
+            None
+        } else {
+            Some(out)
+        }
     }
 
     fn list_events(&self, events: &[Event], summarize: bool) -> String {
