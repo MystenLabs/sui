@@ -14,11 +14,7 @@ flowchart LR
     A["Create Request"] --> B["Approve"] --> C["Resolve"]
 ```
 
-## Creating and managing assets 
-
-Use the following workflows to create and manage permissioned assets.
-
-### Create Chests
+## Create Chests
 
 Chest creation is permissionless. There is one Chest per address, and a Chest can hold any asset type:
 
@@ -27,7 +23,7 @@ chest::create_and_share(&mut namespace, @0xAlice);
 chest::create_and_share(&mut namespace, @0xBob);
 ```
 
-### Transfer a balance
+## Transfer a balance
 
 Transfer balance of permissioned assets from one Chest to another. Requires the owner's `Auth` proof.
 
@@ -64,7 +60,7 @@ request.approve(MyApproval());
 send_funds::resolve_balance(request, &policy);
 ```
 
-### Clawback a balance
+## Clawback a balance
 
 Forcibly withdraw tokens from a Chest. No `Auth` is required because this is an admin action. The policy must have `clawback_allowed: true`.
 
@@ -92,7 +88,7 @@ let balance: Balance<MyCoin> = clawback_funds::resolve(request, &policy);
 to_chest.deposit_balance(balance);
 ```
 
-### Unlock a balance
+## Unlock a balance
 
 Remove tokens from the closed-loop system entirely.
 
@@ -111,7 +107,7 @@ There are 2 resolution paths:
 
 The unrestricted path is `Balance<C>`-specific. It exists for assets like SUI that might accidentally end up in a Chest. It aborts if a `Policy<Balance<C>>` exists for the type because you cannot bypass managed asset controls.
 
-#### Managed assets (policy exists)
+### Managed assets (policy exists)
 
 ```move
 let auth = chest::new_auth(ctx);
@@ -122,7 +118,7 @@ let balance: Balance<MyCoin> = unlock_funds::resolve(request, &policy);
 // Balance is now outside the system
 ```
 
-#### Unmanaged assets (no policy)
+### Unmanaged assets (no policy)
 
 For example, if SUI is accidentally sent to a Chest:
 
@@ -134,7 +130,7 @@ let request = chest.unlock_balance<SUI>(&auth, amount, ctx);
 let balance: Balance<SUI> = unlock_funds::resolve_unrestricted_balance(request, &namespace);
 ```
 
-### Deposit a balance
+## Deposit a balance
 
 Deposit tokens into a Chest. No request is needed:
 
