@@ -1,51 +1,48 @@
 ---
 title: Creating Displays
 description: An Object Display must be explicitly created and then maintained by the package or type owner.
-keywords: [ Object Display, object, display, display properties, object properties, sui::display, Sui utility objects, Unique objects with dynamic representation, objects with unique static content ]
-pagination_prev: null
+keywords: [ Object Display, object, display, display properties, object properties, sui::display, Sui utility objects ]
 ---
 
 :::danger
 
-Object Display V2 will be available in Sui v1.68. You can check the [release schedule](https://www.sui.io/networkinfo) to learn more about when v1.68 is available on Devnet, Testnet, and Mainnet. 
+Object Display V2 will be available in Sui v1.68. Check the [release schedule](https://www.sui.io/networkinfo) to learn when v1.68 is available on Devnet, Testnet, and Mainnet.
 
-All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You don't need to do anything upfront; after the snapshot, you can claim the capability when you're ready (see [Migration to V2](#migrating-to-v2)).
+All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You do not need to do anything upfront. After the snapshot, you can claim the capability when you are ready (see [Migrating to V2](#migrating-to-v2)).
 
 :::
 
+An Object Display must be explicitly created and then maintained by the [package or type owner](#display-registry). The standard does not limit the fields you can set. Use the `{property}` syntax to access all object properties and insert them as part of the template string. The basic set of suggested properties includes:
 
-An Object Display must be explicitly created and then maintained by the [package or type owner](#display-registry). The standard doesn't limit the fields you can set. You can use the  `{property}` syntax to access all object properties, and then insert them as a part of the template string. The basic set of properties suggested includes:
-
-- `name`: A name for the object. The name is displayed when users view the object.
-- `description`: A description for the object. The description is displayed when users view the object.
+- `name`: A name for the object. The name displays when users view the object.
+- `description`: A description for the object. The description displays when users view the object.
 - `link`: A link to the object to use in an application.
 - `image_url`: A URL or a blob with the image for the object.
-- `thumbnail_url`: A URL to a **smaller** image to use in wallets, explorers, and other products as a preview.
+- `thumbnail_url`: A URL to a smaller image to use in wallets, explorers, and other products as a preview.
 - `project_url`: A link to a website associated with the object or creator.
 - `creator`: A string that indicates the object creator.
 
-For the full Object Display syntax, see the [Object Display reference page](/references/object-display-syntax)
+For the full Object Display syntax, see the [Object Display reference page](/references/object-display-syntax).
 
-## Display Registry 
+## Display registry
 
-In V1, discovering the display for a type relied on events, for example, `DisplayCreated<T>`. Clients had to query historical events by type and infer which object(s) represented the display. This approach depends on historical event data, doesn't scale for full nodes that may not retain full history, and is a poor fit for RPC APIs like JSON-RPC, gRPC, and others that need a stable, cheap way to resolve "display for type T" without scanning events.
+In V1, discovering the display for a type relied on events, for example `DisplayCreated<T>`. Clients had to query historical events by type and infer which objects represented the display. This approach depends on historical event data, does not scale for full nodes that might not retain full history, and is a poor fit for RPC APIs like JSON-RPC, gRPC, and others that need a stable, cheap way to resolve the display for type `T` without scanning events.
 
-In V2, the display for type `T` has a single, deterministic ID derived from the global registry and the type. That ID can be computed offline without using events or history. RPCs can resolve "display for type T" by derivation only, which is sustainable for full nodes. This is the main gain for JSON-RPC and gRPC. GraphQL is less affected, as it maintains its own indexed state.
+In V2, the display for type `T` has a single, deterministic ID derived from the global registry and the type. That ID can be computed offline without using events or history. RPCs can resolve the display for type `T` by derivation only, which is sustainable for full nodes. This is the main gain for JSON-RPC and gRPC. GraphQL is less affected because it maintains its own indexed state.
 
-### Structural change: N → 1, and derived
+### Structural change: N to 1, and derived
 
-In Object Display V1, you could have `N` displays per type and had to use events to query them. In Object Display V2, there is only 1 per type and you get it by derivation.
+In Object Display V1, you could have N displays per type and had to use events to query them. In Object Display V2, there is only 1 per type and you get it by derivation.
 
-|                       | **V1** | **V2** |
-| --------------------- | ---------------------------------| ---------------------------------|
-| **Displays per type** | Multiple `Display<T>` could exist. | Exactly one `Display<T>` per type `T`.  |
-| **How you find `Display<T>`**   | Query events by type; requires historical events. | Offline derivation. `Display<T>` is a derived object from `(DisplayRegistry UID, DisplayKey<T>)`. ID is computable from registry and type; no events, no scan. |
-| **Identity**          | Unpredictable (per creation tx).   | Deterministic. The same registry and same `T` result in the same display ID everywhere.  |
+|                                | **V1**                                              | **V2**                                                                                                                                                        |
+| ------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Displays per type**          | Multiple `Display<T>` could exist.                  | Exactly one `Display<T>` per type `T`.                                                                                                                        |
+| **How you find `Display<T>`**  | Query events by type; requires historical events.   | Offline derivation. `Display<T>` is a derived object from `(DisplayRegistry UID, DisplayKey<T>)`. ID is computable from registry and type; no events, no scan. |
+| **Identity**                   | Unpredictable (per creation transaction).           | Deterministic. The same registry and same `T` result in the same display ID everywhere.                                                                       |
 
 ## Example
 
 The `display::new<T>` call creates a `Display`, either in a custom function or module initializer, or as part of a programmable transaction. The following code sample demonstrates how to create a `Display`:
-
 ```move
 module sui::display;
 
@@ -56,7 +53,6 @@ public fun new<T>(pub: &Publisher): Display<T> { /* ... */ }
 ```
 
 After you create the `Display`, you can modify it. The following code sample demonstrates how to modify a `Display`:
-
 ```move
 module sui::display;
 
@@ -77,7 +73,6 @@ public fun remove(self: &mut Display, key: String ) { /* ... */ }
 Next, the `update_version` call applies the changes and sets the `Display` for the `T` by emitting an event. Full nodes receive the event and use the data in the event to retrieve a template for the type.
 
 The following code sample demonstrates how to use the `update_version` call:
-
 ```move
 module sui::display;
 
@@ -85,14 +80,13 @@ module sui::display;
 public fun update_version(self: &mut Display) { /* ... */ }
 ```
 
-## Object Display patterns 
+## Object Display patterns
 
 The following are examples of Object Display patterns. You can explore and interact with additional patterns using the [Object Display template preview](/guides/developer/objects/display/display-overview).
 
 ### Objects with unique static content
 
 This example demonstrates an object with static metadata that is set once during the object's mint event. If the metadata standard evolves and some ecosystem projects add new features for some properties, this object always stays in its original form and might require backward-compatible changes.
-
 ```move
 module sui::devnet_nft;
 
@@ -115,7 +109,6 @@ A common case with in-game items is to have a large number of similar objects gr
 In some cases, users mint in-game items when a game allows them or when they purchase an in-game item. To enable this, some metadata must be created and stored in advance elsewhere, such as on [Walrus](https://docs.wal.app). This requires additional logic that is usually not related to the in-game properties of the item.
 
 The following example demonstrates how to create a `Capy` item:
-
 ```move
 module capy::capy_items;
 
@@ -136,7 +129,6 @@ In Sui, utility objects enable authorization for capabilities. Almost all module
 With capabilities, it is important to provide a meaningful description of objects to facilitate user interface implementation. This helps avoid accidentally transferring the wrong object when objects are similar. It also provides a user-friendly description of items that users see.
 
 The following example demonstrates how to create a capability called `capy`:
-
 ```move
 module capy::utility;
 
@@ -147,16 +139,15 @@ public struct CapyManagerCap has key, store { id: UID }
 
 ## Migrating to V2
 
-:::caution 
+:::caution
 
-All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You don't need to do anything upfront; after the snapshot, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
+All existing V1 displays are migrated to V2 in a **system snapshot migration**. You do not need to do anything upfront. After the snapshot, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
 
 :::
 
-The capability can be claimed in either of two ways:
+You can claim the capability in either of 2 ways:
 
-- **Publisher** using `claim_with_publisher`: Use this if you hold the `Publisher` object. It proves type ownership via `publisher.from_package<T>()`.
-
+- **Publisher** using `claim_with_publisher`: Use this if you hold the `Publisher` object. It proves type ownership through `publisher.from_package<T>()`.
 - **Legacy Display** using `claim`: Use this if you hold the V1 `Display<T>` object. Pass it in; it is consumed and you receive the `DisplayCap<T>`.
 
 Once claimed, the holder of `DisplayCap<T>` can update the display fields (`set`, `unset`, `clear`). Anyone who holds a V1 `Display<T>` can call `delete_legacy(display, legacy)` to burn their legacy object.
