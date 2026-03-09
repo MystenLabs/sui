@@ -21,7 +21,7 @@ use sui_indexer_alt_framework::types::object::Owner;
 /// Key for the index that supports fetching an owner's objects, optionally filtering by object
 /// type.
 #[derive(Encode, Decode, PartialEq, Eq)]
-pub(crate) struct Key {
+pub struct Key {
     pub(crate) kind: OwnerKind,
 
     /// The object's type (only MoveObjects are indexed)
@@ -39,7 +39,7 @@ pub(crate) struct Key {
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub(crate) enum OwnerKind {
+pub enum OwnerKind {
     /// Both AddressOwner and ConsensusAddressOwner map to this OwnerKind.
     AddressOwner(SuiAddress),
     ObjectOwner(SuiAddress),
@@ -55,6 +55,23 @@ impl Key {
             balance: obj.as_coin_maybe().map(|coin| !coin.balance.value()),
             object_id: obj.id(),
         })
+    }
+
+    /// Encode a key for comparison with cursors. This is used by the JSON-RPC layer
+    /// to determine if an address balance coin should be included in pagination results.
+    pub fn encode_key(
+        kind: OwnerKind,
+        type_: StructTag,
+        balance: Option<u64>,
+        object_id: ObjectID,
+    ) -> Vec<u8> {
+        let key = Key {
+            kind,
+            type_,
+            balance,
+            object_id,
+        };
+        crate::db::key::encode(&key)
     }
 }
 

@@ -29,6 +29,7 @@ use sui_types::coin_registry::Currency;
 use sui_types::gas_coin::GAS;
 use sui_types::object::Object;
 
+use crate::address_balance_coins::get_address_balance_coin_info;
 use crate::api::rpc_module::RpcModule;
 use crate::context::Context;
 use crate::data::load_live;
@@ -120,7 +121,7 @@ impl CoinsApiServer for Coins {
             address: SUI_FRAMEWORK_ADDRESS,
             module: COIN_MODULE_NAME.to_owned(),
             name: COIN_STRUCT_NAME.to_owned(),
-            type_params: vec![inner],
+            type_params: vec![inner.clone()],
         };
 
         let Self(ctx) = self;
@@ -159,27 +160,102 @@ impl CoinsApiServer for Coins {
             .map(|obj_ref| obj_ref.value.0)
             .collect();
 
-        let next_cursor = results
-            .results
-            .last()
-            .map(|edge| BcsCursor(edge.token.clone()).encode())
-            .transpose()
-            .context("Failed to encode cursor")
-            .map_err(RpcError::<Error>::from)?;
-
         let coin_futures = coin_ids.iter().map(|id| coin_response(ctx, *id));
 
-        let coins = future::join_all(coin_futures)
+        let mut coins: Vec<Coin> = future::join_all(coin_futures)
             .await
             .into_iter()
-            .zip(coin_ids)
+            .zip(&coin_ids)
             .map(|(r, id)| r.with_internal_context(|| format!("Failed to get object {id}")))
             .collect::<Result<Vec<_>, _>>()?;
+
+        let mut has_next_page = results.has_next_page;
+
+        // Backward compatibility: synthesize an address balance coin and merge it with real
+        // coins. The address balance coin represents the owner's address balance for this coin
+        // type, presented as a Coin object for clients that don't understand address balances.
+        let address_balance_coin = address_balance_coin_for_owner(ctx, owner, inner)
+            .await
+            .context("Failed to get address balance coin")
+            .map_err(RpcError::<Error>::from)?;
+
+        let mut cursor_override: Option<Vec<u8>> = None;
+
+        if let Some(ab_coin) = address_balance_coin {
+            use sui_indexer_alt_consistent_store::{ObjectByOwnerKey, OwnerKind};
+
+            let ab_key_bytes = ObjectByOwnerKey::encode_key(
+                OwnerKind::AddressOwner(owner),
+                object_type.clone(),
+                Some(!ab_coin.balance), // Balance is stored as bitwise negation for descending order
+                ab_coin.coin_object_id,
+            );
+
+            // Determine if the address balance coin should be included on this page.
+            let include = if let Some(cursor) = &page.cursor {
+                // Check if AB coin key is greater than cursor (would come after it)
+                ab_key_bytes > cursor.0
+            } else {
+                // First page - always include
+                true
+            };
+
+            if include {
+                // Insert at the correct position (descending balance, ascending object_id
+                // for tiebreaks).
+                let pos = coins
+                    .iter()
+                    .position(|c| {
+                        ab_coin.balance > c.balance
+                            || (ab_coin.balance == c.balance
+                                && ab_coin.coin_object_id < c.coin_object_id)
+                    })
+                    .unwrap_or(coins.len());
+                coins.insert(pos, ab_coin);
+
+                // Trim to the page limit. When the AB coin causes overflow, derive the
+                // cursor from the last item actually on the page rather than from the
+                // last store result, which may have been displaced off the page.
+                if coins.len() > page.limit as usize {
+                    coins.truncate(page.limit as usize);
+                    has_next_page = true;
+
+                    let last_idx = page.limit as usize - 1;
+                    if pos == last_idx {
+                        // AB coin is the last item on the page — use its key as cursor.
+                        cursor_override = Some(ab_key_bytes);
+                    } else if pos < last_idx {
+                        // Last item is a store coin. AB took one slot, so the store coin
+                        // at page position `last_idx` was at index `last_idx - 1` before
+                        // insertion.
+                        cursor_override = Some(results.results[last_idx - 1].token.clone());
+                    }
+                    // pos == limit means AB was truncated — no override needed.
+                }
+            }
+        }
+
+        let next_cursor = if let Some(token) = cursor_override {
+            Some(
+                BcsCursor(token)
+                    .encode()
+                    .context("Failed to encode cursor")
+                    .map_err(RpcError::<Error>::from)?,
+            )
+        } else {
+            results
+                .results
+                .last()
+                .map(|edge| BcsCursor(edge.token.clone()).encode())
+                .transpose()
+                .context("Failed to encode cursor")
+                .map_err(RpcError::<Error>::from)?
+        };
 
         Ok(PageResponse {
             data: coins,
             next_cursor,
-            has_next_page: results.has_next_page,
+            has_next_page,
         })
     }
 
@@ -391,6 +467,27 @@ async fn coin_metadata_response(
         bcs::from_bytes(move_object.contents()).context("Failed to parse Currency object")?;
 
     Ok(Some(coin_metadata.into()))
+}
+
+/// Query the address balance for this owner/coin_type and synthesize an address balance coin if
+/// the balance is non-zero.
+async fn address_balance_coin_for_owner(
+    ctx: &Context,
+    owner: SuiAddress,
+    coin_type: TypeTag,
+) -> Result<Option<Coin>, anyhow::Error> {
+    let balance_response = ctx
+        .consistent_reader()
+        .get_balance(
+            None,
+            owner.to_string(),
+            coin_type.to_canonical_string(/* with_prefix */ true),
+        )
+        .await?;
+
+    let address_balance = balance_response.address_balance.unwrap_or(0);
+
+    get_address_balance_coin_info(ctx, owner, coin_type, address_balance).await
 }
 
 async fn object_with_coin_data(

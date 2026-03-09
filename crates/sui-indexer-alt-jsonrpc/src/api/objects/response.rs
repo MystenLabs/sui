@@ -32,6 +32,7 @@ use sui_types::object::Data;
 use sui_types::object::Object;
 use tokio::join;
 
+use crate::address_balance_coins::try_resolve_address_balance_object;
 use crate::context::Context;
 use crate::data::load_live;
 use crate::error::InternalContext;
@@ -53,6 +54,16 @@ pub(super) async fn live_object(
         .await
         .context("Failed to load latest object")?
     else {
+        // Before returning NotExists, try resolving as an address balance coin.
+        if let Some(object) = try_resolve_address_balance_object(ctx, object_id)
+            .await
+            .context("Failed to resolve address balance object")?
+        {
+            return Ok(SuiObjectResponse::new_with_data(
+                object_data_with_options(ctx, object, options).await?,
+            ));
+        }
+
         return Ok(SuiObjectResponse::new_with_error(
             SuiObjectResponseError::NotExists { object_id },
         ));
