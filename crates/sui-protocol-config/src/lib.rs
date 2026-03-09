@@ -303,6 +303,7 @@ const MAX_PROTOCOL_VERSION: u64 = 115;
 //              Enable address aliases on mainnet.
 //              Relax ValidDuring requirement for transactions with owned inputs.
 //              Disable defer_unpaid_amplification (debugging).
+// Version 116: Enable Display Registry.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4659,6 +4660,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
                     // Disabled while debugging
                     cfg.feature_flags.defer_unpaid_amplification = false;
+                }
+                116 => {
+                    cfg.feature_flags.enable_display_registry = true;
                 }
                 // Use this template when making changes:
                 //
