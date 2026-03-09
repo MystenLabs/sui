@@ -3521,12 +3521,14 @@ impl GlobalValue {
 // -------------------------------------------------------------------------------------------------
 // Random generation of values that fit into a given layout.
 
-#[cfg(feature = "fuzzing")]
+#[cfg(all(test, feature = "fuzzing"))]
 pub mod prop {
     use super::*;
     use proptest::{collection::vec, prelude::*};
 
-    pub fn value_strategy_with_layout(layout: &MoveTypeLayout) -> impl Strategy<Value = Value> {
+    pub fn value_strategy_with_layout(
+        layout: &MoveTypeLayout,
+    ) -> impl Strategy<Value = Value> + use<> {
         use MoveTypeLayout as L;
 
         match layout {
@@ -3541,68 +3543,24 @@ pub mod prop {
             L::Signer => any::<AccountAddress>().prop_map(Value::signer).boxed(),
 
             L::Vector(layout) => match &**layout {
-                L::U8 => vec(any::<u8>(), 0..10)
-                    .prop_map(|vals| {
-                        Value(Value::Container(Container::VecU8(Rc::new(RefCell::new(
-                            vals,
-                        )))))
-                    })
-                    .boxed(),
-                L::U16 => vec(any::<u16>(), 0..10)
-                    .prop_map(|vals| {
-                        Value(Value::Container(Container::VecU16(Rc::new(RefCell::new(
-                            vals,
-                        )))))
-                    })
-                    .boxed(),
-                L::U32 => vec(any::<u32>(), 0..10)
-                    .prop_map(|vals| {
-                        Value(Value::Container(Container::VecU32(Rc::new(RefCell::new(
-                            vals,
-                        )))))
-                    })
-                    .boxed(),
-                L::U64 => vec(any::<u64>(), 0..10)
-                    .prop_map(|vals| {
-                        Value(Value::Container(Container::VecU64(Rc::new(RefCell::new(
-                            vals,
-                        )))))
-                    })
-                    .boxed(),
+                L::U8 => vec(any::<u8>(), 0..10).prop_map(Value::vector_u8).boxed(),
+                L::U16 => vec(any::<u16>(), 0..10).prop_map(Value::vector_u16).boxed(),
+                L::U32 => vec(any::<u32>(), 0..10).prop_map(Value::vector_u32).boxed(),
+                L::U64 => vec(any::<u64>(), 0..10).prop_map(Value::vector_u64).boxed(),
                 L::U128 => vec(any::<u128>(), 0..10)
-                    .prop_map(|vals| {
-                        Value(Value::Container(Container::VecU128(Rc::new(RefCell::new(
-                            vals,
-                        )))))
-                    })
+                    .prop_map(Value::vector_u128)
                     .boxed(),
                 L::U256 => vec(any::<u256::U256>(), 0..10)
-                    .prop_map(|vals| {
-                        Value(Value::Container(Container::VecU256(Rc::new(RefCell::new(
-                            vals,
-                        )))))
-                    })
+                    .prop_map(Value::vector_u256)
                     .boxed(),
                 L::Bool => vec(any::<bool>(), 0..10)
-                    .prop_map(|vals| {
-                        Value(Value::Container(Container::VecBool(Rc::new(RefCell::new(
-                            vals,
-                        )))))
-                    })
+                    .prop_map(Value::vector_bool)
                     .boxed(),
                 L::Address => vec(any::<AccountAddress>(), 0..10)
-                    .prop_map(|vals| {
-                        Value(Value::Container(Container::VecAddress(Rc::new(
-                            RefCell::new(vals),
-                        ))))
-                    })
+                    .prop_map(Value::vector_address)
                     .boxed(),
                 layout => vec(value_strategy_with_layout(layout), 0..10)
-                    .prop_map(|vals| {
-                        Value(Value::Container(Container::Vec(Rc::new(RefCell::new(
-                            vals.into_iter().map(|val| val.0).collect(),
-                        )))))
-                    })
+                    .prop_map(|vals| Value::Vec(vals.into_iter().map(MemBox::new).collect()))
                     .boxed(),
             },
 
@@ -3613,6 +3571,24 @@ pub mod prop {
                 .collect::<Vec<_>>()
                 .prop_map(move |vals| Value::struct_(Struct::pack(vals)))
                 .boxed(),
+
+            L::Enum(enum_layout) => {
+                let MoveEnumLayout(variants) = &**enum_layout;
+                let variant_strategies: Vec<_> = variants
+                    .iter()
+                    .enumerate()
+                    .map(|(tag, field_layouts)| {
+                        let tag = tag as u16;
+                        field_layouts
+                            .iter()
+                            .map(value_strategy_with_layout)
+                            .collect::<Vec<_>>()
+                            .prop_map(move |vals| Value::make_variant(tag, vals))
+                            .boxed()
+                    })
+                    .collect();
+                proptest::strategy::Union::new(variant_strategies).boxed()
+            }
         }
     }
 
@@ -3634,8 +3610,10 @@ pub mod prop {
         leaf.prop_recursive(8, 32, 2, |inner| {
             prop_oneof![
                 1 => inner.clone().prop_map(|layout| L::Vector(Box::new(layout))),
-                1 => vec(inner, 0..1).prop_map(|f_layouts| {
-                     L::Struct(MoveStructLayout::new(f_layouts))}),
+                1 => vec(inner.clone(), 0..1).prop_map(|f_layouts| {
+                     L::Struct(Box::new(MoveStructLayout::new(f_layouts)))}),
+                1 => vec(vec(inner, 0..3), 1..4).prop_map(|variant_layouts| {
+                     L::Enum(Box::new(MoveEnumLayout(Box::new(variant_layouts))))}),
             ]
         })
     }

@@ -58,7 +58,7 @@ indexing_slicing = "warn"
 
 [features]
 default = []
-fuzzing = []
+fuzzing = ["move-core-types/fuzzing"]
 failpoints = ["fail/failpoints"]
 testing = []
 lazy_natives = []
