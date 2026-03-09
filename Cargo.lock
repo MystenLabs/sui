@@ -15931,6 +15931,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde",
+ "serde_yaml 0.8.26",
  "shared-crypto",
  "sui-config",
  "sui-data-ingestion-core",

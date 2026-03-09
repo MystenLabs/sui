@@ -11,11 +11,13 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::{
     collections::{BTreeMap, HashMap},
+    path::PathBuf,
     sync::{Arc, RwLock},
     time::Duration,
 };
 
 use crate::endpoint_manager::{AddressSource, EndpointId, EndpointManager};
+use store::{load_stored_peers, save_stored_peers};
 use sui_config::p2p::{AccessType, DiscoveryConfig, P2pConfig};
 use sui_types::crypto::{NetworkKeyPair, NetworkPublicKey, Signer, ToFromBytes, VerifyingKey};
 use sui_types::digests::Digest;
@@ -42,6 +44,7 @@ mod generated {
 mod builder;
 mod metrics;
 mod server;
+mod store;
 #[cfg(test)]
 mod tests;
 
@@ -55,14 +58,19 @@ pub use server::{GetKnownPeersRequestV3, GetKnownPeersResponseV2, GetKnownPeersR
 /// Message types for the discovery system mailbox.
 #[derive(Debug)]
 pub enum DiscoveryMessage {
+    /// An external source (e.g. admin API, node config) updated a peer's address.
     PeerAddressChange {
         peer_id: PeerId,
         source: AddressSource,
         addresses: Vec<anemo::types::Address>,
     },
+    /// Node info was received from inbound RPC.
     ReceivedNodeInfo {
         peer_info: Box<SignedVersionedNodeInfo>,
     },
+    /// A spawned peer-query task discovered updated info for a configured peer,
+    /// signaling the event loop to update the stored peer addresses.
+    ConfiguredPeersUpdated,
 }
 
 /// A Handle to the Discovery subsystem. The Discovery system will be shut down once all Handles
@@ -339,9 +347,11 @@ struct DiscoveryEventLoop {
     shutdown_handle: oneshot::Receiver<()>,
     state: Arc<RwLock<State>>,
     mailbox: mpsc::Receiver<DiscoveryMessage>,
+    mailbox_tx: mpsc::Sender<DiscoveryMessage>,
     metrics: Metrics,
     consensus_external_address: Option<Multiaddr>,
     endpoint_manager: EndpointManager,
+    store_path: Option<PathBuf>,
 }
 
 impl DiscoveryEventLoop {
@@ -350,6 +360,7 @@ impl DiscoveryEventLoop {
 
         self.construct_our_info();
         self.configure_preferred_peers();
+        self.load_stored_peers_on_startup();
 
         let mut interval = tokio::time::interval(self.discovery_config.interval_period());
         let mut peer_events = {
@@ -391,6 +402,7 @@ impl DiscoveryEventLoop {
             }
         }
 
+        self.save_stored_peers_if_changed();
         info!("Discovery ended");
     }
 
@@ -404,13 +416,19 @@ impl DiscoveryEventLoop {
                 self.handle_peer_address_change(peer_id, source, addresses);
             }
             DiscoveryMessage::ReceivedNodeInfo { peer_info } => {
-                update_known_peers_versioned(
+                let changed = update_known_peers_versioned(
                     self.state.clone(),
                     self.metrics.clone(),
                     vec![*peer_info],
                     self.configured_peers.clone(),
                     &self.endpoint_manager,
                 );
+                if changed {
+                    self.save_stored_peers_if_changed();
+                }
+            }
+            DiscoveryMessage::ConfiguredPeersUpdated => {
+                self.save_stored_peers_if_changed();
             }
         }
     }
@@ -554,6 +572,71 @@ impl DiscoveryEventLoop {
         }
     }
 
+    fn load_stored_peers_on_startup(&mut self) {
+        let Some(path) = &self.store_path else {
+            return;
+        };
+        let entries = load_stored_peers(path);
+        if entries.is_empty() {
+            return;
+        }
+        info!(
+            count = entries.len(),
+            "Loaded stored peer addresses from {}",
+            path.display()
+        );
+
+        // Collect P2P address overrides for configured peers before passing to
+        // update_known_peers_versioned (which populates known_peers_v2 and
+        // forwards consensus addresses to EndpointManager).
+        let mut p2p_overrides: Vec<(PeerId, Vec<anemo::types::Address>)> = Vec::new();
+        for entry in &entries {
+            let Some(peer_id) = entry.peer_id() else {
+                continue;
+            };
+            if !self.configured_peers.contains_key(&peer_id) {
+                continue;
+            }
+            let anemo_addrs: Vec<_> = entry
+                .p2p_addresses()
+                .iter()
+                .filter_map(|addr| addr.to_anemo_address().ok())
+                .collect();
+            if !anemo_addrs.is_empty() {
+                p2p_overrides.push((peer_id, anemo_addrs));
+            }
+        }
+
+        update_known_peers_versioned(
+            self.state.clone(),
+            self.metrics.clone(),
+            entries,
+            self.configured_peers.clone(),
+            &self.endpoint_manager,
+        );
+
+        // Call directly rather than through the mailbox: this runs before the
+        // event loop starts, so addresses are applied before the first tick.
+        for (peer_id, anemo_addrs) in p2p_overrides {
+            self.handle_peer_address_change(peer_id, AddressSource::Discovery, anemo_addrs);
+        }
+    }
+
+    fn save_stored_peers_if_changed(&self) {
+        let Some(path) = &self.store_path else {
+            return;
+        };
+        let state = self.state.read().unwrap();
+        let peers_to_save: Vec<SignedVersionedNodeInfo> = state
+            .known_peers_v2
+            .iter()
+            .filter(|(pid, _)| self.configured_peers.contains_key(pid))
+            .map(|(_, verified)| verified.inner().clone())
+            .collect();
+        drop(state);
+        save_stored_peers(path, &peers_to_save);
+    }
+
     fn handle_peer_event(&mut self, peer_event: Result<PeerEvent, RecvError>) {
         match peer_event {
             Ok(PeerEvent::NewPeer(peer_id)) => {
@@ -572,6 +655,7 @@ impl DiscoveryEventLoop {
                         self.metrics.clone(),
                         self.configured_peers.clone(),
                         self.endpoint_manager.clone(),
+                        self.mailbox_sender(),
                     ));
                 }
             }
@@ -600,6 +684,7 @@ impl DiscoveryEventLoop {
                 self.metrics.clone(),
                 self.configured_peers.clone(),
                 self.endpoint_manager.clone(),
+                self.mailbox_sender(),
             ));
 
         // Cull old peers older than a day
@@ -703,6 +788,10 @@ impl DiscoveryEventLoop {
 
             self.dial_seed_peers_task = Some(abort_handle);
         }
+    }
+
+    fn mailbox_sender(&self) -> mpsc::Sender<DiscoveryMessage> {
+        self.mailbox_tx.clone()
     }
 }
 
@@ -810,6 +899,7 @@ async fn query_peer_for_their_known_peers(
     metrics: Metrics,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
     endpoint_manager: EndpointManager,
+    mailbox_tx: mpsc::Sender<DiscoveryMessage>,
 ) {
     // Query V3 concurrently with V2 when enabled
     if discovery_config.use_get_known_peers_v3() {
@@ -850,13 +940,16 @@ async fn query_peer_for_their_known_peers(
                 );
             }
             if let Some(found_peers) = found_peers_v3 {
-                update_known_peers_versioned(
+                let changed = update_known_peers_versioned(
                     state,
                     metrics,
                     found_peers,
                     configured_peers,
                     &endpoint_manager,
                 );
+                if changed {
+                    let _ = mailbox_tx.try_send(DiscoveryMessage::ConfiguredPeersUpdated);
+                }
             }
             return;
         }
@@ -875,6 +968,7 @@ async fn query_connected_peers_for_their_known_peers(
     metrics: Metrics,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
     endpoint_manager: EndpointManager,
+    mailbox_tx: mpsc::Sender<DiscoveryMessage>,
 ) {
     use rand::seq::IteratorRandom;
 
@@ -970,13 +1064,16 @@ async fn query_connected_peers_for_their_known_peers(
                 found_peers_v2,
                 configured_peers.clone(),
             );
-            update_known_peers_versioned(
+            let changed = update_known_peers_versioned(
                 state,
                 metrics,
                 found_peers_v3,
                 configured_peers,
                 &endpoint_manager,
             );
+            if changed {
+                let _ = mailbox_tx.try_send(DiscoveryMessage::ConfiguredPeersUpdated);
+            }
             return;
         }
     }
@@ -1075,13 +1172,14 @@ fn update_known_peers(
     }
 }
 
+/// Returns true if any configured peer was inserted or updated.
 fn update_known_peers_versioned(
     state: Arc<RwLock<State>>,
     metrics: Metrics,
     found_peers: Vec<SignedVersionedNodeInfo>,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
     endpoint_manager: &EndpointManager,
-) {
+) -> bool {
     use std::collections::hash_map::Entry;
 
     let now_unix = now_unix();
@@ -1092,6 +1190,7 @@ fn update_known_peers_versioned(
         .as_ref()
         .and_then(|info| info.peer_id());
     let known_peers_v2 = &mut state.write().unwrap().known_peers_v2;
+    let mut configured_peer_changed = false;
 
     for peer_info in found_peers.into_iter().take(MAX_PEERS_TO_SEND + 1) {
         let timestamp_ms = peer_info.timestamp_ms();
@@ -1127,9 +1226,8 @@ fn update_known_peers_versioned(
         };
 
         // Forward non-P2P addresses from configured peers to EndpointManager.
-        if configured_peers.contains_key(&peer_id)
-            && let VersionedNodeInfo::V2(info_v2) = peer_info.data()
-        {
+        let is_configured = configured_peers.contains_key(&peer_id);
+        if is_configured && let VersionedNodeInfo::V2(info_v2) = peer_info.data() {
             for (endpoint_id, addrs) in &info_v2.addresses {
                 if !matches!(endpoint_id, EndpointId::P2p(_)) && !addrs.is_empty() {
                     let _ = endpoint_manager.update_endpoint(
@@ -1154,6 +1252,9 @@ fn update_known_peers_versioned(
                         metrics.dec_num_peers_with_external_address();
                     }
                     o.insert(peer);
+                    if is_configured {
+                        configured_peer_changed = true;
+                    }
                 }
             }
             Entry::Vacant(v) => {
@@ -1161,9 +1262,14 @@ fn update_known_peers_versioned(
                     metrics.inc_num_peers_with_external_address();
                 }
                 v.insert(peer);
+                if is_configured {
+                    configured_peer_changed = true;
+                }
             }
         }
     }
+
+    configured_peer_changed
 }
 
 pub(super) fn now_unix() -> u64 {

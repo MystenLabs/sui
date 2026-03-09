@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, num::NonZeroU32, time::Duration};
+use std::{net::SocketAddr, num::NonZeroU32, path::PathBuf, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use sui_types::{
@@ -490,6 +490,13 @@ pub struct DiscoveryConfig {
     /// If unspecified, this will default to `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_get_known_peers_v3: Option<bool>,
+
+    /// Path to store discovered peer addresses across restarts.
+    ///
+    /// If unspecified, defaults to `<db_path>/discovery_peer_cache.yaml` when
+    /// started via `SuiNode`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_addr_store_path: Option<PathBuf>,
 }
 
 impl DiscoveryConfig {

@@ -14,6 +14,7 @@ anemo.workspace = true
 anemo-tower.workspace = true
 governor.workspace = true
 serde.workspace = true
+serde_yaml.workspace = true
 tonic.workspace = true
 tonic-prost.workspace = true
 dashmap.workspace = true

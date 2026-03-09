@@ -1314,3 +1314,39 @@ async fn test_address_source_clear_all() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_save_and_load_stored_peers() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("peer_cache.yaml");
+
+    use fastcrypto::traits::KeyPair as _;
+    let keypair = sui_types::crypto::NetworkKeyPair::generate(&mut rand::thread_rng());
+    let peer_id = PeerId(*fastcrypto::traits::KeyPair::public(&keypair).0.as_bytes());
+    let mut addresses = BTreeMap::new();
+    addresses.insert(
+        EndpointId::P2p(peer_id),
+        vec!["/ip4/127.0.0.1/udp/8080".parse().unwrap()],
+    );
+    let info = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses,
+        timestamp_ms: now_unix(),
+        access_type: sui_config::p2p::AccessType::Public,
+    });
+    let signed = info.sign(&keypair);
+
+    save_stored_peers(&path, std::slice::from_ref(&signed));
+    assert!(path.exists());
+
+    let loaded = load_stored_peers(&path);
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].data(), signed.data());
+}
+
+#[tokio::test]
+async fn test_load_stored_peers_missing_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("nonexistent.yaml");
+    let loaded = load_stored_peers(&path);
+    assert!(loaded.is_empty());
+}

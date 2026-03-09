@@ -1095,7 +1095,15 @@ impl SuiNode {
             .with_metrics(prometheus_registry)
             .build();
 
-        let mut discovery_builder = discovery::Builder::new().config(config.p2p_config.clone());
+        let mut p2p_config = config.p2p_config.clone();
+        {
+            let disc = p2p_config.discovery.get_or_insert_with(Default::default);
+            if disc.peer_addr_store_path.is_none() {
+                disc.peer_addr_store_path =
+                    Some(config.db_path().join("discovery_peer_cache.yaml"));
+            }
+        }
+        let mut discovery_builder = discovery::Builder::new().config(p2p_config.clone());
         if let Some(consensus_config) = &config.consensus_config {
             let effective_addr = consensus_config
                 .external_address
