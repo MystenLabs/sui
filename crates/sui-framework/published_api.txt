@@ -2983,7 +2983,7 @@ claim
 claim_with_publisher
 	public fun
 	0x2::display_registry
-migrate_v1_to_v2_with_system_migration_cap
+system_migration
 	public fun
 	0x2::display_registry
 migrate_v1_to_v2
@@ -3003,6 +3003,9 @@ cap_id
 	0x2::display_registry
 migration_cap_receiver
 	public(package) fun
+	0x2::display_registry
+new_display
+	fun
 	0x2::display_registry
 create
 	fun

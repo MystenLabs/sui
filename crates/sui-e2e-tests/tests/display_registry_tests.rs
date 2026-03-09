@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
-use sui_types::{DISPLAY_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
+use sui_types::{SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
 
 use sui_macros::sim_test;
@@ -59,7 +59,7 @@ async fn test_create_display_registry_object() {
             assert!(
                 node.state()
                     .get_object_cache_reader()
-                    .get_latest_object_ref_or_tombstone(DISPLAY_REGISTRY_OBJECT_ID)
+                    .get_latest_object_ref_or_tombstone(SUI_DISPLAY_REGISTRY_OBJECT_ID)
                     .is_none()
             );
         });
@@ -75,7 +75,7 @@ async fn test_create_display_registry_object() {
         h.with(|node| {
             node.state()
                 .get_object_cache_reader()
-                .get_latest_object_ref_or_tombstone(DISPLAY_REGISTRY_OBJECT_ID)
+                .get_latest_object_ref_or_tombstone(SUI_DISPLAY_REGISTRY_OBJECT_ID)
                 .expect("display registry object should exist");
         });
     }

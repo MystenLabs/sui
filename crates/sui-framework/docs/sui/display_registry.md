@@ -18,14 +18,14 @@ title: Module `sui::display_registry`
 -  [Function `share`](#sui_display_registry_share)
 -  [Function `claim`](#sui_display_registry_claim)
 -  [Function `claim_with_publisher`](#sui_display_registry_claim_with_publisher)
--  [Function `migrate_v1_to_v2_with_system_migration_cap`](#sui_display_registry_migrate_v1_to_v2_with_system_migration_cap)
+-  [Function `system_migration`](#sui_display_registry_system_migration)
 -  [Function `migrate_v1_to_v2`](#sui_display_registry_migrate_v1_to_v2)
 -  [Function `destroy_system_migration_cap`](#sui_display_registry_destroy_system_migration_cap)
 -  [Function `delete_legacy`](#sui_display_registry_delete_legacy)
 -  [Function `fields`](#sui_display_registry_fields)
 -  [Function `cap_id`](#sui_display_registry_cap_id)
 -  [Function `migration_cap_receiver`](#sui_display_registry_migration_cap_receiver)
--  [Macro function `new_display`](#sui_display_registry_new_display)
+-  [Function `new_display`](#sui_display_registry_new_display)
 -  [Function `create`](#sui_display_registry_create)
 
 
@@ -63,7 +63,7 @@ title: Module `sui::display_registry`
 ## Struct `DisplayRegistry`
 
 The root of display, to enable derivation of addresses.
-We'll most likely deploy this into <code>0xd</code>
+The address is system-generated at <code>0xd</code>
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">DisplayRegistry</a> <b>has</b> key
@@ -90,9 +90,7 @@ We'll most likely deploy this into <code>0xd</code>
 
 ## Struct `SystemMigrationCap`
 
-A singleton capability object to enable migrating all V1 displays into
-V2. We don't wanna support indexing for legacy display objects,
-so this will forcefully move all existing display instances to use the registry.
+A singleton capability object to enable migrating all V1 displays into V2.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/display_registry.md#sui_display_registry_SystemMigrationCap">SystemMigrationCap</a> <b>has</b> key
@@ -185,8 +183,7 @@ The capability object that is used to manage the display.
 
 ## Struct `DisplayKey`
 
-The key used for deriving the instance of <code><a href="../sui/display_registry.md#sui_display_registry_Display">Display</a></code>. Contains the version of
-the Display language in it to separate concerns.
+The key used for deriving the instance of <code><a href="../sui/display_registry.md#sui_display_registry_Display">Display</a></code>.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayKey">DisplayKey</a>&lt;<b>phantom</b> T&gt; <b>has</b> <b>copy</b>, drop, store
@@ -211,11 +208,10 @@ the Display language in it to separate concerns.
 
 <a name="sui_display_registry_SYSTEM_MIGRATION_ADDRESS"></a>
 
-TODO: Fill this in with the programmatic address responsible for
-migrating all V1 displays into V2.
+This is a multi-sig address responsible for the migration of V1 displays into V2.
 
 
-<pre><code><b>const</b> <a href="../sui/display_registry.md#sui_display_registry_SYSTEM_MIGRATION_ADDRESS">SYSTEM_MIGRATION_ADDRESS</a>: <b>address</b> = 0xf00;
+<pre><code><b>const</b> <a href="../sui/display_registry.md#sui_display_registry_SYSTEM_MIGRATION_ADDRESS">SYSTEM_MIGRATION_ADDRESS</a>: <b>address</b> = 0x80e8249451c1a94b0d4ec317d9dd040f11344dcce6f917218086caf2bb1d7bdd;
 </code></pre>
 
 
@@ -302,9 +298,7 @@ prove type ownership.
     _: internal::Permit&lt;T&gt;,
     ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui/display_registry.md#sui_display_registry_Display">Display</a>&lt;T&gt;, <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;T&gt;) {
-    <b>let</b> key = <a href="../sui/display_registry.md#sui_display_registry_DisplayKey">DisplayKey</a>&lt;T&gt;();
-    <b>assert</b>!(!<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&registry.id, key), <a href="../sui/display_registry.md#sui_display_registry_EDisplayAlreadyExists">EDisplayAlreadyExists</a>);
-    <b>let</b> (<a href="../sui/display.md#sui_display">display</a>, cap) = <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>!&lt;T&gt;(registry, ctx);
+    <b>let</b> (<a href="../sui/display.md#sui_display">display</a>, cap) = <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>&lt;T&gt;(registry, ctx);
     (<a href="../sui/display.md#sui_display">display</a>, cap)
 }
 </code></pre>
@@ -320,7 +314,7 @@ prove type ownership.
 Create a new display object using the <code>Publisher</code> object.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_new_with_publisher">new_with_publisher</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">sui::display_registry::DisplayRegistry</a>, publisher: &<a href="../sui/package.md#sui_package_Publisher">sui::package::Publisher</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/display_registry.md#sui_display_registry_Display">sui::display_registry::Display</a>&lt;T&gt;, <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">sui::display_registry::DisplayCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_new_with_publisher">new_with_publisher</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">sui::display_registry::DisplayRegistry</a>, publisher: &<b>mut</b> <a href="../sui/package.md#sui_package_Publisher">sui::package::Publisher</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/display_registry.md#sui_display_registry_Display">sui::display_registry::Display</a>&lt;T&gt;, <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">sui::display_registry::DisplayCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -331,13 +325,11 @@ Create a new display object using the <code>Publisher</code> object.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_new_with_publisher">new_with_publisher</a>&lt;T&gt;(
     registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">DisplayRegistry</a>,
-    publisher: &Publisher,
+    publisher: &<b>mut</b> Publisher,
     ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui/display_registry.md#sui_display_registry_Display">Display</a>&lt;T&gt;, <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;T&gt;) {
-    <b>let</b> key = <a href="../sui/display_registry.md#sui_display_registry_DisplayKey">DisplayKey</a>&lt;T&gt;();
-    <b>assert</b>!(!<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&registry.id, key), <a href="../sui/display_registry.md#sui_display_registry_EDisplayAlreadyExists">EDisplayAlreadyExists</a>);
     <b>assert</b>!(publisher.from_package&lt;T&gt;(), <a href="../sui/display_registry.md#sui_display_registry_ENotValidPublisher">ENotValidPublisher</a>);
-    <b>let</b> (<a href="../sui/display.md#sui_display">display</a>, cap) = <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>!&lt;T&gt;(registry, ctx);
+    <b>let</b> (<a href="../sui/display.md#sui_display">display</a>, cap) = <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>&lt;T&gt;(registry, ctx);
     (<a href="../sui/display.md#sui_display">display</a>, cap)
 }
 </code></pre>
@@ -376,7 +368,7 @@ Unset a key from display.
 
 ## Function `set`
 
-Replace an existing key with the supplied one.
+Set a value for the specified key, replaces existing value if it exists.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_set">set</a>&lt;T&gt;(<a href="../sui/display.md#sui_display">display</a>: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_Display">sui::display_registry::Display</a>&lt;T&gt;, _: &<a href="../sui/display_registry.md#sui_display_registry_DisplayCap">sui::display_registry::DisplayCap</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>, value: <a href="../std/string.md#std_string_String">std::string::String</a>)
@@ -473,7 +465,7 @@ Allow a legacy Display holder to claim the capability object.
 ): <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;T&gt; {
     <b>assert</b>!(<a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display_registry.md#sui_display_registry_cap_id">cap_id</a>.is_none(), <a href="../sui/display_registry.md#sui_display_registry_ECapAlreadyClaimed">ECapAlreadyClaimed</a>);
     <b>let</b> cap = <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;T&gt; { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx) };
-    <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display_registry.md#sui_display_registry_cap_id">cap_id</a> = option::some(cap.id.to_inner());
+    <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display_registry.md#sui_display_registry_cap_id">cap_id</a>.fill(cap.id.to_inner());
     legacy.destroy();
     cap
 }
@@ -507,7 +499,7 @@ Allow claiming a new display using <code>Publisher</code> as proof of ownership.
     <b>assert</b>!(<a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display_registry.md#sui_display_registry_cap_id">cap_id</a>.is_none(), <a href="../sui/display_registry.md#sui_display_registry_ECapAlreadyClaimed">ECapAlreadyClaimed</a>);
     <b>assert</b>!(publisher.from_package&lt;T&gt;(), <a href="../sui/display_registry.md#sui_display_registry_ENotValidPublisher">ENotValidPublisher</a>);
     <b>let</b> cap = <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;T&gt; { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx) };
-    <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display_registry.md#sui_display_registry_cap_id">cap_id</a> = option::some(cap.id.to_inner());
+    <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display_registry.md#sui_display_registry_cap_id">cap_id</a>.fill(cap.id.to_inner());
     cap
 }
 </code></pre>
@@ -516,9 +508,9 @@ Allow claiming a new display using <code>Publisher</code> as proof of ownership.
 
 </details>
 
-<a name="sui_display_registry_migrate_v1_to_v2_with_system_migration_cap"></a>
+<a name="sui_display_registry_system_migration"></a>
 
-## Function `migrate_v1_to_v2_with_system_migration_cap`
+## Function `system_migration`
 
 Allow the <code><a href="../sui/display_registry.md#sui_display_registry_SystemMigrationCap">SystemMigrationCap</a></code> holder to create display objects with supplied
 values. The migration is performed once on launch of the DisplayRegistry,
@@ -526,7 +518,7 @@ further migrations will have to be performed for each object, and will only
 be possible until legacy <code><a href="../sui/display.md#sui_display">display</a></code> methods are finally deprecated.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_migrate_v1_to_v2_with_system_migration_cap">migrate_v1_to_v2_with_system_migration_cap</a>&lt;T: key&gt;(registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">sui::display_registry::DisplayRegistry</a>, _: &<a href="../sui/display_registry.md#sui_display_registry_SystemMigrationCap">sui::display_registry::SystemMigrationCap</a>, <a href="../sui/display_registry.md#sui_display_registry_fields">fields</a>: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../std/string.md#std_string_String">std::string::String</a>, <a href="../std/string.md#std_string_String">std::string::String</a>&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_system_migration">system_migration</a>&lt;T: key&gt;(registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">sui::display_registry::DisplayRegistry</a>, _: &<a href="../sui/display_registry.md#sui_display_registry_SystemMigrationCap">sui::display_registry::SystemMigrationCap</a>, keys: vector&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;, values: vector&lt;<a href="../std/string.md#std_string_String">std::string::String</a>&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -535,19 +527,19 @@ be possible until legacy <code><a href="../sui/display.md#sui_display">display</
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_migrate_v1_to_v2_with_system_migration_cap">migrate_v1_to_v2_with_system_migration_cap</a>&lt;T: key&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_system_migration">system_migration</a>&lt;T: key&gt;(
     registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">DisplayRegistry</a>,
     _: &<a href="../sui/display_registry.md#sui_display_registry_SystemMigrationCap">SystemMigrationCap</a>,
-    <a href="../sui/display_registry.md#sui_display_registry_fields">fields</a>: VecMap&lt;String, String&gt;,
+    keys: vector&lt;String&gt;,
+    values: vector&lt;String&gt;,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    // System migration is only possible <b>for</b> V1 to V2.
-    // Should it keep V1 in <a href="../sui/display_registry.md#sui_display_registry_Display">Display</a> originally?
     <b>let</b> key = <a href="../sui/display_registry.md#sui_display_registry_DisplayKey">DisplayKey</a>&lt;T&gt;();
-    <b>assert</b>!(!<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&registry.id, key), <a href="../sui/display_registry.md#sui_display_registry_EDisplayAlreadyExists">EDisplayAlreadyExists</a>);
+    // Gracefully <b>return</b> to avoid batching issues <b>if</b> someone migrates before our script.
+    <b>if</b> (<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&registry.id, key)) <b>return</b>;
     <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/display_registry.md#sui_display_registry_Display">Display</a>&lt;T&gt; {
         id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> registry.id, key),
-        <a href="../sui/display_registry.md#sui_display_registry_fields">fields</a>,
+        <a href="../sui/display_registry.md#sui_display_registry_fields">fields</a>: <a href="../sui/vec_map.md#sui_vec_map_from_keys_values">vec_map::from_keys_values</a>(keys, values),
         <a href="../sui/display_registry.md#sui_display_registry_cap_id">cap_id</a>: option::none(),
     });
 }
@@ -579,9 +571,7 @@ if a new one has not yet been created.
     legacy: LegacyDisplay&lt;T&gt;,
     ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui/display_registry.md#sui_display_registry_Display">Display</a>&lt;T&gt;, <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;T&gt;) {
-    <b>let</b> key = <a href="../sui/display_registry.md#sui_display_registry_DisplayKey">DisplayKey</a>&lt;T&gt;();
-    <b>assert</b>!(!<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&registry.id, key), <a href="../sui/display_registry.md#sui_display_registry_EDisplayAlreadyExists">EDisplayAlreadyExists</a>);
-    <b>let</b> (<b>mut</b> <a href="../sui/display.md#sui_display">display</a>, cap) = <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>!&lt;T&gt;(registry, ctx);
+    <b>let</b> (<b>mut</b> <a href="../sui/display.md#sui_display">display</a>, cap) = <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>&lt;T&gt;(registry, ctx);
     <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display_registry.md#sui_display_registry_fields">fields</a> = *legacy.<a href="../sui/display_registry.md#sui_display_registry_fields">fields</a>();
     legacy.destroy();
     (<a href="../sui/display.md#sui_display">display</a>, cap)
@@ -720,11 +710,11 @@ Get the cap ID for the display.
 
 <a name="sui_display_registry_new_display"></a>
 
-## Macro function `new_display`
+## Function `new_display`
 
 
 
-<pre><code><b>macro</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>&lt;$T&gt;($registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">sui::display_registry::DisplayRegistry</a>, $ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/display_registry.md#sui_display_registry_Display">sui::display_registry::Display</a>&lt;$T&gt;, <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">sui::display_registry::DisplayCap</a>&lt;$T&gt;)
+<pre><code><b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">sui::display_registry::DisplayRegistry</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/display_registry.md#sui_display_registry_Display">sui::display_registry::Display</a>&lt;T&gt;, <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">sui::display_registry::DisplayCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -733,16 +723,14 @@ Get the cap ID for the display.
 <summary>Implementation</summary>
 
 
-<pre><code><b>macro</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>&lt;$T&gt;(
-    $registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">DisplayRegistry</a>,
-    $ctx: &<b>mut</b> TxContext,
-): (<a href="../sui/display_registry.md#sui_display_registry_Display">Display</a>&lt;$T&gt;, <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;$T&gt;) {
-    <b>let</b> registry = $registry;
-    <b>let</b> ctx = $ctx;
-    <b>let</b> key = <a href="../sui/display_registry.md#sui_display_registry_DisplayKey">DisplayKey</a>&lt;$T&gt;();
+<pre><code><b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_new_display">new_display</a>&lt;T&gt;(
+    registry: &<b>mut</b> <a href="../sui/display_registry.md#sui_display_registry_DisplayRegistry">DisplayRegistry</a>,
+    ctx: &<b>mut</b> TxContext,
+): (<a href="../sui/display_registry.md#sui_display_registry_Display">Display</a>&lt;T&gt;, <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;T&gt;) {
+    <b>let</b> key = <a href="../sui/display_registry.md#sui_display_registry_DisplayKey">DisplayKey</a>&lt;T&gt;();
     <b>assert</b>!(!<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&registry.id, key), <a href="../sui/display_registry.md#sui_display_registry_EDisplayAlreadyExists">EDisplayAlreadyExists</a>);
-    <b>let</b> cap = <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;$T&gt; { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx) };
-    <b>let</b> <a href="../sui/display.md#sui_display">display</a> = <a href="../sui/display_registry.md#sui_display_registry_Display">Display</a>&lt;$T&gt; {
+    <b>let</b> cap = <a href="../sui/display_registry.md#sui_display_registry_DisplayCap">DisplayCap</a>&lt;T&gt; { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx) };
+    <b>let</b> <a href="../sui/display.md#sui_display">display</a> = <a href="../sui/display_registry.md#sui_display_registry_Display">Display</a>&lt;T&gt; {
         id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> registry.id, key),
         <a href="../sui/display_registry.md#sui_display_registry_fields">fields</a>: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
         <a href="../sui/display_registry.md#sui_display_registry_cap_id">cap_id</a>: option::some(cap.id.to_inner()),

@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 109
+version: 116
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -41,13 +41,13 @@ feature_flags:
   recompute_has_public_transfer_in_execution: true
   accept_zklogin_in_multisig: true
   accept_passkey_in_multisig: true
+  validate_zklogin_public_identifier: true
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
   enable_poseidon: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
-  enable_group_ops_native_function_msm: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
   enable_nitro_attestation_all_nonzero_pcrs_parsing: true
@@ -72,7 +72,6 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
-  enable_vdf: true
   record_consensus_determined_version_assignments_in_prologue: true
   record_consensus_determined_version_assignments_in_prologue_v2: true
   fresh_vm_on_framework_upgrade: true
@@ -115,7 +114,10 @@ feature_flags:
   create_root_accumulator_object: true
   enable_authenticated_event_streams: true
   enable_address_balance_gas_payments: true
+  address_balance_gas_check_rgp_at_signing: true
+  address_balance_gas_reject_gas_coin_arg: true
   enable_multi_epoch_transaction_expiration: true
+  relax_valid_during_for_owned_inputs: true
   enable_ptb_execution_v2: true
   better_adapter_type_resolution_errors: true
   record_time_estimate_processed: true
@@ -135,17 +137,24 @@ feature_flags:
   use_new_commit_handler: true
   better_loader_errors: true
   generate_df_type_layouts: true
+  enable_display_registry: true
   private_generics_verifier_v2: true
   deprecate_global_storage_ops: true
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
   address_aliases: true
+  fix_checkpoint_signature_mapping: true
   enable_object_funds_withdraw: true
   consensus_skip_gced_blocks_in_direct_finalization: true
   gas_rounding_halve_digits: true
   flexible_tx_context_positions: true
   disable_entry_point_signature_check: true
   restrict_hot_or_not_entry_functions: true
+  split_checkpoints_in_consensus_handler: true
+  consensus_always_accept_system_transactions: true
+  validator_metadata_verify_v2: true
+  randomize_checkpoint_tx_limit_in_tests: true
+  gasless_transaction_drop_safety: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -380,13 +389,21 @@ group_ops_bls12381_uncompressed_g1_to_g1_cost: 677
 group_ops_bls12381_uncompressed_g1_sum_base_cost: 77
 group_ops_bls12381_uncompressed_g1_sum_cost_per_term: 26
 group_ops_bls12381_uncompressed_g1_sum_max_terms: 1200
+group_ops_ristretto_decode_scalar_cost: 7
+group_ops_ristretto_decode_point_cost: 200
+group_ops_ristretto_scalar_add_cost: 10
+group_ops_ristretto_point_add_cost: 500
+group_ops_ristretto_scalar_sub_cost: 10
+group_ops_ristretto_point_sub_cost: 500
+group_ops_ristretto_scalar_mul_cost: 11
+group_ops_ristretto_point_mul_cost: 1200
+group_ops_ristretto_scalar_div_cost: 151
+group_ops_ristretto_point_div_cost: 2500
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
-vdf_verify_vdf_cost: 1500
-vdf_hash_to_input_cost: 100
 nitro_attestation_parse_base_cost: 2650
 nitro_attestation_parse_cost_per_byte: 50
 nitro_attestation_verify_base_cost: 2481600

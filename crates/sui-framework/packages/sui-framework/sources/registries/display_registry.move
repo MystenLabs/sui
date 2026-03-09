@@ -9,9 +9,9 @@ use sui::display::Display as LegacyDisplay;
 use sui::package::Publisher;
 use sui::vec_map::{Self, VecMap};
 
-/// TODO: Fill this in with the programmatic address responsible for
-/// migrating all V1 displays into V2.
-const SYSTEM_MIGRATION_ADDRESS: address = @0xf00;
+/// This is a multi-sig address responsible for the migration of V1 displays into V2.
+const SYSTEM_MIGRATION_ADDRESS: address =
+    @0x80e8249451c1a94b0d4ec317d9dd040f11344dcce6f917218086caf2bb1d7bdd;
 
 #[error(code = 0)]
 const ENotSystemAddress: vector<u8> = b"This is only callable from system address.";
@@ -218,4 +218,3 @@ fun create(ctx: &mut TxContext) {
 public(package) fun create_for_testing(ctx: &mut TxContext) {
     create(ctx);
 }
-
