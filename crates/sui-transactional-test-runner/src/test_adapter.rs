@@ -7,7 +7,7 @@ use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
 use crate::{TransactionalAdapter, ValidatorWithFullnode, cursor};
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use anyhow::{Context, anyhow, bail, ensure};
+use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
 use criterion::Criterion;
