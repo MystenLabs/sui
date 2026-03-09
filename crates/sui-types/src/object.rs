@@ -22,8 +22,9 @@ use crate::accumulator_root::AccumulatorValue;
 use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
-use crate::error::{ExecutionError, SuiErrorKind, UserInputError, UserInputResult};
-use crate::error::{SuiError, SuiResult};
+use crate::error::{
+    ExecutionError, SuiError, SuiErrorKind, SuiResult, UserInputError, UserInputResult,
+};
 use crate::execution_status::ExecutionErrorKind;
 use crate::gas_coin::GAS;
 use crate::is_system_package;

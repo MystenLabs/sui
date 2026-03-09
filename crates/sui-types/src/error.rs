@@ -6,12 +6,11 @@ use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
     digests::CheckpointContentsDigest,
-    execution_status::CommandArgumentError,
+    execution_status::{CommandArgumentError, CommandIndex, ExecutionErrorKind},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
 
-use crate::execution_status::{CommandIndex, ExecutionErrorKind};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug, slice::SliceIndex};
