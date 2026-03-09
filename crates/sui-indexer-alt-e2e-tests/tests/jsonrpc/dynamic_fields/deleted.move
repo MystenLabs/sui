@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --simulator
+//# init --protocol-version 108 --accounts A --simulator
 
 // 1. Look for a dynamic field that doesn't exist yet (should return nothing).
 // 2. Add the dynamic field and then look for it again (should return the dynamic field).

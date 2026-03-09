@@ -5,6 +5,12 @@ info:
   edition: legacy
   lint: false
 ---
+error[E03010]: unbound field
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
+  │
+6 │         S ( f ) = S { f: 0 };
+  │         ^^^^^^^ Unbound field '0' in '0x42::M::S'
+
 error[E03013]: positional call mismatch
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
   │
@@ -14,6 +20,12 @@ error[E03013]: positional call mismatch
 6 │         S ( f ) = S { f: 0 };
   │         ^^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
+error[E04016]: too few arguments
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
+  │
+6 │         S ( f ) = S { f: 0 };
+  │         ^^^^^^^ Missing assignment for field 'f' in '0x42::M::S'
+
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
   │
@@ -22,17 +34,13 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E03010]: unbound field
-  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:13
   │
 6 │         S ( f ) = S { f: 0 };
-  │         ^^^^^^^ Unbound field '0' in '0x42::M::S'
-
-error[E04016]: too few arguments
-  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
+  │             ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
   │
-6 │         S ( f ) = S { f: 0 };
-  │         ^^^^^^^ Missing assignment for field 'f' in '0x42::M::S'
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09002]: unused variable
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:8:13

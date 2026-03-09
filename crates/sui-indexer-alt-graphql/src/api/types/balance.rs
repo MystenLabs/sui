@@ -7,9 +7,9 @@ use async_graphql::SimpleObject;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
+use sui_indexer_alt_reader::consistent_reader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::proto::Balance as ProtoBalance;
-use sui_indexer_alt_reader::consistent_reader::{self};
 use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress;
 
@@ -96,7 +96,7 @@ impl Balance {
         let consistent_reader: &ConsistentReader = ctx.data()?;
         let balance = consistent_reader
             .get_balance(
-                checkpoint,
+                Some(checkpoint),
                 address.to_string(),
                 coin_type.to_canonical_string(true),
             )
@@ -181,7 +181,7 @@ impl Balance {
 
         let balances = consistent_reader
             .list_balances(
-                checkpoint,
+                Some(checkpoint),
                 address.to_string(),
                 Some(page.limit() as u32),
                 page.after().map(|c| c.1.clone()),

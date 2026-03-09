@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{NativesCostTable, get_extension};
+use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -58,7 +58,9 @@ pub fn validate_metadata_bcs(
 
     let cost = context.gas_used();
 
-    if let Result::Err(err_code) = validator_metadata.verify() {
+    let obj_runtime: &ObjectRuntime = context.extensions().get().unwrap();
+    let metadata_v2 = obj_runtime.protocol_config.validator_metadata_verify_v2();
+    if let Result::Err(err_code) = validator_metadata.verify(metadata_v2) {
         return Ok(NativeResult::err(cost, err_code));
     }
 

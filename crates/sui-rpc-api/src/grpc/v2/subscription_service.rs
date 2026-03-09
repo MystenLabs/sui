@@ -10,6 +10,7 @@ use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
+use sui_types::balance_change::derive_balance_changes_2;
 
 #[tonic::async_trait]
 impl SubscriptionService for RpcService {
@@ -38,7 +39,6 @@ impl SubscriptionService for RpcService {
             ));
         };
 
-        let store = self.reader.clone();
         let response = Box::pin(async_stream::stream! {
             while let Some(checkpoint) = receiver.recv().await {
                 let cursor = checkpoint.summary.sequence_number;
@@ -49,19 +49,16 @@ impl SubscriptionService for RpcService {
                 );
 
                 if read_mask.contains("transactions.balance_changes") {
-                    for (txn, txn_digest) in checkpoint_message.transactions_mut().iter_mut().zip(
+                    for (txn, effects) in checkpoint_message.transactions_mut().iter_mut().zip(
                         checkpoint
                             .transactions
                             .iter()
-                            .map(|t| t.transaction.digest()),
+                            .map(|t| &t.effects),
                     ) {
-                        if let Some(info) = store.get_transaction_info(&txn_digest)
-                        {
-                            *txn.balance_changes_mut() = info.balance_changes
-                                .into_iter()
-                                .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
-                                .collect::<Vec<_>>();
-                        }
+                        *txn.balance_changes_mut() = derive_balance_changes_2(effects, &checkpoint.object_set)
+                            .into_iter()
+                            .map(Into::into)
+                            .collect();
                     }
                 }
 

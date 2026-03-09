@@ -11,6 +11,7 @@ use tabled::{
     builder::Builder as TableBuilder,
     settings::{Panel as TablePanel, Style as TableStyle, style::HorizontalLine},
 };
+
 impl Display for Pretty<'_, DryRunTransactionBlockResponse> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Pretty(response) = self;

@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_2024/naming/macro_identifier_binding.move:3:17
+  │
+3 │         let mut $x = 0u64;
+  │                 ^^ Invalid local name '$x'. Local variable names must start with 'a'..'z', '_', or be a valid name quoted with backticks (`name`)

@@ -111,7 +111,7 @@ impl MetricsResponseCallback {
     pub(crate) fn on_error<E>(&mut self, _error: &E) {
         self.metrics
             .errors
-            .with_label_values(&[&self.route, "unknown"])
+            .with_label_values(&[self.route.as_str(), "unknown"])
             .inc();
     }
 }

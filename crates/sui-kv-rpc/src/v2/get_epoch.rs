@@ -48,7 +48,7 @@ pub async fn get_epoch(
     };
 
     if read_mask.contains(Epoch::EPOCH_FIELD.name) {
-        message.epoch = Some(epoch_info.epoch);
+        message.epoch = epoch_info.epoch;
     }
     if read_mask.contains(Epoch::FIRST_CHECKPOINT_FIELD.name) {
         message.first_checkpoint = epoch_info.start_checkpoint;

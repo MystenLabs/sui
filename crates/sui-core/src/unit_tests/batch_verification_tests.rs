@@ -152,6 +152,7 @@ async fn test_async_verifier() {
         Some(30),
         true,
         true,
+        true,
     ));
 
     let tasks: Vec<_> = (0..32)

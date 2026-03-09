@@ -2,35 +2,50 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_symbol_pool::{Symbol, symbol};
+
 use anyhow::{anyhow, bail, *};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
-use std::{collections::BTreeMap, path::Path};
 use vfs::{VfsPath, VfsResult, error::VfsErrorKind};
+
+use std::{collections::BTreeMap, path::Path};
 
 /// Result of sha256 hash of a file's contents.
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub struct FileHash(pub [u8; 32]);
+pub struct FileHash(pub Symbol);
 
 impl FileHash {
     pub fn new(file_contents: &str) -> Self {
-        Self(sha2::Sha256::digest(file_contents.as_bytes()).into())
+        let hash: [u8; 32] = sha2::Sha256::digest(file_contents.as_bytes()).into();
+        let hash_str = hex::encode(&hash);
+        Self(hash_str.into())
     }
 
     pub const fn empty() -> Self {
-        Self([0; 32])
+        Self(symbol!("00000000000000000000000000000000"))
+    }
+
+    pub fn to_bytes(&self) -> [u8; 32] {
+        let bytes_conversion = hex::decode(self.0.as_str()).expect("Invalid hex in FileHash");
+        let std::result::Result::Ok(bytes): Result<[u8; 32], _> = bytes_conversion.try_into()
+        else {
+            let msg = format!("Invalid file hash length: {}", self.0.as_str());
+            panic!("{}", msg);
+        };
+        bytes
     }
 }
 
 impl std::fmt::Display for FileHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        hex::encode(self.0).fmt(f)
+        hex::encode(self.to_bytes()).fmt(f)
     }
 }
 
 impl std::fmt::Debug for FileHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        hex::encode(self.0).fmt(f)
+        hex::encode(self.to_bytes()).fmt(f)
     }
 }
 

@@ -14,7 +14,7 @@ use crate::{
 use indexmap::IndexSet;
 use sui_types::{
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
-    error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+    error::{ExecutionError, ExecutionErrorKind, SafeIndex, command_argument_error},
     execution_status::CommandArgumentError,
     id::RESOLVED_SUI_ID,
     transfer::RESOLVED_RECEIVING_STRUCT,
@@ -71,6 +71,7 @@ impl Context {
 ///    on mutable objects. And that the gas coin is only taken by value in transfer objects
 pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction {
+        gas_coin: _,
         bytes,
         objects: _,
         withdrawals: _,
@@ -171,7 +172,7 @@ fn primitive_serialization_layout(
             let resolved = dt.qualified_ident();
             // is option of a string
             if resolved == RESOLVED_STD_OPTION && dt.type_arguments.len() == 1 {
-                let info_opt = primitive_serialization_layout(&dt.type_arguments[0])?;
+                let info_opt = primitive_serialization_layout(dt.type_arguments.first().unwrap())?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
             } else if dt.type_arguments.is_empty() {
                 if resolved == RESOLVED_SUI_ID {
@@ -223,7 +224,7 @@ pub fn is_valid_receiving(constraint: &Type) -> bool {
     };
     dt.qualified_ident() == RESOLVED_RECEIVING_STRUCT
         && dt.type_arguments.len() == 1
-        && dt.type_arguments[0].abilities().has_key()
+        && dt.type_arguments.first().unwrap().abilities().has_key()
 }
 
 //**************************************************************************************************
@@ -306,7 +307,7 @@ fn check_obj_by_mut_ref(
         | T::Location::GasCoin
         | T::Location::Result(_, _) => Ok(()),
         T::Location::ObjectInput(idx) => {
-            if !context.objects[*idx as usize].allow_by_mut_ref {
+            if !context.objects.safe_get(*idx as usize)?.allow_by_mut_ref {
                 Err(command_argument_error(
                     CommandArgumentError::InvalidObjectByMutRef,
                     arg_idx as usize,
@@ -332,7 +333,7 @@ fn check_by_value(
         | T::Location::PureInput(_)
         | T::Location::ReceivingInput(_) => Ok(()),
         T::Location::ObjectInput(idx) => {
-            if !context.objects[*idx as usize].allow_by_value {
+            if !context.objects.safe_get(*idx as usize)?.allow_by_value {
                 Err(command_argument_error(
                     CommandArgumentError::InvalidObjectByValue,
                     arg_idx as usize,

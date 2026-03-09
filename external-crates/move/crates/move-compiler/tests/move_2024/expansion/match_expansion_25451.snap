@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/expansion/match_expansion_25451.move:4:16
+  │
+4 │         match (e) { E::W(0) => 1 }
+  │                ^ Pattern 'E::W(false)' not covered
+
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/move_2024/expansion/match_expansion_25451.move:4:26
+  │
+4 │         match (e) { E::W(0) => 1 }
+  │                          ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/expansion/match_expansion_25451.move:4:26
+  │
+2 │     public enum E has drop { W(bool) }
+  │                                ---- Expected: 'bool'
+3 │     fun f(e: E): u64 {
+4 │         match (e) { E::W(0) => 1 }
+  │                          ^
+  │                          │
+  │                          Invalid pattern field type
+  │                          Given: integer

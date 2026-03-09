@@ -23,6 +23,9 @@ pub struct P2pConfig {
     /// connection is established with these nodes.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub seed_peers: Vec<SeedPeer>,
+    /// Manually configured peer addresses. These override addresses loaded from on-chain configs.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub peer_address_overrides: Vec<PeerAddresses>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anemo_config: Option<anemo::Config>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -49,6 +52,7 @@ impl Default for P2pConfig {
             listen_address: default_listen_address(),
             external_address: Default::default(),
             seed_peers: Default::default(),
+            peer_address_overrides: Default::default(),
             anemo_config: Default::default(),
             state_sync: None,
             discovery: None,
@@ -86,6 +90,13 @@ pub struct AllowlistedPeer {
     pub peer_id: anemo::PeerId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<Multiaddr>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct PeerAddresses {
+    pub peer_id: anemo::PeerId,
+    pub addresses: Vec<Multiaddr>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -213,6 +224,37 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `262,144` (256 KiB).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_checkpoint_summary_size: Option<usize>,
+
+    /// Minimum timeout for checkpoint content downloads (adaptive timeout lower bound).
+    ///
+    /// If unspecified, this will default to `10,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_timeout_min_ms: Option<u64>,
+
+    /// Maximum timeout for checkpoint content downloads (adaptive timeout upper bound).
+    ///
+    /// If unspecified, this will default to `30,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_timeout_max_ms: Option<u64>,
+
+    /// Time window for peer scoring samples.
+    ///
+    /// If unspecified, this will default to `60,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_scoring_window_ms: Option<u64>,
+
+    /// Probability of selecting an unknown peer to explore its throughput.
+    ///
+    /// If unspecified, this will default to `0.1`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exploration_probability: Option<f64>,
+
+    /// Failure rate threshold for marking a peer as failing.
+    /// A peer is marked as failing if its failure rate exceeds this threshold.
+    ///
+    /// If unspecified, this will default to `0.3` (30%).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_failure_rate: Option<f64>,
 }
 
 impl StateSyncConfig {
@@ -314,7 +356,37 @@ impl StateSyncConfig {
             .unwrap_or(DEFAULT_MAX_CHECKPOINT_SUMMARY_SIZE)
     }
 
-    /// Returns a StateSyncConfig with randomized settings for testing.
+    pub fn checkpoint_content_timeout_min(&self) -> Duration {
+        const DEFAULT: Duration = Duration::from_secs(5);
+        self.checkpoint_content_timeout_min_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT)
+    }
+
+    pub fn checkpoint_content_timeout_max(&self) -> Duration {
+        const DEFAULT: Duration = Duration::from_secs(30);
+        self.checkpoint_content_timeout_max_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT)
+    }
+
+    pub fn peer_scoring_window(&self) -> Duration {
+        const DEFAULT: Duration = Duration::from_secs(60);
+        self.peer_scoring_window_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT)
+    }
+
+    pub fn exploration_probability(&self) -> f64 {
+        const DEFAULT: f64 = 0.1;
+        self.exploration_probability.unwrap_or(DEFAULT)
+    }
+
+    pub fn peer_failure_rate(&self) -> f64 {
+        const DEFAULT: f64 = 0.3;
+        self.peer_failure_rate.unwrap_or(DEFAULT)
+    }
+
     pub fn randomized_for_testing() -> Self {
         use rand::Rng;
         let mut rng = rand::thread_rng();
@@ -324,7 +396,6 @@ impl StateSyncConfig {
             checkpoint_header_download_concurrency: Some(rng.gen_range(10..=500)),
             checkpoint_content_download_concurrency: Some(rng.gen_range(10..=500)),
             max_checkpoint_lookahead: Some(rng.gen_range(100..=2000)),
-            // Tests sync up to 100 checkpoints, so minimum must be >= 100
             max_checkpoint_sync_batch_size: Some(rng.gen_range(100..=500)),
             max_checkpoint_summary_size: Some(rng.gen_range(64 * 1024..=512 * 1024)),
             ..Default::default()
@@ -347,15 +418,21 @@ impl StateSyncConfig {
 /// AccessType info is shared in the discovery process.
 /// * If the node marks itself as Public, other nodes may try to connect to it.
 /// * If the node marks itself as Private, only nodes that have it in
-///   their `allowlisted_peers` or `seed_peers` will try to connect to it.
+///   their `allowlisted_peers` or `seed_peers` will try to connect to it. The
+///   node's info will not be shared through discovery.
+/// * Trusted is the same as Private, except it allows sharing the node's info
+///   only to other preconfigured peers (i.e. those in `allowlisted_peers` and
+///   `seed_peers`).
 /// * If not set, defaults to Public.
 ///
 /// AccessType is useful when a network of nodes want to stay private. To achieve this,
-/// mark every node in this network as `Private` and allowlist/seed them to each other.
+/// mark every node in this network as `Private` or `Trusted`, and allowlist/seed them
+/// to each other.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AccessType {
     Public,
     Private,
+    Trusted,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -407,6 +484,12 @@ pub struct DiscoveryConfig {
     /// If unspecified, this will default to `1,024`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mailbox_capacity: Option<usize>,
+
+    /// Use get_known_peers_v3 RPC to fetch peer info.
+    ///
+    /// If unspecified, this will default to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_get_known_peers_v3: Option<bool>,
 }
 
 impl DiscoveryConfig {
@@ -438,6 +521,10 @@ impl DiscoveryConfig {
         const MAILBOX_CAPACITY: usize = 1_024;
 
         self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
+    }
+
+    pub fn use_get_known_peers_v3(&self) -> bool {
+        self.use_get_known_peers_v3.unwrap_or(false)
     }
 }
 

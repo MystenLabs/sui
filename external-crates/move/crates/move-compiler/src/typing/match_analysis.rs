@@ -5,8 +5,8 @@ use crate::{
     diag,
     diagnostics::warning_filters::WarningFilters,
     expansion::ast::{ModuleIdent, Value_},
-    ice,
-    naming::ast::BuiltinTypeName_,
+    ice, ice_assert,
+    naming::ast::{BuiltinTypeName_, TypeInner},
     parser::ast::{DatatypeName, VariantName},
     shared::{
         Identifier,
@@ -16,7 +16,7 @@ use crate::{
     },
     typing::{
         ast as T,
-        core::{Context, Subst, error_format},
+        core::{self, Context, Subst, error_format},
         visitor::TypingMutVisitorContext,
     },
 };
@@ -98,6 +98,22 @@ fn invalid_match(
     subject: &T::Exp,
     arms: &Spanned<Vec<T::MatchArm>>,
 ) -> bool {
+    // Divergent subjects are caught during typing in `translate.rs`. If we encounter one here,
+    // an error should already have been reported.
+    let subject_ty = core::unfold_type(&context.subst, &subject.ty);
+    match subject_ty.value.inner() {
+        TypeInner::Anything | TypeInner::Void => {
+            ice_assert!(
+                context,
+                context.env().has_errors(),
+                subject.exp.loc,
+                "Divergent match subject reached match analysis without a prior error"
+            );
+            return true;
+        }
+        TypeInner::UnresolvedError => return true,
+        _ => {}
+    }
     let arms_loc = arms.loc;
     let (pattern_matrix, _arms) =
         PatternMatrix::from(context, loc, subject.ty.clone(), arms.value.clone());
@@ -263,9 +279,12 @@ fn find_counterexample_impl(
         if literals.len() == 2 {
             // Saturated
             for lit in literals {
-                if let Some(counterexample) =
-                    counterexample_rec(context, matrix.specialize_literal(&lit).1, arity - 1, ndx)
-                {
+                if let Some(counterexample) = counterexample_rec(
+                    context,
+                    matrix.specialize_literal(context, &lit).1,
+                    arity - 1,
+                    ndx,
+                ) {
                     let lit_str = format!("{}", lit);
                     let result = [CounterExample::Literal(lit_str)]
                         .into_iter()
@@ -276,7 +295,7 @@ fn find_counterexample_impl(
             }
             None
         } else {
-            let (_, default) = matrix.specialize_default();
+            let (_, default) = matrix.specialize_default(context);
             if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                 if literals.is_empty() {
                     let result = [CounterExample::Wildcard]
@@ -314,7 +333,7 @@ fn find_counterexample_impl(
         // For all other non-literals, we don't consider a case where the constructors are
         // saturated.
         let literals = matrix.first_lits();
-        let (_, default) = matrix.specialize_default();
+        let (_, default) = matrix.specialize_default(context);
         if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
             if literals.is_empty() {
                 let result = [CounterExample::Wildcard]
@@ -371,10 +390,18 @@ fn find_counterexample_impl(
             // recur. If we don't, we check it as a default specialization.
             if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
                 let ctor_arity = arg_types.len() as u32;
-                let decl_fields = context
-                    .info()
-                    .struct_fields(&mident, &datatype_name)
-                    .unwrap();
+                // Native structs have no fields. An error for destructuring a native struct
+                // should have already been reported during typing.
+                let Some(decl_fields) = context.info().struct_fields(&mident, &datatype_name)
+                else {
+                    ice_assert!(
+                        context,
+                        context.env().has_errors(),
+                        ploc,
+                        "Native struct reached match counterexample without a prior error"
+                    );
+                    return None;
+                };
                 let fringe_binders =
                     context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                 let is_positional = context.info().struct_is_positional(&mident, &datatype_name);
@@ -408,7 +435,7 @@ fn find_counterexample_impl(
                     None
                 }
             } else {
-                let (_, default) = matrix.specialize_default();
+                let (_, default) = matrix.specialize_default(context);
                 // `_` is a reasonable counterexample since we never unpacked this struct
                 if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     // If we didn't match any head constructor, `_` is a reasonable
@@ -477,7 +504,7 @@ fn find_counterexample_impl(
                 }
                 None
             } else {
-                let (_, default) = matrix.specialize_default();
+                let (_, default) = matrix.specialize_default(context);
                 if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     if ctors.is_empty() {
                         // If we didn't match any head constructor, `_` is a reasonable
@@ -544,7 +571,7 @@ fn find_counterexample_impl(
                 counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
             } else {
                 // This can only be a binding or wildcard, so we act accordingly.
-                let (_, default) = matrix.specialize_default();
+                let (_, default) = matrix.specialize_default(context);
                 if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     let result = [CounterExample::Wildcard]
                         .into_iter()

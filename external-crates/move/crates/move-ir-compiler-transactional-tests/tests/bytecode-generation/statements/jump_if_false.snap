@@ -9,20 +9,20 @@ task 0, lines 1-20:
 module 6.m {
 
 entry foo() {
-L0:	loc0: u64
+L0:	x: u64
 B0:
 	0: LdU64(0)
-	1: StLoc[0](loc0: u64)
+	1: StLoc[0](x: u64)
 B1:
-	2: CopyLoc[0](loc0: u64)
+	2: CopyLoc[0](x: u64)
 	3: LdU64(5)
 	4: Lt
 	5: BrFalse(11)
 B2:
-	6: CopyLoc[0](loc0: u64)
+	6: CopyLoc[0](x: u64)
 	7: LdU64(1)
 	8: Add
-	9: StLoc[0](loc0: u64)
+	9: StLoc[0](x: u64)
 	10: Branch(2)
 B3:
 	11: Ret
@@ -37,10 +37,10 @@ task 1, lines 22-36:
 module 7.m {
 
 entry foo() {
-L0:	loc0: u64
+L0:	x: u64
 B0:
 	0: LdU64(0)
-	1: StLoc[0](loc0: u64)
+	1: StLoc[0](x: u64)
 B1:
 	2: LdTrue
 	3: BrFalse(6)

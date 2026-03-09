@@ -82,7 +82,9 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
     shell.env("CONFIG", config_file.join(SUI_CLIENT_CONFIG));
 
     // run it; snapshot test output
-    let output = shell.output()?;
+    let output = tokio::task::spawn_blocking(move || shell.output())
+        .await
+        .unwrap()?;
     let result = format!(
         "----- script -----\n{}\n----- results -----\nsuccess: {:?}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
         std::fs::read_to_string(path)?,

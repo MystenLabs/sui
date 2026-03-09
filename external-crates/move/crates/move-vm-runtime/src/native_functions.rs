@@ -165,13 +165,12 @@ impl<'b> NativeContext<'_, 'b> {
     pub fn type_tag_to_fully_annotated_layout_for_test_scenario_only(
         &self,
         tag: &TypeTag,
-    ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
+    ) -> Option<A::MoveTypeLayout> {
+        let ty = self.resolver.loader().try_load_cached_type(tag).ok()??;
         self.resolver
             .loader()
-            .try_load_cached_type(tag)
-            .map_err(|e| e.to_partial())?
-            .map(|ty| self.resolver.loader().type_to_fully_annotated_layout(&ty))
-            .transpose()
+            .type_to_fully_annotated_layout(&ty)
+            .ok()
     }
 
     // TODO: This is a bit hacky right now since we need to pass the store, however this is only
@@ -181,13 +180,9 @@ impl<'b> NativeContext<'_, 'b> {
     pub fn type_tag_to_layout_for_test_scenario_only(
         &self,
         tag: &TypeTag,
-    ) -> PartialVMResult<Option<R::MoveTypeLayout>> {
-        self.resolver
-            .loader()
-            .try_load_cached_type(tag)
-            .map_err(|e| e.to_partial())?
-            .map(|ty| self.resolver.loader().type_to_type_layout(&ty))
-            .transpose()
+    ) -> Option<R::MoveTypeLayout> {
+        let ty = self.resolver.loader().try_load_cached_type(tag).ok()??;
+        self.resolver.loader().type_to_type_layout(&ty).ok()
     }
 
     pub fn type_to_abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {

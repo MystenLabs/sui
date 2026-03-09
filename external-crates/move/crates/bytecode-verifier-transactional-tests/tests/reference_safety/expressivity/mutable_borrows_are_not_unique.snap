@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 3-35:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::fields'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::fields,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 21)],
+}
+
+task 1, lines 37-78:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::fields_write'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::fields_write,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 21)],
+}

@@ -13,7 +13,11 @@ use super::test_authority_builder::TestAuthorityBuilder;
 use super::*;
 
 #[cfg(test)]
-use super::shared_object_version_manager::{AssignedTxAndVersions, Schedulable};
+use super::shared_object_version_manager::Schedulable;
+#[cfg(test)]
+use std::collections::HashMap;
+#[cfg(test)]
+use sui_types::transaction::TransactionKey;
 
 // =============================================================================
 // MFP (Mysticeti Fast Path) Test Helpers
@@ -231,7 +235,9 @@ pub async fn enqueue_and_execute_all(
     );
     let mut output = Vec::new();
     for (exec, _) in executables {
-        let effects = authority.notify_read_effects("", *exec.digest()).await?;
+        let effects = authority
+            .notify_read_effects_for_testing("", *exec.digest())
+            .await;
         output.push(effects);
     }
     Ok(output)
@@ -384,16 +390,22 @@ pub async fn submit_batch_to_consensus<C>(
     transactions: &[Transaction],
     consensus_handler: &mut crate::consensus_handler::ConsensusHandler<C>,
     captured_transactions: &crate::consensus_test_utils::CapturedTransactions,
-) -> (Vec<Schedulable>, AssignedTxAndVersions)
+) -> (Vec<Schedulable>, HashMap<TransactionKey, AssignedVersions>)
 where
     C: crate::checkpoints::CheckpointServiceNotify + Send + Sync + 'static,
 {
     use crate::consensus_test_utils::TestConsensusCommit;
     use sui_types::messages_consensus::ConsensusTransaction;
+    use sui_types::transaction::PlainTransactionWithClaims;
 
     let consensus_transactions: Vec<ConsensusTransaction> = transactions
         .iter()
-        .map(|tx| ConsensusTransaction::new_user_transaction_message(&authority.name, tx.clone()))
+        .map(|tx| {
+            ConsensusTransaction::new_user_transaction_v2_message(
+                &authority.name,
+                PlainTransactionWithClaims::no_aliases(tx.clone()),
+            )
+        })
         .collect();
 
     let epoch_store = authority.epoch_store_for_testing();
@@ -416,8 +428,10 @@ where
             !captured.is_empty(),
             "Expected transactions to be scheduled"
         );
-        let (scheduled_txns, assigned_tx_and_versions, _) = captured.remove(0);
-        (scheduled_txns, assigned_tx_and_versions)
+        let (paired, _) = captured.remove(0);
+        let (schedulables, versions): (Vec<_>, Vec<_>) = paired.into_iter().unzip();
+        let assigned_versions = schedulables.iter().map(|s| s.key()).zip(versions).collect();
+        (schedulables, assigned_versions)
     };
 
     (scheduled_txns, assigned_tx_and_versions)

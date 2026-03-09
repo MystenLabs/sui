@@ -5,9 +5,7 @@ use std::fmt;
 
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
-use sui_json_rpc_types::SuiRawMoveObject;
 use sui_package_management::PublishedAtError;
-use sui_sdk::error::Error as SdkError;
 use sui_types::{base_types::ObjectID, error::SuiObjectResponseError};
 
 #[derive(Debug, thiserror::Error)]
@@ -18,8 +16,8 @@ pub enum Error {
     #[error("Cannot check local module for {package}: {message}")]
     CannotCheckLocalModules { package: Symbol, message: String },
 
-    #[error("Could not read a dependency's on-chain object: {0:?}")]
-    DependencyObjectReadFailure(SdkError),
+    #[error("Could not read a dependency's on-chain object: {0}")]
+    DependencyObjectReadFailure(String),
 
     #[error("On-chain package {0} is empty")]
     EmptyOnChainPackage(AccountAddress),
@@ -49,7 +47,7 @@ pub enum Error {
     },
 
     #[error("Dependency ID contains a Sui object, not a Move package: {0}")]
-    ObjectFoundWhenPackageExpected(ObjectID, SuiRawMoveObject),
+    ObjectFoundWhenPackageExpected(ObjectID),
 
     #[error("Could not deserialize on-chain dependency {address}::{module}.")]
     OnChainDependencyDeserializationError {

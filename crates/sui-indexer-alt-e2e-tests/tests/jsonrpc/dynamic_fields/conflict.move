@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses P=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 // Set-up an object that has a dynamic field and a dynamic object field with
 // the same key. JSON-RPC cannot distinguish between the two and will always

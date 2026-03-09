@@ -1,0 +1,8 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, line 45:
+//# view-abstract-state 0x2::loopy::t
+view-abstract-state subcommand is only available with regex reference safety

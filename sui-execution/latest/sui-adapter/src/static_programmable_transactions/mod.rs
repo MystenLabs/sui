@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::indexing_slicing)]
+#![deny(clippy::cast_possible_truncation)]
 
 use crate::{
     data_store::cached_package_store::CachedPackageStore,
@@ -45,6 +47,7 @@ pub fn execute<Mode: ExecutionMode>(
     txn: ProgrammableTransaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+    let gas_coin = gas_charger.gas_coin();
     let package_store = CachedPackageStore::new(Box::new(package_store));
     let linkage_analysis =
         LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
@@ -66,6 +69,7 @@ pub fn execute<Mode: ExecutionMode>(
             &env,
             &tx_context_ref,
             withdrawal_compatibility_inputs,
+            gas_coin,
             txn,
         )
         .map_err(|e| (e, vec![]))?

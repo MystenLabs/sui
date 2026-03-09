@@ -217,7 +217,9 @@ Response: {
 task 22, lines 186-189:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "object": null
+  },
   "errors": [
     {
       "message": "At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object",

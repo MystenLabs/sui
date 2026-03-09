@@ -17,7 +17,6 @@ use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
@@ -117,11 +116,7 @@ impl SingleValidator {
         );
         let effects = self
             .get_validator()
-            .try_execute_immediately(
-                &executable,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-                &self.epoch_store,
-            )
+            .try_execute_immediately(&executable, ExecutionEnv::new(), &self.epoch_store)
             .await
             .unwrap()
             .0;
@@ -170,20 +165,17 @@ impl SingleValidator {
                     .0
             }
             Component::WithTxManager => {
-                if executable.is_consensus_tx() {
-                    // For shared objects transactions, we manually enqueue since we don't have consensus.
-                    self.get_validator().execution_scheduler().enqueue(
-                        vec![(
-                            executable.clone().into(),
-                            ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
-                        )],
-                        &self.epoch_store,
-                    );
-                }
+                // Manually enqueue since we don't have consensus.
+                self.get_validator().execution_scheduler().enqueue(
+                    vec![(
+                        executable.clone().into(),
+                        ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
+                    )],
+                    &self.epoch_store,
+                );
                 self.get_validator()
-                    .wait_for_transaction_execution(&executable, &self.epoch_store)
+                    .wait_for_transaction_execution_for_testing(&executable, &self.epoch_store)
                     .await
-                    .unwrap()
             }
             Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
                 // Execute the transaction directly using try_execute_executable_for_test

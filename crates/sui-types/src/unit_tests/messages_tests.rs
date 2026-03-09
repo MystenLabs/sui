@@ -740,7 +740,7 @@ fn test_sponsored_transaction_message() {
 
     assert_eq!(
         transaction.get_signer_sig_mapping(true).unwrap(),
-        BTreeMap::from([(sender, &sender_sig), (sponsor, &sponsor_sig)]),
+        BTreeMap::from([(sender, (0, &sender_sig)), (sponsor, (1, &sponsor_sig))]),
     );
 
     assert_eq!(transaction.sender_address(), sender,);
@@ -811,7 +811,7 @@ fn test_sponsored_transaction_validity_check() {
     let sponsor = (&sponsor_kp.public()).into();
 
     // This is a sponsored transaction
-    let gas_price = 10;
+    let gas_price = 1000;
     assert_ne!(sender, sponsor);
     let gas_data = GasData {
         payment: vec![random_object_ref()],

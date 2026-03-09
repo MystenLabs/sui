@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --addresses P0=0x0 --simulator
+//# init --protocol-version 108 --accounts A B --addresses P0=0x0 --simulator
 
 // When an object's owner changes, it is considered "transferred".
 

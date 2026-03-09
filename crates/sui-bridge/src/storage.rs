@@ -65,26 +65,6 @@ impl BridgeOrchestratorTables {
             .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
     }
 
-    pub(crate) fn update_sui_event_cursor(
-        &self,
-        module: Identifier,
-        cursor: EventID,
-    ) -> BridgeResult<()> {
-        let mut batch = self.sui_syncer_cursors.batch();
-
-        batch
-            .insert_batch(&self.sui_syncer_cursors, [(module, cursor)])
-            .map_err(|e| {
-                BridgeError::StorageError(format!(
-                    "Coudln't insert into sui_syncer_cursors: {:?}",
-                    e
-                ))
-            })?;
-        batch
-            .write()
-            .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
-    }
-
     pub(crate) fn update_sui_sequence_number_cursor(&self, cursor: u64) -> BridgeResult<()> {
         let mut batch = self.sui_syncer_sequence_number_cursor.batch();
 
@@ -197,8 +177,6 @@ impl<'de> Deserialize<'de> for AlloyAddressSerializedAsEthers {
 mod tests {
     use std::str::FromStr;
 
-    use sui_types::digests::TransactionDigest;
-
     use crate::test_utils::get_test_sui_to_eth_bridge_action;
 
     use super::*;
@@ -293,29 +271,6 @@ mod tests {
                 .unwrap()[0]
                 .unwrap(),
             eth_block_num
-        );
-
-        // update sui event cursor
-        let sui_module = Identifier::from_str("test").unwrap();
-        let sui_cursor = EventID {
-            tx_digest: TransactionDigest::random(),
-            event_seq: 1,
-        };
-        assert!(
-            store
-                .get_sui_event_cursors(std::slice::from_ref(&sui_module))
-                .unwrap()[0]
-                .is_none()
-        );
-        store
-            .update_sui_event_cursor(sui_module.clone(), sui_cursor)
-            .unwrap();
-        assert_eq!(
-            store
-                .get_sui_event_cursors(std::slice::from_ref(&sui_module))
-                .unwrap()[0]
-                .unwrap(),
-            sui_cursor
         );
 
         // update sui seq cursor

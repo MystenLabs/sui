@@ -14,7 +14,10 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn get_object() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let id: Address = "0x5".parse().unwrap();
 
@@ -152,7 +155,10 @@ async fn get_object() {
 
 #[sim_test]
 async fn batch_get_objects() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await

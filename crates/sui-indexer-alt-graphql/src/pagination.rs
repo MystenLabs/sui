@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use async_graphql::OutputType;
 use async_graphql::connection::Connection;
@@ -178,6 +179,30 @@ impl<C> Page<C> {
 }
 
 impl Page<JsonCursor<usize>> {
+    /// Translate the cursors of this Page into a range of indices, in [0, total).
+    ///
+    /// Returns `None` if the cursors are inconsistent, otherwise returns Some(lo..hi) where `lo`
+    /// and `hi` are the inclusive lower and exclusive upper bounds of the range of indices
+    /// corresponding to the cursors for this page.
+    pub(crate) fn range(&self, total: usize) -> Option<Range<usize>> {
+        let mut lo = self.after().map_or(0, |a| a.saturating_add(1)).min(total);
+        let mut hi = self.before().map_or(total, |b| **b).min(total);
+
+        if hi <= lo {
+            return None;
+        }
+
+        if (hi - lo) > self.limit() {
+            if self.is_from_front() {
+                hi = lo + self.limit();
+            } else {
+                lo = hi - self.limit();
+            }
+        }
+
+        Some(lo..hi)
+    }
+
     /// Treat the cursors of this Page as indices into a range [0, total).
     ///
     /// Returns a connection where the cursors correspond to a sub-range of indices and the
@@ -187,23 +212,14 @@ impl Page<JsonCursor<usize>> {
         total: usize,
         node: impl Fn(usize) -> Result<N, E>,
     ) -> Result<Connection<String, N>, E> {
-        let mut lo = self.after().map_or(0, |a| a.saturating_add(1)).min(total);
-        let mut hi = self.before().map_or(total, |b| **b).min(total);
         let mut conn = Connection::new(false, false);
-
-        if hi <= lo {
+        let Some(range) = self.range(total) else {
             return Ok(conn);
-        } else if (hi - lo) > self.limit() {
-            if self.is_from_front() {
-                hi = lo + self.limit();
-            } else {
-                lo = hi - self.limit();
-            }
-        }
+        };
 
-        conn.has_previous_page = 0 < lo;
-        conn.has_next_page = hi < total;
-        for i in lo..hi {
+        conn.has_previous_page = 0 < range.start;
+        conn.has_next_page = range.end < total;
+        for i in range {
             conn.edges
                 .push(Edge::new(JsonCursor::new(i).encode_cursor(), node(i)?));
         }
@@ -585,5 +601,84 @@ mod tests {
         assert!(!conn.has_previous_page);
         assert!(!conn.has_next_page);
         assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_range_empty_when_bounds_cross_or_touch() {
+        use JsonCursor as C;
+
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let touch: Page<C<usize>> =
+            Page::from_params(&limits, None, Some(C::new(2)), None, Some(C::new(3))).unwrap();
+
+        let cross: Page<C<usize>> =
+            Page::from_params(&limits, None, Some(C::new(4)), None, Some(C::new(3))).unwrap();
+
+        assert_eq!(touch.range(10), None);
+        assert_eq!(cross.range(10), None);
+    }
+
+    #[test]
+    fn test_range_trims_from_front() {
+        use JsonCursor as C;
+
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<C<usize>> =
+            Page::from_params(&limits, Some(2), Some(C::new(1)), None, None).unwrap();
+
+        assert_eq!(page.range(10), Some(2..4));
+    }
+
+    #[test]
+    fn test_range_trims_from_back() {
+        use JsonCursor as C;
+
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<C<usize>> =
+            Page::from_params(&limits, None, None, Some(2), Some(C::new(8))).unwrap();
+
+        assert_eq!(page.range(10), Some(6..8));
+    }
+
+    #[test]
+    fn test_range_clamps_before_to_total() {
+        use JsonCursor as C;
+
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<JsonCursor<usize>> =
+            Page::from_params(&limits, None, None, None, Some(C::new(usize::MAX))).unwrap();
+
+        assert_eq!(page.range(4), Some(0..4));
+    }
+
+    #[test]
+    fn test_range_after_overflow_saturates_then_clamps() {
+        use JsonCursor as C;
+
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<C<usize>> =
+            Page::from_params(&limits, None, Some(C::new(usize::MAX)), None, None).unwrap();
+
+        assert_eq!(page.range(10), None);
     }
 }

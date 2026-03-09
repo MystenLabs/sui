@@ -45,7 +45,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "type": {
-            "repr": "0xd653453b9cd062750dcc9f3aca5eb786545326e231a82a4e3c7a08cab4500295::M::Foo",
+            "repr": "0x6822b9c3f6384583d4b0bbbf84470401856f196201f06a0e4b891cc7b7dee13f::M::Foo",
             "abilities": [
               "KEY"
             ]

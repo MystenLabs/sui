@@ -158,13 +158,13 @@ impl ConsistentReader {
     #[instrument(skip(self), level = "debug")]
     pub async fn get_balance(
         &self,
-        checkpoint: u64,
+        checkpoint: Option<u64>,
         address: String,
         coin_type: String,
     ) -> Result<proto::Balance, Error> {
         self.request(
             "get_balance",
-            Some(checkpoint),
+            checkpoint,
             |mut client, request| async move { client.get_balance(request).await },
             proto::GetBalanceRequest {
                 owner: Some(address),
@@ -178,7 +178,7 @@ impl ConsistentReader {
     #[instrument(skip(self), level = "debug")]
     pub async fn list_balances(
         &self,
-        checkpoint: u64,
+        checkpoint: Option<u64>,
         address: String,
         page_size: Option<u32>,
         after_token: Option<Vec<u8>>,
@@ -188,7 +188,7 @@ impl ConsistentReader {
         let response = self
             .request(
                 "list_balances",
-                Some(checkpoint),
+                checkpoint,
                 |mut client, request| async move { client.list_balances(request).await },
                 proto::ListBalancesRequest {
                     owner: Some(address),
@@ -227,7 +227,7 @@ impl ConsistentReader {
     #[instrument(skip(self), level = "debug")]
     pub async fn list_objects_by_type(
         &self,
-        checkpoint: u64,
+        checkpoint: Option<u64>,
         object_type: String,
         page_size: Option<u32>,
         after_token: Option<Vec<u8>>,
@@ -237,7 +237,7 @@ impl ConsistentReader {
         let response = self
             .request(
                 "list_objects_by_type",
-                Some(checkpoint),
+                checkpoint,
                 |mut client, request| async move { client.list_objects_by_type(request).await },
                 proto::ListObjectsByTypeRequest {
                     object_type: Some(object_type),
@@ -270,11 +270,12 @@ impl ConsistentReader {
     }
 
     /// Paginate live objects at `checkpoint`, with owner described by `kind` and `address`, and an
-    /// optional `object_type` filter.
+    /// optional, `object_type`. If `object_type` is prefaced with `!`, objects of the type prefix
+    /// will be excluded from the page of results.
     #[instrument(skip(self), level = "debug")]
     pub async fn list_owned_objects(
         &self,
-        checkpoint: u64,
+        checkpoint: Option<u64>,
         kind: proto::owner::OwnerKind,
         address: Option<String>,
         object_type: Option<String>,
@@ -286,7 +287,7 @@ impl ConsistentReader {
         let response = self
             .request(
                 "list_owned_objects",
-                Some(checkpoint),
+                checkpoint,
                 |mut client, request| async move { client.list_owned_objects(request).await },
                 proto::ListOwnedObjectsRequest {
                     owner: Some(proto::Owner {
@@ -356,7 +357,7 @@ impl ConsistentReader {
 
         if let Some(checkpoint) = checkpoint {
             request.metadata_mut().insert(
-                proto::CHECKPOINT_METADATA,
+                proto::CHECKPOINT_HEIGHT_METADATA,
                 checkpoint
                     .to_string()
                     .parse()

@@ -6,7 +6,7 @@ use crate::{
     close_frame, close_initial_native_frame, close_instruction,
     loader::{Function, Loader, Resolver},
     native_functions::NativeContext,
-    open_frame, open_initial_frame, open_instruction, trace,
+    open_frame, open_initial_frame, open_instruction,
     tracing2::tracer::VMTracer,
 };
 use fail::fail_point;
@@ -650,11 +650,25 @@ impl Interpreter {
         loader: &Loader,
     ) -> PartialVMResult<()> {
         debug_writeln!(buf, "Call Stack:")?;
-        for (i, frame) in self.call_stack.0.iter().enumerate() {
+        // We reverse number the call stack so that the most recent frame is at the bottom when
+        // printed and with index 0 (the stack grows downwards in the printed output):
+        //
+        // ```
+        // [n] entry_frame_into_vm_and_oldest_frame
+        // ...
+        // [0] most_recent_frame
+        // ```
+        for (i, frame) in (0..self.call_stack.0.len())
+            .rev()
+            .zip(self.call_stack.0.iter())
+        {
             self.debug_print_frame(buf, loader, i, frame)?;
         }
         debug_writeln!(buf, "Operand Stack:")?;
-        for (idx, val) in self.operand_stack.value.iter().enumerate() {
+        for (idx, val) in (0..self.operand_stack.value.len())
+            .rev()
+            .zip(self.operand_stack.value.iter())
+        {
             // TODO: Currently we do not know the types of the values on the operand stack.
             // Revisit.
             debug_write!(buf, "    [{}] ", idx)?;
@@ -1436,11 +1450,6 @@ impl Frame {
         let code = self.function.code();
         loop {
             for instruction in &code[self.pc as usize..] {
-                trace!(
-                    &self.function,
-                    &self.locals, self.pc, instruction, resolver, interpreter
-                );
-
                 fail_point!("move_vm::interpreter_loop", |_| {
                     Err(
                         PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(

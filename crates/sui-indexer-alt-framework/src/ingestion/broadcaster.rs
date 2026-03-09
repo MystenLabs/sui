@@ -10,7 +10,6 @@ use anyhow::Context;
 use anyhow::anyhow;
 use futures::Stream;
 use futures::future::try_join_all;
-use futures::stream;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
@@ -22,6 +21,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::config::ConcurrencyConfig;
 use crate::ingestion::IngestionConfig;
 use crate::ingestion::error::Error;
 use crate::ingestion::ingestion_client::IngestionClient;
@@ -46,7 +46,7 @@ use crate::types::full_checkpoint_content::Checkpoint;
 /// The task will shut down if the `checkpoints` range completes.
 pub(super) fn broadcaster<R, S>(
     checkpoints: R,
-    initial_commit_hi: Option<u64>,
+    next_sequential_checkpoint: Option<u64>,
     mut streaming_client: Option<S>,
     config: IngestionConfig,
     client: IngestionClient,
@@ -86,10 +86,10 @@ where
         // Track subscriber watermarks
         let mut subscribers_hi = HashMap::<&'static str, u64>::new();
 
-        // Initialize ingest_hi watch channel.
-        // Start with None (no backpressure) or Some if we have been provided an initial bound.
-        let initial_ingest_hi = initial_commit_hi.map(|min_hi| min_hi + buffer_size);
-        let (ingest_hi_watch_tx, ingest_hi_watch_rx) = watch::channel(initial_ingest_hi);
+        // Initialize ingest_hi watch channel, seeded from the sequential checkpoint if present.
+        let initial_hi = next_sequential_checkpoint.unwrap_or(start_cp);
+        let (ingest_hi_tx, ingest_hi_rx) = watch::channel(initial_hi.saturating_add(buffer_size));
+        let ingest_hi_rx = next_sequential_checkpoint.is_some().then_some(&ingest_hi_rx);
 
         // If the first attempt at streaming connection fails, we back off for an initial number
         // of checkpoints to process using ingestion. This value doubles on each subsequent failure.
@@ -113,7 +113,7 @@ where
                 &mut streaming_backoff_batch_size,
                 &config,
                 &subscribers,
-                &ingest_hi_watch_rx,
+                ingest_hi_rx.cloned(),
                 &metrics,
             )
             .await;
@@ -124,10 +124,11 @@ where
                 checkpoint_hi,
                 ingestion_end,
                 config.retry_interval(),
-                config.ingest_concurrency,
-                ingest_hi_watch_rx.clone(),
+                config.ingest_concurrency.clone(),
+                ingest_hi_rx.cloned(),
                 client.clone(),
                 subscribers.clone(),
+                metrics.clone(),
             );
 
             let mut ingest_and_broadcast = futures::future::join(stream_guard, ingest_guard);
@@ -140,9 +141,9 @@ where
                         subscribers_hi.insert(name, hi);
 
                         if let Some(min_hi) = subscribers_hi.values().copied().min() {
-                            let new_ingest_hi = Some(min_hi + buffer_size);
+                            let new_ingest_hi = min_hi.saturating_add(buffer_size);
                             // Update the watch channel, which will notify all waiting tasks
-                            let _ = ingest_hi_watch_tx.send(new_ingest_hi);
+                            let _ = ingest_hi_tx.send(new_ingest_hi);
                         }
                     }
                     // docs::/#regulator
@@ -185,54 +186,70 @@ where
     })
 }
 
+/// Wraps a checkpoint range in an async stream gated by `ingest_hi`. Items are only yielded
+/// when the backpressure window allows, preventing spawned tasks from piling up while blocked.
+fn backpressured_checkpoint_stream(
+    start: u64,
+    end: u64,
+    ingest_hi_rx: Option<watch::Receiver<u64>>,
+) -> impl Stream<Item = u64> {
+    futures::stream::unfold((start, ingest_hi_rx), move |(cp, rx)| async move {
+        if cp >= end {
+            return None;
+        }
+
+        let Some(mut rx) = rx else {
+            // No backpressure, just yield checkpoints as fast as possible.
+            return Some((cp, (cp + 1, None)));
+        };
+
+        if rx.wait_for(|hi| cp < *hi).await.is_err() {
+            return None;
+        }
+
+        Some((cp, (cp + 1, Some(rx))))
+    })
+}
+
 /// Fetch and broadcasts checkpoints from a range [start..end) to subscribers. This task is
-/// ingest_hi-aware and will wait if it encounters a checkpoint beyond the current ingest_hi,
-/// resuming when ingest_hi advances to currently ingesting checkpoints.
+/// ingest_hi-aware via the backpressured stream that gates checkpoint yielding based on
+/// the current ingest_hi, resuming when ingest_hi advances.
 fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
     retry_interval: Duration,
-    ingest_concurrency: usize,
-    ingest_hi_rx: watch::Receiver<Option<u64>>,
+    ingest_concurrency: ConcurrencyConfig,
+    ingest_hi_rx: Option<watch::Receiver<u64>>,
     client: IngestionClient,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    metrics: Arc<IngestionMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
-        stream::iter(start..end)
-            .try_for_each_spawned(ingest_concurrency, |cp| {
-                let mut ingest_hi_rx = ingest_hi_rx.clone();
-                let client = client.clone();
-                let subscribers = subscribers.clone();
-
-                async move {
-                    // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                    // Wait until ingest_hi allows processing this checkpoint.
-                    // None means no backpressure limit. If we get Some(hi) we wait until cp < hi.
-                    // wait_for only errors if the sender is dropped (main broadcaster shut down) so
-                    // we treat an error returned here as a shutdown signal.
-                    if ingest_hi_rx
-                        .wait_for(|hi| hi.is_none_or(|hi| cp < hi))
-                        .await
-                        .is_err()
-                    {
-                        return Err(Break::Break);
+        let report_metrics = metrics.clone();
+        // Backpressure is enforced at the stream level: checkpoints are only yielded when
+        // ingest_hi allows, preventing spawned tasks from piling up while blocked.
+        backpressured_checkpoint_stream(start, end, ingest_hi_rx)
+            .try_for_each_broadcast_spawned(
+                ingest_concurrency.into(),
+                |cp| {
+                    let client = client.clone();
+                    async move {
+                        // Fetch the checkpoint or stop if cancelled.
+                        let checkpoint = client.wait_for(cp, retry_interval).await?;
+                        debug!(checkpoint = cp, "Fetched checkpoint");
+                        Ok(checkpoint)
                     }
-                    // docs::/#bound
-
-                    // Fetch the checkpoint or stop if cancelled.
-                    let checkpoint = client.wait_for(cp, retry_interval).await?;
-
-                    // Send checkpoint to all subscribers.
-                    if send_checkpoint(checkpoint, &subscribers).await.is_ok() {
-                        debug!(checkpoint = cp, "Broadcasted checkpoint");
-                        Ok(())
-                    } else {
-                        // An error is returned meaning some subscriber channel has closed, which
-                        // we consider a shutdown signal for ingestion.
-                        Err(Break::Break)
-                    }
-                }
-            })
+                },
+                Arc::unwrap_or_clone(subscribers),
+                move |stats| {
+                    report_metrics
+                        .ingestion_concurrency_limit
+                        .set(stats.limit as i64);
+                    report_metrics
+                        .ingestion_concurrency_inflight
+                        .set(stats.inflight as i64);
+                },
+            )
             .await
     }))
 }
@@ -247,7 +264,7 @@ async fn setup_streaming_task<S>(
     streaming_backoff_batch_size: &mut u64,
     config: &IngestionConfig,
     subscribers: &Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
-    ingest_hi_watch_rx: &watch::Receiver<Option<u64>>,
+    ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: &Arc<IngestionMetrics>,
 ) -> (TaskGuard<u64>, u64)
 where
@@ -322,7 +339,7 @@ where
         end_cp,
         stream,
         subscribers.clone(),
-        ingest_hi_watch_rx.clone(),
+        ingest_hi_rx,
         metrics.clone(),
     )));
 
@@ -339,7 +356,7 @@ async fn stream_and_broadcast_range(
     hi: u64,
     mut stream: impl Stream<Item = Result<Checkpoint, Error>> + Unpin,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
-    mut ingest_hi_rx: watch::Receiver<Option<u64>>,
+    mut ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: Arc<IngestionMetrics>,
 ) -> u64 {
     while lo < hi {
@@ -373,10 +390,8 @@ async fn stream_and_broadcast_range(
         }
 
         assert_eq!(sequence_number, lo);
-        if ingest_hi_rx
-            .wait_for(|hi| hi.is_none_or(|hi| lo < hi))
-            .await
-            .is_err()
+        if let Some(ingest_hi_rx) = &mut ingest_hi_rx
+            && ingest_hi_rx.wait_for(|hi| lo < *hi).await.is_err()
         {
             // Channel closed, treat as cancellation to avoid letting a checkpoint slip through as
             // the indexer winds down.
@@ -458,7 +473,7 @@ mod tests {
     fn test_config() -> IngestionConfig {
         IngestionConfig {
             checkpoint_buffer_size: 5,
-            ingest_concurrency: 2,
+            ingest_concurrency: ConcurrencyConfig::Fixed { value: 2 },
             retry_interval_ms: 100,
             streaming_backoff_initial_batch_size: 2,
             streaming_backoff_max_batch_size: 16,
@@ -586,8 +601,10 @@ mod tests {
 
     #[tokio::test]
     async fn halted() {
-        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (hi_tx, hi_rx) = mpsc::unbounded_channel();
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+
+        hi_tx.send(("test", 4)).unwrap();
 
         let mut config = test_config();
         config.checkpoint_buffer_size = 0; // No buffer
@@ -595,7 +612,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let _svc = broadcaster::<_, MockStreamingClient>(
             0..,
-            Some(4),
+            Some(0),
             None,
             config,
             mock_client(metrics.clone()),
@@ -615,8 +632,10 @@ mod tests {
 
     #[tokio::test]
     async fn halted_buffered() {
-        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (hi_tx, hi_rx) = mpsc::unbounded_channel();
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+
+        hi_tx.send(("test", 2)).unwrap();
 
         let mut config = test_config();
         config.checkpoint_buffer_size = 2; // Buffer of 2
@@ -624,7 +643,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let _svc = broadcaster::<_, MockStreamingClient>(
             0..,
-            Some(2),
+            Some(0),
             None,
             config,
             mock_client(metrics.clone()),
@@ -647,13 +666,15 @@ mod tests {
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
 
+        hi_tx.send(("test", 2)).unwrap();
+
         let mut config = test_config();
         config.checkpoint_buffer_size = 0; // No buffer
 
         let metrics = test_ingestion_metrics();
         let _svc = broadcaster::<_, MockStreamingClient>(
             0..,
-            Some(2),
+            Some(0),
             None,
             config,
             mock_client(metrics.clone()),
@@ -695,7 +716,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let _svc = broadcaster::<_, MockStreamingClient>(
             cps,
-            Some(2),
+            Some(0),
             None,
             config,
             mock_client(metrics.clone()),
@@ -783,7 +804,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster::<_, MockStreamingClient>(
             1000..1010,
-            Some(1005),
+            Some(1000),
             None,
             config,
             mock_client(metrics.clone()),
@@ -1037,6 +1058,8 @@ mod tests {
         let (hi_tx, hi_rx) = mpsc::unbounded_channel();
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(30);
 
+        hi_tx.send(("test", 5)).unwrap();
+
         let streaming_client = MockStreamingClient::new(0..20, None);
 
         let config = IngestionConfig {
@@ -1047,7 +1070,7 @@ mod tests {
         let metrics = test_ingestion_metrics();
         let mut svc = broadcaster(
             0..20,
-            Some(5), // initial watermark to trigger backpressure
+            Some(0),
             Some(streaming_client),
             config,
             mock_client(metrics.clone()),

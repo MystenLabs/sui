@@ -157,7 +157,7 @@ Response: {
               "nodes": [
                 {
                   "name": "S",
-                  "fullyQualifiedName": "0x586abf7d6c3141961a6d2bbd314cfa25da141d12d8aeb9edf98a5983ae9b90ee::M::S",
+                  "fullyQualifiedName": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382::M::S",
                   "abilities": [
                     "COPY",
                     "DROP"
@@ -186,7 +186,7 @@ Response: {
               "nodes": [
                 {
                   "name": "S",
-                  "fullyQualifiedName": "0x062f964fc7f034084a8ea7581906ac5792434f7a7998937407f0da8baf349040::M::S",
+                  "fullyQualifiedName": "0x56562b20e01282c87ceafc23bb04f80ef51e2b91121c3019eca7b00d8010b634::M::S",
                   "abilities": [
                     "COPY",
                     "DROP"
@@ -206,7 +206,7 @@ Response: {
                 },
                 {
                   "name": "T",
-                  "fullyQualifiedName": "0x062f964fc7f034084a8ea7581906ac5792434f7a7998937407f0da8baf349040::M::T",
+                  "fullyQualifiedName": "0x56562b20e01282c87ceafc23bb04f80ef51e2b91121c3019eca7b00d8010b634::M::T",
                   "abilities": [],
                   "typeParameters": [
                     {
@@ -229,11 +229,11 @@ Response: {
                     {
                       "name": "s",
                       "type": {
-                        "repr": "0x586abf7d6c3141961a6d2bbd314cfa25da141d12d8aeb9edf98a5983ae9b90ee::M::S",
+                        "repr": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382::M::S",
                         "signature": {
                           "body": {
                             "datatype": {
-                              "package": "0x586abf7d6c3141961a6d2bbd314cfa25da141d12d8aeb9edf98a5983ae9b90ee",
+                              "package": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382",
                               "module": "M",
                               "type": "S",
                               "typeParameters": []
@@ -257,24 +257,24 @@ Response: {
                 },
                 {
                   "name": "V",
-                  "fullyQualifiedName": "0x062f964fc7f034084a8ea7581906ac5792434f7a7998937407f0da8baf349040::M::V",
+                  "fullyQualifiedName": "0x56562b20e01282c87ceafc23bb04f80ef51e2b91121c3019eca7b00d8010b634::M::V",
                   "abilities": [],
                   "typeParameters": [],
                   "fields": [
                     {
                       "name": "t",
                       "type": {
-                        "repr": "0x586abf7d6c3141961a6d2bbd314cfa25da141d12d8aeb9edf98a5983ae9b90ee::M::T<0x586abf7d6c3141961a6d2bbd314cfa25da141d12d8aeb9edf98a5983ae9b90ee::M::S>",
+                        "repr": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382::M::T<0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382::M::S>",
                         "signature": {
                           "body": {
                             "datatype": {
-                              "package": "0x586abf7d6c3141961a6d2bbd314cfa25da141d12d8aeb9edf98a5983ae9b90ee",
+                              "package": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382",
                               "module": "M",
                               "type": "T",
                               "typeParameters": [
                                 {
                                   "datatype": {
-                                    "package": "0x586abf7d6c3141961a6d2bbd314cfa25da141d12d8aeb9edf98a5983ae9b90ee",
+                                    "package": "0x198b89edfb4809501f3b6c51dc850cc8795c02ba3ffc0db0a94d776608432382",
                                     "module": "M",
                                     "type": "S",
                                     "typeParameters": []

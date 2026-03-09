@@ -10,9 +10,10 @@ const concepts = [
 		label: 'Architecture',
 		link: {
 			type: 'doc',
-			id: 'concepts/architecture',
+			id: 'concepts/sui-architecture/index',
 		},
 		items: [
+			'concepts/sui-architecture/components',
 			'concepts/sui-architecture/networks',
 			'concepts/sui-architecture/sui-storage',
 			'concepts/sui-architecture/consensus',
@@ -23,58 +24,20 @@ const concepts = [
 	},
 	{
 		type: 'category',
-		label: 'Transactions',
-		link: {
-			type: 'doc',
-			id: 'concepts/transactions',
-		},
-		items: [
-			'concepts/transactions/transaction-lifecycle',
-			'concepts/transactions/prog-txn-blocks',
-			'concepts/transactions/sponsored-transactions',
-			'concepts/transactions/gas-smashing',
-			'concepts/transactions/coin-mgt',
-			{
-				type: 'category',
-				label: 'Transaction Authentication',
-				link: {
-					type: 'doc',
-					id: 'concepts/transactions/transaction-auth',
-				},
-				items: [
-					'concepts/transactions/transaction-auth/multisig',
-					'concepts/transactions/transaction-auth/offline-signing',
-					'concepts/transactions/transaction-auth/intent-signing',
-				],
-			},
-		],
-	},
-	{
-		type: 'category',
 		label: 'Tokenomics',
 		link: {
 			type: 'doc',
-			id: 'concepts/tokenomics',
+			id: 'concepts/tokenomics/index',
 		},
 		items: [
+			'concepts/tokenomics/tokenomics-overview',
 			'concepts/tokenomics/staking-unstaking',
 			'concepts/tokenomics/sui-bridging',
 			'concepts/tokenomics/gas-in-sui',
 		],
 	},
-	{
-		type: 'category',
-		label: 'Move',
-		link: {
-			type: 'doc',
-			id: 'concepts/sui-move-concepts',
-		},
-		items: [
-			'concepts/sui-move-concepts/packages',
-			'concepts/sui-move-concepts/conventions',
-			'concepts/sui-move-concepts/move-2024-migration',
-		],
-	},
+	'concepts/coin-mgt',
+	'concepts/sui-move-concepts',
 	{
 		type: 'category',
 		label: 'Accessing Data',
@@ -84,8 +47,21 @@ const concepts = [
 		},
 		items: [
 			'concepts/data-access/grpc',
-			'concepts/data-access/graphql-indexer',
 			'concepts/data-access/graphql-rpc',
+			'concepts/data-access/archival-store',
+			{
+				type: 'category',
+				label: 'Custom Indexers',
+				link: {
+					type: 'doc',
+					id: 'concepts/data-access/custom-indexers',
+				},
+				items: [
+					'concepts/data-access/pipeline-architecture',
+					'concepts/data-access/indexer-data-integration',
+					'concepts/data-access/indexer-runtime-perf',
+				],
+			},
 		],
 	},
 	{
@@ -93,25 +69,11 @@ const concepts = [
 		label: 'Cryptography',
 		link: {
 			type: 'doc',
-			id: 'concepts/cryptography',
+			id: 'concepts/cryptography/index',
 		},
 		items: [
-			'concepts/cryptography/zklogin',
 			'concepts/cryptography/passkeys',
-			'concepts/cryptography/nautilus/nautilus-design',
 			'concepts/cryptography/system/checkpoint-verification',
-			/*{
-				type: 'category',
-				label: 'System',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/system',
-				},
-				items: [
-					'concepts/cryptography/system/validator-signatures',
-					'concepts/cryptography/system/intents-for-validation',
-				],
-			},*/
 		],
 	},
 	'concepts/gaming',

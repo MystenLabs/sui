@@ -1,0 +1,56 @@
+//# publish
+
+module 0x2.borrow_owned_enum {
+
+enum E has drop {
+    A { a: u64, b: u64, c: u64, d: u64, e: u64, f: u64, g: u64, h: u64,
+        i: u64, j: u64, k: u64, l: u64, m: u64, n: u64, o: u64, p: u64 },
+    B {}
+}
+
+public test(owned_enum: Self.E, test: bool) {
+    let a: &u64;
+    let b: &u64;
+    let c: &u64;
+    let d: &u64;
+    let e: &u64;
+    let f: &u64;
+    let g: &u64;
+    let h: &u64;
+    let i: &u64;
+    let j: &u64;
+    let k: &u64;
+    let l: &u64;
+    let m: &u64;
+    let n: &u64;
+    let o: &u64;
+    let p: &u64;
+    let x: &u64;
+    let y: u64;
+label l0:
+    y = 0;
+    &E.A { a: a, b: b, c: c, d: d, e: e, f: f, g: g, h: h,
+        i: i, j: j, k: k, l: l, m: m, n: n, o: o, p: p } = &owned_enum;
+
+    x = &y;
+    jump_if_false (false) la; x = move(a); label la:
+    jump_if_false (false) lb; x = move(b); label lb:
+    jump_if_false (false) lc; x = move(c); label lc:
+    jump_if_false (false) ld; x = move(d); label ld:
+    jump_if_false (false) le; x = move(e); label le:
+    jump_if_false (false) lf; x = move(f); label lf:
+    jump_if_false (false) lg; x = move(g); label lg:
+    jump_if_false (false) lh; x = move(h); label lh:
+    jump_if_false (false) li; x = move(i); label li:
+    jump_if_false (false) lj; x = move(j); label lj:
+    jump_if_false (false) lk; x = move(k); label lk:
+    jump_if_false (false) ll; x = move(l); label ll:
+    jump_if_false (false) lm; x = move(m); label lm:
+    jump_if_false (false) ln; x = move(n); label ln:
+    jump_if_false (false) lo; x = move(o); label lo:
+    jump_if_false (false) lp; x = move(p); label lp:
+    *&mut owned_enum = E.B {};
+    return;
+}
+
+}

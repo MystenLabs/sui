@@ -16,6 +16,7 @@ use async_graphql::Schema;
 use async_graphql::SchemaBuilder;
 use async_graphql::SubscriptionType;
 use async_graphql::extensions::ExtensionFactory;
+use async_graphql::extensions::Tracing;
 use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::GraphQLRequest;
 use async_graphql_axum::GraphQLResponse;
@@ -137,7 +138,9 @@ where
         let router = Router::new();
 
         // The logging extension should be outermost so that it can surround all other extensions.
-        let schema = schema.extension(Logging(metrics.clone()));
+        let schema = schema
+            .extension(Logging(metrics.clone()))
+            .extension(Tracing);
 
         Self {
             rpc_listen_address,
@@ -315,9 +318,14 @@ pub async fn start_rpc(
     };
 
     let ledger_grpc_reader = if let Some(ledger_grpc_url) = kv_args.ledger_grpc_url.as_ref() {
-        let reader = LedgerGrpcReader::new(ledger_grpc_url.clone(), kv_args.ledger_grpc_args())
-            .await
-            .context("Failed to create Ledger gRPC reader")?;
+        let reader = LedgerGrpcReader::new(
+            ledger_grpc_url.clone(),
+            kv_args.ledger_grpc_args(),
+            Some("graphql_ledger_grpc"),
+            registry,
+        )
+        .await
+        .context("Failed to create Ledger gRPC reader")?;
         Some(reader)
     } else {
         None

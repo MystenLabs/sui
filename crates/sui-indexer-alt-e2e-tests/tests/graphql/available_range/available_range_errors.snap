@@ -10,11 +10,11 @@ Response: {
     "happyPath": {
       "availableRange": {
         "first": {
-          "digest": "BUFF7WGwVZ42zpdkteDrQ6u5VUEFiiz79JPcGfbwpftv",
+          "digest": "CDXgyfL9effgQDWAiNSAnk34hMVbnyvzpTohmNRNQgKc",
           "sequenceNumber": 0
         },
         "last": {
-          "digest": "BUFF7WGwVZ42zpdkteDrQ6u5VUEFiiz79JPcGfbwpftv",
+          "digest": "CDXgyfL9effgQDWAiNSAnk34hMVbnyvzpTohmNRNQgKc",
           "sequenceNumber": 0
         }
       }

@@ -3,11 +3,10 @@
 
 use std::sync::Arc;
 
-use crate::{SuiClient, error::Error};
-use fastcrypto::encoding::{Base64, Encoding};
-use fastcrypto::traits::ToFromBytes;
+use crate::error::Error;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
-use sui_json_rpc_types::ZkLoginIntentScope;
+use sui_rpc::proto::sui::rpc::v2::{Bcs, UserSignature, VerifySignatureRequest};
+use sui_rpc_api::Client;
 use sui_types::{
     base_types::SuiAddress,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
@@ -20,7 +19,7 @@ pub async fn verify_personal_message_signature(
     signature: GenericSignature,
     message: &[u8],
     address: SuiAddress,
-    client: Option<SuiClient>,
+    client: Option<Client>,
 ) -> Result<(), Error> {
     let intent_msg = IntentMessage::new(
         Intent::personal_message(),
@@ -30,19 +29,25 @@ pub async fn verify_personal_message_signature(
     );
     match signature {
         GenericSignature::ZkLoginAuthenticator(ref _sig) => {
-            if let Some(client) = client {
-                let bytes = Base64::encode(message);
-                let sig_string = Base64::encode(signature.as_bytes());
+            if let Some(mut client) = client {
+                let message = Bcs::serialize(&message)?.with_name("PersonalMessage");
+                let user_signature =
+                    UserSignature::default().with_bcs(Bcs::from(signature.as_ref().to_owned()));
+
                 let res = client
-                    .read_api()
-                    .verify_zklogin_signature(
-                        bytes,
-                        sig_string,
-                        ZkLoginIntentScope::PersonalMessage,
-                        address,
+                    .inner_mut()
+                    .signature_verification_client()
+                    .verify_signature(
+                        VerifySignatureRequest::default()
+                            .with_address(address.to_string())
+                            .with_message(message)
+                            .with_signature(user_signature),
                     )
-                    .await?;
-                if res.success {
+                    .await
+                    .map_err(|_| Error::InvalidSignature)?
+                    .into_inner();
+
+                if res.is_valid() {
                     Ok(())
                 } else {
                     Err(Error::InvalidSignature)

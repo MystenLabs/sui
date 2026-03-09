@@ -77,7 +77,8 @@ pub(crate) fn verify<'a>(
     let initial_state = AbstractState::new(function_context);
 
     let mut verifier = ReferenceSafetyAnalysis::new(config, module, function_context, name_def_map);
-    analyze_function(function_context, meter, &mut verifier, initial_state)
+    analyze_function(function_context, meter, &mut verifier, initial_state)?;
+    Ok(())
 }
 
 fn call(

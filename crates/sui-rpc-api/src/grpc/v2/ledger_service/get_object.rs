@@ -17,6 +17,7 @@ use sui_rpc::proto::sui::rpc::v2::GetObjectResult;
 use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_sdk_types::Address;
 
+pub const MAX_BATCH_REQUESTS: usize = 1000;
 pub const READ_MASK_DEFAULT: &str = "object_id,version,digest";
 
 type ValidationResult = Result<(Vec<(Address, Option<u64>)>, FieldMaskTree), RpcError>;
@@ -83,6 +84,13 @@ pub fn batch_get_objects(
         ..
     }: BatchGetObjectsRequest,
 ) -> Result<BatchGetObjectsResponse, RpcError> {
+    if requests.len() > MAX_BATCH_REQUESTS {
+        return Err(RpcError::new(
+            tonic::Code::InvalidArgument,
+            format!("number of batch requests exceed limit of {MAX_BATCH_REQUESTS}"),
+        ));
+    }
+
     let requests = requests
         .into_iter()
         .map(|req| (req.object_id, req.version))

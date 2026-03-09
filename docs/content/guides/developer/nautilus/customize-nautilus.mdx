@@ -6,6 +6,12 @@ keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, encla
 
 The Nautilus server logic is located in the directory [`src/nautilus-server`](https://github.com/MystenLabs/nautilus/tree/main/src/nautilus-server). To customize the application, refer to the [Using Nautilus guide](/guides/developer/nautilus/using-nautilus.mdx) as a template.
 
+:::info 
+
+These customization, testing, and management steps are for self-managed TEEs. Alternatively, you can use the [Marlin Oyster marketplace](/guides/developer/nautilus/marlin) for Docker-based simplicity that removes testing and management overhead.
+
+:::
+
 ## Create custom server logic
 
 You can customize the Nautilus server to define allowed endpoints and specify any external domains your application needs to access. You can create `mod.rs` to define your `process_data` logic and register any additional endpoints.
@@ -119,7 +125,7 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
 
 </details>
 
-Then use the values from the enclave response, `signature`, `timestamp`, `location`, and `temperature`, to call `update_weather` in the Move contract. In this example, the call is demonstrated using a script, but it should be integrated into your dApp frontend.
+Then use the values from the enclave response, `signature`, `timestamp`, `location`, and `temperature`, to call `update_weather` in the Move contract. In this example, the call is demonstrated using a script, but it should be integrated into your app frontend.
 
 ```sh
 $ sh ../../update_weather.sh \

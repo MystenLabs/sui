@@ -128,8 +128,7 @@ impl Loader<VersionedObjectKey> for LedgerGrpcReader {
         request.requests = requests;
         request.read_mask = Some(FieldMask::from_paths(["bcs"]));
 
-        let response = self.0.clone().batch_get_objects(request).await?;
-        let batch_response = response.into_inner();
+        let batch_response = self.batch_get_objects(request).await?;
 
         let mut results = HashMap::new();
         for obj_result in batch_response.objects {

@@ -31,15 +31,18 @@ tracing.workspace = true
 tokio-stream.workspace = true
 async-stream.workspace = true
 base64.workspace = true
+futures.workspace = true
 
 sui-name-service.workspace = true
 fastcrypto.workspace = true
 sui-types.workspace = true
+sui-macros.workspace = true
 mysten-network.workspace = true
 sui-protocol-config.workspace = true
 sui-package-resolver.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
+sui-transaction-builder.workspace = true
 
 # dependencies for the protobuf definitions
 roaring.workspace = true

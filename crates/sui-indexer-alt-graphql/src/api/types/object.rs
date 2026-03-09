@@ -20,8 +20,8 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
 use move_core_types::language_storage::StructTag;
+use sui_indexer_alt_reader::consistent_reader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
-use sui_indexer_alt_reader::consistent_reader::{self};
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::object_versions::CheckpointBoundedObjectVersionKey;
 use sui_indexer_alt_reader::object_versions::VersionBoundedObjectVersionKey;
@@ -53,8 +53,8 @@ use crate::api::scalars::type_filter::TypeInput;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address;
 use crate::api::types::address::Address;
+use crate::api::types::balance;
 use crate::api::types::balance::Balance;
-use crate::api::types::balance::{self as balance};
 use crate::api::types::coin_metadata::CoinMetadata;
 use crate::api::types::dynamic_field;
 use crate::api::types::dynamic_field::DynamicField;
@@ -1057,7 +1057,7 @@ impl Object {
             } => {
                 consistent_reader
                     .list_owned_objects(
-                        checkpoint,
+                        Some(checkpoint),
                         kind.unwrap_or(OwnerKind::Address).into(),
                         Some(address.to_string()),
                         type_.map(|t| t.to_string()),
@@ -1076,7 +1076,7 @@ impl Object {
             } => {
                 consistent_reader
                     .list_owned_objects(
-                        checkpoint,
+                        Some(checkpoint),
                         kind.into(),
                         None,
                         Some(type_.to_string()),
@@ -1095,7 +1095,7 @@ impl Object {
             } => {
                 consistent_reader
                     .list_objects_by_type(
-                        checkpoint,
+                        Some(checkpoint),
                         type_.to_string(),
                         Some(page.limit() as u32),
                         page.after().map(|c| c.1.clone()),

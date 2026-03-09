@@ -52,7 +52,8 @@ impl PgReader {
         let db = if let Some(database_url) = database_url {
             let db = db::Db::for_read(database_url, db_args)
                 .await
-                .context("Failed to create database for reading")?;
+                .context("Failed to create database for reading")?
+                .register_metrics(prefix, registry)?;
 
             registry
                 .register(Box::new(DbConnectionStatsCollector::new(

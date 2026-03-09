@@ -1,0 +1,4 @@
+[package]
+name = "dep_pkg"
+edition = "2024"
+implicit-dependencies = false

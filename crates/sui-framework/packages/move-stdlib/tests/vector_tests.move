@@ -581,17 +581,10 @@ fun size_limit_ok() {
     };
 }
 
-#[test, expected_failure(out_of_gas, location = Self)]
+#[test, expected_failure(vector_error, minor_status = 4, location = Self)]
 fun size_limit_fail() {
     let mut v = vector[];
-    let mut i = 0;
-    // Choose value beyond limit
-    let max_len = 1024u64 * 1024;
-
-    while (i < max_len) {
-        v.push_back(i);
-        i = i + 1;
-    };
+    loop v.push_back(0u64)
 }
 
 #[test]

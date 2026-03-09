@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/invalid_or_pattern_25454.move:12:13
+   │
+12 │             A::X | B::Y => 1,
+   │             ^^^^^^^^^^^
+   │             │      │
+   │             │      Found: '0x0::MRE::B'. It is not compatible with the other type.
+   │             Incompatible types in or-pattern
+   │             Found: '0x0::MRE::A'. It is not compatible with the other type.

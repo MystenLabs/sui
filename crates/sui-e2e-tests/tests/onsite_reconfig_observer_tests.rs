@@ -3,8 +3,7 @@
 
 use prometheus::Registry;
 use sui_core::safe_client::SafeClientMetricsBase;
-use sui_core::transaction_driver::reconfig_observer::OnsiteReconfigObserver;
-use sui_core::transaction_driver::reconfig_observer::ReconfigObserver;
+use sui_core::transaction_driver::{OnsiteReconfigObserver, ReconfigObserver};
 use test_cluster::TestClusterBuilder;
 use tracing::info;
 

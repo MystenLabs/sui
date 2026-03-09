@@ -161,3 +161,8 @@ fun test_lossless_shl() {
 fun test_lossless_shr() {
     integer_tests::test_lossless_shr!(MAX, BIT_SIZE);
 }
+
+#[test]
+fun test_lossless_div() {
+    integer_tests::test_lossless_div!(MAX, CASES);
+}

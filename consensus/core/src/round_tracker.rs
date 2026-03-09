@@ -37,34 +37,57 @@ use crate::{
 ///   immediately by a quorum.
 pub(crate) type QuorumRound = (Round, Round);
 
-pub(crate) struct PeerRoundTracker {
+pub(crate) struct RoundTracker {
     context: Arc<Context>,
+
+    /// -------- Peer round tracking --------
     /// Highest accepted round per authority from received blocks (included/excluded ancestors)
     block_accepted_rounds: Vec<Vec<Round>>,
     /// Highest accepted round per authority from round prober
     probed_accepted_rounds: Vec<Vec<Round>>,
     /// Highest received round per authority from round prober
     probed_received_rounds: Vec<Vec<Round>>,
+
+    /// -------- Own round tracking --------
+    /// Highest received round per authority tracked locally.
+    /// Updated after blocks are received and verified.
+    local_highest_received_rounds: Vec<Round>,
 }
 
-impl PeerRoundTracker {
-    pub(crate) fn new(context: Arc<Context>) -> Self {
+impl RoundTracker {
+    pub(crate) fn new(context: Arc<Context>, initial_received_rounds: Vec<Round>) -> Self {
         let size = context.committee.size();
+        let local_highest_received_rounds = if initial_received_rounds.is_empty() {
+            vec![0; size]
+        } else {
+            assert_eq!(
+                initial_received_rounds.len(),
+                size,
+                "initial_received_rounds must be empty or have the same size as the committee"
+            );
+            initial_received_rounds
+        };
         Self {
             context,
             block_accepted_rounds: vec![vec![0; size]; size],
             probed_accepted_rounds: vec![vec![0; size]; size],
             probed_received_rounds: vec![vec![0; size]; size],
+            local_highest_received_rounds,
         }
     }
 
     /// Update accepted rounds based on a new block created locally or received from the network
     /// and its excluded ancestors.
     /// Assumes the block and the excluded ancestors have been verified for validity.
+    /// Also updates the highest received round for the block's author.
     pub(crate) fn update_from_verified_block(&mut self, extended_block: &ExtendedBlock) {
         let block = &extended_block.block;
         let excluded_ancestors = &extended_block.excluded_ancestors;
         let author = block.author();
+
+        // Update highest received round for this author
+        self.local_highest_received_rounds[author] =
+            self.local_highest_received_rounds[author].max(block.round());
 
         // Update author accepted round from block round
         self.block_accepted_rounds[author][author] =
@@ -92,6 +115,11 @@ impl PeerRoundTracker {
     ) {
         self.probed_accepted_rounds = accepted_rounds;
         self.probed_received_rounds = received_rounds;
+    }
+
+    /// Returns the highest received round per authority tracked locally.
+    pub(crate) fn local_highest_received_rounds(&self) -> Vec<Round> {
+        self.local_highest_received_rounds.clone()
     }
 
     // Returns the propagation delay of own blocks.
@@ -280,7 +308,7 @@ mod test {
         TestBlock, VerifiedBlock,
         block::ExtendedBlock,
         context::Context,
-        round_tracker::{PeerRoundTracker, compute_quorum_round},
+        round_tracker::{RoundTracker, compute_quorum_round},
     };
 
     #[tokio::test]
@@ -329,7 +357,7 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let mut round_tracker = PeerRoundTracker::new(context);
+        let mut round_tracker = RoundTracker::new(context.clone(), vec![]);
 
         // Observe latest rounds from peers.
         let highest_received_rounds = vec![
@@ -354,7 +382,7 @@ mod test {
         let (context, _) = Context::new_for_test(NUM_AUTHORITIES);
         let context = Arc::new(context);
         let own_index = context.own_index.value() as u32;
-        let mut round_tracker = PeerRoundTracker::new(context);
+        let mut round_tracker = RoundTracker::new(context.clone(), vec![]);
 
         // Observe latest rounds from peers.
         let highest_accepted_rounds = vec![
@@ -441,7 +469,7 @@ mod test {
             vec![0, 0, 0, 0, 0, 0, 0],
         ];
 
-        let mut round_tracker = PeerRoundTracker::new(context.clone());
+        let mut round_tracker = RoundTracker::new(context.clone(), vec![]);
 
         round_tracker.update_from_probe(highest_accepted_rounds, highest_received_rounds);
 

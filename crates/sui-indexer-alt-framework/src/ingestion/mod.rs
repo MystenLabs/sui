@@ -15,6 +15,7 @@ use serde::Serialize;
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
 
+pub use crate::config::ConcurrencyConfig as IngestConcurrencyConfig;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
@@ -26,6 +27,7 @@ use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
 mod broadcaster;
+pub(crate) mod decode;
 pub mod error;
 pub mod ingestion_client;
 mod rpc_client;
@@ -52,8 +54,10 @@ pub struct IngestionConfig {
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     pub checkpoint_buffer_size: usize,
 
-    /// Maximum number of checkpoints to attempt to fetch concurrently.
-    pub ingest_concurrency: usize,
+    /// Concurrency control for checkpoint ingestion. A plain integer gives fixed concurrency;
+    /// an object with `initial`, `min`, and `max` fields enables adaptive concurrency that adjusts
+    /// based on subscriber channel fill fraction.
+    pub ingest_concurrency: IngestConcurrencyConfig,
 
     /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
     pub retry_interval_ms: u64,
@@ -167,15 +171,24 @@ impl IngestionService {
     /// subscribers' channels (potentially out-of-order). Subscribers can communicate with the
     /// ingestion service via their channels in the following ways:
     ///
-    /// - If a subscriber is lagging (not receiving checkpoints fast enough), it will eventually
-    ///   provide back-pressure to the ingestion service, which will stop fetching new checkpoints.
-    /// - If a subscriber closes its channel, the ingestion service will interpret that as a signal
-    ///   to shutdown as well.
+    /// - If a subscriber is slow to accept checkpoints from the channel, it will provide
+    ///   back-pressure as this channel has a fixed buffer size (configured when the ingestion
+    ///   service is initialized).
+    /// - If the ingestion service is run with `next_sequential_checkpoint` set, subscribers must
+    ///   also update the ingestion service with the latest checkpoint they have completely
+    ///   processed, and the ingestion service will use this to limit how far ahead it fetches
+    ///   checkpoints.
+    /// - If a subscriber closes either of these channels, the ingestion service will interpret
+    ///   that as a signal to shutdown as well.
     ///
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub async fn run<R>(self, checkpoints: R, initial_commit_hi: Option<u64>) -> Result<Service>
+    pub async fn run<R>(
+        self,
+        checkpoints: R,
+        next_sequential_checkpoint: Option<u64>,
+    ) -> Result<Service>
     where
         R: std::ops::RangeBounds<u64> + Send + 'static,
     {
@@ -195,7 +208,7 @@ impl IngestionService {
 
         Ok(broadcaster(
             checkpoints,
-            initial_commit_hi,
+            next_sequential_checkpoint,
             streaming_client,
             config,
             ingestion_client,
@@ -209,8 +222,13 @@ impl IngestionService {
 impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
-            checkpoint_buffer_size: 5000,
-            ingest_concurrency: 200,
+            checkpoint_buffer_size: 50,
+            ingest_concurrency: IngestConcurrencyConfig::Adaptive {
+                initial: 1,
+                min: 1,
+                max: 500,
+                dead_band: None,
+            },
             retry_interval_ms: 200,
             streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
@@ -252,7 +270,9 @@ mod tests {
             },
             IngestionConfig {
                 checkpoint_buffer_size,
-                ingest_concurrency,
+                ingest_concurrency: IngestConcurrencyConfig::Fixed {
+                    value: ingest_concurrency,
+                },
                 ..Default::default()
             },
             None,

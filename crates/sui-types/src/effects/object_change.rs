@@ -195,6 +195,16 @@ impl AccumulatorWriteV1 {
             value: merged_value,
         }
     }
+
+    pub fn get_fund_withdraw_amount(&self) -> Option<u128> {
+        if let (&AccumulatorOperation::Split, &AccumulatorValue::Integer(amount)) =
+            (&self.operation, &self.value)
+        {
+            Some(amount as u128)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]

@@ -3,10 +3,8 @@
 
 use super::AuthorityAggregatorUpdatable;
 use crate::{
-    authority_client::{AuthorityAPI, NetworkAuthorityClient},
-    epoch::committee_store::CommitteeStore,
-    execution_cache::ObjectCacheRead,
-    safe_client::SafeClientMetricsBase,
+    authority_client::NetworkAuthorityClient, epoch::committee_store::CommitteeStore,
+    execution_cache::ObjectCacheRead, safe_client::SafeClientMetricsBase,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -93,18 +91,4 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
             }
         }
     }
-}
-/// A dummy ReconfigObserver for testing.
-pub struct DummyReconfigObserver;
-
-#[async_trait]
-impl<A> ReconfigObserver<A> for DummyReconfigObserver
-where
-    A: AuthorityAPI + Send + Sync + Clone + 'static,
-{
-    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync> {
-        Box::new(Self {})
-    }
-
-    async fn run(&mut self, _quorum_driver: Arc<dyn AuthorityAggregatorUpdatable<A>>) {}
 }

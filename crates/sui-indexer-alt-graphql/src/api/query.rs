@@ -7,10 +7,13 @@ use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::Result;
 use async_graphql::connection::Connection;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
 use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_rpc::proto::sui::rpc::v2 as proto;
+use tonic::Code;
 
 use crate::api::mutation::TransactionInputError;
 use crate::api::scalars::base64::Base64;
@@ -35,18 +38,18 @@ use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::move_object::MoveObject;
+use crate::api::types::move_package;
 use crate::api::types::move_package::MovePackage;
 use crate::api::types::move_package::PackageCheckpointFilter;
 use crate::api::types::move_package::PackageKey;
-use crate::api::types::move_package::{self as move_package};
+use crate::api::types::move_type;
 use crate::api::types::move_type::MoveType;
-use crate::api::types::move_type::{self as move_type};
 use crate::api::types::name_record::NameRecord;
 use crate::api::types::node::Node;
+use crate::api::types::object;
 use crate::api::types::object::Object;
 use crate::api::types::object::ObjectKey;
 use crate::api::types::object::VersionFilter;
-use crate::api::types::object::{self as object};
 use crate::api::types::object_filter::ObjectFilter;
 use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::protocol_configs::ProtocolConfigs;
@@ -57,9 +60,9 @@ use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
+use crate::api::types::zklogin;
 use crate::api::types::zklogin::ZkLoginIntentScope;
 use crate::api::types::zklogin::ZkLoginVerifyResult;
-use crate::api::types::zklogin::{self as zklogin};
 use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::upcast;
@@ -78,63 +81,69 @@ pub struct Query {
 #[Object]
 impl Query {
     /// Fetch a `Node` by its globally unique `ID`. Returns `null` if the node cannot be found (e.g., the underlying data was pruned or never existed).
-    async fn node(&self, ctx: &Context<'_>, id: Id) -> Result<Option<Node>, RpcError> {
-        let scope = self.scope(ctx)?;
-        Ok(match id {
-            Id::Address(a) => Some(Node::Address(Box::new(Address::with_address(scope, a)))),
+    async fn node(&self, ctx: &Context<'_>, id: Id) -> Option<Result<Node, RpcError>> {
+        async {
+            let scope = self.scope(ctx)?;
+            Ok(match id {
+                Id::Address(a) => Some(Node::Address(Box::new(Address::with_address(scope, a)))),
 
-            Id::Checkpoint(s) => Checkpoint::with_sequence_number(scope, Some(s))
-                .map(Box::new)
-                .map(Node::Checkpoint),
-
-            Id::DynamicFieldByAddress(a) => {
-                let object = Object::with_address(scope, a);
-                DynamicField::from_object(&object, ctx)
-                    .await?
+                Id::Checkpoint(s) => Checkpoint::with_sequence_number(scope, Some(s))
                     .map(Box::new)
-                    .map(Node::DynamicField)
-            }
+                    .map(Node::Checkpoint),
 
-            Id::DynamicFieldByRef(a, v, d) => {
-                let object = Object::with_ref(&scope, a, v, d);
-                DynamicField::from_object(&object, ctx)
-                    .await?
-                    .map(Box::new)
-                    .map(Node::DynamicField)
-            }
+                Id::DynamicFieldByAddress(a) => {
+                    let object = Object::with_address(scope, a);
+                    DynamicField::from_object(&object, ctx)
+                        .await?
+                        .map(Box::new)
+                        .map(Node::DynamicField)
+                }
 
-            Id::Epoch(e) => Some(Node::Epoch(Box::new(Epoch::with_id(scope, e)))),
+                Id::DynamicFieldByRef(a, v, d) => {
+                    let object = Object::with_ref(&scope, a, v, d);
+                    DynamicField::from_object(&object, ctx)
+                        .await?
+                        .map(Box::new)
+                        .map(Node::DynamicField)
+                }
 
-            Id::MoveObjectByAddress(a) => {
-                let object = Object::with_address(scope, a);
-                MoveObject::from_object(&object, ctx)
-                    .await?
-                    .map(Box::new)
-                    .map(Node::MoveObject)
-            }
+                Id::Epoch(e) => Some(Node::Epoch(Box::new(Epoch::with_id(scope, e)))),
 
-            Id::MoveObjectByRef(a, v, d) => {
-                let object = Object::with_ref(&scope, a, v, d);
-                MoveObject::from_object(&object, ctx)
-                    .await?
-                    .map(Box::new)
-                    .map(Node::MoveObject)
-            }
+                Id::MoveObjectByAddress(a) => {
+                    let object = Object::with_address(scope, a);
+                    MoveObject::from_object(&object, ctx)
+                        .await?
+                        .map(Box::new)
+                        .map(Node::MoveObject)
+                }
 
-            Id::MovePackage(a) => Some(Node::MovePackage(Box::new(MovePackage::with_address(
-                scope, a,
-            )))),
+                Id::MoveObjectByRef(a, v, d) => {
+                    let object = Object::with_ref(&scope, a, v, d);
+                    MoveObject::from_object(&object, ctx)
+                        .await?
+                        .map(Box::new)
+                        .map(Node::MoveObject)
+                }
 
-            Id::ObjectByAddress(a) => Some(Node::Object(Box::new(Object::with_address(scope, a)))),
+                Id::MovePackage(a) => Some(Node::MovePackage(Box::new(MovePackage::with_address(
+                    scope, a,
+                )))),
 
-            Id::ObjectByRef(a, v, d) => {
-                Some(Node::Object(Box::new(Object::with_ref(&scope, a, v, d))))
-            }
+                Id::ObjectByAddress(a) => {
+                    Some(Node::Object(Box::new(Object::with_address(scope, a))))
+                }
 
-            Id::Transaction(d) => Some(Node::Transaction(Box::new(Transaction::with_digest(
-                scope, d,
-            )))),
-        })
+                Id::ObjectByRef(a, v, d) => {
+                    Some(Node::Object(Box::new(Object::with_ref(&scope, a, v, d))))
+                }
+
+                Id::Transaction(d) => Some(Node::Transaction(Box::new(Transaction::with_digest(
+                    scope, d,
+                )))),
+            })
+        }
+        .await
+        .transpose()
     }
 
     /// Look-up an account by its SuiAddress.
@@ -159,24 +168,28 @@ impl Query {
         name: Option<Domain>,
         root_version: Option<UInt53>,
         at_checkpoint: Option<UInt53>,
-    ) -> Result<Option<Address>, RpcError<address::Error>> {
-        Address::by_key(
-            ctx,
-            self.scope(ctx)?,
-            AddressKey {
-                address,
-                name,
-                root_version,
-                at_checkpoint,
-            },
-        )
+    ) -> Option<Result<Address, RpcError<address::Error>>> {
+        async {
+            Address::by_key(
+                ctx,
+                self.scope(ctx)?,
+                AddressKey {
+                    address,
+                    name,
+                    root_version,
+                    at_checkpoint,
+                },
+            )
+            .await
+        }
         .await
+        .transpose()
     }
 
-    /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
+    /// The network's genesis checkpoint digest (uniquely identifies the network), Base58-encoded.
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
         let chain_id: &ChainIdentifier = ctx.data()?;
-        Ok(chain_id.wait().await.to_string())
+        Ok(Base58::encode(chain_id.wait().await.as_bytes()))
     }
 
     /// Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
@@ -186,12 +199,16 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         sequence_number: Option<UInt53>,
-    ) -> Result<Option<Checkpoint>, RpcError> {
-        let scope = self.scope(ctx)?;
-        Ok(Checkpoint::with_sequence_number(
-            scope,
-            sequence_number.map(|s| s.into()),
-        ))
+    ) -> Option<Result<Checkpoint, RpcError>> {
+        async {
+            let scope = self.scope(ctx)?;
+            Ok(Checkpoint::with_sequence_number(
+                scope,
+                sequence_number.map(|s| s.into()),
+            ))
+        }
+        .await
+        .transpose()
     }
 
     /// Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
@@ -203,16 +220,19 @@ impl Query {
         last: Option<u64>,
         before: Option<CCheckpoint>,
         filter: Option<CheckpointFilter>,
-    ) -> Result<Option<Connection<String, Checkpoint>>, RpcError> {
-        let scope = self.scope(ctx)?;
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Query", "checkpoints");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Checkpoint>, RpcError>> {
+        Some(
+            async {
+                let scope = self.scope(ctx)?;
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "checkpoints");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        let filter = filter.unwrap_or_default();
-        Checkpoint::paginate(ctx, scope, page, filter)
-            .await
-            .map(Some)
+                let filter = filter.unwrap_or_default();
+                Checkpoint::paginate(ctx, scope, page, filter).await
+            }
+            .await,
+        )
     }
 
     /// Fetch the CoinMetadata for a given coin type.
@@ -222,8 +242,10 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<CoinMetadata>, RpcError<object::Error>> {
-        CoinMetadata::by_coin_type(ctx, self.scope(ctx)?, coin_type.into()).await
+    ) -> Option<Result<CoinMetadata, RpcError<object::Error>>> {
+        async { CoinMetadata::by_coin_type(ctx, self.scope(ctx)?, coin_type.into()).await }
+            .await
+            .transpose()
     }
 
     /// Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
@@ -233,9 +255,13 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         epoch_id: Option<UInt53>,
-    ) -> Result<Option<Epoch>, RpcError> {
-        let scope = self.scope(ctx)?;
-        Epoch::fetch(ctx, scope, epoch_id).await
+    ) -> Option<Result<Epoch, RpcError>> {
+        async {
+            let scope = self.scope(ctx)?;
+            Epoch::fetch(ctx, scope, epoch_id).await
+        }
+        .await
+        .transpose()
     }
 
     /// Paginate epochs that are in the network.
@@ -246,13 +272,17 @@ impl Query {
         after: Option<CEpoch>,
         last: Option<u64>,
         before: Option<CEpoch>,
-    ) -> Result<Option<Connection<String, Epoch>>, RpcError> {
-        let scope = self.scope(ctx)?;
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Query", "epochs");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Epoch>, RpcError>> {
+        async {
+            let scope = self.scope(ctx)?;
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("Query", "epochs");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        Epoch::paginate(ctx, &scope, page).await
+            Epoch::paginate(ctx, &scope, page).await
+        }
+        .await
+        .transpose()
     }
 
     /// Paginate events that are emitted in the network, optionally filtered by event filters.
@@ -264,15 +294,18 @@ impl Query {
         last: Option<u64>,
         before: Option<CEvent>,
         filter: Option<EventFilter>,
-    ) -> Result<Option<Connection<String, Event>>, RpcError> {
-        let scope = self.scope(ctx)?;
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Query", "events");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Event>, RpcError>> {
+        Some(
+            async {
+                let scope = self.scope(ctx)?;
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "events");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        Event::paginate(ctx, scope, page, filter.unwrap_or_default())
-            .await
-            .map(Some)
+                Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
+            }
+            .await,
+        )
     }
 
     /// Fetch addresses by their keys.
@@ -410,8 +443,10 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         name: Domain,
-    ) -> Result<Option<NameRecord>, RpcError<object::Error>> {
-        NameRecord::by_domain(ctx, self.scope(ctx)?, name.into()).await
+    ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
+        async { NameRecord::by_domain(ctx, self.scope(ctx)?, name.into()).await }
+            .await
+            .transpose()
     }
 
     /// Fetch an object by its address.
@@ -440,18 +475,22 @@ impl Query {
         version: Option<UInt53>,
         root_version: Option<UInt53>,
         at_checkpoint: Option<UInt53>,
-    ) -> Result<Option<Object>, RpcError<object::Error>> {
-        Object::by_key(
-            ctx,
-            self.scope(ctx)?,
-            ObjectKey {
-                address,
-                version,
-                root_version,
-                at_checkpoint,
-            },
-        )
+    ) -> Option<Result<Object, RpcError<object::Error>>> {
+        async {
+            Object::by_key(
+                ctx,
+                self.scope(ctx)?,
+                ObjectKey {
+                    address,
+                    version,
+                    root_version,
+                    at_checkpoint,
+                },
+            )
+            .await
+        }
         .await
+        .transpose()
     }
 
     /// Paginate objects in the live object set, optionally filtered by owner and/or type. `filter` can be one of:
@@ -467,14 +506,17 @@ impl Query {
         last: Option<u64>,
         before: Option<object::CLive>,
         #[graphql(validator(custom = "OFValidator::default()"))] filter: ObjectFilter,
-    ) -> Result<Option<Connection<String, Object>>, RpcError<object::Error>> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Query", "objects");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Object>, RpcError<object::Error>>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "objects");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        Ok(Some(
-            Object::paginate_live(ctx, self.scope(ctx)?, page, filter).await?,
-        ))
+                Object::paginate_live(ctx, self.scope(ctx)?, page, filter).await
+            }
+            .await,
+        )
     }
 
     /// Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
@@ -487,21 +529,24 @@ impl Query {
         before: Option<object::CVersion>,
         address: SuiAddress,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Query", "objectVersions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "objectVersions");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        Ok(Some(
-            Object::paginate_by_version(
-                ctx,
-                self.scope(ctx)?,
-                page,
-                address.into(),
-                filter.unwrap_or_default(),
-            )
-            .await?,
-        ))
+                Object::paginate_by_version(
+                    ctx,
+                    self.scope(ctx)?,
+                    page,
+                    address.into(),
+                    filter.unwrap_or_default(),
+                )
+                .await
+            }
+            .await,
+        )
     }
 
     /// Fetch a package by its address.
@@ -521,17 +566,21 @@ impl Query {
         address: SuiAddress,
         version: Option<UInt53>,
         at_checkpoint: Option<UInt53>,
-    ) -> Result<Option<MovePackage>, RpcError<move_package::Error>> {
-        MovePackage::by_key(
-            ctx,
-            self.scope(ctx)?,
-            PackageKey {
-                address,
-                version,
-                at_checkpoint,
-            },
-        )
+    ) -> Option<Result<MovePackage, RpcError<move_package::Error>>> {
+        async {
+            MovePackage::by_key(
+                ctx,
+                self.scope(ctx)?,
+                PackageKey {
+                    address,
+                    version,
+                    at_checkpoint,
+                },
+            )
+            .await
+        }
         .await
+        .transpose()
     }
 
     /// Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
@@ -543,20 +592,23 @@ impl Query {
         last: Option<u64>,
         before: Option<move_package::CPackage>,
         filter: Option<PackageCheckpointFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Query", "packages");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "packages");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        Ok(Some(
-            MovePackage::paginate_by_checkpoint(
-                ctx,
-                self.scope(ctx)?,
-                page,
-                filter.unwrap_or_default(),
-            )
-            .await?,
-        ))
+                MovePackage::paginate_by_checkpoint(
+                    ctx,
+                    self.scope(ctx)?,
+                    page,
+                    filter.unwrap_or_default(),
+                )
+                .await
+            }
+            .await,
+        )
     }
 
     /// Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
@@ -571,21 +623,24 @@ impl Query {
         before: Option<object::CVersion>,
         address: SuiAddress,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Query", "packageVersions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "packageVersions");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        Ok(Some(
-            MovePackage::paginate_by_version(
-                ctx,
-                self.scope(ctx)?,
-                page,
-                address.into(),
-                filter.unwrap_or_default(),
-            )
-            .await?,
-        ))
+                MovePackage::paginate_by_version(
+                    ctx,
+                    self.scope(ctx)?,
+                    page,
+                    address.into(),
+                    filter.unwrap_or_default(),
+                )
+                .await
+            }
+            .await,
+        )
     }
 
     /// Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
@@ -593,13 +648,17 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         version: Option<UInt53>,
-    ) -> Result<Option<ProtocolConfigs>, RpcError> {
-        if let Some(version) = version {
-            Ok(Some(ProtocolConfigs::with_protocol_version(version.into())))
-        } else {
-            let scope = self.scope(ctx)?;
-            ProtocolConfigs::latest(ctx, &scope).await
+    ) -> Option<Result<ProtocolConfigs, RpcError>> {
+        async {
+            if let Some(version) = version {
+                Ok(Some(ProtocolConfigs::with_protocol_version(version.into())))
+            } else {
+                let scope = self.scope(ctx)?;
+                ProtocolConfigs::latest(ctx, &scope).await
+            }
         }
+        .await
+        .transpose()
     }
 
     /// Configuration for this RPC service.
@@ -615,8 +674,10 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         digest: Digest,
-    ) -> Result<Option<Transaction>, RpcError> {
-        Transaction::fetch(ctx, self.scope(ctx)?, digest).await
+    ) -> Option<Result<Transaction, RpcError>> {
+        async { Transaction::fetch(ctx, self.scope(ctx)?, digest).await }
+            .await
+            .transpose()
     }
 
     /// Fetch transaction effects by its transaction's digest.
@@ -626,8 +687,10 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         digest: Digest,
-    ) -> Result<Option<TransactionEffects>, RpcError> {
-        TransactionEffects::fetch(ctx, self.scope(ctx)?, digest).await
+    ) -> Option<Result<TransactionEffects, RpcError>> {
+        async { TransactionEffects::fetch(ctx, self.scope(ctx)?, digest).await }
+            .await
+            .transpose()
     }
 
     /// The transactions that exist in the network, optionally filtered by transaction filters.
@@ -639,17 +702,20 @@ impl Query {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
-        let scope = self.scope(ctx)?;
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Query", "transactions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+        Some(
+            async {
+                let scope = self.scope(ctx)?;
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Query", "transactions");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        // Use the filter if provided, otherwise use default (unfiltered)
-        let filter = filter.unwrap_or_default();
-        Transaction::paginate(ctx, scope, page, filter)
-            .await
-            .map(Some)
+                // Use the filter if provided, otherwise use default (unfiltered)
+                let filter = filter.unwrap_or_default();
+                Transaction::paginate(ctx, scope, page, filter).await
+            }
+            .await,
+        )
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.
@@ -661,8 +727,10 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         type_: TypeInput,
-    ) -> Result<Option<MoveType>, RpcError<move_type::Error>> {
-        MoveType::canonicalize(type_.into(), self.scope(ctx)?).await
+    ) -> Option<Result<MoveType, RpcError<move_type::Error>>> {
+        async { MoveType::canonicalize(type_.into(), self.scope(ctx)?).await }
+            .await
+            .transpose()
     }
 
     /// Simulate a transaction to preview its effects without executing it on chain.
@@ -693,7 +761,7 @@ impl Query {
         let proto_tx: proto::Transaction = serde_json::from_value(json_value)
             .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionJson(err)))?;
 
-        // Simulate transaction using proto
+        // Simulate transaction via gRPC
         match fullnode_client
             .simulate_transaction(
                 proto_tx,
@@ -715,20 +783,22 @@ impl Query {
 
                 SimulationResult::from_simulation_response(scope, response, tx_data).map_err(upcast)
             }
-            Err(GrpcExecutionError(status)) => Ok(SimulationResult {
-                effects: None,
-                outputs: None,
-                error: Some(status.to_string()),
-            }),
+            Err(GrpcExecutionError(status))
+                if matches!(status.code(), Code::InvalidArgument | Code::NotFound) =>
+            {
+                Err(bad_user_input(TransactionInputError::InvalidArgument(
+                    status.message().to_string(),
+                )))
+            }
             Err(other_error) => Err(anyhow!(other_error)
                 .context("Failed to simulate transaction")
                 .into()),
         }
     }
 
-    /// Verify a zkLogin signature os from the given `author`.
+    /// Verify a zkLogin signature is from the given `author`.
     ///
-    /// Returns a `ZkLoginVerifyResult` where `success` is `true` and `error` is empty if the signature is valid. If the signature is invalid, `success` is `false` and `error` contains the relevant error message.
+    /// Returns successfully if the signature is valid. If the signature is invalid, returns an error with the reason for the failure.
     ///
     /// - `bytes` are either the bytes of a serialized personal message, or `TransactionData`, Base64-encoded.
     /// - `signature` is a serialized zkLogin signature, also Base64-encoded.
@@ -741,16 +811,21 @@ impl Query {
         signature: Base64,
         intent_scope: ZkLoginIntentScope,
         author: SuiAddress,
-    ) -> Result<ZkLoginVerifyResult, RpcError<zklogin::Error>> {
-        zklogin::verify_signature(
-            ctx,
-            self.scope(ctx)?,
-            bytes,
-            signature,
-            intent_scope,
-            author,
+    ) -> Option<Result<ZkLoginVerifyResult, RpcError<zklogin::Error>>> {
+        Some(
+            async {
+                zklogin::verify_signature(
+                    ctx,
+                    self.scope(ctx)?,
+                    bytes,
+                    signature,
+                    intent_scope,
+                    author,
+                )
+                .await
+            }
+            .await,
         )
-        .await
     }
 }
 

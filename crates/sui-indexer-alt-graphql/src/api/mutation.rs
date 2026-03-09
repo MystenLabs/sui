@@ -12,6 +12,7 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
+use tonic::Code;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::types::execution_result::ExecutionResult;
@@ -33,6 +34,9 @@ pub enum TransactionInputError {
 
     #[error("Invalid JSON-encoded gRPC Transaction: {0}")]
     InvalidTransactionJson(serde_json::Error),
+
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
 }
 
 pub struct Mutation;
@@ -75,7 +79,7 @@ impl Mutation {
             parsed_signatures.push(signature);
         }
 
-        // Execute transaction - capture gRPC errors for ExecutionResult.errors
+        // Execute transaction via gRPC
         match fullnode_client
             .execute_transaction(tx_data.clone(), parsed_signatures.clone())
             .await
@@ -99,13 +103,15 @@ impl Mutation {
 
                 Ok(ExecutionResult {
                     effects: Some(effects),
-                    errors: None,
                 })
             }
-            Err(GrpcExecutionError(status)) => Ok(ExecutionResult {
-                effects: None,
-                errors: Some(vec![status.to_string()]),
-            }),
+            Err(GrpcExecutionError(status))
+                if matches!(status.code(), Code::InvalidArgument | Code::NotFound) =>
+            {
+                Err(bad_user_input(TransactionInputError::InvalidArgument(
+                    status.message().to_string(),
+                )))
+            }
             Err(other_error) => Err(anyhow!(other_error)
                 .context("Failed to execute transaction")
                 .into()),

@@ -240,6 +240,7 @@ impl CommitObserver {
                 };
 
                 let committed_sub_dag = load_committed_subdag_from_store(
+                    &self.context,
                     self.store.as_ref(),
                     commit,
                     reputation_scores,
@@ -367,7 +368,7 @@ mod tests {
             mem_store.clone(),
         )));
         let last_processed_commit_index = 0;
-        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+        let (commit_consumer, mut commit_receiver) =
             CommitConsumerArgs::new(0, last_processed_commit_index);
         let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
         let transaction_certifier = TransactionCertifier::new(
@@ -526,7 +527,7 @@ mod tests {
             blocks_sender,
         );
         let last_processed_commit_index = 0;
-        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+        let (commit_consumer, mut commit_receiver) =
             CommitConsumerArgs::new(0, last_processed_commit_index);
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -630,11 +631,10 @@ mod tests {
                 context.clone(),
                 mem_store.clone(),
             )));
-            let (commit_consumer, mut commit_receiver, _transaction_receiver) =
-                CommitConsumerArgs::new(
-                    replay_after_commit_index,
-                    consumer_last_processed_commit_index,
-                );
+            let (commit_consumer, mut commit_receiver) = CommitConsumerArgs::new(
+                replay_after_commit_index,
+                consumer_last_processed_commit_index,
+            );
             let _observer = CommitObserver::new(
                 context.clone(),
                 commit_consumer,
@@ -678,11 +678,10 @@ mod tests {
             )));
             // Re-create commit observer starting after index 10 which represents the
             // last processed index from the consumer over consensus output channel
-            let (commit_consumer, mut commit_receiver, _transaction_receiver) =
-                CommitConsumerArgs::new(
-                    replay_after_commit_index,
-                    consumer_last_processed_commit_index,
-                );
+            let (commit_consumer, mut commit_receiver) = CommitConsumerArgs::new(
+                replay_after_commit_index,
+                consumer_last_processed_commit_index,
+            );
             let _observer = CommitObserver::new(
                 context.clone(),
                 commit_consumer,
@@ -705,11 +704,10 @@ mod tests {
                 context.clone(),
                 mem_store.clone(),
             )));
-            let (commit_consumer, mut commit_receiver, _transaction_receiver) =
-                CommitConsumerArgs::new(
-                    replay_after_commit_index,
-                    consumer_last_processed_commit_index,
-                );
+            let (commit_consumer, mut commit_receiver) = CommitConsumerArgs::new(
+                replay_after_commit_index,
+                consumer_last_processed_commit_index,
+            );
             let _observer = CommitObserver::new(
                 context.clone(),
                 commit_consumer,
@@ -752,11 +750,10 @@ mod tests {
                 context.clone(),
                 mem_store.clone(),
             )));
-            let (commit_consumer, mut commit_receiver, _transaction_receiver) =
-                CommitConsumerArgs::new(
-                    replay_after_commit_index,
-                    consumer_last_processed_commit_index,
-                );
+            let (commit_consumer, mut commit_receiver) = CommitConsumerArgs::new(
+                replay_after_commit_index,
+                consumer_last_processed_commit_index,
+            );
             let _observer = CommitObserver::new(
                 context.clone(),
                 commit_consumer,

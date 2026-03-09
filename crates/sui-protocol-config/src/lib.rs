@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 109;
+const MAX_PROTOCOL_VERSION: u64 = 115;
 
 // Record history of protocol version allocations here:
 //
@@ -290,8 +290,19 @@ const MAX_PROTOCOL_VERSION: u64 = 109;
 //              Disable entry point signature check.
 //              Enable address aliases on testnet.
 //              Enable poseidon_bn254 on mainnet.
-// Version 109: New framework.
-//              Enable Display Registry in devnet.
+// Version 109: Update where we set bounds for some binary tables to be a bit more idiomatic.
+// Version 110: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
+//              function on mainnet.
+//              split_checkpoints_in_consensus_handler in devnet
+//              Enable additional validation on zkLogin public identifier.
+// Version 111: Validator metadata
+// Version 112: Enable Ristretto255 in devnet.
+// Version 113: Validate gas price >= RGP at signing for address balance gas payments.
+// Version 114: Gate seeded test overrides for checkpoint tx limit behind feature flag.
+// Version 115: Gasless transaction drop safety.
+//              Enable address aliases on mainnet.
+//              Relax ValidDuring requirement for transactions with owned inputs.
+//              Disable defer_unpaid_amplification (debugging).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -529,6 +540,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     accept_passkey_in_multisig: bool,
 
+    // If true, additional zkLogin public identifier structure is validated.
+    #[serde(skip_serializing_if = "is_false")]
+    validate_zklogin_public_identifier: bool,
+
     // If true, consensus prologue transaction also includes the consensus output digest.
     // It can be used to detect consensus output folk.
     #[serde(skip_serializing_if = "is_false")]
@@ -557,6 +572,10 @@ struct FeatureFlags {
     // Enable native function for msm.
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_function_msm: bool,
+
+    // Enable group operations for Ristretto255
+    #[serde(skip_serializing_if = "is_false")]
+    enable_ristretto255_group_ops: bool,
 
     // Enable nitro attestation.
     #[serde(skip_serializing_if = "is_false")]
@@ -804,9 +823,20 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_address_balance_gas_payments: bool,
 
+    // Validate gas price >= RGP at signing for address balance gas payments
+    #[serde(skip_serializing_if = "is_false")]
+    address_balance_gas_check_rgp_at_signing: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    address_balance_gas_reject_gas_coin_arg: bool,
+
     // Enable multi-epoch transaction expiration (max 1 epoch difference)
     #[serde(skip_serializing_if = "is_false")]
     enable_multi_epoch_transaction_expiration: bool,
+
+    // Relax ValidDuring expiration requirement for transactions with owned inputs
+    #[serde(skip_serializing_if = "is_false")]
+    relax_valid_during_for_owned_inputs: bool,
 
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
@@ -932,6 +962,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     address_aliases: bool,
 
+    // Corrects signature-to-signer mapping in CheckpointContentsV2.
+    // TODO: remove old code and deprecate once in mainnet.
+    #[serde(skip_serializing_if = "is_false")]
+    fix_checkpoint_signature_mapping: bool,
+
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
@@ -955,6 +990,34 @@ struct FeatureFlags {
     // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
     #[serde(skip_serializing_if = "is_false")]
     convert_withdrawal_compatibility_ptb_arguments: bool,
+
+    // If true, additional restrictions for hot or not entry functions are enforced.
+    #[serde(skip_serializing_if = "is_false")]
+    restrict_hot_or_not_entry_functions: bool,
+
+    // If true, split checkpoints in consensus handler.
+    #[serde(skip_serializing_if = "is_false")]
+    split_checkpoints_in_consensus_handler: bool,
+
+    // If true, always accept committed system transactions.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_always_accept_system_transactions: bool,
+
+    // If true perform consistent verification of metadata
+    #[serde(skip_serializing_if = "is_false")]
+    validator_metadata_verify_v2: bool,
+
+    // If true, defer transactions with unpaid consensus amplification
+    // (where duplicate count exceeds gas_price / RGP + 1)
+    #[serde(skip_serializing_if = "is_false")]
+    defer_unpaid_amplification: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    randomize_checkpoint_tx_limit_in_tests: bool,
+
+    // If true, mark the gas coin as uninitialized in drop safety when there is no gas coin.
+    #[serde(skip_serializing_if = "is_false")]
+    gasless_transaction_drop_safety: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1614,6 +1677,17 @@ pub struct ProtocolConfig {
     group_ops_bls12381_uncompressed_g1_sum_cost_per_term: Option<u64>,
     group_ops_bls12381_uncompressed_g1_sum_max_terms: Option<u64>,
 
+    group_ops_ristretto_decode_scalar_cost: Option<u64>,
+    group_ops_ristretto_decode_point_cost: Option<u64>,
+    group_ops_ristretto_scalar_add_cost: Option<u64>,
+    group_ops_ristretto_point_add_cost: Option<u64>,
+    group_ops_ristretto_scalar_sub_cost: Option<u64>,
+    group_ops_ristretto_point_sub_cost: Option<u64>,
+    group_ops_ristretto_scalar_mul_cost: Option<u64>,
+    group_ops_ristretto_point_mul_cost: Option<u64>,
+    group_ops_ristretto_scalar_div_cost: Option<u64>,
+    group_ops_ristretto_point_div_cost: Option<u64>,
+
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
@@ -2038,6 +2112,10 @@ impl ProtocolConfig {
         self.feature_flags.accept_passkey_in_multisig
     }
 
+    pub fn validate_zklogin_public_identifier(&self) -> bool {
+        self.feature_flags.validate_zklogin_public_identifier
+    }
+
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta
     }
@@ -2098,8 +2176,20 @@ impl ProtocolConfig {
         self.feature_flags.enable_address_balance_gas_payments
     }
 
+    pub fn address_balance_gas_check_rgp_at_signing(&self) -> bool {
+        self.feature_flags.address_balance_gas_check_rgp_at_signing
+    }
+
+    pub fn address_balance_gas_reject_gas_coin_arg(&self) -> bool {
+        self.feature_flags.address_balance_gas_reject_gas_coin_arg
+    }
+
     pub fn enable_multi_epoch_transaction_expiration(&self) -> bool {
         self.feature_flags.enable_multi_epoch_transaction_expiration
+    }
+
+    pub fn relax_valid_during_for_owned_inputs(&self) -> bool {
+        self.feature_flags.relax_valid_during_for_owned_inputs
     }
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
@@ -2128,6 +2218,10 @@ impl ProtocolConfig {
 
     pub fn enable_group_ops_native_function_msm(&self) -> bool {
         self.feature_flags.enable_group_ops_native_function_msm
+    }
+
+    pub fn enable_ristretto255_group_ops(&self) -> bool {
+        self.feature_flags.enable_ristretto255_group_ops
     }
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
@@ -2503,6 +2597,10 @@ impl ProtocolConfig {
         address_aliases
     }
 
+    pub fn fix_checkpoint_signature_mapping(&self) -> bool {
+        self.feature_flags.fix_checkpoint_signature_mapping
+    }
+
     pub fn enable_object_funds_withdraw(&self) -> bool {
         self.feature_flags.enable_object_funds_withdraw
     }
@@ -2527,6 +2625,31 @@ impl ProtocolConfig {
     pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
         self.feature_flags
             .convert_withdrawal_compatibility_ptb_arguments
+    }
+
+    pub fn restrict_hot_or_not_entry_functions(&self) -> bool {
+        self.feature_flags.restrict_hot_or_not_entry_functions
+    }
+
+    pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
+        self.feature_flags.split_checkpoints_in_consensus_handler
+    }
+
+    pub fn consensus_always_accept_system_transactions(&self) -> bool {
+        self.feature_flags
+            .consensus_always_accept_system_transactions
+    }
+
+    pub fn validator_metadata_verify_v2(&self) -> bool {
+        self.feature_flags.validator_metadata_verify_v2
+    }
+
+    pub fn defer_unpaid_amplification(&self) -> bool {
+        self.feature_flags.defer_unpaid_amplification
+    }
+
+    pub fn gasless_transaction_drop_safety(&self) -> bool {
+        self.feature_flags.gasless_transaction_drop_safety
     }
 }
 
@@ -2922,6 +3045,7 @@ impl ProtocolConfig {
             hash_blake2b256_cost_base: Some(52),
             hash_blake2b256_data_cost_per_byte: Some(2),
             hash_blake2b256_data_cost_per_block: Some(2),
+
             // hash::keccak256
             hash_keccak256_cost_base: Some(52),
             hash_keccak256_data_cost_per_byte: Some(2),
@@ -2971,6 +3095,17 @@ impl ProtocolConfig {
             group_ops_bls12381_uncompressed_g1_sum_base_cost: None,
             group_ops_bls12381_uncompressed_g1_sum_cost_per_term: None,
             group_ops_bls12381_uncompressed_g1_sum_max_terms: None,
+
+            group_ops_ristretto_decode_scalar_cost: None,
+            group_ops_ristretto_decode_point_cost: None,
+            group_ops_ristretto_scalar_add_cost: None,
+            group_ops_ristretto_point_add_cost: None,
+            group_ops_ristretto_scalar_sub_cost: None,
+            group_ops_ristretto_point_sub_cost: None,
+            group_ops_ristretto_scalar_mul_cost: None,
+            group_ops_ristretto_point_mul_cost: None,
+            group_ops_ristretto_scalar_div_cost: None,
+            group_ops_ristretto_point_div_cost: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -4463,9 +4598,67 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_poseidon = true;
                 }
                 109 => {
-                    if chain == Chain::Unknown {
-                        cfg.feature_flags.enable_display_registry = true;
+                    cfg.binary_variant_handles = Some(1024);
+                    cfg.binary_variant_instantiation_handles = Some(1024);
+                    cfg.feature_flags.restrict_hot_or_not_entry_functions = true;
+                }
+                110 => {
+                    cfg.feature_flags
+                        .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
+                    cfg.feature_flags
+                        .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
                     }
+                    cfg.feature_flags.validate_zklogin_public_identifier = true;
+                    cfg.feature_flags.fix_checkpoint_signature_mapping = true;
+                    cfg.feature_flags
+                        .consensus_always_accept_system_transactions = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_object_funds_withdraw = true;
+                    }
+                }
+                111 => {
+                    cfg.feature_flags.validator_metadata_verify_v2 = true;
+                }
+                112 => {
+                    cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
+                    cfg.group_ops_ristretto_decode_point_cost = Some(200);
+                    cfg.group_ops_ristretto_scalar_add_cost = Some(10);
+                    cfg.group_ops_ristretto_point_add_cost = Some(500);
+                    cfg.group_ops_ristretto_scalar_sub_cost = Some(10);
+                    cfg.group_ops_ristretto_point_sub_cost = Some(500);
+                    cfg.group_ops_ristretto_scalar_mul_cost = Some(11);
+                    cfg.group_ops_ristretto_point_mul_cost = Some(1200);
+                    cfg.group_ops_ristretto_scalar_div_cost = Some(151);
+                    cfg.group_ops_ristretto_point_div_cost = Some(2500);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_ristretto255_group_ops = true;
+                    }
+                }
+                113 => {
+                    cfg.feature_flags.address_balance_gas_check_rgp_at_signing = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.defer_unpaid_amplification = true;
+                    }
+                }
+                114 => {
+                    cfg.feature_flags.randomize_checkpoint_tx_limit_in_tests = true;
+                    cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                        cfg.feature_flags.enable_authenticated_event_streams = true;
+                        cfg.feature_flags
+                            .include_checkpoint_artifacts_digest_in_summary = true;
+                    }
+                }
+                115 => {
+                    cfg.feature_flags.gasless_transaction_drop_safety = true;
+                    cfg.feature_flags.address_aliases = true;
+                    cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
+                    // Disabled while debugging
+                    cfg.feature_flags.defer_unpaid_amplification = false;
                 }
                 // Use this template when making changes:
                 //
@@ -4481,15 +4674,25 @@ impl ProtocolConfig {
             }
         }
 
-        // Simtest specific overrides.
-        if cfg!(msim) {
-            // Trigger checkpoint splitting more often.
-            // cfg.max_transactions_per_checkpoint = Some(10);
-            // FIXME: Re-introduce this once we resolve the checkpoint splitting issue
-            // in the quarantine output.
+        cfg
+    }
+
+    pub fn apply_seeded_test_overrides(&mut self, seed: &[u8; 32]) {
+        if !self.feature_flags.randomize_checkpoint_tx_limit_in_tests
+            || !self.feature_flags.split_checkpoints_in_consensus_handler
+        {
+            return;
         }
 
-        cfg
+        if !mysten_common::in_test_configuration() {
+            return;
+        }
+
+        use rand::{Rng, SeedableRng, rngs::StdRng};
+        let mut rng = StdRng::from_seed(*seed);
+        let max_txns = rng.gen_range(10..=100u64);
+        info!("seeded test override: max_transactions_per_checkpoint = {max_txns}");
+        self.max_transactions_per_checkpoint = Some(max_txns);
     }
 
     // Extract the bytecode verifier config from this protocol config.
@@ -4743,10 +4946,6 @@ impl ProtocolConfig {
         self.feature_flags.mysticeti_fastpath = val;
     }
 
-    pub fn set_disable_preconsensus_locking_for_testing(&mut self, val: bool) {
-        self.feature_flags.disable_preconsensus_locking = val;
-    }
-
     pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.accept_passkey_in_multisig = val;
     }
@@ -4792,6 +4991,8 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
         self.feature_flags.enable_address_balance_gas_payments = true;
+        self.feature_flags.address_balance_gas_check_rgp_at_signing = true;
+        self.feature_flags.address_balance_gas_reject_gas_coin_arg = true;
     }
 
     pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
@@ -4807,14 +5008,23 @@ impl ProtocolConfig {
         self.feature_flags.enable_authenticated_event_streams = true;
         self.feature_flags
             .include_checkpoint_artifacts_digest_in_summary = true;
+        self.feature_flags.split_checkpoints_in_consensus_handler = true;
     }
 
     pub fn disable_authenticated_event_streams_for_testing(&mut self) {
         self.feature_flags.enable_authenticated_event_streams = false;
     }
 
+    pub fn disable_randomize_checkpoint_tx_limit_for_testing(&mut self) {
+        self.feature_flags.randomize_checkpoint_tx_limit_in_tests = false;
+    }
+
     pub fn enable_non_exclusive_writes_for_testing(&mut self) {
         self.feature_flags.enable_non_exclusive_writes = true;
+    }
+
+    pub fn set_relax_valid_during_for_owned_inputs_for_testing(&mut self, val: bool) {
+        self.feature_flags.relax_valid_during_for_owned_inputs = val;
     }
 
     pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(
@@ -4855,6 +5065,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
 }
 

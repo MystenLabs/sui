@@ -154,19 +154,7 @@ pub async fn execute_transaction(
 
         let effects = read_mask
             .subtree(ExecutedTransaction::EFFECTS_FIELD)
-            .map(|mask| {
-                service.render_effects_to_proto(
-                    &effects,
-                    &[],
-                    |object_id| {
-                        objects
-                            .iter()
-                            .find(|o| o.id() == *object_id)
-                            .map(|o| o.into())
-                    },
-                    &mask,
-                )
-            });
+            .map(|mask| service.render_effects_to_proto(&effects, &[], &objects, &mask));
 
         let mut message = ExecutedTransaction::default();
         message.digest = read_mask

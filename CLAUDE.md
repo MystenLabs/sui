@@ -12,6 +12,13 @@ Individual preferences supercede and extend project preferences:
 
 ## Essential Development Commands
 
+### License comments
+
+All new files must start with the following license in comments at the top of the file:
+
+    Copyright (c) Mysten Labs, Inc.
+    SPDX-License-Identifier: Apache-2.0
+
 ### Building and Installation
 
 ```bash
@@ -98,7 +105,9 @@ sui/
 1. **Testing Requirements**:
    - Always run tests before submitting changes
    - Framework changes require snapshot updates
-2. **CRITICAL - Final Development Steps**:
+2. **Protocol Config Changes**:
+   - When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
+3. **CRITICAL - Final Development Steps**:
    - **ALWAYS run `cargo xclippy` after finishing development** to ensure code passes all linting checks
    - **NEVER disable or ignore tests** - all tests must pass and be enabled
    - **NEVER use `#[allow(dead_code)]`, `#[allow(unused)]`, or any other linting suppressions** - fix the underlying issues instead

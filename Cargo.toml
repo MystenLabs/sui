@@ -99,7 +99,6 @@ members = [
   "crates/sui-analytics-indexer",
   "crates/sui-analytics-indexer-derive",
   "crates/sui-authority-aggregation",
-  "crates/sui-aws-orchestrator",
   "crates/sui-benchmark",
   "crates/sui-bridge",
   "crates/sui-bridge-cli",
@@ -139,7 +138,6 @@ members = [
   "crates/sui-indexer-alt-reader",
   "crates/sui-indexer-alt-restorer",
   "crates/sui-indexer-alt-schema",
-  "crates/sui-indexer-builder",
   "crates/sui-json",
   "crates/sui-json-rpc",
   "crates/sui-json-rpc-api",
@@ -226,7 +224,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.65.0"
+version = "1.68.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -297,12 +295,8 @@ async-stream = "0.3.6"
 async-trait = "0.1.61"
 atomic_float = "0.1"
 aws-config = { version = "1.8", features = ["behavior-version-latest"] }
-aws-runtime = "1.5"
 aws-sdk-dynamodb = "1.101"
-aws-sdk-ec2 = "1.199"
 aws-sdk-kms = "1.97"
-aws-smithy-http = "0.62"
-aws-smithy-runtime-api = "1.9"
 axum = { version = "0.8", default-features = false, features = [
   "macros",
   "tokio",
@@ -335,16 +329,16 @@ bimap = "0.6.2"
 bincode = "1.3.3"
 bip32 = "0.4.0"
 byteorder = "1.4.3"
-bytes = { version = "1.5.0", features = ["serde"] }
+bytes = { version = "1.11.1", features = ["serde"] }
 cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.39", features = ["clock", "serde"] }
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
+clap_complete = "4.4"
 codespan-reporting = "0.11.1"
 collectable = "0.0.2"
 colored = "2.0.0"
-color-eyre = "0.6.2"
 comfy-table = "6.1.3"
 console-subscriber = "0.4.1"
 const-str = "0.5.3"
@@ -408,7 +402,7 @@ indexmap = { version = "2.8.0", features = ["serde"] }
 indoc = "2.0.6"
 indicatif = "0.18.3"
 inquire = "0.6.0"
-insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
+insta = { version = "1.46.2", features = ["redactions", "yaml", "json"] }
 insta-cmd = "0.6.0"
 integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
@@ -438,8 +432,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9590ccec46377f049f47fd64e5142d383ebec7d9", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9590ccec46377f049f47fd64e5142d383ebec7d9", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "213e543d83b91c4aa904166bef255a6c0054c8a7", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "213e543d83b91c4aa904166bef255a6c0054c8a7", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
@@ -465,20 +459,18 @@ pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.10.0", features = ["std"] }
 pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
-prettytable-rs = "0.10.0"
 proc-macro2 = "1.0.47"
-prometheus = "0.13.3"
+prometheus = { version = "0.14", features = ["protobuf"] }
 prometheus-http-query = { version = "0.8", default-features = false, features = [
   "rustls-tls",
 ] }
-prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 proptest = "1.6.0"
 proptest-derive = "0.5"
 prost = "0.14.1"
 prost-build = "0.14.1"
 prost-types = "0.14.1"
 protox = "0.9"
-protobuf = { version = "2.28", features = ["with-bytes"] }
+protobuf = { version = "3.7", features = ["with-bytes"] }
 quinn-proto = "0.11.7"
 quote = "1.0.23"
 rand = "0.8.5"
@@ -493,8 +485,6 @@ reqwest = { version = "0.12", default-features = false, features = [
 roaring = "0.10.6"
 ron = "0.8.0"
 rstest = "0.16.0"
-russh = "0.38.0"
-russh-keys = "0.38.0"
 rust-version = "1.56.1"
 rustls = { version = "0.23", default-features = false, features = [
   "std",
@@ -542,6 +532,7 @@ tar = "0.4.40"
 tempfile = "3.20.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
+timeout-tracing = "0.1.2"
 tiny-bip39 = "1.0.0"
 tokio = "=1.49.0"
 tokio-retry = "0.3"
@@ -553,7 +544,7 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.18"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.14.2", features = [
+tonic = { version = "0.14.3", features = [
   "zstd",
   "transport",
   "tls-webpki-roots",
@@ -583,7 +574,8 @@ tower-layer = "0.3.2"
 twox-hash = "1.6.3"
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
-tracing-subscriber = { version = "0.3.15", default-features = false, features = [
+tracing-error = "0.2.1"
+tracing-subscriber = { version = "0.3.22", default-features = false, features = [
   "std",
   "smallvec",
   "fmt",
@@ -645,10 +637,10 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4db0e90c732bbf7420ca20de808b698883148d9c" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4db0e90c732bbf7420ca20de808b698883148d9c" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4db0e90c732bbf7420ca20de808b698883148d9c", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4db0e90c732bbf7420ca20de808b698883148d9c", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "db643fd05a1b1c4cd52de3939766b53e12ce137e" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "db643fd05a1b1c4cd52de3939766b53e12ce137e" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "db643fd05a1b1c4cd52de3939766b53e12ce137e", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "db643fd05a1b1c4cd52de3939766b53e12ce137e", features = [
   "experimental",
 ] }
 passkey-types = { version = "0.4.0" }
@@ -664,15 +656,15 @@ p384 = { version = "0.13.0", default-features = false, features = [
 ciborium = "0.2"
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "4b5f0f1d06a31c8ef78ec2e5b446bc633e4e2f77" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "4b5f0f1d06a31c8ef78ec2e5b446bc633e4e2f77" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "4b5f0f1d06a31c8ef78ec2e5b446bc633e4e2f77" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "4b5f0f1d06a31c8ef78ec2e5b446bc633e4e2f77" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "9248f8d3951df750360308df22618e5978ad6dc0" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "9248f8d3951df750360308df22618e5978ad6dc0" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9248f8d3951df750360308df22618e5978ad6dc0" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9248f8d3951df750360308df22618e5978ad6dc0" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "9d9539e620b8b668c1a19528d9700be3f35f269e", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "9d9539e620b8b668c1a19528d9700be3f35f269e", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "9d9539e620b8b668c1a19528d9700be3f35f269e" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "dc3b2bf6f998282e61aeebb803d93499aee2a4a2", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "dc3b2bf6f998282e61aeebb803d93499aee2a4a2", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "dc3b2bf6f998282e61aeebb803d93499aee2a4a2" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -722,7 +714,6 @@ sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }
 sui-indexer-alt-reader = { path = "crates/sui-indexer-alt-reader" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
-sui-indexer-builder = { path = "crates/sui-indexer-builder" }
 sui-indexer-alt-object-store = { path = "crates/sui-indexer-alt-object-store" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }

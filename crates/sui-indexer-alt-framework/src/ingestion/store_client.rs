@@ -7,15 +7,27 @@ use bytes::Bytes;
 use object_store::Error as ObjectStoreError;
 use object_store::ObjectStore;
 use object_store::ObjectStoreExt;
+use object_store::RetryConfig;
 use object_store::path::Path as ObjectPath;
 use serde::de::DeserializeOwned;
 use tracing::debug;
 use tracing::error;
 
+use crate::ingestion::decode;
 use crate::ingestion::ingestion_client::FetchData;
 use crate::ingestion::ingestion_client::FetchError;
 use crate::ingestion::ingestion_client::FetchResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
+use crate::types::full_checkpoint_content::Checkpoint;
+
+/// Disable object_store's internal retries so that transient errors (429s, 5xx) propagate
+/// immediately to the framework's own retry logic.
+pub(super) fn retry_config() -> RetryConfig {
+    RetryConfig {
+        max_retries: 0,
+        ..Default::default()
+    }
+}
 
 pub struct StoreIngestionClient {
     store: Arc<dyn ObjectStore>,
@@ -33,9 +45,13 @@ impl StoreIngestionClient {
         Ok(serde_json::from_slice(&bytes)?)
     }
 
-    /// Fetch the bytes for a checkpoint by its sequence number.
-    /// The response is the serialized representation of a checkpoint, as raw bytes.
-    pub async fn checkpoint(&self, checkpoint: u64) -> object_store::Result<Bytes> {
+    /// Fetch and decode checkpoint data by sequence number.
+    pub async fn checkpoint(&self, checkpoint: u64) -> anyhow::Result<Checkpoint> {
+        let bytes = self.checkpoint_bytes(checkpoint).await?;
+        Ok(decode::checkpoint(&bytes)?)
+    }
+
+    async fn checkpoint_bytes(&self, checkpoint: u64) -> object_store::Result<Bytes> {
         self.bytes(ObjectPath::from(format!("{checkpoint}.binpb.zst")))
             .await
     }
@@ -58,7 +74,7 @@ impl IngestionClientTrait for StoreIngestionClient {
     /// - server errors (5xx),
     /// - issues getting a full response.
     async fn fetch(&self, checkpoint: u64) -> FetchResult {
-        match self.checkpoint(checkpoint).await {
+        match self.checkpoint_bytes(checkpoint).await {
             Ok(bytes) => Ok(FetchData::Raw(bytes)),
             Err(ObjectStoreError::NotFound { .. }) => {
                 debug!(checkpoint, "Checkpoint not found");

@@ -141,7 +141,7 @@ impl Service {
     }
 
     /// Runs the service, waiting for interrupt signals from the operating system to trigger
-    /// graceful shutdown, within the defualt grace period.
+    /// graceful shutdown, within the default grace period.
     pub async fn main(self) -> Result<(), Error> {
         self.wait_for_shutdown(GRACE, terminate).await
     }

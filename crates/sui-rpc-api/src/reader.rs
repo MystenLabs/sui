@@ -1,20 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use sui_sdk_types::{Address, Object, Version};
-use sui_sdk_types::{CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee};
-use sui_types::balance_change::BalanceChange;
-use sui_types::base_types::{ObjectID, ObjectType};
+use sui_sdk_types::{EpochId, ValidatorCommittee};
 use sui_types::storage::ObjectKey;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
-use sui_types::storage::{ObjectStore, TransactionInfo};
 use tap::Pipe;
-
-use crate::Direction;
 
 #[derive(Clone)]
 pub struct StateReader {
@@ -28,30 +21,6 @@ impl StateReader {
 
     pub fn inner(&self) -> &Arc<dyn RpcStateReader> {
         &self.inner
-    }
-
-    #[allow(unused)]
-    #[tracing::instrument(skip(self))]
-    pub fn get_object(&self, object_id: Address) -> crate::Result<Option<Object>> {
-        self.inner
-            .get_object(&object_id.into())
-            .map(TryInto::try_into)
-            .transpose()
-            .map_err(Into::into)
-    }
-
-    #[allow(unused)]
-    #[tracing::instrument(skip(self))]
-    pub fn get_object_with_version(
-        &self,
-        object_id: Address,
-        version: Version,
-    ) -> crate::Result<Option<Object>> {
-        self.inner
-            .get_object_by_key(&object_id.into(), version.into())
-            .map(TryInto::try_into)
-            .transpose()
-            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip(self))]
@@ -92,7 +61,8 @@ impl StateReader {
         &self,
         digest: sui_sdk_types::Digest,
     ) -> crate::Result<(
-        sui_sdk_types::SignedTransaction,
+        sui_types::transaction::TransactionData,
+        Vec<sui_types::signature::GenericSignature>,
         sui_types::effects::TransactionEffects,
         Option<sui_types::effects::TransactionEvents>,
     )> {
@@ -119,19 +89,11 @@ impl StateReader {
             None
         };
 
-        Ok((transaction.try_into()?, effects, events))
-    }
+        let transaction = transaction.into_data().into_inner();
+        let signatures = transaction.tx_signatures;
+        let transaction = transaction.intent_message.value;
 
-    #[tracing::instrument(skip(self))]
-    pub fn get_transaction_info(
-        &self,
-        digest: &sui_types::digests::TransactionDigest,
-    ) -> Option<TransactionInfo> {
-        self.inner()
-            .indexes()?
-            .get_transaction_info(digest)
-            .ok()
-            .flatten()
+        Ok((transaction, signatures, effects, events))
     }
 
     #[tracing::instrument(skip(self))]
@@ -139,26 +101,10 @@ impl StateReader {
         &self,
         digest: sui_sdk_types::Digest,
     ) -> crate::Result<TransactionRead> {
-        let (
-            SignedTransaction {
-                transaction,
-                signatures,
-            },
-            effects,
-            events,
-        ) = self.get_transaction(digest)?;
+        let (transaction, signatures, effects, events) = self.get_transaction(digest)?;
 
-        let (checkpoint, balance_changes, object_types) =
-            if let Some(info) = self.get_transaction_info(&(digest.into())) {
-                (
-                    Some(info.checkpoint),
-                    Some(info.balance_changes),
-                    Some(info.object_types),
-                )
-            } else {
-                let checkpoint = self.inner().get_transaction_checkpoint(&(digest.into()));
-                (checkpoint, None, None)
-            };
+        let checkpoint = self.inner().get_transaction_checkpoint(&(digest.into()));
+
         let timestamp_ms = if let Some(checkpoint) = checkpoint {
             self.inner()
                 .get_checkpoint_by_sequence_number(checkpoint)
@@ -172,35 +118,15 @@ impl StateReader {
             .get_unchanged_loaded_runtime_objects(&(digest.into()));
 
         Ok(TransactionRead {
-            digest: transaction.digest(),
+            digest,
             transaction,
             signatures,
             effects,
             events,
             checkpoint,
             timestamp_ms,
-            balance_changes,
-            object_types,
             unchanged_loaded_runtime_objects,
         })
-    }
-
-    #[allow(unused)]
-    pub fn checkpoint_iter(
-        &self,
-        direction: Direction,
-        start: CheckpointSequenceNumber,
-    ) -> CheckpointIter {
-        CheckpointIter::new(self.clone(), direction, start)
-    }
-
-    #[allow(unused)]
-    pub fn transaction_iter(
-        &self,
-        direction: Direction,
-        cursor: (CheckpointSequenceNumber, Option<usize>),
-    ) -> CheckpointTransactionsIter {
-        CheckpointTransactionsIter::new(self.clone(), direction, cursor)
     }
 
     pub fn lookup_address_balance(
@@ -225,182 +151,32 @@ impl StateReader {
             .and_then(|o| o.load_value::<u128>().ok())
             .map(|balance| balance as u64)
     }
+
+    // Return the lowest available checkpoint watermark for which the RPC service can return proper
+    // responses for.
+    pub fn get_lowest_available_checkpoint(&self) -> Result<u64, crate::RpcError> {
+        // This is the lowest lowest_available_checkpoint from the checkpoint store
+        let lowest_available_checkpoint = self.inner().get_lowest_available_checkpoint()?;
+        // This is the lowest lowest_available_checkpoint from the perpetual store
+        let lowest_available_checkpoint_objects =
+            self.inner().get_lowest_available_checkpoint_objects()?;
+
+        // Return the higher of the two for our lower watermark
+        Ok(lowest_available_checkpoint.max(lowest_available_checkpoint_objects))
+    }
 }
 
 #[derive(Debug)]
 pub struct TransactionRead {
     pub digest: sui_sdk_types::Digest,
-    pub transaction: sui_sdk_types::Transaction,
-    pub signatures: Vec<sui_sdk_types::UserSignature>,
+    pub transaction: sui_types::transaction::TransactionData,
+    pub signatures: Vec<sui_types::signature::GenericSignature>,
     pub effects: sui_types::effects::TransactionEffects,
     pub events: Option<sui_types::effects::TransactionEvents>,
+    #[allow(unused)]
     pub checkpoint: Option<u64>,
     pub timestamp_ms: Option<u64>,
-    pub balance_changes: Option<Vec<BalanceChange>>,
-    pub object_types: Option<HashMap<ObjectID, ObjectType>>,
     pub unchanged_loaded_runtime_objects: Option<Vec<ObjectKey>>,
-}
-
-pub struct CheckpointTransactionsIter {
-    reader: StateReader,
-    direction: Direction,
-
-    next_cursor: Option<(CheckpointSequenceNumber, Option<usize>)>,
-    checkpoint: Option<(
-        sui_types::messages_checkpoint::CheckpointSummary,
-        sui_types::messages_checkpoint::CheckpointContents,
-    )>,
-}
-
-impl CheckpointTransactionsIter {
-    #[allow(unused)]
-    pub fn new(
-        reader: StateReader,
-        direction: Direction,
-        start: (CheckpointSequenceNumber, Option<usize>),
-    ) -> Self {
-        Self {
-            reader,
-            direction,
-            next_cursor: Some(start),
-            checkpoint: None,
-        }
-    }
-}
-
-impl Iterator for CheckpointTransactionsIter {
-    type Item = Result<(CursorInfo, sui_types::digests::TransactionDigest)>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let (current_checkpoint, transaction_index) = self.next_cursor?;
-
-            let (checkpoint, contents) = if let Some(checkpoint) = &self.checkpoint {
-                if checkpoint.0.sequence_number != current_checkpoint {
-                    self.checkpoint = None;
-                    continue;
-                } else {
-                    checkpoint
-                }
-            } else {
-                let checkpoint = self
-                    .reader
-                    .inner()
-                    .get_checkpoint_by_sequence_number(current_checkpoint)?;
-                let contents = self
-                    .reader
-                    .inner()
-                    .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)?;
-
-                self.checkpoint = Some((checkpoint.into_inner().into_data(), contents));
-                self.checkpoint.as_ref().unwrap()
-            };
-
-            let index = transaction_index
-                .map(|idx| idx.clamp(0, contents.size().saturating_sub(1)))
-                .unwrap_or_else(|| match self.direction {
-                    Direction::Ascending => 0,
-                    Direction::Descending => contents.size().saturating_sub(1),
-                });
-
-            self.next_cursor = {
-                let next_index = match self.direction {
-                    Direction::Ascending => {
-                        let next_index = index + 1;
-                        if next_index >= contents.size() {
-                            None
-                        } else {
-                            Some(next_index)
-                        }
-                    }
-                    Direction::Descending => index.checked_sub(1),
-                };
-
-                let next_checkpoint = if next_index.is_some() {
-                    Some(current_checkpoint)
-                } else {
-                    match self.direction {
-                        Direction::Ascending => current_checkpoint.checked_add(1),
-                        Direction::Descending => current_checkpoint.checked_sub(1),
-                    }
-                };
-
-                next_checkpoint.map(|checkpoint| (checkpoint, next_index))
-            };
-
-            if contents.size() == 0 {
-                continue;
-            }
-
-            let digest = contents.inner()[index].transaction;
-
-            let cursor_info = CursorInfo {
-                checkpoint: checkpoint.sequence_number,
-                timestamp_ms: checkpoint.timestamp_ms,
-                index: index as u64,
-                next_cursor: self.next_cursor,
-            };
-
-            return Some(Ok((cursor_info, digest)));
-        }
-    }
-}
-
-#[allow(unused)]
-pub struct CursorInfo {
-    pub checkpoint: CheckpointSequenceNumber,
-    pub timestamp_ms: u64,
-    #[allow(unused)]
-    pub index: u64,
-
-    // None if there are no more transactions in the store
-    pub next_cursor: Option<(CheckpointSequenceNumber, Option<usize>)>,
-}
-
-pub struct CheckpointIter {
-    reader: StateReader,
-    direction: Direction,
-
-    next_cursor: Option<CheckpointSequenceNumber>,
-}
-
-impl CheckpointIter {
-    #[allow(unused)]
-    pub fn new(reader: StateReader, direction: Direction, start: CheckpointSequenceNumber) -> Self {
-        Self {
-            reader,
-            direction,
-            next_cursor: Some(start),
-        }
-    }
-}
-
-impl Iterator for CheckpointIter {
-    type Item = Result<(
-        sui_types::messages_checkpoint::CertifiedCheckpointSummary,
-        sui_types::messages_checkpoint::CheckpointContents,
-    )>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let current_checkpoint = self.next_cursor?;
-
-        let checkpoint = self
-            .reader
-            .inner()
-            .get_checkpoint_by_sequence_number(current_checkpoint)?
-            .into_inner();
-        let contents = self
-            .reader
-            .inner()
-            .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)?;
-
-        self.next_cursor = match self.direction {
-            Direction::Ascending => current_checkpoint.checked_add(1),
-            Direction::Descending => current_checkpoint.checked_sub(1),
-        };
-
-        Some(Ok((checkpoint, contents)))
-    }
 }
 
 #[derive(Debug)]

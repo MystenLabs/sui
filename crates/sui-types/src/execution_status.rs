@@ -18,12 +18,13 @@ mod execution_status_tests;
 pub enum ExecutionStatus {
     Success,
     /// Gas used in the failed case, and the error.
-    Failure {
-        /// The error
-        error: ExecutionFailureStatus,
-        /// Which command the error occurred
-        command: Option<CommandIndex>,
-    },
+    Failure(ExecutionFailure),
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct ExecutionFailure {
+    pub error: ExecutionFailureStatus,
+    pub command: Option<CommandIndex>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -415,7 +416,7 @@ impl ExecutionStatus {
         error: ExecutionFailureStatus,
         command: Option<CommandIndex>,
     ) -> ExecutionStatus {
-        ExecutionStatus::Failure { error, command }
+        ExecutionStatus::Failure(ExecutionFailure { error, command })
     }
 
     pub fn is_ok(&self) -> bool {
@@ -423,13 +424,13 @@ impl ExecutionStatus {
     }
 
     pub fn is_err(&self) -> bool {
-        matches!(self, ExecutionStatus::Failure { .. })
+        matches!(self, ExecutionStatus::Failure(_))
     }
 
     pub fn unwrap(&self) {
         match self {
             ExecutionStatus::Success => {}
-            ExecutionStatus::Failure { .. } => {
+            ExecutionStatus::Failure(_) => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
         }
@@ -440,18 +441,18 @@ impl ExecutionStatus {
             ExecutionStatus::Success => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
-            ExecutionStatus::Failure { error, command } => (error, command),
+            ExecutionStatus::Failure(ExecutionFailure { error, command }) => (error, command),
         }
     }
 
     pub fn get_congested_objects(&self) -> Option<&CongestedObjects> {
-        if let ExecutionStatus::Failure {
+        if let ExecutionStatus::Failure(ExecutionFailure {
             error:
                 ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
                     congested_objects,
                 },
             ..
-        } = self
+        }) = self
         {
             Some(congested_objects)
         } else {
@@ -462,10 +463,10 @@ impl ExecutionStatus {
     pub fn is_cancelled(&self) -> bool {
         matches!(
             self,
-            ExecutionStatus::Failure {
+            ExecutionStatus::Failure(ExecutionFailure {
                 error: ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { .. },
                 ..
-            }
+            })
         )
     }
 }

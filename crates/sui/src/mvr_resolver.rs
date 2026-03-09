@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use sui_protocol_config::Chain;
-use sui_sdk::apis::ReadApi;
-use sui_types::{base_types::ObjectID, digests::ChainIdentifier};
+use sui_rpc_api::Client;
+use sui_types::base_types::ObjectID;
 
 const MVR_RESOLVER_MAINNET_URL: &str = "https://mainnet.mvr.mystenlabs.com";
 const MVR_RESOLVER_TESTNET_URL: &str = "https://testnet.mvr.mystenlabs.com";
@@ -41,7 +41,7 @@ impl MvrResolver {
 
     /// Given a set of MVR names, resolve them to their corresponding package IDs. Note that this
     /// API will error if the resolved list length does not match with the given input.
-    pub async fn resolve_names(&self, read_api: &ReadApi) -> Result<ResolvedNames, Error> {
+    pub async fn resolve_names(&self, client: &Client) -> Result<ResolvedNames, Error> {
         if self.names.is_empty() {
             return Ok(ResolvedNames {
                 resolution: BTreeMap::new(),
@@ -49,7 +49,7 @@ impl MvrResolver {
         }
 
         let request = reqwest::Client::new();
-        let (url, chain) = mvr_req_url(read_api).await?;
+        let (url, chain) = mvr_req_url(client).await?;
         let json_body = json!(NamesRequest {
             names: self.names.clone()
         });
@@ -84,23 +84,14 @@ impl MvrResolver {
 
 /// Based on the chain id of the current set environment, return the correct MVR URL to use for
 /// resolution.
-async fn mvr_req_url(read_api: &ReadApi) -> Result<(&'static str, &'static str), Error> {
-    let chain_id = read_api.get_chain_identifier().await?;
-    let chain = ChainIdentifier::from_chain_short_id(&chain_id);
-
-    if let Some(chain) = chain {
-        let chain = chain.chain();
-        match chain {
-            Chain::Mainnet => Ok((MVR_RESOLVER_MAINNET_URL, "mainnet")),
-            Chain::Testnet => Ok((MVR_RESOLVER_TESTNET_URL, "testnet")),
-            Chain::Unknown => {
-                anyhow::bail!("Unsupported chain identifier: {:?}", chain);
-            }
+async fn mvr_req_url(client: &Client) -> Result<(&'static str, &'static str), Error> {
+    let chain = client.get_chain_identifier().await?;
+    let chain = chain.chain();
+    match chain {
+        Chain::Mainnet => Ok((MVR_RESOLVER_MAINNET_URL, "mainnet")),
+        Chain::Testnet => Ok((MVR_RESOLVER_TESTNET_URL, "testnet")),
+        Chain::Unknown => {
+            anyhow::bail!("Unsupported chain identifier: {:?}", chain);
         }
-    } else {
-        anyhow::bail!(
-            "Unsupported chain: {chain_id}. Only mainnet/testnet are supported for \
-            MVR resolution",
-        )
     }
 }

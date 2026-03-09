@@ -13,14 +13,12 @@ use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_api::{TransactionBuilderOpenRpc, TransactionBuilderServer};
 use sui_json_rpc_types::{RPCTransactionRequestParams, SuiObjectDataFilter};
-use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockBuilderMode, SuiTypeTag,
-    TransactionBlockBytes,
-};
+use sui_json_rpc_types::{SuiTransactionBlockBuilderMode, SuiTypeTag, TransactionBlockBytes};
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 use sui_types::base_types::ObjectInfo;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::object::Object;
 use sui_types::sui_serde::BigInt;
 
 use crate::SuiRpcModule;
@@ -64,13 +62,11 @@ impl DataReader for AuthorityStateDataReader {
             )?)
     }
 
-    async fn get_object_with_options(
-        &self,
-        object_id: ObjectID,
-        options: SuiObjectDataOptions,
-    ) -> Result<SuiObjectResponse, anyhow::Error> {
-        let result = self.0.get_object_read(&object_id)?;
-        Ok((result, options).try_into()?)
+    async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
+        self.0
+            .get_object(&object_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("unable to fetch object {object_id}"))
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {

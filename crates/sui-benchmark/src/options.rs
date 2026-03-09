@@ -185,6 +185,7 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         party: Vec<u32>,
         // relative weight of conflicting transfer transactions in the benchmark workload
+        // DEPRECATED: use composite instead (not deleting yet to avoid breaking stress docker)
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         conflicting_transfer: Vec<u32>,
         // relative weight of composite transactions in the benchmark workload

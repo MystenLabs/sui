@@ -22,3 +22,17 @@ error[E03010]: unbound field
   │
 7 │         s_mut.h;
   │         ^^^^^^^ Unbound field 'h' in '0x8675309::M::S'
+
+error[E06001]: unused value without 'drop'
+  ┌─ tests/move_check/typing/implicit_deref_borrow_field_missing.move:7:16
+  │
+2 │     struct S { f: u64 }
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+3 │ 
+4 │     fun t0(s: S, sref: &S, s_mut: &mut S) {
+  │            -  - The type '0x8675309::M::S' does not have the ability 'drop'
+  │            │   
+  │            The parameter 's' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+  ·
+7 │         s_mut.h;
+  │                ^ Invalid return

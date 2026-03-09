@@ -27,7 +27,7 @@ use sui_types::{
 use tokio::sync::mpsc::{self, unbounded_channel};
 use tokio::time::timeout;
 
-use super::FundsSettlement;
+use super::{FundsSettlement, FundsWithdrawSchedulerType};
 use crate::{
     authority::{
         AuthorityState, ExecutionEnv, shared_object_version_manager::Schedulable,
@@ -67,13 +67,16 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
         .with_starting_objects(&starting_objects)
         .build()
         .await;
+    let registry = prometheus::Registry::new();
     let scheduler = Arc::new(ExecutionScheduler::new(
         state.get_object_cache_reader().clone(),
         state.get_account_funds_read().clone(),
         state.get_transaction_cache_reader().clone(),
         tx_ready_certificates,
         &state.epoch_store_for_testing(),
+        FundsWithdrawSchedulerType::default(),
         state.metrics.clone(),
+        &registry,
     ));
     TestEnv {
         sender,

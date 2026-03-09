@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{ObjectID, SequenceNumber};
 use crate::digests::{ObjectDigest, TransactionEventsDigest};
 use crate::effects::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut, TransactionEffects};
@@ -14,6 +15,7 @@ use crate::transaction::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+#[derive(Clone)]
 pub struct TestEffectsBuilder {
     transaction: SenderSignedData,
     /// Override the execution status if provided.
@@ -32,6 +34,8 @@ pub struct TestEffectsBuilder {
     unwrapped_objects: Vec<(ObjectID, Owner)>,
     /// Immutable objects that are read.
     frozen_objects: BTreeSet<ObjectID>,
+    /// Accumulator events.
+    accumulator_events: Vec<AccumulatorEvent>,
 }
 
 impl TestEffectsBuilder {
@@ -47,6 +51,7 @@ impl TestEffectsBuilder {
             wrapped_objects: vec![],
             unwrapped_objects: vec![],
             frozen_objects: BTreeSet::new(),
+            accumulator_events: vec![],
         }
     }
 
@@ -112,6 +117,14 @@ impl TestEffectsBuilder {
 
     pub fn with_frozen_objects(mut self, objects: impl IntoIterator<Item = ObjectID>) -> Self {
         self.frozen_objects.extend(objects);
+        self
+    }
+
+    pub fn with_accumulator_events(
+        mut self,
+        events: impl IntoIterator<Item = AccumulatorEvent>,
+    ) -> Self {
+        self.accumulator_events.extend(events);
         self
     }
 
@@ -254,6 +267,16 @@ impl TestEffectsBuilder {
                     EffectsObjectChange {
                         input_state: ObjectIn::NotExist,
                         output_state: ObjectOut::ObjectWrite((ObjectDigest::random(), owner)),
+                        id_operation: IDOperation::None,
+                    },
+                )
+            }))
+            .chain(self.accumulator_events.into_iter().map(|event| {
+                (
+                    *event.accumulator_obj.inner(),
+                    EffectsObjectChange {
+                        input_state: ObjectIn::NotExist,
+                        output_state: ObjectOut::AccumulatorWriteV1(event.write),
                         id_operation: IDOperation::None,
                     },
                 )

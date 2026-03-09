@@ -12,7 +12,6 @@ use crate::rpc::consistent_service::list_objects_by_type::list_objects_by_type;
 use crate::rpc::consistent_service::list_owned_objects::list_owned_objects;
 use crate::rpc::consistent_service::service_config::service_config;
 use crate::rpc::state::State;
-use crate::rpc::state::checkpointed_response;
 
 mod available_range;
 mod balances;
@@ -26,62 +25,74 @@ impl ConsistentService for State {
         &self,
         request: tonic::Request<grpc::AvailableRangeRequest>,
     ) -> Result<tonic::Response<grpc::AvailableRangeResponse>, tonic::Status> {
-        let checkpoint = self.checkpoint(&request)?;
-        let response = available_range(self, checkpoint, request.into_inner())?;
-        Ok(checkpointed_response(checkpoint, response)?)
+        self.checkpointed_response(
+            self.checkpoint(&request)
+                .map_err(tonic::Status::from)
+                .and_then(|cp| Ok(available_range(self, cp, request.into_inner())?)),
+        )
     }
 
     async fn batch_get_balances(
         &self,
         request: tonic::Request<grpc::BatchGetBalancesRequest>,
     ) -> Result<tonic::Response<grpc::BatchGetBalancesResponse>, tonic::Status> {
-        let checkpoint = self.checkpoint(&request)?;
-        let response = batch_get_balances(self, checkpoint, request.into_inner())?;
-        Ok(checkpointed_response(checkpoint, response)?)
+        self.checkpointed_response(
+            self.checkpoint(&request)
+                .map_err(tonic::Status::from)
+                .and_then(|cp| Ok(batch_get_balances(self, cp, request.into_inner())?)),
+        )
     }
 
     async fn get_balance(
         &self,
         request: tonic::Request<grpc::GetBalanceRequest>,
     ) -> Result<tonic::Response<grpc::Balance>, tonic::Status> {
-        let checkpoint = self.checkpoint(&request)?;
-        let response = get_balance(self, checkpoint, request.into_inner())?;
-        Ok(checkpointed_response(checkpoint, response)?)
+        self.checkpointed_response(
+            self.checkpoint(&request)
+                .map_err(tonic::Status::from)
+                .and_then(|cp| Ok(get_balance(self, cp, request.into_inner())?)),
+        )
     }
 
     async fn list_balances(
         &self,
         request: tonic::Request<grpc::ListBalancesRequest>,
     ) -> Result<tonic::Response<grpc::ListBalancesResponse>, tonic::Status> {
-        let checkpoint = self.checkpoint(&request)?;
-        let response = list_balances(self, checkpoint, request.into_inner())?;
-        Ok(checkpointed_response(checkpoint, response)?)
+        self.checkpointed_response(
+            self.checkpoint(&request)
+                .map_err(tonic::Status::from)
+                .and_then(|cp| Ok(list_balances(self, cp, request.into_inner())?)),
+        )
     }
 
     async fn list_objects_by_type(
         &self,
         request: tonic::Request<grpc::ListObjectsByTypeRequest>,
     ) -> Result<tonic::Response<grpc::ListObjectsResponse>, tonic::Status> {
-        let checkpoint = self.checkpoint(&request)?;
-        let response = list_objects_by_type(self, checkpoint, request.into_inner())?;
-        Ok(checkpointed_response(checkpoint, response)?)
+        self.checkpointed_response(
+            self.checkpoint(&request)
+                .map_err(tonic::Status::from)
+                .and_then(|cp| Ok(list_objects_by_type(self, cp, request.into_inner())?)),
+        )
     }
 
     async fn list_owned_objects(
         &self,
         request: tonic::Request<grpc::ListOwnedObjectsRequest>,
     ) -> Result<tonic::Response<grpc::ListObjectsResponse>, tonic::Status> {
-        let checkpoint = self.checkpoint(&request)?;
-        let response = list_owned_objects(self, checkpoint, request.into_inner())?;
-        Ok(checkpointed_response(checkpoint, response)?)
+        self.checkpointed_response(
+            self.checkpoint(&request)
+                .map_err(tonic::Status::from)
+                .and_then(|cp| Ok(list_owned_objects(self, cp, request.into_inner())?)),
+        )
     }
 
     async fn service_config(
         &self,
         request: tonic::Request<grpc::ServiceConfigRequest>,
     ) -> Result<tonic::Response<grpc::ServiceConfigResponse>, tonic::Status> {
-        service_config(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        self.checkpointed_response(
+            service_config(self, request.into_inner()).map_err(tonic::Status::from),
+        )
     }
 }

@@ -319,7 +319,13 @@ mod checked {
             gas_objs: &[&ObjectReadResult],
             gas_budget: u64,
         ) -> UserInputResult {
-            // 1. All gas objects have an address owner
+            self.check_gas_objects(gas_objs)?;
+            self.check_gas_data(gas_objs, gas_budget)
+        }
+
+        // Check gas objects have an address owner.
+        pub(crate) fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult {
+            // All gas objects have an address owner
             for gas_object in gas_objs {
                 // if as_object() returns None, it means the object has been deleted (and therefore
                 // must be a shared object).
@@ -335,8 +341,16 @@ mod checked {
                     return Err(UserInputError::MissingGasPayment);
                 }
             }
+            Ok(())
+        }
 
-            // 2. Gas budget is between min and max budget allowed
+        // Gas data is consistent
+        pub(crate) fn check_gas_data(
+            &self,
+            gas_objs: &[&ObjectReadResult],
+            gas_budget: u64,
+        ) -> UserInputResult {
+            // Gas budget is between min and max budget allowed
             if gas_budget > self.cost_table.max_gas_budget {
                 return Err(UserInputError::GasBudgetTooHigh {
                     gas_budget,
@@ -350,13 +364,14 @@ mod checked {
                 });
             }
 
-            // 3. Gas balance (all gas coins together) is bigger or equal to budget
+            // Gas balance (all gas coins together) is bigger or equal to budget
             let mut gas_balance = 0u128;
             for gas_obj in gas_objs {
-                // expect is safe because we already checked that all gas objects have an address owner
-                gas_balance +=
-                    gas::get_gas_balance(gas_obj.as_object().expect("object must be owned"))?
-                        as u128;
+                gas_balance += gas::get_gas_balance(gas_obj.as_object().ok_or(
+                    UserInputError::InvalidGasObject {
+                        object_id: gas_obj.id(),
+                    },
+                )?)? as u128;
             }
             if gas_balance < gas_budget as u128 {
                 Err(UserInputError::GasBalanceTooLow {

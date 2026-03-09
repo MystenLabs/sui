@@ -15,6 +15,7 @@ Functionality for converting Move types into values. Use with care!
 -  [Function `as_string`](#std_type_name_as_string)
 -  [Function `address_string`](#std_type_name_address_string)
 -  [Function `module_string`](#std_type_name_module_string)
+-  [Function `datatype_string`](#std_type_name_datatype_string)
 -  [Function `into_string`](#std_type_name_into_string)
 -  [Function `get`](#std_type_name_get)
 -  [Function `get_with_original_ids`](#std_type_name_get_with_original_ids)
@@ -75,6 +76,16 @@ ASCII Character code for the <code>:</code> (colon) symbol.
 
 
 <pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_COLON">ASCII_COLON</a>: <a href="../std/u8.md#std_u8">u8</a> = 58;
+</code></pre>
+
+
+
+<a name="std_type_name_ASCII_LESS_THAN"></a>
+
+ASCII Character code for the <code>&lt;</code> (less than) symbol.
+
+
+<pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_LESS_THAN">ASCII_LESS_THAN</a>: <a href="../std/u8.md#std_u8">u8</a> = 60;
 </code></pre>
 
 
@@ -385,6 +396,55 @@ Aborts if given a primitive type.
         }
     };
     <a href="../std/ascii.md#std_ascii_string">ascii::string</a>(module_name)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_datatype_string"></a>
+
+## Function `datatype_string`
+
+Get name of the datatype (struct or enum).
+Aborts if given a primitive type.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_datatype_string">datatype_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_datatype_string">datatype_string</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): String {
+    <b>assert</b>!(!self.<a href="../std/type_name.md#std_type_name_is_primitive">is_primitive</a>(), <a href="../std/type_name.md#std_type_name_ENonModuleType">ENonModuleType</a>);
+    // Starts after <b>address</b> and a double colon: `&lt;addr <b>as</b> HEX&gt;::`
+    <b>let</b> <b>mut</b> i = <a href="../std/address.md#std_address_length">address::length</a>() * 2 + 2;
+    <b>let</b> str_bytes = self.name.as_bytes();
+    <b>let</b> str_bytes_len = str_bytes.length();
+    <b>let</b> colon = <a href="../std/type_name.md#std_type_name_ASCII_COLON">ASCII_COLON</a>;
+    // Skip past the `&lt;module_name&gt;::` to the datatype name.
+    // The asserts should never fail, since all non-primitive types should have two colons.
+    <b>while</b> (&str_bytes[i] != &colon) i = i + 1;
+    i = i + 1;
+    <b>assert</b>!(&str_bytes[i] == &colon);
+    i = i + 1;
+    <b>assert</b>!(&str_bytes[i] != &colon);
+    // Take all characters until the type parameters start at `&lt;`, or until the end of the <a href="../std/string.md#std_string">string</a>.
+    <b>let</b> <b>mut</b> datatype_name = <a href="../std/vector.md#std_vector">vector</a>[];
+    <b>let</b> lt = <a href="../std/type_name.md#std_type_name_ASCII_LESS_THAN">ASCII_LESS_THAN</a>;
+    <b>loop</b> {
+        <b>let</b> char = &str_bytes[i];
+        <b>if</b> (char == &lt) <b>break</b>;
+        datatype_name.push_back(*char);
+        i = i + 1;
+        <b>if</b> (i &gt;= str_bytes_len) <b>break</b>;
+    };
+    <a href="../std/ascii.md#std_ascii_string">ascii::string</a>(datatype_name)
 }
 </code></pre>
 

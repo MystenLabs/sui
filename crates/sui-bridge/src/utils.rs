@@ -20,14 +20,12 @@ use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::secp256k1::Secp256k1KeyPair;
 use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
 use futures::future::join_all;
+use move_core_types::language_storage::StructTag;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::Config;
-use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
-};
 use sui_keys::keypair_file::read_key;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -38,6 +36,7 @@ use sui_types::bridge::{
 };
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::{SuiKeyPair, ToFromBytes, get_key_pair};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::{ObjectArg, TransactionData};
@@ -186,11 +185,54 @@ pub async fn get_eth_contract_addresses(
     let bridge_config = EthBridgeConfig::new(config_address, provider.clone());
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
     let vault_address: EthAddress = sui_bridge.vault().call().await?;
-    let vault = EthBridgeVault::new(vault_address, provider.clone());
-    let weth_address: EthAddress = vault.wETH().call().await?;
-    let usdt_address: EthAddress = bridge_config.tokenAddressOf(4).call().await?;
-    let wbtc_address: EthAddress = bridge_config.tokenAddressOf(1).call().await?;
-    let lbtc_address: EthAddress = bridge_config.tokenAddressOf(6).call().await?;
+
+    // Token address lookups are only used for watchdog monitoring and are not critical
+    // for the signing server. If vault_address is zero (can happen due to storage layout
+    // mismatch during upgrades), skip these lookups and use zero addresses.
+    let (weth_address, usdt_address, wbtc_address, lbtc_address) =
+        if vault_address.is_zero() {
+            tracing::warn!(
+                "Vault address is zero - likely storage layout mismatch. \
+            Token address lookups skipped. Watchdog monitoring will be limited."
+            );
+            (
+                EthAddress::ZERO,
+                EthAddress::ZERO,
+                EthAddress::ZERO,
+                EthAddress::ZERO,
+            )
+        } else {
+            let vault = EthBridgeVault::new(vault_address, provider.clone());
+            let weth_address: EthAddress = vault.wETH().call().await.unwrap_or_else(|e| {
+                tracing::warn!("Failed to get wETH address from vault: {:?}", e);
+                EthAddress::ZERO
+            });
+            let usdt_address: EthAddress = bridge_config
+                .tokenAddressOf(4)
+                .call()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to get USDT address: {:?}", e);
+                    EthAddress::ZERO
+                });
+            let wbtc_address: EthAddress = bridge_config
+                .tokenAddressOf(1)
+                .call()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to get WBTC address: {:?}", e);
+                    EthAddress::ZERO
+                });
+            let lbtc_address: EthAddress = bridge_config
+                .tokenAddressOf(6)
+                .call()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to get LBTC address: {:?}", e);
+                    EthAddress::ZERO
+                });
+            (weth_address, usdt_address, wbtc_address, lbtc_address)
+        };
 
     Ok((
         committee_address,
@@ -272,7 +314,10 @@ pub fn generate_bridge_node_config_and_write_to_file(
             sui_bridge_next_sequence_number_override: None,
         },
         eth: EthConfig {
-            eth_rpc_url: "your_eth_rpc_url".to_string(),
+            eth_rpc_url: None, // to be deprecated
+            eth_rpc_urls: Some(vec!["your_eth_rpc_url".to_string()]),
+            eth_rpc_quorum: 1,
+            eth_health_check_interval_secs: 300,
             eth_bridge_proxy_address: "0x0000000000000000000000000000000000000000".to_string(),
             eth_bridge_chain_id: BridgeChainId::EthSepolia as u8,
             eth_contracts_start_block_fallback: Some(0),
@@ -311,13 +356,8 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
 ) -> BridgeAction {
     assert!(token_ids.len() == token_packages_dir.len());
     assert!(token_prices.len() == token_packages_dir.len());
-    let sui_client = wallet_context.get_client().await.unwrap();
-    let quorum_driver_api = Arc::new(sui_client.quorum_driver_api().clone());
-    let rgp = sui_client
-        .governance_api()
-        .get_reference_gas_price()
-        .await
-        .unwrap();
+    let client = wallet_context.grpc_client().unwrap();
+    let rgp = client.get_reference_gas_price().await.unwrap();
 
     let senders = wallet_context.get_addresses();
     // We want each sender to deal with one coin
@@ -336,18 +376,11 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
             .publish(token_package_dir.to_path_buf())
             .build();
         let tx = wallet_context.sign_transaction(&tx).await;
-        let api_clone = quorum_driver_api.clone();
+        let api_clone = client.clone();
         publish_tokens_tasks.push(tokio::spawn(async move {
-            api_clone.execute_transaction_block(
-                tx,
-                SuiTransactionBlockResponseOptions::new()
-                    .with_effects()
-                    .with_input()
-                    .with_events()
-                    .with_object_changes()
-                    .with_balance_changes(),
-                Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
-            ).await
+            api_clone
+                .execute_transaction_and_wait_for_checkpoint(&tx)
+                .await
         }));
     }
     let publish_coin_responses = join_all(publish_tokens_tasks).await;
@@ -356,28 +389,42 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
     let mut register_tasks = vec![];
     for (response, sender) in publish_coin_responses.into_iter().zip(senders.clone()) {
         let response = response.unwrap().unwrap();
-        assert_eq!(
-            response.effects.unwrap().status(),
-            &SuiExecutionStatus::Success
-        );
-        let object_changes = response.object_changes.unwrap();
+        assert!(response.effects.status().is_ok());
         let mut tc = None;
         let mut type_ = None;
         let mut uc = None;
         let mut metadata = None;
-        for object_change in &object_changes {
-            if let o @ sui_json_rpc_types::ObjectChange::Created { object_type, .. } = object_change
-            {
+        for o in &response.changed_objects {
+            use sui_rpc::proto::sui::rpc::v2::changed_object::IdOperation;
+            if matches!(o.id_operation(), IdOperation::Created) {
+                let Ok(object_type) = o.object_type().parse::<StructTag>() else {
+                    continue;
+                };
                 if object_type.name.as_str().starts_with("TreasuryCap") {
                     assert!(tc.is_none() && type_.is_none());
-                    tc = Some(o.clone());
+                    tc = {
+                        let id = o.object_id().parse().unwrap();
+                        let version = o.output_version().into();
+                        let digest = o.output_digest().parse().unwrap();
+                        Some((id, version, digest))
+                    };
                     type_ = Some(object_type.type_params.first().unwrap().clone());
                 } else if object_type.name.as_str().starts_with("UpgradeCap") {
                     assert!(uc.is_none());
-                    uc = Some(o.clone());
+                    uc = {
+                        let id = o.object_id().parse().unwrap();
+                        let version = o.output_version().into();
+                        let digest = o.output_digest().parse().unwrap();
+                        Some((id, version, digest))
+                    };
                 } else if object_type.name.as_str().starts_with("CoinMetadata") {
                     assert!(metadata.is_none());
-                    metadata = Some(o.clone());
+                    metadata = {
+                        let id = o.object_id().parse().unwrap();
+                        let version = o.output_version().into();
+                        let digest = o.output_digest().parse().unwrap();
+                        Some((id, version, digest))
+                    };
                 }
             }
         }
@@ -387,15 +434,9 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
         // register with the bridge
         let mut builder = ProgrammableTransactionBuilder::new();
         let bridge_arg = builder.obj(bridge_arg).unwrap();
-        let uc_arg = builder
-            .obj(ObjectArg::ImmOrOwnedObject(uc.object_ref()))
-            .unwrap();
-        let tc_arg = builder
-            .obj(ObjectArg::ImmOrOwnedObject(tc.object_ref()))
-            .unwrap();
-        let metadata_arg = builder
-            .obj(ObjectArg::ImmOrOwnedObject(metadata.object_ref()))
-            .unwrap();
+        let uc_arg = builder.obj(ObjectArg::ImmOrOwnedObject(uc)).unwrap();
+        let tc_arg = builder.obj(ObjectArg::ImmOrOwnedObject(tc)).unwrap();
+        let metadata_arg = builder.obj(ObjectArg::ImmOrOwnedObject(metadata)).unwrap();
         builder.programmable_move_call(
             BRIDGE_PACKAGE_ID,
             BRIDGE_MODULE_NAME.into(),
@@ -411,23 +452,16 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
             .unwrap();
         let tx = TransactionData::new_programmable(sender, vec![gas], pt, 1_000_000_000, rgp);
         let signed_tx = wallet_context.sign_transaction(&tx).await;
-        let api_clone = quorum_driver_api.clone();
+        let api_clone = client.clone();
         register_tasks.push(async move {
             api_clone
-                .execute_transaction_block(
-                    signed_tx,
-                    SuiTransactionBlockResponseOptions::new().with_effects(),
-                    None,
-                )
+                .execute_transaction_and_wait_for_checkpoint(&signed_tx)
                 .await
         });
         token_type_names.push(type_);
     }
     for response in join_all(register_tasks).await {
-        assert_eq!(
-            response.unwrap().effects.unwrap().status(),
-            &SuiExecutionStatus::Success
-        );
+        assert!(response.unwrap().effects.status().is_ok());
     }
 
     BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {

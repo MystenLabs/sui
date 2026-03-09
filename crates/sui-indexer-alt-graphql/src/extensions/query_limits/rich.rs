@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use anyhow::anyhow;
 use async_graphql::Context;
 
 use crate::config::Limits;
-use crate::error::{RpcError, resource_exhausted};
+use crate::error::RpcError;
+use crate::error::resource_exhausted;
 
 /// Meters the number of "rich" queries performed in a single request. Rich queries are queries that
 /// require dedicated requests to the backing store (i.e. they cannot be batched using a

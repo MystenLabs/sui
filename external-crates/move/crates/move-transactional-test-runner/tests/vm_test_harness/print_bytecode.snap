@@ -8,7 +8,7 @@ task 0, lines 1-7:
 // Move bytecode v6
 module 42.M {
 
-entry foo<Ty0, Ty1>() {
+entry foo<T, U>() {
 B0:
 	0: Ret
 }

@@ -15,7 +15,10 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn get_object() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let id: Address = "0x5".parse().unwrap();
 
@@ -31,7 +34,10 @@ async fn get_object() {
 
 #[sim_test]
 async fn execute_transaction_transfer() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let address = SuiAddress::random_for_testing_only();
@@ -71,7 +77,10 @@ async fn execute_transaction_transfer() {
 
 #[sim_test]
 async fn get_full_checkpoint() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
 
@@ -91,7 +100,10 @@ async fn get_checkpoint_artifacts() {
         return;
     }
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     // Send a tx just to make sure a few checkpoints are created
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;

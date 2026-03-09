@@ -131,7 +131,8 @@ impl CheckpointReader {
         let checkpoint = client
             .clone()
             .get_full_checkpoint(checkpoint_number)
-            .await?;
+            .await?
+            .into();
         let size = bcs::serialized_size(&checkpoint)?;
         Ok((Arc::new(checkpoint), size))
     }

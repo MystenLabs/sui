@@ -4,10 +4,12 @@
 //! Shared test fixture for commit-related tests.
 //! Used by both commit_finalizer.rs tests and randomized_tests.rs.
 
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::ops::Bound::Included;
 use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Stake};
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockDigest, BlockRef};
 use consensus_types::block::{Round, TransactionIndex};
 use mysten_metrics::monitored_mpsc::unbounded_channel;
 use parking_lot::RwLock;
@@ -117,6 +119,9 @@ impl CommitTestFixture {
                 .protocol_config
                 .set_consensus_gc_depth_for_testing(gc_depth);
         }
+        // Skipping equivocation validation is necessary when testing with equivocators.
+        // Also it is ok when only testing the commit code path.
+        context.parameters.internal.skip_equivocation_validation = true;
         Arc::new(context.with_authority_index(AuthorityIndex::new_for_test(authority_index)))
     }
 
@@ -193,6 +198,11 @@ impl CommitTestFixture {
         // Use linearizer to create CommittedSubDag
         let committed_sub_dags = self.linearizer.handle_commit(leaders);
 
+        // After handle_commit(), the GC round is updated. We need to unsuspend any blocks that were
+        // suspended because of missing ancestors that are now GC'ed.
+        self.block_manager
+            .try_unsuspend_blocks_for_latest_gc_round();
+
         // Process through commit finalizer
         let mut finalized_commits = vec![];
         for mut subdag in committed_sub_dags {
@@ -206,34 +216,43 @@ impl CommitTestFixture {
 }
 
 /// Compare commit sequences across all runs, asserting they are identical.
-/// Returns the last commit sequence for additional assertions if needed.
+/// Returns the shortest commit sequence for additional assertions if needed.
 pub fn assert_commit_sequences_match(
-    mut commit_sequences: Vec<Vec<CommittedSubDag>>,
+    commit_sequences: Vec<Vec<CommittedSubDag>>,
 ) -> Vec<CommittedSubDag> {
-    let last_commit_sequence = commit_sequences.pop().unwrap();
+    let (shortest_idx, shortest_sequence) = commit_sequences
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, seq)| seq.len())
+        .expect("commit_sequences should not be empty");
 
-    for (run, commit_sequence) in commit_sequences.into_iter().enumerate() {
-        assert_eq!(
+    for (run, commit_sequence) in commit_sequences.iter().enumerate() {
+        // Since INDIRECT_REJECT_DEPTH is 3, the maximum number of commits buffered in CommitFinalizer is 3.
+        // And because of the direct finalization optimization, it might happen the last 3 commits are pending in
+        // one run but all finalized in another.
+        assert!(
+            commit_sequence.len() <= shortest_sequence.len() + 3,
+            "Commit sequence at run {run} is more than 3 commits longer than shortest (run {shortest_idx}): {} vs {}",
             commit_sequence.len(),
-            last_commit_sequence.len(),
-            "Commit sequence length mismatch at run {run}"
+            shortest_sequence.len()
         );
+
         for (commit_index, (c1, c2)) in commit_sequence
             .iter()
-            .zip(last_commit_sequence.iter())
+            .zip(shortest_sequence.iter())
             .enumerate()
         {
             assert_eq!(
                 c1.leader, c2.leader,
-                "Leader mismatch at commit {commit_index}"
+                "Leader mismatch at run {run} commit {commit_index}"
             );
             assert_eq!(
                 c1.commit_ref, c2.commit_ref,
-                "Commit sequence mismatch at commit {commit_index}"
+                "Commit sequence mismatch at run {run} commit {commit_index}"
             );
             assert_eq!(
                 c1.rejected_transactions_by_block, c2.rejected_transactions_by_block,
-                "Rejected transactions mismatch at commit {commit_index}"
+                "Rejected transactions mismatch at run {run} commit {commit_index}"
             );
         }
     }
@@ -242,7 +261,7 @@ pub fn assert_commit_sequences_match(
     let mut rejected_transactions = 0;
     let mut reject_votes = 0;
     let mut blocks = 4;
-    for commit in last_commit_sequence.iter() {
+    for commit in shortest_sequence.iter() {
         total_transactions += commit
             .blocks
             .iter()
@@ -263,17 +282,32 @@ pub fn assert_commit_sequences_match(
 
     tracing::info!(
         "Finished comparing commit sequences. Commits: {}, Blocks: {}, Total transactions: {}, Rejected transactions: {}, Reject votes: {}",
-        last_commit_sequence.len(),
+        shortest_sequence.len(),
         blocks,
         total_transactions,
         rejected_transactions,
         reject_votes
     );
 
-    last_commit_sequence
+    shortest_sequence.clone()
 }
 
-// ---- RandomDag and RandomDagIterator ----
+// ---- RandomDag, RandomDagConfig and RandomDagIterator ----
+
+/// Configuration for generating a randomized DAG.
+pub struct RandomDagConfig {
+    // Number of distinct authorities creating blocks.
+    pub num_authorities: usize,
+    // Number of rounds to generate.
+    pub num_rounds: Round,
+    // Number of transactions per block.
+    pub num_transactions: u32,
+    // Percentage chance of transactions to randomly reject.
+    pub reject_percentage: u8,
+    // Each element specifies the authority index, and the number of equivocators
+    // that are acting under this authority.
+    pub equivocators: Vec<(AuthorityIndex, u16)>,
+}
 
 /// A randomly generated DAG for testing commit patterns with reject votes.
 pub struct RandomDag {
@@ -283,6 +317,110 @@ pub struct RandomDag {
 }
 
 impl RandomDag {
+    /// Creates a new RandomDag with generated blocks containing transactions and reject votes.
+    pub fn new(context: Arc<Context>, rng: &mut StdRng, config: RandomDagConfig) -> Self {
+        let RandomDagConfig {
+            num_authorities: _,
+            num_rounds,
+            num_transactions,
+            reject_percentage,
+            equivocators,
+        } = config;
+
+        let committee = &context.committee;
+        let quorum_threshold = committee.quorum_threshold();
+        let total_stake = committee.total_stake();
+
+        // Create instance ID for each authority and equivocators.
+        let mut instances: Vec<InstanceID> = committee.authorities().map(|(a, _)| (a, 0)).collect();
+        for (authority, num_equivocators) in equivocators {
+            for i in 1..=num_equivocators {
+                instances.push((authority, i));
+            }
+        }
+
+        let genesis_blocks = genesis_blocks(&context)
+            .into_iter()
+            .map(|b| (b.author(), b))
+            .collect::<BTreeMap<AuthorityIndex, VerifiedBlock>>();
+        let last_round_blocks: Vec<VerifiedBlock> = genesis_blocks.values().cloned().collect();
+
+        // Store all blocks for lookup and range search.
+        let mut all_blocks: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
+        // Initialize with genesis blocks.
+        for block in &last_round_blocks {
+            all_blocks.insert(block.reference(), block.clone());
+        }
+
+        // Track the latest block per instance. Equivocators start from the same genesis blocks per authority.
+        let mut latest_blocks = instances
+            .iter()
+            .map(|&(a, i)| {
+                let b = genesis_blocks.get(&a).unwrap();
+                ((a, i), b.clone())
+            })
+            .collect::<BTreeMap<InstanceID, VerifiedBlock>>();
+
+        // Track included blocks per instance (simulates link_causal_history).
+        let mut included_refs = BTreeMap::<InstanceID, BTreeSet<BlockRef>>::new();
+
+        for r in 1..=num_rounds {
+            // Select random quorum-or-more stake to produce blocks this round.
+            let target_stake = rng.gen_range(quorum_threshold..=total_stake);
+
+            // Select random instances to produce blocks this round.
+            // Equivocations are allowed when multiple instances from the same authority propose at
+            // the same slot.
+            let mut proposers = instances.clone();
+            proposers.shuffle(rng);
+            let mut selected_stake = 0;
+            // Ensure stake across equivocations are counted only once.
+            let mut selected_authorities = vec![false; committee.size()];
+            let selected_proposers: Vec<_> = proposers
+                .into_iter()
+                .take_while(|instance| {
+                    if selected_stake >= target_stake {
+                        return false;
+                    }
+                    if !selected_authorities[instance.0.value()] {
+                        selected_authorities[instance.0.value()] = true;
+                        selected_stake += committee.stake(instance.0);
+                    }
+                    true
+                })
+                .collect();
+
+            let mut current_round_blocks = Vec::new();
+            for instance_id in selected_proposers {
+                let block = build_block_for_instance(
+                    &context,
+                    &instances,
+                    rng,
+                    r,
+                    instance_id,
+                    num_transactions,
+                    reject_percentage,
+                    &all_blocks,
+                    &mut latest_blocks,
+                    &mut included_refs,
+                );
+                current_round_blocks.push((instance_id, block));
+            }
+
+            // Update state with current round blocks.
+            for (instance_id, block) in current_round_blocks {
+                all_blocks.insert(block.reference(), block.clone());
+                latest_blocks.insert(instance_id, block);
+            }
+        }
+
+        RandomDag {
+            context,
+            blocks: all_blocks.values().cloned().collect(),
+            num_rounds,
+        }
+    }
+
     /// Creates a RandomDag from existing blocks.
     pub fn from_blocks(context: Arc<Context>, blocks: Vec<VerifiedBlock>) -> Self {
         let num_rounds = blocks.iter().map(|b| b.round()).max().unwrap_or(0);
@@ -293,7 +431,7 @@ impl RandomDag {
         }
     }
 
-    /// Creates an iterator yielding blocks out of order.
+    /// Creates an iterator yielding blocks in constrained random order.
     pub fn random_iter<'a>(
         &'a self,
         rng: &'a mut StdRng,
@@ -303,163 +441,153 @@ impl RandomDag {
     }
 }
 
-impl RandomDag {
-    /// Creates a new RandomDag with generated blocks containing transactions and reject votes.
-    #[allow(unused)]
-    pub fn new(
-        context: Arc<Context>,
-        rng: &mut StdRng,
-        num_rounds: Round,
-        num_transactions: u32,
-        reject_percentage: u8,
-    ) -> Self {
-        use std::collections::{BTreeMap, BTreeSet, VecDeque};
+// Identifies a consensus instance, by its authority index and another index to differentiate between equivocators.
+type InstanceID = (AuthorityIndex, u16);
 
-        let committee = &context.committee;
-        let quorum_threshold = committee.quorum_threshold();
-        let total_stake = committee.total_stake();
+/// Builds a single block for the given consensus instance at the specified round.
+fn build_block_for_instance(
+    context: &Arc<Context>,
+    instances: &[InstanceID],
+    rng: &mut StdRng,
+    round: Round,
+    own_instance: InstanceID,
+    num_transactions: u32,
+    reject_percentage: u8,
+    all_blocks: &BTreeMap<BlockRef, VerifiedBlock>,
+    latest_blocks: &mut BTreeMap<InstanceID, VerifiedBlock>,
+    included_refs: &mut BTreeMap<InstanceID, BTreeSet<BlockRef>>,
+) -> VerifiedBlock {
+    let committee = &context.committee;
+    let quorum_threshold = committee.quorum_threshold();
+    let own_authority = own_instance.0;
 
-        // Store all blocks for BFS lookup.
-        let mut all_blocks: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
-        let mut blocks: Vec<VerifiedBlock> = vec![];
-        let mut last_round_blocks: Vec<VerifiedBlock> = genesis_blocks(&context);
-
-        // Track the latest block per authority.
-        let mut latest_block_per_authority = last_round_blocks.clone();
-
-        // Track included blocks per authority (simulates link_causal_history).
-        let mut included_per_authority: Vec<BTreeSet<BlockRef>> =
-            vec![BTreeSet::new(); committee.size()];
-
-        // Initialize with genesis blocks.
-        for block in &last_round_blocks {
-            all_blocks.insert(block.reference(), block.clone());
-        }
-
-        for r in 1..=num_rounds {
-            // Select random quorum-or-more authorities to produce blocks this round.
-            let target_stake = rng.gen_range(quorum_threshold..=total_stake);
-            let mut authorities: Vec<_> = committee.authorities().map(|(a, _)| a).collect();
-            authorities.shuffle(rng);
-            let mut accumulated_stake: Stake = 0;
-            let selected_authorities: Vec<_> = authorities
-                .into_iter()
-                .take_while(|a| {
-                    accumulated_stake += committee.stake(*a);
-                    accumulated_stake < target_stake
-                })
-                .collect();
-
-            let mut current_round_blocks = Vec::new();
-
-            for authority in selected_authorities {
-                // First, select blocks from the previous round until quorum stake is reached.
-                let mut prev_round_blocks = last_round_blocks.clone();
-                prev_round_blocks.shuffle(rng);
-                let mut parent_stake: Stake = 0;
-                let mut quorum_count = 0;
-                for block in &prev_round_blocks {
-                    parent_stake += committee.stake(block.author());
-                    quorum_count += 1;
-                    if parent_stake >= quorum_threshold {
-                        break;
-                    }
-                }
-                prev_round_blocks.truncate(quorum_count);
-                let quorum_parents = prev_round_blocks;
-
-                // Collect authorities already included in quorum parents.
-                let quorum_authorities: BTreeSet<_> =
-                    quorum_parents.iter().map(|b| b.author()).collect();
-
-                // Find unselected authorities (those not in quorum parents).
-                let unselected: Vec<_> = committee
-                    .authorities()
-                    .map(|(a, _)| a)
-                    .filter(|a| !quorum_authorities.contains(a))
-                    .collect();
-
-                // Randomly select 0-N of unselected authorities' latest blocks.
-                let extra_count = rng.gen_range(0..=unselected.len());
-                let mut additional_ancestors = unselected;
-                additional_ancestors.shuffle(rng);
-                additional_ancestors.truncate(extra_count);
-
-                // Combine ancestors: quorum parents + extra ancestors from unselected authorities.
-                let mut ancestor_blocks = quorum_parents;
-                ancestor_blocks.extend(
-                    additional_ancestors
-                        .iter()
-                        .map(|a| latest_block_per_authority[a.value()].clone()),
-                );
-                let ancestors: Vec<_> = ancestor_blocks.iter().map(|b| b.reference()).collect();
-
-                // Find newly connected blocks via BFS (similar to link_causal_history).
-                let mut newly_connected = Vec::new();
-                let mut queue = VecDeque::from_iter(ancestors.iter().copied());
-                while let Some(block_ref) = queue.pop_front() {
-                    if block_ref.round == 0 {
-                        continue; // Skip genesis blocks.
-                    }
-                    if included_per_authority[authority.value()].contains(&block_ref) {
-                        continue; // Already included.
-                    }
-                    included_per_authority[authority.value()].insert(block_ref);
-                    newly_connected.push(block_ref);
-                    // Traverse ancestors.
-                    if let Some(block) = all_blocks.get(&block_ref) {
-                        queue.extend(block.ancestors().iter().cloned());
-                    }
-                }
-
-                // Generate random reject votes for newly connected blocks only.
-                let votes: Vec<_> = newly_connected
-                    .iter()
-                    .filter(|_| reject_percentage > 0)
-                    .filter_map(|&block_ref| {
-                        let rejects: Vec<_> = (0..num_transactions)
-                            .filter(|_| rng.gen_range(0..100) < reject_percentage)
-                            .map(|idx| idx as TransactionIndex)
-                            .collect();
-                        (!rejects.is_empty())
-                            .then_some(BlockTransactionVotes { block_ref, rejects })
-                    })
-                    .collect();
-
-                let transactions: Vec<_> = (0..num_transactions)
-                    .map(|_| Transaction::new(vec![1_u8; 16]))
-                    .collect();
-
-                let timestamp =
-                    (r as u64) * 1000 + (authority.value() as u64) + rng.gen_range(0..100);
-
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(r, authority.value() as u32)
-                        .set_transactions(transactions)
-                        .set_transaction_votes(votes)
-                        .set_ancestors(ancestors)
-                        .set_timestamp_ms(timestamp)
-                        .build(),
-                );
-
-                current_round_blocks.push(block);
+    // Select blocks from the previous round until quorum stake is reached.
+    let prev_round = round - 1;
+    let mut prev_round_blocks: Vec<_> = all_blocks
+        .range((
+            Included(BlockRef::new(
+                prev_round,
+                AuthorityIndex::MIN,
+                BlockDigest::MIN,
+            )),
+            Included(BlockRef::new(
+                prev_round,
+                AuthorityIndex::MAX,
+                BlockDigest::MAX,
+            )),
+        ))
+        .map(|(_, b)| b)
+        .cloned()
+        .collect();
+    prev_round_blocks.shuffle(rng);
+    let mut parent_stake: Stake = 0;
+    // Ensure only one block gets selected per authority, regardless of equivocations.
+    let mut selected_authorities = vec![false; committee.size()];
+    let quorum_parents: Vec<_> = prev_round_blocks
+        .into_iter()
+        .filter_map(|b| {
+            if parent_stake >= quorum_threshold {
+                return None;
             }
-
-            // Update state with current round blocks.
-            for block in &current_round_blocks {
-                all_blocks.insert(block.reference(), block.clone());
-                latest_block_per_authority[block.author().value()] = block.clone();
+            if selected_authorities[b.author().value()] {
+                return None;
             }
-            blocks.extend(current_round_blocks.iter().cloned());
-            last_round_blocks = current_round_blocks;
-        }
+            selected_authorities[b.author().value()] = true;
+            parent_stake += committee.stake(b.author());
+            Some(b)
+        })
+        .collect();
 
-        RandomDag {
-            context,
-            blocks,
-            num_rounds,
+    // Find so far unselected instances.
+    let mut unselected_instances: Vec<_> = instances
+        .iter()
+        .filter(|(authority, _)| !selected_authorities[authority.value()])
+        .cloned()
+        .collect();
+
+    // Randomly select extra blocks to link to among ancestors.
+    unselected_instances.shuffle(rng);
+    // Use min of two uniform samples to bias toward fewer additional ancestors
+    // while maintaining non-zero probability for all counts.
+    let extra_count = rng
+        .gen_range(0..=unselected_instances.len())
+        .min(rng.gen_range(0..=unselected_instances.len()));
+    let additional_ancestor_blocks: Vec<_> = unselected_instances[0..extra_count]
+        .iter()
+        .filter_map(|&(authority, instance)| {
+            if selected_authorities[authority.value()] {
+                return None;
+            }
+            let block = latest_blocks.get(&(authority, instance))?;
+            assert!(
+                block.round() < round,
+                "latest_blocks should only contain blocks from previous rounds"
+            );
+            selected_authorities[authority.value()] = true;
+            Some(block.clone())
+        })
+        .collect();
+
+    // Combine ancestors: quorum parents + extra ancestors from unselected authorities + own latest block if necessary.
+    let mut ancestor_blocks = quorum_parents;
+    ancestor_blocks.extend(additional_ancestor_blocks);
+    if !ancestor_blocks.iter().any(|b| b.author() == own_authority) {
+        ancestor_blocks.push(latest_blocks[&own_instance].clone());
+    }
+    let ancestors: Vec<_> = ancestor_blocks.iter().map(|b| b.reference()).collect();
+
+    // Find newly connected blocks via BFS (similar to link_causal_history).
+    let mut newly_connected = Vec::new();
+    let mut queue = VecDeque::from_iter(ancestors.iter().copied());
+    while let Some(block_ref) = queue.pop_front() {
+        if block_ref.round == 0 {
+            continue; // Skip genesis blocks.
+        }
+        if included_refs
+            .entry(own_instance)
+            .or_default()
+            .contains(&block_ref)
+        {
+            continue; // Already included.
+        }
+        included_refs
+            .entry(own_instance)
+            .or_default()
+            .insert(block_ref);
+        newly_connected.push(block_ref);
+        // Traverse ancestors.
+        if let Some(block) = all_blocks.get(&block_ref) {
+            queue.extend(block.ancestors().iter().cloned());
         }
     }
+
+    // Generate random reject votes for newly connected blocks only.
+    let votes: Vec<_> = newly_connected
+        .iter()
+        .filter(|_| reject_percentage > 0)
+        .filter_map(|&block_ref| {
+            let rejects: Vec<_> = (0..num_transactions)
+                .filter(|_| rng.gen_range(0..100) < reject_percentage)
+                .map(|idx| idx as TransactionIndex)
+                .collect();
+            (!rejects.is_empty()).then_some(BlockTransactionVotes { block_ref, rejects })
+        })
+        .collect();
+
+    let transactions: Vec<_> = (0..num_transactions)
+        .map(|_| Transaction::new(vec![1_u8; 16]))
+        .collect();
+
+    let timestamp = (round as u64) * 1000 + (own_authority.value() as u64) + rng.gen_range(0..100);
+
+    VerifiedBlock::new_for_test(
+        TestBlock::new(round, own_authority.value() as u32)
+            .set_transactions(transactions)
+            .set_transaction_votes(votes)
+            .set_ancestors(ancestors)
+            .set_timestamp_ms(timestamp)
+            .build(),
+    )
 }
 
 /// Per-round state for iteration.
@@ -519,6 +647,15 @@ impl<'a> RandomDagIterator<'a> {
 impl Iterator for RandomDagIterator<'_> {
     type Item = VerifiedBlock;
 
+    /// The high level algorithm is to randomly select a block from unvisited blocks,
+    /// up to quorum_round + max_step round.
+    /// It is possible a sequence of blocks are suspended until their common ancestors
+    /// gets selected and accepted.
+    ///
+    /// An alternative approach is to keep track of selected blocks, and only select blocks without
+    /// missing dependencies. Even though block selection order is also randomized, this approach
+    /// seems to have less test coverage, and was unable to expose errors when incorrect logic was
+    /// introduced to CommitFinalizer.
     fn next(&mut self) -> Option<Self::Item> {
         if self.num_remaining == 0 {
             return None;

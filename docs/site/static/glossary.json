@@ -1,0 +1,241 @@
+[
+  {
+    "id": "archival-service",
+    "label": "Archival Service",
+    "definition": "A gRPC API layer that exposes access to this store."
+  },
+  {
+    "id": "archival-store",
+    "label": "Archival Store",
+    "definition": "A long-term storage system that holds checkpoint-indexed Sui data."
+  },
+  {
+    "id": "causal-history",
+    "label": "Causal history",
+    "definition": "The relationship between an object in Sui and its direct predecessors and successors."
+  },
+  {
+    "id": "causal-order",
+    "label": "Causal order",
+    "definition": "A representation of the relationship between transactions and the objects they produce."
+  },
+  {
+    "id": "certificate",
+    "label": "Certificate",
+    "definition": "The mechanism proving a transaction was approved or certified."
+  },
+  {
+    "id": "closed-loop-token",
+    "label": "Closed-Loop Token",
+    "definition": "A token that can be used only for a specific service or authorized account."
+  },
+  {
+    "id": "deepbook",
+    "label": "DeepBook",
+    "definition": "A decentralized central limit order book (CLOB) built on Sui."
+  },
+  {
+    "id": "devnet",
+    "label": "Devnet",
+    "definition": "For developing and testing new features."
+  },
+  {
+    "id": "epoch",
+    "label": "Epoch",
+    "definition": "A period of time defined by the network."
+  },
+  {
+    "id": "equivocation",
+    "label": "Equivocation",
+    "definition": "When an owned object pair is used concurrently in multiple non-finalized transactions."
+  },
+  {
+    "id": "finality",
+    "label": "Finality",
+    "definition": "The state in which a transaction is permanently recorded and cannot be revoked."
+  },
+  {
+    "id": "gas",
+    "label": "Gas",
+    "definition": "The computational cost of execution and object storage for a transaction."
+  },
+  {
+    "id": "localnet",
+    "label": "Localnet",
+    "definition": "Local network you can run on your own machine for optimized development."
+  },
+  {
+    "id": "kiosk",
+    "label": "Kiosk",
+    "definition": "A decentralized system for commerce applications on Sui."
+  },
+  {
+    "id": "mainnet",
+    "label": "Mainnet",
+    "definition": "Production network for live transactions and real-value assets."
+  },
+  {
+    "id": "multi-writer-objects",
+    "label": "Multi-writer objects",
+    "definition": "Objects that are owned by more than one address."
+  },
+  {
+    "id": "mysticeti",
+    "label": "Mysticeti",
+    "definition": "The consensus protocol used on Sui."
+  },
+  {
+    "id": "object",
+    "label": "Object",
+    "definition": "The basic unit of storage on Sui."
+  },
+  {
+    "id": "operation-cap",
+    "label": "Operation Cap",
+    "definition": "Allows a validator to authorize another account to perform certain actions on its behalf."
+  },
+  {
+    "id": "single-writer-objects",
+    "label": "Single-writer objects",
+    "definition": "Objects owned by one address."
+  },
+  {
+    "id": "soulbound",
+    "label": "Soulbound",
+    "definition": "An asset that is bound to an account and cannot be transferred."
+  },
+  {
+    "id": "testnet",
+    "label": "Testnet",
+    "definition": "Staging network for testing changes before production deployment."
+  },
+  {
+    "id": "transaction",
+    "label": "Transaction",
+    "definition": "A number of commands that execute on inputs to define the result of the transaction."
+  },
+  {
+    "id": "transfer",
+    "label": "Transfer",
+    "definition": "Changing the owner of an asset."
+  },
+  {
+    "id": "validator",
+    "label": "Validator",
+    "definition": "Responsible for executing tasks like staking, gas price references, and tallying rules."
+  },
+  {
+    "id": "wallet-standard",
+    "label": "Wallet Standard",
+    "definition": "A cross-chain standard that defines how apps can interact with wallets."
+  },
+  {
+    "id": "consensus",
+    "label": "Consensus",
+    "definition": "The process by which the majority of nodes agree on the current state of the network"
+  },
+  {
+    "id": "full-node",
+    "label": "Full node",
+    "definition": "Responsible for validating blockchain activity."
+  },
+  {
+    "id": "dpos",
+    "label": "DPoS",
+    "definition": "Consensus mechanism used by Sui.",
+    "aliases": ["delegated proof-of-stake"]
+  },
+  {
+    "id": "programmable-transaction-blocks",
+    "label": "Programmable transaction blocks",
+    "definition": "Define all user transactions on Sui.",
+    "aliases": ["PTB", "PTBs"]
+  },
+  {
+    "id": "system-transactions",
+    "label": "System transactions",
+    "definition": "Only submittable by validator nodes."
+  },
+  {
+    "id": "mist",
+    "label": "MIST",
+    "definition": "The smallest unit of SUI."
+  },
+  {
+    "id": "move",
+    "label": "Move",
+    "definition": "An open source programming language used for all activity on Sui."
+  },
+  {
+    "id": "quorum",
+    "label": "Quorum",
+    "definition": "A set of validators whose combined voting power is greater than 2/3 of the total."
+  },
+  {
+    "id": "sponsored-transaction",
+    "label": "Sponsored transaction",
+    "definition": "When one address pays the gas fee for a transaction submitted by another address.",
+    "aliases": ["sponsored transactions"]
+  },
+  {
+    "id": "multisig",
+    "label": "Multisig",
+    "definition": "Multi-signature transactions that require multiple keys for authorization.",
+    "aliases": ["multi-signature", "multi-sig"]
+  },
+  {
+    "id": "grpc-api",
+    "label": "gRPC API",
+    "definition": "Replaces JSON-RPC on full nodes for data access.",
+    "aliases": ["gRPC"]
+  },
+  {
+    "id": "general-purpose-indexer",
+    "label": "General-purpose Indexer",
+    "definition": "A performant and scalable implementation of the custom indexing framework."
+  },
+  {
+    "id": "graphql-rpc",
+    "label": "GraphQL RPC",
+    "definition": "A lightweight GraphQL RPC service."
+  },
+  {
+    "id": "zklogin",
+    "label": "zkLogin",
+    "definition": "A Sui primitive that allows you to send transactions using an OAuth credential."
+  },
+  {
+    "id": "checkpoint",
+    "label": "Checkpoint",
+    "definition": "Created after transaction execution to provide a certified record of chain history.",
+    "aliases": ["checkpoints"]
+  },
+  {
+    "id": "address",
+    "label": "Address",
+    "definition": "A unique, anonymous identity on a blockchain network.",
+    "aliases": ["addresses"]
+  },
+  {
+    "id": "faucet",
+    "label": "Faucet",
+    "definition": "A service that provides free Testnet tokens."
+  },
+  {
+    "id": "package",
+    "label": "Package",
+    "definition": "Smart contracts on Sui.",
+    "aliases": ["packages", "Move package", "Move packages"]
+  },
+  {
+    "id": "module",
+    "label": "Module",
+    "definition": "A component of a Move package that defines interaction with on-chain objects.",
+    "aliases": ["modules"]
+  },
+  {
+    "id": "nautilus",
+    "label": "Nautilus",
+    "definition": "Secure and verifiable off-chain computation on Sui."
+  }
+]

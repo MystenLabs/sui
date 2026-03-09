@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 
 use crate::{TestCluster, TestClusterBuilder};
-use sui_json_rpc_api::CoinReadApiClient;
 use sui_keys::keystore::AccountKeystore;
 use sui_protocol_config::{OverrideGuard, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
@@ -28,6 +27,7 @@ use sui_types::{
 
 pub struct TestEnvBuilder {
     num_validators: usize,
+    test_cluster_builder_cb: Option<Box<dyn Fn(TestClusterBuilder) -> TestClusterBuilder + Send>>,
     proto_override_cb:
         Option<Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send>>,
 }
@@ -41,6 +41,7 @@ impl Default for TestEnvBuilder {
 impl TestEnvBuilder {
     pub fn new() -> Self {
         Self {
+            test_cluster_builder_cb: None,
             proto_override_cb: None,
             num_validators: 1,
         }
@@ -60,15 +61,27 @@ impl TestEnvBuilder {
         self
     }
 
+    pub fn with_test_cluster_builder_cb(
+        mut self,
+        cb: Box<dyn Fn(TestClusterBuilder) -> TestClusterBuilder + Send>,
+    ) -> Self {
+        self.test_cluster_builder_cb = Some(cb);
+        self
+    }
+
     pub async fn build(self) -> TestEnv {
         let _guard = self
             .proto_override_cb
             .map(ProtocolConfig::apply_overrides_for_testing);
 
-        let test_cluster = TestClusterBuilder::new()
-            .with_num_validators(self.num_validators)
-            .build()
-            .await;
+        let mut test_cluster_builder =
+            TestClusterBuilder::new().with_num_validators(self.num_validators);
+
+        if let Some(cb) = self.test_cluster_builder_cb {
+            test_cluster_builder = cb(test_cluster_builder);
+        }
+
+        let test_cluster = test_cluster_builder.build().await;
 
         let chain_id = test_cluster.get_chain_identifier();
         let rgp = test_cluster.get_reference_gas_price().await;
@@ -108,7 +121,7 @@ impl TestEnv {
                 .await
                 .unwrap()
                 .into_iter()
-                .map(|(_, obj)| obj.object_ref())
+                .map(|(_, obj)| obj.compute_object_reference())
                 .collect();
 
             self.gas_objects.insert(address, gas);
@@ -154,6 +167,14 @@ impl TestEnv {
         (sender, gas)
     }
 
+    pub fn get_all_senders(&self) -> Vec<SuiAddress> {
+        self.cluster.wallet.get_addresses()
+    }
+
+    pub fn get_gas_for_sender(&self, sender: SuiAddress) -> Vec<ObjectRef> {
+        self.gas_objects.get(&sender).unwrap().clone()
+    }
+
     pub fn tx_builder(&self, sender: SuiAddress) -> TestTransactionBuilder {
         let gas = self.gas_objects.get(&sender).unwrap()[0];
         TestTransactionBuilder::new(sender, gas, self.rgp)
@@ -177,6 +198,24 @@ impl TestEnv {
             .await;
         self.update_all_gas().await;
         res
+    }
+
+    pub async fn setup_test_package(&mut self, path: impl AsRef<Path>) -> ObjectID {
+        let context = &mut self.cluster.wallet;
+        let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+        let gas_price = context.get_reference_gas_price().await.unwrap();
+        let txn = context
+            .sign_transaction(
+                &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                    .publish_async(path.as_ref().to_path_buf())
+                    .await
+                    .build(),
+            )
+            .await;
+        let resp = context.execute_transaction_must_succeed(txn).await;
+        let package_ref = resp.get_new_package_obj().unwrap();
+        self.update_all_gas().await;
+        package_ref.0
     }
 
     pub fn encode_coin_reservation(
@@ -256,13 +295,13 @@ impl TestEnv {
             }
         });
 
-        let client = self.cluster.fullnode_handle.rpc_client.clone();
+        let client = self.cluster.grpc_client();
         tokio::task::spawn(async move {
             let rpc_balance = client
-                .get_balance(owner, Some(coin_type.to_canonical_string(true)))
+                .get_balance(owner, &coin_type.to_canonical_string(true).parse().unwrap())
                 .await
                 .unwrap();
-            assert_eq!(db_balance, rpc_balance.funds_in_address_balance as u64);
+            assert_eq!(db_balance, rpc_balance.address_balance());
         });
 
         db_balance
@@ -283,6 +322,45 @@ impl TestEnv {
 
     pub async fn trigger_reconfiguration(&self) {
         self.cluster.trigger_reconfiguration().await;
+    }
+
+    /// Publishes the `object_balance` example package, creates an owned vault object,
+    /// and funds it with the given amount. Returns (package_id, vault_id).
+    pub async fn setup_funded_object_balance_vault(&mut self, amount: u64) -> (ObjectID, ObjectID) {
+        let sender = self.get_sender(0);
+
+        let tx = self
+            .tx_builder(sender)
+            .publish_examples("object_balance")
+            .await
+            .build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+        let package_id = effects
+            .created()
+            .into_iter()
+            .find(|(_, owner)| owner.is_immutable())
+            .unwrap()
+            .0
+            .0;
+
+        let tx = self
+            .tx_builder(sender)
+            .move_call(package_id, "object_balance", "new_owned", vec![])
+            .build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+        let vault_id = effects.created().into_iter().next().unwrap().0.0;
+
+        let tx = self
+            .tx_builder(sender)
+            .transfer_sui_to_address_balance(
+                FundSource::coin(self.get_sender_and_gas(0).1),
+                vec![(amount, vault_id.into())],
+            )
+            .build();
+        self.exec_tx_directly(tx).await.unwrap();
+        self.trigger_reconfiguration().await;
+
+        (package_id, vault_id)
     }
 }
 

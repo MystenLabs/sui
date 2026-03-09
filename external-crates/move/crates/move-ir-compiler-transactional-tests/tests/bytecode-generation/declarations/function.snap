@@ -12,46 +12,46 @@ struct Coin {
 	value: u64
 }
 
-public value(Arg0: &Coin): u64 {
-L1:	loc0: &u64
+public value(this: &Coin): u64 {
+L1:	value_ref: &u64
 B0:
-	0: MoveLoc[0](Arg0: &Coin)
+	0: MoveLoc[0](this: &Coin)
 	1: ImmBorrowField[0](Coin.value: u64)
-	2: StLoc[1](loc0: &u64)
-	3: MoveLoc[1](loc0: &u64)
+	2: StLoc[1](value_ref: &u64)
+	3: MoveLoc[1](value_ref: &u64)
 	4: ReadRef
 	5: Ret
 }
 
-public deposit(Arg0: &mut Coin, Arg1: Coin) {
-L2:	loc0: &mut u64
-L3:	loc1: u64
-L4:	loc2: &Coin
-L5:	loc3: u64
-L6:	loc4: u64
-L7:	loc5: u64
+public deposit(this: &mut Coin, check: Coin) {
+L2:	value_ref: &mut u64
+L3:	value: u64
+L4:	check_ref: &Coin
+L5:	check_value: u64
+L6:	new_value: u64
+L7:	i: u64
 B0:
-	0: MoveLoc[0](Arg0: &mut Coin)
+	0: MoveLoc[0](this: &mut Coin)
 	1: MutBorrowField[0](Coin.value: u64)
-	2: StLoc[2](loc0: &mut u64)
-	3: CopyLoc[2](loc0: &mut u64)
+	2: StLoc[2](value_ref: &mut u64)
+	3: CopyLoc[2](value_ref: &mut u64)
 	4: ReadRef
-	5: StLoc[3](loc1: u64)
-	6: ImmBorrowLoc[1](Arg1: Coin)
-	7: StLoc[4](loc2: &Coin)
-	8: MoveLoc[4](loc2: &Coin)
+	5: StLoc[3](value: u64)
+	6: ImmBorrowLoc[1](check: Coin)
+	7: StLoc[4](check_ref: &Coin)
+	8: MoveLoc[4](check_ref: &Coin)
 	9: Call value(&Coin): u64
-	10: StLoc[5](loc3: u64)
-	11: CopyLoc[3](loc1: u64)
-	12: CopyLoc[5](loc3: u64)
+	10: StLoc[5](check_value: u64)
+	11: CopyLoc[3](value: u64)
+	12: CopyLoc[5](check_value: u64)
 	13: Add
-	14: StLoc[6](loc4: u64)
-	15: MoveLoc[6](loc4: u64)
-	16: MoveLoc[2](loc0: &mut u64)
+	14: StLoc[6](new_value: u64)
+	15: MoveLoc[6](new_value: u64)
+	16: MoveLoc[2](value_ref: &mut u64)
 	17: WriteRef
-	18: MoveLoc[1](Arg1: Coin)
+	18: MoveLoc[1](check: Coin)
 	19: Unpack[0](Coin)
-	20: StLoc[7](loc5: u64)
+	20: StLoc[7](i: u64)
 	21: Ret
 }
 

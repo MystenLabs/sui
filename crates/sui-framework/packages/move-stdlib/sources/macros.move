@@ -166,6 +166,14 @@ public macro fun num_lossless_shr<$T>($x: $T, $shift: u8, $bit_size: u8): Option
     }
 }
 
+public macro fun num_lossless_div<$T>($x: $T, $y: $T): Option<$T> {
+    let x = $x;
+    let y = $y;
+    if (y == 0) option::none()
+    else if (x % y == 0) option::some(x / y)
+    else option::none()
+}
+
 public macro fun range_do<$T, $R: drop>($start: $T, $stop: $T, $f: |$T| -> $R) {
     let mut i = $start;
     let stop = $stop;

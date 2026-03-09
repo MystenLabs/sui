@@ -11,20 +11,18 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use sui_config::genesis::Genesis;
+use sui_config::node::FundsWithdrawSchedulerType;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_json_rpc_api::CoinReadApiClient;
-use sui_json_rpc_types::{
-    Balance, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    TransactionFilter,
-};
+use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, TransactionFilter};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
-use sui_sdk::apis::QuorumDriverApi;
+use sui_rpc_api::Client;
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -34,8 +32,8 @@ use sui_swarm_config::genesis_config::{
 };
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
-    GlobalStateHashV2EnabledCallback, GlobalStateHashV2EnabledConfig, ProtocolVersionsConfig,
-    SupportedProtocolVersionsCallback,
+    FundsWithdrawSchedulerTypeConfig, GlobalStateHashV2EnabledCallback,
+    GlobalStateHashV2EnabledConfig, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -46,6 +44,7 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::messages_grpc::{
@@ -59,6 +58,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
+use tokio::sync::broadcast;
 use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
 use tonic::IntoRequest;
@@ -70,8 +70,11 @@ const NUM_VALIDATOR: usize = 4;
 
 pub struct FullNodeHandle {
     pub sui_node: SuiNodeHandle,
+    #[deprecated = "use grpc_client"]
     pub sui_client: SuiClient,
+    #[deprecated = "use grpc_client"]
     pub rpc_client: HttpClient,
+    pub grpc_client: Client,
     pub rpc_url: String,
 }
 
@@ -81,11 +84,15 @@ impl FullNodeHandle {
         let rpc_client = HttpClientBuilder::default().build(&rpc_url).unwrap();
 
         let sui_client = SuiClientBuilder::default().build(&rpc_url).await.unwrap();
+        let grpc_client = Client::new(&rpc_url).unwrap();
 
         Self {
             sui_node,
+            #[allow(deprecated)]
             sui_client,
+            #[allow(deprecated)]
             rpc_client,
+            grpc_client,
             rpc_url,
         }
     }
@@ -98,20 +105,24 @@ pub struct TestCluster {
 }
 
 impl TestCluster {
+    #[deprecated = "use grpc_client()"]
     pub fn rpc_client(&self) -> &HttpClient {
+        #[allow(deprecated)]
         &self.fullnode_handle.rpc_client
     }
 
+    #[deprecated = "use grpc_client()"]
     pub fn sui_client(&self) -> &SuiClient {
+        #[allow(deprecated)]
         &self.fullnode_handle.sui_client
+    }
+
+    pub fn grpc_client(&self) -> Client {
+        self.fullnode_handle.grpc_client.clone()
     }
 
     pub fn rpc_url(&self) -> &str {
         &self.fullnode_handle.rpc_url
-    }
-
-    pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
-        self.sui_client().quorum_driver_api()
     }
 
     pub fn wallet(&mut self) -> &WalletContext {
@@ -149,6 +160,14 @@ impl TestCluster {
         self.fullnode_handle
             .sui_node
             .with(|node| node.state().epoch_store_for_testing().committee().clone())
+    }
+
+    pub fn get_sui_system_state(&self) -> SuiSystemState {
+        self.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_sui_system_state_object_for_testing()
+                .unwrap()
+        })
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
@@ -231,8 +250,7 @@ impl TestCluster {
     }
 
     pub async fn get_reference_gas_price(&self) -> u64 {
-        self.sui_client()
-            .governance_api()
+        self.grpc_client()
             .get_reference_gas_price()
             .await
             .expect("failed to get reference gas price")
@@ -464,6 +482,13 @@ impl TestCluster {
             .expect("timed out waiting for reconfiguration to complete");
     }
 
+    pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
+        // fullnode_handle is not part of swarm and cannot be dropped / killed
+        self.fullnode_handle
+            .sui_node
+            .with(|node| node.subscribe_to_epoch_change())
+    }
+
     /// Upgrade the network protocol version, by restarting every validator with a new
     /// supported versions.
     /// Note that we don't restart the fullnode here, and it is assumed that the fulnode supports
@@ -583,7 +608,7 @@ impl TestCluster {
     pub async fn sign_and_execute_transaction(
         &self,
         tx_data: &TransactionData,
-    ) -> SuiTransactionBlockResponse {
+    ) -> ExecutedTransaction {
         let tx = self.wallet.sign_transaction(tx_data).await;
         self.execute_transaction(tx).await
     }
@@ -595,6 +620,18 @@ impl TestCluster {
     ) -> SuiResult<(TransactionDigest, TransactionEffects)> {
         let mut res = self
             .sign_and_execute_txns_in_soft_bundle(std::slice::from_ref(tx_data))
+            .await?;
+        assert_eq!(res.len(), 1);
+        Ok(res.pop().unwrap())
+    }
+
+    /// Execute an already-signed transaction via direct validator submission, bypassing the fullnode.
+    pub async fn execute_transaction_directly(
+        &self,
+        tx: &Transaction,
+    ) -> SuiResult<(TransactionDigest, TransactionEffects)> {
+        let mut res = self
+            .execute_signed_txns_in_soft_bundle(std::slice::from_ref(tx))
             .await?;
         assert_eq!(res.len(), 1);
         Ok(res.pop().unwrap())
@@ -787,7 +824,7 @@ impl TestCluster {
     /// Also expects the effects status to be ExecutionStatus::Success.
     /// This function is recommended for transaction execution since it most resembles the
     /// production path.
-    pub async fn execute_transaction(&self, tx: Transaction) -> SuiTransactionBlockResponse {
+    pub async fn execute_transaction(&self, tx: Transaction) -> ExecutedTransaction {
         self.wallet.execute_transaction_must_succeed(tx).await
     }
 
@@ -914,29 +951,9 @@ impl TestCluster {
             .await
             .transfer_sui(Some(amount), receiver)
             .build();
-        let effects = self
-            .sign_and_execute_transaction(&tx)
-            .await
-            .effects
-            .unwrap();
-        assert_eq!(&SuiExecutionStatus::Success, effects.status());
-        effects.created().first().unwrap().object_id()
-    }
-
-    pub async fn get_sui_balance(&self, address: SuiAddress) -> Balance {
-        self.fullnode_handle
-            .rpc_client
-            .get_balance(address, Some("0x2::sui::SUI".to_string()))
-            .await
-            .unwrap()
-    }
-
-    pub async fn get_address_balance(&self, address: SuiAddress, coin_type: &str) -> Balance {
-        self.fullnode_handle
-            .rpc_client
-            .get_balance(address, Some(coin_type.to_string()))
-            .await
-            .unwrap()
+        let effects = self.sign_and_execute_transaction(&tx).await.effects;
+        assert!(effects.status().is_ok());
+        effects.created().first().unwrap().0.0
     }
 
     #[cfg(msim)]
@@ -1041,6 +1058,7 @@ pub struct TestClusterBuilder {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
+    validator_funds_withdraw_scheduler_type_config: FundsWithdrawSchedulerTypeConfig,
 
     rpc_config: Option<sui_config::RpcConfig>,
 
@@ -1085,6 +1103,14 @@ impl TestClusterBuilder {
             validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(
                 true,
             ),
+            validator_funds_withdraw_scheduler_type_config:
+                FundsWithdrawSchedulerTypeConfig::PerValidator(Arc::new(|idx| {
+                    if idx % 2 == 0 {
+                        FundsWithdrawSchedulerType::Eager
+                    } else {
+                        FundsWithdrawSchedulerType::Naive
+                    }
+                })),
             rpc_config: None,
             execution_time_observer_config: None,
             state_sync_config: None,
@@ -1191,6 +1217,10 @@ impl TestClusterBuilder {
     }
 
     pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
+        assert!(
+            epoch_duration_ms >= 10000,
+            "Epoch duration must be at least 10s (10000ms) to avoid flaky tests. Got {epoch_duration_ms}ms."
+        );
         self.get_or_init_genesis_config()
             .parameters
             .epoch_duration_ms = epoch_duration_ms;
@@ -1405,6 +1435,9 @@ impl TestClusterBuilder {
             )
             .with_global_state_hash_v2_enabled_config(
                 self.validator_global_state_hash_v2_enabled_config.clone(),
+            )
+            .with_funds_withdraw_scheduler_type_config(
+                self.validator_funds_withdraw_scheduler_type_config.clone(),
             )
             .with_fullnode_count(1)
             .with_fullnode_supported_protocol_versions_config(

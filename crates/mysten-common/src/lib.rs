@@ -4,6 +4,7 @@
 use once_cell::sync::Lazy;
 use tracing::warn;
 
+pub mod assert_reachable;
 pub mod backoff;
 pub mod decay_moving_average;
 pub mod logging;

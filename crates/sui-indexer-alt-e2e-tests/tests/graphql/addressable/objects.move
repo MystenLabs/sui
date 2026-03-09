@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --simulator
+//# init --protocol-version 108 --accounts A B --simulator
 
 // Checkpoint 1:
 // A: Bag, Gas, Coin(1000), Coin(500), Coin(250), Table<u64, u64>

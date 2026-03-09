@@ -19,7 +19,7 @@ jobs:
     if: ${{ github.event.action == 'opened' }}
     steps:
       - name: Dispatch github-issues-external-prs-monitor in MystenLabs/sui-operations
-        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
         with: 
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}

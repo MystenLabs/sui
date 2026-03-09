@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/unit_test/expected_failure_constants_unbound_package.move:4:43
+  │
+4 │     #[test, expected_failure(abort_code = nonsense::nonsense::foo, location = a::m)]
+  │                                           ^^^^^^^^ Could not resolve the name 'nonsense'

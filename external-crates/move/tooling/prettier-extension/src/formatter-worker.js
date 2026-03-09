@@ -25,5 +25,7 @@ parentPort.on('message', async (message) => {
 		enableErrorDebug: options.enableErrorDebug,
 	})
 		.then((text) => parentPort.postMessage({ text, documentUri }))
-		.catch((err) => parentPort.postMessage({ text, documentUri, message: err.message }));
+		.catch((err) =>
+			parentPort.postMessage({ text, documentUri, message: err.message, error: err }),
+		);
 });

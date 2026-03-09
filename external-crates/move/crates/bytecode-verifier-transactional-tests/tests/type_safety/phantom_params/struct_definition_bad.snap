@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/phantom_params/struct_definition_bad.mvir
 ---
 processed 12 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M1,
     indices: [(FieldDefinition, 0), (StructDefinition, 0)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 1, lines 13-19:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M2,
     indices: [(FieldDefinition, 0), (StructDefinition, 0)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 2, lines 21-28:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M3,
     indices: [(FieldDefinition, 0), (StructDefinition, 1)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 3, lines 30-39:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M4,
     indices: [(FieldDefinition, 0), (StructDefinition, 2)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 4, lines 41-47:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M5,
     indices: [(FieldDefinition, 0), (StructDefinition, 0)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 5, lines 49-56:
@@ -62,6 +66,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M6,
     indices: [(FieldDefinition, 0), (StructDefinition, 1)],
     offsets: [],
+    message: "expected type with abilities [Copy, ] got type actual TypeParameter(0) with incompatible abilities []",
 }
 
 task 6, lines 58-68:
@@ -72,6 +77,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M1,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 7, lines 70-76:
@@ -82,6 +88,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M2,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 8, lines 78-85:
@@ -92,6 +99,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M3,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 1)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 9, lines 87-96:
@@ -102,6 +110,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M4,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 2)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 10, lines 98-104:
@@ -112,6 +121,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M5,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "phantom type parameter cannot be used in non-phantom position",
 }
 
 task 11, lines 106-113:
@@ -122,4 +132,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M6,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 1)],
     offsets: [],
+    message: "expected type with abilities [Copy, ] got type actual TypeParameter(0) with incompatible abilities []",
 }

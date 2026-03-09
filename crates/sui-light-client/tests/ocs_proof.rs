@@ -40,8 +40,7 @@ fn load_test_data() -> Result<(CheckpointData, Committee), anyhow::Error> {
     d.push(GENESIS_FILE);
     let genesis_committee = Genesis::load(&d)
         .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?
-        .committee()
-        .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?;
+        .committee();
 
     // Sanity check
     checkpoint

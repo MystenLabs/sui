@@ -16,7 +16,8 @@ use crate::workloads::{GroupID, WorkloadInfo};
 pub trait Driver<T> {
     async fn run(
         &self,
-        proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
+        execution_proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
+        fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
         workloads_by_group_id: BTreeMap<GroupID, Vec<WorkloadInfo>>,
         system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,

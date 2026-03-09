@@ -31,31 +31,50 @@ pub mod typing_analysis;
 
 pub type DefMap = BTreeMap<Loc, DefInfo>;
 
+/// Context tracking the current location during analysis traversal.
+/// All fields are set together when entering a module and the entire
+/// context is cleared when exiting.
+#[derive(Debug, Clone)]
+pub struct CurrentLocationContext {
+    /// Current module identifier string
+    pub mod_ident_str: String,
+    /// Current file hash being processed
+    pub file_hash: FileHash,
+    /// Module definition location for unique identification within a file
+    pub mod_loc: Loc,
+}
+
+impl CurrentLocationContext {
+    pub fn new(mod_ident_str: String, file_hash: FileHash, mod_loc: Loc) -> Self {
+        Self {
+            mod_ident_str,
+            file_hash,
+            mod_loc,
+        }
+    }
+}
+
 /// Run parsing analysis for either main program or dependencies
 pub fn run_parsing_analysis(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &CompiledPkgInfo,
     cursor_context: Option<&mut CursorContext>,
     parsed_program: &ParsedDefinitions,
-    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
     let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
+        mod_parsing_info: &mut computation_data.mod_parsing_info,
         files: &compiled_pkg_info.mapped_files,
+        def_info: &computation_data.def_info,
         references: &mut computation_data.references,
-        def_info: &mut computation_data.def_info,
         use_defs: &mut computation_data.use_defs,
-        current_mod_ident_str: None,
+        current_location: None,
         alias_lengths: BTreeMap::new(),
         pkg_addresses: Arc::new(NamedAddressMap::new()),
         cursor: cursor_context,
     };
 
-    parsing_symbolicator.prog_symbols(
-        parsed_program,
-        &mut computation_data.mod_to_alias_lengths,
-        typed_mod_named_address_maps,
-    );
+    parsing_symbolicator.prog_symbols(parsed_program, &mut computation_data.mod_to_alias_lengths);
 }
 
 /// Run typing analysis for either main program or dependencies
@@ -67,11 +86,12 @@ pub fn run_typing_analysis(
 ) -> SymbolsComputationData {
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
+        mod_parsing_info: &mut computation_data.mod_parsing_info,
         files: mapped_files,
         references: &mut computation_data.references,
         def_info: &mut computation_data.def_info,
         use_defs: &mut computation_data.use_defs,
-        current_mod_ident_str: None,
+        current_location: None,
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
         compiler_analysis_info,
@@ -106,7 +126,10 @@ fn process_typed_modules<'a>(
 ) {
     for (module_ident, module_def) in typed_modules.key_cloned_iter() {
         let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
-        typing_symbolicator.alias_lengths = mod_to_alias_lengths.get(&mod_ident_str).unwrap();
+        // All typed modules must have alias lengths computed during parsing analysis.
+        typing_symbolicator.alias_lengths = mod_to_alias_lengths
+            .get(&mod_ident_str)
+            .unwrap_or_else(|| panic!("no alias lengths for module {mod_ident_str}"));
         typing_symbolicator.visit_module(module_ident, module_def);
     }
 }

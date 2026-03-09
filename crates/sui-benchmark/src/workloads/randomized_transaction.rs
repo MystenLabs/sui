@@ -4,7 +4,7 @@
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
-use crate::workloads::payload::{ConcurrentTransactionResult, Payload};
+use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder,
 };
@@ -216,6 +216,7 @@ impl RandomizedTransactionPayload {
     }
 }
 
+#[async_trait]
 impl Payload for RandomizedTransactionPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
@@ -272,11 +273,11 @@ impl Payload for RandomizedTransactionPayload {
         Some(ExpectedFailureType::NoFailure)
     }
 
-    fn is_concurrent_batch(&self) -> bool {
+    fn is_batched(&self) -> bool {
         true
     }
 
-    fn make_concurrent_transactions(&mut self) -> Vec<Transaction> {
+    async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let rgp = self
             .system_state_observer
             .state
@@ -343,13 +344,14 @@ impl Payload for RandomizedTransactionPayload {
         transactions
     }
 
-    fn handle_concurrent_results(&mut self, results: &[ConcurrentTransactionResult]) {
+    fn handle_batch_results(&mut self, results: &BatchExecutionResults) {
         let mut success_count = 0;
         let mut lock_conflict_count = 0;
+        let mut retriable_count = 0;
 
-        for (i, result) in results.iter().enumerate() {
-            match result {
-                ConcurrentTransactionResult::Success { effects } => {
+        for (i, result) in results.results.iter().enumerate() {
+            match &result.status {
+                BatchedTransactionStatus::Success { effects } => {
                     success_count += 1;
                     // Update gas object ref
                     self.gas_objects[i].0 = effects.gas_object().0;
@@ -374,26 +376,51 @@ impl Payload for RandomizedTransactionPayload {
                         "Immutable object should not be in mutated objects"
                     );
                 }
-                ConcurrentTransactionResult::Failure { error } => {
+                BatchedTransactionStatus::PermanentFailure { error } => {
                     // Check if it's an ObjectLockConflict (expected when owned object is included)
                     if error.contains("ObjectLockConflict") {
                         lock_conflict_count += 1;
                         tracing::debug!(
-                            "Transaction {} rejected with ObjectLockConflict (expected)",
-                            i
+                            "Transaction {} ({}) rejected with ObjectLockConflict (expected)",
+                            i,
+                            result.digest
                         );
                     } else {
-                        tracing::debug!("Transaction {} failed with error: {:?}", i, error);
+                        tracing::debug!(
+                            "Transaction {} ({}) failed with error: {:?}",
+                            i,
+                            result.digest,
+                            error
+                        );
                     }
+                }
+                BatchedTransactionStatus::RetriableFailure { error } => {
+                    retriable_count += 1;
+                    tracing::debug!(
+                        "Transaction {} ({}) had retriable failure: {:?}",
+                        i,
+                        result.digest,
+                        error
+                    );
+                }
+                // we treat unknown rejections as retriable for now
+                BatchedTransactionStatus::UnknownRejection => {
+                    retriable_count += 1;
+                    tracing::debug!(
+                        "Transaction {} ({}) had unknown rejection",
+                        i,
+                        result.digest
+                    );
                 }
             }
         }
 
         tracing::debug!(
-            "Concurrent batch results: {} success, {} lock conflicts out of {} transactions",
+            "Batch results: {} success, {} lock conflicts, {} retriable out of {} transactions",
             success_count,
             lock_conflict_count,
-            results.len()
+            retriable_count,
+            results.results.len()
         );
     }
 }
@@ -538,7 +565,8 @@ pub struct RandomizedTransactionWorkload {
 impl Workload<dyn Payload> for RandomizedTransactionWorkload {
     async fn init(
         &mut self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         // We observed that randomness may need a few seconds until DKG completion, and this may
@@ -564,7 +592,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
         // Publish basics package
         info!("Publishing basics package");
         self.basics_package_id = Some(
-            publish_basics_package(head.0, proxy.clone(), head.1, &head.2, gas_price)
+            publish_basics_package(head.0, execution_proxy.clone(), head.1, &head.2, gas_price)
                 .await
                 .0,
         );
@@ -579,7 +607,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                 let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
                     .call_counter_create(self.basics_package_id.unwrap())
                     .build_and_sign(keypair.as_ref());
-                let proxy_ref = proxy.clone();
+                let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
                     let (_, execution_result) =
                         proxy_ref.execute_transaction_block(transaction).await;
@@ -606,7 +634,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     ],
                 )
                 .build_and_sign(keypair.as_ref());
-            let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+            let (_, execution_result) =
+                execution_proxy.execute_transaction_block(transaction).await;
             let effects = execution_result.expect("Failed to create immutable object");
             let created_obj = effects.created()[0].0;
             current_gas = effects.gas_object().0;
@@ -621,7 +650,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(created_obj))],
                 )
                 .build_and_sign(keypair.as_ref());
-            let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+            let (_, execution_result) =
+                execution_proxy.execute_transaction_block(transaction).await;
             let effects = execution_result.expect("Failed to freeze object");
 
             // After freezing, the object becomes immutable - find it in mutated objects
@@ -653,7 +683,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                         ],
                     )
                     .build_and_sign(keypair.as_ref());
-                let proxy_ref = proxy.clone();
+                let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
                     let (_, execution_result) =
                         proxy_ref.execute_transaction_block(transaction).await;
@@ -675,7 +705,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
 
         // Get randomness shared object initial version
         if self.randomness_initial_shared_version.is_none() {
-            let obj = proxy
+            let obj = execution_proxy
                 .get_object(SUI_RANDOMNESS_STATE_OBJECT_ID)
                 .await
                 .expect("Failed to get randomness object");
@@ -697,7 +727,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
 
     async fn make_test_payloads(
         &self,
-        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         info!("Creating randomized transaction payloads...");

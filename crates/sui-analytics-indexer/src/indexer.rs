@@ -20,6 +20,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::service::Service;
 
 use crate::config::IndexerConfig;
@@ -35,6 +39,8 @@ use crate::store::AnalyticsStore;
 /// gracefully, it will wait for all pending uploads to complete.
 pub async fn build_analytics_indexer(
     config: IndexerConfig,
+    indexer_args: IndexerArgs,
+    client_args: ClientArgs,
     metrics: Metrics,
     registry: prometheus::Registry,
 ) -> Result<Service> {
@@ -46,7 +52,7 @@ pub async fn build_analytics_indexer(
 
     // Find checkpoint range (snaps to file boundaries in migration mode)
     let (adjusted_first_checkpoint, adjusted_last_checkpoint) = store
-        .find_checkpoint_range(config.first_checkpoint, config.last_checkpoint)
+        .find_checkpoint_range(indexer_args.first_checkpoint, indexer_args.last_checkpoint)
         .await?;
 
     let work_dir = if let Some(ref work_dir) = config.work_dir {
@@ -61,48 +67,27 @@ pub async fn build_analytics_indexer(
             .keep()
     };
 
+    let rpc_url = client_args
+        .ingestion
+        .rpc_api_url
+        .as_ref()
+        .map(|u| u.to_string())
+        .unwrap_or_default();
     let package_cache_path = work_dir.join("package_cache");
-    let package_cache = Arc::new(PackageCache::new(&package_cache_path, &config.rpc_api_url));
+    let package_cache = Arc::new(PackageCache::new(&package_cache_path, &rpc_url));
 
-    let indexer_args = sui_indexer_alt_framework::IndexerArgs {
+    let adjusted_indexer_args = IndexerArgs {
         first_checkpoint: adjusted_first_checkpoint,
         last_checkpoint: adjusted_last_checkpoint,
-        pipeline: vec![],
-        task: Default::default(),
-    };
-
-    let client_args = sui_indexer_alt_framework::ingestion::ClientArgs {
-        ingestion: sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
-            // Only use remote_store_url if local_ingestion_path is not provided
-            remote_store_url: if config.local_ingestion_path.is_some() {
-                None
-            } else {
-                config
-                    .remote_store_url
-                    .as_ref()
-                    .map(|url| url::Url::parse(url))
-                    .transpose()?
-            },
-            local_ingestion_path: config.local_ingestion_path.clone(),
-            rpc_api_url: Some(config.rpc_api_url.parse()?),
-            rpc_username: config.rpc_username.clone(),
-            rpc_password: config.rpc_password.clone(),
-            ..Default::default()
-        },
-        streaming: sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs {
-            streaming_url: config
-                .streaming_url
-                .as_ref()
-                .map(|url| url.parse())
-                .transpose()?,
-        },
+        pipeline: indexer_args.pipeline,
+        task: indexer_args.task,
     };
 
     let ingestion_config = config.ingestion.clone();
 
     let mut indexer = Indexer::new(
         store.clone(),
-        indexer_args,
+        adjusted_indexer_args,
         client_args,
         ingestion_config,
         None,
@@ -110,8 +95,18 @@ pub async fn build_analytics_indexer(
     )
     .await?;
 
+    let base_committer = config.committer.clone().finish(CommitterConfig::default());
+    let base_sequential = SequentialConfig {
+        committer: base_committer,
+        ..Default::default()
+    };
+
     for pipeline_config in config.pipeline_configs() {
         info!("Registering pipeline: {}", pipeline_config.pipeline);
+        let sequential = pipeline_config
+            .sequential
+            .clone()
+            .finish(base_sequential.clone());
         pipeline_config
             .pipeline
             .register(
@@ -119,7 +114,7 @@ pub async fn build_analytics_indexer(
                 pipeline_config,
                 package_cache.clone(),
                 metrics.clone(),
-                config.sequential.clone(),
+                sequential,
             )
             .await?;
     }

@@ -565,7 +565,6 @@ Error: Layout API for structs of module 00000000000000000000000000000002::M has 
 ```
 
 In this case, we know we have not published any instances of `S` in global storage, so it is safe to re-run `move sandbox publish --ignore-breaking-changes` (as recommended).
-We can double-check that this was not a breaking change by running `move sandbox doctor`.
 This handy command runs exhaustive sanity checks on global storage to detect any breaking changes that occurred in the past:
 
 - All modules pass the bytecode verifier

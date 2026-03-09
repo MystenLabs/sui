@@ -247,6 +247,50 @@ impl ObjectSet {
 }
 
 impl Checkpoint {
+    pub fn epoch_info(&self) -> Result<Option<EpochInfo>, StorageError> {
+        if self.summary.end_of_epoch_data.is_none() && self.summary.sequence_number != 0 {
+            return Ok(None);
+        }
+
+        let (start_checkpoint, transaction) = if self.summary.sequence_number == 0 {
+            (0, &self.transactions[0])
+        } else {
+            let Some(transaction) = self.transactions.iter().find(|tx| {
+                matches!(
+                    tx.transaction.kind(),
+                    TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
+                )
+            }) else {
+                return Err(StorageError::custom(format!(
+                    "Failed to get end of epoch transaction in checkpoint {} with EndOfEpochData",
+                    self.summary.sequence_number,
+                )));
+            };
+            (self.summary.sequence_number + 1, transaction)
+        };
+
+        let output_objects: Vec<Object> = transaction
+            .output_objects(&self.object_set)
+            .cloned()
+            .collect();
+        let system_state = get_sui_system_state(&output_objects.as_slice()).map_err(|e| {
+            StorageError::custom(format!(
+                "Failed to find system state object output from end of epoch transaction: {e}"
+            ))
+        })?;
+
+        Ok(Some(EpochInfo {
+            epoch: system_state.epoch(),
+            protocol_version: Some(system_state.protocol_version()),
+            start_timestamp_ms: Some(system_state.epoch_start_timestamp_ms()),
+            end_timestamp_ms: None,
+            start_checkpoint: Some(start_checkpoint),
+            end_checkpoint: None,
+            reference_gas_price: Some(system_state.reference_gas_price()),
+            system_state: Some(system_state),
+        }))
+    }
+
     pub fn latest_live_output_objects(&self) -> BTreeMap<ObjectID, Object> {
         let mut latest_live_output_objects = BTreeMap::new();
         for tx in self.transactions.iter() {
@@ -284,6 +328,40 @@ impl Checkpoint {
         }
         eventually_removed_object_refs.into_values().collect()
     }
+
+    // Returns the required FieldMask to fetch all necessary fields for populating `Checkpoint`
+    pub fn proto_field_mask() -> sui_rpc::field::FieldMask {
+        use sui_rpc::field::FieldMaskUtil;
+        use sui_rpc::proto::sui::rpc::v2::Checkpoint;
+
+        sui_rpc::field::FieldMask::from_paths([
+            Checkpoint::path_builder().sequence_number(),
+            Checkpoint::path_builder().summary().bcs().value(),
+            Checkpoint::path_builder().signature().finish(),
+            Checkpoint::path_builder().contents().bcs().value(),
+            Checkpoint::path_builder()
+                .transactions()
+                .transaction()
+                .bcs()
+                .value(),
+            Checkpoint::path_builder()
+                .transactions()
+                .effects()
+                .bcs()
+                .value(),
+            Checkpoint::path_builder()
+                .transactions()
+                .effects()
+                .unchanged_loaded_runtime_objects()
+                .finish(),
+            Checkpoint::path_builder()
+                .transactions()
+                .events()
+                .bcs()
+                .value(),
+            Checkpoint::path_builder().objects().objects().bcs().value(),
+        ])
+    }
 }
 
 impl ExecutedTransaction {
@@ -313,6 +391,16 @@ impl ExecutedTransaction {
                     .output_version
                     .and_then(|version| object_set.get(&ObjectKey(change.id, version)))
             })
+    }
+
+    pub fn created_objects<'a>(
+        &self,
+        object_set: &'a ObjectSet,
+    ) -> impl Iterator<Item = &'a Object> + 'a {
+        self.effects
+            .created()
+            .into_iter()
+            .filter_map(move |((id, version, _), _)| object_set.get(&ObjectKey(id, version)))
     }
 }
 

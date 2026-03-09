@@ -12,15 +12,13 @@ use diesel_async::RunQueryDsl;
 use diesel_async::scoped_futures::ScopedFutureExt;
 
 use crate::ProcessedTxnData;
+use crate::indexer_builder::{IndexerProgressStore, Persistent};
 use crate::postgres_manager::PgPool;
+use crate::{LIVE_TASK_TARGET_CHECKPOINT, Task, Tasks, progress::ProgressSavingPolicy};
 use sui_bridge_schema::models::ProgressStore;
 use sui_bridge_schema::schema;
 use sui_bridge_schema::schema::progress_store::{columns, dsl};
 use sui_bridge_schema::schema::{sui_error_transactions, token_transfer, token_transfer_data};
-use sui_indexer_builder::indexer_builder::{IndexerProgressStore, Persistent};
-use sui_indexer_builder::{
-    LIVE_TASK_TARGET_CHECKPOINT, Task, Tasks, progress::ProgressSavingPolicy,
-};
 
 /// Persistent layer impl
 #[derive(Clone)]
@@ -308,5 +306,18 @@ impl IndexerProgressStore for PgBridgePersistent {
         .execute(&mut conn)
         .await?;
         Ok(())
+    }
+}
+
+impl From<ProgressStore> for Task {
+    fn from(value: ProgressStore) -> Self {
+        Self {
+            task_name: value.task_name,
+            start_checkpoint: value.checkpoint as u64,
+            target_checkpoint: value.target_checkpoint as u64,
+            // Ok to unwrap, timestamp is defaulted to now() in database
+            timestamp: value.timestamp.expect("Timestamp not set").0 as u64,
+            is_live_task: value.target_checkpoint == LIVE_TASK_TARGET_CHECKPOINT,
+        }
     }
 }

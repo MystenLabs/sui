@@ -15,6 +15,7 @@ use crate::{stake_with_validator, transfer_coin};
 #[sim_test]
 async fn get_checkpoint() {
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .disable_fullnode_pruning()
         .build()
         .await;

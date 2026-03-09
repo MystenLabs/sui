@@ -1,0 +1,28 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== M1.move ========================================================
+-- test 0 -------------------
+INLAY TYPE HINT : u64
+-- test 1 -------------------
+INLAY PARAM HINT: int_param
+ON HOVER:
+```rust
+int_param: u64
+```
+-- test 2 -------------------
+INLAY TYPE HINT : u64
+-- test 3 -------------------
+INLAY PARAM HINT: int_param
+ON HOVER:
+```rust
+int_param: u64
+```
+-- test 4 -------------------
+INLAY TYPE HINT : u64
+-- test 5 -------------------
+INLAY PARAM HINT: int_param
+ON HOVER:
+```rust
+int_param: u64
+```

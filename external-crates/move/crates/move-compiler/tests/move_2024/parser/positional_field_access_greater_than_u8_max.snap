@@ -11,6 +11,19 @@ error[E03010]: unbound field
 5 │         y.256
   │         ^^^^^ Unbound field '256' in '0x42::M::Foo'
 
+error[E06001]: unused value without 'drop'
+  ┌─ tests/move_2024/parser/positional_field_access_greater_than_u8_max.move:5:9
+  │
+2 │     public struct Foo(u64)
+  │                   --- To satisfy the constraint, the 'drop' ability would need to be added here
+3 │ 
+4 │     fun x(y: Foo): u64 {
+  │           -  --- The type '0x42::M::Foo' does not have the ability 'drop'
+  │           │   
+  │           The parameter 'y' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+5 │         y.256
+  │         ^^^^^ Invalid return
+
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/positional_field_access_greater_than_u8_max.move:5:11
   │

@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 3-19:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::direct'. Got VMError: {
+    major_status: BORROWLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::direct,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 1, lines 21-37:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::copy_and_freeze'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::copy_and_freeze,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 9)],
+}

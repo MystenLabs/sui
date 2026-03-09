@@ -1,7 +1,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_abstract_interpreter::{absint, control_flow_graph};
+use std::collections::BTreeMap;
+
+use move_abstract_interpreter::{
+    absint::{self, BlockInvariant},
+    control_flow_graph,
+};
 use move_binary_format::{
     CompiledModule,
     errors::{PartialVMError, PartialVMResult},
@@ -55,18 +60,18 @@ pub fn analyze_function<TF: TransferFunctions, M: Meter + ?Sized>(
     meter: &mut M,
     transfer_functions: &mut TF,
     initial_state: TF::State,
-) -> Result<(), PartialVMError> {
+) -> Result<BTreeMap<CodeOffset, BlockInvariant<TF::State>>, PartialVMError> {
     let mut interpreter = AbstractInterpreter {
         meter,
         transfer_functions,
     };
-    let _states = absint::analyze_function(
+    let states = absint::analyze_function(
         &mut interpreter,
         &function_context.cfg,
         &function_context.code.code,
         initial_state,
     )?;
-    Ok(())
+    Ok(states)
 }
 
 /// A `FunctionContext` holds all the information needed by the verifier for `FunctionDefinition`.`

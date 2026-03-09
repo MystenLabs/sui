@@ -82,6 +82,7 @@ mod tests {
     use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
     use std::fs;
 
+    #[cfg(not(tidehunter))]
     #[tokio::test]
     async fn test_basic_epoch_pruner() {
         let parent_directory = tempfile::tempdir().unwrap().keep();

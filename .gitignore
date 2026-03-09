@@ -3,7 +3,9 @@
 **/.vscode/
 **/.idea/
 **/CLAUDE-local.md
-**/.claude/
+**/CLAUDE.local.md
+**/.claude/*
+!**/.claude/skills/
 **/.opencode/
 
 # OSX
@@ -25,6 +27,7 @@ storage
 Move.lock
 .trace
 .coverage_map.mvcov
+traces
 
 # Thumbnails
 ._*
@@ -35,6 +38,7 @@ Move.lock
 
 # Python
 .pyc
+scripts/simtest/__pycache__/**
 
 # Node.js
 node_modules

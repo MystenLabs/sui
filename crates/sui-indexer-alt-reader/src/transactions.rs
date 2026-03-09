@@ -113,8 +113,7 @@ impl Loader<TransactionKey> for LedgerGrpcReader {
             "timestamp",
         ]));
 
-        let response = self.0.clone().batch_get_transactions(request).await?;
-        let batch_response = response.into_inner();
+        let batch_response = self.batch_get_transactions(request).await?;
 
         let mut results = HashMap::new();
         for tx_result in batch_response.transactions {

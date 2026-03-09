@@ -142,7 +142,9 @@ async fn test_make_change_exact_div() -> Result<()> {
     const SUI_10: u64 = 10_000_000_000;
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .build()
         .await;
     let sender = test_cluster.get_address_0();
@@ -268,7 +270,9 @@ async fn test_make_change_remainder_div() -> Result<()> {
     const SUI_12: u64 = 12_000_000_000;
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_epoch_duration_ms(36000000)
+        .disable_fullnode_pruning()
         .build()
         .await;
     let sender = test_cluster.get_address_0();

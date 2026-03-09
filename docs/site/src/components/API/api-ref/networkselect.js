@@ -3,22 +3,21 @@
 
 import React, { useState, useEffect } from "react";
 import ExecutionEnvironment from "@docusaurus/ExecutionEnvironment";
-import { Select, MenuItem, FormControl, InputLabel } from "@mui/material";
+import { Select, MenuItem, FormControl, InputLabel, FormHelperText } from "@mui/material";
 import { StyledEngineProvider } from "@mui/material/styles";
 
-const NETWORKS = ["Devnet", "Testnet", "Mainnet"];
+const NETWORKS = [
+  { label: "Devnet", value: "devnet" },
+  { label: "Testnet", value: "testnet" },
+  { label: "Mainnet", value: "mainnet" },
+];
 
 const NetworkSelect = () => {
   const [selection, setSelection] = useState(() => {
     if (ExecutionEnvironment.canUseDOM) {
-      const network = localStorage.getItem("RPC");
-      if (network === null) {
-        return "mainnet";
-      }
-      return localStorage.getItem("RPC");
-    } else {
-      return "mainnet";
+      return localStorage.getItem("RPC") ?? "mainnet";
     }
+    return "mainnet";
   });
 
   useEffect(() => {
@@ -26,30 +25,30 @@ const NetworkSelect = () => {
     window.dispatchEvent(new Event("storage"));
   }, [selection]);
 
-  const handleChange = (e) => {
-    setSelection(e.target.value);
-  };
+  const rpcUrl = `https://fullnode.${selection}.sui.io:443`;
 
   return (
     <StyledEngineProvider injectFirst>
-      <div className="w-11/12">
-        <FormControl fullWidth>
-          <InputLabel
-            id="network"
-            className="dark:text-white"
-          >{`RPC: https://fullnode.${selection.toLowerCase()}.sui.io:443`}</InputLabel>
+      <div className="w-full">
+        <FormControl fullWidth size="small">
+          <InputLabel id="network">Network</InputLabel>
           <Select
-            label-id="network"
+            labelId="network"
             id="network-select"
             value={selection}
-            label={`RPC: https://fullnode.${selection.toLowerCase()}.sui.io:443`}
-            onChange={handleChange}
+            label="Network"
+            onChange={(e) => setSelection(e.target.value)}
             className="dark:text-white dark:bg-sui-ghost-dark"
           >
-            <MenuItem value="devnet">{NETWORKS[0]}</MenuItem>
-            <MenuItem value="testnet">{NETWORKS[1]}</MenuItem>
-            <MenuItem value="mainnet">{NETWORKS[2]}</MenuItem>
+            {NETWORKS.map((n) => (
+              <MenuItem key={n.value} value={n.value}>
+                {n.label}
+              </MenuItem>
+            ))}
           </Select>
+          <FormHelperText className="api-muted">
+            RPC: <span className="api-typechip">{rpcUrl}</span>
+          </FormHelperText>
         </FormControl>
       </div>
     </StyledEngineProvider>

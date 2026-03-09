@@ -1,0 +1,68 @@
+// can create an immutabe extension via a call after a mut borrow,
+// but if the mut is a parent, it won't be writable
+
+//# publish
+module 0x2.valid {
+
+    id_mut(r: &mut u64): &mut u64 {
+    label b0:
+        return move(r);
+    }
+
+    id(r: &u64): &u64 {
+    label b0:
+        return move(r);
+    }
+
+    t() {
+        let a: u64;
+        let r: &mut u64;
+        let mut1: &mut u64;
+        let imm1: &u64;
+        let imm2: &u64;
+        let imm3: &u64;
+    label b0:
+        a = 0;
+        r = &mut a;
+        mut1 = Self.id_mut(copy(r));
+        // all valid
+        imm1 = Self.id(&a);
+        imm2 = Self.id(freeze(copy(r)));
+        imm3 = Self.id(freeze(copy(mut1)));
+        // all readable
+        _ = *copy(imm1);
+        _ = *copy(imm2);
+        _ = *copy(imm3);
+        return;
+    }
+}
+
+//# publish
+module 0x2.invalid {
+
+    id_mut(r: &mut u64): &mut u64 {
+    label b0:
+        return move(r);
+    }
+
+    id(r: &u64): &u64 {
+    label b0:
+        return move(r);
+    }
+
+    t() {
+        let a: u64;
+        let r: &mut u64;
+        let mut1: &mut u64;
+        let imm1: &u64;
+    label b0:
+        a = 0;
+        r = &mut a;
+        mut1 = Self.id_mut(copy(r));
+        // all valid
+        imm1 = Self.id(&a);
+        // cannot write to mut1
+        *copy(mut1) = 0;
+        return;
+    }
+}

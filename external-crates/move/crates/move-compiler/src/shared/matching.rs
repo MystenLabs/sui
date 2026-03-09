@@ -5,10 +5,10 @@ use crate::{
     diagnostics::DiagnosticReporter,
     expansion::ast::{Fields, ModuleIdent, Mutability, Value},
     hlir::translate::NEW_NAME_DELIM,
-    ice,
+    ice, ice_assert,
     naming::ast::{self as N, Type, Var},
     parser::ast::{BinOp_, ConstantName, Field, VariantName},
-    shared::{CompilationEnv, program_info::ProgramInfo, unique_map::UniqueMap},
+    shared::{CompilationEnv, Identifier, program_info::ProgramInfo, unique_map::UniqueMap},
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
 };
 use move_ir_types::location::*;
@@ -65,7 +65,7 @@ pub struct ArmResult {
 
 /// A shared match context trait for use with counterexample generation in Typing and match
 /// compilation in HLIR lowering.
-pub trait MatchContext<const AFTER_TYPING: bool> {
+pub trait MatchContext<const AFTER_TYPING: bool>: Sized {
     fn env(&self) -> &CompilationEnv;
     fn reporter(&self) -> &DiagnosticReporter<'_>;
     fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var;
@@ -94,7 +94,7 @@ pub trait MatchContext<const AFTER_TYPING: bool> {
             }
         }
 
-        let fields = order_fields_by_decl(decl_fields, arg_types.clone());
+        let fields = order_fields_by_decl(self, decl_fields, arg_types.clone());
         fields
             .into_iter()
             .map(|(_, field_name, field_type)| {
@@ -113,7 +113,7 @@ pub trait MatchContext<const AFTER_TYPING: bool> {
         pattern_loc: Loc,
         arg_types: Fields<N::Type>,
     ) -> Vec<(Field, N::Var, N::Type)> {
-        let fields = order_fields_by_decl(decl_fields, arg_types.clone());
+        let fields = order_fields_by_decl(self, decl_fields, arg_types.clone());
         fields
             .into_iter()
             .map(|(_, field_name, field_type)| {
@@ -154,9 +154,13 @@ impl PatternArm {
             .all(|pat| matches!(pat.pat.value, TP::Wildcard | TP::Binder(_, _)))
     }
 
-    fn all_wild_arm(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<ArmResult> {
+    fn all_wild_arm<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &mut self,
+        context: &MC,
+        fringe: &VecDeque<FringeEntry>,
+    ) -> Option<ArmResult> {
         if self.is_wild_arm() {
-            let bindings = self.make_arm_bindings(fringe);
+            let bindings = self.make_arm_bindings(context, fringe);
             let PatternArm {
                 pats: _,
                 guard,
@@ -174,9 +178,19 @@ impl PatternArm {
         }
     }
 
-    fn make_arm_bindings(&mut self, fringe: &VecDeque<FringeEntry>) -> PatBindings {
+    fn make_arm_bindings<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &mut self,
+        context: &MC,
+        fringe: &VecDeque<FringeEntry>,
+    ) -> PatBindings {
         let mut bindings = BTreeMap::new();
-        assert!(self.pats.len() == fringe.len());
+        // If the lengths don't match, we have an error from typing
+        ice_assert!(
+            context.reporter(),
+            self.pats.len() == fringe.len() || context.env().has_errors(),
+            self.arm.orig_pattern.pat.loc,
+            "mismatched length should have caused an error in typing"
+        );
         for (pmut, subject) in self.pats.iter_mut().zip(fringe.iter()) {
             if let TP::Binder(mut_, x) = pmut.pat.value {
                 if bindings.insert(x, (mut_, subject.clone())).is_some() {
@@ -269,6 +283,22 @@ impl PatternArm {
         first_lit_recur(self.pats.front().unwrap().clone())
     }
 
+    fn pop_front_or_ice<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+        pats: &mut VecDeque<T::MatchPattern>,
+    ) -> Option<T::MatchPattern> {
+        pats.pop_front().or_else(|| {
+            if !context.env().has_errors() {
+                context.reporter().add_diag(ice!((
+                    self.arm.orig_pattern.pat.loc,
+                    "ICE empty pattern in match specialization"
+                )));
+            }
+            None
+        })
+    }
+
     fn specialize_variant<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
         &self,
         context: &MC,
@@ -276,7 +306,7 @@ impl PatternArm {
         arg_types: &Vec<&Type>,
     ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pats.pop_front().unwrap();
+        let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
         let loc = first_pattern.pat.loc;
         match first_pattern.pat.value {
             TP::Variant(mident, enum_, name, _, fields)
@@ -288,7 +318,7 @@ impl PatternArm {
                     .program_info()
                     .enum_variant_fields(&mident, &enum_, &name)
                     .unwrap();
-                let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
+                let ordered_pats = order_fields_by_decl(context, decl_fields, field_pats);
                 for (_, _, pat) in ordered_pats.into_iter().rev() {
                     output.pats.push_front(pat);
                 }
@@ -339,7 +369,7 @@ impl PatternArm {
         arg_types: &Vec<&Type>,
     ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pats.pop_front().unwrap();
+        let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
         let loc = first_pattern.pat.loc;
         match first_pattern.pat.value {
             TP::Struct(mident, struct_, _, fields)
@@ -349,7 +379,7 @@ impl PatternArm {
                     .program_info()
                     .struct_fields(&mident, &struct_)
                     .unwrap();
-                let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
+                let ordered_pats = order_fields_by_decl(context, decl_fields, field_pats);
                 for (_, _, pat) in ordered_pats.into_iter().rev() {
                     output.pats.push_front(pat);
                 }
@@ -393,9 +423,13 @@ impl PatternArm {
         }
     }
 
-    fn specialize_literal(&self, literal: &Value) -> Option<(Binders, PatternArm)> {
+    fn specialize_literal<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+        literal: &Value,
+    ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pats.pop_front().unwrap();
+        let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
         match first_pattern.pat.value {
             TP::Literal(v) if &v == literal => Some((vec![], output)),
             TP::Literal(_) => None,
@@ -407,7 +441,7 @@ impl PatternArm {
             TP::At(x, inner) => {
                 output.pats.push_front(*inner);
                 output
-                    .specialize_literal(literal)
+                    .specialize_literal(context, literal)
                     .map(|(mut binders, inner)| {
                         binders.push((Mutability::Imm, x));
                         (binders, inner)
@@ -417,9 +451,12 @@ impl PatternArm {
         }
     }
 
-    fn specialize_default(&self) -> Option<(Binders, PatternArm)> {
+    fn specialize_default<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
-        let first_pattern = output.pats.pop_front().unwrap();
+        let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
         match first_pattern.pat.value {
             TP::Literal(_) => None,
             TP::Variant(_, _, _, _, _) | TP::BorrowVariant(_, _, _, _, _, _) => None,
@@ -429,10 +466,12 @@ impl PatternArm {
             TP::Constant(_, _) | TP::Or(_, _) => unreachable!(),
             TP::At(x, inner) => {
                 output.pats.push_front(*inner);
-                output.specialize_default().map(|(mut binders, inner)| {
-                    binders.push((Mutability::Imm, x));
-                    (binders, inner)
-                })
+                output
+                    .specialize_default(context)
+                    .map(|(mut binders, inner)| {
+                        binders.push((Mutability::Imm, x));
+                        (binders, inner)
+                    })
             }
             TP::ErrorPat => None,
         }
@@ -519,22 +558,29 @@ impl PatternMatrix {
             .any(|pat| pat.is_wild_arm() && pat.guard.is_none())
     }
 
-    pub fn wild_tree_opt(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<Vec<ArmResult>> {
+    pub fn wild_tree_opt<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &mut self,
+        context: &MC,
+        fringe: &VecDeque<FringeEntry>,
+    ) -> Option<Vec<ArmResult>> {
         // NB: If the first row is all wild, we need to collect _all_ wild rows that have guards
         // until we find one that does not. If we do not find one without a guard, then this isn't
         // a wild tree.
-        if let Some(arm) = self.patterns[0].all_wild_arm(fringe) {
+        if let Some(arm) = self.patterns[0].all_wild_arm(context, fringe) {
             if arm.guard.is_none() {
                 return Some(vec![arm]);
             }
             let mut result = vec![arm];
             for pat in self.patterns[1..].iter_mut() {
-                if let Some(arm) = pat.all_wild_arm(fringe) {
-                    let has_guard = arm.guard.is_some();
-                    result.push(arm);
-                    if !has_guard {
-                        return Some(result);
-                    }
+                // If we find a non-wildcard arm, we have only seen guarded wildcards and should
+                // specialize against the fringe instead.
+                let Some(arm) = pat.all_wild_arm(context, fringe) else {
+                    return None;
+                };
+                let has_guard = arm.guard.is_some();
+                result.push(arm);
+                if !has_guard {
+                    return Some(result);
                 }
             }
             None
@@ -592,12 +638,16 @@ impl PatternMatrix {
         (bindings, matrix)
     }
 
-    pub fn specialize_literal(&self, lit: &Value) -> (Binders, PatternMatrix) {
+    pub fn specialize_literal<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+        lit: &Value,
+    ) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
         let loc = self.loc;
         for entry in &self.patterns {
-            if let Some((mut new_bindings, arm)) = entry.specialize_literal(lit) {
+            if let Some((mut new_bindings, arm)) = entry.specialize_literal(context, lit) {
                 bindings.append(&mut new_bindings);
                 patterns.push(arm)
             }
@@ -607,12 +657,15 @@ impl PatternMatrix {
         (bindings, matrix)
     }
 
-    pub fn specialize_default(&self) -> (Binders, PatternMatrix) {
+    pub fn specialize_default<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
         let loc = self.loc;
         for entry in &self.patterns {
-            if let Some((mut new_bindings, arm)) = entry.specialize_default() {
+            if let Some((mut new_bindings, arm)) = entry.specialize_default(context) {
                 bindings.append(&mut new_bindings);
                 patterns.push(arm)
             }
@@ -928,15 +981,35 @@ fn combine_pattern_fields(
 }
 
 /// Helper function for creating an ordered list of fields Field information and Fields.
-pub fn order_fields_by_decl<T: std::fmt::Debug>(
+pub fn order_fields_by_decl<
+    const AFTER_TYPING: bool,
+    MC: MatchContext<AFTER_TYPING>,
+    T: std::fmt::Debug,
+>(
+    context: &MC,
     decl_fields: UniqueMap<Field, usize>,
     fields: Fields<T>,
 ) -> Vec<(usize, Field, T)> {
+    let field_len = decl_fields.len();
     let mut texp_fields: Vec<(usize, Field, T)> = fields
         .into_iter()
-        .map(|(f, (_exp_idx, t))| (*decl_fields.get(&f).unwrap(), f, t))
+        .map(|(f, (exp_idx, t))| {
+            // If the field is not a valid one, typing will produce an error.
+            // So keep the field in a consistent order, but after all of the
+            // valid fields.
+            let decl_idx_opt = decl_fields.get(&f).copied();
+            ice_assert!(
+                context.reporter(),
+                decl_idx_opt.is_some() || context.env().has_errors(),
+                f.loc(),
+                "field '{}' is unbound but there are no errors",
+                f,
+            );
+            let decl_idx = decl_idx_opt.unwrap_or(field_len + exp_idx);
+            (decl_idx, f, t)
+        })
         .collect();
-    texp_fields.sort_by(|(decl_idx1, _, _), (decl_idx2, _, _)| decl_idx1.cmp(decl_idx2));
+    texp_fields.sort_by_key(|(decl_idx, _, _)| *decl_idx);
     texp_fields
 }
 

@@ -72,6 +72,7 @@ where
 {
     debug_assert_eq!(gas_charger.move_gas_status().stack_height_current(), 0);
     let T::Transaction {
+        gas_coin,
         bytes,
         objects,
         withdrawals,
@@ -85,6 +86,7 @@ where
         metrics,
         tx_context,
         gas_charger,
+        gas_coin,
         bytes,
         objects,
         withdrawals,

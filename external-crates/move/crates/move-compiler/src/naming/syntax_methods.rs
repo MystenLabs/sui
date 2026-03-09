@@ -81,7 +81,7 @@ pub(super) fn resolve_syntax_attributes(
         return None;
     }
 
-    let method_entry = syntax_methods.entry(type_name).or_default();
+    let method_entry = syntax_methods.entry(type_name.clone()).or_default();
 
     let Some(kind) = determine_valid_kind(context, prekind, &param_ty) else {
         assert!(context.env.has_errors());
@@ -101,7 +101,7 @@ pub(super) fn resolve_syntax_attributes(
         loc: function_name.0.loc,
         visibility: function.visibility,
         kind,
-        tname: type_name,
+        tname: type_name.clone(),
         target_function: (*module_name, *function_name),
     };
     let method_opt: &mut Option<Box<SyntaxMethod>> = method_entry.lookup_kind_entry(&kind);
@@ -232,10 +232,10 @@ fn determine_subject_type_name(
                     return None;
                 }
                 N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
-                N::TypeName_::ModuleType(m, _) => Some(m),
+                N::TypeName_::ModuleType(m, _) => Some(&**m),
             };
             if Some(cur_module) == defining_module {
-                Some(*type_name)
+                Some(type_name.clone())
             } else {
                 context.add_diag(diag!(
                     Declarations::InvalidSyntaxMethod,

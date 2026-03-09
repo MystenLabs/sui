@@ -8,35 +8,35 @@ task 0, lines 1-24:
 // Move bytecode v7
 module 6.MonomorphicEnums {
 
-enum EnumWithTwoVariants<Ty0> {
+enum EnumWithTwoVariants<T> {
 	One {  },
 	Two { x: u64 }
 }
 
-public f<Ty0>(Arg0: Ty0, Arg1: Ty0): Ty0 {
-L2:	loc0: EnumWithTwoVariants<Ty0>
-L3:	loc1: Ty0
+public f<T>(t: T, e: T): T {
+L2:	x: EnumWithTwoVariants<T>
+L3:	y: T
 B0:
-	0: MoveLoc[0](Arg0: Ty0)
+	0: MoveLoc[0](t: T)
 	1: PackVariantGeneric(VariantInstantiationHandleIndex(0))
-	2: StLoc[2](loc0: EnumWithTwoVariants<Ty0>)
-	3: ImmBorrowLoc[2](loc0: EnumWithTwoVariants<Ty0>)
+	2: StLoc[2](x: EnumWithTwoVariants<T>)
+	3: ImmBorrowLoc[2](x: EnumWithTwoVariants<T>)
 	4: VariantSwitch(VariantJumpTableIndex(0))
 B1:
-	5: MoveLoc[2](loc0: EnumWithTwoVariants<Ty0>)
+	5: MoveLoc[2](x: EnumWithTwoVariants<T>)
 	6: UnpackVariantGeneric(VariantInstantiationHandleIndex(1))
-	7: MoveLoc[1](Arg1: Ty0)
+	7: MoveLoc[1](e: T)
 	8: Ret
 B2:
-	9: MoveLoc[2](loc0: EnumWithTwoVariants<Ty0>)
+	9: MoveLoc[2](x: EnumWithTwoVariants<T>)
 	10: UnpackVariantGeneric(VariantInstantiationHandleIndex(0))
-	11: StLoc[3](loc1: Ty0)
-	12: MoveLoc[3](loc1: Ty0)
+	11: StLoc[3](y: T)
+	12: MoveLoc[3](y: T)
 	13: Ret
 Jump tables:
 [0]:	variant_switch EnumWithTwoVariants {
-		Variant0 => jump 5
-		Variant1 => jump 9
+		One => jump 5
+		Two => jump 9
 	}
 }
 

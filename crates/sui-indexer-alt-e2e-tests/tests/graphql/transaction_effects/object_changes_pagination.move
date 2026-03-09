@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses P=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# programmable --sender A --inputs @A 42 43 44 45 46 47 48 49
 //> 0: SplitCoins(Gas, [Input(1), Input(2), Input(3), Input(4)]);

@@ -629,6 +629,9 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         gas_price: rgp,
         budget: rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
         currency: None,
+        address_balance_withdrawal: 0,
+        epoch: None,
+        chain_id: None,
     };
     let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
 

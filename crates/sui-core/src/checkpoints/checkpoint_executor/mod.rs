@@ -33,7 +33,7 @@ use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -412,6 +412,11 @@ impl CheckpointExecutor {
 
         finish_stage!(pipeline_handle, BuildDbBatch);
 
+        let object_funds_checker = self.state.object_funds_checker.load();
+        if let Some(object_funds_checker) = object_funds_checker.as_ref() {
+            object_funds_checker.commit_effects(batch.0.iter().map(|o| &o.effects));
+        }
+
         let mut ckpt_state = tokio::task::spawn_blocking({
             let this = self.clone();
             move || {
@@ -603,6 +608,33 @@ impl CheckpointExecutor {
 
         if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
             self.execute_change_epoch_tx(&tx_data).await;
+        }
+
+        // Collect index batches from post-processing and commit atomically.
+        // This must happen AFTER execute_change_epoch_tx (so that all transactions
+        // including the end-of-epoch tx have completed post-processing) and BEFORE
+        // insert_finalized_transactions (so that index data is available when
+        // transactions_executed_in_checkpoint_notify fires).
+        {
+            let mut raw_batches = Vec::new();
+            let mut cache_updates = Vec::new();
+            for tx_digest in &ckpt_state.data.tx_digests {
+                if let Some((raw_batch, cu)) = self.state.await_post_processing(tx_digest).await {
+                    raw_batches.push(raw_batch);
+                    cache_updates.push(cu);
+                }
+            }
+            if !raw_batches.is_empty()
+                && let Some(indexes) = &self.state.indexes
+            {
+                let mut db_batch = indexes.new_db_batch();
+                db_batch
+                    .concat(raw_batches)
+                    .expect("failed to build index batch");
+                indexes
+                    .commit_index_batch(db_batch, cache_updates)
+                    .expect("failed to commit index batch");
+            }
         }
 
         let _scope = mysten_metrics::monitored_scope("CheckpointExecutor::finalize_checkpoint");
@@ -878,10 +910,10 @@ impl CheckpointExecutor {
                             .with_barrier_dependencies(barrier_deps);
 
                         // Check if the expected effects indicate insufficient balance
-                        if let &ExecutionStatus::Failure {
+                        if let &ExecutionStatus::Failure(ExecutionFailure {
                             error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
                             ..
-                        } = effects.status()
+                        }) = effects.status()
                         {
                             env = env.with_insufficient_funds();
                         }

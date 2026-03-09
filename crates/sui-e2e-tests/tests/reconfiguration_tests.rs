@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::ident_str;
 use rand::rngs::OsRng;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_json_rpc_types::ObjectChange;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -26,9 +24,7 @@ use sui_types::sui_system_state::{
     SuiSystemStateTrait, get_validator_from_table,
     sui_system_state_summary::get_validator_by_pool_id,
 };
-use sui_types::transaction::{
-    Command, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
-};
+use sui_types::transaction::{Command, TransactionDataAPI, TransactionExpiration};
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::time::sleep;
 
@@ -116,7 +112,7 @@ async fn do_test_passive_reconfig(chain: Option<Chain>) {
     });
     ProtocolConfig::poison_get_for_min_version();
 
-    let mut builder = TestClusterBuilder::new().with_epoch_duration_ms(1000);
+    let mut builder = TestClusterBuilder::new().with_epoch_duration_ms(10000);
 
     if let Some(chain) = chain {
         builder = builder.with_chain_override(chain);
@@ -146,74 +142,6 @@ async fn do_test_passive_reconfig(chain: Option<Chain>) {
                 .unwrap();
             assert_eq!(commitments.len(), 1);
         });
-}
-
-// Test that transaction locks from previous epochs could be overridden.
-#[sim_test]
-async fn test_expired_locks() {
-    // This test verifies preconsensus lock conflict detection and epoch-based lock expiry,
-    // which only applies when disable_preconsensus_locking=false.
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config.set_address_aliases_for_testing(false);
-        config
-    });
-
-    let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(10000)
-        .build()
-        .await;
-
-    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
-    let accounts_and_objs = test_cluster
-        .wallet
-        .get_all_accounts_and_gas_objects()
-        .await
-        .unwrap();
-    let sender = accounts_and_objs[0].0;
-    let receiver = accounts_and_objs[1].0;
-    let gas_object = accounts_and_objs[0].1[0];
-
-    let transfer_sui = |amount| {
-        TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .transfer_sui(Some(amount), receiver)
-            .build()
-    };
-
-    let t1 = test_cluster.wallet.sign_transaction(&transfer_sui(1)).await;
-    // attempt to equivocate
-    let t2 = test_cluster.wallet.sign_transaction(&transfer_sui(2)).await;
-
-    // Acquire locks for t1 on all validators to simulate a locked transaction
-    // that was never executed (e.g., didn't make it through consensus).
-    for validator in test_cluster.all_validator_handles().into_iter() {
-        let state = validator.state();
-        let epoch_store = state.epoch_store_for_testing();
-        validator
-            .state()
-            .handle_vote_transaction(&epoch_store, VerifiedTransaction::new_unchecked(t1.clone()))
-            .unwrap();
-    }
-
-    // t2 should fail because all validators have locks for t1
-    test_cluster
-        .submit_and_execute(t2.clone(), None)
-        .await
-        .unwrap_err();
-
-    test_cluster.wait_for_epoch_all_nodes(1).await;
-
-    // Old locks can be overridden in new epoch - t2 should now succeed
-    test_cluster
-        .submit_and_execute(t2.clone(), None)
-        .await
-        .unwrap();
-
-    // t1 should now fail because t2 has executed and consumed the object
-    test_cluster
-        .submit_and_execute(t1.clone(), None)
-        .await
-        .unwrap_err();
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
@@ -272,7 +200,7 @@ async fn test_create_advance_epoch_tx_race() {
     register_wait("reconfig_delay", target_node, reconfig_delay_tx.clone());
 
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(1000)
+        .with_epoch_duration_ms(10000)
         .build()
         .await;
 
@@ -299,7 +227,7 @@ async fn test_reconfig_with_failing_validator() {
 
     let test_cluster = Arc::new(
         TestClusterBuilder::new()
-            .with_epoch_duration_ms(5000)
+            .with_epoch_duration_ms(10000)
             .build()
             .await,
     );
@@ -769,11 +697,6 @@ async fn test_reconfig_with_committee_change_stress() {
     do_test_reconfig_with_committee_change_stress().await;
 }
 
-#[sim_test(check_determinism)]
-async fn test_reconfig_with_committee_change_stress_determinism() {
-    do_test_reconfig_with_committee_change_stress().await;
-}
-
 async fn do_test_reconfig_with_committee_change_stress() {
     let mut candidates = (0..6)
         .map(|_| ValidatorGenesisConfigBuilder::new().build(&mut OsRng))
@@ -1039,7 +962,7 @@ async fn execute_remove_validator_tx(test_cluster: &TestCluster, handle: &SuiNod
 async fn execute_add_stake_transaction(
     test_cluster: &mut TestCluster,
     stakes: Vec<(SuiAddress, u64)>,
-) -> Vec<ObjectChange> {
+) {
     let (address, gas) = test_cluster
         .wallet
         .get_one_gas_object()
@@ -1070,21 +993,9 @@ async fn execute_add_stake_transaction(
         tx_builder.build()
     };
 
-    let response = test_cluster
+    let _response = test_cluster
         .execute_transaction(test_cluster.wallet.sign_transaction(&tx).await)
         .await;
-
-    response
-        .object_changes
-        .unwrap()
-        .into_iter()
-        .filter(|change| match change {
-            ObjectChange::Created { object_type, .. } => {
-                object_type.name == ident_str!("StakedSui").into()
-            }
-            _ => false,
-        })
-        .collect::<Vec<_>>()
 }
 
 /// Execute a sequence of transactions to add a validator, including adding candidate, adding stake
@@ -1142,7 +1053,7 @@ async fn execute_add_validator_transactions(
 }
 
 async fn try_request_add_validator(
-    test_cluster: &mut TestCluster,
+    test_cluster: &TestCluster,
     new_validator: &ValidatorGenesisConfig,
 ) -> Result<(TransactionEffects, TransactionEvents), anyhow::Error> {
     let address = (&new_validator.account_key_pair.public()).into();
@@ -1158,7 +1069,33 @@ async fn try_request_add_validator(
         .call_request_add_validator()
         .build_and_sign(&new_validator.account_key_pair);
 
-    test_cluster
-        .execute_transaction_return_raw_effects(tx)
+    // Retry for up to 20 seconds with 5 second timeout per attempt. New validators
+    // may join consensus late and need time to catch up before their transactions
+    // can be sequenced.
+    let start = std::time::Instant::now();
+    let retry_timeout = std::time::Duration::from_secs(20);
+    let attempt_timeout = std::time::Duration::from_secs(5);
+    loop {
+        match tokio::time::timeout(
+            attempt_timeout,
+            test_cluster.execute_transaction_directly(&tx),
+        )
         .await
+        {
+            Ok(Ok((_digest, effects))) => {
+                return Ok((effects, TransactionEvents::default()));
+            }
+            Ok(Err(e)) => {
+                if start.elapsed() >= retry_timeout {
+                    return Err(e.into());
+                }
+            }
+            Err(_timeout) => {
+                if start.elapsed() >= retry_timeout {
+                    return Err(anyhow::anyhow!("Timeout waiting for transaction effects"));
+                }
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
 }

@@ -1,5 +1,6 @@
 ---
-title: Custom Transfer Rules
+title: Custom Object Transfer Rules
+sidebar_label: Custom Transfer Rules
 description: Custom transfer rules enable you to define a set of rules that must be met before Sui considers a transfer operation valid.
 keywords: [ custom transfer rules, transfer rules, store ability, key ability, transfer restrictions, public transfer, custom transfer function, object transfer, transfer conditions, locked objects, unlocked objects, transfer policy, object abilities ]
 ---
@@ -20,7 +21,7 @@ After you enable public transfers on an object, there is no way of re-enabling c
 
 ## Example
 
-This example creates an object type `Object` that is transferrable only if the `unlocked` flag inside of it is set to `true`:
+This example creates an object type `Object` that is transferable only if the `unlocked` flag inside of it is set to `true`:
 
 ```move
 public struct Object has key {

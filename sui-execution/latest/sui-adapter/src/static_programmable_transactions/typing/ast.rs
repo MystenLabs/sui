@@ -16,6 +16,7 @@ use sui_types::base_types::{ObjectID, ObjectRef};
 
 #[derive(Debug)]
 pub struct Transaction {
+    pub gas_coin: Option<ObjectID>,
     /// Gathered BCS bytes from Pure inputs
     pub bytes: IndexSet<Vec<u8>>,
     // All input objects

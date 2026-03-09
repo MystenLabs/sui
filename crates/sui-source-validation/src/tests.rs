@@ -55,12 +55,12 @@ async fn successful_verification() -> anyhow::Result<()> {
         )
     };
 
-    let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api());
+    let client = context.grpc_client()?;
+    let verifier = BytecodeSourceVerifier::new(&client);
 
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
     // Verify root without updating the address
     verifier
@@ -107,12 +107,12 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
     let a_pkg = compile_package_with_unpublished_deps(a_src.clone());
     let a_ref = publish_package_and_deps(context, a_src).await;
 
-    let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api());
+    let client = context.grpc_client()?;
+    let verifier = BytecodeSourceVerifier::new(&client);
 
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
     // Verify the root package which now includes dependency modules
     verifier
@@ -148,12 +148,12 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
         compile_package(z_src)
     };
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
-    BytecodeSourceVerifier::new(client.read_api())
+    BytecodeSourceVerifier::new(&client)
         .verify(&z_pkg, ValidationMode::root(), &env)
         .await
         .unwrap();
@@ -165,10 +165,10 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
 async fn successful_verification_upgrades() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
 
     let b_v1_fixtures = tempfile::tempdir()?;
@@ -194,7 +194,7 @@ async fn successful_verification_upgrades() -> anyhow::Result<()> {
         (compile_package(b_src), compile_package(e_src))
     };
 
-    let verifier = BytecodeSourceVerifier::new(client.read_api());
+    let verifier = BytecodeSourceVerifier::new(&client);
     // Verify the upgraded package b-v2 as the root.
     verifier
         .verify(&b_pkg, ValidationMode::root(), &env)
@@ -229,14 +229,14 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
     let expected = expect!["On-chain address cannot be zero"];
     expected.assert_eq(
-        &BytecodeSourceVerifier::new(client.read_api())
+        &BytecodeSourceVerifier::new(&client)
             .verify(
                 &a_pkg,
                 ValidationMode::root_and_deps_at(AccountAddress::ZERO),
@@ -261,17 +261,17 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
         compile_package(b_src)
     };
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
 
     // Trying to verify the root package, which hasn't been published -- this is going to fail
     // because there is no on-chain package to verify against.
     let expected = expect!["Invalid module b with error: Can't verify unpublished source"];
     expected.assert_eq(
-        &BytecodeSourceVerifier::new(client.read_api())
+        &BytecodeSourceVerifier::new(&client)
             .verify(&b_pkg, ValidationMode::root(), &env)
             .await
             .unwrap_err()
@@ -300,8 +300,8 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
     };
     let _a_addr: SuiAddress = a_ref.0.into();
 
-    let client = context.get_client().await?;
-    let _verifier = BytecodeSourceVerifier::new(client.read_api());
+    let client = context.grpc_client()?;
+    let _verifier = BytecodeSourceVerifier::new(&client);
 
     /*
     // TODO: Dropping cluster no longer stops the network. Need to look into this and see
@@ -348,18 +348,18 @@ async fn package_not_found() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api());
+    let client = context.grpc_client()?;
+    let verifier = BytecodeSourceVerifier::new(&client);
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
     let Err(err) = verifier.verify(&a_pkg, ValidationMode::deps(), &env).await else {
         panic!("Expected verification to fail");
     };
 
     let expected =
-        expect!["Dependency object does not exist or was deleted: NotExists { object_id: 0x<id> }"];
+        expect!["Could not read a dependency's on-chain object: Object 0x<id> not found"];
     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     let package_root = AccountAddress::random();
@@ -374,7 +374,7 @@ async fn package_not_found() -> anyhow::Result<()> {
     // <id> below may refer to either the package_root or dependent package `b`
     // (the check reports the first missing object nondeterministically)
     let expected =
-        expect!["Dependency object does not exist or was deleted: NotExists { object_id: 0x<id> }"];
+        expect!["Could not read a dependency's on-chain object: Object 0x<id> not found"];
     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     let package_root = AccountAddress::random();
@@ -387,7 +387,7 @@ async fn package_not_found() -> anyhow::Result<()> {
     };
 
     let expected =
-        expect!["Dependency object does not exist or was deleted: NotExists { object_id: 0x<id> }"];
+        expect!["Could not read a dependency's on-chain object: Object 0x<id> not found"];
     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     Ok(())
@@ -406,16 +406,16 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
     let expected = expect![
         "Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"
     ];
     expected.assert_eq(
-        &BytecodeSourceVerifier::new(client.read_api())
+        &BytecodeSourceVerifier::new(&client)
             .verify(&a_pkg, ValidationMode::deps(), &env)
             .await
             .unwrap_err()
@@ -444,12 +444,12 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
-    let Err(err) = BytecodeSourceVerifier::new(client.read_api())
+    let Err(err) = BytecodeSourceVerifier::new(&client)
         .verify(&a_pkg, ValidationMode::deps(), &env)
         .await
     else {
@@ -484,12 +484,12 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
         compile_package(a_src)
     };
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
-    let Err(err) = BytecodeSourceVerifier::new(client.read_api())
+    let Err(err) = BytecodeSourceVerifier::new(&client)
         .verify(&a_pkg, ValidationMode::deps(), &env)
         .await
     else {
@@ -542,12 +542,12 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     let a_addr: SuiAddress = a_ref.0.into();
     stable_addrs.insert(a_addr, "<a_addr>");
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
-    let verifier = BytecodeSourceVerifier::new(client.read_api());
+    let verifier = BytecodeSourceVerifier::new(&client);
 
     let Err(err) = verifier.verify(&a_pkg, ValidationMode::deps(), &env).await else {
         panic!("Expected verification to fail");
@@ -573,10 +573,10 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
 async fn linkage_differs() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
 
     let b_v1_fixtures = tempfile::tempdir()?;
@@ -640,7 +640,7 @@ async fn linkage_differs() -> anyhow::Result<()> {
         (b_v2.0.into(), "<b2>"),
         (b_v3.0.into(), "<b3>"),
     ]);
-    let error = BytecodeSourceVerifier::new(client.read_api())
+    let error = BytecodeSourceVerifier::new(&client)
         .verify(&e_pkg, ValidationMode::root(), &env)
         .await
         .unwrap_err()
@@ -693,12 +693,12 @@ async fn multiple_failures() -> anyhow::Result<()> {
         compile_package(d_src)
     };
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
-    let Err(err) = BytecodeSourceVerifier::new(client.read_api())
+    let Err(err) = BytecodeSourceVerifier::new(&client)
         .verify(&d_pkg, ValidationMode::deps(), &env)
         .await
     else {
@@ -736,14 +736,14 @@ async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
         compile_package(a_src.clone())
     };
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
 
     // Verify versioned dependency
-    BytecodeSourceVerifier::new(client.read_api())
+    BytecodeSourceVerifier::new(&client)
         .verify(&a_pkg, ValidationMode::deps(), &env)
         .await
         .unwrap();
@@ -788,12 +788,12 @@ async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
     //     "Invalid test setup: expected bytecode deps to be present."
     // );
 
-    let client = context.get_client().await?;
+    let client = context.grpc_client()?;
     let env = Environment::new(
         "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
+        client.get_chain_identifier().await?.to_string(),
     );
-    let verifier = BytecodeSourceVerifier::new(client.read_api());
+    let verifier = BytecodeSourceVerifier::new(&client);
 
     // Verify deps but skip root
     verifier
@@ -964,7 +964,7 @@ pub async fn upgrade_package_with_wallet(
     digest: Vec<u8>,
 ) -> (ObjectRef, TransactionDigest) {
     let sender = context.get_addresses()[0];
-    let client = context.get_client().await.unwrap();
+    let client = context.grpc_client().unwrap();
     let gas_price = context.get_reference_gas_price().await.unwrap();
     let transaction = {
         let data = client
@@ -988,7 +988,10 @@ pub async fn upgrade_package_with_wallet(
 
     let resp = context.execute_transaction_must_succeed(transaction).await;
 
-    (resp.get_new_package_obj().unwrap(), resp.digest)
+    (
+        resp.get_new_package_obj().unwrap(),
+        resp.transaction.digest(),
+    )
 }
 
 /// Write a Published.toml file into the package at `pkg_path`. It will set the environment to

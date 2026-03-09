@@ -100,7 +100,7 @@ Response: {
   },
   "errors": [
     {
-      "message": "Literal error: Unexpected \"'hello\" at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', an identifier, a decimal number, a hexadecimal number, or a string",
+      "message": "Literal error: Unexpected \"'hello\" at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', '$', an identifier, a decimal number, a hexadecimal number, or a string",
       "locations": [
         {
           "line": 3,

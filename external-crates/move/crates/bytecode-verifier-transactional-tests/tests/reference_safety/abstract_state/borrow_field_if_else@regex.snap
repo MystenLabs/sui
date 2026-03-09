@@ -1,0 +1,90 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, line 28:
+//# view-abstract-state 0x2::borrow_field_if_else::t
+{
+  "0": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "2": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "6": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "9": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      },
+      "x": {
+        "Reference": "r#x"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true,
+        "r#x": true
+      },
+      "outgoing": {
+        "r#s": {
+          "r#x": [
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "S.g"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

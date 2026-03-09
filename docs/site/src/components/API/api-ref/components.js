@@ -12,312 +12,290 @@ import ScrollSpy from "react-ui-scrollspy";
 
 SyntaxHighlighter.registerLanguage("json", js);
 
-const pillStyle =
-  "p-2 border border-solid border-sui-blue-dark rounded-lg max-w-max bg-sui-ghost-white dark:bg-sui-gray-90";
-
-const RefLink = (props) => {
-  const { refer } = props;
+const RefLink = ({ refer }) => {
   const link = refer.substring(refer.lastIndexOf("/") + 1);
   return <Link href={`#${link.toLowerCase()}`}>{link}</Link>;
 };
 
-const Of = (props) => {
-  const { of, type } = props;
+const Of = ({ of, type }) => {
   return (
-    <>
-      {of.map((o) => {
+    <div className="grid gap-2">
+      {of.map((o, idx) => {
+        const indent = type === "all" ? "" : "pl-4";
+
         if (o["$ref"]) {
           return (
-            <div className={`${type === "all" ? "" : "pl-8"}`}>
-              <p
-                className={`(${o.description} ? "mb-0" : "") ${type === "all" ? "" : pillStyle}`}
-              >
+            <div key={idx} className={indent}>
+              <div className="api-chip">
                 <RefLink refer={o["$ref"]} />
-              </p>
+              </div>
               {o.description && (
-                <p>
+                <div className="mt-2 api-muted">
                   <Markdown>{o.description}</Markdown>
-                </p>
+                </div>
               )}
             </div>
           );
-        } else if (o.type && o.type === "object") {
+        }
+
+        if (o.type === "object") {
           return (
-            <div className={`${type === "all" ? "" : "pl-8"}`}>
-              <p className={`(${o.description} ? "mb-0" : "") ${pillStyle}`}>
-                Object
-              </p>
+            <div key={idx} className={indent}>
+              <div className="api-chip">Object</div>
               {o.description && (
-                <p>
+                <div className="mt-2 api-muted">
                   <Markdown>{o.description}</Markdown>
-                </p>
+                </div>
               )}
               {o.properties && (
-                <PropertiesTable
-                  properties={Object.entries(o.properties)}
-                  schema={o}
-                />
+                <PropertiesRows properties={Object.entries(o.properties)} schema={o} />
               )}
             </div>
           );
-        } else if (o.type && o.type === "string") {
+        }
+
+        if (o.type === "string") {
           return (
-            <div className={`${type === "all" ? "" : "pl-8"}`}>
-              <p className={`(${o.description} ? "mb-0" : "") ${pillStyle}`}>
-                String{" "}
-                {o.enum && o.enum.length > 0 && (
-                  <span>
-                    enum: [ {o.enum.map((e) => `"${e}"`).join(" | ")} ]
-                  </span>
-                )}
-              </p>
+            <div key={idx} className={indent}>
+              <div className="api-chip">
+                String {o.enum?.length ? <span className="api-muted">enum</span> : null}
+              </div>
+              {o.enum?.length ? (
+                <div className="mt-2 api-typechip">
+                  [ {o.enum.map((e) => `"${e}"`).join(" | ")} ]
+                </div>
+              ) : null}
               {o.description && (
-                <p>
+                <div className="mt-2 api-muted">
                   <Markdown>{o.description}</Markdown>
-                </p>
+                </div>
               )}
             </div>
           );
-        } else if (o.type && o.type === "integer") {
+        }
+
+        if (o.type === "integer") {
           return (
-            <div className={`${type === "all" ? "" : "pl-8"}`}>
-              <p className={`(${o.description} ? "mb-0" : "") ${pillStyle}`}>
-                {o.type[0].toUpperCase()}
-                {o.type.substring(1)}&lt;{o.format}&gt; Minimum: {o.minimum}
-              </p>
-              {o.description && <Markdown>{o.description}</Markdown>}
+            <div key={idx} className={indent}>
+              <div className="api-chip">
+                Integer&lt;{o.format}&gt; {typeof o.minimum !== "undefined" ? `min: ${o.minimum}` : ""}
+              </div>
+              {o.description && <div className="mt-2 api-muted"><Markdown>{o.description}</Markdown></div>}
             </div>
           );
-        } else if (o.type && o.type === "boolean") {
+        }
+
+        if (o.type === "boolean") {
           return (
-            <div className={`${type === "all" ? "" : "pl-8"}`}>
-              <p className={`(${o.description} ? "mb-0" : "") ${pillStyle}`}>
-                Boolean
-              </p>
-              {o.description && <Markdown>{o.description}</Markdown>}
+            <div key={idx} className={indent}>
+              <div className="api-chip">Boolean</div>
+              {o.description && <div className="mt-2 api-muted"><Markdown>{o.description}</Markdown></div>}
             </div>
           );
-        } else if (o.type && o.type === "array") {
+        }
+
+        if (o.type === "array") {
           return (
-            <div className={`${type === "all" ? "" : "pl-8"}`}>
-              <p className={`(${o.description} ? "mb-0" : "") ${pillStyle}`}>
+            <div key={idx} className={indent}>
+              <div className="api-chip">
                 [
                 {o.items &&
-                  Object.keys(o.items).map((k) => {
-                    if (k === "$ref") {
-                      return <RefLink refer={o.items[k]} />;
-                    }
-                  })}
+                  Object.keys(o.items).map((k) => (k === "$ref" ? <RefLink key={k} refer={o.items[k]} /> : null))}
                 ]
-              </p>
-              {o.description && (
-                <p>
-                  <Markdown>{o.description}</Markdown>
-                </p>
-              )}
+              </div>
+              {o.description && <div className="mt-2 api-muted"><Markdown>{o.description}</Markdown></div>}
             </div>
           );
-        } else if (o.anyOf) {
-          return <AnyOfInline anyof={o.anyOf} pill />;
-        } else if (o.type) {
-          return <p>{o.type}</p>;
         }
-      })}
-    </>
-  );
-};
 
-const AllOf = (props) => {
-  const { allof } = props;
-  return (
-    <div>
-      <Of of={allof} type="all" />
-    </div>
-  );
-};
+        if (o.anyOf) return <AnyOfInline key={idx} anyof={o.anyOf} pill />;
 
-const AnyOf = (props) => {
-  const { anyof } = props;
-  return (
-    <div>
-      <p className="p-2 border border-solid border-sui-blue-dark rounded-lg max-w-max font-bold text-white bg-sui-blue-dark">
-        Any of
-      </p>
-      <div className="ml-1 border-0 border-l-4 border-solid border-sui-blue-dark">
-        <Of of={anyof} type="any" />
-      </div>
-    </div>
-  );
-};
+        if (o.type) return <div key={idx} className="api-muted">{o.type}</div>;
 
-const AnyOfInline = (props) => {
-  const { anyof, pill } = props;
-  return (
-    <div className={pill && `ml-8 mb-5 ${pillStyle}`}>
-      {anyof.map((a, i) => {
-        if (a["$ref"]) {
-          return (
-            <>
-              <RefLink refer={a["$ref"]} />
-              {i % 2 === 0 ? " | " : ""}
-            </>
-          );
-        }
-        if (a.type) {
-          return (
-            <>
-              {a.type}
-              {i % 2 === 0 ? " | " : ""}
-            </>
-          );
-        }
+        return null;
       })}
     </div>
   );
 };
 
-const OneOf = (props) => {
-  const { oneof } = props;
+const AnyOfInline = ({ anyof, pill }) => {
   return (
-    <div>
-      <p className="p-2 border border-solid border-sui-blue-dark rounded-lg max-w-max font-bold text-white bg-sui-blue-dark">
-        One of
-      </p>
-      <div className="ml-1 border-0 border-l-4 border-solid border-sui-blue-dark">
-        <Of of={oneof} type="one" />
-      </div>
+    <div className={pill ? "api-typechip ml-4 mb-2" : ""}>
+      {anyof.map((a, i) => (
+        <React.Fragment key={i}>
+          {a["$ref"] ? <RefLink refer={a["$ref"]} /> : a.type ?? ""}
+          {i < anyof.length - 1 ? " | " : ""}
+        </React.Fragment>
+      ))}
     </div>
   );
 };
 
-const PropertiesTable = (props) => {
-  const { properties, schema } = props;
-  if (!properties) {
-    return;
-  }
+const AllOf = ({ allof }) => <Of of={allof} type="all" />;
+
+const AnyOf = ({ anyof }) => (
+  <div className="api-card api-card-pad">
+    <div className="flex items-center gap-2">
+      <span className="api-chip">Any of</span>
+      <span className="api-muted">Union type</span>
+    </div>
+    <div className="mt-3 border-l-4 pl-3" style={{ borderColor: "rgba(41,141,255,0.5)" }}>
+      <Of of={anyof} type="any" />
+    </div>
+  </div>
+);
+
+const OneOf = ({ oneof }) => (
+  <div className="api-card api-card-pad">
+    <div className="flex items-center gap-2">
+      <span className="api-chip">One of</span>
+      <span className="api-muted">Exclusive union</span>
+    </div>
+    <div className="mt-3 border-l-4 pl-3" style={{ borderColor: "rgba(41,141,255,0.5)" }}>
+      <Of of={oneof} type="one" />
+    </div>
+  </div>
+);
+
+const PropertiesRows = ({ properties, schema }) => {
+  if (!properties) return null;
+
   return (
-    <table className="w-full table table-fixed">
-      <thead>
-        <tr>
-          <th className="">Property</th>
-          <th className="">Type</th>
-          <th className="w-20">Req?</th>
-          <th className="w-1/2">Description</th>
-        </tr>
-      </thead>
-      <tbody>
+    <div className="mt-3">
+      <div className="api-row-head">
+        <div>Property</div>
+        <div>Required</div>
+        <div>Description</div>
+      </div>
+
+      <div className="api-rows">
         {properties.map(([k, v]) => (
-          <>
-            <tr key={k}>
-              <td>{k}</td>
-              <td>
-                {Array.isArray(v.type) ? v.type.join(" | ") : v.type}
-                {v.enum &&
-                  ` enum [ ${v.enum.map((e) => `"${e}"`).join(" | ")} ]`}
-                {v["$ref"] && <RefLink refer={v["$ref"]} />}
-                {v.anyOf && <AnyOfInline anyof={v.anyOf} />}
-                {v.allOf && <AllOf allof={v.allOf} />}
-                {v.oneOf && "ONEOFCELL"}
-                {v === true && "true"}
-              </td>
-              <td className="text-center">
-                {schema.required && schema.required.includes(k) ? "Yes" : "No"}
-              </td>
-              <td>{v.description && v.description}</td>
-            </tr>
+          <div key={k} className="api-row">
+            <div className="api-cell api-cell-scroll">
+              <div className="flex flex-col gap-1">
+                <div className="font-semibold">{k}</div>
+                <div className="api-typechip">
+                  {Array.isArray(v.type) ? v.type.join(" | ") : v.type}
+                  {v.enum ? ` enum [ ${v.enum.map((e) => `"${e}"`).join(" | ")} ]` : ""}
+                  {v["$ref"] ? " " : ""}
+                  {v["$ref"] ? <RefLink refer={v["$ref"]} /> : null}
+                  {v.anyOf ? <span> {buildInline(v.anyOf)} </span> : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="api-cell">
+              <span className={schema.required?.includes(k) ? "api-badge-yes" : "api-badge-no"}>
+                {schema.required?.includes(k) ? "Required" : "Optional"}
+              </span>
+            </div>
+
+            <div className="api-cell api-cell-scroll">
+              {v.description ? v.description : <span className="api-muted">—</span>}
+            </div>
+
             {v.type === "object" ? (
-              <tr>
-                <td className={`${v.additionalProperties ? "text-right" : ""}`}>
-                  {v.additionalProperties && "Additional properties"}
-                </td>
-                <td colSpan={3}>
-                  {v.additionalProperties && v.additionalProperties["$ref"] && (
-                    <RefLink refer={v.additionalProperties["$ref"]} />
-                  )}
-                  {!v.additionalProperties && v.properties && (
-                    <PropertiesTable
-                      properties={Object.entries(v.properties)}
-                      schema={v}
-                    ></PropertiesTable>
-                  )}
-                  {v.additionalProperties &&
-                    v.additionalProperties.type &&
-                    v.additionalProperties.type}
-                  {v.additionalProperties && v.additionalProperties.anyOf && (
-                    <AnyOfInline anyof={v.additionalProperties.anyOf} />
-                  )}
-                  {v.additionalProperties &&
-                    v.additionalProperties === true &&
-                    "true"}
-                </td>
-              </tr>
-            ) : (
-              ""
-            )}
-          </>
+              <div className="api-cell api-cell-scroll" style={{ gridColumn: "1 / -1" }}>
+                <div className="mt-2 api-card api-card-pad">
+                  {v.additionalProperties ? (
+                    <div className="api-muted">
+                      <span className="font-semibold">Additional properties:</span>{" "}
+                      {v.additionalProperties["$ref"] ? (
+                        <RefLink refer={v.additionalProperties["$ref"]} />
+                      ) : v.additionalProperties.type ? (
+                        v.additionalProperties.type
+                      ) : v.additionalProperties.anyOf ? (
+                        buildInline(v.additionalProperties.anyOf)
+                      ) : (
+                        "true"
+                      )}
+                    </div>
+                  ) : v.properties ? (
+                    <PropertiesRows properties={Object.entries(v.properties)} schema={v} />
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
         ))}
-      </tbody>
-    </table>
+      </div>
+    </div>
   );
 };
+
+const buildInline = (anyof) => anyof.map((a) => (a["$ref"] ? a["$ref"].split("/").pop() : a.type)).join(" | ");
 
 const Components = (props) => {
   const { schemas } = props;
   const names = Object.keys(schemas);
+
   const parentScrollContainerRef = () => {
     (useRef < React.HTMLDivElement) | (null > null);
   };
+
   return (
     <div ref={parentScrollContainerRef()}>
       <h1>Component schemas</h1>
+
       <ScrollSpy parentScrollContainerRef={parentScrollContainerRef()}>
-        {names &&
-          names.map((name) => {
-            return (
-              <div
-                key={name}
-                className="p-4 m-4 mt-8 snap-start scroll-mt-40 border border-sui-gray-50 border-solid rounded-lg"
-                id={name.toLowerCase()}
-              >
-                <h2>{name}</h2>
+        {names.map((name) => (
+          <div
+            key={name}
+            className="api-card api-card-pad-lg mt-6 snap-start scroll-mt-40"
+            id={name.toLowerCase()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="m-0">{name}</h2>
+              <span className="api-chip">Schema</span>
+            </div>
 
-                {schemas[name].description && (
-                  <p>
-                    <Markdown>{schemas[name].description}</Markdown>
-                  </p>
-                )}
-                {schemas[name].type && (
-                  <p className="p-2 border border-solid border-sui-blue-dark rounded-lg max-w-max font-bold text-white bg-sui-blue-dark">
-                    {schemas[name].type[0].toUpperCase()}
-                    {schemas[name].type.substring(1)}
-                    {schemas[name].enum &&
-                      ` enum [ ${schemas[name].enum.map((e) => `"${e}"`).join(" | ")} ]`}
-                  </p>
-                )}
-
-                {schemas[name].properties && (
-                  <PropertiesTable
-                    properties={Object.entries(schemas[name].properties)}
-                    schema={schemas[name]}
-                  />
-                )}
-                {schemas[name].allOf && <AllOf allof={schemas[name].allOf} />}
-                {schemas[name].oneOf && <OneOf oneof={schemas[name].oneOf} />}
-                {schemas[name].anyOf && <AnyOf anyof={schemas[name].anyOf} />}
-                {schemas[name]["$ref"] && (
-                  <RefLink refer={schemas[name]["$ref"]} />
-                )}
-                <details className="py-4">
-                  <summary>
-                    <span className="cursor-pointer">Toggle raw JSON</span>
-                  </summary>
-                  <pre>
-                    <code>{`"${name}":  ${JSON.stringify(schemas[name], null, 2)}`}</code>
-                  </pre>
-                </details>
+            {schemas[name].description && (
+              <div className="mt-3 api-muted">
+                <Markdown>{schemas[name].description}</Markdown>
               </div>
-            );
-          })}
+            )}
+
+            {schemas[name].type && (
+              <div className="mt-3">
+                <span className="api-chip">
+                  {schemas[name].type[0].toUpperCase()}
+                  {schemas[name].type.substring(1)}
+                </span>
+                {schemas[name].enum?.length ? (
+                  <span className="ml-2 api-typechip">
+                    enum [ {schemas[name].enum.map((e) => `"${e}"`).join(" | ")} ]
+                  </span>
+                ) : null}
+              </div>
+            )}
+
+            {schemas[name].properties && (
+              <PropertiesRows properties={Object.entries(schemas[name].properties)} schema={schemas[name]} />
+            )}
+
+            {schemas[name].allOf && <div className="mt-4"><AllOf allof={schemas[name].allOf} /></div>}
+            {schemas[name].oneOf && <div className="mt-4"><OneOf oneof={schemas[name].oneOf} /></div>}
+            {schemas[name].anyOf && <div className="mt-4"><AnyOf anyof={schemas[name].anyOf} /></div>}
+
+            {schemas[name]["$ref"] && (
+              <div className="mt-3">
+                <RefLink refer={schemas[name]["$ref"]} />
+              </div>
+            )}
+
+            <details className="mt-4">
+              <summary className="cursor-pointer font-semibold">Raw JSON</summary>
+              <div className="api-code mt-3">
+                <div className="api-code-title">{name}</div>
+                <div className="api-code-body">
+                  <pre style={{ margin: 0, padding: 12 }}>
+                    <code>{`"${name}": ${JSON.stringify(schemas[name], null, 2)}`}</code>
+                  </pre>
+                </div>
+              </div>
+            </details>
+          </div>
+        ))}
       </ScrollSpy>
     </div>
   );

@@ -10,10 +10,9 @@ use move_package_alt::schema::Environment;
 use move_symbol_pool::Symbol;
 use std::collections::{HashMap, HashSet};
 use sui_move_build::CompiledPackage;
-use sui_sdk::apis::ReadApi;
-use sui_sdk::error::Error as SdkError;
-use sui_sdk::rpc_types::{SuiObjectDataOptions, SuiRawData, SuiRawMovePackage};
+use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
+use sui_types::move_package::MovePackage;
 use toolchain::units_for_toolchain;
 
 pub mod error;
@@ -40,7 +39,7 @@ pub enum ValidationMode {
 }
 
 pub struct BytecodeSourceVerifier<'a> {
-    rpc_client: &'a ReadApi,
+    rpc_client: &'a Client,
 }
 
 /// Map package addresses and module names to package names and bytecode.
@@ -148,23 +147,22 @@ impl ValidationMode {
             future::join_all(addrs.iter().copied().map(|a| verifier.pkg_for_address(a))).await;
 
         for (storage_id, pkg) in addrs.into_iter().zip(resps) {
-            let SuiRawMovePackage {
-                module_map,
-                linkage_table,
-                ..
-            } = pkg?;
+            let pkg = pkg?;
+
+            let module_map = pkg.serialized_module_map();
+            let linkage_table = pkg.linkage_table();
 
             let mut modules = module_map
-                .into_iter()
+                .iter()
                 .map(|(name, bytes)| {
-                    let Ok(module) = CompiledModule::deserialize_with_defaults(&bytes) else {
+                    let Ok(module) = CompiledModule::deserialize_with_defaults(bytes) else {
                         return Err(Error::OnChainDependencyDeserializationError {
                             address: storage_id,
-                            module: name.into(),
+                            module: name.as_str().into(),
                         });
                     };
 
-                    Ok::<_, Error>((Symbol::from(name), module))
+                    Ok::<_, Error>((Symbol::from(name.as_str()), module))
                 })
                 .peekable();
 
@@ -200,7 +198,10 @@ impl ValidationMode {
 
             if root.is_some_and(|r| r == storage_id) {
                 on_chain.on_chain_dependencies = Some(HashSet::from_iter(
-                    linkage_table.into_values().map(|info| *info.upgraded_id),
+                    linkage_table
+                        .clone()
+                        .into_values()
+                        .map(|info| *info.upgraded_id),
                 ));
             }
         }
@@ -326,7 +327,7 @@ impl ValidationMode {
 }
 
 impl<'a> BytecodeSourceVerifier<'a> {
-    pub fn new(rpc_client: &'a ReadApi) -> Self {
+    pub fn new(rpc_client: &'a Client) -> Self {
         BytecodeSourceVerifier { rpc_client }
     }
 
@@ -394,7 +395,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         Ok(())
     }
 
-    async fn pkg_for_address(&self, addr: AccountAddress) -> Result<SuiRawMovePackage, Error> {
+    async fn pkg_for_address(&self, addr: AccountAddress) -> Result<MovePackage, Error> {
         // Move packages are specified with an AccountAddress, but are
         // fetched from a sui network via sui_getObject, which takes an object ID
         let obj_id = ObjectID::from(addr);
@@ -402,27 +403,16 @@ impl<'a> BytecodeSourceVerifier<'a> {
         // fetch the Sui object at the address specified for the package in the local resolution table
         // if future packages with a large set of dependency packages prove too slow to verify,
         // batched object fetching should be added to the ReadApi & used here
-        let obj_read = self
+        let obj = self
             .rpc_client
-            .get_object_with_options(obj_id, SuiObjectDataOptions::new().with_bcs())
+            .clone()
+            .get_object(obj_id)
             .await
-            .map_err(Error::DependencyObjectReadFailure)?;
+            .map_err(|e| Error::DependencyObjectReadFailure(e.message().to_owned()))?;
 
-        let obj = obj_read
-            .into_object()
-            .map_err(Error::SuiObjectRefFailure)?
-            .bcs
-            .ok_or_else(|| {
-                Error::DependencyObjectReadFailure(SdkError::DataError(
-                    "Bcs field is not found".to_string(),
-                ))
-            })?;
-
-        match obj {
-            SuiRawData::Package(pkg) => Ok(pkg),
-            SuiRawData::MoveObject(move_obj) => {
-                Err(Error::ObjectFoundWhenPackageExpected(obj_id, move_obj))
-            }
+        match &obj.data {
+            sui_types::object::Data::Package(pkg) => Ok(pkg.to_owned()),
+            sui_types::object::Data::Move(_) => Err(Error::ObjectFoundWhenPackageExpected(obj_id)),
         }
     }
 }

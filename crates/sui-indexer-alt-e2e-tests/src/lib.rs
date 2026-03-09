@@ -213,13 +213,13 @@ impl FullCluster {
         let checkpoint = self.executor.create_checkpoint();
         let indexer = self
             .offchain
-            .wait_for_indexer(checkpoint.sequence_number, Duration::from_secs(10));
+            .wait_for_indexer(checkpoint.sequence_number, Duration::from_secs(100));
         let consistent_store = self
             .offchain
-            .wait_for_consistent_store(checkpoint.sequence_number, Duration::from_secs(10));
+            .wait_for_consistent_store(checkpoint.sequence_number, Duration::from_secs(100));
         let graphql = self
             .offchain
-            .wait_for_graphql(checkpoint.sequence_number, Duration::from_secs(10));
+            .wait_for_graphql(checkpoint.sequence_number, Duration::from_secs(100));
 
         try_join!(indexer, consistent_store, graphql)
             .expect("Timed out waiting for indexer and consistent store");
@@ -371,11 +371,19 @@ impl OffchainCluster {
         .await
         .context("Failed to start Consistent Store")?;
 
+        let consistent_reader_args = ConsistentReaderArgs {
+            consistent_store_url: Some(
+                Url::parse(&format!("http://{consistent_listen_address}")).unwrap(),
+            ),
+            consistent_store_statement_timeout_ms: None,
+        };
+
         let jsonrpc = start_jsonrpc(
             Some(database_url.clone()),
             None,
             DbArgs::default(),
             BigtableArgs::default(),
+            consistent_reader_args.clone(),
             jsonrpc_args,
             JsonRpcNodeArgs::default(),
             SystemPackageTaskArgs::default(),
@@ -384,13 +392,6 @@ impl OffchainCluster {
         )
         .await
         .context("Failed to start JSON-RPC server")?;
-
-        let consistent_reader_args = ConsistentReaderArgs {
-            consistent_store_url: Some(
-                Url::parse(&format!("http://{consistent_listen_address}")).unwrap(),
-            ),
-            consistent_store_statement_timeout_ms: None,
-        };
 
         let graphql = start_graphql(
             Some(database_url.clone()),

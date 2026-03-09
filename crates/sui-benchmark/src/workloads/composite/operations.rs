@@ -1,16 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_common::random::get_rng;
 use rand::Rng;
-use rand::rngs::SmallRng;
 use sui_types::TypeTag;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
 };
-use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+use sui_types::{
+    Identifier, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
+};
+
+use super::AccountState;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum InitRequirement {
@@ -19,11 +24,17 @@ pub enum InitRequirement {
     SeedBalancePool,
     CreateTestCoinCap,
     SeedTestCoinAddressBalance,
+    EnableAddressAlias,
+    CreateImmutableObject,
 }
+
+pub const ALIAS_TX: &str = "alias_tx";
+pub const ALIAS_REMOVE: &str = "alias_remove";
+pub const ALIAS_ADD: &str = "alias_add";
+pub const INVALID_ALIAS_TX: &str = "invalid_alias_tx";
 
 pub struct OperationDescriptor {
     pub name: &'static str,
-    pub flag: u32,
     pub factory: fn() -> Box<dyn Operation>,
 }
 
@@ -39,20 +50,12 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     TestCoinAddressDeposit::DESCRIPTOR,
     TestCoinAddressWithdraw::DESCRIPTOR,
     TestCoinObjectWithdraw::DESCRIPTOR,
+    AddressBalanceOverdraw::DESCRIPTOR,
+    AccumulatorBalanceRead::DESCRIPTOR,
+    ObjectBalanceOverdraw::DESCRIPTOR,
+    AuthenticatedEventEmit::DESCRIPTOR,
+    ImmutableObjectRead::DESCRIPTOR,
 ];
-
-pub fn describe_flags(flags: u32) -> String {
-    let names: Vec<&str> = ALL_OPERATIONS
-        .iter()
-        .filter(|d| (flags & d.flag) != 0)
-        .map(|d| d.name)
-        .collect();
-    if names.is_empty() {
-        "empty".to_string()
-    } else {
-        names.join(" + ")
-    }
-}
 
 #[derive(Debug, Clone)]
 pub enum ResourceRequest {
@@ -61,6 +64,8 @@ pub enum ResourceRequest {
     AddressBalance,
     ObjectBalance,
     TestCoinCap,
+    AccumulatorRoot,
+    ImmutableObject,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -71,16 +76,17 @@ pub struct OperationConstraints {
 pub struct OperationResources {
     pub counter: Option<(ObjectID, SequenceNumber)>,
     pub randomness: Option<SequenceNumber>,
+    pub accumulator_root: Option<SequenceNumber>,
     pub package_id: ObjectID,
     pub address_balance_amount: u64,
     pub balance_pool: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_type: Option<TypeTag>,
+    pub immutable_object: Option<ObjectRef>,
 }
 
 pub trait Operation: Send + Sync {
     fn name(&self) -> &'static str;
-    fn operation_flag(&self) -> u32;
     fn resource_requests(&self) -> Vec<ResourceRequest>;
     fn constraints(&self) -> OperationConstraints {
         OperationConstraints::default()
@@ -92,28 +98,23 @@ pub trait Operation: Send + Sync {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        account_state: &AccountState,
     );
 }
 
 pub struct SharedCounterIncrement;
 
 impl SharedCounterIncrement {
-    pub const FLAG: u32 = 1 << 0;
+    pub const NAME: &'static str = "shared_counter_increment";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "SharedCounterIncrement",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(SharedCounterIncrement),
     };
 }
 
 impl Operation for SharedCounterIncrement {
     fn name(&self) -> &'static str {
-        "shared_counter_increment"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -124,7 +125,7 @@ impl Operation for SharedCounterIncrement {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        _rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (id, initial_shared_version) = resources.counter.expect("Counter not resolved");
 
@@ -147,21 +148,16 @@ impl Operation for SharedCounterIncrement {
 pub struct SharedCounterRead;
 
 impl SharedCounterRead {
-    pub const FLAG: u32 = 1 << 1;
+    pub const NAME: &'static str = "shared_counter_read";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "SharedCounterRead",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(SharedCounterRead),
     };
 }
 
 impl Operation for SharedCounterRead {
     fn name(&self) -> &'static str {
-        "shared_counter_read"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -172,7 +168,7 @@ impl Operation for SharedCounterRead {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        _rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (id, initial_shared_version) = resources.counter.expect("Counter not resolved");
 
@@ -195,21 +191,16 @@ impl Operation for SharedCounterRead {
 pub struct RandomnessRead;
 
 impl RandomnessRead {
-    pub const FLAG: u32 = 1 << 2;
+    pub const NAME: &'static str = "randomness_read";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "RandomnessRead",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(RandomnessRead),
     };
 }
 
 impl Operation for RandomnessRead {
     fn name(&self) -> &'static str {
-        "randomness_read"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -226,7 +217,7 @@ impl Operation for RandomnessRead {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        _rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let initial_shared_version = resources.randomness.expect("Randomness not resolved");
 
@@ -249,21 +240,16 @@ impl Operation for RandomnessRead {
 pub struct AddressBalanceDeposit;
 
 impl AddressBalanceDeposit {
-    pub const FLAG: u32 = 1 << 3;
+    pub const NAME: &'static str = "address_balance_deposit";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "AddressBalanceDeposit",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(AddressBalanceDeposit),
     };
 }
 
 impl Operation for AddressBalanceDeposit {
     fn name(&self) -> &'static str {
-        "address_balance_deposit"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -274,14 +260,14 @@ impl Operation for AddressBalanceDeposit {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let recipient = SuiAddress::random_for_testing_only();
 
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(1000..10000)
+            get_rng().gen_range(1000..10000)
         };
 
         let amount_arg = builder.pure(amount).unwrap();
@@ -313,21 +299,16 @@ impl Operation for AddressBalanceDeposit {
 pub struct AddressBalanceWithdraw;
 
 impl AddressBalanceWithdraw {
-    pub const FLAG: u32 = 1 << 4;
+    pub const NAME: &'static str = "address_balance_withdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "AddressBalanceWithdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(AddressBalanceWithdraw),
     };
 }
 
 impl Operation for AddressBalanceWithdraw {
     fn name(&self) -> &'static str {
-        "address_balance_withdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -342,12 +323,12 @@ impl Operation for AddressBalanceWithdraw {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..1000)
+            get_rng().gen_range(100..1000)
         };
 
         let withdrawal_arg = FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag());
@@ -370,21 +351,16 @@ impl Operation for AddressBalanceWithdraw {
 pub struct ObjectBalanceDeposit;
 
 impl ObjectBalanceDeposit {
-    pub const FLAG: u32 = 1 << 5;
+    pub const NAME: &'static str = "object_balance_deposit";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "ObjectBalanceDeposit",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(ObjectBalanceDeposit),
     };
 }
 
 impl Operation for ObjectBalanceDeposit {
     fn name(&self) -> &'static str {
-        "object_balance_deposit"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -399,7 +375,7 @@ impl Operation for ObjectBalanceDeposit {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (pool_id, initial_shared_version) =
             resources.balance_pool.expect("Balance pool not resolved");
@@ -407,7 +383,7 @@ impl Operation for ObjectBalanceDeposit {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(1000..10000)
+            get_rng().gen_range(1000..10000)
         };
 
         let amount_arg = builder.pure(amount).unwrap();
@@ -446,21 +422,16 @@ impl Operation for ObjectBalanceDeposit {
 pub struct ObjectBalanceWithdraw;
 
 impl ObjectBalanceWithdraw {
-    pub const FLAG: u32 = 1 << 6;
+    pub const NAME: &'static str = "object_balance_withdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "ObjectBalanceWithdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(ObjectBalanceWithdraw),
     };
 }
 
 impl Operation for ObjectBalanceWithdraw {
     fn name(&self) -> &'static str {
-        "object_balance_withdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -478,7 +449,7 @@ impl Operation for ObjectBalanceWithdraw {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (pool_id, initial_shared_version) =
             resources.balance_pool.expect("Balance pool not resolved");
@@ -486,7 +457,7 @@ impl Operation for ObjectBalanceWithdraw {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..1000)
+            get_rng().gen_range(100..1000)
         };
 
         let pool_arg = builder
@@ -531,21 +502,16 @@ impl Operation for ObjectBalanceWithdraw {
 pub struct TestCoinMint;
 
 impl TestCoinMint {
-    pub const FLAG: u32 = 1 << 7;
+    pub const NAME: &'static str = "test_coin_mint";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "TestCoinMint",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(TestCoinMint),
     };
 }
 
 impl Operation for TestCoinMint {
     fn name(&self) -> &'static str {
-        "test_coin_mint"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -563,7 +529,7 @@ impl Operation for TestCoinMint {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (cap_id, cap_version) = resources.test_coin_cap.expect("Test coin cap not resolved");
         let (pool_id, pool_version) = resources.balance_pool.expect("Balance pool not resolved");
@@ -575,7 +541,7 @@ impl Operation for TestCoinMint {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(1000..10000)
+            get_rng().gen_range(1000..10000)
         };
 
         let cap_arg = builder
@@ -617,21 +583,16 @@ impl Operation for TestCoinMint {
 pub struct TestCoinAddressDeposit;
 
 impl TestCoinAddressDeposit {
-    pub const FLAG: u32 = 1 << 8;
+    pub const NAME: &'static str = "test_coin_address_deposit";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "TestCoinAddressDeposit",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(TestCoinAddressDeposit),
     };
 }
 
 impl Operation for TestCoinAddressDeposit {
     fn name(&self) -> &'static str {
-        "test_coin_address_deposit"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -649,7 +610,7 @@ impl Operation for TestCoinAddressDeposit {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (pool_id, pool_version) = resources.balance_pool.expect("Balance pool not resolved");
         let test_coin_type = resources
@@ -661,7 +622,7 @@ impl Operation for TestCoinAddressDeposit {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..1000)
+            get_rng().gen_range(100..1000)
         };
 
         let pool_arg = builder
@@ -704,21 +665,16 @@ impl Operation for TestCoinAddressDeposit {
 pub struct TestCoinAddressWithdraw;
 
 impl TestCoinAddressWithdraw {
-    pub const FLAG: u32 = 1 << 9;
+    pub const NAME: &'static str = "test_coin_address_withdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "TestCoinAddressWithdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(TestCoinAddressWithdraw),
     };
 }
 
 impl Operation for TestCoinAddressWithdraw {
     fn name(&self) -> &'static str {
-        "test_coin_address_withdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -736,7 +692,7 @@ impl Operation for TestCoinAddressWithdraw {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let test_coin_type = resources
             .test_coin_type
@@ -746,7 +702,7 @@ impl Operation for TestCoinAddressWithdraw {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..500)
+            get_rng().gen_range(100..500)
         };
 
         let withdrawal_arg =
@@ -770,21 +726,16 @@ impl Operation for TestCoinAddressWithdraw {
 pub struct TestCoinObjectWithdraw;
 
 impl TestCoinObjectWithdraw {
-    pub const FLAG: u32 = 1 << 10;
+    pub const NAME: &'static str = "test_coin_object_withdraw";
     pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: "TestCoinObjectWithdraw",
-        flag: Self::FLAG,
+        name: Self::NAME,
         factory: || Box::new(TestCoinObjectWithdraw),
     };
 }
 
 impl Operation for TestCoinObjectWithdraw {
     fn name(&self) -> &'static str {
-        "test_coin_object_withdraw"
-    }
-
-    fn operation_flag(&self) -> u32 {
-        Self::FLAG
+        Self::NAME
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
@@ -799,7 +750,7 @@ impl Operation for TestCoinObjectWithdraw {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (pool_id, pool_version) = resources.balance_pool.expect("Balance pool not resolved");
         let test_coin_type = resources
@@ -810,7 +761,7 @@ impl Operation for TestCoinObjectWithdraw {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..1000)
+            get_rng().gen_range(100..1000)
         };
 
         let pool_arg = builder
@@ -849,5 +800,303 @@ impl Operation for TestCoinObjectWithdraw {
 
         let recipient = SuiAddress::random_for_testing_only();
         builder.transfer_arg(recipient, coin);
+    }
+}
+
+pub struct AddressBalanceOverdraw;
+
+impl AddressBalanceOverdraw {
+    pub const NAME: &'static str = "address_balance_overdraw";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(AddressBalanceOverdraw),
+    };
+}
+
+impl Operation for AddressBalanceOverdraw {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::AddressBalance]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::SeedAddressBalance]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        _resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let withdraw_amount = if account_state.sui_balance == 0 {
+            // reservations of zero are invalid, so the transaction will be rejected.
+            0
+        } else {
+            // withdraw at least half the balance
+            let half_balance = std::cmp::max(1, account_state.sui_balance / 2);
+            get_rng().gen_range(half_balance..=account_state.sui_balance)
+        };
+
+        let withdrawal = FundsWithdrawalArg::balance_from_sender(withdraw_amount, GAS::type_tag());
+
+        let withdraw_arg = builder.funds_withdrawal(withdrawal).unwrap();
+        let recipient = builder.pure(account_state.sender).unwrap();
+
+        let balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdraw_arg],
+        );
+
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![balance, recipient],
+        );
+    }
+}
+
+pub struct AccumulatorBalanceRead;
+
+impl AccumulatorBalanceRead {
+    pub const NAME: &'static str = "accumulator_balance_read";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(AccumulatorBalanceRead),
+    };
+}
+
+impl Operation for AccumulatorBalanceRead {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::AccumulatorRoot]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::SeedAddressBalance]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let initial_shared_version = resources
+            .accumulator_root
+            .expect("AccumulatorRoot not resolved");
+
+        let root_arg = builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Immutable,
+            })
+            .unwrap();
+
+        let addr_arg = builder.pure(account_state.sender).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("accumulator_read").unwrap(),
+            Identifier::new("read_settled_balance").unwrap(),
+            vec![],
+            vec![root_arg, addr_arg],
+        );
+    }
+}
+
+pub struct ObjectBalanceOverdraw;
+
+impl ObjectBalanceOverdraw {
+    pub const NAME: &'static str = "object_balance_overdraw";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(ObjectBalanceOverdraw),
+    };
+}
+
+impl Operation for ObjectBalanceOverdraw {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::ObjectBalance]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![
+            InitRequirement::CreateBalancePool,
+            InitRequirement::SeedBalancePool,
+        ]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let (pool_id, initial_shared_version) =
+            resources.balance_pool.expect("Balance pool not resolved");
+
+        let withdraw_amount = if account_state.pool_balance == 0 {
+            0
+        } else {
+            let half_balance = std::cmp::max(1, account_state.pool_balance / 2);
+            get_rng().gen_range(half_balance..=account_state.pool_balance)
+        };
+
+        let pool_arg = builder
+            .obj(ObjectArg::SharedObject {
+                id: pool_id,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap();
+
+        let amount_arg = builder.pure(withdraw_amount).unwrap();
+
+        let withdrawal = builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("balance_pool").unwrap(),
+            Identifier::new("withdraw").unwrap(),
+            vec![GAS::type_tag()],
+            vec![pool_arg, amount_arg],
+        );
+
+        let balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdrawal],
+        );
+
+        let coin = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("from_balance").unwrap(),
+            vec![GAS::type_tag()],
+            vec![balance],
+        );
+
+        let recipient = SuiAddress::random_for_testing_only();
+        builder.transfer_arg(recipient, coin);
+    }
+}
+
+pub struct AuthenticatedEventEmit;
+
+impl AuthenticatedEventEmit {
+    pub const NAME: &'static str = "authenticated_event_emit";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(AuthenticatedEventEmit),
+    };
+}
+
+impl Operation for AuthenticatedEventEmit {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let mut rng = get_rng();
+        let count: u64 = rng.gen_range(1..=5);
+
+        let start_arg = builder.pure(count).unwrap();
+        let count_arg = builder.pure(count).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("auth_event").unwrap(),
+            Identifier::new("emit_multiple").unwrap(),
+            vec![],
+            vec![start_arg, count_arg],
+        );
+    }
+}
+
+pub struct ImmutableObjectRead;
+
+impl ImmutableObjectRead {
+    pub const NAME: &'static str = "immutable_object_read";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(ImmutableObjectRead),
+    };
+}
+
+impl Operation for ImmutableObjectRead {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::ImmutableObject]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::CreateImmutableObject]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let obj_ref = resources
+            .immutable_object
+            .expect("ImmutableObject not resolved");
+
+        let obj_arg = builder.obj(ObjectArg::ImmOrOwnedObject(obj_ref)).unwrap();
+
+        builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("immutable_object").unwrap(),
+            Identifier::new("value").unwrap(),
+            vec![],
+            vec![obj_arg],
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_operation_names_are_unique() {
+        let mut names = std::collections::HashSet::new();
+        for desc in ALL_OPERATIONS {
+            assert!(
+                names.insert(desc.name),
+                "Duplicate operation name: {}",
+                desc.name
+            );
+        }
     }
 }

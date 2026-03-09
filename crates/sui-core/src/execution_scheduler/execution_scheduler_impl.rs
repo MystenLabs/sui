@@ -11,9 +11,8 @@ use crate::{
     execution_scheduler::{
         ExecutingGuard, PendingCertificateStats,
         funds_withdraw_scheduler::{
-            FundsSettlement, ObjectFundsWithdrawSchedulerTrait, ObjectFundsWithdrawStatus,
-            ScheduleStatus, TxFundsWithdraw, naive_scheduler::NaiveObjectFundsWithdrawScheduler,
-            scheduler::FundsWithdrawScheduler,
+            AddressFundsSchedulerMetrics, FundsSettlement, ScheduleStatus, TxFundsWithdraw,
+            WithdrawReservations, scheduler::FundsWithdrawScheduler,
         },
     },
 };
@@ -25,15 +24,13 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
-use sui_config::node::AuthorityOverloadConfig;
+use sui_config::node::{AuthorityOverloadConfig, FundsWithdrawSchedulerType};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    base_types::{FullObjectID, ObjectID, SequenceNumber},
+    base_types::{FullObjectID, ObjectID},
     digests::TransactionDigest,
-    effects::{AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
-    execution_params::FundsWithdrawStatus,
     storage::InputKey,
     transaction::{
         SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
@@ -95,8 +92,9 @@ pub struct ExecutionScheduler {
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     address_funds_withdraw_scheduler: Arc<Mutex<Option<FundsWithdrawScheduler>>>,
-    object_funds_withdraw_scheduler: Arc<Mutex<Option<Box<dyn ObjectFundsWithdrawSchedulerTrait>>>>,
+    funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
     metrics: Arc<AuthorityMetrics>,
+    address_funds_scheduler_metrics: Arc<AddressFundsSchedulerMetrics>,
 }
 
 struct PendingGuard<'a> {
@@ -136,15 +134,23 @@ impl ExecutionScheduler {
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
         metrics: Arc<AuthorityMetrics>,
+        prometheus_registry: &prometheus::Registry,
     ) -> Self {
-        tracing::info!("Creating new ExecutionScheduler");
-        let (address_funds_withdraw_scheduler, object_funds_withdraw_scheduler) =
-            Self::initialize_funds_withdraw_scheduler(
-                epoch_store,
-                &object_cache_read,
-                account_funds_read,
-            );
+        tracing::info!(
+            ?funds_withdraw_scheduler_type,
+            "Creating new ExecutionScheduler"
+        );
+        let address_funds_scheduler_metrics =
+            Arc::new(AddressFundsSchedulerMetrics::new(prometheus_registry));
+        let address_funds_withdraw_scheduler = Self::initialize_funds_withdraw_scheduler(
+            epoch_store,
+            &object_cache_read,
+            account_funds_read,
+            funds_withdraw_scheduler_type,
+            &address_funds_scheduler_metrics,
+        );
         Self {
             object_cache_read,
             transaction_cache_read,
@@ -153,8 +159,9 @@ impl ExecutionScheduler {
             address_funds_withdraw_scheduler: Arc::new(Mutex::new(
                 address_funds_withdraw_scheduler,
             )),
-            object_funds_withdraw_scheduler: Arc::new(Mutex::new(object_funds_withdraw_scheduler)),
+            funds_withdraw_scheduler_type,
             metrics,
+            address_funds_scheduler_metrics,
         }
     }
 
@@ -162,36 +169,26 @@ impl ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         object_cache_read: &Arc<dyn ObjectCacheRead>,
         account_funds_read: Arc<dyn AccountFundsRead>,
-    ) -> (
-        Option<FundsWithdrawScheduler>,
-        Option<Box<dyn ObjectFundsWithdrawSchedulerTrait>>,
-    ) {
+        scheduler_type: FundsWithdrawSchedulerType,
+        address_funds_scheduler_metrics: &Arc<AddressFundsSchedulerMetrics>,
+    ) -> Option<FundsWithdrawScheduler> {
         let withdraw_scheduler_enabled =
             epoch_store.is_validator() && epoch_store.accumulators_enabled();
         if !withdraw_scheduler_enabled {
-            return (None, None);
+            return None;
         }
         let starting_accumulator_version = object_cache_read
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .expect("Accumulator root object must be present if funds accumulator is enabled")
             .version();
-        let address_funds_withdraw_scheduler =
-            FundsWithdrawScheduler::new(account_funds_read.clone(), starting_accumulator_version);
-        let object_funds_withdraw_scheduler =
-            if epoch_store.protocol_config().enable_object_funds_withdraw() {
-                let scheduler: Box<dyn ObjectFundsWithdrawSchedulerTrait> =
-                    Box::new(NaiveObjectFundsWithdrawScheduler::new(
-                        account_funds_read,
-                        starting_accumulator_version,
-                    ));
-                Some(scheduler)
-            } else {
-                None
-            };
-        (
-            Some(address_funds_withdraw_scheduler),
-            object_funds_withdraw_scheduler,
-        )
+        let address_funds_withdraw_scheduler = FundsWithdrawScheduler::new(
+            account_funds_read.clone(),
+            starting_accumulator_version,
+            scheduler_type,
+            address_funds_scheduler_metrics.clone(),
+        );
+
+        Some(address_funds_withdraw_scheduler)
     }
 
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?cert.digest()))]
@@ -312,7 +309,7 @@ impl ExecutionScheduler {
         };
     }
 
-    fn send_transaction_for_execution(
+    pub fn send_transaction_for_execution(
         &self,
         cert: &VerifiedExecutableTransaction,
         execution_env: ExecutionEnv,
@@ -374,7 +371,10 @@ impl ExecutionScheduler {
                 .as_ref()
                 .expect("Funds withdraw scheduler must be enabled if there are withdraws");
             for (version, tx_withdraws) in withdraws {
-                receivers.extend(withdraw_scheduler.schedule_withdraws(version, tx_withdraws));
+                receivers.extend(withdraw_scheduler.schedule_withdraws(WithdrawReservations {
+                    accumulator_version: version,
+                    withdraws: tx_withdraws,
+                }));
             }
             // guard will be dropped here
         }
@@ -387,10 +387,9 @@ impl ExecutionScheduler {
             }
             while let Some(result) = receivers.next().await {
                 match result {
-                    Ok(result) => match result.status {
+                    Ok((tx_digest, status)) => match status {
                         ScheduleStatus::InsufficientFunds => {
                             assert_reachable!("tx cancelled, insufficient funds");
-                            let tx_digest = result.tx_digest;
                             debug!(
                                 ?tx_digest,
                                 "Funds withdraw scheduling result: Insufficient funds"
@@ -401,14 +400,12 @@ impl ExecutionScheduler {
                         }
                         ScheduleStatus::SufficientFunds => {
                             assert_reachable!("tx scheduled, sufficient funds");
-                            let tx_digest = result.tx_digest;
                             debug!(?tx_digest, "Funds withdraw scheduling result: Success");
                             let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
                         ScheduleStatus::SkipSchedule => {
                             assert_reachable!("tx withdrawal scheduling skipped");
-                            let tx_digest = result.tx_digest;
                             debug!(?tx_digest, "Skip scheduling funds withdraw");
                         }
                     },
@@ -418,61 +415,6 @@ impl ExecutionScheduler {
                 }
             }
         }));
-    }
-
-    fn schedule_settlement_transactions(
-        &self,
-        settlement_txns: Vec<(TransactionKey, ExecutionEnv)>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        if !settlement_txns.is_empty() {
-            let scheduler = self.clone();
-            let epoch_store = epoch_store.clone();
-
-            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-                let mut futures: FuturesUnordered<_> = settlement_txns
-                    .into_iter()
-                    .map(|(key, env)| {
-                        let epoch_store = epoch_store.clone();
-                        async move {
-                            (
-                                key,
-                                epoch_store.wait_for_settlement_transactions(key).await,
-                                env,
-                            )
-                        }
-                    })
-                    .collect();
-
-                while let Some((settlement_key, txns, env)) = futures.next().await {
-                    let mut barrier_deps = BarrierDependencyBuilder::new();
-                    let txns = txns
-                        .into_iter()
-                        .map(|tx| {
-                            let deps = barrier_deps.process_tx(*tx.digest(), tx.transaction_data());
-                            let env = env.clone().with_barrier_dependencies(deps);
-                            (tx, env)
-                        })
-                        .collect::<Vec<_>>();
-
-                    scheduler.enqueue_transactions(txns, &epoch_store);
-
-                    // Spawn a new task to wait for the barrier transaction.
-                    let scheduler = scheduler.clone();
-                    let epoch_store = epoch_store.clone();
-                    let env = env.clone();
-                    spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-                        let barrier_tx = epoch_store
-                            .wait_for_barrier_transaction(settlement_key)
-                            .await;
-                        let deps = barrier_deps
-                            .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
-                        let env = env.with_barrier_dependencies(deps);
-                        scheduler.enqueue_transactions(vec![(barrier_tx, env)], &epoch_store);
-                    }));
-                }
-            }));
-        }
     }
 
     fn schedule_tx_keys(
@@ -545,7 +487,6 @@ impl ExecutionScheduler {
         let mut ordinary_txns = Vec::with_capacity(certs.len());
         let mut tx_with_keys = Vec::new();
         let mut tx_with_withdraws = Vec::new();
-        let mut settlement_txns = Vec::new();
 
         for (schedulable, env) in certs {
             match schedulable {
@@ -560,7 +501,7 @@ impl ExecutionScheduler {
                     tx_with_keys.push((s.key(), env));
                 }
                 Schedulable::AccumulatorSettlement(_, _) => {
-                    settlement_txns.push((schedulable.key(), env));
+                    unreachable!("handled by SettlementScheduler");
                 }
                 Schedulable::ConsensusCommitPrologue(_, _, _) => {
                     // we only use Schedulable::ConsensusCommitPrologue as a temporary placeholder
@@ -574,7 +515,6 @@ impl ExecutionScheduler {
         self.enqueue_transactions(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
         self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
-        self.schedule_settlement_transactions(settlement_txns, epoch_store);
     }
 
     pub fn enqueue_transactions(
@@ -645,14 +585,6 @@ impl ExecutionScheduler {
             .settle_funds(settlement);
     }
 
-    pub fn settle_object_funds(&self, next_accumulator_version: SequenceNumber) {
-        if let Some(object_funds_withdraw_scheduler) =
-            self.object_funds_withdraw_scheduler.lock().as_ref()
-        {
-            object_funds_withdraw_scheduler.settle_accumulator_version(next_accumulator_version);
-        }
-    }
-
     /// Reconfigure internal state at epoch start. This resets the funds withdraw scheduler
     /// to the current accumulator root object version.
     pub fn reconfigure(
@@ -660,24 +592,19 @@ impl ExecutionScheduler {
         new_epoch_store: &Arc<AuthorityPerEpochStore>,
         account_funds_read: &Arc<dyn AccountFundsRead>,
     ) {
-        let (address_funds_withdraw_scheduler, object_funds_withdraw_scheduler) =
-            Self::initialize_funds_withdraw_scheduler(
-                new_epoch_store,
-                &self.object_cache_read,
-                account_funds_read.clone(),
-            );
+        let address_funds_withdraw_scheduler = Self::initialize_funds_withdraw_scheduler(
+            new_epoch_store,
+            &self.object_cache_read,
+            account_funds_read.clone(),
+            self.funds_withdraw_scheduler_type,
+            &self.address_funds_scheduler_metrics,
+        );
         let mut guard = self.address_funds_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
             old_scheduler.close_epoch();
         }
         *guard = address_funds_withdraw_scheduler;
         drop(guard);
-
-        let mut object_guard = self.object_funds_withdraw_scheduler.lock();
-        if let Some(old_scheduler) = object_guard.as_ref() {
-            old_scheduler.close_epoch();
-        }
-        *object_guard = object_funds_withdraw_scheduler;
     }
 
     pub fn check_execution_overload(
@@ -701,142 +628,27 @@ impl ExecutionScheduler {
                 .get()) as usize
     }
 
-    #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
-    pub fn should_commit_object_funds_withdraws(
-        &self,
-        certificate: &VerifiedExecutableTransaction,
-        effects: &TransactionEffects,
-        execution_env: &ExecutionEnv,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> bool {
-        // Object funds withdraw is not enabled on this node.
-        if self.object_funds_withdraw_scheduler.lock().is_none() {
-            return true;
-        }
-
-        if effects.status().is_err() {
-            // This transaction already failed. It does not matter any more
-            // whether it has sufficient object funds or not.
-            debug!("Transaction failed, committing effects");
-            return true;
-        }
-        let address_funds_reservations: BTreeSet<_> = certificate
-            .transaction_data()
-            .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier())
-            .into_keys()
-            .collect();
-        // All withdraws will show up as accumulator events with integer values.
-        // Among them, addresses that do not have funds reservations are object
-        // withdraws.
-        let object_withdraws: BTreeMap<_, _> = effects
-            .accumulator_events()
-            .into_iter()
-            .filter_map(|event| {
-                if address_funds_reservations.contains(&event.accumulator_obj) {
-                    return None;
-                }
-                // Only integer splits are funds withdraws.
-                if let (AccumulatorOperation::Split, AccumulatorValue::Integer(amount)) =
-                    (event.write.operation, event.write.value)
-                {
-                    Some((event.accumulator_obj, amount))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        // If there are no object withdraws, we can skip checking object funds.
-        if object_withdraws.is_empty() {
-            debug!("No object withdraws, committing effects");
-            return true;
-        }
-        let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version else {
-            // Fastpath transactions that perform object funds withdraws
-            // must wait for consensus to assign the accumulator version.
-            // We cannot optimize the scheduling by processing fastpath object withdraws
-            // sooner because these may get reverted, and we don't want them
-            // pollute the scheduler tracking state.
-            // TODO: We could however optimize execution by caching
-            // the execution state to avoid re-execution.
-            return false;
-        };
-        match self
-            .object_funds_withdraw_scheduler
-            .lock()
-            .as_ref()
-            .unwrap()
-            .schedule(object_withdraws, accumulator_version)
-        {
-            // Sufficient funds, we can go ahead and commit the execution results as it is.
-            ObjectFundsWithdrawStatus::SufficientFunds => {
-                debug!("Object funds sufficient, committing effects");
-                true
-            }
-            // Currently insufficient funds. We need to wait until it reach a deterministic state
-            // before we can determine if it is really insufficient (to include potential deposits)
-            // At that time we will have to re-enqueue the transaction for execution again.
-            // Re-enqueue is handled here so the caller does not need to worry about it.
-            ObjectFundsWithdrawStatus::Pending(receiver) => {
-                let scheduler = self.clone();
-                let cert = certificate.clone();
-                let mut execution_env = execution_env.clone();
-                let epoch_store = epoch_store.clone();
-                tokio::task::spawn(async move {
-                    // It is possible that checkpoint executor finished executing
-                    // the current epoch and went ahead with epoch change asynchronously,
-                    // while this is still waiting.
-                    let _ = epoch_store
-                        .within_alive_epoch(async move {
-                            let tx_digest = cert.digest();
-                            match receiver.await {
-                                Ok(FundsWithdrawStatus::MaybeSufficient) => {
-                                    // The withdraw state is now deterministically known,
-                                    // so we can enqueue the transaction again and it will check again
-                                    // whether it is sufficient or not in the next execution.
-                                    // TODO: We should be able to optimize this by avoiding re-execution.
-                                    debug!(?tx_digest, "Object funds possibly sufficient");
-                                }
-                                Ok(FundsWithdrawStatus::Insufficient) => {
-                                    // Re-enqueue with insufficient funds status, so it will be executed
-                                    // in the next execution and fail through early error.
-                                    // FIXME: We need to also track the amount of gas that was used,
-                                    // so that we could charge properly in the next execution when we
-                                    // go through early error. Otherwise we would undercharge.
-                                    execution_env = execution_env.with_insufficient_funds();
-                                    debug!(?tx_digest, "Object funds insufficient");
-                                }
-                                Err(e) => {
-                                    error!("Error receiving funds withdraw status: {:?}", e);
-                                }
-                            }
-                            scheduler.send_transaction_for_execution(
-                                &cert,
-                                execution_env,
-                                // TODO: Should the enqueue_time be the original enqueue time
-                                // of this transaction?
-                                Instant::now(),
-                            );
-                        })
-                        .await;
-                });
-                false
-            }
-        }
-    }
-
     #[cfg(test)]
-    pub fn check_empty_for_testing(&self) {
+    pub async fn check_empty_for_testing(&self) {
+        for _ in 0..10 {
+            if self.num_pending_certificates() == 0 {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
         assert_eq!(self.num_pending_certificates(), 0);
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{BarrierDependencyBuilder, ExecutionScheduler, PendingCertificate};
+    use super::{
+        BarrierDependencyBuilder, ExecutionScheduler, FundsWithdrawSchedulerType,
+        PendingCertificate,
+    };
     use crate::authority::ExecutionEnv;
     use crate::authority::shared_object_version_manager::AssignedVersions;
     use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
-    use crate::execution_scheduler::SchedulingSource;
     use std::collections::BTreeSet;
     use std::{time::Duration, vec};
     use sui_test_transaction_builder::TestTransactionBuilder;
@@ -867,13 +679,16 @@ mod test {
         // Create a new execution scheduler instead of reusing the authority's, to examine
         // execution_scheduler output from rx_ready_certificates.
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
+        let registry = prometheus::Registry::new();
         let execution_scheduler = ExecutionScheduler::new(
             state.get_object_cache_reader().clone(),
             state.get_account_funds_read().clone(),
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),
+            FundsWithdrawSchedulerType::default(),
             state.metrics.clone(),
+            &registry,
         );
 
         (execution_scheduler, rx_ready_certificates)
@@ -931,10 +746,7 @@ mod test {
         let transaction = make_transaction(gas_objects[0].clone(), vec![]);
         let tx_start_time = Instant::now();
         execution_scheduler.enqueue_transactions(
-            vec![(
-                transaction.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(transaction.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         // scheduler should output the transaction eventually.
@@ -952,7 +764,7 @@ mod test {
         drop(pending_certificate);
 
         // scheduler should be empty.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         // Enqueue a transaction with a new gas object, empty input.
         let gas_object_new = Object::with_id_owner_version_for_testing(
@@ -963,10 +775,7 @@ mod test {
         let transaction = make_transaction(gas_object_new.clone(), vec![]);
         let tx_start_time = Instant::now();
         execution_scheduler.enqueue_transactions(
-            vec![(
-                transaction.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(transaction.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         // scheduler should output no transaction yet.
@@ -981,10 +790,7 @@ mod test {
 
         // Duplicated enqueue is allowed.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                transaction.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(transaction.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1022,7 +828,7 @@ mod test {
         drop(pending_certificate2);
 
         // scheduler should be empty at the end.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
     }
 
     // Tests when objects become available, correct set of transactions can be sent to execute.
@@ -1233,7 +1039,7 @@ mod test {
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
 
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -1255,7 +1061,7 @@ mod test {
         // scheduler should output no transaction.
         assert!(rx_ready_certificates.try_recv().is_err());
         // scheduler should be empty at the beginning.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         let obj_id = ObjectID::random();
         let object_arguments: Vec<_> = (0..10)
@@ -1286,10 +1092,7 @@ mod test {
             // scheduler should output no transaction yet since waiting on receiving object or
             // ImmOrOwnedObject input.
             execution_scheduler.enqueue_transactions(
-                vec![(
-                    txn.clone(),
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-                )],
+                vec![(txn.clone(), ExecutionEnv::new())],
                 &state.epoch_store_for_testing(),
             );
             sleep(Duration::from_secs(1)).await;
@@ -1325,7 +1128,7 @@ mod test {
         }
 
         // After everything scheduler should be empty.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -1347,7 +1150,7 @@ mod test {
         // scheduler should output no transaction.
         assert!(rx_ready_certificates.try_recv().is_err());
         // scheduler should be empty at the beginning.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         let obj_id = ObjectID::random();
         let receiving_object_new0 =
@@ -1370,10 +1173,7 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                receive_object_transaction0.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(receive_object_transaction0.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1382,10 +1182,7 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                receive_object_transaction1.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(receive_object_transaction1.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1394,10 +1191,7 @@ mod test {
 
         // Duplicate enqueue of receiving object is allowed.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                receive_object_transaction0.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(receive_object_transaction0.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1442,7 +1236,7 @@ mod test {
         // scheduler should output no transaction.
         assert!(rx_ready_certificates.try_recv().is_err());
         // scheduler should be empty at the beginning.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         let obj_id = ObjectID::random();
         let receiving_object_new0 =
@@ -1478,10 +1272,7 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                receive_object_transaction0.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(receive_object_transaction0.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1490,10 +1281,7 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                receive_object_transaction1.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(receive_object_transaction1.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1503,10 +1291,7 @@ mod test {
         // Different transaction with a duplicate receiving object reference is allowed.
         // Both transaction's will be outputted once the receiving object is available.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                receive_object_transaction01.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(receive_object_transaction01.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1530,10 +1315,7 @@ mod test {
         // Enqueue a transaction with a receiving object that is available at the time it is enqueued.
         // This should be immediately available.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                tx1.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(tx1.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1574,7 +1356,7 @@ mod test {
         // scheduler should output no transaction.
         assert!(rx_ready_certificates.try_recv().is_err());
         // scheduler should be empty at the beginning.
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
 
         let receiving_object_new0 = Object::with_id_owner_version_for_testing(
             receiving_object.id(),
@@ -1607,24 +1389,15 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue_transactions(
-            vec![(
-                receive_object_transaction0.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(receive_object_transaction0.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         execution_scheduler.enqueue_transactions(
-            vec![(
-                receive_object_transaction01.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(receive_object_transaction01.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         execution_scheduler.enqueue_transactions(
-            vec![(
-                receive_object_transaction1.clone(),
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
+            vec![(receive_object_transaction1.clone(), ExecutionEnv::new())],
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
@@ -1737,7 +1510,7 @@ mod test {
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
 
-        execution_scheduler.check_empty_for_testing();
+        execution_scheduler.check_empty_for_testing().await;
     }
 
     #[test]

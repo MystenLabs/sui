@@ -12,8 +12,8 @@ expression: common_costs_actual
   "Publish": {
     "computationCost": "1000000",
     "storageCost": "13505200",
-    "storageRebate": "0",
-    "nonRefundableStorageFee": "0"
+    "storageRebate": "978120",
+    "nonRefundableStorageFee": "9880"
   },
   "SharedCounterAssertValue": {
     "computationCost": "1000000",
@@ -54,7 +54,7 @@ expression: common_costs_actual
   "TransferWholeSuiCoin": {
     "computationCost": "1000000",
     "storageCost": "988000",
-    "storageRebate": "0",
-    "nonRefundableStorageFee": "0"
+    "storageRebate": "978120",
+    "nonRefundableStorageFee": "9880"
   }
 }

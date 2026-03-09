@@ -79,7 +79,6 @@ use crate::{
     },
     checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
-    transaction_outputs::TransactionOutputs,
 };
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
 use sui_types::messages_grpc::PingType;
@@ -789,7 +788,7 @@ impl ValidatorService {
                 .get_executed_effects(tx_digest)
             {
                 let effects_digest = effects.digest();
-                if let Ok(executed_data) = self.complete_executed_data(effects, None).await {
+                if let Ok(executed_data) = self.complete_executed_data(effects).await {
                     let executed_result = SubmitTxResult::Executed {
                         effects_digest,
                         details: Some(executed_data),
@@ -843,8 +842,7 @@ impl ValidatorService {
                         .get_executed_effects(tx_digest)
                     {
                         let effects_digest = effects.digest();
-                        if let Ok(executed_data) = self.complete_executed_data(effects, None).await
-                        {
+                        if let Ok(executed_data) = self.complete_executed_data(effects).await {
                             let executed_result = SubmitTxResult::Executed {
                                 effects_digest,
                                 details: Some(executed_data),
@@ -867,39 +865,48 @@ impl ValidatorService {
             }
 
             // Create claims with aliases and / or immutable objects.
-            if epoch_store.protocol_config().address_aliases()
-                || epoch_store.protocol_config().disable_preconsensus_locking()
-            {
-                let mut claims = vec![];
+            let mut claims = vec![];
 
-                if epoch_store.protocol_config().disable_preconsensus_locking() {
-                    let immutable_object_ids = self
-                        .collect_immutable_object_ids(verified_transaction.tx(), state)
-                        .await?;
-                    if !immutable_object_ids.is_empty() {
-                        claims.push(TransactionClaim::ImmutableInputObjects(
-                            immutable_object_ids,
-                        ));
-                    }
-                }
-
-                let (tx, aliases) = verified_transaction.into_inner();
-                if epoch_store.protocol_config().address_aliases() {
-                    claims.push(TransactionClaim::AddressAliases(aliases));
-                }
-
-                let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
-
-                consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
-                    &state.name,
-                    tx_with_claims,
-                ));
-            } else {
-                consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
-                    &state.name,
-                    verified_transaction.into_tx().into(),
+            let immutable_object_ids = self
+                .collect_immutable_object_ids(verified_transaction.tx(), state)
+                .await?;
+            if !immutable_object_ids.is_empty() {
+                claims.push(TransactionClaim::ImmutableInputObjects(
+                    immutable_object_ids,
                 ));
             }
+
+            let (tx, aliases) = verified_transaction.into_inner();
+            if epoch_store.protocol_config().address_aliases() {
+                if epoch_store
+                    .protocol_config()
+                    .fix_checkpoint_signature_mapping()
+                {
+                    claims.push(TransactionClaim::AddressAliasesV2(aliases));
+                } else {
+                    let v1_aliases: Vec<_> = tx
+                        .data()
+                        .intent_message()
+                        .value
+                        .required_signers()
+                        .into_iter()
+                        .zip_eq(aliases.into_iter().map(|(_, seq)| seq))
+                        .collect();
+                    #[allow(deprecated)]
+                    claims.push(TransactionClaim::AddressAliases(
+                        nonempty::NonEmpty::from_vec(v1_aliases)
+                            .expect("must have at least one required_signer"),
+                    ));
+                }
+            }
+
+            let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
+
+            consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
+                &state.name,
+                tx_with_claims,
+            ));
+
             transaction_indexes.push(idx);
             total_size_bytes += tx_size;
         }
@@ -1078,17 +1085,12 @@ impl ValidatorService {
         include_events: bool,
         include_input_objects: bool,
         include_output_objects: bool,
-        fastpath_outputs: Option<Arc<TransactionOutputs>>,
     ) -> SuiResult<(Option<TransactionEvents>, Vec<Object>, Vec<Object>)> {
         let events = if include_events && effects.events_digest().is_some() {
-            if let Some(fastpath_outputs) = &fastpath_outputs {
-                Some(fastpath_outputs.events.clone())
-            } else {
-                Some(
-                    self.state
-                        .get_transaction_events(effects.transaction_digest())?,
-                )
-            }
+            Some(
+                self.state
+                    .get_transaction_events(effects.transaction_digest())?,
+            )
         } else {
             None
         };
@@ -1100,11 +1102,7 @@ impl ValidatorService {
         };
 
         let output_objects = if include_output_objects {
-            if let Some(fastpath_outputs) = &fastpath_outputs {
-                fastpath_outputs.written.values().cloned().collect()
-            } else {
-                self.state.get_transaction_output_objects(effects)?
-            }
+            self.state.get_transaction_output_objects(effects)?
         } else {
             vec![]
         };
@@ -1142,7 +1140,7 @@ impl ValidatorService {
         Ok((tonic::Response::new(response), Weight::zero()))
     }
 
-    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, fields(consensus_position = ?request.consensus_position, fast_path_effects = tracing::field::Empty))]
+    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, fields(consensus_position = ?request.consensus_position))]
     async fn wait_for_effects_response(
         &self,
         request: WaitForEffectsRequest,
@@ -1178,30 +1176,29 @@ impl ValidatorService {
             };
 
         tokio::select! {
-            // Ensure that finalized effects are always prioritized.
-            biased;
             // We always wait for effects regardless of consensus position via
-            // notify_read_executed_effects. This is safe because we have separated
+            // notify_read_executed_effects_may_fail. This is safe because we have separated
             // mysticeti fastpath outputs to a separate dirty cache
             // UncommittedData::fastpath_transaction_outputs that will only get flushed
-            // once finalized. So the output of notify_read_executed_effects is
+            // once finalized. So the output of notify_read_executed_effects_may_fail is
             // guaranteed to be finalized effects or effects from QD execution.
-            mut effects = self.state
+            // We use _may_fail variant because effects may have been pruned for old transactions.
+            effects_result = self.state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects(
+                .notify_read_executed_effects_may_fail(
                     "AuthorityServer::wait_for_effects::notify_read_executed_effects_finalized",
                     &tx_digests,
                 ) => {
-                tracing::Span::current().record("fast_path_effects", false);
-                let effects = effects.pop().unwrap();
+                let effects = effects_result?.pop().unwrap();
+                let effects_digest = effects.digest();
                 let details = if request.include_details {
-                    Some(self.complete_executed_data(effects.clone(), None).await?)
+                    Some(self.complete_executed_data(effects).await?)
                 } else {
                     None
                 };
 
                 Ok(WaitForEffectsResponse::Executed {
-                    effects_digest: effects.digest(),
+                    effects_digest,
                     details,
                     fast_path: false,
                 })
@@ -1345,63 +1342,59 @@ impl ValidatorService {
 
         consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
 
+        // FastpathCertified is non-terminal (tx may still be rejected), so loop
+        // until we see a terminal status.
         let mut current_status = None;
         loop {
-            tokio::select! {
-                status_result = consensus_tx_status_cache
-                    .notify_read_transaction_status_change(consensus_position, current_status) => {
-                    match status_result {
-                        NotifyReadConsensusTxStatusResult::Status(new_status) => {
-                            match new_status {
-                                ConsensusTxStatus::Rejected => {
-                                    return Ok(WaitForEffectsResponse::Rejected {
-                                        error: epoch_store.get_rejection_vote_reason(
-                                            consensus_position
-                                        )
-                                    });
-                                }
-                                ConsensusTxStatus::FastpathCertified => {
-                                    current_status = Some(new_status);
-                                    continue;
-                                }
-                                ConsensusTxStatus::Finalized => {
-                                    current_status = Some(new_status);
-                                    continue;
-                                }
-                                ConsensusTxStatus::Dropped => {
-                                    // Transaction was dropped post-consensus, currently only due to invalid owned object inputs.
-                                    // Fetch the detailed error from the rejection reason cache.
-                                    return Ok(WaitForEffectsResponse::Rejected {
-                                        error: epoch_store
-                                            .get_rejection_vote_reason(consensus_position),
-                                    });
-                                }
-                            }
-                        }
-                        NotifyReadConsensusTxStatusResult::Expired(round) => {
-                            return Ok(WaitForEffectsResponse::Expired {
-                                epoch: epoch_store.epoch(),
-                                round: Some(round),
-                            });
-                        }
+            let status = consensus_tx_status_cache
+                .notify_read_transaction_status_change(consensus_position, current_status)
+                .await;
+            match status {
+                NotifyReadConsensusTxStatusResult::Status(new_status) => match new_status {
+                    ConsensusTxStatus::Rejected => {
+                        return Ok(WaitForEffectsResponse::Rejected {
+                            error: epoch_store.get_rejection_vote_reason(consensus_position),
+                        });
                     }
-                }
+                    ConsensusTxStatus::FastpathCertified => {
+                        current_status = Some(new_status);
+                        continue;
+                    }
+                    ConsensusTxStatus::Finalized => {
+                        let effects = self
+                            .state
+                            .get_transaction_cache_reader()
+                            .notify_read_executed_effects_may_fail(
+                                "AuthorityServer::wait_for_fastpath_effects::notify_read_executed_effects",
+                                tx_digests,
+                            )
+                            .await?
+                            .pop()
+                            .unwrap();
+                        let effects_digest = effects.digest();
 
-                mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(tx_digests),
-                    if current_status == Some(ConsensusTxStatus::FastpathCertified) || current_status == Some(ConsensusTxStatus::Finalized) => {
-                    let outputs = outputs.pop().unwrap();
-                    let effects = outputs.effects.clone();
+                        let details = if include_details {
+                            Some(self.complete_executed_data(effects).await?)
+                        } else {
+                            None
+                        };
 
-                    let details = if include_details {
-                        Some(self.complete_executed_data(effects.clone(), Some(outputs)).await?)
-                    } else {
-                        None
-                    };
-
-                    return Ok(WaitForEffectsResponse::Executed {
-                        effects_digest: effects.digest(),
-                        details,
-                        fast_path: current_status == Some(ConsensusTxStatus::FastpathCertified),
+                        return Ok(WaitForEffectsResponse::Executed {
+                            effects_digest,
+                            details,
+                            fast_path: false,
+                        });
+                    }
+                    ConsensusTxStatus::Dropped => {
+                        return Ok(WaitForEffectsResponse::Rejected {
+                            error: epoch_store.get_rejection_vote_reason(consensus_position),
+                        });
+                    }
+                },
+                NotifyReadConsensusTxStatusResult::Expired(round) => {
+                    return Ok(WaitForEffectsResponse::Expired {
+                        epoch: epoch_store.epoch(),
+                        round: Some(round),
                     });
                 }
             }
@@ -1411,15 +1404,11 @@ impl ValidatorService {
     async fn complete_executed_data(
         &self,
         effects: TransactionEffects,
-        fastpath_outputs: Option<Arc<TransactionOutputs>>,
     ) -> SuiResult<Box<ExecutedData>> {
         let (events, input_objects, output_objects) = self
             .collect_effects_data(
-                &effects,
-                /* include_events */ true,
-                /* include_input_objects */ true,
+                &effects, /* include_events */ true, /* include_input_objects */ true,
                 /* include_output_objects */ true,
-                fastpath_outputs,
             )
             .await?;
         Ok(Box::new(ExecutedData {

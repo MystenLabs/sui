@@ -60,6 +60,10 @@ enum TestSuite {
         project: String,
         file_tests: BTreeMap<String, Vec<AccessChainQuickFixTest>>,
     },
+    References {
+        project: String,
+        file_tests: BTreeMap<String, Vec<ReferencesTest>>,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -100,6 +104,12 @@ struct AccessChainQuickFixTest {
     err_msg: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct ReferencesTest {
+    use_line: u32,
+    use_ndx: usize,
+}
+
 //**************************************************************************************************
 // Test Impls
 //**************************************************************************************************
@@ -134,17 +144,11 @@ impl UseDefTest {
             )?;
             return Ok(());
         };
-        let Some(mod_defs) = symbols.file_mods.get(use_file_path) else {
-            writeln!(
-                output,
-                "ERROR: No modules found for file at {use_file_path:?}"
-            )?;
+
+        let Some(use_file_hash) = symbols.files.file_hash(&use_file_path.to_path_buf()) else {
+            writeln!(output, "ERROR: No file hash for file at {use_file_path:?}")?;
             return Ok(());
         };
-        // symbols.file_mods only has an entry if there are actual modules in the file
-        // (BTreeSet containing module defs is never empty)
-        debug_assert!(!mod_defs.is_empty());
-        let use_file_hash = mod_defs.first().unwrap().fhash;
         let Some((_, use_file_content)) = symbols.files.get(&use_file_hash) else {
             writeln!(
                 output,
@@ -268,23 +272,15 @@ impl CursorTest {
         let cursor_path = path.to_path_buf();
         let cursor_info = Some((&cursor_path, Position { line, character }));
         let mut symbols_computation_data = SymbolsComputationData::new();
-        let typed_mod_named_address_maps = compiled_pkg_info
-            .program
-            .typed_modules
-            .iter()
-            .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
-            .collect::<BTreeMap<_, _>>();
         let mut cursor_context = compute_symbols_pre_process(
             &mut symbols_computation_data,
             &mut compiled_pkg_info,
             cursor_info,
-            &typed_mod_named_address_maps,
         );
         cursor_context = compute_symbols_parsed_program(
             &mut symbols_computation_data,
             &compiled_pkg_info,
             cursor_context,
-            &typed_mod_named_address_maps,
         );
         symbols.cursor_context = cursor_context.clone();
 
@@ -383,6 +379,68 @@ impl AccessChainQuickFixTest {
             writeln!(output, "CODE ACTION: {}", action.title)?;
         }
 
+        Ok(())
+    }
+}
+
+impl ReferencesTest {
+    fn test(
+        &self,
+        test_idx: usize,
+        mod_symbols: &UseDefMap,
+        symbols: &Symbols,
+        output: &mut dyn std::io::Write,
+        use_file: &str,
+    ) -> anyhow::Result<()> {
+        let ReferencesTest { use_ndx, use_line } = self;
+        writeln!(output, "-- test {test_idx} -------------------")?;
+        writeln!(output, "use line: {use_line}, use_ndx: {use_ndx}")?;
+        let lsp_use_line = use_line - 1; // 0th-based
+        let Some(uses) = mod_symbols.get(lsp_use_line) else {
+            writeln!(
+                output,
+                "ERROR: No use_line {use_line} in mod_symbols for file {use_file}"
+            )?;
+            return Ok(());
+        };
+        let Some(use_def) = uses.iter().nth(*use_ndx) else {
+            writeln!(
+                output,
+                "ERROR: No symbol at index {use_ndx} in line {use_line} for file {use_file}"
+            )?;
+            return Ok(());
+        };
+        let Some(ref_locs) = symbols.references.get(&use_def.def_loc()) else {
+            writeln!(output, "No references found")?;
+            return Ok(());
+        };
+        writeln!(output, "References:")?;
+        for ref_loc in ref_locs {
+            let file_path = symbols.files.file_path(&ref_loc.fhash);
+            let file_name = file_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "UNKNOWN".to_string());
+            // 1-based line and column for readability
+            let line = ref_loc.start.line + 1;
+            let col = ref_loc.start.character + 1;
+            // Extract identifier text from source content
+            let ident = if let Some((_, content)) = symbols.files.get(&ref_loc.fhash) {
+                if let Some(src_line) = content.lines().nth(ref_loc.start.line as usize)
+                    && let Some((start, _)) = src_line
+                        .char_indices()
+                        .nth(ref_loc.start.character as usize)
+                    && let Some((end, _)) = src_line.char_indices().nth(ref_loc.col_end as usize)
+                {
+                    src_line[start..end].to_string()
+                } else {
+                    "INVALID IDENT".to_string()
+                }
+            } else {
+                "UNKNOWN FILE CONTENT".to_string()
+            };
+            writeln!(output, "  '{ident}' at {file_name}:{line}:{col}")?;
+        }
         Ok(())
     }
 }
@@ -833,6 +891,52 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
+fn references_test_suite<F: MoveFlavor>(
+    project: String,
+    file_tests: BTreeMap<String, Vec<ReferencesTest>>,
+) -> datatest_stable::Result<String> {
+    let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut project_path = base_path.clone();
+    project_path.push(project);
+
+    let packages_info = Arc::new(Mutex::new(CachedPackages::new()));
+    let ide_files_root: VfsPath = MemoryFS::new().into();
+
+    let (_, symbols) = test_symbols_with_optional_modifications::<F>(
+        packages_info.clone(),
+        ide_files_root.clone(),
+        project_path.clone(),
+        None,
+    )?;
+
+    let mut output: BufWriter<_> = BufWriter::new(Vec::new());
+    let writer: &mut dyn io::Write = output.get_mut();
+
+    for (file, tests) in file_tests {
+        writeln!(
+            writer,
+            "== {file} ========================================================"
+        )?;
+
+        let mut fpath = project_path.clone();
+        fpath.push(format!("sources/{file}"));
+        let cpath = dunce::canonicalize(&fpath).unwrap();
+
+        let mod_symbols = symbols
+            .file_use_defs
+            .get(&cpath)
+            .ok_or(format!("NO SYMBOLS FOR {}", cpath.to_str().unwrap()))?;
+
+        for (idx, test) in tests.iter().enumerate() {
+            test.test(idx, mod_symbols, &symbols, writer, &file)?;
+            writeln!(writer)?;
+        }
+    }
+
+    let result: String = String::from_utf8(output.into_inner().unwrap()).unwrap();
+    Ok(result)
+}
+
 fn move_ide_testsuite<F: MoveFlavor>(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
@@ -863,6 +967,10 @@ fn move_ide_testsuite<F: MoveFlavor>(test_path: &Path) -> datatest_stable::Resul
             project,
             file_tests,
         } => access_chain_quick_fix_test_suite::<F>(project, file_tests),
+        TestSuite::References {
+            project,
+            file_tests,
+        } => references_test_suite::<F>(project, file_tests),
     }?;
 
     insta_assert! {

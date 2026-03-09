@@ -33,7 +33,9 @@ fn run_test_impl(path: &Path) -> anyhow::Result<()> {
         anyhow::bail!("No test plan constructed for {:?}", path);
     };
 
-    let (buffer, _) = unit_test_config.run_and_report_unit_tests(test_plan, None, None, vec![])?;
+    let vm_test_setup = move_unit_test::vm_test_setup::DefaultVMTestSetup::legacy_default();
+    let (buffer, _) =
+        unit_test_config.run_and_report_unit_tests(test_plan, vm_test_setup, vec![])?;
     let base_output = String::from_utf8(buffer)?;
     let cleaned_output = regex.replacen(&base_output, 0, r"$1$2");
 

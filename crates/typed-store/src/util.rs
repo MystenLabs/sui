@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::StorageType;
 use bincode::Options;
 use serde::Serialize;
 use std::ops::{Bound, RangeBounds};
+use std::path::Path;
 
 #[inline]
 pub fn be_fix_int_ser<S>(t: &S) -> Vec<u8>
@@ -15,6 +17,22 @@ where
         .with_fixint_encoding()
         .serialize(t)
         .expect("failed to serialize via be_fix_int_ser method")
+}
+
+/// Serialize `t` in big-endian fixed-int encoding directly into `buf`,
+/// returning the number of bytes written.
+#[inline]
+pub fn be_fix_int_ser_into<S>(buf: &mut Vec<u8>, t: &S) -> usize
+where
+    S: ?Sized + serde::Serialize,
+{
+    let before = buf.len();
+    bincode::DefaultOptions::new()
+        .with_big_endian()
+        .with_fixint_encoding()
+        .serialize_into(&mut *buf, t)
+        .expect("failed to serialize via be_fix_int_ser_into method");
+    buf.len() - before
 }
 
 pub(crate) fn iterator_bounds<K>(
@@ -94,6 +112,37 @@ fn big_endian_saturating_add_one(v: &mut [u8]) {
 /// Check if all the bytes in the vector are 0xFF
 fn is_max(v: &[u8]) -> bool {
     v.iter().all(|&x| x == u8::MAX)
+}
+
+pub(crate) fn ensure_database_type<P: AsRef<Path>>(
+    path: P,
+    storage_type: StorageType,
+) -> std::io::Result<()> {
+    if !path.as_ref().exists() {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(path)? {
+        let filepath = entry?.path();
+        if filepath.extension().is_some_and(|ext| ext == "sst")
+            && storage_type != StorageType::Rocks
+        {
+            panic!(
+                "DB type mismatch: expected {:?}, found RocksDB",
+                storage_type
+            );
+        }
+        if filepath
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with("wal_"))
+            && storage_type != StorageType::TideHunter
+        {
+            panic!(
+                "DB type mismatch: expected {:?}, found TideHunter",
+                storage_type
+            );
+        }
+    }
+    Ok(())
 }
 
 #[allow(clippy::assign_op_pattern, clippy::manual_div_ceil)]

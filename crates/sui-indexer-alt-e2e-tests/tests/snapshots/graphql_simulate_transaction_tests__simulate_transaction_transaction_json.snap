@@ -71,6 +71,5 @@ expression: "result.pointer(\"/data/simulateTransaction\")"
         }
       }
     }
-  },
-  "error": null
+  }
 }

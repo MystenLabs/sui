@@ -1,10 +1,19 @@
 [default]
 extend-ignore-re = [
-  "[a-zA-Z0-9]{44}"
+  # Base58/64 encoded strings (44+ chars)
+  "[a-zA-Z0-9]{44,}",
+  # Hex strings that look like API keys or hashes (24+ hex chars)
+  "[0-9a-f]{24,}",
+  # Truncated object/address IDs like "0x4...dbe"
+  "0x[0-9a-f]+\\.\\.\\.[0-9a-f]+",
 ]
 
 [default.extend-words]
 groth = "groth"
+# Token Generation Event - valid crypto/blockchain acronym
+TGE = "TGE"
+# Transfer-to-Object - valid Sui protocol acronym
+TTO = "TTO"
 
 [files]
 extend-exclude = ["**/*.excalidraw"]

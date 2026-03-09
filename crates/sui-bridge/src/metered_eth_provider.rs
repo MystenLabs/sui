@@ -87,51 +87,95 @@ pub fn new_metered_eth_provider(
     Ok(Arc::new(RootProvider::new(rpc_client)))
 }
 
+pub async fn new_metered_eth_multi_provider(
+    urls: Vec<String>,
+    quorum: usize,
+    health_check_interval_secs: u64,
+    metrics: Arc<BridgeMetrics>,
+) -> anyhow::Result<EthProvider> {
+    use alloy_multiprovider_strategy::{MultiProviderConfig, QuorumTransport};
+
+    let config = MultiProviderConfig::new(urls, quorum)
+        .with_health_check_interval(Duration::from_secs(health_check_interval_secs))
+        .with_request_timeout(Duration::from_secs(30))
+        .with_start_health_check_on_init(false);
+
+    let transport = QuorumTransport::new(config)
+        .map_err(|e| anyhow::anyhow!("Failed to create QuorumTransport: {}", e))?;
+
+    transport.run_health_check().await;
+    transport.start_health_check_task();
+
+    let metered_transport = MeteredHttpService::new(transport, metrics);
+    let rpc_client =
+        RpcClient::new(metered_transport, false).with_poll_interval(Duration::from_millis(2000));
+    Ok(Arc::new(RootProvider::new(rpc_client)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloy::providers::Provider;
     use prometheus::Registry;
 
+    async fn test_provider(metrics: &BridgeMetrics, provider: &EthProvider) {
+        assert_eq!(
+            metrics
+                .eth_rpc_queries
+                .get_metric_with_label_values(&["eth_blockNumber"])
+                .unwrap()
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .eth_rpc_queries_latency
+                .get_metric_with_label_values(&["eth_blockNumber"])
+                .unwrap()
+                .get_sample_count(),
+            0
+        );
+
+        provider.get_block_number().await.unwrap_err(); // the rpc call will fail but we don't care
+
+        assert_eq!(
+            metrics
+                .eth_rpc_queries
+                .get_metric_with_label_values(&["eth_blockNumber"])
+                .unwrap()
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .eth_rpc_queries_latency
+                .get_metric_with_label_values(&["eth_blockNumber"])
+                .unwrap()
+                .get_sample_count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_metered_eth_multi_provider() {
+        let metrics = Arc::new(BridgeMetrics::new(&Registry::new()));
+        let provider = new_metered_eth_multi_provider(
+            vec!["http://localhost:9876".to_string()],
+            1,
+            300,
+            metrics.clone(),
+        )
+        .await
+        .unwrap();
+
+        test_provider(&metrics, &provider).await;
+    }
+
     #[tokio::test]
     async fn test_metered_eth_provider() {
         let metrics = Arc::new(BridgeMetrics::new(&Registry::new()));
         let provider = new_metered_eth_provider("http://localhost:9876", metrics.clone()).unwrap();
 
-        assert_eq!(
-            metrics
-                .eth_rpc_queries
-                .get_metric_with_label_values(&["eth_blockNumber"])
-                .unwrap()
-                .get(),
-            0
-        );
-        assert_eq!(
-            metrics
-                .eth_rpc_queries_latency
-                .get_metric_with_label_values(&["eth_blockNumber"])
-                .unwrap()
-                .get_sample_count(),
-            0
-        );
-
-        provider.get_block_number().await.unwrap_err(); // the rpc cal will fail but we don't care
-
-        assert_eq!(
-            metrics
-                .eth_rpc_queries
-                .get_metric_with_label_values(&["eth_blockNumber"])
-                .unwrap()
-                .get(),
-            1
-        );
-        assert_eq!(
-            metrics
-                .eth_rpc_queries_latency
-                .get_metric_with_label_values(&["eth_blockNumber"])
-                .unwrap()
-                .get_sample_count(),
-            1
-        );
+        test_provider(&metrics, &provider).await;
     }
 }

@@ -14,7 +14,7 @@ use crate::{
         ast::{self as E, AbilitySet, Ellipsis, ModuleIdent, Mutability, Visibility},
         name_validation::is_valid_datatype_or_constant_name as is_constant_name,
     },
-    ice,
+    ice, ice_assert,
     naming::{
         ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
         fake_natives,
@@ -2001,7 +2001,7 @@ fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
         .flat_map(|e| explicit_use_fun(context, e))
         .collect();
     for (tn, method, nuf) in resolved_vec {
-        let methods = resolved.entry(tn).or_default();
+        let methods = resolved.entry(tn.clone()).or_default();
         let nuf_loc = nuf.loc;
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
@@ -2069,7 +2069,9 @@ fn explicit_use_fun(
     };
     let tn_opt = match tn_opt {
         ResolvedType::BuiltinType(bt_) => Some(N::TypeName_::Builtin(sp(ty.loc, bt_))),
-        ResolvedType::ModuleType(mt) => Some(N::TypeName_::ModuleType(mt.mident(), mt.name())),
+        ResolvedType::ModuleType(mt) => {
+            Some(N::TypeName_::ModuleType(mt.mident().into(), mt.name()))
+        }
         ResolvedType::Unbound => {
             assert!(context.env.has_errors());
             None
@@ -2106,7 +2108,7 @@ fn explicit_use_fun(
         loc,
         attributes,
         is_public,
-        tname: tn,
+        tname: tn.clone(),
         target_function,
         kind: N::UseFunKind::Explicit,
         used: is_public.is_some(), // suppress unused warning for public use funs
@@ -2289,12 +2291,18 @@ fn resolve_stdlib_type(context: &mut Context, ma: E::ModuleAccess_) -> Option<N:
     };
     let (decl_loc, tn, arity) = match *mt {
         ResolvedDatatype::Struct(stype) => {
-            let tn = sp(stype.decl_loc, NN::ModuleType(stype.mident, stype.name));
+            let tn = sp(
+                stype.decl_loc,
+                NN::ModuleType(stype.mident.into(), stype.name),
+            );
             let arity = stype.tyarg_arity;
             (stype.decl_loc, tn, arity)
         }
         ResolvedDatatype::Enum(etype) => {
-            let tn = sp(etype.decl_loc, NN::ModuleType(etype.mident, etype.name));
+            let tn = sp(
+                etype.decl_loc,
+                NN::ModuleType(etype.mident.into(), etype.name),
+            );
             let arity = etype.tyarg_arity;
             (etype.decl_loc, tn, arity)
         }
@@ -2773,12 +2781,18 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                 RT::ModuleType(mt) => {
                     let (tn, arity) = match mt {
                         ResolvedDatatype::Struct(stype) => {
-                            let tn = sp(original_loc, NN::ModuleType(stype.mident, stype.name));
+                            let tn = sp(
+                                original_loc,
+                                NN::ModuleType(stype.mident.into(), stype.name),
+                            );
                             let arity = stype.tyarg_arity;
                             (tn, arity)
                         }
                         ResolvedDatatype::Enum(etype) => {
-                            let tn = sp(original_loc, NN::ModuleType(etype.mident, etype.name));
+                            let tn = sp(
+                                original_loc,
+                                NN::ModuleType(etype.mident.into(), etype.name),
+                            );
                             let arity = etype.tyarg_arity;
                             (tn, arity)
                         }
@@ -4025,18 +4039,26 @@ fn lvalue(
                     context.add_diag(diag!(Declarations::DuplicateItem, primary, secondary));
                 }
                 if v.is_syntax_identifier() {
-                    debug_assert!(
-                        matches!(case, C::Assign),
-                        "ICE this should fail during parsing"
-                    );
-                    let msg = format!(
-                        "Cannot assign to argument for parameter '{}'. \
-                        Arguments must be used in value positions",
-                        v.0
-                    );
-                    let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
-                    diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
-                    context.add_diag(diag);
+                    match case {
+                        C::Bind => {
+                            ice_assert!(
+                                context,
+                                context.env.has_errors(),
+                                loc,
+                                "Syntax identifiers for macros should have been rejected already"
+                            );
+                        }
+                        C::Assign => {
+                            let msg = format!(
+                                "Cannot assign to argument for parameter '{}'. \
+                                Arguments must be used in value positions",
+                                v.0
+                            );
+                            let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
+                            diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
+                            context.add_diag(diag);
+                        }
+                    }
                     return None;
                 }
                 let nv = match case {
@@ -4268,20 +4290,22 @@ fn resolve_call(
                     }
                 }
                 B::Assert(_) => {
+                    let function_call_help = || {
+                        format!(
+                            "Replace with '{0}!'. '{0}' has been replaced with a '{0}!' built-in \
+                            macro so that arguments are no longer eagerly evaluated",
+                            B::ASSERT_MACRO
+                        )
+                    };
                     if is_macro.is_none() {
                         let dep_msg = format!(
                             "'{}' function syntax has been deprecated and will be removed",
                             B::ASSERT_MACRO
                         );
-                        // TODO make this a tip/hint?
-                        let help_msg = format!(
-                            "Replace with '{0}!'. '{0}' has been replaced with a '{0}!' built-in \
-                            macro so that arguments are no longer eagerly evaluated",
-                            B::ASSERT_MACRO
-                        );
                         let mut diag =
                             diag!(Uncategorized::DeprecatedWillBeRemoved, (call_loc, dep_msg),);
-                        diag.add_note(help_msg);
+                        // TODO make this a tip/hint?
+                        diag.add_note(function_call_help());
                         context.add_diag(diag);
                     }
                     exp_types_opt_with_arity_check(
@@ -4294,12 +4318,22 @@ fn resolve_call(
                     );
                     // If no abort code is given for the assert, we add in the abort code as the
                     // bitset-line-number if `CleverAssertions` is set.
-                    if args.value.len() == 1 && is_macro.is_some() {
-                        context.check_feature(
+                    if args.value.len() == 1 {
+                        let is_supported = context.check_feature(
                             context.current_package,
                             FeatureGate::CleverAssertions,
                             subject_loc,
                         );
+                        if is_supported && is_macro.is_none() {
+                            let dep_msg = format!(
+                                "'{}' function syntax has been deprecated and cannot be used with clever assertions",
+                                B::ASSERT_MACRO
+                            );
+                            let mut diag = diag!(Editions::DeprecatedFeature, (call_loc, dep_msg));
+                            // TODO make this a tip/hint?
+                            diag.add_note(function_call_help());
+                            context.add_diag(diag);
+                        }
                         args.value.push(sp(
                             call_loc,
                             N::Exp_::ErrorConstant {

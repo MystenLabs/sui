@@ -18,9 +18,6 @@ versions.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
-clap.workspace = true
-pretty_assertions.workspace = true
-tokio = { workspace = true, features = ["full"] }
 fastcrypto.workspace = true
 sui-json-rpc.workspace = true
 sui-json-rpc-api.workspace = true
@@ -29,10 +26,5 @@ sui-json.workspace = true
 sui-types.workspace = true
 sui-protocol-config.workspace = true
 rand.workspace = true
-
+insta.workspace = true
 move-core-types.workspace = true
-
-[[example]]
-name = "generate-json-rpc-spec"
-path = "src/generate_json_rpc_spec.rs"
-test = false

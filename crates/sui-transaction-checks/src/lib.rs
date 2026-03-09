@@ -21,8 +21,9 @@ mod checked {
         TransactionDataAPI, TransactionKind,
     };
     use sui_types::{
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-        SUI_RANDOMNESS_STATE_OBJECT_ID,
+        SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
+        SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+        SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -48,24 +49,26 @@ mod checked {
     // Called on both signing and execution.
     // On success the gas part of the transaction (gas data and gas coins)
     // is verified and good to go
-    pub fn get_gas_status(
+    fn get_gas_status(
         objects: &InputObjects,
         gas: &[ObjectRef],
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         transaction: &TransactionData,
-        gas_paid_from_address_balance: bool,
+        gas_ownership_checks: bool,
     ) -> SuiResult<SuiGasStatus> {
-        check_gas(
-            objects,
-            protocol_config,
-            reference_gas_price,
-            gas,
-            transaction.gas_budget(),
-            transaction.gas_price(),
-            transaction.kind(),
-            gas_paid_from_address_balance,
-        )
+        if transaction.kind().is_system_tx() {
+            Ok(SuiGasStatus::new_unmetered())
+        } else {
+            check_gas(
+                objects,
+                protocol_config,
+                reference_gas_price,
+                gas,
+                transaction,
+                gas_ownership_checks,
+            )
+        }
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -158,11 +161,13 @@ mod checked {
     /// bypasses many of the normal object checks
     pub fn check_dev_inspect_input(
         config: &ProtocolConfig,
-        kind: &TransactionKind,
+        transaction: &TransactionData,
         input_objects: InputObjects,
         // TODO: check ReceivingObjects for dev inspect?
         _receiving_objects: ReceivingObjects,
-    ) -> SuiResult<CheckedInputObjects> {
+        reference_gas_price: u64,
+    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
+        let kind = transaction.kind();
         kind.validity_check(config)?;
         if kind.is_system_tx() {
             return Err(UserInputError::Unsupported(format!(
@@ -189,7 +194,16 @@ mod checked {
             }
         }
 
-        Ok(input_objects.into_checked())
+        let gas_status = get_gas_status(
+            &input_objects,
+            &transaction.gas_data().payment, //gas,
+            config,
+            reference_gas_price,
+            transaction,
+            false, // gas_ownership_checks - false means mostly transaction level checks
+        )?;
+
+        Ok((gas_status, input_objects.into_checked()))
     }
 
     // Common checks performed for transactions and certificates.
@@ -213,11 +227,39 @@ mod checked {
             protocol_config,
             reference_gas_price,
             transaction,
-            transaction.is_gas_paid_from_address_balance(),
+            true, // gas_ownership_checks
         )?;
         check_objects(transaction, input_objects)?;
+        check_replay_protection(transaction, input_objects)?;
 
         Ok(gas_status)
+    }
+
+    /// All transactions must have replay protection, which can come from:
+    /// - ValidDuring expiration with at most two-epoch range (max_epoch = min_epoch + 1)
+    /// - Owned input objects (which have unique versions/digests)
+    /// - Coin reservations (which have epoch constraint like ValidDuring)
+    ///
+    /// This check happens here (not at validation time) because we need access to the
+    /// actual objects to determine if they are owned vs immutable.
+    fn check_replay_protection(
+        transaction: &TransactionData,
+        input_objects: &InputObjects,
+    ) -> UserInputResult<()> {
+        let has_replay_protection = transaction.expiration().is_replay_protected()
+            || !transaction.gas_data().payment.is_empty()
+            || input_objects
+                .iter()
+                .any(|obj| obj.is_replay_protected_input());
+
+        if !has_replay_protection {
+            return Err(UserInputError::InvalidExpiration {
+                error: "Transactions must either have address-owned inputs, or a ValidDuring expiration with at most two epochs of validity"
+                    .to_string(),
+            });
+        }
+
+        Ok(())
     }
 
     fn check_receiving_objects(
@@ -347,36 +389,38 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         gas: &[ObjectRef],
-        gas_budget: u64,
-        gas_price: u64,
-        tx_kind: &TransactionKind,
-        gas_paid_from_address_balance: bool,
+        transaction: &TransactionData,
+        gas_ownership_checks: bool,
     ) -> SuiResult<SuiGasStatus> {
-        if tx_kind.is_system_tx() {
-            Ok(SuiGasStatus::new_unmetered())
-        } else {
-            let gas_status =
-                SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
+        let gas_budget = transaction.gas_budget();
+        let gas_price = transaction.gas_price();
+        let gas_paid_from_address_balance = transaction.is_gas_paid_from_address_balance();
 
-            // check balance and coins consistency
-            // load all gas coins
-            let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
-            let mut gas_objects = vec![];
-            for obj_ref in gas {
-                let obj = objects.get(&obj_ref.0);
-                let obj = *obj.ok_or(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: Some(obj_ref.1),
-                })?;
-                gas_objects.push(obj);
-            }
-            // Skip gas balance check for address balance payments
-            // We reserve gas budget in advance
-            if !gas_paid_from_address_balance {
-                gas_status.check_gas_balance(&gas_objects, gas_budget)?;
-            }
-            Ok(gas_status)
+        let gas_status =
+            SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
+
+        // check balance and coins consistency
+        // load all gas coins
+        let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
+        let mut gas_objects = vec![];
+        for obj_ref in gas {
+            let obj = objects.get(&obj_ref.0);
+            let obj = *obj.ok_or(UserInputError::ObjectNotFound {
+                object_id: obj_ref.0,
+                version: Some(obj_ref.1),
+            })?;
+            gas_objects.push(obj);
         }
+
+        // Skip gas balance check for address balance payments
+        // We reserve gas budget in advance
+        if !gas_paid_from_address_balance {
+            if gas_ownership_checks {
+                gas_status.check_gas_objects(&gas_objects)?;
+            }
+            gas_status.check_gas_data(&gas_objects, gas_budget)?;
+        }
+        Ok(gas_status)
     }
 
     /// Check all the objects used in the transaction against the database, and ensure
@@ -508,56 +552,43 @@ mod checked {
                 };
             }
             InputObjectKind::SharedMoveObject {
-                id: SUI_CLOCK_OBJECT_ID,
-                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                mutability: SharedObjectMutability::Mutable,
-            } => {
-                // Only system transactions can accept the Clock
-                // object as a mutable parameter.
-                if system_transaction {
-                    return Ok(());
-                } else {
-                    return Err(UserInputError::ImmutableParameterExpectedError {
-                        object_id: SUI_CLOCK_OBJECT_ID,
-                    });
-                }
-            }
-            InputObjectKind::SharedMoveObject {
-                id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                ..
-            } => {
-                if system_transaction {
-                    return Ok(());
-                } else {
-                    return Err(UserInputError::InaccessibleSystemObject {
-                        object_id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                    });
-                }
-            }
-            InputObjectKind::SharedMoveObject {
-                id: SUI_RANDOMNESS_STATE_OBJECT_ID,
-                mutability: SharedObjectMutability::Mutable,
-                ..
-            } => {
-                // Only system transactions can accept the Random
-                // object as a mutable parameter.
-                if system_transaction {
-                    return Ok(());
-                } else {
-                    return Err(UserInputError::ImmutableParameterExpectedError {
-                        object_id: SUI_RANDOMNESS_STATE_OBJECT_ID,
-                    });
-                }
-            }
-            InputObjectKind::SharedMoveObject {
                 id: object_id,
                 initial_shared_version: input_initial_shared_version,
-                ..
+                mutability,
             } => {
                 fp_ensure!(
                     object.version() < SequenceNumber::MAX,
                     UserInputError::InvalidSequenceNumber
                 );
+
+                if object_id.is_system_object() {
+                    // System transactions can access system objects without further validation
+                    // (e.g., AuthenticatorStateUpdate uses a placeholder initial_shared_version).
+                    if system_transaction {
+                        return Ok(());
+                    }
+
+                    match (object_id, mutability) {
+                        // System objects that can be taken mutably
+                        (SUI_SYSTEM_STATE_OBJECT_ID, _)
+                        | (SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, _)
+                        | (SUI_COIN_REGISTRY_OBJECT_ID, _)
+                        | (SUI_DENY_LIST_OBJECT_ID, _)
+                        | (SUI_BRIDGE_OBJECT_ID, _)
+
+                        // System objects that can only be taken immutably
+                        | (SUI_CLOCK_OBJECT_ID, SharedObjectMutability::Immutable)
+                        | (SUI_RANDOMNESS_STATE_OBJECT_ID, SharedObjectMutability::Immutable)
+                        | (SUI_ACCUMULATOR_ROOT_OBJECT_ID, SharedObjectMutability::Immutable) => (),
+
+                        // All other system objects: cannot be used as input at all
+                        _ => {
+                            return Err(UserInputError::ImmutableParameterExpectedError {
+                                object_id,
+                            });
+                        }
+                    }
+                }
 
                 match &object.owner {
                     Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {

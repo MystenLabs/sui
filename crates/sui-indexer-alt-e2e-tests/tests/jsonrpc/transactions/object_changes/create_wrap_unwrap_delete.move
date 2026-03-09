@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses P0=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses P0=0x0 --simulator
 
 // "created and wrapped" as well as "unwrapped and deleted" objects do not show
 // up in object changes at all.

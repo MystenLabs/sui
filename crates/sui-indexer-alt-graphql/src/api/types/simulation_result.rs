@@ -11,21 +11,14 @@ use crate::api::types::transaction_effects::TransactionEffects;
 use crate::error::RpcError;
 use crate::scope::Scope;
 
-/// The result of simulating a transaction, including the predicted effects and any errors.
+/// The result of simulating a transaction, including the predicted effects.
 #[derive(Clone, SimpleObject)]
 pub struct SimulationResult {
     /// The predicted effects of the transaction if it were executed.
-    ///
-    /// `None` if the simulation failed due to an error.
     pub effects: Option<TransactionEffects>,
 
     /// The intermediate outputs for each command of the transaction simulation, including contents of mutated references and return values.
     pub outputs: Option<Vec<CommandResult>>,
-
-    /// Error message if the simulation failed.
-    ///
-    /// `None` if the simulation was successful.
-    pub error: Option<String>,
 }
 
 impl SimulationResult {
@@ -62,7 +55,6 @@ impl SimulationResult {
         Ok(Self {
             effects: Some(effects),
             outputs,
-            error: None,
         })
     }
 }

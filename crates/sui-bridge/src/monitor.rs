@@ -17,8 +17,11 @@ use crate::retry_with_max_elapsed_time;
 use crate::sui_client::{SuiClient, SuiClientInner};
 use crate::types::{BridgeCommittee, IsBridgePaused};
 use arc_swap::ArcSwap;
+use futures::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::proto::sui::rpc::v2::{Checkpoint, SubscribeCheckpointsRequest};
 use sui_types::TypeTag;
 use tokio::time::Duration;
 use tracing::{error, info, warn};
@@ -464,6 +467,85 @@ async fn get_latest_bridge_pause_status_with_emergency_event<C: SuiClientInner>(
                 event, summary.is_frozen
             );
             return summary.is_frozen;
+        }
+    }
+}
+
+pub async fn subscribe_bridge_events(
+    mut client: sui_rpc::Client,
+    sender: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
+) {
+    let subscription_read_mask = FieldMask::from_paths([
+        Checkpoint::path_builder().sequence_number(),
+        Checkpoint::path_builder()
+            .transactions()
+            .events()
+            .bcs()
+            .value(),
+        Checkpoint::path_builder().transactions().digest(),
+    ]);
+
+    loop {
+        let mut subscription = match client
+            .subscription_client()
+            .subscribe_checkpoints(
+                SubscribeCheckpointsRequest::default()
+                    .with_read_mask(subscription_read_mask.clone()),
+            )
+            .await
+        {
+            Ok(subscription) => subscription,
+            Err(e) => {
+                tracing::warn!("error trying to subscribe to checkpoints: {e}");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                continue;
+            }
+        }
+        .into_inner();
+
+        while let Some(item) = subscription.next().await {
+            let checkpoint = match item {
+                Ok(checkpoint) => checkpoint,
+                Err(e) => {
+                    tracing::warn!("error in checkpoint stream: {e}");
+                    break;
+                }
+            };
+
+            let ckpt = checkpoint.cursor();
+            tracing::debug!("recieved checkpoint {ckpt}");
+
+            for txn in checkpoint.checkpoint().transactions() {
+                let txn_digest = txn.digest();
+                let Some(bcs_events) = txn.events_opt().map(|events| events.bcs()) else {
+                    continue;
+                };
+
+                let Ok(events) = bcs_events.deserialize::<sui_types::effects::TransactionEvents>()
+                else {
+                    tracing::warn!(
+                        "error deserializing events from txn {txn_digest} in checkpoint {ckpt}"
+                    );
+                    continue;
+                };
+
+                for event in events.data {
+                    match SuiBridgeEvent::try_from_event(&event) {
+                        Ok(Some(bridge_event)) => {
+                            sender
+                                .send(bridge_event)
+                                .await
+                                .expect("Sending event to monitor channel should not fail");
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            tracing::warn!(
+                                "error deserializing SuiBridgeEvent from txn {txn_digest} in checkpoint {ckpt}: {e}"
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 }

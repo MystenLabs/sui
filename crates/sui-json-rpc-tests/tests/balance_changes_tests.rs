@@ -3,7 +3,6 @@
 
 use std::path::PathBuf;
 use sui_move_build::BuildConfig;
-use sui_sdk::SuiClient;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use test_cluster::TestClusterBuilder;
@@ -11,10 +10,10 @@ use test_cluster::TestClusterBuilder;
 #[tokio::test]
 async fn test_dry_run_publish_with_mocked_coin() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await;
-    let context = &cluster.wallet;
 
     let address = cluster.get_address_0();
-    let client: SuiClient = context.get_client().await.unwrap();
+    #[allow(deprecated)]
+    let client = cluster.sui_client().clone();
 
     // Publish test coin package
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
+use move_unit_test::vm_test_setup::VMTestSetup;
 
 use crate::base::test::Test;
 use base::{
@@ -16,19 +17,14 @@ use base::{
     docgen::Docgen, migrate::Migrate, new::New, profile::Profile, summary::Summary,
 };
 
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::build_config::BuildConfig;
-use move_vm_runtime::native_functions::NativeFunction;
-use move_vm_test_utils::gas_schedule::CostTable;
 
 /// Default directory where saved Move resources live
 pub const DEFAULT_STORAGE_DIR: &str = "storage";
 
 /// Default directory for build output
 pub const DEFAULT_BUILD_DIR: &str = ".";
-
-type NativeFunctionRecord = (AccountAddress, Identifier, Identifier, NativeFunction);
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -82,9 +78,8 @@ pub enum Command {
     Summary(Summary),
 }
 
-pub async fn run_cli<F: MoveFlavor>(
-    natives: Vec<NativeFunctionRecord>,
-    cost_table: &CostTable,
+pub async fn run_cli<F: MoveFlavor, V: VMTestSetup + Sync>(
+    vm_test_setup: V,
     move_args: Move,
     cmd: Command,
 ) -> Result<()> {
@@ -118,16 +113,15 @@ pub async fn run_cli<F: MoveFlavor>(
         Command::New(c) => c.execute_with_defaults(move_args.package_path.as_deref()),
         Command::Profile(c) => c.execute(),
         Command::Test(c) => {
-            c.execute::<F>(
+            c.execute::<F, V>(
                 move_args.package_path.as_deref(),
                 move_args.build_config,
-                natives,
-                Some(cost_table.clone()),
+                vm_test_setup,
             )
             .await
         }
         Command::Sandbox { storage_dir, cmd } => {
-            cmd.handle_command::<F>(natives, cost_table, &move_args, &storage_dir)
+            cmd.handle_command::<F, V>(vm_test_setup, &move_args, &storage_dir)
                 .await
         }
         Command::Summary(summary) => {
@@ -142,10 +136,7 @@ pub async fn run_cli<F: MoveFlavor>(
     }
 }
 
-pub async fn move_cli<F: MoveFlavor>(
-    natives: Vec<NativeFunctionRecord>,
-    cost_table: &CostTable,
-) -> Result<()> {
+pub async fn move_cli<F: MoveFlavor, V: VMTestSetup + Sync>(vm_test_setup: V) -> Result<()> {
     let args = MoveCLI::parse();
-    run_cli::<F>(natives, cost_table, args.move_args, args.cmd).await
+    run_cli::<F, V>(vm_test_setup, args.move_args, args.cmd).await
 }

@@ -1201,7 +1201,12 @@ impl QuorumDriverApi {
                     .get_transaction_block(*tx.digest(), Some(options.clone()))
                     .await
                 {
-                    break poll_response;
+                    // Wait until the transaction is included in a checkpoint,
+                    // not just known to the fullnode. Index data is only
+                    // available after the checkpoint has been processed.
+                    if poll_response.checkpoint.is_some() {
+                        break poll_response;
+                    }
                 } else {
                     debug!(
                         ?tx_digest,

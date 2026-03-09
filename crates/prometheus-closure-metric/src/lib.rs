@@ -51,18 +51,22 @@ where
 
     pub fn metric(&self) -> proto::Metric {
         let mut m = proto::Metric::default();
-        m.set_label(protobuf::RepeatedField::from_vec(self.label_pairs.clone()));
+        m.set_label(self.label_pairs.clone());
 
         let val = (self.f)().into_f64();
         match self.value_type {
             ValueType::Counter => {
-                let mut counter = proto::Counter::default();
-                counter.set_value(val);
+                let counter = proto::Counter {
+                    value: Some(val),
+                    ..Default::default()
+                };
                 m.set_counter(counter);
             }
             ValueType::Gauge => {
-                let mut gauge = proto::Gauge::default();
-                gauge.set_value(val);
+                let gauge = proto::Gauge {
+                    value: Some(val),
+                    ..Default::default()
+                };
                 m.set_gauge(gauge);
             }
         }
@@ -81,11 +85,13 @@ where
     }
 
     fn collect(&self) -> Vec<prometheus::proto::MetricFamily> {
-        let mut m = proto::MetricFamily::default();
-        m.set_name(self.desc.fq_name.clone());
-        m.set_help(self.desc.help.clone());
+        let mut m = proto::MetricFamily {
+            name: Some(self.desc.fq_name.clone()),
+            help: Some(self.desc.help.clone()),
+            ..Default::default()
+        };
         m.set_field_type(self.value_type.metric_type());
-        m.set_metric(protobuf::RepeatedField::from_vec(vec![self.metric()]));
+        m.set_metric(vec![self.metric()]);
         vec![m]
     }
 }
@@ -122,10 +128,11 @@ pub fn make_label_pairs(desc: &core::Desc, label_values: &[&str]) -> Result<Vec<
 
     let mut label_pairs = Vec::with_capacity(total_len);
     for (i, n) in desc.variable_labels.iter().enumerate() {
-        let mut label_pair = proto::LabelPair::default();
-        label_pair.set_name(n.clone());
-        label_pair.set_value(label_values[i].to_owned());
-        label_pairs.push(label_pair);
+        label_pairs.push(proto::LabelPair {
+            name: Some(n.clone()),
+            value: Some(label_values[i].to_owned()),
+            ..Default::default()
+        });
     }
 
     for label_pair in &desc.const_label_pairs {

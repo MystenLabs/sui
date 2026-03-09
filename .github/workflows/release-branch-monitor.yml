@@ -1,0 +1,86 @@
+name: Release Branch Monitor
+
+on:
+  push:
+    branches:
+      - 'releases/sui-v*-release'
+
+permissions:
+  contents: read
+
+jobs:
+  notify-release-branch-push:
+    name: Notify on release branch changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get two most recent release branches
+        id: check-branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Current branch: ${{ github.ref_name }}"
+
+          # Get all release branches and extract version numbers
+          # Sort by semantic version (major.minor.patch) in descending order
+          # Note: --paginate returns multiple JSON arrays, so we extract names first then combine
+          latest_two=$(gh api repos/${{ github.repository }}/branches --paginate \
+            --jq '.[] | select(.name | test("^releases/sui-v[0-9]+\\.[0-9]+\\.[0-9]+-release$")) | .name' \
+            | jq -Rs 'split("\n") | map(select(length > 0))
+                  | map({name: ., version: (. | capture("v(?<major>[0-9]+)\\.(?<minor>[0-9]+)\\.(?<patch>[0-9]+)") | (.major | tonumber) * 10000 + (.minor | tonumber) * 100 + (.patch | tonumber))})
+                  | sort_by(.version)
+                  | reverse
+                  | .[0:2]
+                  | map(.name)')
+
+          echo "Latest two release branches: $latest_two"
+
+          # Check if current branch is in the latest two
+          is_monitored=$(echo "$latest_two" | jq --arg branch "${{ github.ref_name }}" 'contains([$branch])')
+
+          if [ "$is_monitored" = "true" ]; then
+            echo "Branch ${{ github.ref_name }} is one of the two most recent release branches"
+            echo "should_notify=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Branch ${{ github.ref_name }} is not in the two most recent release branches, skipping notification"
+            echo "should_notify=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get commit and PR details
+        if: steps.check-branch.outputs.should_notify == 'true'
+        id: details
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RAW_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          # Get commit message (first line), JSON-escaped for safe payload construction
+          # Using env var to avoid shell injection from commit message content
+          commit_message=$(printf '%s' "$RAW_COMMIT_MESSAGE" | head -n 1 | jq -Rs . | sed 's/^"//;s/"$//')
+          echo "commit_message=${commit_message}" >> "$GITHUB_OUTPUT"
+
+          # Try to find associated PR
+          pr_number=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/pulls --jq '.[0].number // empty' 2>/dev/null || echo "")
+          if [ -n "$pr_number" ]; then
+            echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
+            echo "pr_url=https://github.com/${{ github.repository }}/pull/${pr_number}" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_number=" >> "$GITHUB_OUTPUT"
+            echo "pr_url=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dispatch to sui-operations for notification
+        if: steps.check-branch.outputs.should_notify == 'true'
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: release-branch-push
+          client-payload: |-
+            {
+              "branch": "${{ github.ref_name }}",
+              "commit_sha": "${{ github.sha }}",
+              "commit_message": "${{ steps.details.outputs.commit_message }}",
+              "actor": "${{ github.actor }}",
+              "pr_number": "${{ steps.details.outputs.pr_number }}",
+              "pr_url": "${{ steps.details.outputs.pr_url }}",
+              "compare_url": "${{ github.event.compare }}"
+            }

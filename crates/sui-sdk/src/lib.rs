@@ -77,6 +77,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub use sui_crypto;
+pub use sui_rpc;
+pub use sui_sdk_types;
+
 use async_trait::async_trait;
 use base64::Engine;
 use jsonrpsee::core::client::ClientT;
@@ -93,12 +97,12 @@ use sui_json_rpc_api::{
 };
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
-    ObjectsPage, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery,
+    ObjectsPage, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponseQuery,
 };
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress};
+use sui_types::object::Object;
 
 use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriverApi, ReadApi};
 use crate::error::{Error, SuiRpcResult};
@@ -630,12 +634,14 @@ impl DataReader for ReadApi {
         Ok(result)
     }
 
-    async fn get_object_with_options(
-        &self,
-        object_id: ObjectID,
-        options: SuiObjectDataOptions,
-    ) -> Result<SuiObjectResponse, anyhow::Error> {
-        Ok(self.get_object_with_options(object_id, options).await?)
+    async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
+        let resp = self
+            .get_object_with_options(object_id, SuiObjectDataOptions::bcs_lossless())
+            .await?;
+
+        resp.data
+            .ok_or_else(|| anyhow::anyhow!("unable to fetch object {object_id}"))?
+            .try_into()
     }
 
     /// Returns the reference gas price as a u64 or an error otherwise

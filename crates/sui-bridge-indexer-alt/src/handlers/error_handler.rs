@@ -11,7 +11,7 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Connection;
 use sui_indexer_alt_framework::postgres::handler::Handler;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
-use sui_indexer_alt_framework::types::execution_status::ExecutionStatus;
+use sui_indexer_alt_framework::types::execution_status::{ExecutionFailure, ExecutionStatus};
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
 
@@ -30,7 +30,9 @@ impl Processor for ErrorTransactionHandler {
             if !is_bridge_txn(tx) {
                 continue;
             }
-            if let ExecutionStatus::Failure { error, command } = tx.effects.status() {
+            if let ExecutionStatus::Failure(ExecutionFailure { error, command }) =
+                tx.effects.status()
+            {
                 results.push(SuiErrorTransactions {
                     txn_digest: tx.transaction.digest().inner().to_vec(),
                     timestamp_ms,

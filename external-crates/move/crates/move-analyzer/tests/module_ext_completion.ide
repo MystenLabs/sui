@@ -1,0 +1,37 @@
+// Tests if completions work inside module extensions
+// and for constructs defined in module extension
+{
+  "AutoImport": {
+    "project": "tests/module-ext",
+    "file_tests": {
+      "M1.move": [
+        // completions for functions defined in extensions
+        {
+          "use_line": 5,
+          "use_col": 23
+        },
+        {
+          "use_line": 6,
+          "use_col": 23
+        },
+        {
+          "use_line": 7,
+          "use_col": 26
+        },
+        // completions inside extensions
+        {
+          "use_line": 17,
+          "use_col": 9
+        },
+        {
+          "use_line": 28,
+          "use_col": 9
+        },
+        {
+          "use_line": 39,
+          "use_col": 9
+        }
+      ]
+    }
+  }
+}

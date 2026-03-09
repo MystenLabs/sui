@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(deprecated)]
+
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

@@ -124,18 +124,19 @@ Response: {
   }
 }
 
-task 15, lines 65-79:
+task 15, lines 65-80:
 //# run-graphql
 Response: {
   "data": {
     "epoch": {
-      "totalTransactions": 6,
+      "totalTransactions": 9,
+      "totalCheckpoints": 4,
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
           "startCursor": "Mg==",
-          "endCursor": "Nw=="
+          "endCursor": "MTA="
         },
         "edges": [
           {
@@ -173,7 +174,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 3
+                  "sequenceNumber": 2
                 }
               }
             }
@@ -183,13 +184,43 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 5
+                  "sequenceNumber": 3
                 }
               }
             }
           },
           {
             "cursor": "Nw==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 3
+                }
+              }
+            }
+          },
+          {
+            "cursor": "OA==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 4
+                }
+              }
+            }
+          },
+          {
+            "cursor": "OQ==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 5
+                }
+              }
+            }
+          },
+          {
+            "cursor": "MTA=",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -204,7 +235,7 @@ Response: {
   }
 }
 
-task 16, lines 81-95:
+task 16, lines 82-96:
 //# run-graphql
 Response: {
   "data": {

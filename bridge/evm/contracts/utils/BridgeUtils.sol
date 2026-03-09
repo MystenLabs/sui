@@ -282,8 +282,6 @@ library BridgeUtils {
         uint8 offset = 2;
         require((_payload.length - offset) % 20 == 0, "BridgeUtils: Invalid payload length");
         for (uint8 i; i < membersLength; i++) {
-            // Calculate the starting index for each address
-            offset += i * 20;
             address member;
             // Extract each address
             assembly {
@@ -291,6 +289,7 @@ library BridgeUtils {
             }
             // Store the extracted address
             members[i] = member;
+            offset += 20;
         }
         // blocklistType: 0 = blocklist, 1 = unblocklist
         bool blocklisted = (blocklistType == 0);

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses P=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 // Track the versions of an object as it is being wrapped, unwrapped, and deleted.
 
 //# publish

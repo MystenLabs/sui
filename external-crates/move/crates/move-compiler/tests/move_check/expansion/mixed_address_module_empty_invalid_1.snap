@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03001]: address with no value
+  ┌─ tests/move_check/expansion/mixed_address_module_empty_invalid_1.move:1:9
+  │
+1 │ address panic {
+  │         ^^^^^ address 'panic' is not assigned a value
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/mixed_address_module_empty_invalid_1.move:2:12
+  │
+1 │ address panic {
+  │         ----- Address previously specified here
+2 │     module panic::panic { }
+  │            ^^^^^ Redundant address specification
+
+error[E03001]: address with no value
+  ┌─ tests/move_check/expansion/mixed_address_module_empty_invalid_1.move:2:12
+  │
+2 │     module panic::panic { }
+  │            ^^^^^ address 'panic' is not assigned a value. Try assigning it a value when calling the compiler

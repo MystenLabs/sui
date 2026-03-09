@@ -174,3 +174,8 @@ fun test_lossless_shr() {
     assert_eq!(1u256.lossless_shr(1), option::none());
     assert_eq!(MAX.lossless_shr(1), option::none());
 }
+
+#[test]
+fun test_lossless_div() {
+    integer_tests::test_lossless_div!(MAX, CASES);
+}

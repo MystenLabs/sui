@@ -4,12 +4,10 @@
 
 use std::sync::Arc;
 
-use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
     effects::TransactionEffects,
-    error::SuiErrorKind,
     execution_status::{CommandArgumentError, ExecutionFailureStatus},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -200,34 +198,6 @@ impl TestRunner {
             (self.package.0)::o2::consume_o2(arg)
         };
         let delete_obj_tx = delete_object_transaction_builder.finish();
-        let gas_id = self.gas_object_ids.pop().unwrap();
-        self.create_signed_transaction_from_pt(delete_obj_tx, gas_id)
-            .await
-    }
-
-    pub async fn delete_shared_obj_with_owned_tx(
-        &mut self,
-        owned_obj: ObjectRef,
-        shared_obj_id: ObjectID,
-        initial_shared_version: SequenceNumber,
-    ) -> Transaction {
-        let mut object_transaction_builder = ProgrammableTransactionBuilder::new();
-        let arg_1 = object_transaction_builder
-            .obj(ObjectArg::ImmOrOwnedObject(owned_obj))
-            .unwrap();
-        let arg_2 = object_transaction_builder
-            .obj(ObjectArg::SharedObject {
-                id: shared_obj_id,
-                initial_shared_version,
-                mutability: SharedObjectMutability::Mutable,
-            })
-            .unwrap();
-
-        move_call! {
-            object_transaction_builder,
-            (self.package.0)::o2::consume_with_owned(arg_1, arg_2)
-        };
-        let delete_obj_tx = object_transaction_builder.finish();
         let gas_id = self.gas_object_ids.pop().unwrap();
         self.create_signed_transaction_from_pt(delete_obj_tx, gas_id)
             .await
@@ -1813,50 +1783,6 @@ async fn test_delete_before_two_mutations() {
     assert_eq!(effects.mutated().len(), 1);
 
     assert!(effects.dependencies().contains(mutate_digest));
-}
-
-#[tokio::test]
-async fn test_object_lock_conflict() {
-    // This test requires preconsensus locking to be enabled because it tests ObjectLockConflict
-    // errors which only happen with preconsensus locking.
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config.set_address_aliases_for_testing(false);
-        config
-    });
-
-    let mut user_1 = TestRunner::new("shared_object_deletion").await;
-    let effects = user_1.create_shared_object().await;
-
-    assert_eq!(effects.created().len(), 1);
-    let shared_obj = effects.created()[0].0;
-    let shared_obj_id = shared_obj.0;
-    let initial_shared_version = shared_obj.1;
-
-    let owned_effects = user_1.create_owned_object().await;
-
-    assert_eq!(owned_effects.created().len(), 1);
-    let owned_obj = owned_effects.created()[0].0;
-
-    let delete_obj_tx = user_1
-        .delete_shared_obj_with_owned_tx(owned_obj, shared_obj_id, initial_shared_version)
-        .await;
-
-    let _delete_cert = user_1
-        .prepare_shared_obj_transaction(delete_obj_tx)
-        .await
-        .unwrap();
-
-    let mutate_obj_tx = user_1
-        .mutate_shared_obj_with_owned_tx(owned_obj, shared_obj_id, initial_shared_version)
-        .await;
-
-    let mutate_cert_res = user_1.prepare_shared_obj_transaction(mutate_obj_tx).await;
-
-    assert!(matches!(
-        mutate_cert_res.err().map(|e| e.into_inner()),
-        Some(SuiErrorKind::ObjectLockConflict { .. })
-    ));
 }
 
 #[tokio::test]

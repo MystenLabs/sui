@@ -12,15 +12,18 @@ use crate::{
 use anyhow::Result;
 use consensus_core::storage::{Store, rocksdb_store::RocksDBStore};
 use consensus_core::{BlockAPI, CommitAPI, CommitRange};
-use futures::{StreamExt, future::join_all};
+use futures::TryStreamExt;
+use futures::future::join_all;
 use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
 use sui_replay::{ReplayToolCommand, execute_replay_command};
-use sui_sdk::{SuiClient, SuiClientBuilder, rpc_types::SuiTransactionBlockResponseOptions};
+use sui_rpc_api::Client;
+use sui_types::gas_coin::GasCoin;
 use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::transaction::Transaction;
 use telemetry_subscribers::TracingHandle;
 
 use sui_types::{
@@ -33,7 +36,6 @@ use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
-use sui_types::transaction::Transaction;
 
 #[derive(Parser, Clone, ValueEnum)]
 pub enum Verbosity {
@@ -370,7 +372,7 @@ pub enum ToolCommand {
 }
 
 async fn check_locked_object(
-    sui_client: &Arc<SuiClient>,
+    sui_client: &Client,
     committee: Arc<BTreeMap<AuthorityPublicKeyBytes, u64>>,
     id: ObjectID,
     rescue: bool,
@@ -412,14 +414,8 @@ async fn check_locked_object(
         })
         .await?
         .transaction;
-    let res = sui_client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            Transaction::new(tx),
-            SuiTransactionBlockResponseOptions::full_content(),
-            None,
-        )
-        .await;
+    let tx = Transaction::new(tx);
+    let res = sui_client.clone().execute_transaction(&tx).await;
     match res {
         Ok(_) => {
             println!("Transaction executed successfully ({:?})", tx_digest);
@@ -477,14 +473,12 @@ impl ToolCommand {
                 rescue,
                 address,
             } => {
-                let sui_client =
-                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+                let sui_client = Client::new(fullnode_rpc_url)?;
                 let committee = Arc::new(
                     sui_client
-                        .governance_api()
-                        .get_committee_info(None)
+                        .get_committee(None)
                         .await?
-                        .validators
+                        .voting_rights
                         .into_iter()
                         .collect::<BTreeMap<_, _>>(),
                 );
@@ -493,11 +487,10 @@ impl ToolCommand {
                     None => {
                         let address = address.expect("Either id or address must be provided");
                         sui_client
-                            .coin_read_api()
-                            .get_coins_stream(address, None)
-                            .map(|c| c.coin_object_id)
-                            .collect()
-                            .await
+                            .list_owned_objects(address, Some(GasCoin::type_()))
+                            .map_ok(|o| o.id())
+                            .try_collect()
+                            .await?
                     }
                 };
                 for ids in object_ids.chunks(30) {
@@ -524,8 +517,7 @@ impl ToolCommand {
                 verbosity,
                 concise_no_header,
             } => {
-                let sui_client =
-                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+                let sui_client = Client::new(fullnode_rpc_url)?;
                 let clients = Arc::new(make_clients(&sui_client).await?);
                 let output = get_object(id, version, validator, clients).await?;
 
@@ -533,10 +525,9 @@ impl ToolCommand {
                     Verbosity::Grouped => {
                         let committee = Arc::new(
                             sui_client
-                                .governance_api()
-                                .get_committee_info(None)
+                                .get_committee(None)
                                 .await?
-                                .validators
+                                .voting_rights
                                 .into_iter()
                                 .collect::<BTreeMap<_, _>>(),
                         );
@@ -611,8 +602,7 @@ impl ToolCommand {
                 sequence_number,
                 fullnode_rpc_url,
             } => {
-                let sui_client =
-                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+                let sui_client = Client::new(fullnode_rpc_url)?;
                 let clients = make_clients(&sui_client).await?;
 
                 for (name, (_, client)) in clients {

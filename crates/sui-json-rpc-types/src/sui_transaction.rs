@@ -38,7 +38,7 @@ use sui_types::effects::{
     TransactionEvents,
 };
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
-use sui_types::execution_status::ExecutionStatus;
+use sui_types::execution_status::{ExecutionFailure, ExecutionStatus};
 use sui_types::gas::GasCostSummary;
 use sui_types::layout_resolver::{LayoutResolver, get_layout_from_struct_tag};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -1432,16 +1432,16 @@ impl From<ExecutionStatus> for SuiExecutionStatus {
     fn from(status: ExecutionStatus) -> Self {
         match status {
             ExecutionStatus::Success => Self::Success,
-            ExecutionStatus::Failure {
+            ExecutionStatus::Failure(ExecutionFailure {
                 error,
                 command: None,
-            } => Self::Failure {
+            }) => Self::Failure {
                 error: format!("{error:?}"),
             },
-            ExecutionStatus::Failure {
+            ExecutionStatus::Failure(ExecutionFailure {
                 error,
                 command: Some(idx),
-            } => Self::Failure {
+            }) => Self::Failure {
                 error: format!("{error:?} in command {idx}"),
             },
         }

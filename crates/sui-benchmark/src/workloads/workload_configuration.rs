@@ -6,7 +6,6 @@ use crate::drivers::Interval;
 use crate::options::{Opts, RunSpec};
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
-use crate::workloads::conflicting_transfer::ConflictingTransferWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
 use crate::workloads::party::PartyWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
@@ -14,6 +13,7 @@ use crate::workloads::slow::SlowWorkloadBuilder;
 use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
 use crate::workloads::{ExpectedFailureType, GroupID, WorkloadBuilderInfo, WorkloadInfo};
 use anyhow::Result;
+use futures::future::join_all;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -178,19 +178,25 @@ impl WorkloadConfiguration {
             .flatten()
             .map(|x| (x.workload_params, x.workload_builder))
             .unzip();
-        let mut workloads = bank
+        let workloads = bank
             .generate(
                 workload_builders,
                 reference_gas_price,
                 gas_request_chunk_size,
             )
             .await?;
-        for workload in workloads.iter_mut() {
-            workload
-                .init(bank.proxy.clone(), system_state_observer.clone())
-                .await;
-        }
-
+        let init_futures = workloads.into_iter().map(|mut workload| {
+            let execution_proxy = bank.execution_proxy.clone();
+            let fullnode_proxies = bank.fullnode_proxies.clone();
+            let observer = system_state_observer.clone();
+            async move {
+                workload
+                    .init(execution_proxy, fullnode_proxies, observer)
+                    .await;
+                workload
+            }
+        });
+        let workloads: Vec<_> = join_all(init_futures).await;
         let all_workloads = workloads.into_iter().zip(workload_params).fold(
             BTreeMap::<GroupID, Vec<WorkloadInfo>>::new(),
             |mut acc, (workload, workload_params)| {
@@ -219,7 +225,7 @@ impl WorkloadConfiguration {
             shared_counter_hotness_factor,
             num_shared_counters,
             shared_counter_max_tip,
-            num_contested_objects,
+            num_contested_objects: _,
             randomized_transaction_concurrency,
             target_qps,
             in_flight_ratio,
@@ -364,16 +370,6 @@ impl WorkloadConfiguration {
             group,
         );
         workload_builders.push(party_workload);
-        let conflicting_transfer_workload = ConflictingTransferWorkloadBuilder::from(
-            weights.conflicting_transfer as f32 / total_weight as f32,
-            target_qps,
-            num_workers,
-            in_flight_ratio,
-            num_contested_objects,
-            duration,
-            group,
-        );
-        workload_builders.push(conflicting_transfer_workload);
         if let Some(config) = composite_config {
             let composite_workload = CompositeWorkloadBuilder::from(
                 weights.composite as f32 / total_weight as f32,

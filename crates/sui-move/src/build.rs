@@ -21,7 +21,7 @@ pub struct Build {
     pub with_unpublished_dependencies: bool,
     /// Dump the compiled bytecode as base64-encoded strings in a JSON object, together with the
     /// digest and list of dependencies.
-    #[clap(long, global = true)]
+    #[clap(long, visible_alias = "dump", global = true)]
     pub dump_bytecode_as_base64: bool,
     /// By default, the CLI will drop any unused dependencies from the output and makes calls to
     /// the RPC. This flag disables that behavior and avoids any RPC calls, keeping all

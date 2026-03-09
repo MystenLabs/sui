@@ -115,13 +115,7 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier = RequestRetrier::new(
-            authority_aggregator,
-            client_monitor,
-            tx_type,
-            vec![],
-            vec![],
-        );
+        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, vec![], vec![]);
         let ping_type = get_ping_type(&tx_digest, tx_type);
 
         // Channel for wait_for_acknowledgments to notify which validators have acked.
@@ -542,7 +536,7 @@ impl EffectsCertifier {
 
                             self.metrics
                                 .transaction_fastpath_acked
-                                .with_label_values(&[&display_name, ping_label])
+                                .with_label_values(&[display_name.as_str(), ping_label])
                                 .inc();
                         }
 

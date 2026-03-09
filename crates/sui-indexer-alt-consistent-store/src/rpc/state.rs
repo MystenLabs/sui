@@ -3,8 +3,9 @@
 
 use std::sync::Arc;
 
-use anyhow::Context;
-use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::CHECKPOINT_METADATA;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::CHECKPOINT_HEIGHT_METADATA;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::LEGACY_CHECKPOINT_METADATA;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::LOWEST_AVAILABLE_CHECKPOINT_METADATA;
 use tonic::metadata::AsciiMetadataValue;
 
 use crate::config::ConsistencyConfig;
@@ -49,22 +50,62 @@ impl State {
         &self,
         request: &tonic::Request<T>,
     ) -> Result<u64, RpcError<Error>> {
-        let Some(checkpoint) = request.metadata().get(CHECKPOINT_METADATA) else {
+        let snapshot_range = self
+            .store
+            .db()
+            .snapshot_range(u64::MAX)
+            .ok_or(Error::NoSnapshots)?;
+
+        let metadata = request.metadata();
+        let Some(checkpoint) = metadata
+            .get(CHECKPOINT_HEIGHT_METADATA)
+            .or_else(|| metadata.get(LEGACY_CHECKPOINT_METADATA))
+        else {
             // If a checkpoint hasn't been supplied default to the latest snapshot.
-            return Ok(self
-                .store
-                .db()
-                .snapshot_range(u64::MAX)
-                .ok_or(Error::NoSnapshots)?
-                .end()
-                .checkpoint_hi_inclusive);
+            return Ok(snapshot_range.end().checkpoint_hi_inclusive);
         };
 
-        Ok(checkpoint
+        let checkpoint = checkpoint
             .to_str()
             .map_err(|_| Error::BadCheckpoint(checkpoint.clone()))?
             .parse()
-            .map_err(|_| Error::BadCheckpoint(checkpoint.clone()))?)
+            .map_err(|_| Error::BadCheckpoint(checkpoint.clone()))?;
+
+        if checkpoint < snapshot_range.start().checkpoint_hi_inclusive
+            || checkpoint > snapshot_range.end().checkpoint_hi_inclusive
+        {
+            return Err(RpcError::NotInRange(checkpoint));
+        }
+
+        Ok(checkpoint)
+    }
+
+    /// Convert a result into a `tonic::Response` and annotate it with checkpoint headers.
+    pub(super) fn checkpointed_response<T>(
+        &self,
+        result: Result<T, tonic::Status>,
+    ) -> Result<tonic::Response<T>, tonic::Status> {
+        let mut resp = result.map(tonic::Response::new);
+
+        let Some(range) = self.store.db().snapshot_range(u64::MAX) else {
+            return resp;
+        };
+
+        let meta = resp
+            .as_mut()
+            .map_or_else(|s| s.metadata_mut(), |r| r.metadata_mut());
+
+        if let Ok(min) = range.start().checkpoint_hi_inclusive.to_string().parse() {
+            meta.insert(LOWEST_AVAILABLE_CHECKPOINT_METADATA, min);
+        }
+
+        if let Ok(max) = range.end().checkpoint_hi_inclusive.to_string().parse() {
+            let max: AsciiMetadataValue = max;
+            meta.insert(CHECKPOINT_HEIGHT_METADATA, max.clone());
+            meta.insert(LEGACY_CHECKPOINT_METADATA, max);
+        }
+
+        resp
     }
 }
 
@@ -75,21 +116,4 @@ impl StatusCode for Error {
             Error::NoSnapshots => tonic::Code::Unavailable,
         }
     }
-}
-
-/// Convert `content` into a `tonic::Response` annotated with the checkpoint the data came from.
-pub(super) fn checkpointed_response<T>(
-    checkpoint: u64,
-    content: T,
-) -> Result<tonic::Response<T>, RpcError<Error>> {
-    let checkpoint = checkpoint
-        .to_string()
-        .parse()
-        .with_context(|| format!("Invalid checkpoint for metadata: {checkpoint}"))?;
-
-    let mut resp = tonic::Response::new(content);
-    let meta = resp.metadata_mut();
-    meta.insert(CHECKPOINT_METADATA, checkpoint);
-
-    Ok(resp)
 }

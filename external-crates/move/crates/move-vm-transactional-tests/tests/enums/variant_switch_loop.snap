@@ -12,24 +12,24 @@ enum EnumWithOneVariant {
 	One {  }
 }
 
-public f(Arg0: EnumWithOneVariant) {
+public f(x: EnumWithOneVariant) {
 B0:
-	0: ImmBorrowLoc[0](Arg0: EnumWithOneVariant)
+	0: ImmBorrowLoc[0](x: EnumWithOneVariant)
 	1: VariantSwitch(VariantJumpTableIndex(0))
 B1:
 	2: Ret
 Jump tables:
 [0]:	variant_switch EnumWithOneVariant {
-		Variant0 => jump 0
+		One => jump 0
 	}
 }
 
 public start(): EnumWithOneVariant {
-L0:	loc0: EnumWithOneVariant
+L0:	x: EnumWithOneVariant
 B0:
 	0: PackVariant(VariantHandleIndex(0))
-	1: StLoc[0](loc0: EnumWithOneVariant)
-	2: MoveLoc[0](loc0: EnumWithOneVariant)
+	1: StLoc[0](x: EnumWithOneVariant)
+	2: MoveLoc[0](x: EnumWithOneVariant)
 	3: Ret
 }
 

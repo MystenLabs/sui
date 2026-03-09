@@ -120,16 +120,6 @@ pub fn simulate_transaction(
                 )
                 .map_err(anyhow::Error::from)?;
 
-            if !simulation_result.effects.status().is_ok() {
-                return Err(RpcError::new(
-                    tonic::Code::InvalidArgument,
-                    format!(
-                        "Budget estimation failed with status: {:?}.",
-                        simulation_result.effects.status()
-                    ),
-                ));
-            }
-
             let estimate = estimate_gas_budget_from_gas_cost(
                 simulation_result.effects.gas_cost_summary(),
                 reference_gas_price,
@@ -172,6 +162,7 @@ pub fn simulate_transaction(
         execution_result,
         mock_gas_id,
         unchanged_loaded_runtime_objects,
+        suggested_gas_price,
     } = executor
         .simulate_transaction(transaction.clone(), checks, allow_mock_gas_coin)
         .map_err(anyhow::Error::from)?;
@@ -204,12 +195,7 @@ pub fn simulate_transaction(
                 service.render_effects_to_proto(
                     &effects,
                     &unchanged_loaded_runtime_objects,
-                    |object_id| {
-                        objects
-                            .iter()
-                            .find(|o| o.id() == *object_id)
-                            .map(|o| o.into())
-                    },
+                    &objects,
                     &mask,
                 )
             });
@@ -267,6 +253,9 @@ pub fn simulate_transaction(
     let mut response = SimulateTransactionResponse::default();
     response.transaction = transaction;
     response.command_outputs = outputs;
+    if read_mask.contains(SimulateTransactionResponse::SUGGESTED_GAS_PRICE_FIELD) {
+        response.suggested_gas_price = suggested_gas_price;
+    }
     Ok(response)
 }
 

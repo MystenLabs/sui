@@ -26,6 +26,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::effects::{InputConsensusObject, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::transaction::PlainTransactionWithClaims;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::transaction::{ObjectArg, SharedObjectMutability};
 use sui_types::{
@@ -257,6 +258,7 @@ async fn test_congestion_control_execution_cancellation() {
                 observations_chunk_size: None,
             },
             false,
+            false,
         ))
     });
 
@@ -306,9 +308,9 @@ async fn test_congestion_control_execution_cancellation() {
     .await
     .unwrap();
 
-    let consensus_transactions = vec![ConsensusTransaction::new_user_transaction_message(
+    let consensus_transactions = vec![ConsensusTransaction::new_user_transaction_v2_message(
         &authority_state.name,
-        congested_tx.clone(),
+        PlainTransactionWithClaims::no_aliases(congested_tx.clone()),
     )];
     let commit = TestConsensusCommit::new(consensus_transactions, 1, 0, 0);
 
@@ -318,22 +320,22 @@ async fn test_congestion_control_execution_cancellation() {
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // Get the captured transactions
-    let (scheduled_txns, assigned_tx_and_versions) = {
+    let scheduled_txns = {
         let mut captured = captured_transactions.lock();
         assert!(
             !captured.is_empty(),
             "Expected transactions to be scheduled"
         );
-        let (scheduled_txns, assigned_tx_and_versions, _) = captured.remove(0);
-        (scheduled_txns, assigned_tx_and_versions)
+        let (scheduled_txns, _) = captured.remove(0);
+        scheduled_txns
     };
 
     // Both prologue and the cancelled transaction should be scheduled
     // The cancelled transaction will abort during execution
     assert_eq!(
         scheduled_txns.len(),
-        3,
-        "Expected prologue + cancelled transaction + settlement"
+        2,
+        "Expected prologue + cancelled transaction"
     );
 
     // Now execute the cancelled transaction to get the effects
@@ -345,11 +347,11 @@ async fn test_congestion_control_execution_cancellation() {
 
     // Find the assigned versions for our specific transaction
     let tx_key = executable.key();
-    let assigned_versions = assigned_tx_and_versions
-        .into_map()
-        .get(&tx_key)
-        .expect("Transaction should have assigned versions")
-        .clone();
+    let assigned_versions = scheduled_txns
+        .iter()
+        .find(|(s, _)| s.key() == tx_key)
+        .map(|(_, v)| v.clone())
+        .expect("Transaction should have assigned versions");
 
     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     let (effects, execution_error) = authority_state

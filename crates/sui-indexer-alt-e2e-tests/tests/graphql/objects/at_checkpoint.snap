@@ -192,7 +192,9 @@ Response: {
 task 25, lines 135-138:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "object": null
+  },
   "errors": [
     {
       "message": "Checkpoint 9 in the future",

@@ -34,7 +34,7 @@ exit_code: 1
 Failed to fetch package UnpublishedNonZeroAddress
 
 Caused by:
-    Object 0x0000000000000000000000000000000000000000000000000000000000000bad does not exist
+    Object 0x0000000000000000000000000000000000000000000000000000000000000bad not found
 
 ----- stderr -----
 INCLUDING DEPENDENCY MoveStdlib

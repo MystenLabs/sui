@@ -166,7 +166,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                         .metrics
                         .node_metrics
                         .subscriber_connection_attempts
-                        .with_label_values(&[peer_hostname, "success"])
+                        .with_label_values(&[peer_hostname.as_str(), "success"])
                         .inc();
                     blocks
                 }
@@ -179,7 +179,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                         .metrics
                         .node_metrics
                         .subscriber_connection_attempts
-                        .with_label_values(&[peer_hostname, "failure"])
+                        .with_label_values(&[peer_hostname.as_str(), "failure"])
                         .inc();
                     continue 'subscription;
                 }

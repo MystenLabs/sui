@@ -118,15 +118,15 @@ pub(crate) async fn get_service_info(
     chain_id: ChainIdentifier,
     server_version: Option<ServerVersion>,
 ) -> Result<GetServiceInfoResponse, RpcError> {
-    let Some(checkpoint) = client.get_latest_checkpoint_summary().await? else {
+    let Some(wm) = client.get_watermark().await? else {
         return Err(CheckpointNotFoundError::sequence_number(0).into());
     };
     let mut message = GetServiceInfoResponse::default();
     message.chain_id = Some(Digest::new(chain_id.as_bytes().to_owned()).to_string());
     message.chain = Some(chain_id.chain().as_str().into());
-    message.epoch = Some(checkpoint.epoch);
-    message.checkpoint_height = Some(checkpoint.sequence_number);
-    message.timestamp = Some(timestamp_ms_to_proto(checkpoint.timestamp_ms));
+    message.epoch = Some(wm.epoch_hi_inclusive);
+    message.checkpoint_height = Some(wm.checkpoint_hi_inclusive);
+    message.timestamp = Some(timestamp_ms_to_proto(wm.timestamp_ms_hi_inclusive));
     message.lowest_available_checkpoint = Some(0);
     message.lowest_available_checkpoint_objects = Some(0);
     message.server = server_version.as_ref().map(ToString::to_string);

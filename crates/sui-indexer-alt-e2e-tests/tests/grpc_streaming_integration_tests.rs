@@ -101,14 +101,18 @@ async fn transfer_coin(
         .gas_for_owner_budget(sender, 5000, Default::default())
         .await
         .unwrap();
-    let gas_obj = gas_objs.1.object_ref();
+    let gas_obj = gas_objs.1.compute_object_reference();
 
     let tx_data = TestTransactionBuilder::new(sender, gas_obj, 1000)
         .transfer_sui(Some(1000), sender)
         .build();
     let tx = wallet.sign_transaction(&tx_data).await;
 
-    wallet.execute_transaction_must_succeed(tx).await.digest
+    wallet
+        .execute_transaction_must_succeed(tx)
+        .await
+        .transaction
+        .digest()
 }
 
 #[tokio::test]

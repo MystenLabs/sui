@@ -9,10 +9,14 @@ use std::str::FromStr;
 use std::sync::Arc;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2::{Checkpoint, GetCheckpointRequest, get_checkpoint_request};
+use sui_rpc::proto::sui::rpc::v2::{
+    Checkpoint, GetCheckpointRequest, GetServiceInfoRequest, get_checkpoint_request,
+};
 use sui_types::base_types::TransactionDigest;
 use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+use sui_types::digests::ChainIdentifier;
 
 use crate::operations::Operations;
 use crate::types::{
@@ -24,6 +28,7 @@ use crate::{CoinMetadataCache, Error};
 pub struct OnlineServerContext {
     pub client: GrpcClient,
     pub coin_metadata_cache: CoinMetadataCache,
+    pub chain_id: ChainIdentifier,
     block_provider: Arc<dyn BlockProvider + Send + Sync>,
 }
 
@@ -32,11 +37,13 @@ impl OnlineServerContext {
         client: GrpcClient,
         block_provider: Arc<dyn BlockProvider + Send + Sync>,
         coin_metadata_cache: CoinMetadataCache,
+        chain_id: ChainIdentifier,
     ) -> Self {
         Self {
             client,
             block_provider,
             coin_metadata_cache,
+            chain_id,
         }
     }
 
@@ -154,11 +161,32 @@ impl BlockProvider for CheckpointBlockProvider {
     }
 
     async fn genesis_block_identifier(&self) -> Result<BlockIdentifier, Error> {
-        self.create_block_identifier(0).await
+        let response = self
+            .client
+            .clone()
+            .ledger_client()
+            .get_service_info(GetServiceInfoRequest::default())
+            .await?
+            .into_inner();
+        let chain_id = response
+            .chain_id
+            .ok_or_else(|| Error::DataError("Missing chain_id".to_string()))?;
+        let hash = CheckpointDigest::from_str(&chain_id)?;
+        Ok(BlockIdentifier { index: 0, hash })
     }
 
     async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error> {
-        self.create_block_identifier(0).await
+        let response = self
+            .client
+            .clone()
+            .ledger_client()
+            .get_service_info(GetServiceInfoRequest::default())
+            .await?
+            .into_inner();
+        let lowest = response
+            .lowest_available_checkpoint
+            .ok_or_else(|| Error::DataError("Missing lowest_available_checkpoint".to_string()))?;
+        self.create_block_identifier(lowest).await
     }
 
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error> {

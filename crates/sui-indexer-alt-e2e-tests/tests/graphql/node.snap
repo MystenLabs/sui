@@ -48,7 +48,7 @@ Response: {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::bag::Bag"
               },
               "json": {
-                "id": "0xa247cb461e5e5bf089b4d481e00845fca72ccd4ecd743ac0302a80d8f9e9f8ec",
+                "id": "0x59885da24318a178c15897bd2e1086b49c473c3aa61436a8c2197e50882c9d1b",
                 "size": "1"
               }
             }
@@ -59,7 +59,7 @@ Response: {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
               },
               "json": {
-                "id": "0x1279a1708ba67edf9e73d98e30e2eeec9acb65a6bf8021083e5d83e0fc64f8b5",
+                "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
                 "balance": "299999992224843"
               }
             }
@@ -70,7 +70,7 @@ Response: {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
               },
               "json": {
-                "id": "0xe6496369dfa0503cba2d00232bb3f05120d0e656811c67e23b235ddded5234b1",
+                "id": "0xf616814098fb7a3be3ad67179e37e6b071cfe72ad70dcd44ae79456daddb9833",
                 "balance": "1"
               }
             }
@@ -88,7 +88,7 @@ Response: {
     "node": {
       "id": "AQAAAAAAAAAA",
       "sequenceNumber": 0,
-      "digest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3"
+      "digest": "6cronpZMrLFsLQY6vJ2JmmzXivRwaNN8C9wCXZWhgdGN"
     }
   }
 }
@@ -98,7 +98,7 @@ task 7, lines 48-62:
 Response: {
   "data": {
     "node": {
-      "id": "AoOlXwH7tuLzLrnOh3CaDa+9A0GeZml84uY0vPP8Ftq1",
+      "id": "Ajn1BRegnrr/hOib/L1MwExb2diCFyRjA/Woplbe6hHA",
       "name": {
         "type": {
           "repr": "u64"
@@ -132,13 +132,13 @@ task 9, lines 75-86:
 Response: {
   "data": {
     "node": {
-      "id": "BRJ5oXCLpn7fnnPZjjDi7uyay2Wmv4AhCD5dg+D8ZPi1",
+      "id": "BbDYJnhq03S55uedpKLWyNXyPEE663b6CwflY20XOkqP",
       "contents": {
         "type": {
           "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
         },
         "json": {
-          "id": "0x1279a1708ba67edf9e73d98e30e2eeec9acb65a6bf8021083e5d83e0fc64f8b5",
+          "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
           "balance": "299999992224843"
         }
       }
@@ -155,13 +155,13 @@ Response: {
       "modules": {
         "nodes": [
           {
-            "name": "address"
+            "name": "accumulator"
           },
           {
-            "name": "authenticator_state"
+            "name": "accumulator_metadata"
           },
           {
-            "name": "bag"
+            "name": "accumulator_settlement"
           }
         ]
       }
@@ -172,13 +172,13 @@ Response: {
         "modules": {
           "nodes": [
             {
-              "name": "address"
+              "name": "accumulator"
             },
             {
-              "name": "authenticator_state"
+              "name": "accumulator_metadata"
             },
             {
-              "name": "bag"
+              "name": "accumulator_settlement"
             }
           ]
         }
@@ -192,14 +192,14 @@ task 11, lines 115-128:
 Response: {
   "data": {
     "node": {
-      "id": "CBJ5oXCLpn7fnnPZjjDi7uyay2Wmv4AhCD5dg+D8ZPi1",
+      "id": "CLDYJnhq03S55uedpKLWyNXyPEE663b6CwflY20XOkqP",
       "asMoveObject": {
         "contents": {
           "type": {
             "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
           },
           "json": {
-            "id": "0x1279a1708ba67edf9e73d98e30e2eeec9acb65a6bf8021083e5d83e0fc64f8b5",
+            "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
             "balance": "299999992224843"
           }
         }
@@ -213,8 +213,8 @@ task 12, lines 130-141:
 Response: {
   "data": {
     "node": {
-      "id": "CiAuDP2pV13DnUBx/1+QlW8kOSm2nHSbzjlhBjztrI62xw==",
-      "digest": "46mF7QdyUBJemM2hTWGSmi73LdF8jcPGPttSgMAvzbMY",
+      "id": "CiBNG/lNa9WSFOsqoYrPKbkuLQpggIhinAB+iVyzNNldng==",
+      "digest": "6C18iBWhDB6yN1HkrKPhfJUFphinX3YfEAHANX8JksQy",
       "effects": {
         "status": "SUCCESS"
       }

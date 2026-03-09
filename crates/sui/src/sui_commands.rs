@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io};
 
+use crate::external_signer::ExternalKeysCommand;
 use anyhow::{Context, anyhow, bail, ensure};
 use clap::*;
 use colored::Colorize;
@@ -56,7 +57,6 @@ use sui_indexer_alt_reader::{
     consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
     system_package_task::SystemPackageTaskArgs,
 };
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -68,8 +68,7 @@ use sui_pg_db::DbArgs;
 use sui_pg_db::temp::{LocalDatabase, get_available_port};
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
-use sui_sdk::SuiClient;
-use sui_sdk::apis::ReadApi;
+use sui_rpc_api::Client;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -79,14 +78,14 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
-use sui_types::digests::ChainIdentifier;
 use sui_types::move_package::MovePackage;
 use tokio::time::interval;
 use tracing::info;
 use url::Url;
 
 use crate::client_commands::{
-    SuiClientCommands, USER_AGENT, check_for_unpublished_deps, load_root_pkg_for_publish_upgrade,
+    SuiClientCommands, USER_AGENT, check_for_unpublished_deps,
+    load_root_pkg_for_ephemeral_publish_or_upgrade, load_root_pkg_for_publish_upgrade,
     pkg_tree_shake,
 };
 use crate::fire_drill::{FireDrill, run_fire_drill};
@@ -325,6 +324,18 @@ pub enum SuiCommand {
         #[clap(subcommand)]
         cmd: KeyToolCommand,
     },
+    /// Manage keys on external signers
+    ExternalKeys {
+        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+        #[clap(long)]
+        keystore_path: Option<PathBuf>,
+        /// Return command outputs in json format
+        #[clap(long, global = true)]
+        json: bool,
+        /// Subcommands.
+        #[clap(subcommand)]
+        cmd: ExternalKeysCommand,
+    },
     /// Client for interacting with the Sui network.
     #[clap(name = "client")]
     Client {
@@ -410,6 +421,14 @@ pub enum SuiCommand {
         #[command(flatten)]
         replay_config: SR2::ReplayConfigStable,
     },
+
+    /// Generate shell completion scripts for CLI
+    #[clap(name = "completion")]
+    Completion {
+        /// If provided, outputs the completion file for given shell
+        #[arg(long = "generate", value_enum)]
+        generator: clap_complete::Shell,
+    },
 }
 
 impl SuiCommand {
@@ -488,26 +507,32 @@ impl SuiCommand {
             }
             SuiCommand::GenesisCeremony(cmd) => run(cmd),
             SuiCommand::KeyTool {
-                keystore_path,
+                keystore_path: _,
                 json,
                 cmd,
             } => {
-                let keystore_path =
-                    keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
-                let mut keystore =
-                    Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
-                cmd.execute(&mut keystore).await?.print(!json);
+                let config_path = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
+                let mut context = WalletContext::new(&config_path)?;
+
+                cmd.execute(&mut context).await?.print(!json);
+                Ok(())
+            }
+            SuiCommand::ExternalKeys {
+                keystore_path: _,
+                json,
+                cmd,
+            } => {
+                let client_path = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
+                let mut config = PersistedConfig::<SuiClientConfig>::read(&client_path)?;
+
+                cmd.execute(config.external_keys.as_mut())
+                    .await?
+                    .print(!json);
                 Ok(())
             }
             SuiCommand::Client { config, cmd, json } => {
                 if let Some(cmd) = cmd {
                     let mut context = get_wallet_context(&config).await?;
-
-                    if let Ok(client) = context.get_client().await
-                        && let Err(e) = client.check_api_version()
-                    {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                    }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -520,11 +545,6 @@ impl SuiCommand {
             SuiCommand::Validator { config, cmd, json } => {
                 let mut context = get_wallet_context(&config).await?;
                 if let Some(cmd) = cmd {
-                    if let Ok(client) = context.get_client().await
-                        && let Err(e) = client.check_api_version()
-                    {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                    }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
@@ -549,13 +569,11 @@ impl SuiCommand {
                             "sui move summary --package-id <object_id>",
                         )
                         .await?;
-                        let Some(client) = client else {
+                        let Some(mut client) = client else {
                             bail!(
                                 "`sui move summary --package-id <object_id>` requires a configured network"
                             );
                         };
-
-                        let read_api = client.read_api();
 
                         // If they didn't run with `--bytecode` correct this for them but warn them
                         // to let them know that we are changing it.
@@ -576,7 +594,7 @@ impl SuiCommand {
                         let package_bytes_location = tempdir()?;
                         let path = package_bytes_location.path();
                         let package_metadata =
-                            download_package_and_deps_under(read_api, path, *root_package_id)
+                            download_package_and_deps_under(&mut client, path, *root_package_id)
                                 .await?;
 
                         // Now produce the summary, pointing at the tempdir containing the package
@@ -592,6 +610,17 @@ impl SuiCommand {
                         Ok(())
                     }
                     sui_move::Command::Build(ref build) if build.dump_bytecode_as_base64 => {
+                        // Resolve pubfile_path to absolute before reroot_path changes CWD
+                        let pubfile_path = build_config.pubfile_path.as_ref().map(|p| {
+                            if p.is_absolute() {
+                                p.clone()
+                            } else {
+                                std::env::current_dir()
+                                    .expect("failed to get current directory")
+                                    .join(p)
+                            }
+                        });
+
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
 
                         let with_unpublished_deps = build.with_unpublished_dependencies;
@@ -602,12 +631,29 @@ impl SuiCommand {
                         )
                         .await?;
 
-                        let mut root_pkg = load_root_pkg_for_publish_upgrade(
-                            &context,
-                            &build_config,
-                            &rerooted_path,
-                        )
-                        .await?;
+                        let mut root_pkg = if let Some(pubfile_path) = pubfile_path {
+                            let chain_id = context
+                                .grpc_client()?
+                                .get_chain_identifier()
+                                .await?
+                                .to_string();
+                            let modes = build_config.mode_set();
+                            load_root_pkg_for_ephemeral_publish_or_upgrade(
+                                &rerooted_path,
+                                &chain_id,
+                                build_config.environment.clone(),
+                                pubfile_path,
+                                modes,
+                            )
+                            .await?
+                        } else {
+                            load_root_pkg_for_publish_upgrade(
+                                &context,
+                                &build_config,
+                                &rerooted_path,
+                            )
+                            .await?
+                        };
 
                         if !with_unpublished_deps {
                             let _ = check_for_unpublished_deps(&root_pkg, with_unpublished_deps)?;
@@ -617,6 +663,7 @@ impl SuiCommand {
                         // to 0x0
                         let mut config = build_config.clone();
                         config.set_unpublished_deps_to_zero = with_unpublished_deps;
+                        config.root_as_zero = true;
 
                         let mut pkg = SuiBuildConfig {
                             config,
@@ -628,9 +675,8 @@ impl SuiCommand {
                         .await?;
 
                         if !build.no_tree_shaking {
-                            let client = context.get_client().await?;
-                            pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg)
-                                .await?;
+                            let client = context.grpc_client()?;
+                            pkg_tree_shake(client, with_unpublished_deps, &mut pkg).await?;
                         }
 
                         println!(
@@ -682,11 +728,6 @@ impl SuiCommand {
                 let config_path =
                     client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 let mut context = WalletContext::new(&config_path)?;
-                if let Ok(client) = context.get_client().await
-                    && let Err(e) = client.check_api_version()
-                {
-                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                }
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.get_active_env()?.rpc;
                 let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
@@ -780,6 +821,12 @@ impl SuiCommand {
                     )?;
                 }
 
+                Ok(())
+            }
+            SuiCommand::Completion { generator } => {
+                let mut app: Command = SuiCommand::command();
+                let name = app.get_name().to_string();
+                clap_complete::generate(generator, &mut app, name, &mut std::io::stdout());
                 Ok(())
             }
         }
@@ -1604,9 +1651,10 @@ async fn get_wallet_context(client_config: &SuiEnvConfig) -> Result<WalletContex
 async fn get_client(
     client_config: SuiEnvConfig,
     command_err_string: &str,
-) -> Result<SuiClient, anyhow::Error> {
+) -> Result<Client, anyhow::Error> {
     let context = get_wallet_context(&client_config).await?;
-    let Ok(client) = context.get_client().await else {
+    let mut client = context.grpc_client()?;
+    if client.get_latest_checkpoint().await.is_err() {
         bail!(
             "`{command_err_string}` requires a connection to the network. \
              Current active network is {} but failed to connect to it.",
@@ -1621,45 +1669,33 @@ async fn get_client(
 async fn get_chain_id_and_client(
     client_config: SuiEnvConfig,
     command_err_string: &str,
-) -> anyhow::Result<(Option<String>, Option<SuiClient>)> {
+) -> anyhow::Result<(Option<String>, Option<Client>)> {
     let client = get_client(client_config, command_err_string).await?;
 
-    if let Err(e) = client.check_api_version() {
-        eprintln!("{}", format!("[warning] {e}").yellow().bold());
-    }
-
     Ok((
-        client.read_api().get_chain_identifier().await.ok(),
+        client
+            .get_chain_identifier()
+            .await
+            .ok()
+            .map(|chain| chain.to_string()),
         Some(client),
     ))
 }
 
 /// Try to resolve an ObjectID to a MovePackage
-async fn resolve_package(reader: &ReadApi, package_id: ObjectID) -> anyhow::Result<MovePackage> {
-    let object = reader
-        .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
-        .await?
-        .into_object()?;
+async fn resolve_package(client: &mut Client, package_id: ObjectID) -> anyhow::Result<MovePackage> {
+    let object = client.get_object(package_id).await?;
 
-    let Some(SuiRawData::Package(package)) = object.bcs else {
+    let Some(package) = object.data.try_as_package() else {
         bail!("Object {} is not a package.", package_id);
     };
 
-    Ok(MovePackage::new(
-        package.id,
-        package.version,
-        package.module_map,
-        // This package came from on-chain and the tool runs locally, so don't worry about
-        // trying to enforce the package size limit.
-        u64::MAX,
-        package.type_origin_table,
-        package.linkage_table,
-    )?)
+    Ok(package.to_owned())
 }
 
 /// Download the package's modules and its dependencies to the specified path.
 async fn download_package_and_deps_under(
-    read_api: &ReadApi,
+    client: &mut Client,
     path: &Path,
     package_id: ObjectID,
 ) -> anyhow::Result<PackageSummaryMetadata> {
@@ -1667,9 +1703,9 @@ async fn download_package_and_deps_under(
     let mut linkage = BTreeMap::new();
     let mut type_origins = BTreeMap::new();
 
-    let root_package = resolve_package(read_api, package_id).await?;
+    let root_package = resolve_package(client, package_id).await?;
     for (original_id, pkg_info) in root_package.linkage_table().iter() {
-        let package = resolve_package(read_api, pkg_info.upgraded_id).await?;
+        let package = resolve_package(client, pkg_info.upgraded_id).await?;
         let relative_package_path = package
             .id()
             .deref()
@@ -1753,17 +1789,10 @@ pub fn parse_host_port(
 pub async fn get_replay_node(
     context: &WalletContext,
 ) -> Result<sui_data_store::Node, anyhow::Error> {
-    let chain_id = context
-        .get_client()
-        .await?
-        .read_api()
-        .get_chain_identifier()
-        .await?;
+    let chain_id = context.grpc_client()?.get_chain_identifier().await?;
     let err_msg = format!(
         "'{chain_id}' chain identifier is not supported for replay -- only testnet and mainnet are supported currently"
     );
-    let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
-        .ok_or_else(|| anyhow::anyhow!(err_msg.clone()))?;
     Ok(match chain_id.chain() {
         Chain::Mainnet => sui_data_store::Node::Mainnet,
         Chain::Testnet => sui_data_store::Node::Testnet,

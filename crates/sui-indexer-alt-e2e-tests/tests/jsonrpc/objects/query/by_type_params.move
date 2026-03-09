@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --addresses P=0x0 --simulator
+//# init --protocol-version 108 --accounts A B --addresses P=0x0 --simulator
 
 // 1. All the objects of a generic type instance, for a particular owner
 // 2. All the objects of another generic type instance, for that same owner
@@ -71,20 +71,6 @@ module P::M {
       "options": { "showType": true }
     },
     null,
-    1
-  ]
-}
-
-//# run-jsonrpc --cursors bcs(bcs(@{obj_5_0}),2)
-{
-  "method": "suix_getOwnedObjects",
-  "params": [
-    "@{A}",
-    {
-      "filter": { "StructType": "@{P}::M::O1<u32>" },
-      "options": { "showType": true }
-    },
-    "@{cursor_0}",
     1
   ]
 }

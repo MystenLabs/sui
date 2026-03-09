@@ -23,6 +23,7 @@ use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use consensus_types::block::{BlockRef, Round};
 use futures::Stream;
+use mysten_network::Multiaddr;
 
 use crate::{
     block::{ExtendedBlock, VerifiedBlock},
@@ -190,6 +191,10 @@ where
 
     /// Stops the network service.
     async fn stop(&mut self);
+
+    /// Updates the network address for a peer identified by their authority index.
+    /// If address is None, the override is cleared and the committee address will be used.
+    fn update_peer_address(&self, peer: AuthorityIndex, address: Option<Multiaddr>);
 }
 
 /// Serialized block with extended information from the proposing authority.

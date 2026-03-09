@@ -7,11 +7,13 @@
 //! - accesses to mutable references are safe
 //! - accesses to global storage references are safe
 
-mod abstract_state;
+pub mod abstract_state;
+pub mod serializable_state;
 
 use crate::absint::{FunctionContext, TransferFunctions, analyze_function};
 use crate::regex_reference_safety::abstract_state::STEP_BASE_COST;
 use abstract_state::{AbstractState, AbstractValue};
+use move_abstract_interpreter::absint::BlockInvariant;
 use move_abstract_stack::{AbsStackError, AbstractStack};
 use move_binary_format::{
     CompiledModule,
@@ -25,6 +27,7 @@ use move_binary_format::{
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
+use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 
 use self::abstract_state::ValueKind;
@@ -67,7 +70,17 @@ pub fn verify(
     function_context: &FunctionContext,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let initial_state = AbstractState::new(function_context)?;
+    verify_and_return_states(config, module, function_context, meter)?;
+    Ok(())
+}
+
+pub fn verify_and_return_states(
+    config: &VerifierConfig,
+    module: &CompiledModule,
+    function_context: &FunctionContext,
+    meter: &mut (impl Meter + ?Sized),
+) -> PartialVMResult<BTreeMap<CodeOffset, BlockInvariant<AbstractState>>> {
+    let initial_state = AbstractState::new(function_context, meter)?;
 
     let mut verifier = ReferenceSafetyAnalysis::new(config, module, function_context);
     analyze_function(function_context, meter, &mut verifier, initial_state)
@@ -165,7 +178,7 @@ fn execute_inner(
     meter.add(Scope::Function, STEP_BASE_COST)?;
 
     match bytecode {
-        Bytecode::Pop => state.release_value(safe_unwrap_err!(verifier.stack.pop()))?,
+        Bytecode::Pop => state.release_value(safe_unwrap_err!(verifier.stack.pop()), meter)?,
 
         Bytecode::CopyLoc(local) => {
             let value = state.copy_loc(offset, *local, meter)?;
@@ -190,12 +203,12 @@ fn execute_inner(
         Bytecode::Eq | Bytecode::Neq => {
             let v1 = safe_unwrap_err!(verifier.stack.pop());
             let v2 = safe_unwrap_err!(verifier.stack.pop());
-            let value = state.comparison(offset, v1, v2)?;
+            let value = state.comparison(offset, v1, v2, meter)?;
             verifier.push(value)?
         }
         Bytecode::ReadRef => {
             let r = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).to_ref());
-            let value = state.read_ref(offset, r)?;
+            let value = state.read_ref(offset, r, meter)?;
             verifier.push(value)?
         }
         Bytecode::WriteRef => {
@@ -275,7 +288,7 @@ fn execute_inner(
 
         Bytecode::Abort => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_non_ref());
-            state.abort()
+            state.abort()?
         }
         Bytecode::LdTrue
         | Bytecode::LdFalse
@@ -510,7 +523,7 @@ fn execute_inner(
         }
         Bytecode::VariantSwitch(_) => {
             let r = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).to_ref());
-            state.read_ref(offset, r)?;
+            state.read_ref(offset, r, meter)?;
         }
 
         Bytecode::ExistsDeprecated(_)

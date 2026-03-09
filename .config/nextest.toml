@@ -1,8 +1,8 @@
 [profile.ci]
 # Print output for failing tests only when they fail.
 failure-output = "immediate"
-# Show skipped tests in the CI output.
-status-level = "skip"
+# Only show failing tests (not PASS or skip).
+status-level = "fail"
 # Do not cancel the test run on the first failure.
 fail-fast = false
 # Retry failing tests in order to not block builds on flaky tests

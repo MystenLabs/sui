@@ -119,12 +119,9 @@ impl Loader<TransactionEventsKey> for LedgerGrpcReader {
             let request = proto::GetTransactionRequest::new(&key.0.into())
                 .with_read_mask(FieldMask::from_paths(["events.bcs", "timestamp"]));
 
-            match self.0.clone().get_transaction(request).await {
+            match self.get_transaction(request).await {
                 Ok(response) => {
-                    let executed = response
-                        .into_inner()
-                        .transaction
-                        .context("No transaction returned")?;
+                    let executed = response.transaction.context("No transaction returned")?;
 
                     let events = executed
                         .events

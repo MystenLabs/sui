@@ -78,6 +78,7 @@ const standards = [
 		},
 		items: [
 			'standards/deepbook-margin/design',
+			'standards/deepbook-margin/margin-risks',
 			{
 				type: 'category',
 				label: 'Contract Information',

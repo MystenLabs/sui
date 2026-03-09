@@ -1548,6 +1548,42 @@ impl TransactionKind {
             })
     }
 
+    /// If this is an accumulator barrier settlement transaction, returns its
+    /// `AccumulatorSettlement` transaction key by extracting epoch and
+    /// checkpoint_height from the prologue call arguments.
+    pub fn accumulator_barrier_settlement_key(&self) -> Option<TransactionKey> {
+        let TransactionKind::ProgrammableSystemTransaction(pt) = self else {
+            return None;
+        };
+        let has_mutable_acc_root = pt.inputs.iter().any(|input| {
+            matches!(
+                input,
+                CallArg::Object(ObjectArg::SharedObject {
+                    id,
+                    mutability: SharedObjectMutability::Mutable,
+                    ..
+                }) if *id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+            )
+        });
+        if !has_mutable_acc_root {
+            return None;
+        }
+        // The prologue embeds epoch as Input(1) and checkpoint_height as Input(2),
+        // both as BCS-encoded u64 pure values.
+        let epoch = pt.inputs.get(1).and_then(|arg| match arg {
+            CallArg::Pure(bytes) => bcs::from_bytes::<u64>(bytes).ok(),
+            _ => None,
+        })?;
+        let checkpoint_height = pt.inputs.get(2).and_then(|arg| match arg {
+            CallArg::Pure(bytes) => bcs::from_bytes::<u64>(bytes).ok(),
+            _ => None,
+        })?;
+        Some(TransactionKey::AccumulatorSettlement(
+            epoch,
+            checkpoint_height,
+        ))
+    }
+
     /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
     /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
     /// directly.
@@ -1973,6 +2009,20 @@ pub enum TransactionExpiration {
     },
 }
 
+impl TransactionExpiration {
+    /// Validators remember all executed transaction digests from the current and previous
+    /// epoch. Therefore, ValidDuring with a one or two epoch range provides replay protection.
+    /// Either the transaction is statically invalid (current epoch not within range) or the
+    /// validator will remember if the transaction was already executed.
+    pub fn is_replay_protected(&self) -> bool {
+        matches!(self, TransactionExpiration::ValidDuring {
+                min_epoch: Some(min_epoch),
+                max_epoch: Some(max_epoch),
+                ..
+            } if *max_epoch == *min_epoch || *max_epoch == min_epoch.saturating_add(1))
+    }
+}
+
 #[enum_dispatch(TransactionDataAPI)]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum TransactionData {
@@ -2378,6 +2428,35 @@ impl TransactionData {
         )
     }
 
+    pub fn new_programmable_with_address_balance_gas(
+        sender: SuiAddress,
+        pt: ProgrammableTransaction,
+        gas_budget: u64,
+        gas_price: u64,
+        chain_identifier: ChainIdentifier,
+        current_epoch: EpochId,
+        nonce: u32,
+    ) -> Self {
+        TransactionData::V1(TransactionDataV1 {
+            kind: TransactionKind::ProgrammableTransaction(pt),
+            sender,
+            gas_data: GasData {
+                payment: vec![],
+                owner: sender,
+                price: gas_price,
+                budget: gas_budget,
+            },
+            expiration: TransactionExpiration::ValidDuring {
+                min_epoch: Some(current_epoch),
+                max_epoch: Some(current_epoch + 1),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: chain_identifier,
+                nonce,
+            },
+        })
+    }
+
     pub fn message_version(&self) -> u64 {
         match self {
             TransactionData::V1(_) => 1,
@@ -2753,9 +2832,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                     .into());
                 }
 
-                // TODO: these checks can be loosened in the case where the transaction is not stateless,
-                // i.e. contains AddressOwned inputs.
+                // Legacy behavior: If ValidDuring is present, it must have either one- or two-epoch
+                // validity, even if the transaction is has other replay-protection.
+                // New behavior: ValidDuring can specify any epoch range. Replay protection is enforced
+                // by sui_transaction_checks::check_replay_protection.
                 match (min_epoch, max_epoch) {
+                    _ if config.relax_valid_during_for_owned_inputs() => (),
                     (Some(min), Some(max)) => {
                         if config.enable_multi_epoch_transaction_expiration() {
                             if !(*max == *min || *max == min.saturating_add(1)) {
@@ -2875,20 +2957,48 @@ impl TransactionDataAPI for TransactionDataV1 {
             && config.enable_address_balance_gas_payments()
             && self.is_gas_paid_from_address_balance()
         {
-            match self.expiration() {
-                TransactionExpiration::None => {
+            if config.address_balance_gas_reject_gas_coin_arg()
+                && let TransactionKind::ProgrammableTransaction(pt) = &self.kind
+            {
+                fp_ensure!(
+                    !pt.commands.iter().any(|cmd| cmd.is_gas_coin_used()),
+                    UserInputError::Unsupported(
+                        "Argument::GasCoin is not supported with address balance gas payments"
+                            .to_string(),
+                    )
+                    .into()
+                );
+            }
+
+            if config.address_balance_gas_check_rgp_at_signing() {
+                fp_ensure!(
+                    self.gas_data.price >= context.reference_gas_price,
+                    UserInputError::GasPriceUnderRGP {
+                        gas_price: self.gas_data.price,
+                        reference_gas_price: context.reference_gas_price,
+                    }
+                    .into()
+                );
+            }
+
+            // Legacy behavior: when paying gas from address balance, we require ValidDuring expiration
+            // even if the transaction has other replay-protected inputs.
+            // New behavior: the check is done in `check_address_balance_replay_protection`, which only
+            // requires two-epoch ValidDuring if there are no replay-protected inputs.
+            if !config.relax_valid_during_for_owned_inputs() {
+                if matches!(self.expiration(), TransactionExpiration::None) {
                     // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
                     // instead of a missing expiration error.
                     return Err(UserInputError::MissingGasPayment.into());
                 }
-                TransactionExpiration::Epoch(_) => {
+
+                if !self.expiration().is_replay_protected() {
                     return Err(UserInputError::InvalidExpiration {
                         error: "Address balance gas payments require ValidDuring expiration"
                             .to_string(),
                     }
                     .into());
                 }
-                TransactionExpiration::ValidDuring { .. } => {}
             }
         } else {
             fp_ensure!(
@@ -2928,8 +3038,6 @@ impl TransactionDataAPI for TransactionDataV1 {
         }
 
         if !self.is_system_tx() {
-            let cost_table = SuiCostTable::new(config, self.gas_data.price);
-
             fp_ensure!(
                 !check_for_gas_price_too_high(config.gas_model_version())
                     || self.gas_data.price < config.max_gas_price(),
@@ -2938,6 +3046,7 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
                 .into()
             );
+            let cost_table = SuiCostTable::new(config, self.gas_data.price);
 
             fp_ensure!(
                 self.gas_data.budget <= cost_table.max_gas_budget,
@@ -3066,6 +3175,7 @@ pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
     pub epoch: EpochId,
     pub chain_identifier: ChainIdentifier,
+    pub reference_gas_price: u64,
 }
 
 impl<'a> TxValidityCheckContext<'a> {
@@ -3074,6 +3184,7 @@ impl<'a> TxValidityCheckContext<'a> {
             config,
             epoch: 0,
             chain_identifier: ChainIdentifier::default(),
+            reference_gas_price: 1000,
         }
     }
 }
@@ -3143,20 +3254,20 @@ impl<'de> Deserialize<'de> for SenderSignedTransaction {
 }
 
 impl SenderSignedTransaction {
+    /// Returns a mapping from signer address to the signature and its index in `tx_signatures`.
     pub(crate) fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
-    ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+    ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
         let mut mapping = BTreeMap::new();
-        for sig in &self.tx_signatures {
-            if verify_legacy_zklogin_address {
+        for (idx, sig) in self.tx_signatures.iter().enumerate() {
+            if verify_legacy_zklogin_address && let GenericSignature::ZkLoginAuthenticator(z) = sig
+            {
                 // Try deriving the address from the legacy padded way.
-                if let GenericSignature::ZkLoginAuthenticator(z) = sig {
-                    mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, sig);
-                };
+                mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, (idx as u8, sig));
             }
             let address = sig.try_into()?;
-            mapping.insert(address, sig);
+            mapping.insert(address, (idx as u8, sig));
         }
         Ok(mapping)
     }
@@ -3202,7 +3313,7 @@ impl SenderSignedData {
     pub(crate) fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
-    ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+    ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
         self.inner()
             .get_signer_sig_mapping(verify_legacy_zklogin_address)
     }
@@ -3654,7 +3765,8 @@ impl Transaction {
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
             vec![],
-        )
+        )?;
+        Ok(())
     }
 
     pub fn try_into_verified_for_testing(
@@ -3762,11 +3874,11 @@ pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQ
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WithAliases<T>(
     T,
-    #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+    #[serde(with = "nonempty_as_vec")] NonEmpty<(u8, Option<SequenceNumber>)>,
 );
 
 impl<T> WithAliases<T> {
-    pub fn new(tx: T, aliases: NonEmpty<(SuiAddress, Option<SequenceNumber>)>) -> Self {
+    pub fn new(tx: T, aliases: NonEmpty<(u8, Option<SequenceNumber>)>) -> Self {
         Self(tx, aliases)
     }
 
@@ -3774,7 +3886,7 @@ impl<T> WithAliases<T> {
         &self.0
     }
 
-    pub fn aliases(&self) -> &NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
+    pub fn aliases(&self) -> &NonEmpty<(u8, Option<SequenceNumber>)> {
         &self.1
     }
 
@@ -3782,11 +3894,11 @@ impl<T> WithAliases<T> {
         self.0
     }
 
-    pub fn into_aliases(self) -> NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
+    pub fn into_aliases(self) -> NonEmpty<(u8, Option<SequenceNumber>)> {
         self.1
     }
 
-    pub fn into_inner(self) -> (T, NonEmpty<(SuiAddress, Option<SequenceNumber>)>) {
+    pub fn into_inner(self) -> (T, NonEmpty<(u8, Option<SequenceNumber>)>) {
         (self.0, self.1)
     }
 }
@@ -3799,30 +3911,60 @@ impl<T: Message, S> WithAliases<VerifiedEnvelope<T, S>> {
 }
 
 impl<S> WithAliases<Envelope<SenderSignedData, S>> {
+    /// Creates a WithAliases where each required signer is mapped to its corresponding
+    /// signature index (assuming 1:1 correspondence) with no alias object version.
     pub fn no_aliases(tx: Envelope<SenderSignedData, S>) -> Self {
-        let no_aliases = tx
-            .intent_message()
-            .value
-            .required_signers()
-            .map(|s| (s, None));
-        Self::new(tx, no_aliases)
+        let required_signers = tx.intent_message().value.required_signers();
+        assert_eq!(required_signers.len(), tx.tx_signatures().len());
+        let no_aliases = required_signers
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| (idx as u8, None))
+            .collect::<Vec<_>>();
+        Self::new(
+            tx,
+            NonEmpty::from_vec(no_aliases).expect("must have at least one required_signer"),
+        )
     }
 }
 
 impl<S> WithAliases<VerifiedEnvelope<SenderSignedData, S>> {
+    /// Creates a WithAliases where each required signer is mapped to its corresponding
+    /// signature index (assuming 1:1 correspondence) with no alias object version.
     pub fn no_aliases(tx: VerifiedEnvelope<SenderSignedData, S>) -> Self {
-        let no_aliases = tx
-            .intent_message()
-            .value
-            .required_signers()
-            .map(|s| (s, None));
-        Self::new(tx, no_aliases)
+        let required_signers = tx.intent_message().value.required_signers();
+        assert_eq!(required_signers.len(), tx.tx_signatures().len());
+        let no_aliases = required_signers
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| (idx as u8, None))
+            .collect::<Vec<_>>();
+        Self::new(
+            tx,
+            NonEmpty::from_vec(no_aliases).expect("must have at least one required_signer"),
+        )
     }
 }
 
 pub type TransactionWithAliases = WithAliases<Transaction>;
 pub type VerifiedTransactionWithAliases = WithAliases<VerifiedTransaction>;
 pub type TrustedTransactionWithAliases = WithAliases<TrustedTransaction>;
+
+/// Deprecated version of WithAliases that uses SuiAddress instead of u8.
+/// This is needed to read data from deferred_transactions_with_aliases_v2 table
+/// which was written with the old format before the type was changed.
+// TODO: Delete this after all production networks are on the latest table.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DeprecatedWithAliases<T>(
+    T,
+    #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+);
+
+impl<T> DeprecatedWithAliases<T> {
+    pub fn into_inner(self) -> (T, NonEmpty<(SuiAddress, Option<SequenceNumber>)>) {
+        (self.0, self.1)
+    }
+}
 
 impl<T: Message, S> From<WithAliases<VerifiedEnvelope<T, S>>> for WithAliases<Envelope<T, S>> {
     fn from(value: WithAliases<VerifiedEnvelope<T, S>>) -> Self {
@@ -3904,8 +4046,8 @@ mod nonempty_as_vec {
 /// 3. The consensus handler can use deterministically
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransactionClaim {
-    /// Address aliases used for signature verification.
-    /// Maps addresses to their alias object versions (if any).
+    /// DEPRECATED. Do not use.
+    #[deprecated(note = "Use AddressAliasesV2")]
     AddressAliases(
         #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
     ),
@@ -3913,6 +4055,11 @@ pub enum TransactionClaim {
     /// Object IDs that are claimed to be immutable.
     /// Used to filter out immutable objects from lock acquisition in consensus handler.
     ImmutableInputObjects(Vec<ObjectID>),
+
+    /// Address aliases used for signature verification.
+    /// Length must equal the number of `required_signers`. Each element maps the corresponding
+    /// signer to the signature index and alias object version (if any) used to verify it.
+    AddressAliasesV2(#[serde(with = "nonempty_as_vec")] NonEmpty<(u8, Option<SequenceNumber>)>),
 }
 
 /// A transaction with attached claims that have been verified by voting validators.
@@ -3928,10 +4075,10 @@ impl<T> TransactionWithClaims<T> {
     }
 
     /// Create from a transaction with only address aliases.
-    pub fn from_aliases(tx: T, aliases: NonEmpty<(SuiAddress, Option<SequenceNumber>)>) -> Self {
+    pub fn from_aliases(tx: T, aliases: NonEmpty<(u8, Option<SequenceNumber>)>) -> Self {
         Self {
             tx,
-            claims: vec![TransactionClaim::AddressAliases(aliases)],
+            claims: vec![TransactionClaim::AddressAliasesV2(aliases)],
         }
     }
 
@@ -3948,8 +4095,20 @@ impl<T> TransactionWithClaims<T> {
         self.tx
     }
 
-    /// Get the address aliases claim. Differentiate between empty and not present for validation.
-    pub fn aliases(&self) -> Option<NonEmpty<(SuiAddress, Option<SequenceNumber>)>> {
+    /// Get the address aliases V2 claim. Differentiate between empty and not present for validation.
+    pub fn aliases(&self) -> Option<NonEmpty<(u8, Option<SequenceNumber>)>> {
+        self.claims
+            .iter()
+            .find_map(|c| match c {
+                TransactionClaim::AddressAliasesV2(aliases) => Some(aliases),
+                _ => None,
+            })
+            .cloned()
+    }
+
+    // TODO: Remove once `fix_checkpoint_signature_mapping` flag is enabled in testnet.
+    #[allow(deprecated)]
+    pub fn aliases_v1(&self) -> Option<NonEmpty<(SuiAddress, Option<SequenceNumber>)>> {
         self.claims
             .iter()
             .find_map(|c| match c {
@@ -4203,8 +4362,8 @@ impl ObjectReadResult {
         }
     }
 
-    /// Return the object ref iff the object is an owned object (i.e. not shared, not immutable).
-    pub fn get_owned_objref(&self) -> Option<ObjectRef> {
+    /// Return the object ref iff the object is an address-owned object (i.e. not shared, not immutable).
+    pub fn get_address_owned_objref(&self) -> Option<ObjectRef> {
         match (&self.input_object_kind, &self.object) {
             (InputObjectKind::MovePackage(_), _) => None,
             (
@@ -4229,8 +4388,18 @@ impl ObjectReadResult {
         }
     }
 
-    pub fn is_owned(&self) -> bool {
-        self.get_owned_objref().is_some()
+    pub fn is_address_owned(&self) -> bool {
+        self.get_address_owned_objref().is_some()
+    }
+
+    pub fn is_replay_protected_input(&self) -> bool {
+        if let InputObjectKind::ImmOrOwnedMoveObject(obj_ref) = &self.input_object_kind
+            && ParsedDigest::is_coin_reservation_digest(&obj_ref.2)
+        {
+            true
+        } else {
+            self.is_address_owned()
+        }
     }
 
     pub fn to_shared_input(&self) -> Option<SharedInput> {
@@ -4273,6 +4442,7 @@ impl std::fmt::Debug for InputObjects {
 
 // An InputObjects new-type that has been verified by sui-transaction-checks, and can be
 // safely passed to execution.
+#[derive(Clone)]
 pub struct CheckedInputObjects(InputObjects);
 
 // DO NOT CALL outside of sui-transaction-checks, genesis, or replay.
@@ -4366,7 +4536,7 @@ impl InputObjects {
         let owned_objects: Vec<_> = self
             .objects
             .iter()
-            .filter_map(|obj| obj.get_owned_objref())
+            .filter_map(|obj| obj.get_address_owned_objref())
             .collect();
 
         trace!(

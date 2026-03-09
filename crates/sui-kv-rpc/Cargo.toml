@@ -12,6 +12,7 @@ axum.workspace = true
 bin-version.workspace = true
 clap.workspace = true
 prometheus.workspace = true
+rustls.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
 sui-data-ingestion-core.workspace = true

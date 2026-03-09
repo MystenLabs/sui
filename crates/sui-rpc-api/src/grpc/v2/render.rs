@@ -176,16 +176,13 @@ impl RpcService {
         move_abort.clever_error = render(self, move_abort);
     }
 
-    pub fn render_effects_to_proto<F>(
+    pub fn render_effects_to_proto(
         &self,
         effects: &sui_types::effects::TransactionEffects,
         unchanged_loaded_runtime_objects: &[sui_types::storage::ObjectKey],
-        object_type_lookup: F,
+        objects: &sui_types::full_checkpoint_content::ObjectSet,
         mask: &FieldMaskTree,
-    ) -> TransactionEffects
-    where
-        F: Fn(&sui_types::base_types::ObjectID) -> Option<sui_types::base_types::ObjectType>,
-    {
+    ) -> TransactionEffects {
         // TODO consider inlining this function here to avoid needing to do the extra parsing below
         let mut effects = TransactionEffects::merge_from(effects, mask);
 
@@ -205,8 +202,14 @@ impl RpcService {
                     continue;
                 };
 
-                if let Some(object_type) = object_type_lookup(&object_id) {
-                    changed_object.set_object_type(object_type_to_string(object_type));
+                if let Some(object) = objects.get(&sui_types::storage::ObjectKey(
+                    object_id,
+                    changed_object
+                        .input_version_opt()
+                        .unwrap_or_else(|| changed_object.output_version())
+                        .into(),
+                )) {
+                    changed_object.set_object_type(object_type_to_string(object.into()));
                 }
             }
         }
@@ -220,8 +223,12 @@ impl RpcService {
                     continue;
                 };
 
-                if let Some(object_type) = object_type_lookup(&object_id) {
-                    unchanged_consensus_object.set_object_type(object_type_to_string(object_type));
+                if let Some(object) = objects.get(&sui_types::storage::ObjectKey(
+                    object_id,
+                    unchanged_consensus_object.version().into(),
+                )) {
+                    unchanged_consensus_object
+                        .set_object_type(object_type_to_string(object.into()));
                 }
             }
         }

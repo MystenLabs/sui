@@ -31,6 +31,7 @@ use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::bridge::MoveTypeCommitteeMemberRegistration;
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::ToFromBytes;
+use sui_types::event::Event;
 use sui_types::parse_sui_type_tag;
 
 // `TokendDepositedEvent` emitted in bridge.move
@@ -479,6 +480,23 @@ macro_rules! declare_events {
                 )*
                 Ok(None)
             }
+
+            pub fn try_from_event(event: &Event) -> BridgeResult<Option<SuiBridgeEvent>> {
+                init_all_struct_tags(); // Ensure all tags are initialized
+
+                if event.type_.address != BRIDGE_PACKAGE_ID.into() {
+                    return Ok(None);
+                }
+
+                // Unwrap safe: we inited above
+                $(
+                    if &event.type_ == $variant.get().unwrap() {
+                        let event_struct: $event_struct = bcs::from_bytes(&event.contents).map_err(|e| BridgeError::InternalError(format!("Failed to deserialize event to {}: {:?}", stringify!($event_struct), e)))?;
+                        return Ok(Some(SuiBridgeEvent::$variant(event_struct.try_into()?)));
+                    }
+                )*
+                Ok(None)
+            }
         }
     };
 }
@@ -618,19 +636,16 @@ pub mod tests {
             .await;
 
         let events = bridge_test_cluster
-            .new_bridge_events(
-                HashSet::from_iter([
-                    CommitteeMemberRegistration.get().unwrap().clone(),
-                    CommitteeUpdateEvent.get().unwrap().clone(),
-                    TokenRegistrationEvent.get().unwrap().clone(),
-                    NewTokenEvent.get().unwrap().clone(),
-                ]),
-                false,
-            )
+            .new_bridge_events(HashSet::from_iter([
+                CommitteeMemberRegistration.get().unwrap().clone(),
+                CommitteeUpdateEvent.get().unwrap().clone(),
+                TokenRegistrationEvent.get().unwrap().clone(),
+                NewTokenEvent.get().unwrap().clone(),
+            ]))
             .await;
         let mut mask = 0u8;
         for event in events.iter() {
-            match SuiBridgeEvent::try_from_sui_event(event).unwrap().unwrap() {
+            match SuiBridgeEvent::try_from_event(event).unwrap().unwrap() {
                 SuiBridgeEvent::CommitteeMemberRegistration(_event) => mask |= 0x1,
                 SuiBridgeEvent::CommitteeUpdateEvent(_event) => mask |= 0x2,
                 SuiBridgeEvent::TokenRegistrationEvent(_event) => mask |= 0x4,

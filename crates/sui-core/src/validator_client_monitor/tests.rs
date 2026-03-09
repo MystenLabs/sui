@@ -13,7 +13,6 @@ use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, get_key_pair};
 mod client_stats_tests {
 
     use super::*;
-    use sui_types::messages_grpc::TxType;
 
     /// Helper to create test validator names
     fn create_test_validator_names(n: usize) -> Vec<AuthorityName> {
@@ -70,7 +69,7 @@ mod client_stats_tests {
         stats.record_interaction_result(OperationFeedback {
             authority_name: validator1,
             display_name: validator1.concise().to_string(),
-            operation: OperationType::FastPath,
+            operation: OperationType::Consensus,
             ping_type: None,
             result: Ok(Duration::from_millis(50)),
         });
@@ -79,7 +78,7 @@ mod client_stats_tests {
         stats.record_interaction_result(OperationFeedback {
             authority_name: validator2,
             display_name: validator2.concise().to_string(),
-            operation: OperationType::FastPath,
+            operation: OperationType::Consensus,
             ping_type: None,
             result: Ok(Duration::from_millis(200)),
         });
@@ -99,7 +98,7 @@ mod client_stats_tests {
             vec![(validator1, 1), (validator2, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+        let all_stats = stats.get_all_validator_stats(&committee);
         assert_eq!(all_stats.len(), 2);
 
         // Validator 1 should be faster (lower latency) than validator 2
@@ -189,7 +188,7 @@ mod client_stats_tests {
             vec![(validator, 1)].into_iter().collect(),
         );
 
-        let all_stats = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+        let all_stats = stats.get_all_validator_stats(&committee);
         // Should have a partial latency even with only one operation type
         let latency = *all_stats.get(&validator).unwrap();
         assert!(latency > Duration::ZERO);
@@ -307,22 +306,22 @@ mod client_stats_tests {
 
         println!("Case 1: Unknown validator should return MAX_LATENCY");
         {
-            let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+            let latency = stats.get_all_validator_stats(&committee);
             // MAX_LATENCY
             assert_eq!(*latency.get(&validator3).unwrap(), Duration::from_secs(10));
         }
 
-        println!("Case 2: Good validator with FastPath operation");
+        println!("Case 2: Good validator with Consensus operation for SingleWriter");
         {
             stats.record_interaction_result(OperationFeedback {
                 authority_name: validator1,
                 display_name: validator1.concise().to_string(),
-                operation: OperationType::FastPath,
+                operation: OperationType::Consensus,
                 ping_type: None,
                 result: Ok(Duration::from_millis(100)), // 0.1s
             });
 
-            let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+            let latency = stats.get_all_validator_stats(&committee);
             // 100ms from history, without reliability penalty.
             assert_eq!(
                 *latency.get(&validator1).unwrap(),
@@ -330,30 +329,12 @@ mod client_stats_tests {
             );
         }
 
-        println!("Case 3: Good validator with Consensus operation");
-        {
-            stats.record_interaction_result(OperationFeedback {
-                authority_name: validator1,
-                display_name: validator1.concise().to_string(),
-                operation: OperationType::Consensus,
-                ping_type: None,
-                result: Ok(Duration::from_millis(200)), // 0.2s
-            });
-
-            let latency_shared = stats.get_all_validator_stats(&committee, TxType::SharedObject);
-            // 200ms from history, without reliability penalty.
-            assert_eq!(
-                *latency_shared.get(&validator1).unwrap(),
-                Duration::from_millis(200)
-            );
-        }
-
-        println!("Case 4: Validator with reduced reliability");
+        println!("Case 3: Validator with reduced reliability");
         {
             stats.record_interaction_result(OperationFeedback {
                 authority_name: validator2,
                 display_name: validator2.concise().to_string(),
-                operation: OperationType::FastPath,
+                operation: OperationType::Consensus,
                 ping_type: None,
                 result: Ok(Duration::from_millis(100)),
             });
@@ -367,7 +348,7 @@ mod client_stats_tests {
                 result: Err(()),
             });
 
-            let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+            let latency = stats.get_all_validator_stats(&committee);
             let validator2_latency = *latency.get(&validator2).unwrap();
             // Reliability should be 0.66, so latency = 0.1 + (1.0 - 0.66) * 1.0 * 10.0 = 0.1 + 0.34 * 1.0 * 10.0 = 0.1 + 3.4 = 3.5
             assert!(
@@ -377,7 +358,7 @@ mod client_stats_tests {
             );
         }
 
-        println!("Case 5: Excluded validator should return MAX_LATENCY");
+        println!("Case 4: Excluded validator should return MAX_LATENCY");
         {
             for _ in 0..2 {
                 // Add enough failures to cause exclusion
@@ -390,12 +371,12 @@ mod client_stats_tests {
                 });
             }
 
-            let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+            let latency = stats.get_all_validator_stats(&committee);
             // MAX_LATENCY due to exclusion
             assert_eq!(*latency.get(&validator2).unwrap(), Duration::from_secs(10));
         }
 
-        println!("Case 6: Increase reliability should reduce latency again");
+        println!("Case 5: Increase reliability should reduce latency again");
         {
             for _ in 0..2 {
                 stats.record_interaction_result(OperationFeedback {
@@ -407,7 +388,7 @@ mod client_stats_tests {
                 });
             }
 
-            let latency = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+            let latency = stats.get_all_validator_stats(&committee);
             let validator2_latency = *latency.get(&validator2).unwrap();
             // Should be back to calculated latency, not MAX_LATENCY
             assert!(validator2_latency < Duration::from_secs(10));
@@ -432,7 +413,7 @@ mod client_stats_tests {
             stats.record_interaction_result(OperationFeedback {
                 authority_name: validator,
                 display_name: validator.concise().to_string(),
-                operation: OperationType::FastPath,
+                operation: OperationType::Consensus,
                 ping_type: None,
                 result: Ok(Duration::from_millis(100)), // 0.1s
             });
@@ -451,7 +432,7 @@ mod client_stats_tests {
             );
 
             // Get latencies for both configurations
-            let latencies = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+            let latencies = stats.get_all_validator_stats(&committee);
             let latency = *latencies.get(&validator).unwrap();
             assert!((latency.as_secs_f64() - 3.433).abs() < 0.001);
         }
@@ -467,7 +448,7 @@ mod client_stats_tests {
             stats.record_interaction_result(OperationFeedback {
                 authority_name: validator,
                 display_name: validator.concise().to_string(),
-                operation: OperationType::FastPath,
+                operation: OperationType::Consensus,
                 ping_type: None,
                 result: Ok(Duration::from_millis(100)),
             });
@@ -485,7 +466,7 @@ mod client_stats_tests {
                 validators.iter().map(|v| (*v, 1)).collect(),
             );
 
-            let latencies = stats.get_all_validator_stats(&committee, TxType::SingleWriter);
+            let latencies = stats.get_all_validator_stats(&committee);
             let latency = *latencies.get(&validator).unwrap();
             assert_eq!(latency, Duration::from_millis(100));
         }
@@ -494,8 +475,6 @@ mod client_stats_tests {
 
 #[cfg(test)]
 mod client_monitor_tests {
-    use sui_types::messages_grpc::TxType;
-
     use crate::{
         authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
         test_authority_clients::MockAuthorityApi,
@@ -526,7 +505,7 @@ mod client_monitor_tests {
             monitor.record_interaction_result(OperationFeedback {
                 authority_name: *validator,
                 display_name: auth_agg.get_display_name(validator),
-                operation: OperationType::FastPath,
+                operation: OperationType::Consensus,
                 ping_type: None,
                 result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
             });
@@ -536,8 +515,7 @@ mod client_monitor_tests {
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Select validators with delta = 100% (50, 100)
-        let selected =
-            monitor.select_shuffled_preferred_validators(&committee, TxType::SingleWriter, 1.0);
+        let selected = monitor.select_shuffled_preferred_validators(&committee, 1.0);
         assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
 
         // The first 2 positions should contain the best two validators (but shuffled)
@@ -565,7 +543,7 @@ mod client_monitor_tests {
             monitor.record_interaction_result(OperationFeedback {
                 authority_name: *validator,
                 display_name: auth_agg.get_display_name(validator),
-                operation: OperationType::FastPath,
+                operation: OperationType::Consensus,
                 ping_type: None,
                 result: if i < 2 {
                     Ok(Duration::from_millis((i as u64 + 1) * 50))
@@ -579,8 +557,7 @@ mod client_monitor_tests {
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Select validators with delta = 200% (50, 100, 150)
-        let selected =
-            monitor.select_shuffled_preferred_validators(&committee, TxType::SingleWriter, 2.0);
+        let selected = monitor.select_shuffled_preferred_validators(&committee, 2.0);
 
         // Should return all 5 validators
         assert_eq!(selected.len(), 5);
@@ -638,11 +615,7 @@ mod client_monitor_tests {
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Should still select validators from the provided committee
-        let selected = monitor.select_shuffled_preferred_validators(
-            &other_committee,
-            TxType::SingleWriter,
-            1.0,
-        );
+        let selected = monitor.select_shuffled_preferred_validators(&other_committee, 1.0);
         assert_eq!(selected.len(), 3); // Should return all 3 validators from other_committee
         for validator in &selected {
             assert!(other_committee.authority_exists(validator));
@@ -678,15 +651,15 @@ mod client_monitor_tests {
         monitor.force_update_cached_latencies(&auth_agg);
 
         // Request higher delta than actual values.
-        let selected =
-            monitor.select_shuffled_preferred_validators(&committee, TxType::SingleWriter, 1000.0);
+        let selected = monitor.select_shuffled_preferred_validators(&committee, 1000.0);
         // Should return all available validators
         assert_eq!(selected.len(), 2);
         assert!(selected.contains(&validators[0]));
         assert!(selected.contains(&validators[1]));
     }
 
-    // Testing the select_shuffled_preferred_validators both for the single writer and shared object tx types.
+    // Testing the select_shuffled_preferred_validators for both single writer and shared object tx types.
+    // Since both transaction types now use Consensus, they should have the same scoring.
     #[tokio::test]
     async fn test_validator_selection_shared_object_tx_type() {
         let auth_agg = get_authority_aggregator(4);
@@ -695,18 +668,9 @@ mod client_monitor_tests {
         let committee = auth_agg.committee.clone();
         let validators = committee.names().cloned().collect::<Vec<_>>();
 
-        // Record different performance per operation type for each validator
+        // Record different performance using Consensus operation type for each validator
+        // Both SingleWriter and SharedObject transactions now use the same Consensus operation
         for (i, validator) in validators.iter().enumerate() {
-            monitor.record_interaction_result(OperationFeedback {
-                authority_name: *validator,
-                display_name: auth_agg.get_display_name(validator),
-                operation: OperationType::FastPath,
-                ping_type: None,
-                result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
-            });
-        }
-
-        for (i, validator) in validators.iter().rev().enumerate() {
             monitor.record_interaction_result(OperationFeedback {
                 authority_name: *validator,
                 display_name: auth_agg.get_display_name(validator),
@@ -719,25 +683,14 @@ mod client_monitor_tests {
         // Force update cached latencies (in production this happens in the health check loop)
         monitor.force_update_cached_latencies(&auth_agg);
 
-        // Select validators with delta = 100% for the shared object tx type
-        let selected =
-            monitor.select_shuffled_preferred_validators(&committee, TxType::SingleWriter, 1.0);
+        // Select validators with delta = 100%
+        let selected = monitor.select_shuffled_preferred_validators(&committee, 1.0);
         assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
 
         // The first 2 positions should contain the best two validators (but shuffled)
         let top_2_positions: HashSet<_> = selected.iter().take(2).cloned().collect();
         assert!(top_2_positions.contains(&validators[0])); // Best performer
         assert!(top_2_positions.contains(&validators[1])); // Second best
-
-        // Select the validators with delta = 100% for the single writer tx type
-        let selected =
-            monitor.select_shuffled_preferred_validators(&committee, TxType::SharedObject, 1.0);
-        assert_eq!(selected.len(), 4); // Should return all 4 validators from committee
-
-        // The first 2 positions should contain the best two validators (but shuffled)
-        let top_2_positions: HashSet<_> = selected.iter().take(2).cloned().collect();
-        assert!(top_2_positions.contains(&validators[2])); // Best performer
-        assert!(top_2_positions.contains(&validators[3])); // Second best
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

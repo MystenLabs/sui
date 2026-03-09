@@ -90,17 +90,23 @@ impl SafeClientMetrics {
 
         let total_requests_handle_transaction_info_request = metrics_base
             .total_requests_by_address_method
-            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+            .with_label_values(&[
+                validator_address.as_str(),
+                "handle_transaction_info_request",
+            ]);
         let total_ok_responses_handle_transaction_info_request = metrics_base
             .total_responses_by_address_method
-            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+            .with_label_values(&[
+                validator_address.as_str(),
+                "handle_transaction_info_request",
+            ]);
 
         let total_requests_handle_object_info_request = metrics_base
             .total_requests_by_address_method
-            .with_label_values(&[&validator_address, "handle_object_info_request"]);
+            .with_label_values(&[validator_address.as_str(), "handle_object_info_request"]);
         let total_ok_responses_handle_object_info_request = metrics_base
             .total_responses_by_address_method
-            .with_label_values(&[&validator_address, "handle_object_info_request"]);
+            .with_label_values(&[validator_address.as_str(), "handle_object_info_request"]);
 
         let handle_certificate_latency = metrics_base
             .latency

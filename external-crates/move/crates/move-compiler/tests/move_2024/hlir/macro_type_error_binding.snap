@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/hlir/macro_type_error_binding.move:2:17
+  │
+2 │     macro fun f($x: u64): (u64, u64) {
+  │                 ^^ Unused parameter '$x'. Consider removing or prefixing with an underscore: '_$x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/hlir/macro_type_error_binding.move:3:9
+  │
+3 │        ($, $x)
+  │         ^ Expected an identifier following '$', e.g. '$x'
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_2024/hlir/macro_type_error_binding.move:6:25
+  │
+6 │         let (a, b) = f!(0);
+  │                         ^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_2024/hlir/macro_type_error_binding.move:13:9
+   │
+12 │         move x;
+   │         ------
+   │         │
+   │         The value of 'x' was previously moved here.
+   │         Suggestion: use 'copy x' to avoid the move.
+13 │         move x;
+   │         ^^^^^^ Invalid usage of previously moved variable 'x'.

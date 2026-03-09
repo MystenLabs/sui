@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_framework::BuiltInFramework;
-use sui_json_rpc_api::ReadApiClient;
-use sui_json_rpc_types::SuiObjectResponse;
 use sui_macros::sim_test;
 use sui_types::{
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
@@ -20,9 +18,8 @@ async fn test_additional_objects() {
         .build()
         .await;
 
-    let client = cluster.rpc_client();
-    let resp = client.get_object(id, None).await.unwrap();
-    assert!(matches!(resp, SuiObjectResponse { data: Some(_), .. }));
+    let mut client = cluster.grpc_client();
+    let _resp = client.get_object(id).await.unwrap();
 }
 
 #[sim_test]
@@ -30,17 +27,9 @@ async fn test_package_override() {
     // `with_objects` can be used to override existing packages.
     let framework_ref = {
         let default_cluster = TestClusterBuilder::new().build().await;
-        let client = default_cluster.rpc_client();
-        let obj = client
-            .get_object(SUI_SYSTEM_PACKAGE_ID, None)
-            .await
-            .unwrap();
-
-        if let Some(obj) = obj.data {
-            obj.object_ref()
-        } else {
-            panic!("Original framework package should exist");
-        }
+        let mut client = default_cluster.grpc_client();
+        let obj = client.get_object(SUI_SYSTEM_PACKAGE_ID).await.unwrap();
+        obj.compute_object_reference()
     };
 
     let modified_ref = {
@@ -73,17 +62,10 @@ async fn test_package_override() {
             .build()
             .await;
 
-        let client = modified_cluster.rpc_client();
-        let obj = client
-            .get_object(SUI_SYSTEM_PACKAGE_ID, None)
-            .await
-            .unwrap();
+        let mut client = modified_cluster.grpc_client();
+        let obj = client.get_object(SUI_SYSTEM_PACKAGE_ID).await.unwrap();
 
-        if let Some(obj) = obj.data {
-            obj.object_ref()
-        } else {
-            panic!("Original framework package should exist");
-        }
+        obj.compute_object_reference()
     };
 
     assert_ne!(framework_ref, modified_ref);

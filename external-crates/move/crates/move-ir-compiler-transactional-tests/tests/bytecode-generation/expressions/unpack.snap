@@ -20,14 +20,14 @@ B0:
 }
 
 f() {
-L0:	loc0: T
-L1:	loc1: bool
+L0:	t: T
+L1:	b: bool
 B0:
 	0: Call new(): T
-	1: StLoc[0](loc0: T)
-	2: MoveLoc[0](loc0: T)
+	1: StLoc[0](t: T)
+	2: MoveLoc[0](t: T)
 	3: Unpack[0](T)
-	4: StLoc[1](loc1: bool)
+	4: StLoc[1](b: bool)
 	5: Ret
 }
 

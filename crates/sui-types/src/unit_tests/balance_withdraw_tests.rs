@@ -10,13 +10,13 @@ use crate::{
     accumulator_root::AccumulatorValue,
     base_types::{SuiAddress, random_object_ref},
     coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
-    digests::ChainIdentifier,
+    digests::{ChainIdentifier, CheckpointDigest},
     error::UserInputResult,
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        FundsWithdrawalArg, TransactionData, TransactionDataAPI, TxValidityCheckContext,
-        WithdrawalTypeArg,
+        FundsWithdrawalArg, GasData, TransactionData, TransactionDataAPI, TransactionDataV1,
+        TransactionExpiration, TransactionKind, TxValidityCheckContext, WithdrawalTypeArg,
     },
 };
 
@@ -116,8 +116,13 @@ fn test_withdraw_zero_amount() {
     let mut ptb = ProgrammableTransactionBuilder::new();
     ptb.funds_withdrawal(arg.clone()).unwrap();
     let sender = SuiAddress::random_for_testing_only();
-    let tx =
-        TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
+    let tx = TransactionData::new_programmable(
+        sender,
+        vec![random_object_ref()],
+        ptb.finish(),
+        1_000_000,
+        1000,
+    );
     assert!(
         tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(
             &protocol_config()
@@ -137,12 +142,80 @@ fn test_withdraw_too_many_withdraws() {
         .unwrap();
     }
     let sender = SuiAddress::random_for_testing_only();
-    let tx =
-        TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
+    let tx = TransactionData::new_programmable(
+        sender,
+        vec![random_object_ref()],
+        ptb.finish(),
+        1_000_000,
+        1000,
+    );
     assert!(
         tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(
             &protocol_config()
         ))
         .is_err()
     );
+}
+
+#[test]
+fn test_withdraw_overflow() {
+    let arg1 = FundsWithdrawalArg::balance_from_sender(u64::MAX, GAS::type_tag());
+    let arg2 = FundsWithdrawalArg::balance_from_sender(u64::MAX, GAS::type_tag());
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    ptb.funds_withdrawal(arg1).unwrap();
+    ptb.funds_withdrawal(arg2).unwrap();
+    let sender = SuiAddress::random_for_testing_only();
+    let tx =
+        TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
+    let result = tx.process_funds_withdrawals_for_signing(ChainIdentifier::default(), &NoImpl);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(
+        err.to_string().contains("overflow"),
+        "Expected overflow error, got: {}",
+        err
+    );
+}
+
+#[test]
+fn test_mixed_withdrawal_and_gas_payment_aggregation() {
+    let mut cfg = protocol_config();
+    cfg.enable_address_balance_gas_payments_for_testing();
+
+    let sender = SuiAddress::random_for_testing_only();
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+        5000,
+        GAS::type_tag(),
+    ))
+    .unwrap();
+
+    let tx = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(ptb.finish()),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: 1000,
+            budget: 10_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: ChainIdentifier::from(CheckpointDigest::default()),
+            nonce: 42,
+        },
+    });
+
+    let withdraws = tx
+        .process_funds_withdrawals_for_signing(ChainIdentifier::default(), &NoImpl)
+        .unwrap();
+    let account_id = AccumulatorValue::get_field_id(
+        sender,
+        &WithdrawalTypeArg::Balance(GAS::type_tag()).to_type_tag(),
+    )
+    .unwrap();
+    assert_eq!(withdraws, BTreeMap::from([(account_id, 5000 + 10_000_000)]));
 }

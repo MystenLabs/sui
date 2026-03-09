@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 1-19:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::vector_ops_mixed_borrow'. Got VMError: {
+    major_status: VEC_BORROW_ELEMENT_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::vector_ops_mixed_borrow,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 6)],
+}

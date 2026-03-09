@@ -616,6 +616,6 @@ fn type_name_to_naming_type_name_(tn_: TypeName_) -> N::TypeName_ {
     use TypeName_ as TN;
     match tn_ {
         TN::Builtin(b) => NTN::Builtin(b),
-        TN::ModuleType(m, n) => NTN::ModuleType(m, n),
+        TN::ModuleType(m, n) => NTN::ModuleType(m.into(), n),
     }
 }

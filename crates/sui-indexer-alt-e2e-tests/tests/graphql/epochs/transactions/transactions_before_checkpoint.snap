@@ -62,7 +62,7 @@ Response: {
           {
             "cursor": "MA==",
             "node": {
-              "digest": "G6JweuSUhMSJvPUTCgTpvf37aLGrv887XFKBZyVLpP5M",
+              "digest": "9SSXusUFMCT7nVFXQA8kMyG1p38Uze9APuQtFFKWS4AK",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 0,
@@ -106,13 +106,13 @@ task 12, lines 54-62:
 Response: {
   "data": {
     "epoch1BeforeCp5": {
-      "totalTransactions": 3,
+      "totalTransactions": 4,
       "transactions": {
         "edges": [
           {
             "cursor": "Mw==",
             "node": {
-              "digest": "7V7fPn6swdTXSLTjj9bMyjqhRq2YC3kpHpzcHGg5Kpkh",
+              "digest": "5xMzcxiVwvwR65tixPQ5JZ5VqDAreR1FCiPEmM1wzL9N",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
@@ -126,7 +126,7 @@ Response: {
           {
             "cursor": "NA==",
             "node": {
-              "digest": "ArmNbTCDdFNp1eWmBbQKR9QM19ovMb14kKUeU2xCVxYu",
+              "digest": "8na3nb5hbtEHuW55gSoy2Ls7MDrJ1MjMCr7jhoQf8Hfc",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
@@ -140,10 +140,10 @@ Response: {
           {
             "cursor": "NQ==",
             "node": {
-              "digest": "CqmfRKnUfFSzQd5GC66nAe87HSvKpo2wjuKJNW1WX8EE",
+              "digest": "5QdTEu1h7fuRih364SecoELKZ8BQvetNyZHhrGV8YF2i",
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 3,
+                  "sequenceNumber": 2,
                   "epoch": {
                     "epochId": 1
                   }
@@ -162,7 +162,7 @@ task 13, lines 64-72:
 Response: {
   "data": {
     "epoch1BeforeCp0": {
-      "totalTransactions": 3,
+      "totalTransactions": 4,
       "transactions": {
         "edges": []
       }

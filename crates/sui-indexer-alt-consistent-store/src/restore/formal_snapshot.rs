@@ -15,8 +15,7 @@ use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
 use sui_indexer_alt_framework::ingestion::store_client::StoreIngestionClient;
-use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
-use sui_storage::blob::Blob;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use tracing::info;
 use url::Url;
 
@@ -167,26 +166,21 @@ impl FormalSnapshot {
             .cloned()
             .with_context(|| format!("Cannot find end-of-epoch checkpoint for epoch {epoch}"))?;
 
-        let CheckpointData {
-            checkpoint_summary, ..
-        } = Blob::from_bytes(
-            &client
-                .checkpoint(checkpoint)
-                .await
-                .context("Failed to fetch end-of-epoch checkpoint")?,
-        )
-        .context("Failed to deserialize end-of-epoch checkpoint")?;
+        let Checkpoint { summary, .. } = client
+            .checkpoint(checkpoint)
+            .await
+            .context("Failed to fetch end-of-epoch checkpoint")?;
 
         ensure!(
-            checkpoint_summary.epoch == epoch,
+            summary.epoch == epoch,
             "End-of-epoch checkpoint {checkpoint} does not belong to epoch {epoch}",
         );
 
         let watermark = Watermark {
             epoch_hi_inclusive: epoch,
-            checkpoint_hi_inclusive: checkpoint_summary.sequence_number,
-            tx_hi: checkpoint_summary.network_total_transactions,
-            timestamp_ms_hi_inclusive: checkpoint_summary.timestamp_ms,
+            checkpoint_hi_inclusive: summary.sequence_number,
+            tx_hi: summary.network_total_transactions,
+            timestamp_ms_hi_inclusive: summary.timestamp_ms,
         };
 
         info!(?watermark, "Anchored formal snapshot");

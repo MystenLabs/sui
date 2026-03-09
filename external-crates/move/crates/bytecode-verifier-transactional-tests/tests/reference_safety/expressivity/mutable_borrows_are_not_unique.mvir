@@ -1,0 +1,78 @@
+// mutable borrows are not unique
+
+//# publish
+module 0x2.fields {
+
+    struct S has copy, drop { f: u64 }
+    struct Pair has copy, drop { s1: Self.S, s2: Self.S }
+
+    create(p: &mut Self.Pair) {
+        // mutable variables are not unique. Nor do they take ownership over their memory
+        // We only care about preventing the creation of dangling references
+        let p2: &mut Self.Pair;
+        let s1_1: &mut Self.S;
+        let s1_2: &mut Self.S;
+        let s2_1: &mut Self.S;
+        let s2_2: &mut Self.S;
+        let f_1_1: &mut u64;
+        let f_1_2: &mut u64;
+        let f_2_1: &mut u64;
+        let f_2_2: &mut u64;
+    label b0:
+        s1_1 = &mut copy(p).Pair::s1;
+        s2_1 = &mut copy(p).Pair::s2;
+        f_1_1 = &mut copy(s1_1).S::f;
+        f_2_1 = &mut copy(s2_1).S::f;
+
+        p2 = copy(p);
+        s1_2 = &mut copy(p2).Pair::s1;
+        s2_2 = &mut copy(p2).Pair::s2;
+        f_1_2 = &mut copy(s1_2).S::f;
+        f_2_2 = &mut copy(s2_2).S::f;
+
+        return;
+    }
+}
+
+//# publish
+module 0x3.fields_write {
+
+    struct S has copy, drop { f: u64 }
+    struct Pair has copy, drop { s1: Self.S, s2: Self.S }
+
+    write(p: &mut Self.Pair) {
+        // We can do the same thing, and write to them
+        let p2: &mut Self.Pair;
+        let s1_1: &mut Self.S;
+        let s1_2: &mut Self.S;
+        let s2_1: &mut Self.S;
+        let s2_2: &mut Self.S;
+        let f_1_1: &mut u64;
+        let f_1_2: &mut u64;
+        let f_2_1: &mut u64;
+        let f_2_2: &mut u64;
+    label b0:
+        s1_1 = &mut copy(p).Pair::s1;
+        s2_1 = &mut copy(p).Pair::s2;
+        f_1_1 = &mut copy(s1_1).S::f;
+        f_2_1 = &mut copy(s2_1).S::f;
+
+        p2 = copy(p);
+        s1_2 = &mut copy(p2).Pair::s1;
+        s2_2 = &mut copy(p2).Pair::s2;
+        f_1_2 = &mut copy(s1_2).S::f;
+        f_2_2 = &mut copy(s2_2).S::f;
+
+        // order here does not matter as long as the reference has no extensions
+        *move(f_2_2) = 0;
+        *move(f_2_1) = 0;
+        *move(f_1_2) = 0;
+        *move(f_1_1) = 0;
+        *move(s1_1) = S { f: 0 };
+        *move(s2_1) = S { f: 0 };
+        *move(s1_2) = S { f: 0 };
+        *move(s2_2) = S { f: 0 };
+
+        return;
+    }
+}

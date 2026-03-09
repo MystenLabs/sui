@@ -1,73 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState } from "react";
-import TypeDef from "./typedef";
+import React from "react";
 import Markdown from "markdown-to-jsx";
 import PropType from "./proptype";
 
 export const Parameter = (props) => {
-  //const desc = String( compile(param.description[0].toUpperCase() + param.description.substring(1, param.description.length)))
-  const [type, setType] = useState();
-  const [typeDefVisible, setTypeDefVisible] = useState(false);
+  const { param, schemas } = props;
 
-  const { param, method, schemas } = props;
   const desc = param.description
-    ? `${param.description[0].toUpperCase()}${param.description.substring(
-        1,
-        param.description.length,
-      )}`
+    ? `${param.description[0].toUpperCase()}${param.description.substring(1)}`
         .replaceAll(/\</g, "&lt;")
         .replaceAll(/\{/g, "&#123;")
     : "";
-  const methods = Object.keys(schemas);
-
-  let typename = "";
-
-  if (param.schema && param.schema["$ref"]) {
-    typename = param.schema["$ref"].substring(
-      param.schema["$ref"].lastIndexOf("/") + 1,
-      param.schema["$ref"].length,
-    );
-  } else if (param.schema && !param.schema["$ref"]) {
-    if (param.schema.type) {
-      if (param.schema.type === "integer") {
-        typename = param.schema.format;
-      }
-      if (param.schema.type === "array") {
-        if (param.schema.items) {
-          if (param.schema.items["$ref"]) {
-            typename = param.schema.items["$ref"].substring(
-              param.schema.items["$ref"].lastIndexOf("/") + 1,
-              param.schema.items["$ref"].length,
-            );
-          } else if (param.schema.items.format) {
-            typename = param.schema.items.format;
-          }
-        }
-      } else {
-        typename = param.schema.type;
-      }
-    }
-  }
 
   return (
-    <>
-      <div className="grid grid-cols-6 ml-4 odd:bg-sui-ghost-white dark:odd:bg-sui-ghost-dark rounded-lg">
-        <div className="col-span-2 p-2 overflow-x-auto">
-          <PropType proptype={[param.name, param.schema]}></PropType>
-        </div>
-        <div className="p-2">{param.required ? "Yes" : "No"}</div>
-        <div className="col-span-3 p-2 overflow-x-auto">
-          {param.description && <Markdown>{desc}</Markdown>}
-        </div>
+    <div className="api-row">
+      <div className="api-cell api-cell-scroll">
+        <PropType proptype={[param.name, param.schema]} />
       </div>
-      {typeDefVisible && (
-        <div className="border text-sm border-solid p-4 pt-0 mx-8 rounded-lg">
-          <TypeDef schema={type} schemas={schemas} />
-        </div>
-      )}
-    </>
+
+      <div className="api-cell">
+        <span className={param.required ? "api-badge-yes" : "api-badge-no"}>
+          {param.required ? "Required" : "Optional"}
+        </span>
+      </div>
+
+      <div className="api-cell api-cell-scroll">
+        {param.description ? <Markdown>{desc}</Markdown> : <span className="api-muted">—</span>}
+      </div>
+    </div>
   );
 };
 
@@ -76,33 +38,31 @@ const Parameters = (props) => {
   const hasParams = params.length > 0;
 
   return (
-    <div className="border-b mb-8">
-      {hasParams && (
-        <div className="grid grid-cols-6 ml-4">
-          <div className="rounded-tl-lg rounded-bl-lg col-span-2 p-2 bg-sui-blue dark:bg-sui-blue-dark text-sui-gray-95 dark:text-sui-gray-50 font-bold">
-            Name&lt;Type&gt;
-          </div>
-          <div className="p-2 bg-sui-blue dark:bg-sui-blue-dark text-sui-gray-95 dark:text-sui-gray-50 text-sui-gray-35 font-bold">
-            Required
-          </div>
-          <div className="rounded-tr-lg rounded-br-lg col-span-3 p-2 bg-sui-blue dark:bg-sui-blue-dark text-sui-gray-95 dark:text-sui-gray-50 text-sui-gray-35 font-bold">
-            Description
-          </div>
-        </div>
-      )}
-      {hasParams &&
-        params.map((param) => {
-          return (
-            <Parameter
-              param={param}
-              method={method}
-              schemas={schemas}
-              key={`${method}-${param.name.replaceAll(/\s/g, "-")}`}
-            />
-          );
-        })}
+    <div className="api-card api-card-pad">
+      <div className="api-section-title">Parameters</div>
 
-      {!hasParams && <p className="ml-4">None</p>}
+      {!hasParams && <div className="api-muted">None</div>}
+
+      {hasParams && (
+        <>
+          <div className="api-row-head">
+            <div>Name &amp; Type</div>
+            <div>Required</div>
+            <div>Description</div>
+          </div>
+
+          <div className="api-rows">
+            {params.map((param) => (
+              <Parameter
+                param={param}
+                method={method}
+                schemas={schemas}
+                key={`${method}-${param.name.replaceAll(/\s/g, "-")}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 };

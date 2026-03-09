@@ -26,18 +26,25 @@ pub struct KvRpcServer {
 impl KvRpcServer {
     pub async fn new(
         instance_id: String,
+        project_id: Option<String>,
         app_profile_id: Option<String>,
         checkpoint_bucket: Option<String>,
+        channel_timeout: Option<Duration>,
         server_version: Option<ServerVersion>,
         registry: &Registry,
+        credentials_path: Option<String>,
     ) -> anyhow::Result<Self> {
-        let mut client = BigTableClient::new_remote(
+        let mut client = BigTableClient::new_remote_with_credentials(
             instance_id,
+            project_id,
             false,
+            channel_timeout,
             None,
             "sui-kv-rpc".to_string(),
             Some(registry),
             app_profile_id,
+            None,
+            credentials_path,
         )
         .await?;
         let genesis = client

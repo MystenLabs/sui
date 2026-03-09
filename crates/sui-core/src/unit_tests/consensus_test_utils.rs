@@ -21,10 +21,10 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
 
 use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, ExecutionIndicesWithStats,
+    AuthorityPerEpochStore, ExecutionIndicesWithStatsV2,
 };
 use crate::authority::backpressure::BackpressureManager;
-use crate::authority::shared_object_version_manager::{AssignedTxAndVersions, Schedulable};
+use crate::authority::shared_object_version_manager::Schedulable;
 use crate::authority::{AuthorityMetrics, AuthorityState, ExecutionEnv};
 use crate::consensus_adapter::{
     BlockStatusReceiver, ConnectionMonitorStatusForTests, ConsensusAdapter,
@@ -36,11 +36,9 @@ use crate::consensus_handler::{
 };
 use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use crate::consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction};
-use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
 
-pub(crate) type CapturedTransactions =
-    Arc<Mutex<Vec<(Vec<Schedulable>, AssignedTxAndVersions, SchedulingSource)>>>;
+pub(crate) type CapturedTransactions = Arc<Mutex<Vec<crate::consensus_handler::SchedulerMessage>>>;
 
 pub struct TestConsensusCommit {
     pub transactions: Vec<ConsensusTransaction>,
@@ -343,26 +341,19 @@ where
     let consensus_adapter =
         make_consensus_adapter_for_test(authority.clone(), HashSet::new(), false, vec![]);
 
-    let last_consensus_stats = ExecutionIndicesWithStats {
+    let last_consensus_stats = ExecutionIndicesWithStatsV2 {
         stats: crate::authority::authority_per_epoch_store::ConsensusStats::new(
             consensus_committee.size(),
         ),
         ..Default::default()
     };
 
-    // Create a test ExecutionSchedulerSender that captures transactions
-    let captured_transactions = Arc::new(Mutex::new(Vec::<(
-        Vec<Schedulable>,
-        AssignedTxAndVersions,
-        SchedulingSource,
-    )>::new()));
+    let captured_transactions: CapturedTransactions = Arc::new(Mutex::new(Vec::new()));
     let captured_tx_clone = captured_transactions.clone();
 
-    // Create a channel to capture sent transactions
     let (tx_sender, mut receiver) =
         mysten_metrics::monitored_mpsc::unbounded_channel("test_execution_scheduler");
 
-    // Spawn a task to capture transactions from the channel
     tokio::spawn(async move {
         while let Some(item) = receiver.recv().await {
             captured_tx_clone.lock().push(item);

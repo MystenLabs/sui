@@ -26,7 +26,6 @@ use sui_types::transaction::Transaction;
 use sui_types::{SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{
     committee::{Committee, EpochId, ProtocolVersion},
-    error::SuiResult,
     object::Object,
 };
 use tracing::trace;
@@ -113,7 +112,7 @@ impl Genesis {
     pub fn checkpoint(&self) -> VerifiedCheckpoint {
         self.checkpoint
             .clone()
-            .try_into_verified(&self.committee().unwrap())
+            .try_into_verified(&self.committee())
             .unwrap()
     }
 
@@ -140,9 +139,8 @@ impl Genesis {
         self.sui_system_object().reference_gas_price()
     }
 
-    // TODO: No need to return SuiResult. Also consider return &.
-    pub fn committee(&self) -> SuiResult<Committee> {
-        Ok(self.committee_with_network().committee().clone())
+    pub fn committee(&self) -> Committee {
+        self.committee_with_network().committee().clone()
     }
 
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {

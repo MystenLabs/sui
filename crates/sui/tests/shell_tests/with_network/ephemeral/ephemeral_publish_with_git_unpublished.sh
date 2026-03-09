@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Test an ephemeral publication workflow. We have
+# B --> A
+#
+# A is a git dependency (not published ephemerally)
+# B depends on A. Should publish both A and B.
+
+# use default git settings
+export GIT_CONFIG_GLOBAL=""
+
+# Set up git repo for `a`
+git init -q -b main a
+git -C a add .
+git -C a -c user.email=test@test.com -c user.name=test commit -q -m "initial revision"
+
+HASH=$(git -C a log --pretty=format:%H)
+GIT_DEP="a = { git = \"file://$(pwd)/a\", rev = \"${HASH}\", subdir = \".\" }"
+
+mv b/Move.toml b/Move.toml.tmp
+sed "s|a = { local = \"../a\" }|${GIT_DEP}|g" b/Move.toml.tmp > b/Move.toml
+
+echo "publishing b (using --publish-unpublished-deps)"
+sui client --client.config $CONFIG test-publish --build-env testnet \
+  --pubfile-path Pub.local.toml --publish-unpublished-deps b \
+  > out.log 2>&1 || cat out.log

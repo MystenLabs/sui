@@ -146,6 +146,11 @@ fun test_lossless_shr() {
 }
 
 #[test]
+fun test_lossless_div() {
+    integer_tests::test_lossless_div!(MAX, CASES);
+}
+
+#[test]
 fun exhaustive_test_add() {
     let max = MAX as u16;
     0u16.range_do_eq!(max, |i| {

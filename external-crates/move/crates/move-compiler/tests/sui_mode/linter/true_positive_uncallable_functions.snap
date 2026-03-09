@@ -1,0 +1,72 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99011]: it will not be possible to call this function
+  ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:6:25
+  │
+6 │     fun no_clock_mut(_: &mut sui::clock::Clock) {
+  │                         ^^^^^^^^^^^^^^^^^^^^^^ Invalid parameter type. 'Clock' must be taken immutably, e.g. '&sui::clock::Clock'
+  │
+  = This object has extra restrictions checked when submitting transactions to Sui. As such, this function will not be callable.
+  = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99011]: it will not be possible to call this function
+  ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:9:25
+  │
+9 │     fun no_clock_val(_: sui::clock::Clock) {
+  │                         ^^^^^^^^^^^^^^^^^ Invalid parameter type. 'Clock' must be taken immutably, e.g. '&sui::clock::Clock'
+  │
+  = This object has extra restrictions checked when submitting transactions to Sui. As such, this function will not be callable.
+  = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99011]: it will not be possible to call this function
+   ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:12:26
+   │
+12 │     fun no_random_mut(_: &mut sui::random::Random) {
+   │                          ^^^^^^^^^^^^^^^^^^^^^^^^ Invalid parameter type. 'Random' must be taken immutably, e.g. '&sui::random::Random'
+   │
+   = This object has extra restrictions checked when submitting transactions to Sui. As such, this function will not be callable.
+   = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99011]: it will not be possible to call this function
+   ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:15:26
+   │
+15 │     fun no_random_val(_: sui::random::Random) {
+   │                          ^^^^^^^^^^^^^^^^^^^ Invalid parameter type. 'Random' must be taken immutably, e.g. '&sui::random::Random'
+   │
+   = This object has extra restrictions checked when submitting transactions to Sui. As such, this function will not be callable.
+   = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99011]: it will not be possible to call this function
+   ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:20:43
+   │
+20 │     fun two_mut_ctx(_: &mut TxContext, _: &mut TxContext) {
+   │                        --------------     ^^^^^^^^^^^^^^ Duplicate 'TxContext' usage. '&mut TxContext' usage must be unique
+   │                        │                   
+   │                        Previous 'TxContext' usage here
+   │
+   = Due to restrictions in PTB execution if there is a mutable reference to a TxContext, it must be unique. This means that there cannot be another usage of the transaction context (either '&TxContext' or '&mut TxContext') in the function parameters. This function will not be callable on Sui
+   = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99011]: it will not be possible to call this function
+   ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:23:47
+   │
+23 │     fun mut_and_imm_ctx(_: &mut TxContext, _: &TxContext) {
+   │                            --------------     ^^^^^^^^^^ Duplicate TxContext usage
+   │                            │                   
+   │                            Previous 'TxContext' usage here. '&mut TxContext' usage must be unique
+   │
+   = Due to restrictions in PTB execution if there is a mutable reference to a TxContext, it must be unique. This means that there cannot be another usage of the transaction context (either '&TxContext' or '&mut TxContext') in the function parameters. This function will not be callable on Sui
+   = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99011]: it will not be possible to call this function
+   ┌─ tests/sui_mode/linter/true_positive_uncallable_functions.move:26:22
+   │
+26 │     fun owned_ctx(_: TxContext, _: &mut TxContext, _: &mut TxContext) {
+   │                      ^^^^^^^^^ Invalid TxContext usage. 'TxContext' must be taken by reference, e.g. '&TxContext' or '&mut TxContext'
+   │
+   = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

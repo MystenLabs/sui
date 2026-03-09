@@ -150,9 +150,8 @@ impl TryFrom<MultiSigPublicKeyLegacy> for MultiSigPublicKey {
 
 /// Convert a roaring bitmap to plain bitmap.
 pub fn bitmap_to_u16(roaring: RoaringBitmap) -> Result<u16, FastCryptoError> {
-    let indices: Vec<u32> = roaring.into_iter().collect();
     let mut val = 0;
-    for i in indices {
+    for i in roaring {
         if i >= 10 {
             return Err(FastCryptoError::InvalidInput);
         }

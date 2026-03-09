@@ -1,0 +1,5 @@
+# Custom self-hosted runner labels used in this repository.
+self-hosted-runner:
+  labels:
+    - ubuntu-ghcloud
+    - windows-ghcloud-128

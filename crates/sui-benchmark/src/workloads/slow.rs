@@ -203,7 +203,8 @@ pub struct SlowWorkload {
 impl Workload<dyn Payload> for SlowWorkload {
     async fn init(
         &mut self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         let gas = &self.init_gas;
@@ -217,7 +218,7 @@ impl Workload<dyn Payload> for SlowWorkload {
             .publish_async(path)
             .await
             .build_and_sign(gas.2.as_ref());
-        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.unwrap();
         let created = effects.created();
         // should only create the package object, upgrade cap, shared obj.
@@ -229,7 +230,7 @@ impl Workload<dyn Payload> for SlowWorkload {
 
         for o in &created {
             let obj = loop {
-                match proxy.get_object(o.0.0).await {
+                match execution_proxy.get_object(o.0.0).await {
                     Ok(obj) => break obj,
                     Err(e) => {
                         tracing::debug!("Failed to get object {}: {}", o.0.0, e);
@@ -253,7 +254,8 @@ impl Workload<dyn Payload> for SlowWorkload {
 
     async fn make_test_payloads(
         &self,
-        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let mut payloads = Vec::new();

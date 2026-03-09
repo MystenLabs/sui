@@ -9,7 +9,10 @@ use std::{
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
+use itertools::Itertools;
+use mysten_common::assert_reachable;
 use mysten_metrics::monitored_scope;
+use nonempty::NonEmpty;
 use prometheus::{
     IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry,
@@ -22,7 +25,8 @@ use sui_types::{
     error::{SuiError, SuiErrorKind, SuiResult, UserInputError},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::{
-        InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI, TransactionWithClaims,
+        CertifiedTransaction, InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI,
+        TransactionWithClaims,
     },
 };
 use tap::TapFallible;
@@ -69,19 +73,18 @@ impl SuiTxValidator {
 
     fn validate_transactions(&self, txs: &[ConsensusTransactionKind]) -> Result<(), SuiError> {
         let epoch_store = &self.epoch_store;
-        let mut cert_batch = Vec::new();
+        // cert_batch is always empty since CertifiedTransaction is rejected
+        let cert_batch: Vec<&CertifiedTransaction> = Vec::new();
         let mut ckpt_messages = Vec::new();
         let mut ckpt_batch = Vec::new();
         for tx in txs.iter() {
             match tx {
-                ConsensusTransactionKind::CertifiedTransaction(certificate) => {
-                    if epoch_store.protocol_config().disable_preconsensus_locking() {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "CertifiedTransaction cannot be used when preconsensus locking is disabled".to_string(),
-                        )
-                        .into());
-                    }
-                    cert_batch.push(certificate.as_ref());
+                ConsensusTransactionKind::CertifiedTransaction(_) => {
+                    return Err(SuiErrorKind::UnexpectedMessage(
+                        "CertifiedTransaction cannot be used when preconsensus locking is disabled"
+                            .to_string(),
+                    )
+                    .into());
                 }
                 ConsensusTransactionKind::CheckpointSignature(_) => {
                     return Err(SuiErrorKind::UnexpectedMessage(
@@ -113,37 +116,53 @@ impl SuiTxValidator {
                     .into());
                 }
 
+                ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
+                    return Err(SuiErrorKind::UnexpectedMessage(
+                        "RandomnessStateUpdate is no longer supported".to_string(),
+                    )
+                    .into());
+                }
+
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
-                | ConsensusTransactionKind::CapabilityNotificationV2(_)
-                | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
+                | ConsensusTransactionKind::CapabilityNotificationV2(_) => {}
 
                 ConsensusTransactionKind::UserTransaction(_) => {
-                    if epoch_store.protocol_config().address_aliases()
-                        || epoch_store.protocol_config().disable_preconsensus_locking()
-                    {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransaction cannot be used when address aliases is enabled or preconsensus locking is disabled".to_string(),
-                        )
-                        .into());
-                    }
+                    return Err(SuiErrorKind::UnexpectedMessage(
+                        "ConsensusTransactionKind::UserTransaction cannot be used when address aliases is enabled or preconsensus locking is disabled".to_string(),
+                    )
+                    .into());
                 }
 
                 ConsensusTransactionKind::UserTransactionV2(tx) => {
-                    if !(epoch_store.protocol_config().address_aliases()
-                        || epoch_store.protocol_config().disable_preconsensus_locking())
-                    {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransactionV2 must be used when either address aliases is enabled or preconsensus locking is disabled".to_string(),
-                        )
-                        .into());
+                    if epoch_store.protocol_config().address_aliases() {
+                        let has_aliases = if epoch_store
+                            .protocol_config()
+                            .fix_checkpoint_signature_mapping()
+                        {
+                            tx.aliases().is_some()
+                        } else {
+                            tx.aliases_v1().is_some()
+                        };
+                        if !has_aliases {
+                            return Err(SuiErrorKind::UnexpectedMessage(
+                                "ConsensusTransactionKind::UserTransactionV2 must contain an aliases claim".to_string(),
+                            )
+                            .into());
+                        }
                     }
-                    if epoch_store.protocol_config().address_aliases() && tx.aliases().is_none() {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransactionV2 must contain an aliases claim".to_string(),
-                        )
-                        .into());
+
+                    if let Some(aliases) = tx.aliases() {
+                        let num_sigs = tx.tx().tx_signatures().len();
+                        for (sig_idx, _) in aliases.iter() {
+                            if (*sig_idx as usize) >= num_sigs {
+                                return Err(SuiErrorKind::UnexpectedMessage(format!(
+                                    "UserTransactionV2 alias contains out-of-bounds signature index {sig_idx} (transaction has {num_sigs} signatures)",
+                                )).into());
+                            }
+                        }
                     }
+
                     // TODO(fastpath): move deterministic verifications of user transactions here.
                 }
 
@@ -177,8 +196,7 @@ impl SuiTxValidator {
 
         // All checkpoint sigs have been verified, forward them to the checkpoint service
         for ckpt in ckpt_messages {
-            self.checkpoint_service
-                .notify_checkpoint_signature(epoch_store, ckpt)?;
+            self.checkpoint_service.notify_checkpoint_signature(ckpt)?;
         }
 
         self.metrics
@@ -243,7 +261,8 @@ impl SuiTxValidator {
         tx: PlainTransactionWithClaims,
     ) -> SuiResult<()> {
         // Extract claims before consuming the transaction
-        let aliases = tx.aliases();
+        let aliases_v2 = tx.aliases();
+        let aliases_v1 = tx.aliases_v1();
         let claimed_immutable_ids = tx.get_immutable_objects();
         let inner_tx = tx.into_tx();
 
@@ -272,20 +291,50 @@ impl SuiTxValidator {
         let verified_tx = epoch_store.verify_transaction_with_current_aliases(inner_tx)?;
 
         // aliases must have data when address_aliases() is enabled.
-        if epoch_store.protocol_config().address_aliases()
-            && (*verified_tx.aliases() != aliases.unwrap()
-                || fail_point_always_report_aliases_changed)
-        {
-            return Err(SuiErrorKind::AliasesChanged.into());
+        if epoch_store.protocol_config().address_aliases() {
+            let aliases_match = if epoch_store
+                .protocol_config()
+                .fix_checkpoint_signature_mapping()
+            {
+                // V2 format comparison
+                let Some(claimed_v2) = aliases_v2 else {
+                    return Err(
+                        SuiErrorKind::InvalidRequest("missing address alias claim".into()).into(),
+                    );
+                };
+                *verified_tx.aliases() == claimed_v2
+            } else {
+                // V1 format comparison: derive V1 from verified_tx and compare
+                let Some(claimed_v1) = aliases_v1 else {
+                    return Err(
+                        SuiErrorKind::InvalidRequest("missing address alias claim".into()).into(),
+                    );
+                };
+                let computed_v1: Vec<_> = verified_tx
+                    .tx()
+                    .data()
+                    .intent_message()
+                    .value
+                    .required_signers()
+                    .into_iter()
+                    .zip_eq(verified_tx.aliases().iter().map(|(_, seq)| *seq))
+                    .collect();
+                let computed_v1 =
+                    NonEmpty::from_vec(computed_v1).expect("must have at least one signer");
+                computed_v1 == claimed_v1
+            };
+
+            if !aliases_match || fail_point_always_report_aliases_changed {
+                return Err(SuiErrorKind::AliasesChanged.into());
+            }
         }
 
         let inner_tx = verified_tx.into_tx();
         self.authority_state
             .handle_vote_transaction(epoch_store, inner_tx.clone())?;
 
-        if epoch_store.protocol_config().disable_preconsensus_locking()
-            && !claimed_immutable_ids.is_empty()
-        {
+        if !claimed_immutable_ids.is_empty() {
+            assert_reachable!("transaction has immutable input object claims");
             let owned_object_refs: HashSet<ObjectRef> = inner_tx
                 .data()
                 .transaction_data()
@@ -981,15 +1030,6 @@ mod tests {
 
     #[sim_test]
     async fn accept_already_executed_transaction() {
-        // This test uses ConsensusTransaction::new_user_transaction_message which creates a
-        // UserTransaction. When disable_preconsensus_locking=true (protocol version 105+),
-        // UserTransaction is not allowed. Gate with disable_preconsensus_locking=false.
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_disable_preconsensus_locking_for_testing(false);
-            config.set_address_aliases_for_testing(false);
-            config
-        });
-
         let (sender, keypair) = deterministic_random_account_key();
 
         let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
@@ -1016,10 +1056,10 @@ mod tests {
             gas_object.clone(),
             vec![owned_object.clone()],
         )
-        .await
-        .into_tx();
-        let tx_digest = *transaction.digest();
-        let cert = VerifiedExecutableTransaction::new_from_consensus(transaction.clone(), 0);
+        .await;
+        let tx_digest = *transaction.tx().digest();
+        let cert =
+            VerifiedExecutableTransaction::new_from_consensus(transaction.clone().into_tx(), 0);
         let (executed_effects, _) = state
             .try_execute_immediately(&cert, ExecutionEnv::new(), &state.epoch_store_for_testing())
             .await
@@ -1033,10 +1073,10 @@ mod tests {
         assert_eq!(read_effects, executed_effects);
         assert_eq!(read_effects.executed_epoch(), epoch_store.epoch());
 
-        // Now try to vote on the already executed transaction
-        let serialized_tx = bcs::to_bytes(&ConsensusTransaction::new_user_transaction_message(
+        // Now try to vote on the already executed transaction using UserTransactionV2
+        let serialized_tx = bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
             &state.name,
-            transaction.into_inner().clone(),
+            transaction.into(),
         ))
         .unwrap();
         let validator = SuiTxValidator::new(
@@ -1051,5 +1091,58 @@ mod tests {
 
         // The executed transaction should NOT be rejected.
         assert!(rejected_transactions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_reject_invalid_alias_signature_index() {
+        let (sender, keypair) = deterministic_random_account_key();
+
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(1).unwrap())
+                .with_objects(vec![gas_object.clone(), owned_object.clone()])
+                .build();
+
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .build()
+            .await;
+
+        let transaction = test_user_transaction(
+            &state,
+            sender,
+            &keypair,
+            gas_object.clone(),
+            vec![owned_object.clone()],
+        )
+        .await;
+
+        // Extract the inner transaction and construct a PlainTransactionWithClaims
+        // with a bogus alias where sig_idx = 255 (far exceeding the 1 signature).
+        let inner_tx: Transaction = transaction.into_tx().into();
+        let bogus_aliases = nonempty::nonempty![(255u8, None)];
+        let tx_with_bogus_alias = PlainTransactionWithClaims::from_aliases(inner_tx, bogus_aliases);
+
+        let serialized_tx = bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
+            &state.name,
+            tx_with_bogus_alias,
+        ))
+        .unwrap();
+
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            state.epoch_store_for_testing().clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let res = validator.verify_batch(&[&serialized_tx]);
+        assert!(
+            res.is_err(),
+            "Should reject transaction with out-of-bounds alias signature index"
+        );
     }
 }

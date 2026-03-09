@@ -1,8 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anemo::types::{PeerAffinity, PeerInfo};
+use std::sync::Arc;
+
+use arc_swap::ArcSwapOption;
 use mysten_network::Multiaddr;
+use serde::{Deserialize, Serialize};
+use sui_types::crypto::NetworkPublicKey;
+use sui_types::error::{SuiErrorKind, SuiResult};
 use tap::TapFallible;
 use tracing::warn;
 
@@ -10,20 +15,54 @@ use crate::discovery;
 
 /// EndpointManager can be used to dynamically update the addresses of
 /// other nodes in the network.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct EndpointManager {
-    discovery_handle: discovery::Handle,
+    inner: Arc<Inner>,
+}
+
+struct Inner {
+    discovery_sender: discovery::Sender,
+    consensus_address_updater: ArcSwapOption<Arc<dyn ConsensusAddressUpdater>>,
+}
+
+pub trait ConsensusAddressUpdater: Send + Sync + 'static {
+    fn update_address(
+        &self,
+        network_pubkey: NetworkPublicKey,
+        source: AddressSource,
+        addresses: Vec<Multiaddr>,
+    ) -> SuiResult<()>;
 }
 
 impl EndpointManager {
-    pub fn new(discovery_handle: discovery::Handle) -> Self {
-        Self { discovery_handle }
+    pub fn new(discovery_sender: discovery::Sender) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                discovery_sender,
+                consensus_address_updater: ArcSwapOption::empty(),
+            }),
+        }
     }
 
-    /// Updates the address(es) for the given endpoint.
+    pub fn set_consensus_address_updater(
+        &self,
+        consensus_address_updater: Arc<dyn ConsensusAddressUpdater>,
+    ) {
+        self.inner
+            .consensus_address_updater
+            .store(Some(Arc::new(consensus_address_updater)));
+    }
+
+    /// Updates the address(es) for the given endpoint from the specified source.
     ///
-    /// If the addresses have changed, forcibly reconnects to the peer.
-    pub fn update_endpoint(&self, endpoint: EndpointId, addresses: Vec<Multiaddr>) {
+    /// Multiple sources can provide addresses for the same peer. The highest-priority
+    /// source's addresses are used. Empty `addresses` clears a source.
+    pub fn update_endpoint(
+        &self,
+        endpoint: EndpointId,
+        source: AddressSource,
+        addresses: Vec<Multiaddr>,
+    ) -> SuiResult<()> {
         match endpoint {
             EndpointId::P2p(peer_id) => {
                 let anemo_addresses: Vec<_> = addresses
@@ -39,21 +78,143 @@ impl EndpointManager {
                             .ok()
                     })
                     .collect();
-                if anemo_addresses.is_empty() {
-                    warn!(?peer_id, "No valid addresses for peer after conversion");
+
+                self.inner
+                    .discovery_sender
+                    .peer_address_change(peer_id, source, anemo_addresses);
+            }
+            EndpointId::Consensus(network_pubkey) => {
+                if let Some(updater) = self.inner.consensus_address_updater.load_full() {
+                    updater
+                        .update_address(network_pubkey.clone(), source, addresses)
+                        .map_err(|e| {
+                            warn!(?network_pubkey, "Error updating consensus address: {e:?}");
+                            e
+                        })?;
+                } else {
+                    return Err(SuiErrorKind::GenericAuthorityError {
+                        error: "Consensus address updater not configured".to_string(),
+                    }
+                    .into());
                 }
-                self.discovery_handle.peer_address_change(PeerInfo {
-                    peer_id,
-                    affinity: PeerAffinity::High,
-                    address: anemo_addresses,
-                });
             }
         }
+
+        Ok(())
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum EndpointId {
     P2p(anemo::PeerId),
-    // TODO: Implement support for updating consensus addresses via EndpointManager.
-    // Consensus(NetworkPublicKey),
+    Consensus(NetworkPublicKey),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// NOTE: AddressSources are prioritized in order of the enum variants below.
+pub enum AddressSource {
+    Admin,
+    Config,
+    Discovery,
+    Committee,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fastcrypto::traits::KeyPair;
+    use std::sync::{Arc, Mutex};
+    use sui_types::crypto::{NetworkKeyPair, get_key_pair};
+
+    type UpdateEntry = (NetworkPublicKey, Vec<Multiaddr>);
+    // Mock consensus address updater for testing
+    struct MockConsensusAddressUpdater {
+        updates: Arc<Mutex<Vec<UpdateEntry>>>,
+    }
+
+    impl MockConsensusAddressUpdater {
+        fn new() -> (Self, Arc<Mutex<Vec<UpdateEntry>>>) {
+            let updates = Arc::new(Mutex::new(Vec::new()));
+            let updater = Self {
+                updates: updates.clone(),
+            };
+            (updater, updates)
+        }
+    }
+
+    impl ConsensusAddressUpdater for MockConsensusAddressUpdater {
+        fn update_address(
+            &self,
+            network_pubkey: NetworkPublicKey,
+            _source: AddressSource,
+            addresses: Vec<Multiaddr>,
+        ) -> SuiResult<()> {
+            self.updates
+                .lock()
+                .unwrap()
+                .push((network_pubkey.clone(), addresses));
+            Ok(())
+        }
+    }
+
+    fn create_mock_endpoint_manager() -> EndpointManager {
+        use sui_config::p2p::P2pConfig;
+
+        let config = P2pConfig::default();
+        let (_unstarted, _server, endpoint_manager) =
+            discovery::Builder::new().config(config).build();
+        endpoint_manager
+    }
+
+    #[tokio::test]
+    async fn test_update_consensus_endpoint() {
+        let endpoint_manager = create_mock_endpoint_manager();
+
+        let (mock_updater, updates) = MockConsensusAddressUpdater::new();
+        endpoint_manager.set_consensus_address_updater(Arc::new(mock_updater));
+
+        let (_, network_key): (_, NetworkKeyPair) = get_key_pair();
+        let network_pubkey = network_key.public();
+
+        let addresses = vec![
+            "/ip4/127.0.0.1/udp/9000".parse().unwrap(),
+            "/ip4/127.0.0.1/udp/9001".parse().unwrap(),
+        ];
+
+        let result = endpoint_manager.update_endpoint(
+            EndpointId::Consensus(network_pubkey.clone()),
+            AddressSource::Admin,
+            addresses.clone(),
+        );
+
+        assert!(result.is_ok());
+
+        let recorded_updates = updates.lock().unwrap();
+        assert_eq!(recorded_updates.len(), 1);
+        assert_eq!(recorded_updates[0].0, network_pubkey.clone());
+        assert_eq!(recorded_updates[0].1, addresses);
+    }
+
+    #[tokio::test]
+    async fn test_update_consensus_endpoint_without_updater() {
+        let endpoint_manager = create_mock_endpoint_manager();
+
+        let (_, network_key): (_, NetworkKeyPair) = get_key_pair();
+        let network_pubkey = network_key.public();
+
+        let addresses = vec!["/ip4/127.0.0.1/udp/9000".parse().unwrap()];
+
+        let result = endpoint_manager.update_endpoint(
+            EndpointId::Consensus(network_pubkey.clone()),
+            AddressSource::Admin,
+            addresses,
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Consensus address updater not configured")
+        );
+    }
 }

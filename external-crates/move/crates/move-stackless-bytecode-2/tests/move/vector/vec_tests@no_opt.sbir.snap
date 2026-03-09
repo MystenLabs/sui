@@ -6,8 +6,8 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
       Label LBL_0:
         reg_0 : u8 = Move(lcl_0)
         reg_1 : u8 = Move(lcl_1)
-        reg_2 : u8 = VecPack<u8>(reg_0 : u8, reg_1 : u8)
-        Return(reg_2 : u8)
+        reg_2 : vector<u8> = VecPack<u8>(reg_0 : u8, reg_1 : u8)
+        Return(reg_2 : vector<u8>)
 
 
     Function: create_empty (entry: LBL_0)

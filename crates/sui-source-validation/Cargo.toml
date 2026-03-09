@@ -24,13 +24,14 @@ thiserror.workspace = true
 toml.workspace = true
 tracing.workspace = true
 ureq.workspace = true
+tonic.workspace = true
 
-sui-json-rpc-types.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
 sui-package-alt.workspace = true
 sui-types.workspace = true
 sui-sdk.workspace = true
+sui-rpc-api.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true
@@ -62,5 +63,3 @@ msim.workspace = true
 [[test]]
 name = "shell_tests"
 harness = false
-
-

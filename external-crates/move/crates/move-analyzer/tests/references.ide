@@ -1,0 +1,26 @@
+// Tests references for basic Move constructs
+{
+  "References": {
+    "project": "tests/references",
+    "file_tests": {
+      "M1.move": [
+        {
+          "use_line": 5,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 6,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 19,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 26,
+          "use_ndx": 0
+        }
+      ]
+    }
+  }
+}

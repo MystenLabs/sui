@@ -38,6 +38,13 @@ Response: {
           {
             "outputState": {
               "asMoveObject": {
+                "asCoinMetadata": null
+              }
+            }
+          },
+          {
+            "outputState": {
+              "asMoveObject": {
                 "asCoinMetadata": {
                   "decimals": 2,
                   "name": "",
@@ -49,13 +56,6 @@ Response: {
                   "regulatedState": "UNREGULATED",
                   "allowGlobalPause": false
                 }
-              }
-            }
-          },
-          {
-            "outputState": {
-              "asMoveObject": {
-                "asCoinMetadata": null
               }
             }
           }

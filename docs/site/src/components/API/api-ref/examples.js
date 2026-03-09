@@ -16,76 +16,55 @@ const Examples = (props) => {
   useEffect(() => {
     const checkTheme = () => {
       const theme = localStorage.getItem("theme");
-
-      if (theme !== "light") {
-        setLight(false);
-      }
+      setLight(theme === "light");
     };
-
     window.addEventListener("storage", checkTheme);
-
-    return () => {
-      window.removeEventListener("storage", checkTheme);
-    };
-  }, [light]);
+    return () => window.removeEventListener("storage", checkTheme);
+  }, []);
 
   const { method, examples } = props;
 
-  const request = {
-    jsonrpc: "2.0",
-    id: 1,
-    method,
-    params: [],
-  };
+  const request = { jsonrpc: "2.0", id: 1, method, params: [] };
+  const keyedParams = examples[0].params ?? [];
+  keyedParams.forEach((item) => request.params.push(item.value));
 
-  let keyedParams = examples[0].params;
+  let stringRequest = JSON.stringify(request, null, 2).replaceAll('"  value": ', "");
 
-  keyedParams.forEach((item) => {
-    request.params.push(item.value);
-  });
-
-  let stringRequest = JSON.stringify(request, null, 2);
-  stringRequest = stringRequest.replaceAll('"  value": ', "");
-
-  const response = {
-    jsonrpc: "2.0",
-    result: {},
-    id: 1,
-  };
-
-  response.result = examples[0].result.value;
+  const response = { jsonrpc: "2.0", result: examples[0]?.result?.value ?? {}, id: 1 };
 
   return (
-    <div className="mx-4">
-      <p className="my-2">
-        <Markdown>{examples[0].name}</Markdown>
-      </p>
+    <div className="api-card api-card-pad">
+      <div className="api-section-title">Example</div>
+
+      {examples?.[0]?.name && (
+        <div className="api-muted">
+          <Markdown>{examples[0].name}</Markdown>
+        </div>
+      )}
+
       {examples[0].params && (
-        <div>
-          <p className="font-bold mt-4 text-sui-gray-80 dark:text-sui-gray-50">
-            Request
-          </p>
-          <pre className="p-2 pb-0 max-h-96	dark:bg-sui-ghost-dark bg-sui-ghost-white rounded-lg mt-4 overflow-x-auto border dark:border-sui-gray-75">
-            <code className="text-base">
+        <div className="api-section">
+          <div className="api-code">
+            <div className="api-code-title">Request</div>
+            <div className="api-code-body">
               <SyntaxHighlighter language={js} style={light ? docco : dark}>
                 {stringRequest}
               </SyntaxHighlighter>
-            </code>
-          </pre>
+            </div>
+          </div>
         </div>
       )}
-      {examples[0].result.value && (
-        <div>
-          <p className="font-bold mt-6 text-sui-gray-80 dark:text-sui-gray-50">
-            Response
-          </p>
-          <pre className="p-2 pb-0 max-h-96 dark:bg-sui-ghost-dark bg-sui-ghost-white rounded-lg mt-4 overflow-x-auto border dark:border-sui-gray-75">
-            <code className="text-base">
+
+      {examples?.[0]?.result?.value && (
+        <div className="api-section">
+          <div className="api-code">
+            <div className="api-code-title">Response</div>
+            <div className="api-code-body">
               <SyntaxHighlighter language={js} style={light ? docco : dark}>
                 {JSON.stringify(response, null, 2)}
               </SyntaxHighlighter>
-            </code>
-          </pre>
+            </div>
+          </div>
         </div>
       )}
     </div>

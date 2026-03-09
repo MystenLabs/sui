@@ -12,7 +12,6 @@ use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use itertools::Itertools;
-use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::bridge::Bridge;
 
@@ -35,7 +34,7 @@ use sui_types::storage::{
     ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
+use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
     object::Owner,
@@ -549,36 +548,49 @@ pub trait TransactionCacheRead: Send + Sync {
     /// ExecutionLockReadGuard would also prevent reconfig from happening while waiting,
     /// but this is very dangerous, as it could prevent reconfiguration from ever
     /// occurring!
+    ///
+    /// This function panics if any of the requested effects are not found. Use this in
+    /// critical paths where effects are expected to exist (e.g., checkpoint building,
+    /// consensus commit processing). For non-critical paths where effects may have been
+    /// pruned (e.g., serving historical data to clients), use `notify_read_executed_effects_may_fail`.
     fn notify_read_executed_effects<'a>(
         &'a self,
         task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffects>> {
         async move {
-            let digests = self
-                .notify_read_executed_effects_digests(task_name, digests)
-                .await;
-            // once digests are available, effects must be present as well
-            self.multi_get_effects(&digests)
-                .into_iter()
-                .map(|e| e.unwrap_or_else(|| fatal!("digests must exist")))
-                .collect()
+            self.notify_read_executed_effects_may_fail(task_name, digests)
+                .await
+                .unwrap_or_else(|e| panic!("effects must exist: {e}"))
         }
         .boxed()
     }
 
-    /// Get the execution outputs of a mysticeti fastpath certified transaction, if it exists.
-    fn get_mysticeti_fastpath_outputs(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Option<Arc<TransactionOutputs>>;
-
-    /// Wait until the outputs of the given transactions are available
-    /// in the temporary buffer holding mysticeti fastpath outputs.
-    fn notify_read_fastpath_transaction_outputs<'a>(
+    /// Returns an error if any of the requested effects have been pruned from the database.
+    /// Use this in non-critical paths where effects may not exist (e.g., serving historical
+    /// data that may have been pruned). For critical paths where effects must exist,
+    /// use `notify_read_executed_effects`.
+    fn notify_read_executed_effects_may_fail<'a>(
         &'a self,
-        tx_digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, Vec<Arc<TransactionOutputs>>>;
+        task_name: &'static str,
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffects>>> {
+        async move {
+            let effects_digests = self
+                .notify_read_executed_effects_digests(task_name, digests)
+                .await;
+            self.multi_get_effects(&effects_digests)
+                .into_iter()
+                .zip(digests)
+                .map(|(e, digest)| {
+                    e.ok_or_else(|| {
+                        SuiError::from(SuiErrorKind::TransactionEffectsNotFound { digest: *digest })
+                    })
+                })
+                .collect()
+        }
+        .boxed()
+    }
 }
 
 pub trait ExecutionCacheWrite: Send + Sync {
@@ -601,25 +613,8 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// in question.
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>);
 
-    /// Write the output of a Mysticeti fastpath certified transaction.
-    /// Such output cannot be written to the dirty cache right away because
-    /// the transaction may end up rejected by consensus later. We need to make sure
-    /// that it is not visible to any subsequent transaction until we observe it
-    /// from consensus or checkpoints.
-    fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>);
-
-    /// Attempt to acquire object locks for all of the owned input locks.
-    fn acquire_transaction_locks(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
-        signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult;
-
     /// Validate owned object versions and digests without acquiring locks.
-    /// Used when preconsensus locking is disabled to validate objects without locking,
-    /// since locking happens post-consensus in that mode.
+    /// Used to validate transaction input before submitting or voting to accept the transaction.
     fn validate_owned_object_versions(&self, owned_input_objects: &[ObjectRef]) -> SuiResult;
 
     /// Write an object entry directly to the cache for testing.

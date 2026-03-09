@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/signature/vector_ops_invalid_type_args.mvir
 ---
 processed 3 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 1 type token for vector operations, got 2",
 }
 
 task 1, lines 11-20:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 1 type token for vector operations, got 0",
 }
 
 task 2, lines 21-30:
@@ -32,4 +33,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(Signature, 0), (FunctionDefinition, 0)],
     offsets: [],
+    message: "reference not allowed at offset 0 ",
 }

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/pack_generic_enum_invalid_type_arguments.mvir
 ---
 processed 9 tasks
 
@@ -42,6 +41,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(Signature, 1), (FunctionDefinition, 0)],
     offsets: [],
+    message: "expected 1 type argument(s), got 2 at offset 1 ",
 }
 
 task 4, lines 49-59:
@@ -52,6 +52,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: undefined,
     indices: [],
     offsets: [],
+    message: "expected 1 type parameters got 2",
 }
 
 task 5, lines 61-71:
@@ -62,6 +63,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: undefined,
     indices: [],
     offsets: [],
+    message: "expected 1 type parameters got 2",
 }
 
 task 7, lines 79-90:

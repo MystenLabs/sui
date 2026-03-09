@@ -4,11 +4,10 @@
 use std::sync::Arc;
 
 use rand::{Rng, seq::SliceRandom};
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::FundSource;
-use sui_types::gas_coin::MIST_PER_SUI;
+use sui_types::{effects::TransactionEffectsAPI, gas_coin::MIST_PER_SUI};
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]
@@ -47,18 +46,8 @@ async fn test_object_balance_withdraw_stress() {
             builder = builder.move_call(package_id, "object_balance", "new_shared", vec![]);
         }
         let tx = builder.build();
-        let effects = test_cluster
-            .sign_and_execute_transaction(&tx)
-            .await
-            .effects
-            .unwrap();
-        let vault_object = effects
-            .created()
-            .first()
-            .cloned()
-            .unwrap()
-            .reference
-            .to_object_ref();
+        let effects = test_cluster.sign_and_execute_transaction(&tx).await.effects;
+        let vault_object = effects.created().first().cloned().unwrap().0;
         vault_objects.push(vault_object);
     }
 
@@ -93,16 +82,8 @@ async fn test_object_balance_withdraw_stress() {
         .await
         .split_coin(gas_coins[1], vec![10000 * MIST_PER_SUI; 7])
         .build();
-    let effects = test_cluster
-        .sign_and_execute_transaction(&tx)
-        .await
-        .effects
-        .unwrap();
-    let gas_coins: Vec<_> = effects
-        .created()
-        .iter()
-        .map(|oref| oref.reference.object_id)
-        .collect();
+    let effects = test_cluster.sign_and_execute_transaction(&tx).await.effects;
+    let gas_coins: Vec<_> = effects.created().into_iter().map(|oref| oref.0.0).collect();
 
     // Start 7 threads, each thread controls one gas object.
     // One thread withdraws funds from the owned vault object;
@@ -153,15 +134,13 @@ async fn test_object_balance_withdraw_stress() {
                     .execute_transaction_may_fail(tx)
                     .await
                     .unwrap()
-                    .effects
-                    .unwrap();
+                    .effects;
                 vault_object = effects
                     .mutated()
-                    .iter()
-                    .find(|oref| oref.object_id() == vault_object.0)
+                    .into_iter()
+                    .find(|oref| oref.0.0 == vault_object.0)
                     .unwrap()
-                    .reference
-                    .to_object_ref();
+                    .0;
             }
         }));
     }

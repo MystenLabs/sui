@@ -5,22 +5,24 @@ import React from "react";
 import Link from "@docusaurus/Link";
 
 const CompNav = (props) => {
-  const { json, apis } = props;
+  const { json } = props;
+  const schemas = json?.components?.schemas || {};
 
   return (
-    <div className="mb-32">
-      <div>
-        <h2>Component schemas</h2>
-        {Object.keys(json["components"]["schemas"]).map((component) => {
-          return (
-          <div key={component}>
-            <Link href={`#${component.toLowerCase()}`}
-            data-to-scrollspy-id={`${component.toLowerCase()}`}
-            className="my-1 pl-4 block text-sui-gray-95 dark:text-sui-grey-35 hover:no-underline dark:hover:text-sui-blue">
-              {component}
-            </Link>
-            </div>
-        )})}      
+    <div className="mb-10 api-nav">
+      <div className="api-nav-group">
+        <div className="api-nav-title">Component schemas</div>
+
+        {Object.keys(schemas).map((component) => (
+          <Link
+            key={component}
+            href={`#${component.toLowerCase()}`}
+            data-to-scrollspy-id={component.toLowerCase()}
+            className="api-nav-link"
+          >
+            {component}
+          </Link>
+        ))}
       </div>
     </div>
   );

@@ -732,7 +732,6 @@ async fn test_transfer_single_gas_coin() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
     let recipient = test_cluster.get_address_1();
-    let _client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
 

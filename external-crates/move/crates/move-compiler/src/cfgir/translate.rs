@@ -261,10 +261,11 @@ fn constants(
     let mut graph = DiGraphMap::<ConstantName, ()>::new();
     for (name, constant) in consts.key_cloned_iter() {
         let deps = dependent_constants(constant);
-        if deps.is_empty() {
-            graph.add_node(name);
-        } else {
-            for dep in deps {
+        graph.add_node(name);
+        for dep in deps {
+            // Only add edges for constants defined in this module; cross-module constants
+            // are already resolved and don't need dependency tracking here.
+            if consts.contains_key(&dep) {
                 graph.add_edge(dep, name, ());
             }
         }
@@ -274,7 +275,18 @@ fn constants(
     let sccs = petgraph_scc(&graph);
     let mut cycle_nodes = BTreeSet::new();
     for scc in sccs {
-        if scc.len() > 1 {
+        // An SCC of size 1 is only a cycle if the node has a self-edge.
+        if scc.len() == 1 && graph.contains_edge(scc[0], scc[0]) {
+            let name = scc[0];
+            context.add_diag(diag!(
+                CodeGeneration::UnfoldableConstant,
+                (
+                    *consts.get_loc(&name).unwrap(),
+                    format!("Constant '{}' references itself", name),
+                )
+            ));
+            cycle_nodes.insert(name);
+        } else if scc.len() > 1 {
             let names = scc
                 .iter()
                 .map(|name| name.to_string())

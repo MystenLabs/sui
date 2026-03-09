@@ -7,7 +7,7 @@ use move_cli::base::test::UnitTestResult;
 use move_package_alt_compilation::lint_flag::LintFlag;
 use move_unit_test::UnitTestingConfig;
 use sui_framework_tests::setup_examples;
-use sui_move::unit_test::run_move_unit_tests;
+use sui_move::unit_test::{MAX_UNIT_TEST_INSTRUCTIONS, run_move_unit_tests};
 use sui_move_build::BuildConfig;
 
 pub(crate) const EXAMPLES: &str = "../../examples";
@@ -76,7 +76,8 @@ pub(crate) async fn tests(path: &Path) -> datatest_stable::Result<()> {
 
     let move_config = config.config.clone();
     // TODO: Remove this when we support per-test gas limits.
-    let mut testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
+    let mut testing_config =
+        UnitTestingConfig::default_with_bound(Some(*MAX_UNIT_TEST_INSTRUCTIONS));
     testing_config.filter = std::env::var("FILTER").ok().map(|s| s.to_string());
 
     assert_eq!(

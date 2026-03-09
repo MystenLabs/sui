@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --addresses P=0x0 --simulator
+//# init --protocol-version 108 --accounts A B --addresses P=0x0 --simulator
 
 // 1. All the objects of a generic type, for a particular owner
 // 2. All the objects of a non-generic type, for that same owner
@@ -93,7 +93,7 @@ module P::N {
   ]
 }
 
-//# run-jsonrpc --cursors bcs(bcs(@{obj_5_0}),2)
+//# run-jsonrpc --cursors bcs(bin(0u8,@{A},@{P}::M::O1<u16>,0u8,@{obj_5_0}))
 {
   "method": "suix_getOwnedObjects",
   "params": [

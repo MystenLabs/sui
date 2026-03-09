@@ -586,8 +586,9 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::VecPack(bx) => {
             let args = pop_n!(bx.1);
+            let vec_type = Type::Vector(Box::new(bx.0.as_ref().clone()));
             assign_reg!(
-                [push!(bx.0.clone())] = RValue::Data {
+                [push!(vec_type.into())] = RValue::Data {
                     op: DataOp::VecPack(bx.0.clone()),
                     args,
                 }

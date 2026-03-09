@@ -4,15 +4,22 @@ description: Details on how to use Nautilus with the reproducible build template
 keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
 ---
 
-[Nautilus](/guides/developer/nautilus/index.mdx) is a framework for secure and verifiable off-chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
+[Nautilus](/guides/developer/nautilus/index.mdx) is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/guides/developer/nautilus/marlin) while preserving trust on-chain through smart contract-based verification.
 
 The [Nautilus repo](https://github.com/MystenLabs/nautilus) provides scaffolding such as reproducible builds, signature formatting, and HTTPS traffic forwarding. This allows you to focus on implementing the off-chain computation logic inside the enclave.
 
-The framework also provides an on-chain template that includes the minimal smart contract code required to register a Nautilus instance and its public key. 
+An on-chain template includes the minimal smart contract code required to register a Nautilus instance and its public key. 
+
+:::important
+Nautilus is NOT just about running code in privacy-preserving manner in a TEE. Part of the overall value proposition is **on-chain verification** of computation integrity:
+
+1. PCRs (enclave measurements) must be registered and verified on-chain
+2. Every computation result could optionally be verified on-chain
+:::
 
 ## Developer workflow 
 
-To use Nautilus in your dApp:
+To use Nautilus in your app:
 
 1. Implement the enclave in Rust with the desired computation logic.
 
@@ -43,7 +50,7 @@ Frontend code is not included in this guide.
 
 - [x] Install [Make](https://www.gnu.org/software/make/).
 
-- [x] Install the Sui CLI](/guides/developer/getting-started/sui-install.mdx).
+- [x] [Install the Sui CLI](/guides/developer/getting-started/sui-install.mdx).
 
 - [x] Download or git clone the [Nautilus repo](https://github.com/MystenLabs/nautilus).
 
@@ -76,7 +83,7 @@ aws configure sso
 
 When prompted, fill in the following fields:
 
-- SSO start URL: `https://d-926756e6a4.awsapps.com/start/#`
+- SSO start URL: `<your-sso-start-url>`
 
 - SSO region: `us-east-1`
 
@@ -338,7 +345,7 @@ Optionally, you can set up an application load balancer (ALB) for the EC2 instan
 
 ###step Register the enclave on-chain
 
-After finalizing the Rust code, the dApp administrator can register the enclave with the corresponding PCRs and public key.
+After finalizing the Rust code, the app administrator can register the enclave with the corresponding PCRs and public key.
 
 ```sh
 # Optionally
@@ -353,7 +360,7 @@ $ sui client publish
 # Record ENCLAVE_PACKAGE_ID as env var from publish output
 $ ENCLAVE_PACKAGE_ID=0x3b009f952e11f0fa0612d0a8e07461fb69edc355d732e5d6e39267b1b4fd7138
 
-# Deploy your dApp logic
+# Deploy your app logic
 $ cd ../<APP>
 $ sui move build
 $ sui client publish
@@ -367,7 +374,7 @@ $ APP_PACKAGE_ID=0x097b551dec72f0c47e32e5f8114d0d12a98ab31762d21adff295f6d95d353
 # Record the deployed enclave url, for example http://<PUBLIC_IP>:3000
 $ ENCLAVE_URL=<DEPLOYED_URL>
 
-# The module name and otw name used to create the dApp, defined in your Move code `fun init`
+# The module name and otw name used to create the app, defined in your Move code `fun init`
 $ MODULE_NAME=weather
 $ OTW_NAME=WEATHER
 
@@ -419,7 +426,7 @@ aws ec2 start-instances --instance-ids <instance-id>
 To reconnect to your instance: 
 
 ```bash
-ssh -i ~/.ssh/nautilus-seint-2598.pem ec2-user@18.208.226.122
+ssh -i ~/.ssh/<your-alias>.pem ec2-user@<public-ip>
 cd nautilus
 make ENCLAVE_APP=weather-example
 make run
@@ -470,6 +477,19 @@ $ ENCLAVE_URL=http://<PUBLIC_IP>:3000
 You can view an [example enclave config object](https://testnet.suivision.xyz/object/0xe33641a2dae5eb4acad3859e603ec4e25641af05f837c85058645c7d8d9d831a) containing PCR values. You can also view an [example enclave object](https://testnet.suivision.xyz/object/0x53db077721140910697668f9b2ee80fbecd104ac076d60fc1fb49ae57cd96c0d) that includes the registered enclave public key.
 
 You can find the frontend code for the Twitter example [in this repository](https://github.com/MystenLabs/nautilus-twitter/tree/main/frontend).
+
+## Development mode
+
+For non-production development, you can inject a private key instead of generating it inside the enclave and run the enclave in debug mode anywhere.
+
+1. Modify the code to [inject a deterministic private key](https://github.com/MystenLabs/nautilus/blob/main/src/nautilus-server/src/main.rs#L16) into the enclave. This allows you to run the server anywhere with the same private key without needing an AWS Nitro instance.
+2. Use `make run-debug` instead of `make run`. Debug mode produces all-zero PCR values. You can register the enclave on-chain with these all-zero PCRs once and reuse it for development without needing to update PCRs on-chain. 
+
+:::danger
+
+For development only. Never use in production as all-zero PCRs provide no attestation guarantees and injected keys compromise the TEE security model.
+
+:::
 
 ## Troubleshooting
 

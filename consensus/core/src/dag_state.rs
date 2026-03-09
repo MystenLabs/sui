@@ -147,8 +147,12 @@ impl DagState {
                         last_committed_rounds[block_ref.author] =
                             max(last_committed_rounds[block_ref.author], block_ref.round);
                     }
-                    let committed_subdag =
-                        load_committed_subdag_from_store(store.as_ref(), commit.clone(), vec![]);
+                    let committed_subdag = load_committed_subdag_from_store(
+                        &context,
+                        store.as_ref(),
+                        commit.clone(),
+                        vec![],
+                    );
                     // We don't need to recover reputation scores for unscored_committed_subdags
                     unscored_committed_subdags.push(committed_subdag);
                 });
@@ -312,11 +316,18 @@ impl DagState {
         // Ensure we don't write multiple blocks per slot for our own index
         if block_ref.author == self.context.own_index {
             let existing_blocks = self.get_uncommitted_blocks_at_slot(block_ref.into());
-            assert!(
-                existing_blocks.is_empty(),
-                "Block Rejected! Attempted to add block {block:#?} to own slot where \
-                block(s) {existing_blocks:#?} already exists."
-            );
+            if !self
+                .context
+                .parameters
+                .internal
+                .skip_equivocation_validation
+            {
+                assert!(
+                    existing_blocks.is_empty(),
+                    "Block Rejected! Attempted to add block {block:#?} to own slot where \
+                    block(s) {existing_blocks:#?} already exists."
+                );
+            }
         }
         self.update_block_metadata(&block);
         self.blocks_to_write.push(block);

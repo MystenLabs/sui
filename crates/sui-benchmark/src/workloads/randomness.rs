@@ -202,7 +202,8 @@ pub struct RandomnessWorkload {
 impl Workload<dyn Payload> for RandomnessWorkload {
     async fn init(
         &mut self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         if self.basics_package_id.is_some() {
@@ -223,7 +224,7 @@ impl Workload<dyn Payload> for RandomnessWorkload {
         if self.basics_package_id.is_none() {
             info!("Publishing basics package");
             self.basics_package_id = Some(
-                publish_basics_package(gas.0, proxy.clone(), gas.1, &gas.2, gas_price)
+                publish_basics_package(gas.0, execution_proxy.clone(), gas.1, &gas.2, gas_price)
                     .await
                     .0,
             );
@@ -235,7 +236,7 @@ impl Workload<dyn Payload> for RandomnessWorkload {
             let transaction = TestTransactionBuilder::new(counter_gas.1, counter_gas.0, gas_price)
                 .call_counter_create(self.basics_package_id.unwrap())
                 .build_and_sign(counter_gas.2.as_ref());
-            let (obj_ref, owner) = proxy
+            let (obj_ref, owner) = execution_proxy
                 .execute_transaction_block(transaction)
                 .await
                 .1
@@ -249,7 +250,7 @@ impl Workload<dyn Payload> for RandomnessWorkload {
 
         // Get randomness shared object initial version
         if self.randomness_initial_shared_version.is_none() {
-            let obj = proxy
+            let obj = execution_proxy
                 .get_object(SUI_RANDOMNESS_STATE_OBJECT_ID)
                 .await
                 .expect("Failed to get randomness object");
@@ -264,7 +265,8 @@ impl Workload<dyn Payload> for RandomnessWorkload {
     }
     async fn make_test_payloads(
         &self,
-        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let mut shared_payloads = vec![];

@@ -31,7 +31,7 @@ use sui_bridge_cli::{
     SEPOLIA_BRIDGE_PROXY_ADDR, make_action, select_contract_address,
 };
 use sui_config::Config;
-use sui_sdk::SuiClientBuilder;
+use sui_rpc_api::Client;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
 use sui_types::bridge::{MoveTypeCommitteeMember, MoveTypeCommitteeMemberRegistration};
@@ -287,17 +287,15 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to get bridge summary: {:?}", e))?;
             let move_type_bridge_committee = bridge_summary.committee;
-            let sui_client = SuiClientBuilder::default().build(sui_rpc_url).await?;
+            let sui_client = Client::new(sui_rpc_url)?;
             let stakes = sui_client
-                .governance_api()
-                .get_committee_info(None)
+                .get_committee(None)
                 .await?
-                .validators
+                .voting_rights
                 .into_iter()
                 .collect::<HashMap<_, _>>();
             let names = sui_client
-                .governance_api()
-                .get_latest_sui_system_state()
+                .get_system_state_summary(None)
                 .await?
                 .active_validators
                 .into_iter()
@@ -373,10 +371,9 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to get bridge summary: {:?}", e))?;
             let move_type_bridge_committee = bridge_summary.committee;
-            let sui_client = SuiClientBuilder::default().build(sui_rpc_url).await?;
+            let sui_client = Client::new(sui_rpc_url)?;
             let names = sui_client
-                .governance_api()
-                .get_latest_sui_system_state()
+                .get_system_state_summary(None)
                 .await?
                 .active_validators
                 .into_iter()

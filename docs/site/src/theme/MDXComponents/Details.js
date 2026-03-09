@@ -1,21 +1,29 @@
+/*
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+*/
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import Details from "@theme/Details";
+
 export default function MDXDetails(props) {
   const [hover, setHover] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  
   const handleMouseEnter = () => {
     setHover(true);
   };
+  
   const handleMouseLeave = () => {
     setHover(false);
   };
+  
   const handleClick = () => {
     setIsOpen(!isOpen);
   };
+  
   const items = React.Children.toArray(props.children);
+  
   const mergeHandlers = (originalHandler, newHandler) => (event) => {
     if (originalHandler) {
       originalHandler(event);
@@ -24,6 +32,7 @@ export default function MDXDetails(props) {
       newHandler(event);
     }
   };
+  
   // Split summary item from the rest to pass it as a separate prop to the
   // Details theme component
   const summary = items.find(
@@ -36,7 +45,7 @@ export default function MDXDetails(props) {
         onMouseEnter: handleMouseEnter,
         onMouseLeave: handleMouseLeave,
         onClick: mergeHandlers(summary.props.onClick, handleClick),
-        className: `${summary.props.className || ""}`, // Add custom class to summary
+        className: `${summary.props.className || ""}`,
       })
     : null;
 

@@ -21,6 +21,7 @@ Error: Function execution failed with VMError: {
     location: undefined,
     indices: [],
     offsets: [],
+    message: "Cannot find ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000042, name: Identifier(\"m\") } in data cache",
 }
 
 task 2, lines 27-45:

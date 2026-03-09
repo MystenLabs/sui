@@ -16,8 +16,11 @@ use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 use crate::tidehunter_util::{
     apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
 };
-use crate::util::{be_fix_int_ser, iterator_bounds, iterator_bounds_with_range};
-use crate::{DbIterator, TypedStoreError};
+use crate::util::{
+    be_fix_int_ser, be_fix_int_ser_into, ensure_database_type, iterator_bounds,
+    iterator_bounds_with_range,
+};
+use crate::{DbIterator, StorageType, TypedStoreError};
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
     traits::{Map, TableSummary},
@@ -25,6 +28,7 @@ use crate::{
 use backoff::backoff::Backoff;
 use fastcrypto::hash::{Digest, HashFunction};
 use mysten_common::debug_fatal;
+use mysten_metrics::RegistryID;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::properties::num_files_at_level;
 use rocksdb::{
@@ -136,11 +140,16 @@ impl std::fmt::Debug for Storage {
 pub struct Database {
     storage: Storage,
     metric_conf: MetricConf,
+    registry_id: Option<RegistryID>,
 }
 
 impl Drop for Database {
     fn drop(&mut self) {
-        DBMetrics::get().decrement_num_active_dbs(&self.metric_conf.db_name);
+        let metrics = DBMetrics::get();
+        metrics.decrement_num_active_dbs(&self.metric_conf.db_name);
+        if let Some(registry_id) = self.registry_id {
+            metrics.registry_serivce.remove(registry_id);
+        }
     }
 }
 
@@ -164,11 +173,12 @@ impl Deref for GetResult<'_> {
 }
 
 impl Database {
-    pub fn new(storage: Storage, metric_conf: MetricConf) -> Self {
+    pub fn new(storage: Storage, metric_conf: MetricConf, registry_id: Option<RegistryID>) -> Self {
         DBMetrics::get().increment_num_active_dbs(&metric_conf.db_name);
         Self {
             storage,
             metric_conf,
+            registry_id,
         }
     }
 
@@ -383,10 +393,9 @@ impl Database {
                 Ok(())
             }
             #[cfg(tidehunter)]
-            (Storage::TideHunter(db), StorageWriteBatch::TideHunter(batch)) => {
+            (Storage::TideHunter(_db), StorageWriteBatch::TideHunter(batch)) => {
                 // TideHunter doesn't support write options
-                db.write_batch(batch)
-                    .map_err(typed_store_error_from_th_error)
+                batch.commit().map_err(typed_store_error_from_th_error)
             }
             _ => Err(TypedStoreError::RocksDBError(
                 "using invalid batch type for the database".to_string(),
@@ -651,9 +660,7 @@ impl<K, V> DBMap<K, V> {
             Storage::Rocks(_) => StorageWriteBatch::Rocks(WriteBatch::default()),
             Storage::InMemory(_) => StorageWriteBatch::InMemory(InMemoryBatch::default()),
             #[cfg(tidehunter)]
-            Storage::TideHunter(_) => {
-                StorageWriteBatch::TideHunter(tidehunter::batch::WriteBatch::new())
-            }
+            Storage::TideHunter(db) => StorageWriteBatch::TideHunter(db.write_batch()),
         };
         DBBatch::new(
             &self.db,
@@ -1136,6 +1143,89 @@ pub enum StorageWriteBatch {
     TideHunter(tidehunter::batch::WriteBatch),
 }
 
+/// Flat-buffer entry header. All byte data (cf_name, key, value) is stored
+/// contiguously in `StagedBatch::data`; this header records offsets and lengths
+/// so that slices can be produced without any per-entry allocation.
+struct EntryHeader {
+    /// Byte offset into `StagedBatch::data` where this entry's data begins.
+    offset: usize,
+    cf_name_len: usize,
+    key_len: usize,
+    is_put: bool,
+}
+
+/// A write batch that stores serialized operations in a flat byte buffer without
+/// requiring a database reference. Can be replayed into a real `DBBatch` via
+/// `DBBatch::concat`.
+/// TOOD: this can be deleted when we upgrade rust-rocksdb, which supports iterating
+/// over write batches.
+#[derive(Default)]
+pub struct StagedBatch {
+    data: Vec<u8>,
+    entries: Vec<EntryHeader>,
+}
+
+impl StagedBatch {
+    pub fn new() -> Self {
+        Self {
+            data: Vec::with_capacity(1024),
+            entries: Vec::with_capacity(16),
+        }
+    }
+
+    pub fn insert_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
+        &mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, U)>,
+    ) -> Result<&mut Self, TypedStoreError> {
+        let cf_name = db.cf_name();
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let offset = self.data.len();
+                self.data.extend_from_slice(cf_name.as_bytes());
+                let key_len = be_fix_int_ser_into(&mut self.data, k.borrow());
+                bcs::serialize_into(&mut self.data, v.borrow())
+                    .map_err(typed_store_err_from_bcs_err)?;
+                self.entries.push(EntryHeader {
+                    offset,
+                    cf_name_len: cf_name.len(),
+                    key_len,
+                    is_put: true,
+                });
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
+        &mut self,
+        db: &DBMap<K, V>,
+        purged_vals: impl IntoIterator<Item = J>,
+    ) -> Result<(), TypedStoreError> {
+        let cf_name = db.cf_name();
+        purged_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|k| {
+                let offset = self.data.len();
+                self.data.extend_from_slice(cf_name.as_bytes());
+                let key_len = be_fix_int_ser_into(&mut self.data, k.borrow());
+                self.entries.push(EntryHeader {
+                    offset,
+                    cf_name_len: cf_name.len(),
+                    key_len,
+                    is_put: false,
+                });
+                Ok(())
+            })?;
+        Ok(())
+    }
+
+    pub fn size_in_bytes(&self) -> usize {
+        self.data.len()
+    }
+}
+
 /// Provides a mutable struct to form a collection of database write operations, and execute them.
 ///
 /// Batching write and delete operations is faster than performing them one by one and ensures their atomicity,
@@ -1281,6 +1371,59 @@ impl DBBatch {
             #[cfg(tidehunter)]
             StorageWriteBatch::TideHunter(_) => 0,
         }
+    }
+
+    /// Replay all operations from `StagedBatch`es into this batch.
+    pub fn concat(&mut self, raw_batches: Vec<StagedBatch>) -> Result<&mut Self, TypedStoreError> {
+        for raw_batch in raw_batches {
+            let data = &raw_batch.data;
+            for (i, hdr) in raw_batch.entries.iter().enumerate() {
+                let end = raw_batch
+                    .entries
+                    .get(i + 1)
+                    .map_or(data.len(), |next| next.offset);
+                let cf_bytes = &data[hdr.offset..hdr.offset + hdr.cf_name_len];
+                let key_start = hdr.offset + hdr.cf_name_len;
+                let key = &data[key_start..key_start + hdr.key_len];
+                // Safety: cf_name was written from &str bytes in insert_batch / delete_batch.
+                let cf_name = std::str::from_utf8(cf_bytes)
+                    .map_err(|e| TypedStoreError::SerializationError(e.to_string()))?;
+
+                if hdr.is_put {
+                    let value = &data[key_start + hdr.key_len..end];
+                    match &mut self.batch {
+                        StorageWriteBatch::Rocks(b) => {
+                            b.put_cf(&rocks_cf_from_db(&self.database, cf_name)?, key, value);
+                        }
+                        StorageWriteBatch::InMemory(b) => {
+                            b.put_cf(cf_name, key, value);
+                        }
+                        #[cfg(tidehunter)]
+                        _ => {
+                            return Err(TypedStoreError::RocksDBError(
+                                "concat not supported for TideHunter".to_string(),
+                            ));
+                        }
+                    }
+                } else {
+                    match &mut self.batch {
+                        StorageWriteBatch::Rocks(b) => {
+                            b.delete_cf(&rocks_cf_from_db(&self.database, cf_name)?, key);
+                        }
+                        StorageWriteBatch::InMemory(b) => {
+                            b.delete_cf(cf_name, key);
+                        }
+                        #[cfg(tidehunter)]
+                        _ => {
+                            return Err(TypedStoreError::RocksDBError(
+                                "concat not supported for TideHunter".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(self)
     }
 
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
@@ -1775,6 +1918,8 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<Database>, TypedStoreError> {
     let path = path.as_ref();
+    ensure_database_type(path, StorageType::Rocks)
+        .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
     // In the simulator, we intercept the wall clock in the test thread only. This causes problems
     // because rocksdb uses the simulated clock when creating its background threads, but then
     // those threads see the real wall clock (because they are not the test thread), which causes
@@ -1802,6 +1947,7 @@ pub fn open_cf_opts<P: AsRef<Path>>(
                 underlying: rocksdb,
             }),
             metric_conf,
+            None,
         )))
     })
 }
@@ -1846,6 +1992,11 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
             s.as_path().to_path_buf()
         });
 
+        ensure_database_type(&primary_path, StorageType::Rocks)
+            .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        ensure_database_type(&secondary_path, StorageType::Rocks)
+            .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+
         let rocksdb = {
             options.create_if_missing(true);
             options.create_missing_column_families(true);
@@ -1867,6 +2018,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
                 underlying: rocksdb,
             }),
             metric_conf,
+            None,
         )))
     })
 }
@@ -1891,6 +2043,7 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
 
 #[cfg(tidehunter)]
 pub async fn safe_drop_db(path: PathBuf, _: Duration) -> Result<(), std::io::Error> {
+    tokio::time::sleep(Duration::from_secs(600)).await;
     std::fs::remove_dir_all(path)
 }
 

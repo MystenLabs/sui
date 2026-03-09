@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses test=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses test=0x0 --simulator
 
 // Display imposes a limit on how deeply nested field accesses can be (default
 // to 10). If a Display format contains a nesting greater than this, showing

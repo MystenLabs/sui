@@ -40,7 +40,6 @@ impl Row for WrappedObjectRow {
 #[async_trait]
 impl Processor for WrappedObjectProcessor {
     const NAME: &'static str = Pipeline::WrappedObject.name();
-    const FANOUT: usize = 16;
     type Value = WrappedObjectRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

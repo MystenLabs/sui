@@ -43,10 +43,13 @@ impl<'a> Compiler<'a> {
 
     /// Compiles the module.
     pub fn into_compiled_module(self, code: &str) -> Result<CompiledModule> {
-        Ok(self.compile_mod(code)?.0)
+        Ok(self.into_compiled_module_with_source_map(code)?.0)
     }
 
-    fn compile_mod(self, code: &str) -> Result<(CompiledModule, SourceMap)> {
+    pub fn into_compiled_module_with_source_map(
+        self,
+        code: &str,
+    ) -> Result<(CompiledModule, SourceMap)> {
         let parsed_module = parse_module_with_named_addresses(code, &self.named_addresses)?;
         let (compiled_module, source_map) =
             compile_module(parsed_module, self.deps.iter().copied())?;

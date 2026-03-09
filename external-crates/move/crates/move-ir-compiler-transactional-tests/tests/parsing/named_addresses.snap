@@ -24,11 +24,11 @@ B0:
 }
 
 l(): address {
-L0:	loc0: address
+L0:	t: address
 B0:
 	0: LdConst[0](address: 0x00..)
-	1: StLoc[0](loc0: address)
-	2: MoveLoc[0](loc0: address)
+	1: StLoc[0](t: address)
+	2: MoveLoc[0](t: address)
 	3: Call T::g(address): address
 	4: Ret
 }

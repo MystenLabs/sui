@@ -111,12 +111,9 @@ impl Loader<CheckpointKey> for LedgerGrpcReader {
                 FieldMask::from_paths(["summary.bcs", "signature", "contents.bcs"]),
             );
 
-            match self.0.clone().get_checkpoint(request).await {
+            match self.get_checkpoint(request).await {
                 Ok(response) => {
-                    let checkpoint = response
-                        .into_inner()
-                        .checkpoint
-                        .context("No checkpoint returned")?;
+                    let checkpoint = response.checkpoint.context("No checkpoint returned")?;
 
                     let summary: CheckpointSummary = checkpoint
                         .summary

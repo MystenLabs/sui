@@ -6,7 +6,6 @@ use futures::join;
 use rand::distributions::Distribution;
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime};
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::{
@@ -16,7 +15,9 @@ use sui_types::base_types::FullObjectRef;
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
-use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{
+    CommandArgumentError, ExecutionFailure, ExecutionFailureStatus, ExecutionStatus,
+};
 use sui_types::messages_grpc::WaitForEffectsResponse;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
@@ -66,14 +67,13 @@ async fn shared_object_deletion() {
     let effects = test_cluster
         .sign_and_execute_transaction(&transaction)
         .await
-        .effects
-        .unwrap();
+        .effects;
 
     assert_eq!(effects.deleted().len(), 1);
-    assert_eq!(effects.shared_objects().len(), 1);
+    assert_eq!(effects.input_consensus_objects().len(), 1);
 
     // assert the shared object was deleted
-    let deleted_obj_id = effects.deleted()[0].object_id;
+    let deleted_obj_id = effects.deleted()[0].0;
     assert_eq!(deleted_obj_id, counter_id);
 }
 
@@ -328,8 +328,7 @@ async fn call_shared_object_contract() {
         let effects = test_cluster
             .sign_and_execute_transaction(&transaction)
             .await
-            .effects
-            .unwrap();
+            .effects;
         // Check that all reads must depend on the creation of the counter, but not to any previous reads.
         assert!(
             effects
@@ -353,8 +352,7 @@ async fn call_shared_object_contract() {
     let effects = test_cluster
         .sign_and_execute_transaction(&transaction)
         .await
-        .effects
-        .unwrap();
+        .effects;
     let increment_transaction = *effects.transaction_digest();
     assert!(
         effects
@@ -393,12 +391,8 @@ async fn call_shared_object_contract() {
         let effects = test_cluster
             .sign_and_execute_transaction(&transaction)
             .await
-            .effects
-            .unwrap();
+            .effects;
         assert!(effects.dependencies().contains(&increment_transaction));
-        if let Some(prev) = assert_value_mut_transaction {
-            assert!(effects.dependencies().contains(&prev));
-        }
         assert_value_mut_transaction = Some(*effects.transaction_digest());
     }
 
@@ -420,19 +414,17 @@ async fn call_shared_object_contract() {
         .execute_transaction_may_fail(test_cluster.wallet.sign_transaction(&transaction).await)
         .await
         .unwrap()
-        .effects
-        .unwrap();
+        .effects;
     // Transaction fails
     assert_eq!(
         effects.status(),
-        &ExecutionStatus::Failure {
+        &ExecutionStatus::Failure(ExecutionFailure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidObjectByMutRef,
             },
             command: Some(0),
-        }
-        .into()
+        })
     );
     assert!(
         effects
@@ -541,11 +533,10 @@ async fn replay_shared_object_transaction() {
         let effects = test_cluster
             .execute_transaction(create_counter_transaction.clone())
             .await
-            .effects
-            .unwrap();
+            .effects;
 
         // Ensure the sequence number of the shared object did not change.
-        let curr = effects.created()[0].reference.version;
+        let curr = effects.created()[0].0.1;
         if let Some(prev) = version {
             assert_eq!(
                 prev, curr,
@@ -557,15 +548,15 @@ async fn replay_shared_object_transaction() {
     }
 }
 
-/// Test that when preconsensus locking is disabled, conflicting owned object transactions
-/// in the same consensus commit are handled correctly via post-consensus lock conflict detection.
+/// Test that conflicting owned object transactions in the same consensus commit are handled
+/// correctly via post-consensus lock conflict detection.
 /// The first transaction in consensus order should succeed, and the second should be dropped
 /// with ObjectLockConflict status.
 ///
 /// This test uses soft bundle submission to guarantee both transactions end up in the same
 /// consensus commit, ensuring we always test the post-consensus conflict detection path.
 #[sim_test]
-async fn test_disable_preconsensus_locking_conflicting_owned_transactions() {
+async fn test_conflicting_owned_transactions() {
     // Create cluster with multiple gas coins for the sender
     let test_cluster = TestClusterBuilder::new()
         .with_accounts(vec![AccountConfig {

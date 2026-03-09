@@ -676,17 +676,17 @@ mod tests {
 
         // THEN
         let mut metrics = registry_service.gather_all();
-        metrics.sort_by(|m1, m2| Ord::cmp(m1.get_name(), m2.get_name()));
+        metrics.sort_by(|m1, m2| Ord::cmp(m1.name(), m2.name()));
 
         assert_eq!(metrics.len(), 2);
 
         let metric_default = metrics.remove(0);
-        assert_eq!(metric_default.get_name(), "default_counter");
-        assert_eq!(metric_default.get_help(), "counter_desc");
+        assert_eq!(metric_default.name(), "default_counter");
+        assert_eq!(metric_default.help(), "counter_desc");
 
         let metric_1 = metrics.remove(0);
-        assert_eq!(metric_1.get_name(), "narwhal_counter_1");
-        assert_eq!(metric_1.get_help(), "counter_1_desc");
+        assert_eq!(metric_1.name(), "narwhal_counter_1");
+        assert_eq!(metric_1.help(), "counter_1_desc");
 
         // AND add a second registry with a metric
         let registry_2 = Registry::new_custom(Some("sui".to_string()), None).unwrap();
@@ -699,37 +699,37 @@ mod tests {
 
         // THEN all the metrics should be returned
         let mut metrics = registry_service.gather_all();
-        metrics.sort_by(|m1, m2| Ord::cmp(m1.get_name(), m2.get_name()));
+        metrics.sort_by(|m1, m2| Ord::cmp(m1.name(), m2.name()));
 
         assert_eq!(metrics.len(), 3);
 
         let metric_default = metrics.remove(0);
-        assert_eq!(metric_default.get_name(), "default_counter");
-        assert_eq!(metric_default.get_help(), "counter_desc");
+        assert_eq!(metric_default.name(), "default_counter");
+        assert_eq!(metric_default.help(), "counter_desc");
 
         let metric_1 = metrics.remove(0);
-        assert_eq!(metric_1.get_name(), "narwhal_counter_1");
-        assert_eq!(metric_1.get_help(), "counter_1_desc");
+        assert_eq!(metric_1.name(), "narwhal_counter_1");
+        assert_eq!(metric_1.help(), "counter_1_desc");
 
         let metric_2 = metrics.remove(0);
-        assert_eq!(metric_2.get_name(), "sui_counter_2");
-        assert_eq!(metric_2.get_help(), "counter_2_desc");
+        assert_eq!(metric_2.name(), "sui_counter_2");
+        assert_eq!(metric_2.help(), "counter_2_desc");
 
         // AND remove first registry
         assert!(registry_service.remove(registry_1_id));
 
         // THEN metrics should now not contain metric of registry_1
         let mut metrics = registry_service.gather_all();
-        metrics.sort_by(|m1, m2| Ord::cmp(m1.get_name(), m2.get_name()));
+        metrics.sort_by(|m1, m2| Ord::cmp(m1.name(), m2.name()));
 
         assert_eq!(metrics.len(), 2);
 
         let metric_default = metrics.remove(0);
-        assert_eq!(metric_default.get_name(), "default_counter");
-        assert_eq!(metric_default.get_help(), "counter_desc");
+        assert_eq!(metric_default.name(), "default_counter");
+        assert_eq!(metric_default.help(), "counter_desc");
 
         let metric_1 = metrics.remove(0);
-        assert_eq!(metric_1.get_name(), "sui_counter_2");
-        assert_eq!(metric_1.get_help(), "counter_2_desc");
+        assert_eq!(metric_1.name(), "sui_counter_2");
+        assert_eq!(metric_1.help(), "counter_2_desc");
     }
 }

@@ -97,8 +97,8 @@ task 13, lines 98-100:
 //# programmable --sender A --inputs object(4,0) receiving(2,0) @A
 //> P::M::receive(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 3
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 12, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 15) at offset 0, Abort Code: 3
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 15, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(15), 0)] }), command: Some(0) } }
 
 task 14, lines 102-104:
 //# programmable --sender A --inputs object(3,0) receiving(2,0) @A
@@ -166,134 +166,134 @@ Response: {
     "all": {
       "nodes": [
         {
-          "digest": "En49Y24o8stk1LsmKi7Ev7or7C7bSrz9D8YxPejW1nLt"
+          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY"
         },
         {
-          "digest": "4yzronnJP7YRex8LsRSrJToVGrfRPKJzwVKuZWYvb4fu"
+          "digest": "F483483ABLCYqg53ZUx2girAKdagJnLChQKfNekk5Mzi"
         },
         {
-          "digest": "EwuxR8HjrakSxHE8wxiAbrGUMHDj3JY54ViNTQh2HdMy"
+          "digest": "7xSBTJ6mjuqNyex4qsq8PAL8824HQUJL7kuWrSYWrX6Q"
         },
         {
-          "digest": "Hz99EYwaSpBgk64f3RQzfzHN9vKeeJxL7gS8oVu7ywkC"
+          "digest": "FQxHHabcwArCvCvYbhjkNoD9RURDYwpXSMMrG1GSuBD8"
         },
         {
-          "digest": "Awq7ieCA7vXNfGNASBMHU69FLhg6NxuqWduMFcoB1TQM"
+          "digest": "8mhbdFWJDqsJsZrE5v69DWTJpwBPeHJUFyJVtku4NB8t"
         },
         {
-          "digest": "2RvDNQBFJ8ApKsdFVLZamb62gaUh1P1uSN7xWum4PjKn"
+          "digest": "E7VqqfznL6PsnfjWjFbEPzj1BDqG5pwefdfoLHMMX8hu"
         },
         {
-          "digest": "3ugk6qxtpmSAr1aBusiqdxybnfpFg9kC49QFW72Q9LZX"
+          "digest": "GFtHa2ZNZB2ApRykQFhwK7hXZryk7Rvtrg69jtVKPAnr"
         },
         {
-          "digest": "4U6vA5dw59JRUhzQrD3oHdJDY2o8sa4eZ92WnxwnU6hk"
+          "digest": "8hYvUr6zUsZ2aQ1cBR2arjFB8Cwh32Gu6k921StVqdJs"
         },
         {
-          "digest": "9AHVfWtTYUgWDyTrhmRYFcQKiCTpPzt9XkjFe9pzJeJN"
+          "digest": "5cD2vN2Z1tDytXHKAe2Lf3KtKVNtr4S2NJnoLXSpJMhL"
         },
         {
-          "digest": "5qQxbnVGn2gsedZ5NtbHHwbPE6avn1F9WyEp2MCDXhRM"
+          "digest": "7PnrxJuFGsvhSjTGebhRVxC4qaA1fFLLnUDnW9h8L8PD"
         },
         {
-          "digest": "CFaht7cGNgDRBUMkXvZnNkjw5evrsxUrQQZ1qcLk2st3"
+          "digest": "3iUcU15eb1UpGuh3bjs43Y9i3eCDvsPus4hqwfRMqkGX"
         },
         {
-          "digest": "B7c3B42sWqy4yxXKgQ3Znda6SsPJWru1MsWK6Q7mNNY9"
+          "digest": "6EgaCaUeT3b3yoQHLFcS7pcD5RFVPhEq8wJV2FuendvC"
         },
         {
-          "digest": "C5fDqpgjoabQ35FmmEuEECHycJ7bMvJFrTufdT3PvYjs"
+          "digest": "AL9L7Yo4Xk6TvKAbjgcrGET8FZxcmK4LJbqkFKgF7FwJ"
         },
         {
-          "digest": "8iDNctFf4AKaH4ASBtqmDiBzTBFAdgPfEMV5Jb5suQTC"
+          "digest": "3Jm3amp4TnCzenq8upCmRVaJneVntXoEjzjAGxKa6AnJ"
         },
         {
-          "digest": "9HPrTcvXYYFBMFeWNLFKCgFPf87phCRz5kGGeRUNbeV7"
+          "digest": "5TjtvGc1z88KWxRPEgn9ThNo6xinN6s9dj78rJiEgNSr"
         },
         {
-          "digest": "62QTXe5TYqvdz16erbEiju61evMRpvgo97Y5ZXBSracg"
+          "digest": "2b96n6HpnyaH31vxk3KmJEgCkpdKxNwGr1TQP5UFrzxr"
         },
         {
-          "digest": "3N5dihwky5ZVdqaXwo3BfXZZK16WXYYpdxHboHU3wMT7"
+          "digest": "GvhTRJn4RuBkCahHyr2wkz5VbRNVV8TuKKkkGPke8oxE"
         },
         {
-          "digest": "JBpgvn3GR8RJnkkjFNPKiuBPxrhvNsLfegoagHm9i16p"
+          "digest": "AVpNDExXXpzK2K5dauw6Ju9C34KTZCrimtqn4aS8YA2k"
         },
         {
-          "digest": "9MpUrkUocruTsooZDz58TvTvAQAae2MNEcq9AQofRNZy"
+          "digest": "BBjuWFZJsyh1WHXaSFGPbnBxyuxEsTPhZRuvYpk8zHZ6"
         },
         {
-          "digest": "HNhWwPZB9kte3x7wfHRanPCgXQwcAHvyeA2jZTMU8R2k"
+          "digest": "B4n3DLYnzdsUsAUnknpVyUjBfipFbJMagPE4NwBXaQ4u"
         }
       ]
     },
     "affect2": {
       "nodes": [
         {
-          "digest": "EwuxR8HjrakSxHE8wxiAbrGUMHDj3JY54ViNTQh2HdMy"
+          "digest": "7xSBTJ6mjuqNyex4qsq8PAL8824HQUJL7kuWrSYWrX6Q"
         },
         {
-          "digest": "3ugk6qxtpmSAr1aBusiqdxybnfpFg9kC49QFW72Q9LZX"
+          "digest": "GFtHa2ZNZB2ApRykQFhwK7hXZryk7Rvtrg69jtVKPAnr"
         },
         {
-          "digest": "9AHVfWtTYUgWDyTrhmRYFcQKiCTpPzt9XkjFe9pzJeJN"
+          "digest": "5cD2vN2Z1tDytXHKAe2Lf3KtKVNtr4S2NJnoLXSpJMhL"
         },
         {
-          "digest": "CFaht7cGNgDRBUMkXvZnNkjw5evrsxUrQQZ1qcLk2st3"
+          "digest": "3iUcU15eb1UpGuh3bjs43Y9i3eCDvsPus4hqwfRMqkGX"
         },
         {
-          "digest": "B7c3B42sWqy4yxXKgQ3Znda6SsPJWru1MsWK6Q7mNNY9"
+          "digest": "6EgaCaUeT3b3yoQHLFcS7pcD5RFVPhEq8wJV2FuendvC"
         },
         {
-          "digest": "9HPrTcvXYYFBMFeWNLFKCgFPf87phCRz5kGGeRUNbeV7"
+          "digest": "5TjtvGc1z88KWxRPEgn9ThNo6xinN6s9dj78rJiEgNSr"
         },
         {
-          "digest": "62QTXe5TYqvdz16erbEiju61evMRpvgo97Y5ZXBSracg"
+          "digest": "2b96n6HpnyaH31vxk3KmJEgCkpdKxNwGr1TQP5UFrzxr"
         }
       ]
     },
     "affect3": {
       "nodes": [
         {
-          "digest": "Hz99EYwaSpBgk64f3RQzfzHN9vKeeJxL7gS8oVu7ywkC"
+          "digest": "FQxHHabcwArCvCvYbhjkNoD9RURDYwpXSMMrG1GSuBD8"
         },
         {
-          "digest": "B7c3B42sWqy4yxXKgQ3Znda6SsPJWru1MsWK6Q7mNNY9"
+          "digest": "6EgaCaUeT3b3yoQHLFcS7pcD5RFVPhEq8wJV2FuendvC"
         },
         {
-          "digest": "9HPrTcvXYYFBMFeWNLFKCgFPf87phCRz5kGGeRUNbeV7"
+          "digest": "5TjtvGc1z88KWxRPEgn9ThNo6xinN6s9dj78rJiEgNSr"
         },
         {
-          "digest": "3N5dihwky5ZVdqaXwo3BfXZZK16WXYYpdxHboHU3wMT7"
+          "digest": "GvhTRJn4RuBkCahHyr2wkz5VbRNVV8TuKKkkGPke8oxE"
         }
       ]
     },
     "affect4": {
       "nodes": [
         {
-          "digest": "Awq7ieCA7vXNfGNASBMHU69FLhg6NxuqWduMFcoB1TQM"
+          "digest": "8mhbdFWJDqsJsZrE5v69DWTJpwBPeHJUFyJVtku4NB8t"
         },
         {
-          "digest": "8iDNctFf4AKaH4ASBtqmDiBzTBFAdgPfEMV5Jb5suQTC"
+          "digest": "3Jm3amp4TnCzenq8upCmRVaJneVntXoEjzjAGxKa6AnJ"
         },
         {
-          "digest": "JBpgvn3GR8RJnkkjFNPKiuBPxrhvNsLfegoagHm9i16p"
+          "digest": "AVpNDExXXpzK2K5dauw6Ju9C34KTZCrimtqn4aS8YA2k"
         }
       ]
     },
     "affect5": {
       "nodes": [
         {
-          "digest": "2RvDNQBFJ8ApKsdFVLZamb62gaUh1P1uSN7xWum4PjKn"
+          "digest": "E7VqqfznL6PsnfjWjFbEPzj1BDqG5pwefdfoLHMMX8hu"
         },
         {
-          "digest": "9MpUrkUocruTsooZDz58TvTvAQAae2MNEcq9AQofRNZy"
+          "digest": "BBjuWFZJsyh1WHXaSFGPbnBxyuxEsTPhZRuvYpk8zHZ6"
         },
         {
-          "digest": "HNhWwPZB9kte3x7wfHRanPCgXQwcAHvyeA2jZTMU8R2k"
+          "digest": "B4n3DLYnzdsUsAUnknpVyUjBfipFbJMagPE4NwBXaQ4u"
         },
         {
-          "digest": "CiHpRXFgxHe15cycNGVptAez3aUTzC1Kcp9SQPX9WPya"
+          "digest": "6gWB8E4h3hxmvvHRNnWv1Vdp9WdDyVUG7oZ21gG7NQLR"
         }
       ]
     },

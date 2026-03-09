@@ -61,7 +61,7 @@ where
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldInfo {
     pub name: DynamicFieldName,
@@ -75,7 +75,7 @@ pub struct DynamicFieldInfo {
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldName {
     #[schemars(with = "String")]

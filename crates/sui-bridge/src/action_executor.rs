@@ -492,12 +492,52 @@ where
         let tx_data = match build_sui_transaction(
             *sui_address,
             &gas_object_ref,
-            ceriticate_clone,
+            ceriticate_clone.clone(),
             *bridge_object_arg,
             sui_token_type_tags.load().as_ref(),
             rgp,
         ) {
             Ok(tx_data) => tx_data,
+            Err(BridgeError::UnknownTokenId(token_id)) => {
+                // Token not found in local cache - it might be newly registered.
+                // Refresh token map from chain and retry.
+                info!(
+                    "Unknown token_id {}, refreshing token map from chain and retrying",
+                    token_id
+                );
+                match sui_client.get_token_id_map().await {
+                    Ok(new_token_map) => {
+                        sui_token_type_tags.store(Arc::new(new_token_map));
+                        // Retry building transaction with refreshed token map
+                        match build_sui_transaction(
+                            *sui_address,
+                            &gas_object_ref,
+                            ceriticate_clone,
+                            *bridge_object_arg,
+                            sui_token_type_tags.load().as_ref(),
+                            rgp,
+                        ) {
+                            Ok(tx_data) => tx_data,
+                            Err(err) => {
+                                metrics.err_build_sui_transaction.inc();
+                                error!(
+                                    "Manual intervention is required. Failed to build transaction after token map refresh for action {:?}: {:?}",
+                                    action, err
+                                );
+                                return;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        metrics.err_build_sui_transaction.inc();
+                        error!(
+                            "Manual intervention is required. Failed to refresh token map: {:?}",
+                            e
+                        );
+                        return;
+                    }
+                }
+            }
             Err(err) => {
                 metrics.err_build_sui_transaction.inc();
                 error!(

@@ -41,12 +41,6 @@ error[E04015]: invalid use of native item
 12 │         let C::T {} = c;
    │             ^^^^^^^ Invalid binding usage for native struct '0x42::C::T'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed
 
-error[E04001]: restricted visibility
-   ┌─ tests/move_check/typing/native_structs_pack_unpack.move:15:18
-   │
-15 │         let _f = c.f;
-   │                  ^^^ Invalid access of field 'f' on the struct '0x42::C::T'. The field 'f' can only be accessed within the module '0x42::C' since it defines 'T'
-
 error[E03010]: unbound field
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:15:18
    │
@@ -55,3 +49,9 @@ error[E03010]: unbound field
    ·
 15 │         let _f = c.f;
    │                  ^^^ Unbound field 'f' for native struct '0x42::C::T'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/native_structs_pack_unpack.move:15:18
+   │
+15 │         let _f = c.f;
+   │                  ^^^ Invalid access of field 'f' on the struct '0x42::C::T'. The field 'f' can only be accessed within the module '0x42::C' since it defines 'T'

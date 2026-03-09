@@ -9,6 +9,8 @@ use sui_rpc::proto::sui::rpc::v2::Balance;
 use sui_rpc::proto::sui::rpc::v2::{ExecutedTransaction, GasCostSummary};
 use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, ListBalancesRequest};
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::coin::Coin;
+use sui_types::gas_coin::GasCoin;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
 use sui_types::{Identifier, base_types::SuiAddress};
@@ -20,7 +22,10 @@ const INITIAL_SUI_BALANCE: u64 = 150000000000000000;
 
 #[sim_test]
 async fn test_balance_apis() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address = test_cluster.get_address_0();
@@ -38,7 +43,10 @@ async fn test_balance_apis() {
 
 #[sim_test]
 async fn test_balance_changes_on_transfer() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let sender = test_cluster.get_address_0();
@@ -84,7 +92,10 @@ async fn test_address_balance() {
         cfg
     });
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let sender = test_cluster.get_address_0();
@@ -131,7 +142,10 @@ async fn test_address_balance_account_with_only_address_balance() {
         cfg
     });
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let sender = test_cluster.get_address_0();
@@ -171,7 +185,10 @@ async fn test_address_balance_account_with_only_address_balance() {
 
 #[sim_test]
 async fn test_custom_coin_balance() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address = test_cluster.get_address_0();
@@ -270,20 +287,24 @@ async fn test_custom_coin_balance() {
     let transfer_amount = 300_000;
 
     // Query for the minted coin owned by address_0
-    let sui_client = test_cluster.sui_client();
+    let sui_client = test_cluster.grpc_client();
     let coins = sui_client
-        .coin_read_api()
-        .get_coins(address, Some(coin_type.clone()), None, Some(1))
+        .get_owned_objects(
+            address,
+            Some(Coin::type_(coin_type.parse().unwrap())),
+            Some(1),
+            None,
+        )
         .await
         .unwrap();
 
     assert_eq!(
-        coins.data.len(),
+        coins.items.len(),
         1,
         "Expected exactly 1 coin, found {}",
-        coins.data.len()
+        coins.items.len()
     );
-    let coin = &coins.data[0];
+    let coin = &coins.items[0];
 
     // Build and execute split-and-transfer transaction
     let gas_object = test_cluster
@@ -298,7 +319,7 @@ async fn test_custom_coin_balance() {
         address,
         address_1,
         (gas_object.0, gas_object.1, gas_object.2),
-        (coin.coin_object_id, coin.version, coin.digest),
+        coin.compute_object_reference(),
         transfer_amount,
         gas_price,
     )
@@ -364,7 +385,10 @@ async fn test_custom_coin_balance() {
 
 #[sim_test]
 async fn test_multiple_concurrent_balance_changes() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address_0 = test_cluster.get_address_0();
@@ -481,7 +505,10 @@ async fn test_multiple_concurrent_balance_changes() {
 
 #[sim_test]
 async fn test_fresh_address_with_no_coins() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     // Generate a new address that has never received any coins
@@ -522,7 +549,10 @@ async fn test_fresh_address_with_no_coins() {
 
 #[sim_test]
 async fn test_invalid_requests() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     // Test with missing owner
@@ -662,26 +692,21 @@ async fn build_split_and_transfer_transaction(
     amount: u64,
 ) -> TransactionData {
     let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
-    let sui_client = test_cluster.sui_client();
+    let sui_client = test_cluster.grpc_client();
 
     // Get coins (one for gas, one to split)
     let coins = sui_client
-        .coin_read_api()
-        .get_coins(sender, Some(SUI_COIN_TYPE.to_string()), None, None)
+        .get_owned_objects(sender, Some(GasCoin::type_()), None, None)
         .await
         .unwrap();
 
     // Use first coin as gas
-    let gas_coin = &coins.data[0];
-    let gas_object = (gas_coin.coin_object_id, gas_coin.version, gas_coin.digest);
+    let gas_coin = &coins.items[0];
+    let gas_object = gas_coin.compute_object_reference();
 
     // Use second coin to split from
-    let transfer_coin = &coins.data[1];
-    let coin = (
-        transfer_coin.coin_object_id,
-        transfer_coin.version,
-        transfer_coin.digest,
-    );
+    let transfer_coin = &coins.items[1];
+    let coin = transfer_coin.compute_object_reference();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let coin_arg = builder.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap();

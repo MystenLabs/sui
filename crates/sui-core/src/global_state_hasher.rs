@@ -540,7 +540,7 @@ impl GlobalStateHasher {
         checkpoint_acc: Option<GlobalStateHash>,
     ) -> SuiResult {
         let _scope = monitored_scope("AccumulateRunningRoot");
-        tracing::info!(
+        tracing::debug!(
             "accumulating running root for checkpoint {}",
             checkpoint_seq_num
         );

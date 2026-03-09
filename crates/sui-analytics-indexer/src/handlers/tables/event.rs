@@ -41,7 +41,6 @@ impl Row for EventRow {
 #[async_trait]
 impl Processor for EventProcessor {
     const NAME: &'static str = Pipeline::Event.name();
-    const FANOUT: usize = 16;
     type Value = EventRow;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {

@@ -19,11 +19,12 @@ use move_core_types::ident_str;
 use std::path::{Path, PathBuf};
 use sui_config::node::{AuthorityKeyPairWithPath, KeyPairWithPath};
 use sui_config::{Config, NodeConfig, PersistedConfig, local_ip_utils};
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
 use sui_keys::keypair_file::read_keypair_from_file;
-use sui_sdk::{SuiClient, SuiClientBuilder, rpc_types::SuiTransactionBlockEffectsAPI};
+use sui_rpc_api::Client;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{SuiKeyPair, generate_proof_of_possession, get_key_pair};
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::gas_coin::GasCoin;
 use sui_types::multiaddr::{Multiaddr, Protocol};
 use sui_types::transaction::{
     CallArg, TEST_ONLY_GAS_UNIT_FOR_GENERIC, Transaction, TransactionData,
@@ -72,7 +73,7 @@ async fn run_metadata_rotation(metadata_rotation: MetadataRotation) -> anyhow::R
         ))
     })?;
 
-    let sui_client = SuiClientBuilder::default().build(fullnode_rpc_url).await?;
+    let sui_client = Client::new(fullnode_rpc_url)?;
     let sui_address = SuiAddress::from(&account_key.public());
     let starting_epoch = current_epoch(&sui_client).await?;
     info!(
@@ -102,25 +103,29 @@ async fn run_metadata_rotation(metadata_rotation: MetadataRotation) -> anyhow::R
 // TODO move this to a shared lib
 pub async fn get_gas_obj_ref(
     sui_address: SuiAddress,
-    sui_client: &SuiClient,
+    sui_client: &Client,
     minimal_gas_balance: u64,
 ) -> anyhow::Result<ObjectRef> {
     let coins = sui_client
-        .coin_read_api()
-        .get_coins(sui_address, Some("0x2::sui::SUI".into()), None, None)
+        .get_owned_objects(sui_address, Some(GasCoin::type_()), None, None)
         .await?
-        .data;
-    let gas_obj = coins.iter().find(|c| c.balance >= minimal_gas_balance);
+        .items;
+    let gas_obj = coins.into_iter().find(|c| {
+        let Ok(c) = GasCoin::try_from(c) else {
+            return false;
+        };
+        c.value() >= minimal_gas_balance
+    });
     if gas_obj.is_none() {
         bail!("Validator doesn't have enough Sui coins to cover transaction fees.");
     }
-    Ok(gas_obj.unwrap().object_ref())
+    Ok(gas_obj.unwrap().compute_object_reference())
 }
 
 async fn update_next_epoch_metadata(
     sui_node_config_path: &Path,
     config: &NodeConfig,
-    sui_client: &SuiClient,
+    sui_client: &Client,
     account_key: &SuiKeyPair,
 ) -> anyhow::Result<PathBuf> {
     // Save backup config just in case
@@ -150,18 +155,15 @@ async fn update_next_epoch_metadata(
     let new_worker_key_pair_copy = new_worker_key_pair.copy();
     new_config.worker_key_pair = KeyPairWithPath::new(SuiKeyPair::Ed25519(new_worker_key_pair));
 
-    let validators = sui_client
-        .governance_api()
-        .get_latest_sui_system_state()
-        .await?
-        .active_validators;
+    let system_state = sui_client.get_system_state(None).await?;
+    let validators = system_state.validators().active_validators();
     let self_validator = validators
         .iter()
-        .find(|v| v.sui_address == sui_address)
+        .find(|v| v.address() == sui_address.to_string())
         .unwrap();
 
     // Network address
-    let mut new_network_address = Multiaddr::try_from(self_validator.net_address.clone()).unwrap();
+    let mut new_network_address = Multiaddr::try_from(self_validator.network_address()).unwrap();
     info!("Current network address: {:?}", new_network_address);
     let http = new_network_address.pop().unwrap();
     // pop out tcp
@@ -190,8 +192,7 @@ async fn update_next_epoch_metadata(
     new_config.p2p_config.listen_address = new_listen_address;
 
     // primary address
-    let mut new_primary_addresses =
-        Multiaddr::try_from(self_validator.primary_address.clone()).unwrap();
+    let mut new_primary_addresses = Multiaddr::try_from(self_validator.primary_address()).unwrap();
     info!("Current primary address: {:?}", new_primary_addresses);
     // pop out udp
     new_primary_addresses.pop().unwrap();
@@ -203,10 +204,9 @@ async fn update_next_epoch_metadata(
     let mut new_worker_addresses = Multiaddr::try_from(
         validators
             .iter()
-            .find(|v| v.sui_address == sui_address)
+            .find(|v| v.address() == sui_address.to_string())
             .unwrap()
-            .worker_address
-            .clone(),
+            .worker_address(),
     )
     .unwrap();
     info!("Current worker address: {:?}", new_worker_addresses);
@@ -305,14 +305,11 @@ async fn update_metadata_on_chain(
     account_key: &SuiKeyPair,
     function: &'static str,
     call_args: Vec<CallArg>,
-    sui_client: &SuiClient,
+    sui_client: &Client,
 ) -> anyhow::Result<()> {
     let sui_address = SuiAddress::from(&account_key.public());
     let gas_obj_ref = get_gas_obj_ref(sui_address, sui_client, 10000 * 100).await?;
-    let rgp = sui_client
-        .governance_api()
-        .get_reference_gas_price()
-        .await?;
+    let rgp = sui_client.get_reference_gas_price().await?;
     let mut args = vec![CallArg::SUI_SYSTEM_MUT];
     args.extend(call_args);
     let tx_data = TransactionData::new_move_call(
@@ -334,30 +331,22 @@ async fn update_metadata_on_chain(
 
 async fn execute_tx(
     account_key: &SuiKeyPair,
-    sui_client: &SuiClient,
+    sui_client: &Client,
     tx_data: TransactionData,
     action: &str,
 ) -> anyhow::Result<()> {
     let tx = Transaction::from_data_and_signer(tx_data, vec![account_key]);
     info!("Executing {:?}", tx.digest());
     let tx_digest = *tx.digest();
-    let resp = sui_client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            tx,
-            SuiTransactionBlockResponseOptions::full_content(),
-            Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await
-        .unwrap();
-    if *resp.effects.unwrap().status() != SuiExecutionStatus::Success {
+    let resp = sui_client.clone().execute_transaction(&tx).await.unwrap();
+    if !resp.effects.status().is_ok() {
         anyhow::bail!("Tx to update metadata {:?} failed", tx_digest);
     }
     info!("{action} succeeded");
     Ok(())
 }
 
-async fn wait_for_next_epoch(sui_client: &SuiClient, target_epoch: EpochId) -> anyhow::Result<()> {
+async fn wait_for_next_epoch(sui_client: &Client, target_epoch: EpochId) -> anyhow::Result<()> {
     loop {
         let epoch_id = current_epoch(sui_client).await?;
         if epoch_id > target_epoch {
@@ -374,6 +363,6 @@ async fn wait_for_next_epoch(sui_client: &SuiClient, target_epoch: EpochId) -> a
     }
 }
 
-async fn current_epoch(sui_client: &SuiClient) -> anyhow::Result<EpochId> {
-    Ok(sui_client.read_api().get_committee_info(None).await?.epoch)
+async fn current_epoch(sui_client: &Client) -> anyhow::Result<EpochId> {
+    Ok(sui_client.clone().get_latest_checkpoint().await?.epoch)
 }

@@ -27,12 +27,12 @@ use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GasCoin;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -89,7 +89,6 @@ enum ArgumentKind {
 struct SimulationResult {
     effects: Option<TransactionEffects>,
     outputs: Option<Vec<CommandResult>>,
-    error: Option<String>,
 }
 
 // Reuse TransactionEffects from execute_transaction tests
@@ -270,7 +269,6 @@ async fn test_simulate_transaction_basic() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -292,7 +290,6 @@ async fn test_simulate_transaction_basic() {
     // Verify simulation was successful
     let effects = simulation_result.effects.unwrap();
     assert_eq!(effects.status, "SUCCESS");
-    assert!(simulation_result.error.is_none());
 
     // Verify transaction data matches original
     let transaction = effects.transaction.unwrap();
@@ -349,7 +346,6 @@ async fn test_simulate_transaction_with_events() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -395,8 +391,7 @@ async fn test_simulate_transaction_with_events() {
             }
           ]
         }
-      },
-      "error": null
+      }
     }
     "#);
 }
@@ -413,7 +408,6 @@ async fn test_simulate_transaction_input_validation() {
             query($txData: JSON!) {
                 simulateTransaction(transaction: $txData) {
                     effects { digest }
-                    error
                 }
             }
         "#,
@@ -479,7 +473,6 @@ async fn test_simulate_transaction_object_changes() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -579,13 +572,12 @@ async fn test_simulate_transaction_command_results() {
     // Find the published package ID from created objects
     let package_id = publish_result
         .effects
-        .unwrap()
         .created()
-        .iter()
-        .find(|obj| obj.owner.is_immutable())
+        .into_iter()
+        .find(|obj| obj.1.is_immutable())
         .unwrap()
-        .reference
-        .object_id;
+        .0
+        .0;
 
     // Now create a programmable transaction that calls our Move functions exactly like move_call.move:
     // Command 0: create_test_object(Input(42)) -> TestObject
@@ -845,7 +837,6 @@ async fn test_simulate_transaction_json_transfer() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -863,7 +854,6 @@ async fn test_simulate_transaction_json_transfer() {
     // Verify simulation was successful
     let effects = simulation_result.effects.unwrap();
     assert_eq!(effects.status, "SUCCESS");
-    assert!(simulation_result.error.is_none());
 
     // Verify transaction data matches original
     let transaction = effects.transaction.unwrap();
@@ -1021,7 +1011,6 @@ async fn test_simulate_transaction_balance_changes() {
                             }
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -1123,7 +1112,6 @@ async fn test_simulate_transaction_with_gas_selection() {
                             transactionBcs
                         }
                     }
-                    error
                 }
             }
         "#,
@@ -1156,7 +1144,6 @@ async fn test_simulate_transaction_with_gas_selection() {
             mutation($txData: Base64!, $sigs: [Base64!]!) {
                 executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects { status }
-                    errors
                 }
             }
         "#,
@@ -1171,10 +1158,6 @@ async fn test_simulate_transaction_with_gas_selection() {
     assert_eq!(
         execute_result.pointer("/data/executeTransaction/effects/status"),
         Some(&json!("SUCCESS"))
-    );
-    assert_eq!(
-        execute_result.pointer("/data/executeTransaction/errors"),
-        Some(&serde_json::Value::Null)
     );
 }
 
@@ -1200,7 +1183,6 @@ async fn test_simulate_transaction_effects_json() {
                         effectsJson
                         balanceChangesJson
                     }
-                    error
                 }
             }
         "#,
@@ -1239,6 +1221,47 @@ async fn test_simulate_transaction_effects_json() {
 }
 
 #[tokio::test]
+async fn test_simulate_transaction_payload_bypasses_query_limit() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    let mut tx_builder = validator_cluster.test_transaction_builder().await;
+    let payload_size = GraphQlConfig::default().limits.max_query_payload_size;
+    tx_builder
+        .ptb_builder_mut()
+        .pure_bytes(vec![0u8; payload_size as usize], false);
+
+    let tx_data = tx_builder.build();
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects { status }
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    assert_eq!(
+        result.pointer("/data/simulateTransaction/effects/status"),
+        Some(&json!("SUCCESS"))
+    );
+}
+
+#[tokio::test]
 async fn test_simulate_transaction_transaction_json() {
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
@@ -1261,7 +1284,6 @@ async fn test_simulate_transaction_transaction_json() {
                             transactionJson
                         }
                     }
-                    error
                 }
             }
         "#,
