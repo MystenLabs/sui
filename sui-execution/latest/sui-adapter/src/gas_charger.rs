@@ -7,9 +7,13 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 pub mod checked {
 
+    use std::collections::HashMap;
+
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::temporary_store::TemporaryStore;
     use either::Either;
+    use indexmap::IndexMap;
+    use move_vm_types::values::debug;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::deny_list_v2::CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
     use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
@@ -39,10 +43,19 @@ pub mod checked {
     pub struct GasCharger {
         tx_digest: TransactionDigest,
         gas_model_version: u64,
-        /// Empty if unmetered
-        payment_methods: Vec<PaymentMethod>,
-        //smashed_gas_coin_bud
+        payment_kind: PaymentKind,
         gas_status: SuiGasStatus,
+    }
+
+    #[derive(Debug)]
+    pub struct PaymentKind(PaymentKind_);
+
+    #[derive(Debug)]
+    enum PaymentKind_ {
+        Unmetered,
+        /// A non-empty vector of gas coins or address balance withdrawals. The payments are
+        /// "smashed" into the first location in the vector.
+        Smash(Vec<PaymentMethod>),
     }
 
     #[derive(Debug)]
@@ -51,10 +64,60 @@ pub mod checked {
         AddressBalance(SuiAddress, /* withdrawal reservation */ u64),
     }
 
-    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
     pub enum PaymentLocation {
         Coin(ObjectID),
         AddressBalance(SuiAddress),
+    }
+
+    impl PaymentKind {
+        pub fn unmetered() -> Self {
+            Self(PaymentKind_::Unmetered)
+        }
+
+        pub fn smash(payment_methods: Vec<PaymentMethod>) -> Option<Self> {
+            debug_assert!(
+                !payment_methods.is_empty(),
+                "GasCharger must have at least one payment method"
+            );
+            if payment_methods.is_empty() {
+                return None;
+            }
+            let mut unique_methods = IndexMap::new();
+            for payment_method in payment_methods {
+                match (
+                    unique_methods.entry(payment_method.location()),
+                    payment_method,
+                ) {
+                    (indexmap::map::Entry::Vacant(entry), payment_method) => {
+                        entry.insert(payment_method);
+                    }
+                    (
+                        indexmap::map::Entry::Occupied(mut occupied),
+                        PaymentMethod::AddressBalance(other, additional),
+                    ) => {
+                        let PaymentMethod::AddressBalance(addr, amount) = occupied.get_mut() else {
+                            unreachable!("Payment method does not match location")
+                        };
+                        assert_eq!(*addr, other, "Payment method does not match location");
+                        *amount += additional;
+                    }
+                    (indexmap::map::Entry::Occupied(_), _) => {
+                        debug_assert!(
+                            false,
+                            "Duplicate coin payment method found, \
+                             which should have been prevented by input checks"
+                        );
+                        return None;
+                    }
+                }
+            }
+            let unique_methods = unique_methods
+                .into_iter()
+                .map(|(_, method)| method)
+                .collect::<Vec<_>>();
+            Some(Self(PaymentKind_::Smash(unique_methods)))
+        }
     }
 
     impl PaymentMethod {
@@ -69,19 +132,15 @@ pub mod checked {
     impl GasCharger {
         pub fn new(
             tx_digest: TransactionDigest,
-            payment_methods: Vec<PaymentMethod>,
+            payment_kind: PaymentKind,
             gas_status: SuiGasStatus,
             protocol_config: &ProtocolConfig,
         ) -> Self {
-            assert!(
-                !payment_methods.is_empty(),
-                "GasCharger must have at least one payment method"
-            );
             let gas_model_version = protocol_config.gas_model_version();
             Self {
                 tx_digest,
                 gas_model_version,
-                payment_methods,
+                payment_kind,
                 gas_status,
             }
         }
@@ -90,30 +149,42 @@ pub mod checked {
             Self {
                 tx_digest,
                 gas_model_version: 6, // pick any of the latest, it should not matter
-                payment_methods: vec![],
+                payment_kind: PaymentKind::unmetered(),
                 gas_status: SuiGasStatus::new_unmetered(),
             }
         }
 
-        // // TODO: there is only one caller to this function that should not exist otherwise.
-        // //       Explore way to remove it.
-        // pub(crate) fn gas_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
-        //     match &self.payment_method {
-        //         PaymentMethod::Coins(gas_coins) => Either::Left(gas_coins.iter()),
-        //         PaymentMethod::AddressBalance(_) | PaymentMethod::Unmetered => {
-        //             Either::Right(std::iter::empty())
-        //         }
-        //     }
-        // }
-        //
+        // TODO: there is only one caller to this function that should not exist otherwise.
+        //       Explore way to remove it.
+        pub(crate) fn used_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
+            match &self.payment_kind.0 {
+                PaymentKind_::Unmetered => Either::Left(std::iter::empty()),
+                PaymentKind_::Smash(payment_methods) => {
+                    Either::Right(payment_methods.iter().filter_map(|method| match method {
+                        PaymentMethod::Coin(obj_ref) => Some(obj_ref),
+                        PaymentMethod::AddressBalance(_, _) => None,
+                    }))
+                }
+            }
+        }
 
         fn smash_target(&self) -> Option<&PaymentMethod> {
-            self.payment_methods.first()
+            match &self.payment_kind.0 {
+                PaymentKind_::Unmetered => None,
+                PaymentKind_::Smash(payment_methods) => {
+                    let first = payment_methods.first();
+                    debug_assert!(
+                        first.is_some(),
+                        "Payment methods should not be empty for Smash payment kind"
+                    );
+                    first
+                }
+            }
         }
 
         // Return the payment location for this transaction, or None if it was unmetered.
         pub fn gas_payment_location(&self) -> Option<PaymentLocation> {
-            self.payment_methods.first().map(|method| method.location())
+            self.smash_target().map(|method| method.location())
         }
 
         pub fn gas_budget(&self) -> u64 {
@@ -158,20 +229,22 @@ pub mod checked {
         // Transaction and certificate input checks must have insured that all gas coins
         // are correct.
         pub fn smash_gas(&mut self, temporary_store: &mut TemporaryStore<'_>) {
-            let payment_count = self.payment_methods.len();
-            let Some(primary_method) = self.smash_target() else {
+            let PaymentKind_::Smash(payment_methods) = &self.payment_kind.0 else {
                 // unmetered, nothing to smash
                 return;
             };
-            let primary_location = primary_method.location();
-            if self.payment_methods.len() == 1 {
+            let payment_count = payment_methods.len();
+            let smash_target = self
+                .smash_target()
+                .expect("Payment methods should not be empty for Smash payment kind");
+            if payment_methods.len() == 1 {
                 // only one payment method, nothing to smash
                 return;
             }
+            let smash_location = smash_target.location();
 
             // sum the value of all gas coins
-            let total = self
-                .payment_methods
+            let total = payment_methods
                 .iter()
                 .map(|payment| match payment {
                     PaymentMethod::AddressBalance(_, reservation) => Ok(*reservation),
@@ -202,9 +275,9 @@ pub mod checked {
                 .iter()
                 .sum();
             // delete all gas objects except the primary_gas_object
-            for payment_method in &self.payment_methods[1..] {
+            for payment_method in &payment_methods[1..] {
                 let location = payment_method.location();
-                assert_ne!(location, primary_location, "Payment methods must be unique");
+                assert_ne!(location, smash_location, "Payment methods must be unique");
                 match payment_method {
                     PaymentMethod::AddressBalance(sui_address, reservation) => {
                         temporary_store.withdraw_from_address_balance(*sui_address, *reservation);
@@ -341,7 +414,7 @@ pub mod checked {
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
 
-            if !self.payment_methods.is_empty() {
+            if !matches!(&self.payment_kind.0, PaymentKind_::Unmetered) {
                 // bucketize computation cost
                 let is_move_abort = execution_result
                     .as_ref()
@@ -370,12 +443,12 @@ pub mod checked {
             temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
 
-            let Some(primary_method) = self.smash_target() else {
+            let Some(smash_target) = self.smash_target() else {
                 // unmetered, nothing to charge
                 return GasCostSummary::default();
             };
 
-            if let PaymentMethod::Coin(_) = primary_method {
+            if let PaymentMethod::Coin(_) = smash_target {
                 #[skip_checked_arithmetic]
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
@@ -390,7 +463,7 @@ pub mod checked {
                     )
                 })
                 .unwrap_or(false)
-                && let PaymentMethod::AddressBalance(_,_) = primary_method {
+                && let PaymentMethod::AddressBalance(_,_) = smash_target {
                     // If we don't have enough balance to withdraw, don't charge for gas
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
@@ -400,7 +473,7 @@ pub mod checked {
             let cost_summary = self.gas_status.summary();
             let net_change = cost_summary.net_gas_usage();
 
-            match primary_method {
+            match smash_target {
                 PaymentMethod::AddressBalance(payer_address, _) => {
                     // if net_change != 0 {
                     //     let balance_type = sui_types::balance::Balance::type_tag(
