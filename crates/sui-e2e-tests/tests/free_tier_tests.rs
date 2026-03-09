@@ -29,15 +29,19 @@ use sui_types::{
 };
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
-fn build_send_funds_ptb(amount: u64, recipient: SuiAddress) -> TransactionKind {
+fn build_send_funds_ptb(
+    amount: u64,
+    token_type: TypeTag,
+    recipient: SuiAddress,
+) -> TransactionKind {
     let mut builder = ProgrammableTransactionBuilder::new();
-    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag());
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(amount, token_type.clone());
     let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
     let balance = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("balance").unwrap(),
         Identifier::new("redeem_funds").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![token_type.clone()],
         vec![withdraw_arg],
     );
     let recipient_arg = builder.pure(recipient).unwrap();
@@ -45,7 +49,7 @@ fn build_send_funds_ptb(amount: u64, recipient: SuiAddress) -> TransactionKind {
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("balance").unwrap(),
         Identifier::new("send_funds").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![token_type],
         vec![balance, recipient_arg],
     );
     TransactionKind::ProgrammableTransaction(builder.finish())
@@ -254,7 +258,7 @@ async fn test_free_tier_paid_tx_still_works() {
         .fund_one_address_balance(sender, 10_000_000_000)
         .await;
 
-    let tx_kind = build_send_funds_ptb(1000, recipient);
+    let tx_kind = build_send_funds_ptb(1000, GAS::type_tag(), recipient);
     let paid_tx = TransactionData::V1(TransactionDataV1 {
         kind: tx_kind,
         sender,
@@ -281,8 +285,8 @@ async fn test_free_tier_paid_tx_still_works() {
         "Paid tx should have nonzero gas"
     );
 
-    let free_tx =
-        test_env.create_free_tier_transaction(1000, GAS::type_tag(), sender, recipient, 1, 0);
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
+    let free_tx = test_env.create_free_tier_transaction(1000, coin_type, sender, recipient, 1, 0);
     let (_, effects) = test_env.exec_tx_directly(free_tx).await.unwrap();
     assert!(effects.status().is_ok());
     assert_zero_gas(effects.gas_cost_summary());
@@ -294,14 +298,12 @@ async fn test_free_tier_paid_tx_still_works() {
 #[sim_test]
 async fn test_free_tier_rejects_regular_send_funds() {
     let mut test_env = setup_free_tier_env().await;
-    let sender = test_env.get_sender(0);
-    let recipient = test_env.get_sender(1);
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
 
-    test_env
-        .fund_one_address_balance(sender, 10_000_000_000)
-        .await;
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
 
-    let tx_kind = build_send_funds_ptb(1000, recipient);
+    let tx_kind = build_send_funds_ptb(1000, coin_type, recipient);
     let tx = test_env.free_tier_transaction_data(tx_kind, sender, 0, 0);
     let result = test_env.exec_tx_directly(tx).await;
 
@@ -319,28 +321,26 @@ async fn test_free_tier_rejects_regular_send_funds() {
 #[sim_test]
 async fn test_free_tier_rejects_transfer_objects() {
     let mut test_env = setup_free_tier_env().await;
-    let sender = test_env.get_sender(0);
-    let recipient = test_env.get_sender(1);
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
 
-    test_env
-        .fund_one_address_balance(sender, 10_000_000_000)
-        .await;
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(1000, GAS::type_tag());
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(1000, coin_type.clone());
     let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
     let balance = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("balance").unwrap(),
         Identifier::new("redeem_funds").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![coin_type.clone()],
         vec![withdraw_arg],
     );
     let coin = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("coin").unwrap(),
         Identifier::new("from_balance").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![coin_type],
         vec![balance],
     );
     builder.transfer_arg(recipient, coin);
@@ -433,14 +433,12 @@ async fn test_free_tier_drive_transaction() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_rejects_non_sui_token() {
+async fn test_free_tier_rejects_non_whitelisted_token() {
     let mut test_env = setup_free_tier_env().await;
-    let sender = test_env.get_sender(0);
-    let recipient = test_env.get_sender(1);
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
 
-    test_env
-        .fund_one_address_balance(sender, 10_000_000_000)
-        .await;
+    setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
 
     let fake_type = TypeTag::Struct(Box::new(StructTag {
         address: AccountAddress::from_hex_literal("0x123").unwrap(),
