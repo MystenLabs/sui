@@ -2568,6 +2568,7 @@ async fn create_validator_fullnode(
         .with_protocol_config(protocol_config.clone())
         .with_starting_objects(objects)
         .with_shared_network_config(&network_config)
+        .insert_genesis_checkpoint()
         .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
@@ -2579,6 +2580,7 @@ async fn create_validator_fullnode(
         .with_starting_objects(objects)
         .with_shared_network_config(&network_config)
         .with_keypair(&fullnode_key_pair)
+        .insert_genesis_checkpoint()
         .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
@@ -2606,6 +2608,8 @@ async fn create_val_fullnode_executor(
         validator,
         fullnode,
         kv_store,
+        pending_effects: Vec::new(),
+        next_checkpoint_seq: 1, // 0 is genesis
     }
 }
 

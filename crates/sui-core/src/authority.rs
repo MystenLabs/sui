@@ -4131,15 +4131,18 @@ impl AuthorityState {
         }
     }
 
-    pub async fn settle_accumulator_for_testing(&self, effects: &[TransactionEffects]) {
+    pub async fn settle_accumulator_for_testing(
+        &self,
+        effects: &[TransactionEffects],
+        checkpoint_seq: Option<u64>,
+    ) {
         let accumulator_version = self
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .await
             .unwrap()
             .version();
-        // Use the current accumulator version as the checkpoint sequence number.
-        // This is a convenient hack to keep the checkpoint version unique for each settlement and incrementing.
-        let ckpt_seq = accumulator_version.value();
+        // Use provided checkpoint sequence, or fall back to accumulator version.
+        let ckpt_seq = checkpoint_seq.unwrap_or_else(|| accumulator_version.value());
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.get_transaction_cache_reader().as_ref()),
             effects,
