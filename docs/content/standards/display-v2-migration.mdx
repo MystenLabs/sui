@@ -8,6 +8,8 @@ keywords: [ Object Display, object, display, display properties, object properti
 
 Object Display V2 will be available in Sui v1.68. You can check the [release schedule](https://www.sui.io/networkinfo) to learn more about when v1.68 is available on Devnet, Testnet, and Mainnet. 
 
+All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You don't need to do anything upfront; after the snapshot, you can claim the capability when you're ready (see [Migration and claiming](#migration-and-claiming)).
+
 :::
 
 ## V1 end of life 
@@ -46,12 +48,6 @@ In Object Display V1, you could have `N` displays per type and had to use events
 | **Identity**                   | Unpredictable (per creation tx).                    | Deterministic. The same registry and same `T` result in the same display ID everywhere.                                                                       |
 
 ## Migration and claiming
-
-:::caution 
-
-All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You don't need to do anything upfront; after the snapshot, you can claim the capability when you're ready (see [Migration and claiming](#migration-and-claiming)).
-
-:::
 
 All V1 displays will be migrated to V2 in a system snapshot migration. After that, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
 
