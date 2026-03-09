@@ -65,7 +65,7 @@ use crate::{
         cursor::CursorContext,
         def_info::{DefInfo, FunType, VariantInfo},
         ide_strings::{const_val_to_ide_string, mod_ident_to_ide_string},
-        mod_defs::{FieldDef, MemberDef, MemberDefInfo, ModuleDefs},
+        mod_defs::{FieldDef, MemberDef, MemberDefInfo, ModuleDefs, ModuleParsingInfo},
         use_def::{References, UseDef, UseDefMap},
     },
     utils::{expansion_mod_ident_to_map_key, loc_start_to_lsp_position_opt, lsp_position_to_loc},
@@ -90,7 +90,7 @@ use move_compiler::{
     naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeInner, TypeName_, VariantFields},
     parser::ast::{self as P, DocComment},
     shared::{
-        Identifier, NamedAddressMap, files::MappedFiles,
+        Identifier, NamedAddressMap, NamedAddressMaps, files::MappedFiles,
         stdlib_definitions::UNIT_TEST_POISON_INJECTION_NAME, unique_map::UniqueMap,
     },
     typing::ast::ModuleDefinition,
@@ -118,6 +118,9 @@ pub struct Symbols {
     pub file_use_defs: FileUseDefs,
     /// A mapping from filePath to ModuleDefs
     pub file_mods: FileModules,
+    /// Per-module parsing data (untyped_defs, call_infos, import_insert_info),
+    /// keyed by file path and then by module location within that file
+    pub mod_parsing_info: BTreeMap<PathBuf, BTreeMap<Loc, ModuleParsingInfo>>,
     /// Mapped file information for translating locations into positions
     pub files: MappedFiles,
     /// Additional information about definitions
@@ -237,23 +240,15 @@ pub fn compute_symbols(
         .map(|(fhash, fpath)| (fpath.clone(), *fhash))
         .collect::<BTreeMap<_, _>>();
     let mut symbols_computation_data = SymbolsComputationData::new();
-    let typed_mod_named_address_maps = compiled_pkg_info
-        .program
-        .typed_modules
-        .iter()
-        .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
-        .collect::<BTreeMap<_, _>>();
     let cursor_context = compute_symbols_pre_process(
         &mut symbols_computation_data,
         &mut compiled_pkg_info,
         cursor_info,
-        &typed_mod_named_address_maps,
     );
     let cursor_context = compute_symbols_parsed_program(
         &mut symbols_computation_data,
         &compiled_pkg_info,
         cursor_context,
-        &typed_mod_named_address_maps,
     );
 
     let (symbols, deps_symbols_data_opt, program) =
@@ -296,18 +291,13 @@ pub fn compute_symbols_pre_process(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &mut CompiledPkgInfo,
     cursor_info: Option<(&PathBuf, Position)>,
-    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) -> Option<CursorContext> {
     let mut fields_order_info = FieldOrderInfo::new();
     let parsed_program = &compiled_pkg_info.program.parsed_definitions;
     let typed_program_modules = &compiled_pkg_info.program.typed_modules;
-    pre_process_parsed_program(
-        parsed_program,
-        &mut fields_order_info,
-        typed_mod_named_address_maps,
-    );
+    pre_process_parsed_program(parsed_program, &mut fields_order_info);
 
-    let mut cursor_context = compute_cursor_context(&compiled_pkg_info.mapped_files, cursor_info);
+    let cursor_context = compute_cursor_context(&compiled_pkg_info.mapped_files, cursor_info);
     pre_process_typed_modules(
         typed_program_modules,
         &fields_order_info,
@@ -317,21 +307,30 @@ pub fn compute_symbols_pre_process(
         &mut computation_data.references,
         &mut computation_data.def_info,
         &compiled_pkg_info.edition,
-        cursor_context.as_mut(),
         &compiled_pkg_info.compiler_analysis_info,
     );
 
     if let Some(cached_deps) = compiled_pkg_info.cached_deps.clone()
         && let Some(cached_symbols_data) = cached_deps.symbols_data
     {
-        // We need to update definitions for the code being currently processed
-        // so that these definitions are available when ASTs for this code are visited
-        computation_data
-            .mod_outer_defs
-            .extend(cached_symbols_data.mod_outer_defs.clone());
-        computation_data
-            .def_info
-            .extend(cached_symbols_data.def_info.clone());
+        // Merge cached data with what's already in mod_outer_defs
+        // (it may contain extension-related data computed during
+        // anaysis)
+        for (mod_ident_str, mod_defs) in cached_symbols_data.mod_outer_defs.iter() {
+            computation_data
+                .mod_outer_defs
+                .entry(mod_ident_str.clone())
+                .or_insert_with(|| mod_defs.clone());
+        }
+        // Merge cached data with what's already in def_info
+        // (it may contain extension-related data computed during
+        // anaysis)
+        for (loc, info) in cached_symbols_data.def_info.iter() {
+            computation_data
+                .def_info
+                .entry(*loc)
+                .or_insert_with(|| info.clone());
+        }
     }
 
     cursor_context
@@ -342,14 +341,12 @@ pub fn compute_symbols_parsed_program(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &CompiledPkgInfo,
     mut cursor_context: Option<CursorContext>,
-    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) -> Option<CursorContext> {
     run_parsing_analysis(
         computation_data,
         compiled_pkg_info,
         cursor_context.as_mut(),
         &compiled_pkg_info.program.parsed_definitions,
-        typed_mod_named_address_maps,
     );
     cursor_context
 }
@@ -428,6 +425,10 @@ pub fn compute_symbols_typed_program(
                     mod_outer_defs,
                     |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
                 ),
+                // Don't cache mod_parsing_info for dependencies - only needed for user code
+                // because they only concern files opened in the editor (and once
+                // a dependency is opened, it becomes user code itself)
+                mod_parsing_info: BTreeMap::new(),
                 use_defs: filter_computation_data!(computation_data, use_defs, |(fhash, _)| {
                     cached_deps.dep_hashes.contains(fhash)
                 }),
@@ -455,16 +456,58 @@ pub fn compute_symbols_typed_program(
     };
 
     let mut file_mods: FileModules = BTreeMap::new();
-    for d in computation_data.mod_outer_defs.into_values() {
-        let path = compiled_pkg_info.mapped_files.file_path(&d.fhash.clone());
-        file_mods.entry(path.to_path_buf()).or_default().insert(d);
+
+    // Map a file containing "regular" (non-extension) module
+    // to typing-level definition for this module
+    for d in computation_data.mod_outer_defs.values() {
+        let path = compiled_pkg_info.mapped_files.file_path(&d.fhash);
+        file_mods
+            .entry(path.to_path_buf())
+            .or_default()
+            .insert(d.clone());
     }
+
+    // Map a file containing a module extension to typing-level
+    // module inlining this extension
+    for (fhash, mod_map) in &computation_data.mod_parsing_info {
+        for parsing_info in mod_map.values() {
+            if let Some(mod_defs) = computation_data
+                .mod_outer_defs
+                .get(&parsing_info.mod_ident_str)
+                && *fhash != mod_defs.fhash
+            {
+                let ext_path = compiled_pkg_info.mapped_files.file_path(fhash);
+                file_mods
+                    .entry(ext_path.to_path_buf())
+                    .or_default()
+                    .insert(mod_defs.clone());
+            }
+        }
+    }
+
+    // Convert mod_parsing_info from FileHash keys to PathBuf keys
+    let mod_parsing_info = computation_data
+        .mod_parsing_info
+        .into_iter()
+        .filter_map(|(fhash, mod_map)| {
+            compiled_pkg_info
+                .mapped_files
+                .file_name_mapping()
+                .get(&fhash)
+                .map(|p| {
+                    let fpath =
+                        dunce::canonicalize(p).unwrap_or_else(|_| p.as_path().to_path_buf());
+                    (fpath, mod_map)
+                })
+        })
+        .collect();
 
     (
         Symbols {
             references: computation_data.references,
             file_use_defs,
             file_mods,
+            mod_parsing_info,
             def_info: computation_data.def_info,
             files: compiled_pkg_info.mapped_files,
             compiler_autocomplete_info: compiled_pkg_info
@@ -512,16 +555,12 @@ fn compute_cursor_context(
 }
 
 /// Pre-process parsed program to get initial info before AST traversals
-fn pre_process_parsed_program(
-    prog: &ParsedDefinitions,
-    fields_order_info: &mut FieldOrderInfo,
-    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
-) {
+fn pre_process_parsed_program(prog: &ParsedDefinitions, fields_order_info: &mut FieldOrderInfo) {
     prog.source_definitions.iter().for_each(|pkg_def| {
-        pre_process_parsed_pkg(pkg_def, fields_order_info, typed_mod_named_address_maps);
+        pre_process_parsed_pkg(pkg_def, fields_order_info, &prog.named_address_maps);
     });
     prog.lib_definitions.iter().for_each(|pkg_def| {
-        pre_process_parsed_pkg(pkg_def, fields_order_info, typed_mod_named_address_maps);
+        pre_process_parsed_pkg(pkg_def, fields_order_info, &prog.named_address_maps);
     });
 }
 
@@ -570,21 +609,12 @@ fn filter_program_asts(program: &mut CompiledProgram, dep_hashes: &[FileHash]) {
 fn pre_process_parsed_pkg(
     pkg_def: &P::PackageDefinition,
     fields_order_info: &mut FieldOrderInfo,
-    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+    named_address_maps: &NamedAddressMaps,
 ) {
     if let P::Definition::Module(mod_def) = &pkg_def.def {
-        // when doing full standalone compilation (vs. pre-compiling dependencies)
-        // we may have a module at parsing but no longer at typing
-        // in case there is a name conflict with a dependency (and
-        // mod_named_address_maps comes from typing modules)
-        let Some(pkg_addresses) = typed_mod_named_address_maps.get(&mod_def.loc) else {
-            eprintln!(
-                "no typing-level named address maps for module {}",
-                mod_def.name.value(),
-            );
-            return;
-        };
-        let Some(mod_ident_str) = parsing_mod_def_to_map_key(pkg_addresses.clone(), mod_def) else {
+        // Get the address map directly from the package's own index - works for extensions too
+        let pkg_addresses = named_address_maps.get(pkg_def.named_address_map);
+        let Some(mod_ident_str) = parsing_mod_def_to_map_key(pkg_addresses, mod_def) else {
             return;
         };
         for member in &mod_def.members {
@@ -637,17 +667,9 @@ fn pre_process_typed_modules(
     references: &mut References,
     def_info: &mut DefMap,
     edition: &Edition,
-    mut cursor_context: Option<&mut CursorContext>,
     compiler_analysis_info: &CompilerAnalysisInfo,
 ) {
     for (pos, module_ident, module_def) in typed_modules {
-        // If the cursor is in this module, mark that down.
-        if let Some(cursor) = &mut cursor_context
-            && module_def.loc.contains(&cursor.loc)
-        {
-            cursor.module = Some(sp(pos, *module_ident));
-        };
-
         let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let (defs, symbols) = get_mod_outer_defs(
             &pos,
@@ -671,23 +693,22 @@ fn pre_process_typed_modules(
 }
 
 /// Converts parsing AST's `LeadingNameAccess` to expansion AST's `Address` (similarly to
-/// expansion::translate::top_level_address but disregarding the name portion of `Address` as we
-/// only care about actual address here if it's available). We need this to be able to reliably
-/// compare parsing AST's module identifier with expansion/typing AST's module identifier, even in
-/// presence of module renaming (i.e., we cannot rely on module names if addresses are available).
-pub fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: Arc<NamedAddressMap>) -> E::Address {
+/// expansion::translate::top_level_address but without name validation as we only care about
+/// actual address here if it's available).
+pub fn parsed_address(
+    ln: P::LeadingNameAccess,
+    pkg_addresses: Arc<NamedAddressMap>,
+    name_conflict: bool,
+) -> E::Address {
     let sp!(loc, ln_) = ln;
     match ln_ {
         P::LeadingNameAccess_::AnonymousAddress(bytes) => E::Address::anonymous(loc, bytes),
         P::LeadingNameAccess_::GlobalAddress(name) => E::Address::NamedUnassigned(name),
         P::LeadingNameAccess_::Name(name) => match pkg_addresses.get(&name.value).copied() {
-            // set `name_conflict` to `true` to force displaying (addr==pkg_name) so that the string
-            // representing map key is consistent with what's generated for expansion ModuleIdent in
-            // `expansion_mod_ident_to_map_key`
             Some(addr) => E::Address::Numerical {
                 name: Some(name),
                 value: sp(loc, addr),
-                name_conflict: true,
+                name_conflict,
             },
             None => E::Address::NamedUnassigned(name),
         },
@@ -700,6 +721,7 @@ pub fn empty_symbols() -> Symbols {
         file_use_defs: BTreeMap::new(),
         references: BTreeMap::new(),
         file_mods: BTreeMap::new(),
+        mod_parsing_info: BTreeMap::new(),
         def_info: BTreeMap::new(),
         files: MappedFiles::empty(),
         compiler_autocomplete_info: CompilerAutocompleteInfo::new(),
@@ -992,9 +1014,6 @@ fn get_mod_outer_defs(
         enums,
         constants,
         functions,
-        untyped_defs: BTreeSet::new(),
-        call_infos: BTreeMap::new(),
-        import_insert_info: None,
         neighbors: mod_def.immediate_neighbors.clone(),
     };
 
@@ -1066,10 +1085,7 @@ impl Symbols {
     }
 
     pub fn file_hash(&self, path: &Path) -> Option<FileHash> {
-        let Some(mod_defs) = self.file_mods.get(path) else {
-            return None;
-        };
-        Some(mod_defs.first().unwrap().fhash)
+        self.files.file_hash(&path.to_path_buf())
     }
 }
 

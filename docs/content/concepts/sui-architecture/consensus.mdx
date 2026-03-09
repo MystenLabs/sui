@@ -4,7 +4,7 @@ description: Overview of the Sui consensus mechanism.
 keywords: [ consensus, mysticeti, delegated proof of stake, proof of stake, dpos ]
 ---
 
-_Consensus_ is the process by which the majority of nodes on a blockchain network agree on the current state of the network, including which transactions to finalize and commit to the chain's permanent history. This process prevents malicious or faulty nodes from altering the network incorrectly.
+Consensus is the process by which the majority of nodes on a blockchain network agree on the current state of the network, including which transactions to finalize and commit to the chain's permanent history. This process prevents malicious or faulty nodes from altering the network incorrectly.
 
 ## Validator nodes
 
@@ -12,7 +12,7 @@ To participate in consensus, validators must [stake SUI tokens](/guides/operator
 
 ### Epochs
 
-An [epoch](/concepts/sui-architecture/epochs.mdx) is a duration of time where the Sui validators and their stakes do not change. An epoch is about 24 hours on both [Mainnet](/concepts/sui-architecture/networks.mdx) and [Testnet](/concepts/sui-architecture/networks.mdx). At an epoch boundary, [reconfiguration](/concepts/sui-architecture/epochs.mdx) might occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as genesis and the new set of validators as the operators. Besides validator set changes, [tokenomics](/concepts/tokenomics.mdx) operations such as staking and un-staking, and distribution of staking rewards are also processed at epoch boundaries.
+An [epoch](/concepts/sui-architecture/epochs.mdx) is a duration of time where the Sui validators and their stakes do not change. An epoch is about 24 hours on both [Mainnet](/concepts/sui-architecture/networks.mdx) and [Testnet](/concepts/sui-architecture/networks.mdx). At an epoch boundary, [reconfiguration](/concepts/sui-architecture/epochs.mdx) might occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as genesis and the new set of validators as the operators. Besides validator set changes, [tokenomics](/concepts/tokenomics) operations such as staking and un-staking, and distribution of staking rewards are also processed at epoch boundaries.
 
 ### Quorums
 
@@ -69,11 +69,3 @@ Finality is the guarantee that a transaction or block, after confirmation, is pe
 Mysticeti simplifies this process by finalizing transactions immediately upon inclusion in the structure. As a result, there is no need to wait for additional confirmations or network activity, which makes Mysticeti faster and more reliable for confirming transactions in less active or challenging network conditions.
 
 For more details, including correctness proofs, see the [MYSTICETI: Reaching the Latency Limits with Uncertified DAGs](/paper/mysticeti.pdf) whitepaper.
-
-## Related links
-
-<RelatedLink to="/concepts/transactions/transaction-lifecycle.mdx" />
-
-<RelatedLink to="/concepts/sui-architecture/sui-security.mdx" />
-
-<RelatedLink href="https://docs.sui.io/paper/mysticeti.pdf" label="MYSTICETI: Reaching the Latency Limits with Uncertified DAGs" desc="Whitepaper that documents the Mysticeti protocol." />

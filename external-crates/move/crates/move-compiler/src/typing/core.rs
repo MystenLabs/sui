@@ -1416,6 +1416,13 @@ impl Subst {
             .map(|constraint| constraint.is_string_var())
             .unwrap_or(false)
     }
+
+    pub fn is_divergent_var(&self, tvar: &TVar) -> bool {
+        self.tvar_constraints
+            .get(tvar)
+            .map(|constraint| constraint.is_divergent())
+            .unwrap_or(false)
+    }
 }
 
 impl VarConstraint {
@@ -1425,6 +1432,10 @@ impl VarConstraint {
 
     pub fn is_string_var(&self) -> bool {
         matches!(self, VarConstraint::String(_))
+    }
+
+    pub fn is_divergent(&self) -> bool {
+        matches!(self, VarConstraint::Divergent(_))
     }
 
     pub fn loc(&self) -> Loc {
@@ -1676,6 +1687,23 @@ pub fn make_divergent_tvar(context: &mut Context, loc: Loc) -> Type {
         .subst
         .new_divergent_var(&mut context.tvar_counter, loc);
     sp(loc, TI::Var(tvar).into())
+}
+
+/// Indicates if a type diverges. Note error types are not divergent.
+pub fn is_type_divergent(subst: &Subst, ty: &Type) -> bool {
+    match ty.value.inner() {
+        TI::Anything | TI::Void => true,
+        TI::Var(tvar) => {
+            let last_tvar = forward_tvar(subst, *tvar);
+            subst.get(last_tvar).is_none() && subst.is_divergent_var(&last_tvar)
+        }
+        TI::UnresolvedError
+        | TI::Unit
+        | TI::Apply(_, _, _)
+        | TI::Param(_)
+        | TI::Ref(_, _)
+        | TI::Fun(_, _) => false,
+    }
 }
 
 pub fn make_num_tvar(context: &mut Context, loc: Loc) -> Type {

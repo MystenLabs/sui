@@ -17,7 +17,7 @@ If you have worked with Ethereum Virtual Machine (EVM) before, the biggest diffe
 | Access control | Identity/role-based access control through `Ownable` and `AccessControl` contract. | Mostly [capability based access control](https://move-book.com/programmability/capability.html) through owned objects. Identity/role-based access control is possible. |
 | Contract upgrades | Proxy contract forwards user transactions. | New contracts must be [layout-compatible](/guides/developer/packages/upgrade#upgrade-requirements) with the old one. Need to consider versioning shared objects. |
 | Development environment | Hardhat, Foundry | [Move VSCode extension](https://marketplace.visualstudio.com/items?itemName=mysten.move). |
-| Mutate contract state | Sending transactions through compile time ABI interface. | Sending transaction through runtime [programmable transaction block](/guides/developer/transactions/prog-txn-blocks.mdx) (PTB) construction. |
+| Mutate contract state | Sending transactions through compile time ABI interface. | Sending transaction through runtime [programmable transaction block](/guides/developer/transactions/ptbs/prog-txn-blocks) (PTB) construction. |
 
 ## Object model
 
@@ -32,7 +32,7 @@ There are some nuances to object ownership, but key types include:
 - **Address-owned objects:** These objects are owned by a single address. You can transfer or receive these objects without interacting with a smart contract. For example, currency, NFTs, or tokens gating access to certain functions.
 - **Shared objects:** Publicly accessible objects that anyone can use. Mutating the data stored in these objects typically involves defining rules in the smart contract.
 
-For all types of ownership on Sui, see [Object Ownership](/guides/developer/objects/object-ownership.mdx).
+For all types of ownership on Sui, see [Object Ownership](/guides/developer/objects/object-ownership).
 
 ## Access control
 
@@ -75,7 +75,7 @@ In Move, PTBs solve this problem. PTBs give builders the ability to chain contra
 
 Builders on Sui leverage PTBs to provide experiences that would otherwise be intractable. A good example is a DeFi aggregator that routes token swaps across multiple DeFi protocols with the best price. On Sui, the aggregator would use a single PTB with the guarantee that the transaction would execute at the displayed price or it would revert completely. The PTB is one of the most powerful Sui features. Experience shows builders who are most successful on Sui are the ones who learn to leverage this feature early and often, leaning into it rather than treating it just as a way to batch transactions.
 
-See [Programmable Transaction Blocks](/guides/developer/transactions/prog-txn-blocks.mdx) for details on PTBs.
+See [Programmable Transaction Blocks](/guides/developer/transactions/ptbs/prog-txn-blocks) for details on PTBs.
 
 ## More comparison
 
@@ -108,10 +108,3 @@ See [Programmable Transaction Blocks](/guides/developer/transactions/prog-txn-bl
 | Contract upgrading | Native, upgrade capability mediated. | Achieved using proxy pattern to delegate calls. Upgrades change where calls are directed to. |
 | Composability | Call any number of functions within a single transaction using PTBs. Compose by taking the output of one contract call and passing it into another. Ensures atomic execution. | Each call is its own transaction that must be processed individually and serialized by the chain. Requires careful publishing to ensure execution. Not atomic. |
 | Token royalties | Enforced by the chain. | Only enforceable by marketplaces. |
-
-## Related links
-
-<RelatedLink to="/concepts/sui-move-concepts" />
-<RelatedLink to="/guides/developer/objects/object-ownership" />
-<RelatedLink to="/guides/developer/transactions/prog-txn-blocks" />
-<RelatedLink href="https://move-book.com/programmability/dynamic-object-fields.html)" label="Dynamic Object Fields" desc="Learn more about Dynamic Object Fields in The Move Book." />

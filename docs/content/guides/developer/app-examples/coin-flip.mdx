@@ -24,11 +24,11 @@ Source code locations for the smart contracts and frontend:
 ## What the guide teaches
 
 - **Shared objects:** The guide teaches you how to use [shared objects](/guides/developer/objects/object-ownership/shared.mdx), in this case to create a globally accessible `HouseData` object.
-- **One-time witnesses:** The guide teaches you how to use [one-time witnesses](concepts/sui-move-concepts.mdx) to ensure only a single instance of the `HouseData` object ever exists.
+- **One-time witnesses:** The guide teaches you how to use [one-time witnesses](/concepts/sui-move-concepts.mdx) to ensure only a single instance of the `HouseData` object ever exists.
 - **Asserts:** The guide teaches you how to use [asserts](https://move-book.com/move-basics/assert-and-abort.html?highlight=asserts#assert) to abort functions due to certain conditions not being met.
 - **Address-owned objects:** The guide teaches you how to use [address-owned objects](/guides/developer/objects/object-ownership/address-owned) when necessary.
 - **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](/guides/developer/accessing-data/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
-- **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics.mdx#storage-fund-rewards).
+- **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](/concepts/tokenomics/tokenomics-overview.mdx).
 - **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
 
 
@@ -442,7 +442,7 @@ Now take a look at the main function in this game, `finish_game`:
   }
 ```
 
-- First, the function makes sure the `Game` object exists, then deletes it, as after the game concludes the metadata is no longer needed. Freeing up unnecessary storage is not only recommended, but [incentivized through rebates on storage fees](concepts/tokenomics.mdx#storage-fund-rewards).
+- First, the function makes sure the `Game` object exists, then deletes it, as after the game concludes the metadata is no longer needed. Freeing up unnecessary storage is not only recommended, but [incentivized through rebates on storage fees](/concepts/tokenomics/tokenomics-overview.mdx).
 - In step 1, the function checks to see if the BLS signature is valid. This is to ensure the game is truly random.
 - In step 2, the function checks to see if the player's guess, heads (`0`) or tails (`1`), is the same as that of the house. This is done by taking the first byte of the randomized vector and checking to see if it's divisible by two. If it is, it is heads, if it is not, it is tails.
 - In step 3, if the player won, meaning the player's guess matched the results of the house, the logic transfers fees from the stake to the house, then distributes the rest of the principle plus an equal amount from the house's balance back to the player. If the player loses, the logic transfers the entire stake to the house, and takes no fees.
@@ -750,7 +750,7 @@ export const HOUSECAP_ID =
 
 ### Exploring the code
 
-The UI interacts with the [Single Player smart contract](guides/developer/app-examples/coin-flip.mdx) variant of the game. This section walks you through each step in the smart contract flow and the corresponding frontend code.
+The UI interacts with the [Single Player smart contract](/guides/developer/app-examples/coin-flip.mdx) variant of the game. This section walks you through each step in the smart contract flow and the corresponding frontend code.
 
 :::info
 
@@ -895,7 +895,7 @@ Okay, that's a good start to have an overview of the project. Time to move to in
   }}
 ```
 
-To use a [programmable transaction block](/guides/developer/transactions/prog-txn-blocks.mdx) (PTB) in Sui, create a `Transaction`. To initiate a Move call, you must know the global identifier of a public function in your smart contract. The global identifier usually takes the following form:
+To use a [programmable transaction block](/guides/developer/transactions/ptbs/prog-txn-blocks) (PTB) in Sui, create a `Transaction`. To initiate a Move call, you must know the global identifier of a public function in your smart contract. The global identifier usually takes the following form:
 
 ```
 ${PACKAGE_ID}::${MODULE_NAME}::${FUNCTION_NAME}

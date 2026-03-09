@@ -1159,6 +1159,16 @@ pub fn generate_genesis_system_object(
             )?;
         }
 
+        if protocol_config.enable_display_registry() {
+            builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("display_registry").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )?;
+        }
+
         if protocol_config.enable_coin_deny_list_v1() {
             builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),

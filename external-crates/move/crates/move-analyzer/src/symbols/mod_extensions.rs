@@ -3,7 +3,7 @@
 
 //! This module contains code supporting handling of module extensions.
 //! The main problem we are trying to solve is that extensions are defined
-//! in user code but the compiler "inlines" them into ad AST at expansion.
+//! in user code but the compiler "inlines" them into an AST at expansion.
 //! This causes two different, though related, problems: one for extended
 //! dependency modules, and one for extended user-space modules.
 //!
@@ -206,23 +206,19 @@ fn extract_module_info(
 ) {
     match def {
         P::Definition::Module(mdef) => {
-            if let Some(addr) = mdef.address.as_ref().or(inherited_addr) {
-                let e_address = parsed_address(*addr, named_address_map.clone());
-                let mident = sp(mdef.name_loc, E::ModuleIdent_::new(e_address, mdef.name));
-
-                if mdef.is_extension {
-                    // This is an extension - record what it extends
-                    extension_targets.push(mident);
-                } else {
-                    // This is a regular module definition - record it
-                    module_defs.push((mident, file_path));
-                }
-            }
+            extract_module_info_internal(
+                mdef,
+                inherited_addr,
+                named_address_map,
+                file_path,
+                module_defs,
+                extension_targets,
+            );
         }
         P::Definition::Address(adef) => {
             for mdef in &adef.modules {
-                extract_module_info(
-                    &P::Definition::Module(mdef.clone()),
+                extract_module_info_internal(
+                    mdef,
                     Some(&adef.addr),
                     named_address_map.clone(),
                     file_path,
@@ -230,6 +226,30 @@ fn extract_module_info(
                     extension_targets,
                 );
             }
+        }
+    }
+}
+
+/// Extract module definitions and extension targets from a module definition.
+fn extract_module_info_internal(
+    mdef: &P::ModuleDefinition,
+    inherited_addr: Option<&P::LeadingNameAccess>,
+    named_address_map: Arc<NamedAddressMap>,
+    file_path: Symbol,
+    module_defs: &mut Vec<(E::ModuleIdent, Symbol)>,
+    extension_targets: &mut Vec<E::ModuleIdent>,
+) {
+    if let Some(addr) = mdef.address.as_ref().or(inherited_addr) {
+        // name_conflict's value does not matter
+        // as it's not used for ModuleIdent comparison
+        let e_address = parsed_address(*addr, named_address_map, /* name_conflict */ false);
+        let mident = sp(mdef.name_loc, E::ModuleIdent_::new(e_address, mdef.name));
+        if mdef.is_extension {
+            // This is an extension - record what it extends
+            extension_targets.push(mident);
+        } else {
+            // This is a regular module definition - record it
+            module_defs.push((mident, file_path));
         }
     }
 }

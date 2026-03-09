@@ -1,10 +1,10 @@
 ---
-title: Object Model
+title: Sui Object Model
 description: Everything on the Sui blockchain is an object that has metadata, a type of ownership, and a referencing scheme. 
 keywords: [ object model, objects on sui, sui move package, sui move object, move objects, move packages, objects, packages, referring to objects, object metadata, transaction-objects, transaction objects, relating objects and transactions ]
 ---
 
-An _object_ is a fundamental unit of storage on the network. Every resource, asset, or piece of data on-chain is an object. Many other blockchains structure storage around accounts containing key-value stores. Sui's storage is structured around objects addressable by unique IDs on-chain.
+An object is a fundamental unit of storage on the network. Every resource, asset, or piece of data on-chain is an object. Many other blockchains structure storage around accounts containing key-value stores. Sui's storage is structured around objects addressable by unique IDs on-chain.
 
 Every object has the following components:
 
@@ -60,7 +60,7 @@ Every object has the following metadata:
 
 - **A 32-byte transaction digest:** Indicates the last transaction that included this object as an output.
 
-- **A 32-byte owner field:** Indicates how this object can be [accessed](/guides/developer/objects/object-ownership.mdx).
+- **A 32-byte owner field:** Indicates how this object can be [accessed](/guides/developer/objects/object-ownership).
 
 In addition to common metadata, objects have a category-specific, variable-sized contents field containing a [Binary Canonical Serialization (BCS)](https://docs.rs/bcs/latest/bcs/)-encoded payload:
 
@@ -96,15 +96,7 @@ The `ProtocolConfig` struct in the [`sui-protocol-config` crate](https://github.
 
 </details>
 
-Select a network from the following tabs to see the currently configured limits and values.
-
 <ProtocolConfig fields="[max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit, max_accumulated_txn_cost_per_object_in_mysticeti_commit, max_accumulated_txn_cost_per_object_in_narwhal_commit, max_arguments, max_input_objects, max_gas_computation_bucket, max_gas_payment_objects, max_gas_price, max_move_object_size, max_num_event_emit, max_transactions_per_checkpoint, max_tx_gas, max_tx_size_bytes, max_txn_cost_overage_per_object_in_commit, max_type_argument_depth, max_type_arguments, max_type_nodes, max_type_to_layout_nodes, max_value_stack_size]"/>
 
-## Related links
+Select a network from the following tabs to see the currently configured limits and values.
 
-<RelatedLink to="/guides/developer/objects/versioning.mdx" />
-<RelatedLink to="/guides/developer/objects/object-ownership.mdx" />
-<RelatedLink href="https://github.com/MystenLabs/sui/blob/main/crates/sui-protocol-config/src/lib.rs" label="`sui-protocol-config`" desc=" Crate that defines the `ProtocolConfig` struct with limit definitions." />
-<RelatedLink href="https://move-book.com/guides/building-against-limits.html" label="Building against Limits" desc=" The Move Book provides a concise overview for limits most projects deal with." />
-<RelatedLink href="https://move-book.com/" label="The Move Book" desc=" A comprehensive guide to the Move programming language used on the Sui network." />
-<RelatedLink href="https://move-book.com/reference/" label="The Move Reference" desc=" Reference guide for the Move language." />

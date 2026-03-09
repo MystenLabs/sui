@@ -52,6 +52,7 @@ config.json
 deny_list.json
 derived_object.json
 display.json
+display_registry.json
 dynamic_field.json
 dynamic_object_field.json
 ecdsa_k1.json

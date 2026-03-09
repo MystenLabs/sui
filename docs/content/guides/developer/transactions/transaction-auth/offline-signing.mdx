@@ -37,7 +37,7 @@ All other CLI commands that craft a transaction (such as `sui client publish` an
 
 ## Sign the serialized data {#sign}
 
-You can sign the data using the device and programming language of your choice. Sui accepts signatures for pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and native multisig. To learn more about the requirements of the signatures, see [Sui Signatures](/concepts/transactions/transaction-auth.mdx).
+You can sign the data using the device and programming language of your choice. Sui accepts signatures for pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and native multisig. To learn more about the requirements of the signatures, see [Sui Signatures](/guides/developer/transactions/transaction-auth/auth-overview).
 
 This example uses the `sui keytool` command to sign, using the Ed25519 key corresponding to the provided address stored in `sui.keystore`. This command outputs the signature, the public key, and the flag encoded in Base64. This command is backed by [fastcrypto](https://github.com/MystenLabs/fastcrypto).
 

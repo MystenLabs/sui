@@ -177,14 +177,19 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
 
     let under_path = shared::get_build_output_path(&project_root, build_config);
 
-    save_to_disk(
-        root_compiled_units.clone(),
-        compiled_package_info.clone(),
-        deps_compiled_units.clone(),
-        compiled_docs.clone(),
-        package_name,
-        under_path,
-    )?;
+    if !root_compiled_units.is_empty() || !deps_compiled_units.is_empty() || compiled_docs.is_some()
+    {
+        // Save to disk only if there are any artfifacts. In particular,
+        // driver compilation may not produce any compiled modules.
+        save_to_disk(
+            root_compiled_units.clone(),
+            compiled_package_info.clone(),
+            deps_compiled_units.clone(),
+            compiled_docs.clone(),
+            package_name,
+            under_path,
+        )?;
+    }
 
     let compiled_package = CompiledPackage {
         compiled_package_info,

@@ -10,7 +10,7 @@ module References::M1 {
         MyStruct { value: 42 }
     }
 
-    public fun unoack(s: MyStruct): u64 {
+    public fun unpack(s: MyStruct): u64 {
         let MyStruct { value } = s;
         value
     }

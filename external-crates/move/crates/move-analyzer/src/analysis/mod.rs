@@ -31,31 +31,50 @@ pub mod typing_analysis;
 
 pub type DefMap = BTreeMap<Loc, DefInfo>;
 
+/// Context tracking the current location during analysis traversal.
+/// All fields are set together when entering a module and the entire
+/// context is cleared when exiting.
+#[derive(Debug, Clone)]
+pub struct CurrentLocationContext {
+    /// Current module identifier string
+    pub mod_ident_str: String,
+    /// Current file hash being processed
+    pub file_hash: FileHash,
+    /// Module definition location for unique identification within a file
+    pub mod_loc: Loc,
+}
+
+impl CurrentLocationContext {
+    pub fn new(mod_ident_str: String, file_hash: FileHash, mod_loc: Loc) -> Self {
+        Self {
+            mod_ident_str,
+            file_hash,
+            mod_loc,
+        }
+    }
+}
+
 /// Run parsing analysis for either main program or dependencies
 pub fn run_parsing_analysis(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &CompiledPkgInfo,
     cursor_context: Option<&mut CursorContext>,
     parsed_program: &ParsedDefinitions,
-    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
     let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
+        mod_parsing_info: &mut computation_data.mod_parsing_info,
         files: &compiled_pkg_info.mapped_files,
         def_info: &computation_data.def_info,
         references: &mut computation_data.references,
         use_defs: &mut computation_data.use_defs,
-        current_mod_ident_str: None,
+        current_location: None,
         alias_lengths: BTreeMap::new(),
         pkg_addresses: Arc::new(NamedAddressMap::new()),
         cursor: cursor_context,
     };
 
-    parsing_symbolicator.prog_symbols(
-        parsed_program,
-        &mut computation_data.mod_to_alias_lengths,
-        typed_mod_named_address_maps,
-    );
+    parsing_symbolicator.prog_symbols(parsed_program, &mut computation_data.mod_to_alias_lengths);
 }
 
 /// Run typing analysis for either main program or dependencies
@@ -67,11 +86,12 @@ pub fn run_typing_analysis(
 ) -> SymbolsComputationData {
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
+        mod_parsing_info: &mut computation_data.mod_parsing_info,
         files: mapped_files,
         references: &mut computation_data.references,
         def_info: &mut computation_data.def_info,
         use_defs: &mut computation_data.use_defs,
-        current_mod_ident_str: None,
+        current_location: None,
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
         compiler_analysis_info,
@@ -104,17 +124,12 @@ fn process_typed_modules<'a>(
     mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
     typing_symbolicator: &mut typing_analysis::TypingAnalysisContext<'a>,
 ) {
-    // TODO(extensions): Extension modules are skipped during parsing analysis because
-    // their location-based address map lookup fails in `pkg_symbols`. When full extension
-    // support is added, alias lengths should be computed for extensions and this
-    // fallback removed.
-    static EMPTY_ALIAS_LENGTHS: std::sync::LazyLock<BTreeMap<Position, usize>> =
-        std::sync::LazyLock::new(BTreeMap::new);
     for (module_ident, module_def) in typed_modules.key_cloned_iter() {
         let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
+        // All typed modules must have alias lengths computed during parsing analysis.
         typing_symbolicator.alias_lengths = mod_to_alias_lengths
             .get(&mod_ident_str)
-            .unwrap_or(&EMPTY_ALIAS_LENGTHS);
+            .unwrap_or_else(|| panic!("no alias lengths for module {mod_ident_str}"));
         typing_symbolicator.visit_module(module_ident, module_def);
     }
 }
@@ -145,13 +160,7 @@ fn add_member_use_def(
         .or_else(|| mod_defs.structs.get(member_def_name))
         .or_else(|| mod_defs.enums.get(member_def_name))
     {
-        let Some(member_info) = def_info.get(&member_def.name_loc) else {
-            // TODO: This can happen with module extensions as currently we don't
-            // have a way to recognize that these are part of a dependent package
-            // and they are filtered out when creating cached dependencies.
-            // Clearly this needs to be fixed but let's at least not crash for now...
-            return None;
-        };
+        let member_info = def_info.get(&member_def.name_loc).unwrap();
         // type def location exists only for structs and enums (and not for functions)
         let ident_type_def_loc = match member_info {
             DefInfo::Struct(_, name, ..) | DefInfo::Enum(_, name, ..) => {

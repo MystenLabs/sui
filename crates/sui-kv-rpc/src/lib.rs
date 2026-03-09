@@ -43,7 +43,7 @@ impl KvRpcServer {
             "sui-kv-rpc".to_string(),
             Some(registry),
             app_profile_id,
-            None,
+            Some(1),
             credentials_path,
         )
         .await?;

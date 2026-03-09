@@ -24,7 +24,7 @@ If you set up your own indexer, you are responsible for its ongoing maintenance 
 
 At a high level, the indexing framework is a streaming pipeline that continuously polls for the latest available checkpoints from a predefined data source and streams that checkpoint data to your pipeline's processing logic.
 
-Checkpoints on Sui are batches of transactions that represent consistent blockchain state snapshots. Each checkpoint contains complete transaction details, events, object changes, and execution results with guaranteed ordering. See [Life of a Transaction](/concepts/transactions/transaction-lifecycle.mdx) for more information on checkpoints.
+Checkpoints on Sui are batches of transactions that represent consistent blockchain state snapshots. Each checkpoint contains complete transaction details, events, object changes, and execution results with guaranteed ordering. See [Life of a Transaction](/guides/developer/transactions/transaction-lifecycle) for more information on checkpoints.
 
 ![Overview](images/overview.png)
 
@@ -75,9 +75,3 @@ The indexing framework abstracts database operations through a flexible storage 
 ## Building custom indexers
 
 To build your own pipelines for application-specific data, see [Building Your First Custom Indexer](/guides/developer/accessing-data/custom-indexer/build.mdx). You can also reach out to a [data indexer operator](/references/awesome-sui.mdx#indexers--data-services) that might already have set one up for your needs.
-
-## Related links
-
-<RelatedLink to="/guides/developer/accessing-data/custom-indexer/build.mdx" />
-<RelatedLink to="/concepts/data-access/pipeline-architecture.mdx" />
-<RelatedLink to="/concepts/transactions/transaction-lifecycle.mdx" />

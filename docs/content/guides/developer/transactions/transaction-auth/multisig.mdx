@@ -4,7 +4,7 @@ description: Multi-signature (multisig) transactions require multiple keys for a
 keywords: [ multi-signature, multi-sig, multisig, multiple signatures, pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1 ]
 ---
 
-Sui supports multi-signature (multisig) transactions, which require multiple keys for authorization rather than a single key signature. Sui supports `k` out of `n` multisig transactions, where `k` is the threshold and `n` is the total weight of all participating parties. The maximum number of parties is 10. To learn more about supported single key signatures, see [Signatures](/concepts/transactions/transaction-auth.mdx).
+Sui supports multi-signature (multisig) transactions, which require multiple keys for authorization rather than a single key signature. Sui supports `k` out of `n` multisig transactions, where `k` is the threshold and `n` is the total weight of all participating parties. The maximum number of parties is 10. To learn more about supported single key signatures, see [Signatures](/guides/developer/transactions/transaction-auth/auth-overview).
 
 Valid participating keys for multisig are:
 
@@ -31,6 +31,3 @@ Compared to threshold signatures, a multisig account is generally more flexible 
 ![Multisig structure diagram](images/sui_multisig_structures.png 'Supported multisig configurations in Sui')
 _Multisig structures supported in Sui._
 
-## Related links
-
-<RelatedLink to="/guides/developer/cryptography/multisig.mdx" />

@@ -327,30 +327,6 @@ You can also add additional strings to the end of the inject statement to highli
 <ImportContent source="examples/move/example.source" mode="code" module="example::example" noComments noTests />
 ```
 
-## `RelatedLink`
-
-Each page should have a _Related links_ section at the bottom. Use the `RelatedLink` component to itemize each link under this heading. The `## Related links` heading remains in markdown format for ease of ToC inclusion.
-
-There are two basic forms to the component. 
-
-1. `<RelatedLink to="/guides/path/to/page" />`
-    Internal pages just need a `to` value that is relative to the site root. The label and description are pulled from that pages frontmatter.
-
-1. `<RelatedLink href="https://url/to/page" label="Hyperlink label" desc="Description of link." />`
-    Links external to the site need an `href`, `label`, and `desc` values.
-
-**Example:**
-
-```
-...
-
-## Related links
-
-<RelatedLink to="/guides/path/to/page" />
-<RelatedLink href="https://url/to/page" label="Hyperlink label" desc="Description of link." />
-<RelatedLink href="https://url/to/page" label="Hyperlink label" desc="Description of link." />
-```
-
 ## Collapsible components: Details and summary 
 
 Use `<details>` and `<summary>` to create collapsible content. This is useful for reducing page length by placing long code files, command output, or other large text blocks inside `<details>`, making the page easier to scroll.

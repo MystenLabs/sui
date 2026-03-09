@@ -13,7 +13,7 @@ const guides = [
     collapsed: false,
     link: {
       type: 'doc',
-      id: 'guides/developer/getting-started',
+      id: 'guides/developer/getting-started/index',
     },
     items: [
       {
@@ -41,14 +41,18 @@ const guides = [
   {
     type: 'category',
     label: 'Objects',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/objects/index',
+    },
     items: [
       'guides/developer/objects/object-model',
       {
         type: 'category',
-        label: 'Object Ownership',
+        label: 'Types of Object Ownership',
         link: {
           type: 'doc',
-          id: 'guides/developer/objects/object-ownership',
+          id: 'guides/developer/objects/object-ownership/index',
         },
         items: [
           'guides/developer/objects/object-ownership/address-owned',
@@ -60,10 +64,10 @@ const guides = [
       },
       {
         type: 'category',
-        label: 'Transfers',
+        label: 'Transfering Objects',
         link: {
           type: 'doc',
-          id: 'guides/developer/objects/transfers',
+          id: 'guides/developer/objects/transfers/index',
         },
         items: [
           'guides/developer/objects/transfers/custom-rules',
@@ -73,85 +77,101 @@ const guides = [
       },
       'guides/developer/objects/derived-objects',
       {
-				type: 'category',
-				label: 'Dynamic Fields',
-				link: {
-					type: 'doc',
-					id: 'guides/developer/objects/dynamic-fields',
-				},
-				items: ['guides/developer/objects/tables-bags'],
-			},
+        type: 'category',
+        label: 'Dynamic Fields',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/objects/dynamic-fields',
+        },
+        items: ['guides/developer/objects/tables-bags'],
+      },
       'guides/developer/objects/versioning',
       'guides/developer/objects/local-fee-markets',
       'guides/developer/objects/simulating-refs',
-
     ],
+  },
+  {
+    type: 'category',
+    label: 'Packages',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/packages/index',
+        },
+    items: [
+      'guides/developer/packages/package-overview',
+      'guides/developer/packages/move-package-management',
+      'guides/developer/packages/upgrade',
+      'guides/developer/packages/custom-policies',
+      'guides/developer/packages/automated-address-management',
+    ],
+  },
+  {
+    type: 'category',
+    label: 'Transactions',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/transactions/index',
     },
-    {
-        type: 'category',
-        label: 'Packages',
-  				items: [
-          'guides/developer/packages/move-package-management',
-					'guides/developer/packages/upgrade',
-					'guides/developer/packages/custom-policies',
-					'guides/developer/packages/automated-address-management',
-				],
-			},
+    items: [
+      'guides/developer/transactions/txn-overview',
+      'guides/developer/transactions/transaction-lifecycle',
       {
-				type: 'category',
-				label: 'Transactions',
-				link: {
-					type: 'doc',
-					id: 'guides/developer/transactions/txn-overview',
-				},
+        type: 'category',
+        label: 'Programmable Transaction Blocks (PTBs)',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/transactions/ptbs/index',
+        },
         items: [
-           {
-            type: 'category',
-            label: 'Programmable Transaction Blocks',
-            link: {
-              type: 'doc',
-              id: 'guides/developer/transactions/prog-txn-blocks',
-            },
-              items: [
-              'guides/developer/transactions/building-ptb',
-              ],
-            },
-            'guides/developer/transactions/sign-and-send-txn',
-            'guides/developer/transactions/sponsor-txn',
-            {
-            type: 'category',
-            label: 'Transaction Authentication',
-              items: [
-              'guides/developer/transactions/transaction-auth/intent-signing',
-              'guides/developer/transactions/transaction-auth/multisig',
-              'guides/developer/transactions/transaction-auth/offline-signing',
-              'guides/developer/transactions/transaction-auth/address-aliases',
-              ],
-            },
+          'guides/developer/transactions/ptbs/prog-txn-blocks',
+          'guides/developer/transactions/ptbs/building-ptb',
+          'guides/developer/transactions/ptbs/inputs-and-results',
+          'guides/developer/transactions/ptbs/sign-and-send-txn',
         ],
+      },
+      {
+        type: 'category',
+        label: 'Transaction Authentication',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/transactions/transaction-auth/index',
+        },
+        items: [
+          'guides/developer/transactions/transaction-auth/intent-signing',
+          'guides/developer/transactions/transaction-auth/multisig',
+          'guides/developer/transactions/transaction-auth/offline-signing',
+		  'guides/developer/transactions/transaction-auth/address-aliases',
+        ],
+      },
+      'guides/developer/transactions/sponsor-txn',
+			'guides/developer/transactions/gas-smashing',
+    ],
   },
   {
     type: 'category',
     label: 'Accessing Data',
+     link: {
+          type: 'doc',
+          id: 'guides/developer/accessing-data/index',
+        },
     items: [
       'guides/developer/accessing-data/grpc-overview',
       'guides/developer/accessing-data/query-with-graphql',
       'guides/developer/accessing-data/archival-store',
       'guides/developer/accessing-data/using-events',
-      'guides/developer/accessing-data/authenticated-events',
       {
         type: 'category',
         label: 'Custom Indexing Framework',
         link: {
           type: 'doc',
-          id: 'guides/developer/accessing-data/custom-indexing-framework',
+          id: 'guides/developer/accessing-data/custom-indexer/index',
         },
-          items: [
-            'guides/developer/accessing-data/custom-indexer/build',
-            'guides/developer/accessing-data/custom-indexer/indexer-walrus',
-            'guides/developer/accessing-data/custom-indexer/bring-your-own-store',
-          ]
-        },
+        items: [
+          'guides/developer/accessing-data/custom-indexer/build',
+          'guides/developer/accessing-data/custom-indexer/indexer-walrus',
+          'guides/developer/accessing-data/custom-indexer/bring-your-own-store',
+        ],
+      },
     ],
   },
   {
@@ -159,16 +179,15 @@ const guides = [
     label: 'Currencies and Tokens',
     link: {
       type: 'doc',
-      id: 'guides/developer/coin-index',
+      id: 'guides/developer/coin/index',
     },
     items: [
-      'guides/developer/currency',
+      'guides/developer/coin/currency',
       'guides/developer/address-balances-migration',
       'guides/developer/coin/regulated',
       'guides/developer/coin/in-game-token',
       'guides/developer/coin/loyalty',
       'guides/developer/coin/vesting-strategies',
-
     ],
   },
   {
@@ -176,10 +195,10 @@ const guides = [
     label: 'NFTs',
     link: {
       type: 'doc',
-      id: 'guides/developer/nft-index',
+      id: 'guides/developer/nft/index',
     },
     items: [
-      'guides/developer/nft',
+      'guides/developer/nft/nft',
       'guides/developer/nft/nft-soulbound',
       'guides/developer/nft/nft-rental',
       'guides/developer/nft/asset-tokenization',
@@ -187,7 +206,22 @@ const guides = [
   },
   {
     type: 'category',
+    label: 'Wallets',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/wallets/index',
+    },
+    items: [
+      'guides/developer/wallets/suilink'
+    ],
+  },
+  {
+    type: 'category',
     label: 'On-Chain Primitives',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/on-chain-primitives/index',
+    },
     items: [
       'guides/developer/on-chain-primitives/access-time',
       'guides/developer/on-chain-primitives/randomness-onchain',
@@ -198,7 +232,7 @@ const guides = [
     label: 'Cryptography',
     link: {
       type: 'doc',
-      id: 'guides/developer/cryptography',
+      id: 'guides/developer/cryptography/index',
     },
     items: [
       'guides/developer/cryptography/signing',
@@ -211,16 +245,18 @@ const guides = [
         label: 'zkLogin Integration Guide',
         link: {
           type: 'doc',
-          id: 'guides/developer/cryptography/zklogin-integration',
+          id: 'guides/developer/cryptography/zklogin-integration/index',
         },
         items: [
+          'guides/developer/cryptography/zklogin-integration/zklogin',
+          'guides/developer/cryptography/zklogin-integration/zklogin-integration',
           'guides/developer/cryptography/zklogin-integration/developer-account',
           'guides/developer/cryptography/zklogin-integration/zklogin-example',
         ],
       },
     ],
   },
-    {
+  {
     type: 'category',
     label: 'Nautilus',
     link: {
@@ -228,6 +264,7 @@ const guides = [
       id: 'guides/developer/nautilus/index',
     },
     items: [
+      'guides/developer/nautilus/nautilus-overview',
       'guides/developer/nautilus/nautilus-design',
       'guides/developer/nautilus/using-nautilus',
       'guides/developer/nautilus/customize-nautilus',
@@ -237,17 +274,10 @@ const guides = [
   },
   {
     type: 'category',
-    label: 'Wallets',
-    items: [
-      'guides/developer/wallets/suilink',
-    ],
-  },
-  {
-    type: 'category',
     label: 'App Examples',
     link: {
       type: 'doc',
-      id: 'guides/developer/app-examples',
+      id: 'guides/developer/app-examples/index',
     },
     items: [
       'guides/developer/app-examples/e2e-counter',
@@ -272,14 +302,12 @@ const guides = [
       },
     ],
   },
-  'guides/developer/dev-cheat-sheet',
-  'guides/developer/common-errors',
   {
     type: 'category',
     label: 'Operator Guides',
     link: {
       type: 'doc',
-      id: 'guides/operator',
+      id: 'guides/operator/index',
     },
     items: [
       'guides/operator/sui-full-node',
@@ -294,6 +322,7 @@ const guides = [
       'guides/operator/bridge-node-configuration',
       'guides/operator/indexer-stack-setup',
       'guides/operator/archival-stack-setup',
+      'guides/operator/remote-store-setup',
       {
         type: 'category',
         label: 'Sui Validator Nodes',
@@ -316,7 +345,7 @@ const guides = [
     collapsed: true,
     link: {
       type: 'doc',
-      id: 'guides/suiplay0x1',
+      id: 'guides/suiplay0x1/index',
     },
     items: [
       'guides/suiplay0x1/integration',
@@ -325,6 +354,9 @@ const guides = [
       'guides/suiplay0x1/best-practices',
     ],
   },
+  'guides/developer/dev-cheat-sheet',
+  'guides/developer/move-best-practices',
+  'guides/developer/common-errors',
 ];
 
 export default guides;

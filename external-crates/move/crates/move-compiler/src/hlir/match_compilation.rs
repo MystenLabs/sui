@@ -5,7 +5,7 @@ use crate::{
     expansion::ast::{Fields, ModuleIdent, Mutability, Value, Value_},
     hlir::translate::Context,
     ice, ice_assert,
-    naming::ast::{self as N, BuiltinTypeName_, Type, UseFuns, Var},
+    naming::ast::{self as N, BuiltinTypeName_, Type, TypeInner, UseFuns, Var},
     parser::ast::{DatatypeName, Field, VariantName},
     shared::{
         ast_debug::{AstDebug, AstWriter},
@@ -62,6 +62,14 @@ pub(super) fn compile_match(
     arms: Spanned<Vec<T::MatchArm>>,
 ) -> T::Exp {
     let loc = arms.loc;
+    match subject.ty.value.inner() {
+        TypeInner::Anything | TypeInner::Void | TypeInner::UnresolvedError => {
+            assert!(context.env.has_errors());
+            let exp_value = sp(loc, T::UnannotatedExp_::UnresolvedError);
+            return T::exp(result_type.clone(), exp_value);
+        }
+        _ => {}
+    }
     // NB: `from` also flattens `or` and converts constants into guards.
     let (pattern_matrix, arms) = PatternMatrix::from(context, loc, subject.ty.clone(), arms.value);
 

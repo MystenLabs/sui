@@ -50,7 +50,6 @@ ${content}`;
       }
 
       fs.writeFileSync(mdxPath, mdxContent, 'utf8');
-      console.log(`Converted: ${filePath} -> ${mdxPath}`);
     }
   });
 }

@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04001]: restricted visibility
+  ┌─ tests/move_check/folding/constant_cross_module.move:7:20
+  │
+2 │     const C_ZERO: u64 = 0;
+  │           ------ Constants are internal to their module, and cannot can be accessed outside of their module
+  ·
+7 │     const D: u64 = C_ZERO + 1;
+  │                    ^^^^^^ Invalid access of '0x42::t::C_ZERO'
+
+error[E08001]: cannot compute constant value
+  ┌─ tests/move_check/folding/constant_cross_module.move:7:20
+  │
+7 │     const D: u64 = C_ZERO + 1;
+  │                    ^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value

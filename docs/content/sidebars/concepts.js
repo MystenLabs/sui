@@ -10,9 +10,10 @@ const concepts = [
 		label: 'Architecture',
 		link: {
 			type: 'doc',
-			id: 'concepts/architecture',
+			id: 'concepts/sui-architecture/index',
 		},
 		items: [
+			'concepts/sui-architecture/components',
 			'concepts/sui-architecture/networks',
 			'concepts/sui-architecture/sui-storage',
 			'concepts/sui-architecture/consensus',
@@ -23,40 +24,16 @@ const concepts = [
 	},
 	{
 		type: 'category',
-		label: 'Transactions',
-		items: [
-			'concepts/transactions/transaction-lifecycle',
-			'concepts/transactions/inputs-and-results',
-			'concepts/transactions/gas-smashing',
-			'concepts/transactions/transaction-auth',
-		],
-	},
-	{
-		type: 'category',
 		label: 'Tokenomics',
 		link: {
 			type: 'doc',
-			id: 'concepts/tokenomics',
+			id: 'concepts/tokenomics/index',
 		},
 		items: [
+			'concepts/tokenomics/tokenomics-overview',
 			'concepts/tokenomics/staking-unstaking',
 			'concepts/tokenomics/sui-bridging',
 			'concepts/tokenomics/gas-in-sui',
-		],
-	},
-	'concepts/coin-mgt',
-
-	{
-		type: 'category',
-		label: 'Move',
-		link: {
-			type: 'doc',
-			id: 'concepts/sui-move-concepts',
-		},
-		items: [
-			'concepts/sui-move-concepts/packages',
-			'concepts/sui-move-concepts/conventions',
-			'concepts/sui-move-concepts/move-2024-migration',
 		],
 	},
 	{
@@ -90,26 +67,15 @@ const concepts = [
 		label: 'Cryptography',
 		link: {
 			type: 'doc',
-			id: 'concepts/cryptography',
+			id: 'concepts/cryptography/index',
 		},
 		items: [
-			'concepts/cryptography/zklogin',
 			'concepts/cryptography/passkeys',
 			'concepts/cryptography/system/checkpoint-verification',
-			/*{
-				type: 'category',
-				label: 'System',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/system',
-				},
-				items: [
-					'concepts/cryptography/system/validator-signatures',
-					'concepts/cryptography/system/intents-for-validation',
-				],
-			},*/
 		],
 	},
+	'concepts/coin-mgt',
+	'concepts/sui-move-concepts',
 	'concepts/gaming',
 	'concepts/research-papers',
 ];

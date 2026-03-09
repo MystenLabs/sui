@@ -53,7 +53,7 @@ The following gRPC services are available on Sui. Protocol buffers define the gR
 | `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. It also supports dry-run simulations for transactions. |
 | `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. See Subscriptions for streaming data. |
 | `MovePackageService` | `sui/rpc/v2/move_package_service.proto` | Access metadata and the content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
-| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that might include [zkLogin](/concepts/cryptography/zklogin) or other signatures, simulate authentication, or build custom signing workflows. |
+| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that might include [zkLogin](/guides/developer/cryptography/zklogin-integration) or other signatures, simulate authentication, or build custom signing workflows. |
 | `NameService` | `sui/rpc/v2/name_service.proto` | Resolve human-readable SuiNS names to their underlying name records, and perform reverse lookups from Sui addresses back to linked names. |
 
 Use these definitions to generate client libraries in various programming languages.
@@ -111,10 +111,3 @@ In `proto3`, marking a field as `optional` gives the API the ability to detect [
 #### Are all services and related data guaranteed to be available on all full nodes?
 
 Full nodes might vary in which services and retention they support. Some services might not be supported yet or some APIs might return `NOT_FOUND` depending on the node's configuration and data availability.
-
-## Related links
-
-<RelatedLink to="/references/fullnode-protocol" label="Sui gRPC proto spec" />
-<RelatedLink to="/guides/operator/indexer-stack-setup" />
-<RelatedLink to="/guides/developer/accessing-data/grpc-overview" label="Using Sui gRPC" />
-<RelatedLink to="/guides/operator/sui-full-node#considerations-to-enable-grpc" label="Configuration options to enable gRPC on your full node" />

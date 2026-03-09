@@ -58,6 +58,8 @@ pub struct TestAuthorityBuilder<'a> {
     reference_gas_price: Option<u64>,
     node_keypair: Option<&'a AuthorityKeyPair>,
     genesis: Option<&'a Genesis>,
+    /// Pre-built network config to avoid rebuilding genesis
+    network_config: Option<&'a NetworkConfig>,
     starting_objects: Option<&'a [Object]>,
     expensive_safety_checks: Option<ExpensiveSafetyCheckConfig>,
     disable_indexer: bool,
@@ -68,6 +70,10 @@ pub struct TestAuthorityBuilder<'a> {
     cache_config: Option<ExecutionCacheConfig>,
     chain_override: Option<Chain>,
     dev_inspect_disabled: bool,
+    /// Skip full RPC index initialization (use for tests that don't need RPC endpoints)
+    skip_rpc_index_init: bool,
+    /// Skip genesis owner/dynamic-field indexing (use for tests that don't query owned objects)
+    skip_genesis_owner_index: bool,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -145,8 +151,29 @@ impl<'a> TestAuthorityBuilder<'a> {
         )
     }
 
+    /// Provide a pre-built network config to avoid rebuilding genesis.
+    /// This is useful when creating multiple authorities that should share the same genesis.
+    pub fn with_shared_network_config(mut self, config: &'a NetworkConfig) -> Self {
+        assert!(self.network_config.replace(config).is_none());
+        self
+    }
+
     pub fn disable_indexer(mut self) -> Self {
         self.disable_indexer = true;
+        self
+    }
+
+    /// Skip full RPC index initialization. This is much faster for tests
+    /// that don't need RPC endpoint functionality.
+    pub fn skip_rpc_index_init(mut self) -> Self {
+        self.skip_rpc_index_init = true;
+        self
+    }
+
+    /// Skip genesis owner/dynamic-field indexing. This is much faster for tests
+    /// that don't query owned objects via RPC (e.g., get_owned_objects).
+    pub fn skip_genesis_owner_index(mut self) -> Self {
+        self.skip_genesis_owner_index = true;
         self
     }
 
@@ -193,15 +220,22 @@ impl<'a> TestAuthorityBuilder<'a> {
             .clone()
             .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
 
-        let mut local_network_config_builder =
-            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                .with_accounts(self.accounts)
-                .with_reference_gas_price(self.reference_gas_price.unwrap_or(500));
-        if let Some(protocol_config) = &self.protocol_config {
-            local_network_config_builder =
-                local_network_config_builder.with_protocol_version(protocol_config.version);
-        }
-        let local_network_config = local_network_config_builder.build();
+        // Use pre-built network config if available, otherwise build one
+        let owned_network_config;
+        let local_network_config: &NetworkConfig = if let Some(config) = self.network_config {
+            config
+        } else {
+            let mut local_network_config_builder =
+                sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                    .with_accounts(self.accounts)
+                    .with_reference_gas_price(self.reference_gas_price.unwrap_or(500));
+            if let Some(protocol_config) = &self.protocol_config {
+                local_network_config_builder =
+                    local_network_config_builder.with_protocol_version(protocol_config.version);
+            }
+            owned_network_config = local_network_config_builder.build();
+            &owned_network_config
+        };
         let genesis = &self.genesis.unwrap_or(&local_network_config.genesis);
         let genesis_committee = genesis.committee();
         let path = self.store_base_path.unwrap_or_else(|| {
@@ -233,6 +267,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .unwrap()
             }
         };
+
         if let Some(cache_config) = self.cache_config {
             config.execution_cache = cache_config;
         }
@@ -297,6 +332,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
         )
         .expect("failed to create authority per epoch store");
+
         let committee_store = Arc::new(CommitteeStore::new(
             path.join("epochs"),
             &genesis_committee,
@@ -322,8 +358,11 @@ impl<'a> TestAuthorityBuilder<'a> {
                 false,
             )))
         };
+
         let rpc_index = if self.disable_indexer {
             None
+        } else if self.skip_rpc_index_init {
+            Some(Arc::new(RpcIndexStore::new_without_init(&path)))
         } else {
             Some(Arc::new(
                 RpcIndexStore::new(
@@ -361,6 +400,11 @@ impl<'a> TestAuthorityBuilder<'a> {
         let policy_config = config.policy_config.clone();
         let firewall_config = config.firewall_config.clone();
 
+        let genesis_objects_for_index = if self.skip_genesis_owner_index {
+            &[][..]
+        } else {
+            genesis.objects()
+        };
         let state = AuthorityState::new(
             name,
             secret,
@@ -373,7 +417,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             rpc_index,
             checkpoint_store,
             &registry,
-            genesis.objects(),
+            genesis_objects_for_index,
             &DBCheckpointConfig::default(),
             config.clone(),
             chain_identifier,
@@ -444,6 +488,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .await
                 .unwrap();
         };
+
         state
     }
 }

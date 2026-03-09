@@ -24,7 +24,7 @@ The Currency Standard is a technical standard used by Move smart contracts for c
 
 The standardization of coin creation on Sui means that wallets, exchanges, and other smart contracts can manage coins created on Sui the same as they manage SUI, without any additional processing logic.
 
-See [Sui Tokenomics](/concepts/tokenomics.mdx) to learn more about the SUI native currency and its use on the network.
+See [Sui Tokenomics](/concepts/tokenomics) to learn more about the SUI native currency and its use on the network.
 
 Coins on Sui can offer specialized abilities while following the Currency Standard. For example, you can create regulated coins that allow their creator to add specific addresses to a deny list, so that the identified addresses cannot use the coin as inputs to transactions.
 
@@ -367,11 +367,3 @@ The registry enforces several important validations:
 - **Capability proof:** Metadata deletion requires capability ownership.
 - **State consistency:** Regulatory state migration prevents double-setting.
 
-## Related links
-
-<RelatedLink to="/guides/developer/currency.mdx" />
-<RelatedLink to="/standards/closed-loop-token.mdx" />
-<RelatedLink to="/guides/developer/objects/derived-objects.mdx" />
-<RelatedLink href="/references/framework/sui_sui/coin" label="`coin` module rustdoc documentation" desc="Automated documentation output for the Sui framework `coin` module." />
-<RelatedLink href="/references/framework/sui_sui/token" label="`token` module rustdoc documentation" desc="Automated documentation output for the Sui framework `token` module." />
-<RelatedLink to="/concepts/tokenomics.mdx" />

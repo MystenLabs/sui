@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03010]: unbound field
+  ┌─ tests/move_2024/borrows/pack_single_value.move:5:9
+  │
+5 │         A(());
+  │         ^^^^^ Unbound field '0' in '0x42::m::A'
