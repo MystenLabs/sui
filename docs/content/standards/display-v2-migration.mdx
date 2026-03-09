@@ -29,8 +29,6 @@ Display V2 brings a richer templating model, improved rendering pipeline, and be
 
 - **GraphQL**: Rich APIs to use display as a querying tool, not just for rendering.
 
-[Read more about the new templating language and try the visual display builder](/standards/display/display-preview).
-
 ## Differences between V1 and V2
 
 In V1, discovering the display for a type relied on events, for example, `DisplayCreated<T>`. Clients had to query historical events by type and infer which object(s) represented the display. This approach depends on historical event data, doesn't scale for full nodes that may not retain full history, and is a poor fit for RPC APIs like JSON-RPC, gRPC, and others that need a stable, cheap way to resolve "display for type T" without scanning events.
