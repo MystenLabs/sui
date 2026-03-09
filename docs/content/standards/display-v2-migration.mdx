@@ -4,11 +4,18 @@ description: The Sui Object Display standard is a template engine that enables o
 keywords: [ Object Display, object, display, display properties, object properties, sui::display, display<T>, Sui utility objects, Unique objects with dynamic representation, objects with unique static content ]
 ---
 
-:::caution 
+:::danger
 
-All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You don't need to do anything upfront; after the snapshot, you can claim the capability when you're ready (see [Migration and claiming](#migration-and-claiming)).
+Object Display V2 will be available in Sui v1.68. You can check the [release schedule](https://www.sui.io/networkinfo) to learn more about when v1.68 is available on Devnet, Testnet, and Mainnet. 
 
 :::
+
+## V1 end of life 
+
+Object Display V1 will be supported by RPCs that already have support for it (JSON-RPC, GraphQL) until the **end of July 2026**. After that, on-chain V1 display code will be decommissioned and will start aborting.
+
+It is recommended to use the `sui::display_registry` APIs when creating display from Move code. For the intermediate phase, use the `migrate_v1_to_v2` function to migrate a legacy display and receive the V2 `Display<T>` and `DisplayCap<T>`.
+
 
 ## What's new in V2
 
@@ -34,13 +41,19 @@ In V2, the display for type `T` has a single, deterministic ID derived from the 
 
 In Object Display V1, you could have `N` displays per type and had to use events to query them. In Object Display V2, there is only 1 per type and you get it by derivation.
 
-|                       | **V1** | **V2** | --------------------- | ---------------------------------|
-| **Displays per type** | Multiple `Display<T>` could exist. | Exactly one `Display<T>` per type `T`.  |
-| **How you find `Display<T>`**   | Query events by type; requires historical events. | Offline derivation. `Display<T>` is a derived object from `(DisplayRegistry UID, DisplayKey<T>)`. ID is computable from registry and type; no events, no scan. |
-| **Identity**          | Unpredictable (per creation tx).   | Deterministic. The same registry and same `T` result in the same display ID everywhere.  |
-
+|                                | **V1**                                              | **V2**                                                                                                                                                        |
+| ------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Displays per type**          | Multiple `Display<T>` could exist.                  | Exactly one `Display<T>` per type `T`.                                                                                                                        |
+| **How you find `Display<T>`**  | Query events by type; requires historical events.   | Offline derivation. `Display<T>` is a derived object from `(DisplayRegistry UID, DisplayKey<T>)`. ID is computable from registry and type; no events, no scan. |
+| **Identity**                   | Unpredictable (per creation tx).                    | Deterministic. The same registry and same `T` result in the same display ID everywhere.                                                                       |
 
 ## Migration and claiming
+
+:::caution 
+
+All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You don't need to do anything upfront; after the snapshot, you can claim the capability when you're ready (see [Migration and claiming](#migration-and-claiming)).
+
+:::
 
 All V1 displays will be migrated to V2 in a system snapshot migration. After that, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
 
@@ -51,9 +64,3 @@ The capability can be claimed in either of two ways:
 - **Legacy Display** using `claim`: Use this if you hold the V1 `Display<T>` object. Pass it in; it is consumed and you receive the `DisplayCap<T>`.
 
 Once claimed, the holder of `DisplayCap<T>` can update the display fields (`set`, `unset`, `clear`). `delete_legacy` is permissionless as long as the V2 cap has been claimed. Anyone who holds a V1 `Display<T>` can call `delete_legacy(display, legacy)` to burn their legacy object, no need to be the cap holder.
-
-## V1 end of life 
-
-Object Display V1 will be supported by RPCs that already have support for it (JSON-RPC, GraphQL) until the **end of July 2026**. After that, on-chain V1 display code will be decommissioned and will start aborting.
-
-It is recommended to use the `sui::display_registry` APIs when creating display from Move code. For the intermediate phase, use the `migrate_v1_to_v2` function to migrate a legacy display and receive the V2 `Display<T>` and `DisplayCap<T>`.
