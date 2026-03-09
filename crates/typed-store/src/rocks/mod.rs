@@ -2043,7 +2043,6 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
 
 #[cfg(tidehunter)]
 pub async fn safe_drop_db(path: PathBuf, _: Duration) -> Result<(), std::io::Error> {
-    tokio::time::sleep(Duration::from_secs(600)).await;
     std::fs::remove_dir_all(path)
 }
 
