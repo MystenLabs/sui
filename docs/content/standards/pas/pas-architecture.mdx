@@ -8,7 +8,7 @@ On Sui, any object with the `store` ability can be freely transferred by its own
 
 This is great for general-purpose assets, but a problem for regulated assets that need transfer controls, compliance checks, or issuer oversight.
 
-The Permissioned Asset Standard (PAS) solves this by proxying asset ownership through **Chests**, objects that hold assets and enforce a closed-loop system where every movement is gated by programmable approval logic.**
+The Permissioned Asset Standard (PAS) solves this by proxying asset ownership through **Chests**, objects that hold assets and enforce a closed-loop system where every movement is gated by programmable approval logic.
 
 ## How it works
 
@@ -131,6 +131,54 @@ For example, a `TransferApproval` witness struct defined in contracts:
 // Request has:     { WrongApproval }  ← aborts (type mismatch)
 ```
 
+## Balance tracking
+
+PAS uses Sui's [address balances](https://docs.sui.io/guides/developer/address-balances-migration):
+
+### How balances are stored
+
+```
+Chest (shared object)
+  └── UID
+       └── Balance<MyCoin> stored via balance::send_funds(balance, chest_object_address)
+```
+
+Balances are **not** stored as fields on the Chest struct. They are stored as object balance on the Chest's `UID`, using `balance::send_funds` to send funds to the Chest's object address and `balance::withdraw_funds_from_object` (through `UID.withdraw_funds_from_object`) to pull them out.
+
+### Balance flow
+
+```
+Deposit:  Balance<C> → balance::send_funds(balance, chest_addr) → stored on Chest UID
+Withdraw: Chest UID → balance::withdraw_funds_from_object(amount) → Balance<C>
+```
+
+Deposits are permissionless (anyone can deposit into any Chest).
+Withdrawals are internal (`public(package)`). Only PAS modules can withdraw, and only through Requests.
+
+## Wallet ownership compared to object ownership
+
+Chests can be owned by wallet addresses or objects.
+
+```move
+// Wallet-owned: proves ownership via transaction sender
+let auth = chest::new_auth(ctx);
+
+// Object-owned: proves ownership via UID reference
+let auth = chest::new_auth_as_object(&mut my_object_uid);
+```
+
+## Derived object addresses
+
+All PAS objects (Chests, policies) use deterministic derived addresses. You can compute them off-chain:
+
+```move
+// Get the chest address for an owner
+let chest_addr: address = namespace.chest_address(@0xAlice);
+
+// Get the policy address for a type
+let policy_addr: address = namespace.policy_address<Balance<MyCoin>>();
+```
+
 ## Security model
 
 PAS guarantees the following:
@@ -143,7 +191,7 @@ PAS guarantees the following:
 
 4. **Deterministic addressing:** All objects use derived addresses. No hidden state, no non-deterministic object creation.
 
-PAS does support or garuntee: 
+PAS does not support or guarantee:
 
 - **Access control:** PAS does not decide who can transfer. That is your contract's job through approval witnesses.
 

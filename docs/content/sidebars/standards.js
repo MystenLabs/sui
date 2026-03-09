@@ -29,7 +29,6 @@ const standards = [
 		},
 	items: [
 		'standards/pas/pas-workflows',
-		'standards/pas/pas-actions',
 	],
 	},
 	'standards/kiosk',
