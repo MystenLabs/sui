@@ -17,6 +17,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_indexer_alt_framework_store_traits::Connection;
+use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::PrunerWatermark;
 use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
@@ -83,13 +84,17 @@ impl Connection for BigTableConnection<'_> {
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        _default_next_checkpoint: u64,
-    ) -> Result<Option<u64>> {
-        Ok(self
+        init_watermark: InitWatermark,
+    ) -> Result<InitWatermark> {
+        let checkpoint_hi_inclusive = self
             .client
             .get_pipeline_watermark(pipeline_task)
             .await?
-            .map(|wm| wm.checkpoint_hi_inclusive))
+            .map(|wm| wm.checkpoint_hi_inclusive);
+        Ok(InitWatermark {
+            checkpoint_hi_inclusive,
+            ..init_watermark
+        })
     }
 
     async fn committer_watermark(

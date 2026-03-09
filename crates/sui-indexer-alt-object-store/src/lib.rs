@@ -16,6 +16,7 @@ use object_store::path::Path as ObjectPath;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework_store_traits::Connection;
+use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::PrunerWatermark;
 use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
@@ -86,11 +87,19 @@ impl Store for ObjectStore {
 
 #[async_trait]
 impl Connection for ObjectStoreConnection {
-    async fn init_watermark(&mut self, pipeline_task: &str, _: u64) -> anyhow::Result<Option<u64>> {
-        Ok(self
+    async fn init_watermark(
+        &mut self,
+        pipeline_task: &str,
+        init_watermark: InitWatermark,
+    ) -> anyhow::Result<InitWatermark> {
+        let checkpoint_hi_inclusive = self
             .committer_watermark(pipeline_task)
             .await?
-            .map(|w| w.checkpoint_hi_inclusive))
+            .map(|w| w.checkpoint_hi_inclusive);
+        Ok(InitWatermark {
+            checkpoint_hi_inclusive,
+            ..init_watermark
+        })
     }
 
     async fn committer_watermark(
