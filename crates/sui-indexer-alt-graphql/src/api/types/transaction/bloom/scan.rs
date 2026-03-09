@@ -79,7 +79,7 @@ impl BloomScan {
     pub(super) async fn next<'a>(
         &'a mut self,
         pg_reader: &PgReader,
-        filter_values: &[[u8; 32]],
+        filter_values: &[Vec<u8>],
     ) -> Result<Option<Candidates<'a>>, RpcError> {
         if self.hits >= self.page_limit || self.cp_lo > self.cp_hi_inclusive {
             return Ok(None);

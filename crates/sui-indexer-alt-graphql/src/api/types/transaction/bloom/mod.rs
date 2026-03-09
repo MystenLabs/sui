@@ -195,7 +195,7 @@ async fn candidate_txns(
 /// then a finer filter over those ranges for checkpoint matches using cp_blooms.
 pub(super) async fn candidate_cps(
     pg_reader: &PgReader,
-    filter_values: &[[u8; 32]],
+    filter_values: &[Vec<u8>],
     cp_lo: u64,
     cp_hi_inclusive: u64,
     is_from_front: bool,

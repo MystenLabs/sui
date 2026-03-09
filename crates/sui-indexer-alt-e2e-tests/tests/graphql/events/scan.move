@@ -18,6 +18,10 @@ module P1::M1 {
         value: u64,
     }
 
+    public struct GenericEvent<phantom T> has copy, drop {
+        value: u64,
+    }
+
     public entry fun emit_a(value: u64) {
         event::emit(EventA {
             message: ascii::string(b"Event A"),
@@ -30,6 +34,14 @@ module P1::M1 {
             message: ascii::string(b"Event B"),
             value,
         });
+    }
+
+    public entry fun emit_generic_bool(value: u64) {
+        event::emit(GenericEvent<bool> { value });
+    }
+
+    public entry fun emit_generic_u64(value: u64) {
+        event::emit(GenericEvent<u64> { value });
     }
 
     public entry fun emit_multiple(count: u64) {
@@ -87,6 +99,16 @@ module P2::M2 {
 
 //# create-checkpoint
 
+// Checkpoint 6: A emits GenericEvent<bool>
+//# run P1::M1::emit_generic_bool --sender A --args 10
+
+//# create-checkpoint
+
+// Checkpoint 7: B emits GenericEvent<u64>
+//# run P1::M1::emit_generic_u64 --sender B --args 20
+
+//# create-checkpoint
+
 //# advance-epoch
 
 // Generate 10,501 checkpoints to create 10 complete blocks + 500 extra for incomplete block
@@ -101,24 +123,24 @@ module P2::M2 {
 # Scan vs indexed cross-check, multi-filter combinations, empty-result edge cases,
 # checkpoint-bounded scan, and scan across bloom blocks.
 {
-  scanEventsA: scanEvents(filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
+  scanEventsA: scanEvents(filter: { sender: "@{A}", beforeCheckpoint: 10512 }) { ...EV }
   paginateEventsA: events(filter: { sender: "@{A}" }) { ...EV }
 
   eventsAFromP1: scanEvents(filter: {
     sender: "@{A}",
     module: "@{P1}",
-    beforeCheckpoint: 10510
+    beforeCheckpoint: 10512
   }) { ...EV }
   scanTripleFilter: scanEvents(filter: {
     sender: "@{A}",
     module: "@{P1}",
     type: "@{P1}::M1::EventA",
-    beforeCheckpoint: 10510
+    beforeCheckpoint: 10512
   }) { ...EV }
 
   emptyNonExistent: scanEvents(filter: {
     sender: "0x0000000000000000000000000000000000000000000000000000000000000001",
-    beforeCheckpoint: 10510
+    beforeCheckpoint: 10512
   }) { ...EV }
 
   earlyEvents: scanEvents(filter: {
@@ -135,10 +157,30 @@ module P2::M2 {
     beforeCheckpoint: 6
   }) { ...EV }
 
+  scanByTypeOnly: scanEvents(filter: {
+    type: "@{P2}::M2::EventC",
+    beforeCheckpoint: 6
+  }) { ...EV }
+
   scanAcrossBlocks: scanEvents(filter: {
     sender: "@{A}",
     afterCheckpoint: 0,
-    beforeCheckpoint: 10510
+    beforeCheckpoint: 10512
+  }) { ...EV }
+
+  # Primitive type param filtering: GenericEvent<bool> vs GenericEvent<u64>
+  scanGenericBool: scanEvents(filter: {
+    type: "@{P1}::M1::GenericEvent<bool>",
+    beforeCheckpoint: 10512
+  }) { ...EV }
+  scanGenericU64: scanEvents(filter: {
+    type: "@{P1}::M1::GenericEvent<u64>",
+    beforeCheckpoint: 10512
+  }) { ...EV }
+  # Without type params, should return both GenericEvent<bool> and GenericEvent<u64>
+  scanGenericAny: scanEvents(filter: {
+    type: "@{P1}::M1::GenericEvent",
+    beforeCheckpoint: 10512
   }) { ...EV }
 }
 
@@ -151,16 +193,16 @@ fragment EV on EventConnection {
 # Cursor pagination: cursor_0 is cp1 event (t=3,e=0),
 # cursor_1 is cp5 first event (t=7,e=0), cursor_2 is cp5 last event (t=7,e=2).
 {
-  first2: scanEvents(first: 2, filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
-  last2: scanEvents(last: 2, filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
+  first2: scanEvents(first: 2, filter: { sender: "@{A}", beforeCheckpoint: 10512 }) { ...EV }
+  last2: scanEvents(last: 2, filter: { sender: "@{A}", beforeCheckpoint: 10512 }) { ...EV }
 
-  firstAfter: scanEvents(first: 10, after: "@{cursor_0}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
-  firstBefore: scanEvents(first: 10, before: "@{cursor_2}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
+  firstAfter: scanEvents(first: 10, after: "@{cursor_0}", filter: { sender: "@{A}", beforeCheckpoint: 10512 }) { ...EV }
+  firstBefore: scanEvents(first: 10, before: "@{cursor_2}", filter: { sender: "@{A}", beforeCheckpoint: 10512 }) { ...EV }
 
-  windowFirst: scanEvents(first: 10, after: "@{cursor_0}", before: "@{cursor_2}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
+  windowFirst: scanEvents(first: 10, after: "@{cursor_0}", before: "@{cursor_2}", filter: { sender: "@{A}", beforeCheckpoint: 10512 }) { ...EV }
 
-  nonexistentCursor: scanEvents(last: 10, after: "@{cursor_3}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
-  invalidOrder: scanEvents(first: 10, after: "@{cursor_2}", before: "@{cursor_0}", filter: { sender: "@{A}", beforeCheckpoint: 10510 }) { ...EV }
+  nonexistentCursor: scanEvents(last: 10, after: "@{cursor_3}", filter: { sender: "@{A}", beforeCheckpoint: 10512 }) { ...EV }
+  invalidOrder: scanEvents(first: 10, after: "@{cursor_2}", before: "@{cursor_0}", filter: { sender: "@{A}", beforeCheckpoint: 10512 }) { ...EV }
 }
 
 fragment EV on EventConnection {

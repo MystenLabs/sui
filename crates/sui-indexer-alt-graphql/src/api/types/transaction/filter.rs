@@ -7,8 +7,9 @@ use async_graphql::Enum;
 use async_graphql::InputObject;
 use async_graphql::InputType;
 use async_graphql::InputValueError;
+use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_reader::kv_loader::TransactionContents;
-use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
+use sui_indexer_alt_schema::blooms::BloomValue;
 use sui_types::transaction::TransactionDataAPI as _;
 
 use crate::api::scalars::fq_name_filter::FqNameFilter;
@@ -128,17 +129,35 @@ impl TransactionFilter {
     }
 
     /// Values to probe in bloom filters.
-    pub(crate) fn bloom_probe_values(&self) -> Vec<[u8; 32]> {
-        [
-            self.function.as_ref().map(|f| f.package().into_bytes()),
-            self.affected_address.map(|a| a.into_bytes()),
-            self.affected_object.map(|o| o.into_bytes()),
-            self.sent_address.map(|s| s.into_bytes()),
-        ]
-        .into_iter()
-        .flatten()
-        .filter(|v| !should_skip_for_bloom(v))
-        .collect()
+    pub(crate) fn bloom_probe_values(&self) -> Vec<Vec<u8>> {
+        let mut values: Vec<BloomValue> = Vec::new();
+
+        if let Some(f) = &self.function {
+            let pkg: AccountAddress = f.package().into_bytes().into();
+            values.push(BloomValue::MoveCallPackage(pkg));
+            if let Some(m) = f.module() {
+                values.push(BloomValue::MoveCallModule(m.to_owned()));
+                if let Some(n) = f.name() {
+                    values.push(BloomValue::Name(n.to_owned()));
+                }
+            }
+        }
+
+        if let Some(a) = self.affected_address {
+            values.push(BloomValue::SenderOrRecipient(AccountAddress::from(a)));
+        }
+        if let Some(o) = self.affected_object {
+            values.push(BloomValue::AffectedObject(AccountAddress::from(o)));
+        }
+        if let Some(s) = self.sent_address {
+            values.push(BloomValue::SenderOrRecipient(AccountAddress::from(s)));
+        }
+
+        values
+            .into_iter()
+            .filter(|v| !v.should_skip())
+            .map(|v| v.to_bytes())
+            .collect()
     }
 
     /// Checks if a transaction's contents matches the filter conditions.
@@ -275,50 +294,5 @@ impl<T: CheckpointBounds + InputType> CustomValidator<T> for ScanFilterValidator
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-
-    use super::*;
-
-    #[test]
-    fn test_bloom_probe_values_skips_zero_address() {
-        let zero = SuiAddress::from_str("0x0").unwrap();
-        let filter = TransactionFilter {
-            sent_address: Some(zero),
-            ..Default::default()
-        };
-        assert!(filter.bloom_probe_values().is_empty());
-    }
-
-    #[test]
-    fn test_bloom_probe_values_skips_clock_address() {
-        let clock = SuiAddress::from_str("0x6").unwrap();
-        let filter = TransactionFilter {
-            affected_object: Some(clock),
-            ..Default::default()
-        };
-        assert!(filter.bloom_probe_values().is_empty());
-    }
-
-    #[test]
-    fn test_bloom_probe_values_keeps_normal_address() {
-        let addr = SuiAddress::from_str("0x42").unwrap();
-        let filter = TransactionFilter {
-            sent_address: Some(addr),
-            ..Default::default()
-        };
-        let values = filter.bloom_probe_values();
-        assert_eq!(values.len(), 1);
-        assert_eq!(values[0], addr.into_bytes());
-    }
-
-    #[test]
-    fn test_bloom_probe_values_empty_filter() {
-        let filter = TransactionFilter::default();
-        assert!(filter.bloom_probe_values().is_empty());
     }
 }

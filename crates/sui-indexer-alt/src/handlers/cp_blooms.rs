@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
+use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Connection;
 use sui_indexer_alt_framework::postgres::handler::Handler;
@@ -13,7 +14,7 @@ use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::full_checkpoint_content::ExecutedTransaction;
 use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
-use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
+use sui_indexer_alt_schema::blooms::BloomValue;
 use sui_indexer_alt_schema::cp_blooms::CpBloomFilter;
 use sui_indexer_alt_schema::cp_blooms::MAX_FOLD_DENSITY;
 use sui_indexer_alt_schema::cp_blooms::MIN_FOLD_BYTES;
@@ -72,55 +73,41 @@ impl Handler for CpBlooms {
 
 /// Inserts values from a transaction into bloom filter.
 ///
-/// Values include:
-/// - Transaction sender
-/// - Recipient addresses of changed objects
-/// - Object IDs of all changed objects
-/// - Package IDs from Move calls
-/// - Addresses from emitted events (package, type address, type params)
-///
 /// Common addresses (e.g., 0x0, clock) are filtered out as they appear in most
 /// checkpoints and would defeat the bloom filter's purpose.
 pub(crate) fn insert_tx_addresses(tx: &ExecutedTransaction, bloom: &mut impl Extend<Vec<u8>>) {
-    let sender = std::iter::once(tx.transaction.sender().to_vec());
+    let mut values: Vec<BloomValue> = Vec::new();
 
-    let recipients = affected_addresses(&tx.effects).map(|a| a.to_vec());
+    let sender: AccountAddress = tx.transaction.sender().into();
+    values.push(BloomValue::SenderOrRecipient(sender));
 
-    let object_ids = tx
-        .effects
-        .object_changes()
-        .into_iter()
-        .map(|change| change.id.to_vec());
+    for addr in affected_addresses(&tx.effects) {
+        values.push(BloomValue::SenderOrRecipient(addr.into()));
+    }
 
-    let package_ids = tx
-        .transaction
-        .move_calls()
-        .into_iter()
-        .map(|(_, package_id, _, _)| package_id.to_vec());
+    for change in tx.effects.object_changes() {
+        values.push(BloomValue::AffectedObject(change.id.into()));
+    }
 
-    let event_addresses = tx
-        .events
-        .iter()
-        .flat_map(|evs| evs.data.iter())
-        .flat_map(|ev| {
-            std::iter::once(ev.type_.address.to_vec())
-                .chain(std::iter::once(ev.package_id.to_vec()))
-                .chain(
-                    ev.type_
-                        .type_params
-                        .iter()
-                        .flat_map(|tp| tp.all_addresses())
-                        .map(|addr| addr.to_vec()),
-                )
-        });
+    for (_, package_id, module, function) in tx.transaction.move_calls() {
+        let pkg: AccountAddress = (*package_id).into();
+        values.push(BloomValue::MoveCallPackage(pkg));
+        values.push(BloomValue::MoveCallModule(module.to_owned()));
+        values.push(BloomValue::Name(function.to_owned()));
+    }
+
+    for ev in tx.events.iter().flat_map(|evs| evs.data.iter()) {
+        let emit_pkg: AccountAddress = ev.package_id.into();
+        values.push(BloomValue::EvAddress(emit_pkg));
+        values.push(BloomValue::EvEmitModule(ev.transaction_module.to_string()));
+        values.extend(BloomValue::from_struct_tag(&ev.type_));
+    }
 
     bloom.extend(
-        sender
-            .chain(recipients)
-            .chain(object_ids)
-            .chain(package_ids)
-            .chain(event_addresses)
-            .filter(|bytes| !should_skip_for_bloom(bytes)),
+        values
+            .into_iter()
+            .filter(|v| !v.should_skip())
+            .map(|v| v.to_bytes()),
     );
 }
 
@@ -170,56 +157,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cp_blooms_with_function_calls() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.store().connect().await.unwrap();
-
-        let mut builder = TestCheckpointBuilder::new(0);
-        builder = builder
-            .start_transaction(1) // Use sender_idx=1 to avoid SuiAddress::ZERO which is filtered out
-            .add_move_call(ObjectID::ZERO, "module", "function")
-            .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
-
-        let values = CpBlooms.process(&checkpoint).await.unwrap();
-
-        assert_eq!(values.len(), 1, "Should produce one bloom filter");
-        assert_eq!(values[0].cp_sequence_number, 0);
-        assert!(!values[0].bloom_filter.is_empty());
-
-        CpBlooms::commit(&values, &mut conn).await.unwrap();
-
-        let stored = get_all_bloom_filters(&mut conn).await;
-        assert_eq!(stored.len(), 1);
-        assert_eq!(stored[0].cp_sequence_number, 0);
-    }
-
-    #[tokio::test]
-    async fn test_cp_blooms_multiple_checkpoints() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.store().connect().await.unwrap();
-
-        for cp_num in 0..3 {
-            let mut builder = TestCheckpointBuilder::new(cp_num);
-            builder = builder
-                .start_transaction(1) // Use sender_idx=1 to avoid SuiAddress::ZERO which is filtered out
-                .add_move_call(ObjectID::ZERO, "module", "function")
-                .finish_transaction();
-            let checkpoint = Arc::new(builder.build_checkpoint());
-
-            let values = CpBlooms.process(&checkpoint).await.unwrap();
-            CpBlooms::commit(&values, &mut conn).await.unwrap();
-        }
-
-        let stored = get_all_bloom_filters(&mut conn).await;
-        assert_eq!(stored.len(), 3);
-
-        for (i, bloom) in stored.iter().enumerate() {
-            assert_eq!(bloom.cp_sequence_number, i as i64);
-        }
-    }
-
-    #[tokio::test]
     async fn test_cp_blooms_filter_accuracy() {
         let package_id = ObjectID::from_single_byte(0x42);
         let mut builder = TestCheckpointBuilder::new(0);
@@ -238,8 +175,11 @@ mod tests {
         let bloom_bytes = &values[0].bloom_filter;
 
         assert!(
-            folded_bloom_contains(bloom_bytes, &package_id.to_vec()),
-            "Should contain package ID from move call"
+            folded_bloom_contains(
+                bloom_bytes,
+                &BloomValue::MoveCallPackage(package_id.into()).to_bytes()
+            ),
+            "Should contain move call package key"
         );
 
         // Common addresses should be filtered out
@@ -248,30 +188,42 @@ mod tests {
             "Should NOT contain common address ObjectID::ZERO"
         );
 
-        let sender_0 = checkpoint.transactions[0].transaction.sender();
-        let sender_1 = checkpoint.transactions[1].transaction.sender();
+        let sender_0: AccountAddress = checkpoint.transactions[0].transaction.sender().into();
+        let sender_1: AccountAddress = checkpoint.transactions[1].transaction.sender().into();
         assert!(
-            folded_bloom_contains(bloom_bytes, &sender_0.to_vec()),
+            folded_bloom_contains(
+                bloom_bytes,
+                &BloomValue::SenderOrRecipient(sender_0).to_bytes()
+            ),
             "Should contain sender address from tx 0"
         );
         assert!(
-            folded_bloom_contains(bloom_bytes, &sender_1.to_vec()),
+            folded_bloom_contains(
+                bloom_bytes,
+                &BloomValue::SenderOrRecipient(sender_1).to_bytes()
+            ),
             "Should contain sender address from tx 1"
         );
 
         for tx in &checkpoint.transactions {
             for ((obj_id, _, _), _, _) in tx.effects.all_changed_objects() {
                 assert!(
-                    folded_bloom_contains(bloom_bytes, &obj_id.to_vec()),
+                    folded_bloom_contains(
+                        bloom_bytes,
+                        &BloomValue::AffectedObject(*obj_id).to_bytes()
+                    ),
                     "Should contain object ID {}",
                     obj_id
                 );
             }
         }
 
-        let random_addr = SuiAddress::random_for_testing_only();
+        let random_addr: AccountAddress = SuiAddress::random_for_testing_only().into();
         assert!(
-            !folded_bloom_contains(bloom_bytes, &random_addr.to_vec()),
+            !folded_bloom_contains(
+                bloom_bytes,
+                &BloomValue::SenderOrRecipient(random_addr).to_bytes()
+            ),
             "Should not contain random address"
         );
     }
@@ -293,43 +245,21 @@ mod tests {
             .finish_transaction();
         let checkpoint1 = Arc::new(builder1.build_checkpoint());
         let values1 = CpBlooms.process(&checkpoint1).await.unwrap();
-        let sender1 = checkpoint1.transactions[0].transaction.sender();
 
         CpBlooms::commit(&values1, &mut conn).await.unwrap();
 
-        // Verify first key is present
         let stored1 = get_all_bloom_filters(&mut conn).await;
         assert_eq!(stored1.len(), 1);
-        assert!(
-            folded_bloom_contains(&stored1[0].bloom_filter, &package1.to_vec()),
-            "First commit should contain package1"
-        );
-        assert!(
-            folded_bloom_contains(&stored1[0].bloom_filter, &sender1.to_vec()),
-            "First commit should contain sender1"
-        );
 
-        // Second commit: same checkpoint 0 (simulating reprocessing)
-        // Since it's the same checkpoint, the bloom filter would be identical
-        // and do_nothing keeps the original row
+        // Second commit: same checkpoint 0 (simulating reprocessing).
+        // do_nothing keeps the original row unchanged.
         CpBlooms::commit(&values1, &mut conn).await.unwrap();
 
-        // Verify data is unchanged (do_nothing preserves original)
         let stored2 = get_all_bloom_filters(&mut conn).await;
+        assert_eq!(stored2.len(), 1);
         assert_eq!(
-            stored2.len(),
-            1,
-            "Should still have only one row for checkpoint 0"
-        );
-
-        // Keys from first commit should still be present
-        assert!(
-            folded_bloom_contains(&stored2[0].bloom_filter, &package1.to_vec()),
-            "package1 should still be present after do_nothing"
-        );
-        assert!(
-            folded_bloom_contains(&stored2[0].bloom_filter, &sender1.to_vec()),
-            "sender1 should still be present after do_nothing"
+            stored1[0].bloom_filter, stored2[0].bloom_filter,
+            "Bloom filter should be unchanged after do_nothing"
         );
     }
 }

@@ -1,100 +1,119 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 833
 ---
-processed 19 tasks
+processed 23 tasks
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
 
-task 1, lines 6-45:
+task 1, lines 6-57:
 //# publish
 created: object(1,0)
 mutated: object(0,3)
-gas summary: computation_cost: 1000000, storage_cost: 6794400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 8056000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 47-65:
+task 2, lines 59-77:
 //# publish
 created: object(2,0)
 mutated: object(0,3)
 gas summary: computation_cost: 1000000, storage_cost: 5289600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, line 66:
+task 3, line 78:
 //# run P1::M1::emit_a --sender A --args 1
 events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [7, 69, 118, 101, 110, 116, 32, 65, 1, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, lines 68-70:
+task 4, lines 80-82:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, line 71:
+task 5, line 83:
 //# run P1::M1::emit_b --sender B --args 2
 events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: B, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventB"), type_params: [] }, contents: [7, 69, 118, 101, 110, 116, 32, 66, 2, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 6, lines 73-75:
+task 6, lines 85-87:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 7, line 76:
+task 7, line 88:
 //# run P2::M2::emit_c --sender A --args 3
 events: Event { package_id: P2, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: P2, module: Identifier("M2"), name: Identifier("EventC"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 67, 32, 102, 114, 111, 109, 32, 80, 50, 3, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8, lines 78-80:
+task 8, lines 90-92:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 9, line 81:
+task 9, line 93:
 //# run P1::M1::emit_a --sender C --args 4
 events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: C, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [7, 69, 118, 101, 110, 116, 32, 65, 4, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 10, lines 83-85:
+task 10, lines 95-97:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 11, line 86:
+task 11, line 98:
 //# run P1::M1::emit_multiple --sender A --args 3
 events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 3, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 12, line 88:
+task 12, lines 100-102:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 13, lines 90-92:
+task 13, line 103:
+//# run P1::M1::emit_generic_bool --sender A --args 10
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("GenericEvent"), type_params: [Bool] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, lines 105-107:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 15, line 108:
+//# run P1::M1::emit_generic_u64 --sender B --args 20
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: B, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("GenericEvent"), type_params: [U64] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, line 110:
+//# create-checkpoint
+Checkpoint created: 7
+
+task 17, lines 112-114:
 //# advance-epoch
 Epoch advanced: 1
 
-task 14, lines 93-95:
+task 18, lines 115-117:
 //# create-checkpoint 10501
-Checkpoint created: 10507
+Checkpoint created: 10509
 
-task 15, line 96:
+task 19, line 118:
 //# run P2::M2::emit_c --sender B --args 100
 events: Event { package_id: P2, transaction_module: Identifier("M2"), sender: B, type_: StructTag { address: P2, module: Identifier("M2"), name: Identifier("EventC"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 67, 32, 102, 114, 111, 109, 32, 80, 50, 100, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 16, line 98:
+task 20, line 120:
 //# create-checkpoint
-Checkpoint created: 10508
+Checkpoint created: 10510
 
-task 17, lines 100-148:
+task 21, lines 122-190:
 //# run-graphql
 Response: {
   "data": {
     "scanEventsA": {
       "pageInfo": {
         "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
+        "endCursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
@@ -108,7 +127,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -122,7 +141,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0x2a4de3bd8841a6d9f3987956258c1f43a7eb6b1927f33a9a9c920f0bf08113e8::M2::EventC"
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -136,7 +155,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -150,7 +169,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -164,7 +183,21 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<bool>"
               }
             }
           }
@@ -174,7 +207,7 @@ Response: {
     "paginateEventsA": {
       "pageInfo": {
         "startCursor": "eyJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJ0Ijo3LCJlIjoyfQ==",
+        "endCursor": "eyJ0Ijo4LCJlIjowfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
@@ -188,7 +221,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -202,7 +235,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0x2a4de3bd8841a6d9f3987956258c1f43a7eb6b1927f33a9a9c920f0bf08113e8::M2::EventC"
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -216,7 +249,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -230,7 +263,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -244,7 +277,21 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0Ijo4LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<bool>"
               }
             }
           }
@@ -254,7 +301,7 @@ Response: {
     "eventsAFromP1": {
       "pageInfo": {
         "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
+        "endCursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
@@ -268,7 +315,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -282,7 +329,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -296,7 +343,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -310,7 +357,21 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<bool>"
               }
             }
           }
@@ -334,7 +395,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -348,7 +409,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -362,7 +423,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -376,7 +437,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -409,7 +470,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -423,7 +484,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0x2a4de3bd8841a6d9f3987956258c1f43a7eb6b1927f33a9a9c920f0bf08113e8::M2::EventC"
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -447,7 +508,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -461,7 +522,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -475,7 +536,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -499,7 +560,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -513,7 +574,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventB"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventB"
               }
             }
           }
@@ -527,7 +588,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0x2a4de3bd8841a6d9f3987956258c1f43a7eb6b1927f33a9a9c920f0bf08113e8::M2::EventC"
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -541,7 +602,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -555,7 +616,31 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanByTypeOnly": {
+      "pageInfo": {
+        "startCursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
+        "endCursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -565,7 +650,7 @@ Response: {
     "scanAcrossBlocks": {
       "pageInfo": {
         "startCursor": "eyJjIjoxLCJ0IjozLCJlIjowfQ==",
-        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
+        "endCursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
@@ -579,7 +664,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -593,7 +678,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0x2a4de3bd8841a6d9f3987956258c1f43a7eb6b1927f33a9a9c920f0bf08113e8::M2::EventC"
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -607,7 +692,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -621,7 +706,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -635,7 +720,107 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<bool>"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanGenericBool": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+        "endCursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<bool>"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanGenericU64": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo5LCJlIjowfQ==",
+        "endCursor": "eyJjIjo3LCJ0Ijo5LCJlIjowfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjo3LCJ0Ijo5LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<u64>"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanGenericAny": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+        "endCursor": "eyJjIjo3LCJ0Ijo5LCJlIjowfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<bool>"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjo3LCJ0Ijo5LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<u64>"
               }
             }
           }
@@ -645,7 +830,7 @@ Response: {
   }
 }
 
-task 18, lines 150-169:
+task 22, lines 192-211:
 //# run-graphql --cursors {"c":1,"t":3,"e":0} {"c":5,"t":7,"e":0} {"c":5,"t":7,"e":2} {"c":20,"t":20,"e":0}
 Response: {
   "data": {
@@ -666,7 +851,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -680,7 +865,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0x2a4de3bd8841a6d9f3987956258c1f43a7eb6b1927f33a9a9c920f0bf08113e8::M2::EventC"
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -689,26 +874,12 @@ Response: {
     },
     "last2": {
       "pageInfo": {
-        "startCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
-        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
+        "startCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
+        "endCursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
         "hasPreviousPage": true,
         "hasNextPage": false
       },
       "edges": [
-        {
-          "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoxfQ==",
-          "node": {
-            "sequenceNumber": 1,
-            "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            },
-            "contents": {
-              "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
-              }
-            }
-          }
-        },
         {
           "cursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
           "node": {
@@ -718,7 +889,21 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<bool>"
               }
             }
           }
@@ -728,7 +913,7 @@ Response: {
     "firstAfter": {
       "pageInfo": {
         "startCursor": "eyJjIjozLCJ0Ijo1LCJlIjowfQ==",
-        "endCursor": "eyJjIjo1LCJ0Ijo3LCJlIjoyfQ==",
+        "endCursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
         "hasPreviousPage": true,
         "hasNextPage": false
       },
@@ -742,7 +927,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0x2a4de3bd8841a6d9f3987956258c1f43a7eb6b1927f33a9a9c920f0bf08113e8::M2::EventC"
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -756,7 +941,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -770,7 +955,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -784,7 +969,21 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjo2LCJ0Ijo4LCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::GenericEvent<bool>"
               }
             }
           }
@@ -808,7 +1007,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -822,7 +1021,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0x2a4de3bd8841a6d9f3987956258c1f43a7eb6b1927f33a9a9c920f0bf08113e8::M2::EventC"
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -836,7 +1035,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -850,7 +1049,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -874,7 +1073,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0x2a4de3bd8841a6d9f3987956258c1f43a7eb6b1927f33a9a9c920f0bf08113e8::M2::EventC"
+                "repr": "0x83ef41027d189afd21ec61da0b7e38253e464c277ac662f5cc346280a8d4dcaf::M2::EventC"
               }
             }
           }
@@ -888,7 +1087,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }
@@ -902,7 +1101,7 @@ Response: {
             },
             "contents": {
               "type": {
-                "repr": "0xab69efd2f54283fb2e9fb257b34d6ab572d3f06e958dcccf3760100c0e5a7a8e::M1::EventA"
+                "repr": "0xc2f3bc23f30551acc78b78555d2ed472f66d42e0cac79a0539f91c1d5f1f46db::M1::EventA"
               }
             }
           }

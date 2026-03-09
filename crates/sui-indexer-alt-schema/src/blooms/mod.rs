@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::account_address::AccountAddress;
+use move_core_types::language_storage::StructTag;
 use sui_types::SUI_CLOCK_ADDRESS;
 
 pub mod blocked;
@@ -9,14 +10,108 @@ pub mod bloom;
 pub mod hash;
 
 /// High-frequency identifiers excluded from bloom filters. These appear in most
-/// checkpoints, so including them would:
-/// - Cause queries to match nearly all blocks and checkpoints
-/// - Require fetching and probing more bloom filter rows at both levels
+/// checkpoints, so including them would cause queries to match nearly all blocks.
 const BLOOM_SKIP_ADDRESSES: &[AccountAddress] = &[AccountAddress::ZERO, SUI_CLOCK_ADDRESS];
 
-/// Returns true if the bytes should be excluded from bloom filter operations.
-pub fn should_skip_for_bloom(bytes: &[u8]) -> bool {
-    BLOOM_SKIP_ADDRESSES.iter().any(|id| id.as_ref() == bytes)
+/// Single-byte prefix tags for bloom key dimensions that would otherwise collide.
+/// Not every `BloomValue` variant is tagged — untagged variants are unlikely to
+/// collide with other dimensions in practice (e.g. function names vs type params).
+#[repr(u8)]
+enum BloomTag {
+    MoveCallPackage = b'P',
+    MoveCallModule = b'M',
+    EvEmitModule = b'E',
+    EvAddress = b'A',
+    AffectedObject = b'O',
+    EvTypeModule = b'T',
+}
+
+impl BloomTag {
+    fn prefix(self, data: &[u8]) -> Vec<u8> {
+        [&[self as u8], data].concat()
+    }
+}
+
+/// Bloom filter values, each variant represents a distinct dimension
+/// that can be inserted into or probed against a checkpoint bloom filter.
+/// Some bloom filter values are prepended with tags to prevent collisions across
+/// dimensions, e.g. a Move call package address colliding with an event type module address.
+#[derive(Debug)]
+pub enum BloomValue {
+    /// Transaction sender or affected address (recipients, gas owner, etc.).
+    SenderOrRecipient(AccountAddress),
+    /// Object ID mutated, created, or deleted by a transaction.
+    AffectedObject(AccountAddress),
+    /// Move call package address.
+    MoveCallPackage(AccountAddress),
+    /// Move call module name.
+    MoveCallModule(String),
+    /// Event emitting or type package address.
+    EvAddress(AccountAddress),
+    /// Event emitting module name (the module whose function emitted the event).
+    EvEmitModule(String),
+    /// Event type module name (from the event's StructTag, not the emitting function).
+    EvTypeModule(String),
+    /// Function or type name (without package or module).
+    Name(String),
+    /// Event type parameter canonical string (e.g. "bool", "u64", "0x2::sui::SUI").
+    TypeParam(String),
+}
+
+impl BloomValue {
+    pub fn to_bytes(self) -> Vec<u8> {
+        match self {
+            Self::EvAddress(addr) => BloomTag::EvAddress.prefix(addr.as_ref()),
+            Self::SenderOrRecipient(addr) => addr.to_vec(),
+            Self::AffectedObject(addr) => BloomTag::AffectedObject.prefix(addr.as_ref()),
+            Self::MoveCallPackage(pkg) => BloomTag::MoveCallPackage.prefix(pkg.as_ref()),
+            Self::MoveCallModule(module) => BloomTag::MoveCallModule.prefix(module.as_bytes()),
+            Self::EvEmitModule(module) => BloomTag::EvEmitModule.prefix(module.as_bytes()),
+            Self::EvTypeModule(module) => BloomTag::EvTypeModule.prefix(module.as_bytes()),
+            Self::Name(name) => name.into_bytes(),
+            Self::TypeParam(s) => s.into_bytes(),
+        }
+    }
+
+    /// Returns true if this value should be excluded from bloom filter operations
+    /// because it matches a high-frequency address.
+    pub fn should_skip(&self) -> bool {
+        let addr = match self {
+            Self::EvAddress(addr)
+            | Self::SenderOrRecipient(addr)
+            | Self::AffectedObject(addr)
+            | Self::MoveCallPackage(addr) => addr,
+            Self::MoveCallModule(_)
+            | Self::EvEmitModule(_)
+            | Self::EvTypeModule(_)
+            | Self::Name(_)
+            | Self::TypeParam(_) => return false,
+        };
+        BLOOM_SKIP_ADDRESSES.contains(addr)
+    }
+
+    /// Extract bloom values from an event's StructTag for insertion into the
+    /// checkpoint bloom filter.
+    ///
+    /// The top-level struct gets three keys at increasing specificity:
+    ///   - `EvAddress(pkg)`        — matches queries filtering by package only
+    ///   - `EvTypeModule(mod)`       — matches queries filtering by module
+    ///   - `Name(name)`             — matches queries filtering by type name
+    ///
+    /// Each type parameter is inserted as its canonical string representation
+    /// (e.g. "bool", "u64", "0x2::sui::SUI"). This handles all TypeTag variants
+    /// including primitives and nested generics.
+    pub fn from_struct_tag(tag: &StructTag) -> Vec<BloomValue> {
+        let mut values = vec![
+            BloomValue::EvAddress(tag.address),
+            BloomValue::EvTypeModule(tag.module.to_string()),
+            BloomValue::Name(tag.name.to_string()),
+        ];
+        for tp in &tag.type_params {
+            values.push(BloomValue::TypeParam(tp.to_canonical_string(false)));
+        }
+        values
+    }
 }
 
 #[cfg(test)]
@@ -24,12 +119,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_should_skip_for_bloom() {
-        assert!(should_skip_for_bloom(AccountAddress::ZERO.as_ref()));
-        assert!(should_skip_for_bloom(SUI_CLOCK_ADDRESS.as_ref()));
+    fn test_should_skip() {
+        let zero = AccountAddress::ZERO;
+        let clock = SUI_CLOCK_ADDRESS;
+        let normal = AccountAddress::from_hex_literal("0x42").unwrap();
 
-        let mut bytes = [0u8; AccountAddress::LENGTH];
-        bytes[0] = 0x42;
-        assert!(!should_skip_for_bloom(&bytes));
+        assert!(BloomValue::EvAddress(zero).should_skip());
+        assert!(BloomValue::EvAddress(clock).should_skip());
+        assert!(!BloomValue::EvAddress(normal).should_skip());
+
+        assert!(BloomValue::SenderOrRecipient(zero).should_skip());
+        assert!(BloomValue::AffectedObject(zero).should_skip());
+        assert!(!BloomValue::SenderOrRecipient(normal).should_skip());
+        assert!(!BloomValue::AffectedObject(normal).should_skip());
+
+        assert!(BloomValue::MoveCallPackage(zero).should_skip());
+        assert!(!BloomValue::MoveCallModule("mod".into()).should_skip());
+        assert!(!BloomValue::EvEmitModule("mod".into()).should_skip());
+        assert!(!BloomValue::EvTypeModule("mod".into()).should_skip());
+        assert!(!BloomValue::Name("name".into()).should_skip());
+        assert!(!BloomValue::MoveCallPackage(normal).should_skip());
+        assert!(!BloomValue::TypeParam("bool".into()).should_skip());
+        assert!(!BloomValue::TypeParam("u64".into()).should_skip());
+    }
+
+    #[test]
+    fn test_all_tagged_variants_differ() {
+        let addr = AccountAddress::from_hex_literal("0x2").unwrap();
+        let variants = [
+            BloomValue::EvAddress(addr).to_bytes(),
+            BloomValue::SenderOrRecipient(addr).to_bytes(),
+            BloomValue::AffectedObject(addr).to_bytes(),
+            BloomValue::MoveCallPackage(addr).to_bytes(),
+            BloomValue::MoveCallModule("m".into()).to_bytes(),
+            BloomValue::EvEmitModule("m".into()).to_bytes(),
+            BloomValue::EvTypeModule("m".into()).to_bytes(),
+            BloomValue::Name("n".into()).to_bytes(),
+            BloomValue::TypeParam("bool".into()).to_bytes(),
+        ];
+        for i in 0..variants.len() {
+            for j in (i + 1)..variants.len() {
+                assert_ne!(variants[i], variants[j], "variants {i} and {j} collide");
+            }
+        }
     }
 }

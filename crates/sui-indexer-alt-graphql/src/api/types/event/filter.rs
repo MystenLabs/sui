@@ -7,7 +7,8 @@ use anyhow::Context as _;
 use async_graphql::CustomValidator;
 use async_graphql::InputObject;
 use async_graphql::InputValueError;
-use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
+use move_core_types::account_address::AccountAddress;
+use sui_indexer_alt_schema::blooms::BloomValue;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::event::Event as NativeEvent;
@@ -167,16 +168,42 @@ impl EventFilter {
     }
 
     /// Values to probe in bloom filters.
-    pub(crate) fn bloom_probe_values(&self) -> Vec<[u8; 32]> {
-        [
-            self.sender.map(|s| s.into_bytes()),
-            self.module.as_ref().map(|m| m.package().into_bytes()),
-            self.type_.as_ref().map(|t| t.package().into_bytes()),
-        ]
-        .into_iter()
-        .flatten()
-        .filter(|v| !should_skip_for_bloom(v))
-        .collect()
+    pub(crate) fn bloom_probe_values(&self) -> Vec<Vec<u8>> {
+        let mut values: Vec<BloomValue> = Vec::new();
+
+        if let Some(sender) = self.sender {
+            values.push(BloomValue::SenderOrRecipient(AccountAddress::from(sender)));
+        }
+
+        if let Some(m) = &self.module {
+            let pkg: AccountAddress = m.package().into_bytes().into();
+            values.push(BloomValue::EvAddress(pkg));
+            if let Some(mod_name) = m.module() {
+                values.push(BloomValue::EvEmitModule(mod_name.to_owned()));
+            }
+        }
+
+        if let Some(t) = &self.type_ {
+            let pkg: AccountAddress = t.package().into_bytes().into();
+            values.push(BloomValue::EvAddress(pkg));
+            if let Some(mod_name) = t.module() {
+                values.push(BloomValue::EvTypeModule(mod_name.to_owned()));
+                if let Some(name) = t.type_name() {
+                    values.push(BloomValue::Name(name.to_owned()));
+                }
+            }
+            if let Some(type_params) = t.type_params() {
+                for tp in type_params {
+                    values.push(BloomValue::TypeParam(tp.to_canonical_string(false)));
+                }
+            }
+        }
+
+        values
+            .into_iter()
+            .filter(|v| !v.should_skip())
+            .map(|v| v.to_bytes())
+            .collect()
     }
 }
 
