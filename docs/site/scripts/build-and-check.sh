@@ -14,13 +14,11 @@ fi
 
 # Pre-build generation steps
 echo "Running pre-build generation..."
-
-node src/js/generate-import-context.js || { echo "❌ generate-import-context failed"; exit 1; }
-node src/utils/grpc-download.js || { echo "❌ grpc-download failed"; exit 1; }
+node scripts/generate-import-context.js || { echo "❌ generate-import-context failed"; exit 1; }
+node scripts/grpc-download.js || { echo "❌ grpc-download failed"; exit 1; }
 docusaurus graphql-to-doc:beta && node scripts/remove-no-desc.mjs ../content/references/sui-api/sui-graphql/beta/reference || { echo "❌ graphql-to-doc step failed"; exit 1; }
-node src/utils/getopenrpcspecs.js || { echo "❌ getopenrpcspecs failed"; exit 1; }
-node src/utils/massagegraphql.js || { echo "❌ massagegraphql failed"; exit 1; }
-
+node scripts/getopenrpcspecs.js || { echo "❌ getopenrpcspecs failed"; exit 1; }
+node scripts/massagegraphql.js || { echo "❌ massagegraphql failed"; exit 1; }
 echo "✅ Pre-build generation complete"
 
 ## Build displayV2 app - only download during build process, do not commit files locally
