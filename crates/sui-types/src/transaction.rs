@@ -971,10 +971,9 @@ impl ProgrammableTransaction {
             .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
     }
 
-    pub fn validate_free_tier_commands(&self) -> UserInputResult {
+    pub fn validate_free_tier_commands(&self, config: &ProtocolConfig) -> UserInputResult {
         #[allow(unused_mut)]
-        let mut allowed_token_types: HashSet<TypeInput> =
-            HashSet::from([TypeInput::from(GAS::type_tag())]);
+        let mut allowed_token_types = parse_free_tier_allowed_token_types(config);
         fail_point_arg!("free_tier_extra_token_types", |extra: HashSet<
             TypeInput,
         >| {
@@ -1050,6 +1049,19 @@ impl ProgrammableTransaction {
         }
         Ok(())
     }
+}
+
+fn parse_free_tier_allowed_token_types(config: &ProtocolConfig) -> HashSet<TypeInput> {
+    config
+        .free_tier_allowed_token_types()
+        .iter()
+        .map(|s| {
+            let tag: TypeTag = s
+                .parse()
+                .unwrap_or_else(|e| panic!("invalid free tier token type {s:?}: {e}"));
+            TypeInput::from(tag)
+        })
+        .collect()
 }
 
 fn extract_balance_inner_type(ti: &TypeInput) -> Option<&TypeInput> {
@@ -3242,7 +3254,7 @@ impl TransactionDataAPI for TransactionDataV1 {
 
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
             if config.enable_free_tier() && self.is_free_tier_transaction() {
-                pt.validate_free_tier_commands()?;
+                pt.validate_free_tier_commands(config)?;
             } else {
                 pt.validate_no_gasless_commands()?;
             }

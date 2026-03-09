@@ -1040,6 +1040,9 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_free_tier: bool,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    free_tier_allowed_token_types: Vec<String>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2695,6 +2698,10 @@ impl ProtocolConfig {
 
     pub fn enable_free_tier(&self) -> bool {
         self.feature_flags.enable_free_tier
+    }
+
+    pub fn free_tier_allowed_token_types(&self) -> &[String] {
+        &self.feature_flags.free_tier_allowed_token_types
     }
 }
 
@@ -5078,6 +5085,10 @@ impl ProtocolConfig {
 
     pub fn disable_free_tier_for_testing(&mut self) {
         self.feature_flags.enable_free_tier = false;
+    }
+
+    pub fn set_free_tier_allowed_token_types_for_testing(&mut self, types: Vec<String>) {
+        self.feature_flags.free_tier_allowed_token_types = types;
     }
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {
