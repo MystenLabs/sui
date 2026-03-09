@@ -12,7 +12,7 @@ module 0x0::M {
 
     fun f(e: E): u64 {
         match (e) {
-            E::A(x) | E::B(x) if (x > 0) => x,
+            E::A(x) | E::B(x) if (*x > 0) => x,
             _ => 0,
         }
     }

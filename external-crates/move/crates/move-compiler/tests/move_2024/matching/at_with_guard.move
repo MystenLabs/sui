@@ -11,7 +11,7 @@ public enum E has drop, copy {
 
 fun test(e: &E): u64 {
     match (e) {
-        x @ E::A(n) if (*n > 10) => *n,
+        _x @ E::A(n) if (*n > 10) => *n,
         _ => 0,
     }
 }
