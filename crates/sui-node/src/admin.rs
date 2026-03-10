@@ -9,15 +9,17 @@ use axum::{
     routing::{get, post},
 };
 use base64::Engine;
+use fastcrypto::ed25519::Ed25519Signature;
 use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::traits::{KeyPair, Signer, ToFromBytes};
 use humantime::parse_duration;
 use mysten_network::Multiaddr;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
 };
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_types::{
@@ -86,6 +88,10 @@ use tracing::info;
 //
 //  $ curl -X POST 'http://127.0.0.1:1337/update-endpoint?endpoint_type=p2p&id=<hex_encoded_peer_id>&addresses=<multiaddr1>,<multiaddr2>'
 //  $ curl -X POST 'http://127.0.0.1:1337/update-endpoint?endpoint_type=consensus&id=<hex_encoded_network_pubkey>&addresses=<multiaddr1>,<multiaddr2>'
+//
+// Send validator backup IP info to Sui API:
+//
+//  $ curl -X POST 'http://127.0.0.1:1337/send-ip-info?backup_ip=192.168.1.100'
 
 const NO_TRACING_HANDLE: &str = "tracing handle not available";
 const LOGGING_ROUTE: &str = "/logging";
@@ -103,6 +109,10 @@ const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
 const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
 const TRAFFIC_CONTROL: &str = "/traffic-control";
 const UPDATE_ENDPOINT: &str = "/update-endpoint";
+const SEND_IP_INFO_ROUTE: &str = "/send-ip-info";
+
+const SUI_IP_INFO_API_URL_ENV: &str = "SUI_IP_INFO_API_URL";
+const DEFAULT_SUI_IP_INFO_API_URL: &str = "https://validator-ip.mystenlabs.com/ip-info";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -156,6 +166,7 @@ pub async fn run_admin_server(
         )
         .route(TRAFFIC_CONTROL, post(traffic_control))
         .route(UPDATE_ENDPOINT, post(update_endpoint))
+        .route(SEND_IP_INFO_ROUTE, post(send_ip_info))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -654,4 +665,142 @@ async fn update_endpoint(
             parsed_addresses.len(),
         ),
     )
+}
+
+#[derive(Deserialize)]
+struct SendIpInfoParams {
+    backup_ip: String,
+}
+
+#[derive(Serialize)]
+struct IpInfoPayload {
+    network_public_key: String,
+    backup_ip: String,
+    timestamp_ms: u64,
+}
+
+#[derive(Serialize)]
+struct SignedIpInfoRequest {
+    payload: IpInfoPayload,
+    signature: String,
+}
+
+async fn send_ip_info(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<SendIpInfoParams>,
+) -> (StatusCode, String) {
+    let parsed_ip: IpAddr = match params.backup_ip.parse() {
+        Ok(ip) => ip,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("Invalid IP address format: {}", params.backup_ip),
+            );
+        }
+    };
+
+    let network_keypair = state.node.config.network_key_pair();
+    let network_pubkey_hex = Hex::encode(network_keypair.public().as_bytes());
+
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    let payload = IpInfoPayload {
+        network_public_key: network_pubkey_hex,
+        backup_ip: parsed_ip.to_string(),
+        timestamp_ms,
+    };
+
+    let payload_bytes = match serde_json::to_vec(&payload) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to serialize payload: {}", e),
+            );
+        }
+    };
+    let signature: Ed25519Signature = network_keypair.sign(&payload_bytes);
+    let signature_hex = Hex::encode(signature.as_ref());
+
+    let signed_request = SignedIpInfoRequest {
+        payload,
+        signature: signature_hex,
+    };
+
+    let api_url = std::env::var(SUI_IP_INFO_API_URL_ENV)
+        .unwrap_or_else(|_| DEFAULT_SUI_IP_INFO_API_URL.to_string());
+
+    let client = reqwest::Client::new();
+    let response = match client
+        .post(&api_url)
+        .timeout(std::time::Duration::from_secs(30))
+        .json(&signed_request)
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                format!("Failed to connect to IP info API: {}", e),
+            );
+        }
+    };
+
+    if response.status().is_success() {
+        (StatusCode::OK, "IP info sent successfully\n".to_string())
+    } else {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        (
+            StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+            format!("IP info API error [{}]: {}", status, body),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ip_address_validation_ipv4() {
+        let valid_ip = "192.168.1.100";
+        let result: Result<IpAddr, _> = valid_ip.parse();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ip_address_validation_ipv6() {
+        let valid_ip = "2001:db8::1";
+        let result: Result<IpAddr, _> = valid_ip.parse();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_ip_address_validation_invalid() {
+        let invalid_ip = "not-an-ip";
+        let result: Result<IpAddr, _> = invalid_ip.parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_signed_ip_info_request_creation() {
+        let payload = IpInfoPayload {
+            network_public_key: "abc123".to_string(),
+            backup_ip: "192.168.1.100".to_string(),
+            timestamp_ms: 1234567890,
+        };
+        let signed_request = SignedIpInfoRequest {
+            payload,
+            signature: "sig456".to_string(),
+        };
+        assert_eq!(signed_request.payload.network_public_key, "abc123");
+        assert_eq!(signed_request.payload.backup_ip, "192.168.1.100");
+        assert_eq!(signed_request.payload.timestamp_ms, 1234567890);
+        assert_eq!(signed_request.signature, "sig456");
+    }
 }
