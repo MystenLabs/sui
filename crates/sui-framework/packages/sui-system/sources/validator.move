@@ -54,6 +54,8 @@ const ENewCapNotCreatedByValidatorItself: u64 = 100;
 const EInvalidCap: u64 = 101;
 /// Validator trying to set gas price higher than threshold.
 const EGasPriceHigherThanThreshold: u64 = 102;
+/// Invalid protocol public key length.
+const EInvalidProtocolPubKeyLength: u64 = 16;
 
 // TODO: potentially move this value to onchain config.
 const MAX_COMMISSION_RATE: u64 = 2_000; // Max rate is 20%, which is 2000 base points
@@ -796,6 +798,7 @@ public(package) fun update_next_epoch_protocol_pubkey(
     protocol_pubkey: vector<u8>,
     proof_of_possession: vector<u8>,
 ) {
+    assert!(protocol_pubkey.length() == 96, EInvalidProtocolPubKeyLength);
     self.metadata.next_epoch_protocol_pubkey_bytes = option::some(protocol_pubkey);
     self.metadata.next_epoch_proof_of_possession = option::some(proof_of_possession);
     self.metadata.validate();

@@ -233,8 +233,8 @@ public struct ItemDelisted<phantom T: key + store> has copy, drop {
 /// `KioskOwnerCap` and becomes the Owner, the `Kiosk` is shared.
 entry fun default(ctx: &mut TxContext) {
     let (kiosk, cap) = new(ctx);
-    sui::transfer::transfer(cap, ctx.sender());
-    sui::transfer::share_object(kiosk);
+    transfer::transfer(cap, ctx.sender());
+    transfer::share_object(kiosk);
 }
 
 /// Creates a new `Kiosk` with a matching `KioskOwnerCap`.
