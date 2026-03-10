@@ -50,6 +50,7 @@ pub struct ClientArgs {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
 pub struct IngestionConfig {
     /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
     pub checkpoint_buffer_size: usize,
