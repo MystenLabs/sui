@@ -337,25 +337,47 @@ macro_rules! comparison_int_binop {
     }};
 }
 
-macro_rules! shift_int_binop {
-    ($v1:expr, $v2:expr, $method:ident) => {{
-        use Value_ as V;
-        let V::U8(rhs) = $v2 else { return None };
-        match $v1 {
-            V::U8(a) => a.$method(rhs as u32).map(V::U8),
-            V::U16(a) => a.$method(rhs as u32).map(V::U16),
-            V::U32(a) => a.$method(rhs as u32).map(V::U32),
-            V::U64(a) => a.$method(rhs as u32).map(V::U64),
-            V::U128(a) => a.$method(rhs as u32).map(V::U128),
-            V::U256(a) => a.$method(rhs as u32).map(V::U256),
-            V::I8(a) => a.$method(rhs as u32).map(V::I8),
-            V::I16(a) => a.$method(rhs as u32).map(V::I16),
-            V::I32(a) => a.$method(rhs as u32).map(V::I32),
-            V::I64(a) => a.$method(rhs as u32).map(V::I64),
-            V::I128(a) => a.$method(rhs as u32).map(V::I128),
-            _ => None,
-        }
-    }};
+fn fold_shl(v1: Value_, v2: Value_) -> Option<Value_> {
+    use Value_ as V;
+    let V::U8(rhs) = v2 else { return None };
+    let rhs = rhs as u32;
+    match v1 {
+        V::U8(a) => a.checked_shl(rhs).map(V::U8),
+        V::U16(a) => a.checked_shl(rhs).map(V::U16),
+        V::U32(a) => a.checked_shl(rhs).map(V::U32),
+        V::U64(a) => a.checked_shl(rhs).map(V::U64),
+        V::U128(a) => a.checked_shl(rhs).map(V::U128),
+        V::U256(a) => a.checked_shl(rhs).map(V::U256),
+        // For signed left shift, verify no overflow by roundtrip:
+        // (a << rhs) >> rhs == a ensures no significant bits were lost.
+        V::I8(a) => a.checked_shl(rhs).filter(|r| r >> rhs == a).map(V::I8),
+        V::I16(a) => a.checked_shl(rhs).filter(|r| r >> rhs == a).map(V::I16),
+        V::I32(a) => a.checked_shl(rhs).filter(|r| r >> rhs == a).map(V::I32),
+        V::I64(a) => a.checked_shl(rhs).filter(|r| r >> rhs == a).map(V::I64),
+        V::I128(a) => a.checked_shl(rhs).filter(|r| r >> rhs == a).map(V::I128),
+        _ => None,
+    }
+}
+
+// Rust's `>>` on signed types is arithmetic (sign-extending).
+fn fold_shr(v1: Value_, v2: Value_) -> Option<Value_> {
+    use Value_ as V;
+    let V::U8(rhs) = v2 else { return None };
+    let rhs = rhs as u32;
+    match v1 {
+        V::U8(a) => a.checked_shr(rhs).map(V::U8),
+        V::U16(a) => a.checked_shr(rhs).map(V::U16),
+        V::U32(a) => a.checked_shr(rhs).map(V::U32),
+        V::U64(a) => a.checked_shr(rhs).map(V::U64),
+        V::U128(a) => a.checked_shr(rhs).map(V::U128),
+        V::U256(a) => a.checked_shr(rhs).map(V::U256),
+        V::I8(a) => a.checked_shr(rhs).map(V::I8),
+        V::I16(a) => a.checked_shr(rhs).map(V::I16),
+        V::I32(a) => a.checked_shr(rhs).map(V::I32),
+        V::I64(a) => a.checked_shr(rhs).map(V::I64),
+        V::I128(a) => a.checked_shr(rhs).map(V::I128),
+        _ => None,
+    }
 }
 
 fn fold_binary_op(
@@ -373,8 +395,8 @@ fn fold_binary_op(
         B::Div => checked_int_binop!(v1, v2, checked_div),
         B::Mod => checked_int_binop!(v1, v2, checked_rem),
 
-        B::Shl => shift_int_binop!(v1, v2, checked_shl),
-        B::Shr => shift_int_binop!(v1, v2, checked_shr),
+        B::Shl => fold_shl(v1, v2),
+        B::Shr => fold_shr(v1, v2),
 
         B::BitOr => bitwise_int_binop!(v1, v2, |),
         B::BitAnd => bitwise_int_binop!(v1, v2, &),
@@ -402,94 +424,57 @@ fn fold_binary_op(
     Some(evalue_(loc, v))
 }
 
+macro_rules! cast_u {
+    ($v:expr, $target_v:ident, $target_ty:ty) => {
+        match $v {
+            V::U8(u) => V::$target_v(<$target_ty>::try_from(u).ok()?),
+            V::U16(u) => V::$target_v(<$target_ty>::try_from(u).ok()?),
+            V::U32(u) => V::$target_v(<$target_ty>::try_from(u).ok()?),
+            V::U64(u) => V::$target_v(<$target_ty>::try_from(u).ok()?),
+            V::U128(u) => V::$target_v(<$target_ty>::try_from(u).ok()?),
+            V::U256(u) => V::$target_v(<$target_ty>::try_from(u).ok()?),
+            _ => return None,
+        }
+    };
+}
+
+macro_rules! cast_i {
+    ($v:expr, $target_v:ident, $target_ty:ty) => {
+        match $v {
+            V::I8(v) => V::$target_v(<$target_ty>::try_from(v).ok()?),
+            V::I16(v) => V::$target_v(<$target_ty>::try_from(v).ok()?),
+            V::I32(v) => V::$target_v(<$target_ty>::try_from(v).ok()?),
+            V::I64(v) => V::$target_v(<$target_ty>::try_from(v).ok()?),
+            V::I128(v) => V::$target_v(<$target_ty>::try_from(v).ok()?),
+            _ => return None,
+        }
+    };
+}
+
 fn fold_cast(loc: Loc, sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<UnannotatedExp_> {
     use BuiltinTypeName_ as BT;
     use Value_ as V;
-    let cast = match (bt_, v) {
-        (BT::U8, V::U8(u)) => V::U8(u),
-        (BT::U8, V::U16(u)) => V::U8(u8::try_from(u).ok()?),
-        (BT::U8, V::U32(u)) => V::U8(u8::try_from(u).ok()?),
-        (BT::U8, V::U64(u)) => V::U8(u8::try_from(u).ok()?),
-        (BT::U8, V::U128(u)) => V::U8(u8::try_from(u).ok()?),
-        (BT::U8, V::U256(u)) => V::U8(u8::try_from(u).ok()?),
-
-        (BT::U16, V::U8(u)) => V::U16(u as u16),
-        (BT::U16, V::U16(u)) => V::U16(u),
-        (BT::U16, V::U32(u)) => V::U16(u16::try_from(u).ok()?),
-        (BT::U16, V::U64(u)) => V::U16(u16::try_from(u).ok()?),
-        (BT::U16, V::U128(u)) => V::U16(u16::try_from(u).ok()?),
-        (BT::U16, V::U256(u)) => V::U16(u16::try_from(u).ok()?),
-
-        (BT::U32, V::U8(u)) => V::U32(u as u32),
-        (BT::U32, V::U16(u)) => V::U32(u as u32),
-        (BT::U32, V::U32(u)) => V::U32(u),
-        (BT::U32, V::U64(u)) => V::U32(u32::try_from(u).ok()?),
-        (BT::U32, V::U128(u)) => V::U32(u32::try_from(u).ok()?),
-        (BT::U32, V::U256(u)) => V::U32(u32::try_from(u).ok()?),
-
-        (BT::U64, V::U8(u)) => V::U64(u as u64),
-        (BT::U64, V::U16(u)) => V::U64(u as u64),
-        (BT::U64, V::U32(u)) => V::U64(u as u64),
-        (BT::U64, V::U64(u)) => V::U64(u),
-        (BT::U64, V::U128(u)) => V::U64(u64::try_from(u).ok()?),
-        (BT::U64, V::U256(u)) => V::U64(u64::try_from(u).ok()?),
-
-        (BT::U128, V::U8(u)) => V::U128(u as u128),
-        (BT::U128, V::U16(u)) => V::U128(u as u128),
-        (BT::U128, V::U32(u)) => V::U128(u as u128),
-        (BT::U128, V::U64(u)) => V::U128(u as u128),
-        (BT::U128, V::U128(u)) => V::U128(u),
-        (BT::U128, V::U256(u)) => V::U128(u128::try_from(u).ok()?),
-
-        (BT::U256, V::U8(u)) => V::U256(u.into()),
-        (BT::U256, V::U16(u)) => V::U256(u.into()),
-        (BT::U256, V::U32(u)) => V::U256(u.into()),
-        (BT::U256, V::U64(u)) => V::U256(u.into()),
-        (BT::U256, V::U128(u)) => V::U256(u.into()),
-        (BT::U256, V::U256(u)) => V::U256(u),
-
-        (BT::I8, V::I8(v)) => V::I8(v),
-        (BT::I8, V::I16(v)) => V::I8(i8::try_from(v).ok()?),
-        (BT::I8, V::I32(v)) => V::I8(i8::try_from(v).ok()?),
-        (BT::I8, V::I64(v)) => V::I8(i8::try_from(v).ok()?),
-        (BT::I8, V::I128(v)) => V::I8(i8::try_from(v).ok()?),
-
-        (BT::I16, V::I8(v)) => V::I16(v as i16),
-        (BT::I16, V::I16(v)) => V::I16(v),
-        (BT::I16, V::I32(v)) => V::I16(i16::try_from(v).ok()?),
-        (BT::I16, V::I64(v)) => V::I16(i16::try_from(v).ok()?),
-        (BT::I16, V::I128(v)) => V::I16(i16::try_from(v).ok()?),
-
-        (BT::I32, V::I8(v)) => V::I32(v as i32),
-        (BT::I32, V::I16(v)) => V::I32(v as i32),
-        (BT::I32, V::I32(v)) => V::I32(v),
-        (BT::I32, V::I64(v)) => V::I32(i32::try_from(v).ok()?),
-        (BT::I32, V::I128(v)) => V::I32(i32::try_from(v).ok()?),
-
-        (BT::I64, V::I8(v)) => V::I64(v as i64),
-        (BT::I64, V::I16(v)) => V::I64(v as i64),
-        (BT::I64, V::I32(v)) => V::I64(v as i64),
-        (BT::I64, V::I64(v)) => V::I64(v),
-        (BT::I64, V::I128(v)) => V::I64(i64::try_from(v).ok()?),
-
-        (BT::I128, V::I8(v)) => V::I128(v as i128),
-        (BT::I128, V::I16(v)) => V::I128(v as i128),
-        (BT::I128, V::I32(v)) => V::I128(v as i128),
-        (BT::I128, V::I64(v)) => V::I128(v as i128),
-        (BT::I128, V::I128(v)) => V::I128(v),
-
-        // Cross signed/unsigned casts: don't fold, let bytecode handle
-        (BT::I8, _)
-        | (BT::I16, _)
-        | (BT::I32, _)
-        | (BT::I64, _)
-        | (BT::I128, _)
-        | (_, V::I8(_))
-        | (_, V::I16(_))
-        | (_, V::I32(_))
-        | (_, V::I64(_))
-        | (_, V::I128(_)) => return None,
-        (_, v) => panic!("ICE unexpected cast while folding: {:?} as {:?}", v, bt_),
+    let cast = match bt_ {
+        BT::U8 => cast_u!(v, U8, u8),
+        BT::U16 => cast_u!(v, U16, u16),
+        BT::U32 => cast_u!(v, U32, u32),
+        BT::U64 => cast_u!(v, U64, u64),
+        BT::U128 => cast_u!(v, U128, u128),
+        BT::U256 => match v {
+            V::U8(u) => V::U256(u.into()),
+            V::U16(u) => V::U256(u.into()),
+            V::U32(u) => V::U256(u.into()),
+            V::U64(u) => V::U256(u.into()),
+            V::U128(u) => V::U256(u.into()),
+            V::U256(u) => V::U256(u),
+            _ => return None,
+        },
+        BT::I8 => cast_i!(v, I8, i8),
+        BT::I16 => cast_i!(v, I16, i16),
+        BT::I32 => cast_i!(v, I32, i32),
+        BT::I64 => cast_i!(v, I64, i64),
+        BT::I128 => cast_i!(v, I128, i128),
+        _ => panic!("ICE unexpected cast target while folding: {:?}", bt_),
     };
     Some(evalue_(loc, cast))
 }

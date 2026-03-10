@@ -3880,36 +3880,11 @@ pub(super) fn value_result(
                 context, /* suggest_declaration */ true, addr,
             )))
         }
-        PV::Num(s) if s.ends_with("u8") => parse_num!(parse_u8(&s[..s.len() - 2]), EV::U8, "'u8'"),
-        PV::Num(s) if s.ends_with("u16") => {
-            parse_num!(parse_u16(&s[..s.len() - 3]), EV::U16, "'u16'")
+        PV::Num(ref s) if has_unsigned_suffix(s) => {
+            unsigned_num(context, loc, s).ok_or_else(Vec::new) // error already emitted
         }
-        PV::Num(s) if s.ends_with("u32") => {
-            parse_num!(parse_u32(&s[..s.len() - 3]), EV::U32, "'u32'")
-        }
-        PV::Num(s) if s.ends_with("u64") => {
-            parse_num!(parse_u64(&s[..s.len() - 3]), EV::U64, "'u64'")
-        }
-        PV::Num(s) if s.ends_with("u128") => {
-            parse_num!(parse_u128(&s[..s.len() - 4]), EV::U128, "'u128'")
-        }
-        PV::Num(s) if s.ends_with("u256") => {
-            parse_num!(parse_u256(&s[..s.len() - 4]), EV::U256, "'u256'")
-        }
-        PV::Num(s) if s.ends_with("i8") => {
-            parse_num!(parse_i8(&s[..s.len() - 2], false), EV::I8, "'i8'")
-        }
-        PV::Num(s) if s.ends_with("i16") => {
-            parse_num!(parse_i16(&s[..s.len() - 3], false), EV::I16, "'i16'")
-        }
-        PV::Num(s) if s.ends_with("i32") => {
-            parse_num!(parse_i32(&s[..s.len() - 3], false), EV::I32, "'i32'")
-        }
-        PV::Num(s) if s.ends_with("i64") => {
-            parse_num!(parse_i64(&s[..s.len() - 3], false), EV::I64, "'i64'")
-        }
-        PV::Num(s) if s.ends_with("i128") => {
-            parse_num!(parse_i128(&s[..s.len() - 4], false), EV::I128, "'i128'")
+        PV::Num(ref s) if has_signed_suffix(s) => {
+            signed_num(context, loc, s, /* negated */ false).ok_or_else(Vec::new)
         }
         PV::Num(s) => parse_num!(
             parse_u256(&s),
