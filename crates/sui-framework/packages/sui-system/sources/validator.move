@@ -599,6 +599,8 @@ public fun is_duplicate(self: &Validator, other: &Validator): bool {
         || self.name == other.name
         || self.net_address == other.net_address
         || self.p2p_address == other.p2p_address
+        || self.primary_address == other.primary_address
+        || self.worker_address == other.worker_address
         || self.protocol_pubkey_bytes == other.protocol_pubkey_bytes
         || self.network_pubkey_bytes == other.network_pubkey_bytes
         || self.network_pubkey_bytes == other.worker_pubkey_bytes
@@ -607,6 +609,8 @@ public fun is_duplicate(self: &Validator, other: &Validator): bool {
         // All next epoch parameters.
         || both_some_and_equal!(self.next_epoch_net_address, other.next_epoch_net_address)
         || both_some_and_equal!(self.next_epoch_p2p_address, other.next_epoch_p2p_address)
+        || both_some_and_equal!(self.next_epoch_primary_address, other.next_epoch_primary_address)
+        || both_some_and_equal!(self.next_epoch_worker_address, other.next_epoch_worker_address)
         || both_some_and_equal!(self.next_epoch_protocol_pubkey_bytes, other.next_epoch_protocol_pubkey_bytes)
         || both_some_and_equal!(self.next_epoch_network_pubkey_bytes, other.next_epoch_network_pubkey_bytes)
         || both_some_and_equal!(self.next_epoch_network_pubkey_bytes, other.next_epoch_worker_pubkey_bytes)
@@ -615,6 +619,8 @@ public fun is_duplicate(self: &Validator, other: &Validator): bool {
         // My next epoch parameters with other current epoch parameters.
         || self.next_epoch_net_address.is_some_and!(|v| v == other.net_address)
         || self.next_epoch_p2p_address.is_some_and!(|v| v == other.p2p_address)
+        || self.next_epoch_primary_address.is_some_and!(|v| v == other.primary_address)
+        || self.next_epoch_worker_address.is_some_and!(|v| v == other.worker_address)
         || self.next_epoch_protocol_pubkey_bytes.is_some_and!(|v| v == other.protocol_pubkey_bytes)
         || self.next_epoch_network_pubkey_bytes.is_some_and!(|v| v == other.network_pubkey_bytes)
         || self.next_epoch_network_pubkey_bytes.is_some_and!(|v| v == other.worker_pubkey_bytes)
@@ -623,6 +629,8 @@ public fun is_duplicate(self: &Validator, other: &Validator): bool {
         // Other next epoch parameters with my current epoch parameters.
         || other.next_epoch_net_address.is_some_and!(|v| v == self.net_address)
         || other.next_epoch_p2p_address.is_some_and!(|v| v == self.p2p_address)
+        || other.next_epoch_primary_address.is_some_and!(|v| v == self.primary_address)
+        || other.next_epoch_worker_address.is_some_and!(|v| v == self.worker_address)
         || other.next_epoch_protocol_pubkey_bytes.is_some_and!(|v| v == self.protocol_pubkey_bytes)
         || other.next_epoch_network_pubkey_bytes.is_some_and!(|v| v == self.network_pubkey_bytes)
         || other.next_epoch_network_pubkey_bytes.is_some_and!(|v| v == self.worker_pubkey_bytes)

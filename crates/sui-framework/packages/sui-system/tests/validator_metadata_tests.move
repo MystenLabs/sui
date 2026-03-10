@@ -85,6 +85,42 @@ fun cannot_set_duplicate_p2p_address() {
     abort
 }
 
+#[test, expected_failure(abort_code = validator_set::EDuplicateValidator)]
+fun cannot_set_duplicate_primary_address() {
+    let preset_0 = validator_preset::preset(0);
+    let preset_1 = validator_preset::preset(1);
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::from_preset(preset_0),
+            validator_builder::from_preset(preset_1),
+        ])
+        .build();
+
+    runner.set_sender(preset_0.account_address()).system_tx!(|system, ctx| {
+        system.update_validator_next_epoch_primary_address(preset_1.primary_address(), ctx);
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = validator_set::EDuplicateValidator)]
+fun cannot_set_duplicate_worker_address() {
+    let preset_0 = validator_preset::preset(0);
+    let preset_1 = validator_preset::preset(1);
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::from_preset(preset_0),
+            validator_builder::from_preset(preset_1),
+        ])
+        .build();
+
+    runner.set_sender(preset_0.account_address()).system_tx!(|system, ctx| {
+        system.update_validator_next_epoch_worker_address(preset_1.worker_address(), ctx);
+    });
+
+    abort
+}
+
 // TODO: come back to me
 #[test, expected_failure(abort_code = 0, location = validator)]
 fun cannot_set_duplicate_protocol_pubkey_bytes() {
@@ -186,6 +222,56 @@ fun cannot_set_duplicate_next_epoch_p2p_address() {
     abort
 }
 
+#[test, expected_failure(abort_code = validator_set::EDuplicateValidator)]
+fun cannot_set_duplicate_next_epoch_primary_address() {
+    let preset_0 = validator_preset::preset(0);
+    let preset_1 = validator_preset::preset(1);
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::from_preset(preset_0),
+            validator_builder::from_preset(preset_1),
+        ])
+        .build();
+
+    // Validator 1 sets a new next_epoch primary address.
+    let new_primary = b"/ip4/99.99.99.99/udp/80";
+    runner.set_sender(preset_1.account_address()).system_tx!(|system, ctx| {
+        system.update_validator_next_epoch_primary_address(new_primary, ctx);
+    });
+
+    // Validator 0 tries to set the same next_epoch primary address.
+    runner.set_sender(preset_0.account_address()).system_tx!(|system, ctx| {
+        system.update_validator_next_epoch_primary_address(new_primary, ctx);
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = validator_set::EDuplicateValidator)]
+fun cannot_set_duplicate_next_epoch_worker_address() {
+    let preset_0 = validator_preset::preset(0);
+    let preset_1 = validator_preset::preset(1);
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::from_preset(preset_0),
+            validator_builder::from_preset(preset_1),
+        ])
+        .build();
+
+    // Validator 1 sets a new next_epoch worker address.
+    let new_worker = b"/ip4/99.99.99.99/udp/81";
+    runner.set_sender(preset_1.account_address()).system_tx!(|system, ctx| {
+        system.update_validator_next_epoch_worker_address(new_worker, ctx);
+    });
+
+    // Validator 0 tries to set the same next_epoch worker address.
+    runner.set_sender(preset_0.account_address()).system_tx!(|system, ctx| {
+        system.update_validator_next_epoch_worker_address(new_worker, ctx);
+    });
+
+    abort
+}
+
 // TODO: consider how to enable this test
 #[test, expected_failure(abort_code = 0, location = validator)]
 fun cannot_set_duplicate_next_epoch_protocol_pubkey_bytes() {
@@ -272,6 +358,8 @@ fun active_validator_update_metadata() {
             pop1,
             b"/ip4/42.42.42.42/tcp/80",
             b"/ip4/43.43.43.43/udp/80",
+            b"/ip4/168.168.168.168/udp/80",
+            b"/ip4/168.168.168.168/udp/81",
             vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
             vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
         );
@@ -284,6 +372,8 @@ fun active_validator_update_metadata() {
             b"validator_new_name",
             pubkey,
             pop,
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             b"/ip4/127.0.0.1/tcp/80",
             b"/ip4/127.0.0.1/udp/80",
             vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
@@ -292,6 +382,8 @@ fun active_validator_update_metadata() {
             pop1,
             b"/ip4/42.42.42.42/tcp/80",
             b"/ip4/43.43.43.43/udp/80",
+            b"/ip4/168.168.168.168/udp/80",
+            b"/ip4/168.168.168.168/udp/81",
             vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
             vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
         );
@@ -317,8 +409,8 @@ fun active_validator_update_metadata() {
         .project_url(b"project_url2")
         .net_address(b"/ip4/127.0.0.2/tcp/80")
         .p2p_address(b"/ip4/127.0.0.2/udp/80")
-        .primary_address(b"/ip4/127.0.0.1/udp/80")
-        .worker_address(b"/ip4/127.0.0.1/udp/80")
+        .primary_address(b"/ip4/192.192.192.192/udp/80")
+        .worker_address(b"/ip4/192.192.192.192/udp/81")
         .gas_price(1)
         .commission_rate(0)
         .is_active_at_genesis(false)
@@ -339,6 +431,8 @@ fun active_validator_update_metadata() {
             new_pop1,
             b"/ip4/66.66.66.66/tcp/80",
             b"/ip4/77.77.77.77/udp/80",
+            b"/ip4/88.88.88.88/udp/80",
+            b"/ip4/88.88.88.88/udp/81",
             vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
             vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
         );
@@ -351,6 +445,8 @@ fun active_validator_update_metadata() {
             b"new_validator_new_name",
             new_pubkey,
             new_pop,
+            b"/ip4/192.192.192.192/udp/80",
+            b"/ip4/192.192.192.192/udp/81",
             b"/ip4/127.0.0.2/tcp/80",
             b"/ip4/127.0.0.2/udp/80",
             vector[33, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
@@ -359,6 +455,8 @@ fun active_validator_update_metadata() {
             new_pop1,
             b"/ip4/66.66.66.66/tcp/80",
             b"/ip4/77.77.77.77/udp/80",
+            b"/ip4/88.88.88.88/udp/80",
+            b"/ip4/88.88.88.88/udp/81",
             vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
             vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
         );
@@ -379,6 +477,8 @@ fun active_validator_update_metadata() {
             b"validator_new_name",
             pubkey1,
             pop1,
+            b"/ip4/168.168.168.168/udp/80",
+            b"/ip4/168.168.168.168/udp/81",
             b"/ip4/42.42.42.42/tcp/80",
             b"/ip4/43.43.43.43/udp/80",
             vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
@@ -392,6 +492,8 @@ fun active_validator_update_metadata() {
             b"new_validator_new_name",
             new_pubkey1,
             new_pop1,
+            b"/ip4/88.88.88.88/udp/80",
+            b"/ip4/88.88.88.88/udp/81",
             b"/ip4/66.66.66.66/tcp/80",
             b"/ip4/77.77.77.77/udp/80",
             vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
@@ -693,6 +795,8 @@ fun update_metadata(
     pop: vector<u8>,
     network_address: vector<u8>,
     p2p_address: vector<u8>,
+    primary_address: vector<u8>,
+    worker_address: vector<u8>,
     network_pubkey: vector<u8>,
     worker_pubkey: vector<u8>,
 ) {
@@ -703,8 +807,8 @@ fun update_metadata(
     system_state.update_validator_project_url(b"new_project_url", ctx);
     system_state.update_validator_next_epoch_network_address(network_address, ctx);
     system_state.update_validator_next_epoch_p2p_address(p2p_address, ctx);
-    system_state.update_validator_next_epoch_primary_address(b"/ip4/168.168.168.168/udp/80", ctx);
-    system_state.update_validator_next_epoch_worker_address(b"/ip4/168.168.168.168/udp/80", ctx);
+    system_state.update_validator_next_epoch_primary_address(primary_address, ctx);
+    system_state.update_validator_next_epoch_worker_address(worker_address, ctx);
     system_state.update_validator_next_epoch_protocol_pubkey(
         protocol_pub_key,
         pop,
@@ -719,6 +823,8 @@ fun verify_metadata(
     name: vector<u8>,
     protocol_pub_key: vector<u8>,
     pop: vector<u8>,
+    current_primary_address: vector<u8>,
+    current_worker_address: vector<u8>,
     network_address: vector<u8>,
     p2p_address: vector<u8>,
     network_pubkey: vector<u8>,
@@ -727,6 +833,8 @@ fun verify_metadata(
     new_pop: vector<u8>,
     new_network_address: vector<u8>,
     new_p2p_address: vector<u8>,
+    new_primary_address: vector<u8>,
+    new_worker_address: vector<u8>,
     new_network_pubkey: vector<u8>,
     new_worker_pubkey: vector<u8>,
 ) {
@@ -736,8 +844,8 @@ fun verify_metadata(
         name,
         protocol_pub_key,
         pop,
-        b"/ip4/127.0.0.1/udp/80",
-        b"/ip4/127.0.0.1/udp/80",
+        current_primary_address,
+        current_worker_address,
         network_address,
         p2p_address,
         network_pubkey,
@@ -750,10 +858,10 @@ fun verify_metadata(
     );
     assert!(validator.next_epoch_p2p_address() == &option::some(new_p2p_address.to_string()));
     assert!(
-        validator.next_epoch_primary_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()),
+        validator.next_epoch_primary_address() == &option::some(new_primary_address.to_string()),
     );
     assert!(
-        validator.next_epoch_worker_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()),
+        validator.next_epoch_worker_address() == &option::some(new_worker_address.to_string()),
     );
     assert!(validator.next_epoch_protocol_pubkey_bytes() == &option::some(new_protocol_pub_key), 0);
     assert!(validator.next_epoch_proof_of_possession() == &option::some(new_pop), 0);
@@ -793,6 +901,8 @@ fun verify_metadata_after_advancing_epoch(
     name: vector<u8>,
     protocol_pub_key: vector<u8>,
     pop: vector<u8>,
+    primary_address: vector<u8>,
+    worker_address: vector<u8>,
     network_address: vector<u8>,
     p2p_address: vector<u8>,
     network_pubkey: vector<u8>,
@@ -804,8 +914,8 @@ fun verify_metadata_after_advancing_epoch(
         name,
         protocol_pub_key,
         pop,
-        b"/ip4/168.168.168.168/udp/80",
-        b"/ip4/168.168.168.168/udp/80",
+        primary_address,
+        worker_address,
         network_address,
         p2p_address,
         network_pubkey,
