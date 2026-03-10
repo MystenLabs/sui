@@ -119,6 +119,7 @@ const references = [
 				label: 'Rust SDK',
 				href: 'https://github.com/MystenLabs/sui-rust-sdk',
 			},
+			"references/rust-sdk",
 			{
 				type: 'link',
 				label: 'TypeScript SDK',
