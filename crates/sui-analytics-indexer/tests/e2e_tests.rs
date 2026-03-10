@@ -13,7 +13,7 @@ use object_store::memory::InMemory;
 use parquet::file::reader::FileReader;
 use prost::Message;
 use sui_analytics_indexer::config::CommitterLayer;
-use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_analytics_indexer::config::IngestionLayer;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_indexer_alt_framework_store_traits::Connection;
@@ -200,8 +200,8 @@ impl TestHarness {
             sf_role: None,
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(Pipeline::Checkpoint)],
-            ingestion: IngestionConfig {
-                checkpoint_buffer_size: 100,
+            ingestion: IngestionLayer {
+                checkpoint_buffer_size: Some(100),
                 ..Default::default()
             },
             committer: CommitterLayer::default(),
@@ -347,7 +347,7 @@ impl TestHarness {
             sf_role: None,
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(pipeline_enum)],
-            ingestion: IngestionConfig::default(),
+            ingestion: IngestionLayer::default(),
             committer: CommitterLayer::default(),
             migration_id: Some(migration_id.to_string()),
             file_format: FileFormat::Parquet,
@@ -481,8 +481,8 @@ impl MockTestHarness {
             sf_role: None,
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(Pipeline::Checkpoint)],
-            ingestion: IngestionConfig {
-                checkpoint_buffer_size: 100,
+            ingestion: IngestionLayer {
+                checkpoint_buffer_size: Some(100),
                 ..Default::default()
             },
             committer: CommitterLayer::default(),
@@ -603,7 +603,7 @@ impl MockTestHarness {
             sf_role: None,
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(pipeline_enum)],
-            ingestion: IngestionConfig::default(),
+            ingestion: IngestionLayer::default(),
             committer: CommitterLayer::default(),
             migration_id: Some(migration_id.to_string()),
             file_format: FileFormat::Parquet,
