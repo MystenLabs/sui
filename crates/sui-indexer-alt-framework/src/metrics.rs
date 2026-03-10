@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::time::Duration;
 
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -83,6 +84,7 @@ pub struct IngestionMetrics {
 pub struct IndexerMetrics {
     // Statistics related to individual ingestion pipelines' handlers.
     pub total_handler_checkpoints_received: IntCounterVec,
+    pub total_handler_processor_retries: IntCounterVec,
     pub total_handler_checkpoints_processed: IntCounterVec,
     pub total_handler_rows_created: IntCounterVec,
 
@@ -321,6 +323,13 @@ impl IndexerMetrics {
             total_handler_checkpoints_received: register_int_counter_vec_with_registry!(
                 name("total_handler_checkpoints_received"),
                 "Total number of checkpoints received by this handler",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_handler_processor_retries: register_int_counter_vec_with_registry!(
+                name("total_handler_processor_retries"),
+                "Total number of handler retries after transient processing failures",
                 &["pipeline"],
                 registry,
             )
@@ -704,6 +713,24 @@ impl IndexerMetrics {
             )
             .unwrap(),
         })
+    }
+
+    pub(crate) fn inc_processor_retry<P: Processor>(
+        &self,
+        checkpoint: u64,
+        error: &anyhow::Error,
+        delay: Duration,
+    ) {
+        warn!(
+            pipeline = P::NAME,
+            checkpoint,
+            retry_delay_ms = delay.as_millis(),
+            "Retrying processor after error: {error:?}",
+        );
+
+        self.total_handler_processor_retries
+            .with_label_values(&[P::NAME])
+            .inc();
     }
 }
 

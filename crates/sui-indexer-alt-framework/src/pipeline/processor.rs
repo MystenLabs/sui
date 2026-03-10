@@ -103,12 +103,24 @@ pub(super) fn processor<P: Processor>(
                             ..Default::default()
                         };
 
-                        let values = backoff::future::retry(backoff, || async {
-                            processor
-                                .process(&checkpoint)
-                                .await
-                                .map_err(backoff::Error::transient)
-                        })
+                        let checkpoint_sequence_number = checkpoint.summary.sequence_number;
+                        let retry_metrics = metrics.clone();
+                        let values = backoff::future::retry_notify(
+                            backoff,
+                            || async {
+                                processor
+                                    .process(&checkpoint)
+                                    .await
+                                    .map_err(backoff::Error::transient)
+                            },
+                            move |error: anyhow::Error, delay| {
+                                retry_metrics.inc_processor_retry::<P>(
+                                    checkpoint_sequence_number,
+                                    &error,
+                                    delay,
+                                );
+                            },
+                        )
                         .await?;
 
                         let elapsed = guard.stop_and_record();
@@ -381,7 +393,7 @@ mod tests {
             processor,
             data_rx,
             indexed_tx,
-            metrics,
+            metrics.clone(),
             ConcurrencyConfig::Fixed { value: 10 },
         );
 
@@ -404,6 +416,13 @@ mod tests {
 
         // Verify that exactly 3 attempts were made (2 failures + 1 success)
         assert_eq!(attempt_count.load(Ordering::Relaxed), 3);
+        assert_eq!(
+            metrics
+                .total_handler_processor_retries
+                .with_label_values(&[RetryTestPipeline::NAME])
+                .get(),
+            2
+        );
     }
 
     // By default, Rust's async tests run on the single-threaded runtime.
