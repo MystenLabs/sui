@@ -698,7 +698,7 @@ impl AuthorityEpochTables {
                 "owned_object_locked_transactions".to_string(),
                 ThConfig::new_with_config_indexing(
                     object_ref_indexing,
-                    mutexes * 2,
+                    mutexes * 8,
                     uniform_key,
                     bloom_config.clone(),
                 ),
