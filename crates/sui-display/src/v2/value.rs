@@ -40,7 +40,9 @@ use crate::v2::writer::StringWriter;
 /// Dynamically load objects by their ID, returning the object's owned data.
 ///
 /// The `Store` trait is responsible only for fetching object data -- lifetime management
-/// and caching are handled by the `Interpreter`.
+/// and caching are handled by the `Interpreter`. The interpreter can potentially issue racing
+/// requests for the same object, and it is the store's responsibility to handle this correctly
+/// (e.g. by deduplicating in-flight requests).
 #[async_trait]
 pub trait Store {
     async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>>;
