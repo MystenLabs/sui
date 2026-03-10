@@ -86,6 +86,10 @@ fn thdb_config() -> Config {
     let commit_pool_size = 0;
     #[cfg(not(debug_assertions))]
     let commit_pool_size = 8; // Use thread pool to commit large batches
+    #[cfg(debug_assertions)]
+    let num_flusher_threads = 1;
+    #[cfg(not(debug_assertions))]
+    let num_flusher_threads = 4;
     Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
@@ -97,6 +101,7 @@ fn thdb_config() -> Config {
         max_maps,
         max_index_maps,
         commit_pool_size,
+        num_flusher_threads,
         ..Config::default()
     }
 }
