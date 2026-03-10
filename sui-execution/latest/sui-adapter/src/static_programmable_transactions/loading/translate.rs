@@ -3,6 +3,7 @@
 
 use crate::{
     execution_mode::ExecutionMode,
+    gas_charger::PaymentLocation,
     static_programmable_transactions::{
         env::Env,
         linkage::resolved_linkage::RootedLinkage,
@@ -25,7 +26,7 @@ pub fn transaction<Mode: ExecutionMode>(
     // which inputs are withdrawals that need to be converted to coins, must
     // be the same length as the inputs
     withdrawal_compatibility_inputs: Option<Vec<bool>>,
-    gas_coin: Option<ObjectID>,
+    gas_payment: Option<(PaymentLocation, u64)>,
     pt: P::ProgrammableTransaction,
 ) -> Result<L::Transaction, ExecutionError> {
     metering::pre_translation::meter(meter, &pt)?;
@@ -57,7 +58,7 @@ pub fn transaction<Mode: ExecutionMode>(
         .map(|(idx, cmd)| command(env, cmd).map_err(|e| e.with_command_index(idx)))
         .collect::<Result<Vec<_>, _>>()?;
     let loaded_tx = L::Transaction {
-        gas_coin,
+        gas_payment,
         inputs,
         commands,
     };

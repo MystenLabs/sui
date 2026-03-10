@@ -19,7 +19,7 @@ mod checked {
             ObjectContents, ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue,
             UsageKind, Value,
         },
-        gas_charger::GasCharger,
+        gas_charger::{GasCharger, PaymentLocation},
         gas_meter::SuiGasMeter,
         type_resolver::TypeTagResolver,
     };
@@ -183,7 +183,14 @@ mod checked {
                 })
                 .collect::<Result<_, ExecutionError>>()?;
             std::mem::drop(tx_context_ref);
-            let gas = if let Some(gas_coin) = gas_charger.gas_coin() {
+            let gas_coin_id = match gas_charger.gas_payment_amount() {
+                None => None,
+                Some((PaymentLocation::Coin(coin_id), _)) => Some(coin_id),
+                Some((PaymentLocation::AddressBalance(_), _)) => unreachable!(
+                    "Gas payment from address balance is not supported in this version"
+                ),
+            };
+            let gas = if let Some(gas_coin) = gas_coin_id {
                 let mut gas = load_object(
                     protocol_config,
                     vm,

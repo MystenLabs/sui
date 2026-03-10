@@ -47,7 +47,7 @@ pub fn execute<Mode: ExecutionMode>(
     txn: ProgrammableTransaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
-    let gas_coin = gas_charger.gas_coin();
+    let gas_payment = gas_charger.gas_payment_amount();
     let package_store = CachedPackageStore::new(Box::new(package_store));
     let linkage_analysis =
         LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
@@ -69,7 +69,7 @@ pub fn execute<Mode: ExecutionMode>(
             &env,
             &tx_context_ref,
             withdrawal_compatibility_inputs,
-            gas_coin,
+            gas_payment,
             txn,
         )
         .map_err(|e| (e, vec![]))?

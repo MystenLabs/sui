@@ -4,6 +4,7 @@
 use super::{ast as T, env::Env};
 use crate::{
     execution_mode::ExecutionMode,
+    gas_charger::PaymentLocation,
     programmable_transactions::context::EitherError,
     static_programmable_transactions::{
         loading::ast::{self as L, Type},
@@ -41,7 +42,7 @@ enum InputKind {
 
 struct Context {
     current_command: u16,
-    gas_coin: Option<ObjectID>,
+    gas_payment: Option<(PaymentLocation, u64)>,
     /// What kind of input is at each original index
     input_resolution: Vec<InputKind>,
     bytes: IndexSet<Vec<u8>>,
@@ -58,10 +59,13 @@ struct Context {
 }
 
 impl Context {
-    fn new(gas_coin: Option<ObjectID>, linputs: L::Inputs) -> Result<Self, ExecutionError> {
+    fn new(
+        gas_payment: Option<(PaymentLocation, u64)>,
+        linputs: L::Inputs,
+    ) -> Result<Self, ExecutionError> {
         let mut context = Context {
             current_command: 0,
-            gas_coin,
+            gas_payment,
             input_resolution: vec![],
             bytes: IndexSet::new(),
             bytes_idx_remapping: IndexMap::new(),
@@ -151,7 +155,7 @@ impl Context {
 
     fn finish(self) -> T::Transaction {
         let Self {
-            gas_coin,
+            gas_payment,
             bytes,
             objects,
             withdrawals,
@@ -166,7 +170,7 @@ impl Context {
         let pure = pure.into_iter().map(|(_, p)| p).collect();
         let receiving = receiving.into_iter().map(|(_, r)| r).collect();
         T::Transaction {
-            gas_coin,
+            gas_payment,
             bytes,
             objects,
             withdrawals,
@@ -329,13 +333,13 @@ pub fn transaction<Mode: ExecutionMode>(
     lt: L::Transaction,
 ) -> Result<T::Transaction, ExecutionError> {
     let L::Transaction {
-        gas_coin,
+        gas_payment,
         mut inputs,
         mut commands,
     } = lt;
     let withdrawal_compatability_inputs =
         determine_withdrawal_compatibility_inputs(env, &mut inputs)?;
-    let mut context = Context::new(gas_coin, inputs)?;
+    let mut context = Context::new(gas_payment, inputs)?;
     withdrawal_compatibility_conversion(
         env,
         &mut context,
@@ -1288,7 +1292,7 @@ mod consumed_shared_objects {
     impl Context {
         pub fn new(ast: &T::Transaction) -> Self {
             let T::Transaction {
-                gas_coin: _,
+                gas_payment: _,
                 bytes: _,
                 objects,
                 withdrawals: _,

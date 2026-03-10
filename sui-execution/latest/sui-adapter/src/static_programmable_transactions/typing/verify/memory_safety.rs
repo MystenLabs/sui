@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::{
+    gas_charger::PaymentLocation,
     sp,
     static_programmable_transactions::{
         env::Env,
@@ -69,12 +70,20 @@ impl Value {
 
 impl Context {
     fn new(env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
-        let gas_coin =
-            if ast.gas_coin.is_none() && env.protocol_config.gasless_transaction_drop_safety() {
-                None
-            } else {
-                Some(Value::NonRef)
-            };
+        let has_gas_coin = if env.protocol_config.gasless_transaction_drop_safety() {
+            match ast.gas_payment {
+                Some((PaymentLocation::Coin(_), _))
+                | Some((PaymentLocation::AddressBalance(_), _)) => true,
+                None => false,
+            }
+        } else {
+            true
+        };
+        let gas_coin = if !has_gas_coin {
+            None
+        } else {
+            Some(Value::NonRef)
+        };
         let objects = ast.objects.iter().map(|_| Some(Value::NonRef)).collect();
         let withdrawals = ast
             .withdrawals

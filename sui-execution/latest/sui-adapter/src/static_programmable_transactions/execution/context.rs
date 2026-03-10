@@ -222,7 +222,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
-        payment_location: Option<PaymentLocation>,
+        payment_location: Option<(PaymentLocation, u64)>,
         pure_input_bytes: IndexSet<Vec<u8>>,
         object_inputs: Vec<T::ObjectInput>,
         input_withdrawal_metadata: Vec<T::WithdrawalInput>,

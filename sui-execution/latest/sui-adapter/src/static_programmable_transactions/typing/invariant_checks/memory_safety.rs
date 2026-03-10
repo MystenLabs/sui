@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    gas_charger::PaymentLocation,
     sp,
     static_programmable_transactions::{env::Env, typing::ast as T},
 };
@@ -292,7 +293,7 @@ impl Location {
 impl Context {
     fn new(env: &Env, txn: &T::Transaction) -> anyhow::Result<Self> {
         let T::Transaction {
-            gas_coin,
+            gas_payment,
             bytes: _,
             objects,
             withdrawals,
@@ -303,7 +304,16 @@ impl Context {
         } = txn;
         let tx_context = Location::non_ref(T::Location::TxContext);
         let mut gas = Location::non_ref(T::Location::GasCoin);
-        if gas_coin.is_none() && env.protocol_config.gasless_transaction_drop_safety() {
+        let has_gas_coin = if env.protocol_config.gasless_transaction_drop_safety() {
+            match gas_payment {
+                Some((PaymentLocation::Coin(_), _))
+                | Some((PaymentLocation::AddressBalance(_), _)) => true,
+                None => false,
+            }
+        } else {
+            true
+        };
+        if !has_gas_coin {
             gas.move_value()
                 .map_err(|_| anyhow::anyhow!("gas coin should be initialized"))?;
         }
@@ -551,7 +561,7 @@ pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
 fn verify_(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
     let mut context = Context::new(env, txn)?;
     let T::Transaction {
-        gas_coin: _,
+        gas_payment: _,
         bytes: _,
         objects: _,
         withdrawals: _,

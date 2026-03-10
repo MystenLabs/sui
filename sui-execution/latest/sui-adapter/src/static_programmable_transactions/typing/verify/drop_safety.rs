@@ -207,6 +207,7 @@ mod refine {
 mod verify {
     use crate::{
         execution_mode::ExecutionMode,
+        gas_charger::PaymentLocation,
         sp,
         static_programmable_transactions::{
             env::Env,
@@ -243,13 +244,16 @@ mod verify {
                 .iter()
                 .map(|_| Some(Value))
                 .collect::<Vec<_>>();
-            let gas_coin = if ast.gas_coin.is_none()
-                && env.protocol_config.gasless_transaction_drop_safety()
-            {
-                None
+            let has_gas_coin = if env.protocol_config.gasless_transaction_drop_safety() {
+                match &ast.gas_payment {
+                    Some((PaymentLocation::Coin(_), _))
+                    | Some((PaymentLocation::AddressBalance(_), _)) => true,
+                    None => false,
+                }
             } else {
-                Some(Value)
+                true
             };
+            let gas_coin = if !has_gas_coin { None } else { Some(Value) };
             Ok(Self {
                 tx_context: Some(Value),
                 gas_coin,
