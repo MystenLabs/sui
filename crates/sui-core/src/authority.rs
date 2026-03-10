@@ -1574,9 +1574,6 @@ impl AuthorityState {
             }
         }
 
-        // TODO: We should also settle address funds during execution,
-        // instead of from checkpoint builder. It will improve performance
-        // since we will be settling as soon as we can.
         if certificate
             .transaction_data()
             .kind()
