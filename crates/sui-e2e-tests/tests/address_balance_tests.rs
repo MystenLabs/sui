@@ -3765,6 +3765,33 @@ async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
         get_balance_changes
     );
 
+    // Verify the receiver's balance change matches the withdrawal amount
+    let receiver_change = get_balance_changes
+        .iter()
+        .find(|c| c.owner == sui_types::object::Owner::AddressOwner(receiver))
+        .expect("Should have balance change for receiver");
+    assert_eq!(
+        receiver_change.amount,
+        withdraw_amount as i128,
+        "Receiver should receive exactly the withdrawal amount"
+    );
+
+    // Verify the sender has a negative balance change (withdrawal + gas)
+    let sender_change = get_balance_changes
+        .iter()
+        .find(|c| c.owner == sui_types::object::Owner::AddressOwner(sender))
+        .expect("Should have balance change for sender");
+    assert!(
+        sender_change.amount < 0,
+        "Sender balance change should be negative, got: {}",
+        sender_change.amount
+    );
+    assert!(
+        sender_change.amount.unsigned_abs() >= withdraw_amount as u128,
+        "Sender should lose at least the withdrawal amount, got: {}",
+        sender_change.amount
+    );
+
     // The bug: execute_transaction_block returns None or empty balance_changes
     // while get_transaction_block returns the correct balance changes
     let execute_balance_changes = execute_response.balance_changes.as_ref();
@@ -3777,6 +3804,18 @@ async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
          Got {:?} while get_transaction_block returned: {:?}",
         execute_balance_changes,
         get_balance_changes
+    );
+
+    // Verify execute_transaction_block returns the same balance changes
+    let execute_balance_changes = execute_balance_changes.unwrap();
+    let exec_receiver_change = execute_balance_changes
+        .iter()
+        .find(|c| c.owner == sui_types::object::Owner::AddressOwner(receiver))
+        .expect("execute_transaction_block should have balance change for receiver");
+    assert_eq!(
+        exec_receiver_change.amount,
+        withdraw_amount as i128,
+        "execute_transaction_block: Receiver should receive exactly the withdrawal amount"
     );
 }
 
