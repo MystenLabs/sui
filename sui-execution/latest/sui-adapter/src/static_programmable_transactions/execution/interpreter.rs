@@ -17,9 +17,9 @@ use move_trace_format::format::MoveTraceBuilder;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
 use sui_types::{
     base_types::TxContext,
-    error::{ExecutionError, ExecutionErrorKind},
+    error::ExecutionError,
     execution::{ExecutionTiming, ResultWithTimings},
-    execution_status::PackageUpgradeError,
+    execution_status::{ExecutionErrorKind, PackageUpgradeError},
     metrics::LimitsMetrics,
     move_package::MovePackage,
     object::Owner,

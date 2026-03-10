@@ -28,8 +28,8 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         base_types::*,
-        error::ExecutionError,
-        error::{ExecutionErrorKind, SuiError},
+        error::{ExecutionError, SuiError},
+        execution_status::ExecutionErrorKind,
         metrics::LimitsMetrics,
         storage::ChildObjectResolver,
     };

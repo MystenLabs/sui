@@ -12,7 +12,8 @@ pub mod private_generics;
 pub mod struct_with_key_verifier;
 
 use move_core_types::{ident_str, identifier::IdentStr, vm_status::StatusCode};
-use sui_types::error::{ExecutionError, ExecutionErrorKind};
+use sui_types::error::ExecutionError;
+use sui_types::execution_status::ExecutionErrorKind;
 
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 pub const TEST_SCENARIO_MODULE_NAME: &str = "test_scenario";

@@ -60,9 +60,9 @@ mod checked {
         ChainIdentifier, get_mainnet_chain_identifier, get_testnet_chain_identifier,
     };
     use sui_types::effects::TransactionEffects;
-    use sui_types::error::{ExecutionError, ExecutionErrorKind};
+    use sui_types::error::ExecutionError;
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
-    use sui_types::execution_status::ExecutionStatus;
+    use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::id::UID;

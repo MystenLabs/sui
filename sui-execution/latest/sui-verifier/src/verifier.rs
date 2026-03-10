@@ -47,7 +47,7 @@ pub fn sui_verify_module_metered_check_timeout_only(
     if let Err(error) = sui_verify_module_metered(module, fn_info_map, meter, verifier_config)
         && matches!(
             error.kind(),
-            sui_types::execution_status::ExecutionFailureStatus::SuiMoveVerificationTimedout
+            sui_types::execution_status::ExecutionErrorKind::SuiMoveVerificationTimedout
         )
     {
         return Err(error);
@@ -66,9 +66,9 @@ pub fn sui_verify_module_unmetered(
             // We must never see timeout error in execution
             debug_assert!(
                 !matches!(
-                err.kind(),
-                sui_types::execution_status::ExecutionFailureStatus::SuiMoveVerificationTimedout
-            ),
+                    err.kind(),
+                    sui_types::execution_status::ExecutionErrorKind::SuiMoveVerificationTimedout
+                ),
                 "Unexpected timeout error in execution"
             );
         },

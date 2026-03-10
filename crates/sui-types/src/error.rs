@@ -6,7 +6,7 @@ use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
     digests::CheckpointContentsDigest,
-    execution_status::CommandArgumentError,
+    execution_status::{CommandArgumentError, CommandIndex, ExecutionErrorKind},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
@@ -37,7 +37,6 @@ macro_rules! fp_ensure {
         }
     };
 }
-use crate::execution_status::{CommandIndex, ExecutionFailureStatus};
 
 #[macro_export]
 macro_rules! exit_main {
@@ -1160,8 +1159,6 @@ impl std::fmt::Debug for SuiError {
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-pub type ExecutionErrorKind = ExecutionFailureStatus;
-
 #[derive(Debug)]
 pub struct ExecutionError {
     inner: Box<ExecutionErrorInner>,
@@ -1190,7 +1187,7 @@ impl ExecutionError {
     }
 
     pub fn invariant_violation<E: Into<BoxError>>(source: E) -> Self {
-        Self::new_with_source(ExecutionFailureStatus::InvariantViolation, source)
+        Self::new_with_source(ExecutionErrorKind::InvariantViolation, source)
     }
 
     pub fn with_command_index(mut self, command: CommandIndex) -> Self {
@@ -1214,7 +1211,7 @@ impl ExecutionError {
         &self.inner.source
     }
 
-    pub fn to_execution_status(&self) -> (ExecutionFailureStatus, Option<CommandIndex>) {
+    pub fn to_execution_status(&self) -> (ExecutionErrorKind, Option<CommandIndex>) {
         (self.kind().clone(), self.command())
     }
 }

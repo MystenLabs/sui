@@ -10,7 +10,7 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use sui_types::error::ExecutionError;
-use sui_types::execution_status::{ExecutionFailureStatus, MoveLocation, MoveLocationOpt};
+use sui_types::execution_status::{ExecutionErrorKind, MoveLocation, MoveLocationOpt};
 
 pub(crate) fn convert_vm_error_impl(
     error: VMError,
@@ -21,12 +21,12 @@ pub(crate) fn convert_vm_error_impl(
         (StatusCode::EXECUTED, _, _) => {
             // If we have an error the status probably shouldn't ever be Executed
             debug_assert!(false, "VmError shouldn't ever report successful execution");
-            ExecutionFailureStatus::VMInvariantViolation
+            ExecutionErrorKind::VMInvariantViolation
         }
         (StatusCode::ABORTED, None, _) => {
             debug_assert!(false, "No abort code");
             // this is a Move VM invariant violation, the code should always be there
-            ExecutionFailureStatus::VMInvariantViolation
+            ExecutionErrorKind::VMInvariantViolation
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
             let abort_location_id = abort_module_id_relocation_fn(id);
@@ -34,7 +34,7 @@ pub(crate) fn convert_vm_error_impl(
             debug_assert!(offset.is_some(), "Move should set the location on aborts");
             let (function, instruction) = offset.unwrap_or((0, 0));
             let function_name = function_name_resolution_fn(id, FunctionDefinitionIndex(function));
-            ExecutionFailureStatus::MoveAbort(
+            ExecutionErrorKind::MoveAbort(
                 MoveLocation {
                     module: abort_location_id,
                     function,
@@ -44,7 +44,7 @@ pub(crate) fn convert_vm_error_impl(
                 code,
             )
         }
-        (StatusCode::OUT_OF_GAS, _, _) => ExecutionFailureStatus::InsufficientGas,
+        (StatusCode::OUT_OF_GAS, _, _) => ExecutionErrorKind::InsufficientGas,
         (_, _, location) => match error.major_status().status_type() {
             StatusType::Execution => {
                 debug_assert!(error.major_status() != StatusCode::ABORTED);
@@ -67,13 +67,13 @@ pub(crate) fn convert_vm_error_impl(
                     }
                     _ => None,
                 };
-                ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(location))
+                ExecutionErrorKind::MovePrimitiveRuntimeError(MoveLocationOpt(location))
             }
             StatusType::Validation
             | StatusType::Verification
             | StatusType::Deserialization
-            | StatusType::Unknown => ExecutionFailureStatus::VMVerificationOrDeserializationError,
-            StatusType::InvariantViolation => ExecutionFailureStatus::VMInvariantViolation,
+            | StatusType::Unknown => ExecutionErrorKind::VMVerificationOrDeserializationError,
+            StatusType::InvariantViolation => ExecutionErrorKind::VMInvariantViolation,
         },
     };
     ExecutionError::new_with_source(kind, error)

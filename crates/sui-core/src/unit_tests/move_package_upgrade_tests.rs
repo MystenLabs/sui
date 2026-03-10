@@ -25,7 +25,7 @@ use std::{
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::UserInputError;
 use sui_types::execution_status::{
-    CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
+    CommandArgumentError, ExecutionErrorKind, ExecutionStatus, PackageUpgradeError,
 };
 
 use crate::authority::authority_tests::init_state_with_ids;
@@ -312,7 +312,7 @@ async fn test_upgrade_package_happy_path() {
         .await;
 
     match effects.into_status().unwrap_err().0 {
-        ExecutionFailureStatus::MoveAbort(_, 42) => { /* nop */ }
+        ExecutionErrorKind::MoveAbort(_, 42) => { /* nop */ }
         err => panic!("Unexpected error: {:#?}", err),
     };
 
@@ -452,7 +452,7 @@ async fn test_upgrade_incompatible() {
 
     assert_eq!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
         },
     )
@@ -470,7 +470,7 @@ async fn test_upgrade_package_incorrect_digest() {
 
     assert_eq!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::DigestDoesNotMatch { digest }
         }
     );
@@ -501,7 +501,7 @@ async fn test_upgrade_package_compatibility_too_permissive() {
     // ETooPermissive abort when we try to authorize the upgrade.
     assert!(matches!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::MoveAbort(_, 1)
+        ExecutionErrorKind::MoveAbort(_, 1)
     ));
 }
 
@@ -516,7 +516,7 @@ async fn test_upgrade_package_compatible_in_dep_only_mode() {
 
     assert_eq!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         },
     );
@@ -577,7 +577,7 @@ public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
 
         assert_eq!(
             effects.into_status().unwrap_err().0,
-            ExecutionFailureStatus::PackageUpgradeError {
+            ExecutionErrorKind::PackageUpgradeError {
                 upgrade_error: PackageUpgradeError::IncompatibleUpgrade
             },
         );
@@ -612,7 +612,7 @@ public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
 
         assert_eq!(
             effects.into_status().unwrap_err().0,
-            ExecutionFailureStatus::PackageUpgradeError {
+            ExecutionErrorKind::PackageUpgradeError {
                 upgrade_error: PackageUpgradeError::IncompatibleUpgrade
             },
         );
@@ -630,7 +630,7 @@ async fn test_upgrade_package_compatible_in_additive_mode() {
 
     assert_eq!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         },
     );
@@ -645,7 +645,7 @@ async fn test_upgrade_package_invalid_compatibility() {
 
     assert!(matches!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::UnknownUpgradePolicy { policy: 255 }
         }
     ));
@@ -662,7 +662,7 @@ async fn test_upgrade_package_missing_type() {
 
     assert!(matches!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         }
     ));
@@ -679,7 +679,7 @@ async fn test_upgrade_package_missing_type_module_removal() {
 
     assert!(matches!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         }
     ));
@@ -708,7 +708,7 @@ async fn test_upgrade_package_invalid_additive_mode() {
 
     assert_eq!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         },
     );
@@ -725,7 +725,7 @@ async fn test_upgrade_package_additive_dep_only_mode() {
 
     assert_eq!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         },
     );
@@ -756,7 +756,7 @@ async fn test_upgrade_package_not_a_ticket() {
 
     assert_eq!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::CommandArgumentError {
+        ExecutionErrorKind::CommandArgumentError {
             arg_idx: 0,
             kind: CommandArgumentError::TypeMismatch
         }
@@ -797,7 +797,7 @@ async fn test_upgrade_ticket_doesnt_match() {
     assert!(
         matches!(
             err,
-            ExecutionFailureStatus::PackageUpgradeError {
+            ExecutionErrorKind::PackageUpgradeError {
                 upgrade_error: PackageUpgradeError::PackageIDDoesNotMatch {
                     package_id: _,
                     ticket_id: _
@@ -814,7 +814,7 @@ async fn upgrade_missing_deps() {
     let (_, effects) = test_multiple_upgrades(&mut runner, true).await;
     assert!(matches!(
         effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
+        ExecutionErrorKind::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::DigestDoesNotMatch { digest: _ }
         }
     ));
@@ -1080,7 +1080,7 @@ async fn test_publish_transitive_happy_path() {
         .await;
 
     match call_effects.into_status().unwrap_err().0 {
-        ExecutionFailureStatus::MoveAbort(_, 42) => { /* nop */ }
+        ExecutionErrorKind::MoveAbort(_, 42) => { /* nop */ }
         err => panic!("Unexpected error: {:#?}", err),
     };
 }
@@ -1396,7 +1396,7 @@ async fn test_conflicting_versions_across_calls() {
 
     // verify that execution aborts
     match call_error.0 {
-        ExecutionFailureStatus::MoveAbort(_, 42) => { /* nop */ }
+        ExecutionErrorKind::MoveAbort(_, 42) => { /* nop */ }
         err => panic!("Unexpected error: {:#?}", err),
     };
 

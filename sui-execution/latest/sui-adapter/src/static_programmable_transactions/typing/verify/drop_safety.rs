@@ -213,7 +213,8 @@ mod verify {
             typing::ast::{self as T, Type},
         },
     };
-    use sui_types::error::{ExecutionError, ExecutionErrorKind, SafeIndex};
+    use sui_types::error::{ExecutionError, SafeIndex};
+    use sui_types::execution_status::ExecutionErrorKind;
 
     #[must_use]
     struct Value;

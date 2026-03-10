@@ -32,7 +32,7 @@ use sui_types::transaction::{ObjectArg, SharedObjectMutability};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
-    execution_status::{CongestedObjects, ExecutionFailureStatus},
+    execution_status::{CongestedObjects, ExecutionErrorKind},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
@@ -362,7 +362,7 @@ async fn test_congestion_control_execution_cancellation() {
     assert!(execution_error.is_some());
     assert_eq!(
         execution_error.unwrap().to_execution_status().0,
-        ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
+        ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
             congested_objects: CongestedObjects(vec![shared_object_1.0]),
         }
     );
@@ -398,7 +398,7 @@ async fn test_congestion_control_execution_cancellation() {
     // Should result in the same cancellation.
     assert_eq!(
         execution_error.unwrap().to_execution_status().0,
-        ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
+        ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
             congested_objects: CongestedObjects(vec![shared_object_1.0]),
         }
     );

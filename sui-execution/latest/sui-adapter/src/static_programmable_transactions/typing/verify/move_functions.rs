@@ -7,7 +7,8 @@ use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typi
 use move_binary_format::file_format::Visibility;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
-use sui_types::error::{ExecutionError, ExecutionErrorKind};
+use sui_types::error::ExecutionError;
+use sui_types::execution_status::ExecutionErrorKind;
 use sui_verifier::private_generics_verifier_v2;
 
 /// Checks the following

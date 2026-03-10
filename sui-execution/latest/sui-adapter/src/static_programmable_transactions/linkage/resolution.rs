@@ -9,8 +9,7 @@ use std::{
     sync::Arc,
 };
 use sui_types::{
-    base_types::ObjectID,
-    error::{ExecutionError, ExecutionErrorKind},
+    base_types::ObjectID, error::ExecutionError, execution_status::ExecutionErrorKind,
 };
 
 /// Unifiers. These are used to determine how to unify two packages.

@@ -268,8 +268,10 @@ impl<'s> Display<'s> {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
 
+    use async_trait::async_trait;
     use base64::Engine as _;
     use base64::engine::general_purpose::STANDARD;
     use insta::assert_debug_snapshot;
@@ -287,6 +289,8 @@ mod tests {
     use sui_types::dynamic_field::derive_dynamic_field_id;
     use sui_types::id::ID;
     use sui_types::id::UID;
+    use tokio::sync::Barrier;
+    use tokio::time::Duration;
 
     use crate::v2::value::tests::MockStore;
     use crate::v2::value::tests::enum_;
@@ -355,7 +359,7 @@ mod tests {
 
     /// Helper to parse display fields and render them against the provided object.
     async fn format<'s>(
-        store: MockStore,
+        store: impl Store,
         limits: Limits,
         bytes: Vec<u8>,
         layout: MoveTypeLayout,
@@ -1428,6 +1432,67 @@ mod tests {
             ),
             "miss": Ok(
                 Null,
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_display_concurrent_dynamic_field_fetch() {
+        // Define a store that intentionally holds back requests to the store so they operate
+        // concurrently.
+        #[derive(Clone)]
+        struct BlockingStore {
+            barrier: Arc<Barrier>,
+            inner: MockStore,
+        }
+
+        #[async_trait]
+        impl Store for BlockingStore {
+            async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>> {
+                self.barrier.wait().await;
+                self.inner.object(id).await
+            }
+        }
+
+        let parent = AccountAddress::from_str("0x1200").unwrap();
+        let bytes = bcs::to_bytes(&parent).unwrap();
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![("id", L::Struct(Box::new(UID::layout())))],
+        );
+
+        let store = BlockingStore {
+            barrier: Arc::new(Barrier::new(2)),
+            inner: MockStore::default().with_dynamic_field(
+                parent,
+                "key",
+                L::Struct(Box::new(move_utf8_str_layout())),
+                42u64,
+                L::U64,
+            ),
+        };
+
+        let rendered = tokio::time::timeout(
+            Duration::from_secs(10),
+            format(
+                store,
+                Limits::default(),
+                bytes,
+                layout,
+                usize::MAX,
+                ONE_MB,
+                [("concurrent", "{id->['key']}{id->['key']}")],
+            ),
+        )
+        .await
+        .expect("back-to-back dynamic field expressions should not block")
+        .unwrap();
+
+        assert_debug_snapshot!(rendered, @r###"
+        {
+            "concurrent": Ok(
+                String("4242"),
             ),
         }
         "###);

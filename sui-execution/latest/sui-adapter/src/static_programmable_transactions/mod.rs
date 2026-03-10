@@ -22,11 +22,8 @@ use move_vm_runtime::runtime::MoveRuntime;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::TxContext,
-    error::{ExecutionError, ExecutionErrorKind},
-    execution::ResultWithTimings,
-    metrics::LimitsMetrics,
-    storage::BackingPackageStore,
+    base_types::TxContext, error::ExecutionError, execution::ResultWithTimings,
+    execution_status::ExecutionErrorKind, metrics::LimitsMetrics, storage::BackingPackageStore,
     transaction::ProgrammableTransaction,
 };
 

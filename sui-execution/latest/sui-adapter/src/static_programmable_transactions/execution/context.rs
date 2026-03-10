@@ -72,9 +72,10 @@ use sui_types::{
         SuiAddress, TxContext,
     },
     effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
-    error::{ExecutionError, ExecutionErrorKind, SafeIndex, command_argument_error},
+    error::{ExecutionError, SafeIndex, command_argument_error},
     event::Event,
     execution::{ExecutionResults, ExecutionResultsV2},
+    execution_status::ExecutionErrorKind,
     execution_status::{CommandArgumentError, PackageUpgradeError},
     metrics::LimitsMetrics,
     move_package::{

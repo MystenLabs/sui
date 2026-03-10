@@ -19,8 +19,7 @@ use move_core_types::identifier::IdentStr;
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::ObjectID,
-    error::{ExecutionError, ExecutionErrorKind},
+    base_types::ObjectID, error::ExecutionError, execution_status::ExecutionErrorKind,
     transaction::ProgrammableTransaction,
 };
 
@@ -197,7 +196,8 @@ mod input_type_resolution_analysis {
     use move_core_types::language_storage::StructTag;
     use sui_types::{
         base_types::ObjectID,
-        error::{ExecutionError, ExecutionErrorKind},
+        error::ExecutionError,
+        execution_status::ExecutionErrorKind,
         transaction::{
             CallArg, Command, FundsWithdrawalArg, ObjectArg, ProgrammableMoveCall,
             ProgrammableTransaction, WithdrawalTypeArg,

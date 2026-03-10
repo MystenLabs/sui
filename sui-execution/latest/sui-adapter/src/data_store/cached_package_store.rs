@@ -10,7 +10,8 @@ use move_vm_runtime::{
 use std::{rc::Rc, sync::Arc};
 use sui_types::{
     base_types::ObjectID,
-    error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, SuiResult},
+    error::{ExecutionError, SuiErrorKind, SuiResult},
+    execution_status::ExecutionErrorKind,
     move_package::MovePackage,
 };
 

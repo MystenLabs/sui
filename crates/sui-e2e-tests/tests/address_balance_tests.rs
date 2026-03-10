@@ -2219,7 +2219,7 @@ async fn test_address_balance_gas_budget_enforcement_with_storage() {
     assert!(
         matches!(
             error_kind,
-            sui_types::execution_status::ExecutionFailureStatus::InsufficientGas
+            sui_types::execution_status::ExecutionErrorKind::InsufficientGas
         ),
         "Expected InsufficientGas error when storage exceeds budget, got: {:?}",
         error_kind
@@ -2293,7 +2293,7 @@ async fn test_address_balance_computation_oog() {
     assert!(
         matches!(
             error_kind,
-            sui_types::execution_status::ExecutionFailureStatus::InsufficientGas
+            sui_types::execution_status::ExecutionErrorKind::InsufficientGas
         ),
         "Expected InsufficientGas error when computation exceeds budget, got: {:?}",
         error_kind
@@ -2516,7 +2516,7 @@ async fn test_sponsored_address_balance_storage_oog() {
     assert!(
         matches!(
             error_kind,
-            sui_types::execution_status::ExecutionFailureStatus::InsufficientGas
+            sui_types::execution_status::ExecutionErrorKind::InsufficientGas
         ),
         "Expected InsufficientGas error when sponsor's budget exceeded, got: {:?}",
         error_kind

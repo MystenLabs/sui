@@ -8,7 +8,8 @@ use crate::deny_list_v1::{
     DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE, input_object_coin_types_for_denylist_check,
 };
 use crate::dynamic_field::{DOFWrapper, get_dynamic_field_from_store};
-use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
+use crate::error::{ExecutionError, UserInputError, UserInputResult};
+use crate::execution_status::ExecutionErrorKind;
 use crate::gas_coin::GAS;
 use crate::id::UID;
 use crate::storage::{DenyListResult, ObjectStore};
