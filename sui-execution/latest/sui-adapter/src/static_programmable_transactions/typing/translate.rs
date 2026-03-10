@@ -18,7 +18,7 @@ use move_core_types::account_address::AccountAddress;
 use std::rc::Rc;
 use sui_types::{
     balance::RESOLVED_BALANCE_STRUCT,
-    base_types::{ObjectID, ObjectRef, TxContextKind},
+    base_types::{ObjectRef, TxContextKind},
     coin::{COIN_MODULE_NAME, REDEEM_FUNDS_FUNC_NAME, RESOLVED_COIN_STRUCT},
     error::{ExecutionError, SafeIndex, command_argument_error},
     execution_status::{CommandArgumentError, ExecutionErrorKind},
@@ -59,10 +59,7 @@ struct Context {
 }
 
 impl Context {
-    fn new(
-        gas_payment: Option<GasPayment>,
-        linputs: L::Inputs,
-    ) -> Result<Self, ExecutionError> {
+    fn new(gas_payment: Option<GasPayment>, linputs: L::Inputs) -> Result<Self, ExecutionError> {
         let mut context = Context {
             current_command: 0,
             gas_payment,

@@ -543,7 +543,7 @@ pub mod checked {
                 PaymentMethod::Coin((gas_coin_id, _, _)) => {
                     let mut primary_gas_object = temporary_store
                         .objects()
-                        .get(&gas_coin_id)
+                        .get(gas_coin_id)
                         // unwrap should be safe because we checked that this exists in `self.objects()` above
                         .unwrap_or_else(|| {
                             panic!(
