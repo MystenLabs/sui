@@ -15961,6 +15961,7 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
+ "once_cell",
  "prometheus",
  "rand 0.8.5",
  "serde",
