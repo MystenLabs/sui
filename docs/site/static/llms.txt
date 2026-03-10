@@ -524,6 +524,12 @@
     Description: Defines a Display struct which defines the way an Object should be displayed. The
         intention is to keep data as independent from its display as possible, protecting the
         development process and keeping it separate from the ecosystem agreements.
+- [Module
+    sui::display_registry](https://docs.sui.io/references/framework/sui_sui/display_registry.md)
+    Description: Struct DisplayRegistry Struct SystemMigrationCap Struct Display Struct DisplayCap
+        Struct DisplayKey Constants Function new Function newwithpublisher Function unset Function
+        set Function clear Function share Function claim Function claimwithpublisher Function
+        systemmigration Function migratev1tov2
 - [Module sui::dynamic_field](https://docs.sui.io/references/framework/sui_sui/dynamic_field.md)
     Description: In addition to the fields declared in its type definition, a Sui object can have
         dynamic fields that can be added after the object has been constructed.
@@ -1088,12 +1094,6 @@
         useState(startOpen); return ( { e.preventDefault();
 -
     [TransactionKindInput](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/transaction-kind-input.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
--
-    [WithdrawFrom](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/withdraw-from.md)
     Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
         <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
         dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
