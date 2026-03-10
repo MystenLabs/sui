@@ -247,8 +247,12 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         self.next_checkpoint_seq += 1;
         let effects = std::mem::take(&mut self.pending_effects);
         if !effects.is_empty() {
-            self.validator
+            let replay_txns = self
+                .validator
                 .settle_accumulator_for_testing(&effects, Some(checkpoint_seq))
+                .await;
+            self.fullnode
+                .replay_settlement_for_testing(&replay_txns)
                 .await;
         }
         self.get_checkpoint_by_sequence_number(0)

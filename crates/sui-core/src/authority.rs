@@ -4131,11 +4131,14 @@ impl AuthorityState {
         }
     }
 
+    /// Executes accumulator settlement for testing purposes.
+    /// Returns a list of (transaction, execution_env) pairs that can be replayed on another
+    /// AuthorityState (e.g., a fullnode) using `replay_settlement_for_testing`.
     pub async fn settle_accumulator_for_testing(
         &self,
         effects: &[TransactionEffects],
         checkpoint_seq: Option<u64>,
-    ) {
+    ) -> Vec<(VerifiedExecutableTransaction, ExecutionEnv)> {
         let accumulator_version = self
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .await
@@ -4182,15 +4185,17 @@ impl AuthorityState {
             .unwrap();
         let version_map = assigned_versions.into_map();
 
+        let mut replay_txns = Vec::new();
         let mut settlement_effects = Vec::with_capacity(settlements.len());
         for tx in settlements {
-            let env = ExecutionEnv::new()
-                .with_assigned_versions(version_map.get(&tx.key()).unwrap().clone());
+            let assigned = version_map.get(&tx.key()).unwrap().clone();
+            let env = ExecutionEnv::new().with_assigned_versions(assigned);
             let (effects, _) = self
-                .try_execute_immediately(&tx, env, &epoch_store)
+                .try_execute_immediately(&tx.clone(), env.clone(), &epoch_store)
                 .await
                 .unwrap();
             assert!(effects.status().is_ok());
+            replay_txns.push((tx, env));
             settlement_effects.push(effects);
         }
 
@@ -4213,13 +4218,14 @@ impl AuthorityState {
             .unwrap();
         let version_map = assigned_versions.into_map();
 
-        let env = ExecutionEnv::new()
-            .with_assigned_versions(version_map.get(&barrier.key()).unwrap().clone());
+        let barrier_assigned = version_map.get(&barrier.key()).unwrap().clone();
+        let env = ExecutionEnv::new().with_assigned_versions(barrier_assigned);
         let (effects, _) = self
-            .try_execute_immediately(&barrier, env, &epoch_store)
+            .try_execute_immediately(&barrier.clone(), env.clone(), &epoch_store)
             .await
             .unwrap();
         assert!(effects.status().is_ok());
+        replay_txns.push((barrier, env));
 
         let next_accumulator_version = accumulator_version.next();
         self.execution_scheduler
@@ -4228,6 +4234,24 @@ impl AuthorityState {
                 next_accumulator_version,
             });
         // object funds are settled while executing the barrier transaction
+
+        replay_txns
+    }
+
+    /// Replays settlement transactions on this AuthorityState.
+    /// Used to sync a fullnode with settlement transactions executed on a validator.
+    pub async fn replay_settlement_for_testing(
+        &self,
+        txns: &[(VerifiedExecutableTransaction, ExecutionEnv)],
+    ) {
+        let epoch_store = self.epoch_store_for_testing();
+        for (tx, env) in txns {
+            let (effects, _) = self
+                .try_execute_immediately(tx, env.clone(), &epoch_store)
+                .await
+                .unwrap();
+            assert!(effects.status().is_ok());
+        }
     }
 
     /// Advance the epoch store to the next epoch for testing only.

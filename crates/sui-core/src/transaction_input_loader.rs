@@ -219,7 +219,7 @@ impl TransactionInputLoader {
                         object: obj.into(),
                     }
                 }
-                (_, InputObjectKind::SharedMoveObject { .. }) => {
+                (Some(_obj), InputObjectKind::SharedMoveObject { .. }) => {
                     assert!(key.1.is_valid());
                     // If the full ID on a shared input doesn't match, check if the object
                     // was removed from consensus by a concurrently certified tx.

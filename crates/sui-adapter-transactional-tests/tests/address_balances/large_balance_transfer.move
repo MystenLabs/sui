@@ -6,7 +6,7 @@
 // sends both amounts to address A, then attempts to withdraw both amounts in a single PTB.
 // The withdraw operation fails with arithmetic error because the total exceeds u64::MAX.
 
-//# init --addresses test=0x0 --accounts A B --enable-accumulators --simulator
+//# init --addresses test=0x0 --accounts A B --enable-accumulators
 
 //# publish --sender A
 module test::large_balance {
