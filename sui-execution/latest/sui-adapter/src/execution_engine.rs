@@ -590,24 +590,29 @@ mod checked {
 
     /// SIP-70 v2: Build a map from PTB input index to (TypeTag, balance) for coin inputs.
     /// This enables coin normalization — hashing coins by TypeName + Balance instead of ObjectID.
+    /// Looks up owned coins from input_objects and receiving coins from the backing store.
     fn build_coin_info_map(
         pt: &ProgrammableTransaction,
-        objects: &BTreeMap<sui_types::base_types::ObjectID, Object>,
+        input_objects: &BTreeMap<sui_types::base_types::ObjectID, Object>,
+        store: &dyn sui_types::storage::BackingStore,
     ) -> BTreeMap<usize, (move_core_types::language_storage::TypeTag, u64)> {
         let mut coin_info = BTreeMap::new();
         for (idx, input) in pt.inputs.iter().enumerate() {
-            let obj_id = match input {
-                CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))) => Some(id),
-                CallArg::Object(ObjectArg::Receiving((id, _, _))) => Some(id),
+            let obj = match input {
+                CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))) => {
+                    input_objects.get(id).cloned()
+                }
+                CallArg::Object(ObjectArg::Receiving((id, version, _))) => {
+                    // Receiving objects aren't in input_objects — look up from store
+                    store.as_object_store().get_object_by_key(id, *version)
+                }
                 _ => None,
             };
-            if let Some(id) = obj_id {
-                if let Some(obj) = objects.get(id) {
-                    if obj.is_coin() {
-                        if let Some(type_tag) = obj.coin_type_maybe() {
-                            let balance = obj.get_coin_value_unsafe();
-                            coin_info.insert(idx, (type_tag, balance));
-                        }
+            if let Some(obj) = obj {
+                if obj.is_coin() {
+                    if let Some(type_tag) = obj.coin_type_maybe() {
+                        let balance = obj.get_coin_value_unsafe();
+                        coin_info.insert(idx, (type_tag, balance));
                     }
                 }
             }
@@ -726,14 +731,13 @@ mod checked {
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::ProgrammableTransaction(pt) => {
-                // SIP-70 v2: Build coin_info map from input objects for coin normalization
-                let coin_info = build_coin_info_map(&pt, temporary_store.objects());
+                // SIP-70: Compute base structural digest (no coin normalization).
+                // This is identity-preserving: coins hash by ObjectID.
+                let structural_digest = pt.structural_digest();
 
-                // Compute structural digest with coin normalization
-                let structural_digest = pt.structural_digest_with_options(
-                    Some(&coin_info),
-                    &std::collections::BTreeSet::new(),
-                );
+                // SIP-70 v2: Build coin_info for the masked variant.
+                // Coin normalization (TypeTag + balance) only applies to structural_digest_masked.
+                let coin_info = build_coin_info_map(&pt, temporary_store.objects(), store);
 
                 {
                     let mut ctx = tx_ctx.borrow_mut();

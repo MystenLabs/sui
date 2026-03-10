@@ -1013,6 +1013,13 @@ impl ProgrammableTransaction {
         result
     }
 
+    /// Hash a length as a u32 LE prefix. Prevents concatenation collisions
+    /// between adjacent variable-length fields (e.g. module "a" + function "bc"
+    /// vs module "ab" + function "c").
+    fn hash_len(hasher: &mut DefaultHash, len: usize) {
+        hasher.update(&(len as u32).to_le_bytes());
+    }
+
     fn hash_command_inner(
         &self,
         command: &Command,
@@ -1024,17 +1031,26 @@ impl ProgrammableTransaction {
             Command::MoveCall(call) => {
                 hasher.update(&[0x00]); // discriminator
                 hasher.update(call.package.as_ref());
+                // Length-prefix strings to prevent boundary collisions
+                Self::hash_len(&mut hasher, call.module.len());
                 hasher.update(call.module.as_bytes());
+                Self::hash_len(&mut hasher, call.function.len());
                 hasher.update(call.function.as_bytes());
+                // Count-prefix lists to prevent boundary ambiguity
+                Self::hash_len(&mut hasher, call.type_arguments.len());
                 for ty in &call.type_arguments {
-                    hasher.update(&bcs::to_bytes(ty).unwrap_or_default());
+                    let ty_bytes = bcs::to_bytes(ty).unwrap_or_default();
+                    Self::hash_len(&mut hasher, ty_bytes.len());
+                    hasher.update(&ty_bytes);
                 }
+                Self::hash_len(&mut hasher, call.arguments.len());
                 for arg in &call.arguments {
                     self.hash_argument_inner(&mut hasher, arg, coin_info, wildcard_indices);
                 }
             }
             Command::TransferObjects(objects, recipient) => {
                 hasher.update(&[0x01]);
+                Self::hash_len(&mut hasher, objects.len());
                 for obj in objects {
                     self.hash_argument_inner(&mut hasher, obj, coin_info, wildcard_indices);
                 }
@@ -1043,6 +1059,7 @@ impl ProgrammableTransaction {
             Command::SplitCoins(coin, amounts) => {
                 hasher.update(&[0x02]);
                 self.hash_argument_inner(&mut hasher, coin, coin_info, wildcard_indices);
+                Self::hash_len(&mut hasher, amounts.len());
                 for amt in amounts {
                     self.hash_argument_inner(&mut hasher, amt, coin_info, wildcard_indices);
                 }
@@ -1050,15 +1067,19 @@ impl ProgrammableTransaction {
             Command::MergeCoins(target, sources) => {
                 hasher.update(&[0x03]);
                 self.hash_argument_inner(&mut hasher, target, coin_info, wildcard_indices);
+                Self::hash_len(&mut hasher, sources.len());
                 for src in sources {
                     self.hash_argument_inner(&mut hasher, src, coin_info, wildcard_indices);
                 }
             }
             Command::Publish(modules, deps) => {
                 hasher.update(&[0x04]);
+                Self::hash_len(&mut hasher, modules.len());
                 for module in modules {
+                    Self::hash_len(&mut hasher, module.len());
                     hasher.update(module);
                 }
+                Self::hash_len(&mut hasher, deps.len());
                 for dep in deps {
                     hasher.update(dep.as_ref());
                 }
@@ -1066,17 +1087,26 @@ impl ProgrammableTransaction {
             Command::MakeMoveVec(type_tag, elements) => {
                 hasher.update(&[0x05]);
                 if let Some(tag) = type_tag {
-                    hasher.update(&bcs::to_bytes(tag).unwrap_or_default());
+                    hasher.update(&[0x01]); // tag-present marker
+                    let tag_bytes = bcs::to_bytes(tag).unwrap_or_default();
+                    Self::hash_len(&mut hasher, tag_bytes.len());
+                    hasher.update(&tag_bytes);
+                } else {
+                    hasher.update(&[0x00]); // tag-absent marker
                 }
+                Self::hash_len(&mut hasher, elements.len());
                 for elem in elements {
                     self.hash_argument_inner(&mut hasher, elem, coin_info, wildcard_indices);
                 }
             }
             Command::Upgrade(modules, deps, package_id, ticket) => {
                 hasher.update(&[0x06]);
+                Self::hash_len(&mut hasher, modules.len());
                 for module in modules {
+                    Self::hash_len(&mut hasher, module.len());
                     hasher.update(module);
                 }
+                Self::hash_len(&mut hasher, deps.len());
                 for dep in deps {
                     hasher.update(dep.as_ref());
                 }
@@ -1141,6 +1171,7 @@ impl ProgrammableTransaction {
                     hasher.update(&[0xFF]);
                 } else {
                     hasher.update(&[0x01]);
+                    Self::hash_len(hasher, bytes.len());
                     hasher.update(bytes);
                 }
             }
@@ -1187,7 +1218,7 @@ impl ProgrammableTransaction {
 /// Data needed for structural_digest_masked recomputation at runtime (SIP-70 v2).
 /// Stored on TxContext during execution so the masked native can recompute
 /// the digest with wildcard inputs.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructuralDigestData {
     pub pt: ProgrammableTransaction,
     pub coin_info: BTreeMap<usize, (TypeTag, u64)>,

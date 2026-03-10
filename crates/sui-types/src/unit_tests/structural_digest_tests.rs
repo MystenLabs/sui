@@ -732,6 +732,132 @@ fn test_wildcard_and_coin_normalization_combined() {
 }
 
 // ============================================================================
+// Length framing (collision prevention)
+// ============================================================================
+
+#[test]
+fn test_no_collision_module_function_boundary() {
+    // Without length framing, "a" + "bc" hashes same as "ab" + "c".
+    // With length framing, they differ.
+    let pkg = ObjectID::random();
+
+    let pt1 = make_pt(vec![], vec![make_move_call(pkg, "a", "bc", vec![])]);
+    let pt2 = make_pt(vec![], vec![make_move_call(pkg, "ab", "c", vec![])]);
+
+    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
+}
+
+#[test]
+fn test_no_collision_module_function_boundary_longer() {
+    // Another boundary case: "mod" + "func" vs "modf" + "unc"
+    let pkg = ObjectID::random();
+
+    let pt1 = make_pt(vec![], vec![make_move_call(pkg, "mod", "func", vec![])]);
+    let pt2 = make_pt(vec![], vec![make_move_call(pkg, "modf", "unc", vec![])]);
+
+    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
+}
+
+#[test]
+fn test_no_collision_different_arg_count() {
+    // A single 2-byte Pure vs two 1-byte Pures should differ
+    // (list count framing prevents this collision)
+    let pkg = ObjectID::random();
+
+    let pt1 = make_pt(
+        vec![CallArg::Pure(vec![0x01, 0x02])],
+        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
+    );
+
+    let pt2 = make_pt(
+        vec![CallArg::Pure(vec![0x01]), CallArg::Pure(vec![0x02])],
+        vec![make_move_call(
+            pkg,
+            "mod",
+            "func",
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
+    );
+
+    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
+}
+
+// ============================================================================
+// Two-mode coin normalization: base vs masked
+// ============================================================================
+
+#[test]
+fn test_base_digest_uses_object_id_for_coins() {
+    // structural_digest() should hash coins by ObjectID (identity-preserving).
+    // Different coin ObjectIDs with same type+balance -> different base digests.
+    let pkg = ObjectID::random();
+    let coin_id_1 = ObjectID::random();
+    let coin_id_2 = ObjectID::random();
+
+    let pt1 = make_pt(
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
+            coin_id_1,
+            SequenceNumber::from_u64(1),
+            ObjectDigest::new([0xAA; 32]),
+        )))],
+        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
+    );
+
+    let pt2 = make_pt(
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
+            coin_id_2,
+            SequenceNumber::from_u64(1),
+            ObjectDigest::new([0xAA; 32]),
+        )))],
+        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
+    );
+
+    // Base digest: different coin IDs -> different digests
+    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
+}
+
+#[test]
+fn test_masked_digest_normalizes_coins_by_type_and_balance() {
+    // structural_digest_with_options(Some(coin_info), ...) normalizes coins.
+    // Different ObjectIDs with same type+balance -> same masked digest.
+    let pkg = ObjectID::random();
+    let coin_id_1 = ObjectID::random();
+    let coin_id_2 = ObjectID::random();
+
+    let pt1 = make_pt(
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
+            coin_id_1,
+            SequenceNumber::from_u64(1),
+            ObjectDigest::new([0xAA; 32]),
+        )))],
+        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
+    );
+
+    let pt2 = make_pt(
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
+            coin_id_2,
+            SequenceNumber::from_u64(5),
+            ObjectDigest::new([0xBB; 32]),
+        )))],
+        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
+    );
+
+    let coin_info_1: BTreeMap<usize, (TypeTag, u64)> =
+        [(0, (sui_coin_type(), 1000))].into_iter().collect();
+    let coin_info_2: BTreeMap<usize, (TypeTag, u64)> =
+        [(0, (sui_coin_type(), 1000))].into_iter().collect();
+
+    // Masked with coin normalization: same type+balance -> same digest
+    assert_eq!(
+        pt1.structural_digest_with_options(Some(&coin_info_1), &BTreeSet::new()),
+        pt2.structural_digest_with_options(Some(&coin_info_2), &BTreeSet::new()),
+    );
+
+    // But base digest differs (identity-preserving)
+    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
+}
+
+// ============================================================================
 // Complex multi-command PTB (governance scenario)
 // ============================================================================
 

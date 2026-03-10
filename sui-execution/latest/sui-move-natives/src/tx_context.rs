@@ -526,8 +526,14 @@ pub fn structural_digest_masked(
         cost_params.tx_context_structural_digest_masked_cost_base
     );
 
-    // Pop wildcard_pure_indices: vector<u64>, convert to BTreeSet<u16>
+    // Pop wildcard_pure_indices: vector<u64>, validate, convert to BTreeSet<u16>
     let wildcard_vec = pop_arg!(args, Vec<u64>);
+    // Validate: abort if any index exceeds u16::MAX (prevents silent truncation)
+    for &v in &wildcard_vec {
+        if v > u16::MAX as u64 {
+            return Ok(NativeResult::err(context.gas_used(), 0));
+        }
+    }
     let wildcard_indices: std::collections::BTreeSet<u16> =
         wildcard_vec.into_iter().map(|v| v as u16).collect();
 

@@ -4,8 +4,8 @@
 
 Two native functions on `sui::tx_context`:
 
-1. `structural_digest(&TxContext): vector<u8>` — returns a versioned, deterministic hash of the current PTB's normalized structure with coin normalization.
-2. `structural_digest_masked(&TxContext, wildcard_pure_indices: vector<u64>): vector<u8>` — same, but specified Pure inputs are treated as wildcards.
+1. `structural_digest(&TxContext): vector<u8>` — returns a versioned, deterministic hash of the current PTB's structure. Identity-preserving: coins hash by ObjectID.
+2. `structural_digest_masked(&TxContext, wildcard_pure_indices: vector<u64>): vector<u8>` — same structure hash, but with coin normalization (TypeTag + balance instead of ObjectID) and specified Pure inputs treated as wildcards.
 
 This enables DAOs, smart accounts, and governance contracts to vote on "what will be executed" and verify at execution time that the PTB matches the approved template.
 
@@ -26,9 +26,7 @@ Hash the **structure and argument provenance**, not the runtime identity. A stru
 - How results flow between commands (`Result(n)` / `NestedResult(n, m)`)
 - What values are passed (Pure bytes, shared object IDs, owned object IDs)
 - Type arguments for each call
-- Coin inputs normalized by TypeName + Balance (not ObjectID)
-
-Two PTBs that differ only in which specific coin objects are used (but have the same type and balance) produce the same digest.
+- Two modes: identity-preserving (coins by ObjectID) or normalized (coins by TypeTag + balance)
 
 ## Specification
 
@@ -58,29 +56,42 @@ Each PTB argument type is normalized before hashing:
 | `Coin Receiving (normalized)` | `0x09` | TypeTag BCS + balance LE | Fungible receiving coin |
 | `Wildcard Pure` | `0xFF` | marker only | Executor-discretion parameter |
 
-**Coin normalization:** The execution engine resolves each object input from the loaded objects. If it's a `Coin<T>`, it hashes by TypeTag + balance instead of ObjectID. This makes the digest stable across coin split/merge — any coin of the right type and amount satisfies the template.
+**Coin normalization (masked variant only):** `structural_digest_masked` resolves each object input from the loaded objects. If it's a `Coin<T>`, it hashes by TypeTag + balance (discriminator `0x08`/`0x09`) instead of ObjectID. This makes the digest stable across coin split/merge. The base `structural_digest` always hashes coins by ObjectID (`0x03`/`0x04`), preserving identity for use cases where specific coin objects matter.
 
-**Wildcard slots:** When `structural_digest_masked` is called with wildcard indices, Pure inputs at those positions are hashed as `0xFF` instead of their actual bytes. This lets a DAO approve "swap on this DEX at this amount" while leaving slippage tolerance to the executor.
+**Why two modes:** Coin identity is deliberately erased in the masked variant because governance approves economic intent ("transfer 100 SUI"), not specific UTXOs. However, some protocols key on coin ObjectID (deposit receipts, position tracking). The base variant preserves identity for these cases. Use `structural_digest` when coin identity matters, `structural_digest_masked(vector[])` for fungible coin handling.
+
+**Wildcard slots:** When `structural_digest_masked` is called with wildcard indices, Pure inputs at those positions are hashed as `0xFF` instead of their actual bytes. This lets a DAO approve "swap on this DEX at this amount" while leaving slippage tolerance to the executor. Wildcard indices are validated: values exceeding `u16::MAX` cause an abort.
+
+**Length framing:** All variable-length fields are length-prefixed (u32 LE) and all lists are count-prefixed to prevent concatenation collisions (e.g. module "a" + function "bc" vs module "ab" + function "c").
 
 ### Hash Construction
 
 ```
 digest = 0x01 || Blake2b256(
     for each command in order:
-        Blake2b256(command_discriminator || command_specific_data || normalized_arguments)
+        Blake2b256(
+            command_discriminator
+            || length_framed(command_specific_data)
+            || count(arguments) || normalized_arguments
+        )
 )
 ```
+
+All strings and byte blobs are prefixed with their length as u32 LE. All lists are prefixed with their count as u32 LE. This prevents boundary ambiguity in the hash input.
 
 ### Move API
 
 ```move
 module sui::tx_context {
-    /// Returns the normalized structural digest of the current PTB.
+    /// Returns the structural digest of the current PTB.
+    /// Identity-preserving: coins hash by ObjectID.
     /// Output: [0x01 | blake2b256_hash] (33 bytes).
     public fun structural_digest(_self: &TxContext): vector<u8>;
 
-    /// Returns the structural digest with specified Pure inputs wildcarded.
-    /// Wildcarded inputs hash as 0xFF marker instead of their value.
+    /// Returns the structural digest with coin normalization and optional wildcards.
+    /// Coins hash by TypeTag + balance (fungible across split/merge).
+    /// Wildcarded Pure inputs hash as 0xFF marker instead of their value.
+    /// `wildcard_pure_indices` contains input indices to wildcard (pass empty for none).
     public fun structural_digest_masked(
         _self: &TxContext,
         wildcard_pure_indices: vector<u64>,
@@ -144,9 +155,15 @@ const digest = tx.computeStructuralDigest();
 
 2. **Owned object version dropped:** Version increments between proposal vote and execution. Hashing by ObjectID only (same as shared objects) makes the digest stable across this gap.
 
-3. **Coin normalization at execution engine level:** The `ProgrammableTransaction` struct doesn't carry object types/balances. The execution engine resolves coins from the loaded input objects and passes a `coin_info` map to the digest function.
+3. **Two-mode coin handling:** `structural_digest` preserves coin identity (ObjectID). `structural_digest_masked` normalizes coins to TypeTag + balance. This is because coin normalization erases object identity, which is correct for governance ("transfer 100 SUI to Bob") but incorrect for protocols that key on coin ObjectID. The base variant is the safe default; the masked variant opts into fungibility.
 
-4. **Wildcard recomputation:** The full PT + coin_info is stored (transient, `#[serde(skip)]`) on TxContext so `structural_digest_masked` can recompute with wildcard substitution at runtime.
+4. **Coin normalization at execution engine level:** The `ProgrammableTransaction` struct doesn't carry object types/balances. The execution engine resolves coins from the loaded input objects (and receiving objects from the backing store) and passes a `coin_info` map to the digest function.
+
+5. **Wildcard recomputation:** The full PT + coin_info is stored (transient, `#[serde(skip)]`) on TxContext so `structural_digest_masked` can recompute with wildcard substitution at runtime.
+
+6. **Length framing:** All variable-length fields are u32 LE length-prefixed before hashing to prevent concatenation collisions across field boundaries.
+
+7. **Wildcard validation:** Wildcard indices are validated at the native layer. Values exceeding u16::MAX cause an abort to prevent silent truncation (e.g. 65536 aliasing index 0).
 
 ### Security Considerations
 
