@@ -372,6 +372,14 @@ impl ExpTranslator<'_, '_, '_> {
                 let ty = Type::Vector(Box::new(Type::new_prim(PrimitiveType::U8)));
                 Some((Value::ByteArray(x.clone()), ty))
             }
+            EA::Value_::I8(_)
+            | EA::Value_::I16(_)
+            | EA::Value_::I32(_)
+            | EA::Value_::I64(_)
+            | EA::Value_::I128(_) => {
+                self.error(&loc, "signed integers are not supported");
+                None
+            }
         }
     }
 
