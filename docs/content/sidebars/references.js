@@ -114,7 +114,11 @@ const references = [
 				label: 'dApp Kit',
 				href: 'https://sdk.mystenlabs.com/dapp-kit',
 			},
-			'references/rust-sdk',
+			{
+				type: 'link',
+				label: 'Rust SDK',
+				href: 'https://github.com/MystenLabs/sui-rust-sdk',
+			},
 			{
 				type: 'link',
 				label: 'TypeScript SDK',
