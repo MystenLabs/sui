@@ -246,7 +246,7 @@ impl AuthorityPerpetualTables {
                 "objects".to_string(),
                 ThConfig::new_with_config_indexing(
                     object_indexing,
-                    mutexes * 2,
+                    mutexes * 4,
                     KeyType::uniform(1),
                     objects_config,
                 ),
