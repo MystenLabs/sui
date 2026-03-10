@@ -5,7 +5,7 @@ use crate::{
     adapter,
     data_store::linked_data_store::LinkedDataStore,
     execution_mode::ExecutionMode,
-    gas_charger::{GasCharger, PaymentLocation},
+    gas_charger::{GasCharger, GasPayment, PaymentLocation},
     gas_meter::SuiGasMeter,
     programmable_transactions::{self as legacy_ptb},
     sp,
@@ -31,7 +31,6 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
-    metadata,
 };
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::native_extensions::NativeContextExtensions;
@@ -46,10 +45,13 @@ use std::{
     sync::Arc,
 };
 use sui_move_natives::object_runtime::{
-    self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
+    self, LoadedRuntimeObject, MoveAccumulatorAction, MoveAccumulatorEvent, MoveAccumulatorValue,
+    ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
 };
 use sui_types::{
     TypeTag,
+    accumulator_root::AccumulatorValue,
+    balance::Balance,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
     error::{ExecutionError, SafeIndex},
     execution::ExecutionResults,
@@ -123,7 +125,7 @@ struct Locations {
     // A single local for holding the TxContext
     tx_context_value: Locals,
     /// The runtime value for the Gas coin, None if no gas coin is provided
-    gas: Option<(PaymentLocation, InputObjectMetadata, Locals)>,
+    gas: Option<(GasPayment, InputObjectMetadata, Locals)>,
     /// The runtime value for the input objects args
     input_object_metadata: Vec<(T::InputIndex, InputObjectMetadata)>,
     object_inputs: Locals,
@@ -222,7 +224,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
-        payment_location: Option<(PaymentLocation, u64)>,
+        payment_location: Option<GasPayment>,
         pure_input_bytes: IndexSet<Vec<u8>>,
         object_inputs: Vec<T::ObjectInput>,
         input_withdrawal_metadata: Vec<T::WithdrawalInput>,
@@ -251,17 +253,16 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
         let mut new_gas_coin_id = None;
         let gas = match payment_location {
-            Some(payment_location) => {
+            Some(gas_payment) => {
                 let ty = env.gas_coin_type()?;
-                let (gas_metadata, gas_value) = match payment_location {
+                let (gas_metadata, gas_value) = match gas_payment.location {
                     PaymentLocation::AddressBalance(sui_address) => {
                         // TODO we need a way to:
                         // - get the "in memory" value for this address balance
                         // - deduct that amount from the "in memory" balance
-                        let in_memory_balance = 0;
                         let max_gas_in_balance = gas_charger.gas_budget();
                         assert_invariant!(
-                            in_memory_balance >= max_gas_in_balance,
+                            gas_payment.amount >= max_gas_in_balance,
                             "not enough gas to pay. How did we get this far?"
                         );
                         let id = tx_context.borrow_mut().fresh_id();
@@ -274,7 +275,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                             version: SequenceNumber::new(),
                             type_: ty,
                         };
-                        let coin = Value::coin(id, in_memory_balance);
+                        let coin = Value::coin(id, gas_payment.amount);
                         (metadata, coin)
                     }
                     PaymentLocation::Coin(gas_coin_id) => load_object_arg_impl(
@@ -292,7 +293,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 // We have already checked that the gas balance is enough to cover the gas budget
                 let max_gas_in_balance = gas_charger.gas_budget();
                 gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
-                Some((payment_location, gas_metadata, gas_locals))
+                Some((gas_payment, gas_metadata, gas_locals))
             }
             None => None,
         };
@@ -427,7 +428,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             loaded_child_objects,
             mut created_object_ids,
             deleted_object_ids,
-            accumulator_events,
+            mut accumulator_events,
             settlement_input_sui,
             settlement_output_sui,
         } = object_runtime.finish()?;
@@ -441,6 +442,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             destroy_ephemeral_gas_coin(
                 &mut writes,
                 &mut loaded_runtime_objects,
+                &mut accumulator_events,
                 gas_id,
                 gas_payment_location,
             )?;
@@ -1457,12 +1459,18 @@ fn refund_max_gas_budget<OType>(
 fn destroy_ephemeral_gas_coin<OType>(
     writes: &mut IndexMap<ObjectID, (Owner, OType, VMValue)>,
     loaded_runtime_objects: &mut BTreeMap<ObjectID, LoadedRuntimeObject>,
+    accumulator_events: &mut Vec<MoveAccumulatorEvent>,
     gas_id: ObjectID,
-    gas_payment_location: Option<PaymentLocation>,
+    gas_payment: Option<GasPayment>,
 ) -> Result<(), ExecutionError> {
-    let Some(PaymentLocation::AddressBalance(address)) = gas_payment_location else {
-        // no ephemeral coin
+    let Some(gas_payment) = gas_payment else {
+        // no gas payment metadata, so no ephemeral coin
         return Ok(());
+    };
+    let address = match gas_payment.location {
+        // The gas payment was a coin, so it is not ephemeral
+        PaymentLocation::Coin(_) => return Ok(()),
+        PaymentLocation::AddressBalance(address) => address,
     };
     let Some((owner, _ty, _value)) = writes.get(&gas_id) else {
         invariant_violation!("Ephemeral gas coin must be in writes")
@@ -1475,12 +1483,29 @@ fn destroy_ephemeral_gas_coin<OType>(
         // The ephemeral coin was transferred so we keep it
         return Ok(());
     }
-    let Some((_owner, _ty, value)) = writes.swap_remove(&gas_id) else {
+    let Some((_owner, _ty, value)) = writes.shift_remove(&gas_id) else {
         invariant_violation!("checked above that the gas coin was present")
     };
     loaded_runtime_objects.remove(&gas_id);
     let (_id, remaining_balance) = Value::from(value).unpack_coin()?;
-    // TODO: return remaining_balance to the in-memory address balance store
+    let Some(withdrawn_balance) = gas_payment.amount.checked_sub(remaining_balance) else {
+        invariant_violation!("Remaining balance cannot be greater than the original balance")
+    };
+    if withdrawn_balance > 0 {
+        let balance_type = Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
+        let Some(accumulator_id) = AccumulatorValue::get_field_id(address, &balance_type).ok()
+        else {
+            invariant_violation!("Failed to compute accumulator field id")
+        };
+        accumulator_events.push(MoveAccumulatorEvent {
+            accumulator_id: *accumulator_id.inner(),
+            action: MoveAccumulatorAction::Split,
+            target_addr: address.into(),
+            target_ty: balance_type,
+            value: MoveAccumulatorValue::U64(withdrawn_balance),
+        });
+    }
+
     Ok(())
 }
 

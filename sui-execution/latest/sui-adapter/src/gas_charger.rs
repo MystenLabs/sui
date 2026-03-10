@@ -78,6 +78,16 @@ pub mod checked {
         Coin(ObjectID),
         AddressBalance(SuiAddress),
     }
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct GasPayment {
+        /// The location of the gas payment (coin or address balance), which also serves as the
+        /// target for smashed gas payments.
+        pub location: PaymentLocation,
+        /// The total amount available for gas payment after smashing
+        pub amount: u64,
+    }
+
     impl GasCharger {
         pub fn new(
             tx_digest: TransactionDigest,
@@ -136,12 +146,13 @@ pub mod checked {
         /// For unmetered, this is None.
         /// For smashed gas payments, this is the payment location and the total amount smashed.
         /// This information feels a bit brittle but should be used only by PTB execution
-        pub fn gas_payment_amount(&self) -> Option<(PaymentLocation, u64)> {
+        pub fn gas_payment_amount(&self) -> Option<GasPayment> {
             match &self.payment {
                 PaymentMetadata::Unmetered => None,
-                PaymentMetadata::Smash(metadata) => {
-                    Some((metadata.smash_target().location(), metadata.total_smashed))
-                }
+                PaymentMetadata::Smash(metadata) => Some(GasPayment {
+                    location: metadata.smash_target().location(),
+                    amount: metadata.total_smashed,
+                }),
             }
         }
 
@@ -359,7 +370,7 @@ pub mod checked {
                         let event = AccumulatorEvent::from_balance_change(
                             payer_address,
                             balance_type,
-                            -net_change,
+                            net_change.checked_neg().unwrap(),
                         )
                         .expect("Failed to create accumulator event for gas charging");
                         temporary_store.add_accumulator_event(event);

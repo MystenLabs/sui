@@ -4,7 +4,7 @@
 use super::{ast as T, env::Env};
 use crate::{
     execution_mode::ExecutionMode,
-    gas_charger::PaymentLocation,
+    gas_charger::GasPayment,
     programmable_transactions::context::EitherError,
     static_programmable_transactions::{
         loading::ast::{self as L, Type},
@@ -42,7 +42,7 @@ enum InputKind {
 
 struct Context {
     current_command: u16,
-    gas_payment: Option<(PaymentLocation, u64)>,
+    gas_payment: Option<GasPayment>,
     /// What kind of input is at each original index
     input_resolution: Vec<InputKind>,
     bytes: IndexSet<Vec<u8>>,
@@ -60,7 +60,7 @@ struct Context {
 
 impl Context {
     fn new(
-        gas_payment: Option<(PaymentLocation, u64)>,
+        gas_payment: Option<GasPayment>,
         linputs: L::Inputs,
     ) -> Result<Self, ExecutionError> {
         let mut context = Context {

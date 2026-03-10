@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    gas_charger::PaymentLocation,
+    gas_charger::GasPayment,
     static_programmable_transactions::{
         linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
     },
@@ -19,7 +19,7 @@ use sui_types::base_types::{ObjectID, ObjectRef};
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub gas_payment: Option<(PaymentLocation, u64)>,
+    pub gas_payment: Option<GasPayment>,
     /// Gathered BCS bytes from Pure inputs
     pub bytes: IndexSet<Vec<u8>>,
     // All input objects

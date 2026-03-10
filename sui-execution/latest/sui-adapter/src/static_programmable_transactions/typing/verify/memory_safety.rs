@@ -8,7 +8,6 @@ use std::{
 };
 
 use crate::{
-    gas_charger::PaymentLocation,
     sp,
     static_programmable_transactions::{
         env::Env,
@@ -71,11 +70,7 @@ impl Value {
 impl Context {
     fn new(env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
         let has_gas_coin = if env.protocol_config.gasless_transaction_drop_safety() {
-            match ast.gas_payment {
-                Some((PaymentLocation::Coin(_), _))
-                | Some((PaymentLocation::AddressBalance(_), _)) => true,
-                None => false,
-            }
+            ast.gas_payment.is_some()
         } else {
             true
         };

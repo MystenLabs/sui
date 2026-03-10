@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    gas_charger::PaymentLocation,
     sp,
     static_programmable_transactions::{env::Env, typing::ast as T},
 };
@@ -305,11 +304,7 @@ impl Context {
         let tx_context = Location::non_ref(T::Location::TxContext);
         let mut gas = Location::non_ref(T::Location::GasCoin);
         let has_gas_coin = if env.protocol_config.gasless_transaction_drop_safety() {
-            match gas_payment {
-                Some((PaymentLocation::Coin(_), _))
-                | Some((PaymentLocation::AddressBalance(_), _)) => true,
-                None => false,
-            }
+            gas_payment.is_some()
         } else {
             true
         };

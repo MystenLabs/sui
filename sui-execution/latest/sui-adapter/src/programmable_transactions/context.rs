@@ -185,10 +185,12 @@ mod checked {
             std::mem::drop(tx_context_ref);
             let gas_coin_id = match gas_charger.gas_payment_amount() {
                 None => None,
-                Some((PaymentLocation::Coin(coin_id), _)) => Some(coin_id),
-                Some((PaymentLocation::AddressBalance(_), _)) => unreachable!(
-                    "Gas payment from address balance is not supported in this version"
-                ),
+                Some(gp) => match gp.location {
+                    PaymentLocation::Coin(coin_id) => Some(coin_id),
+                    PaymentLocation::AddressBalance(_) => unreachable!(
+                        "Gas payment from address balance is not supported in this version"
+                    ),
+                },
             };
             let gas = if let Some(gas_coin) = gas_coin_id {
                 let mut gas = load_object(

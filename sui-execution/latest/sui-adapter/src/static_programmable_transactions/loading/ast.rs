@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    gas_charger::PaymentLocation,
+    gas_charger::GasPayment,
     static_programmable_transactions::linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
 };
 use indexmap::IndexSet;
@@ -25,7 +25,7 @@ use sui_types::{
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub gas_payment: Option<(PaymentLocation, u64)>,
+    pub gas_payment: Option<GasPayment>,
     pub inputs: Inputs,
     pub commands: Commands,
 }

@@ -334,7 +334,7 @@ impl<'backing> TemporaryStore<'backing> {
         // the first coin is where all the others are merged.
         let gas_coin = gas_charger
             .gas_payment_amount()
-            .and_then(|(location, _amount)| match location {
+            .and_then(|gp| match gp.location {
                 PaymentLocation::Coin(coin_id) => Some(coin_id),
                 PaymentLocation::AddressBalance(_) => None,
             });
