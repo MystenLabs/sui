@@ -3,7 +3,7 @@
 
 // Test send_funds and redeem_funds from sui::balance
 
-//# init --addresses test=0x0 --accounts A B --enable-accumulators --simulator
+//# init --addresses test=0x0 --accounts A B --enable-accumulators
 
 // Send 1000 from A to B
 //# programmable --sender A --inputs 1000 @B
