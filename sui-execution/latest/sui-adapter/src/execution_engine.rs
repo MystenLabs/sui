@@ -170,6 +170,7 @@ mod checked {
             transaction_digest,
             payment_kind(&gas_data, &transaction_kind),
             gas_status,
+            &mut temporary_store,
             protocol_config,
         );
 
@@ -353,8 +354,6 @@ mod checked {
         Result<Mode::ExecutionResults, ExecutionError>,
         Vec<ExecutionTiming>,
     ) {
-        gas_charger.smash_gas(temporary_store);
-
         // At this point no charges have been applied yet
         debug_assert!(
             gas_charger.no_charges(),

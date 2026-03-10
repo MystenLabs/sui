@@ -333,8 +333,8 @@ impl<'backing> TemporaryStore<'backing> {
         // Gas coins are guaranteed to be at least size 1 and if more than 1
         // the first coin is where all the others are merged.
         let gas_coin = gas_charger
-            .gas_payment_location()
-            .and_then(|location| match location {
+            .gas_payment_amount()
+            .and_then(|(location, _amount)| match location {
                 PaymentLocation::Coin(coin_id) => Some(coin_id),
                 PaymentLocation::AddressBalance(_) => None,
             });
