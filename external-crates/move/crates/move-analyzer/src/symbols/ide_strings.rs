@@ -279,6 +279,11 @@ pub fn ast_value_to_ide_string(sp!(_, val): &Value) -> String {
         V::U64(u) => format!("{}", u),
         V::U128(u) => format!("{}", u),
         V::U256(u) => format!("{}", u),
+        V::I8(v) => format!("{}", v),
+        V::I16(v) => format!("{}", v),
+        V::I32(v) => format!("{}", v),
+        V::I64(v) => format!("{}", v),
+        V::I128(v) => format!("{}", v),
         V::Bool(b) => format!("{}", b),
         V::Bytearray(vec) => format!(
             "[{}]",
