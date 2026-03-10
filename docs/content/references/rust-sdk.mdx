@@ -4,6 +4,16 @@ description: The Sui Rust SDK provides Rust wrappers around the Sui API. Using t
 keywords: [ rust, rust SDK, sui rust SDK, crates/sui-sdk, sui-sdk ]
 ---
 
-The Sui Rust SDK crate is in the [**crates\sui-sdk** directory](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) of the Sui repository.
+The Sui Rust SDK can be found in the [`sui-rust-sdk` repo](https://github.com/MystenLabs/sui-rust-sdk).
 
-<ImportContent source="crates/sui-sdk/README.md" mode="code" style="md" />
+:::caution 
+
+`sui-rust-sdk` does not support JSON RPC. If you need JSON RPC access, then the [legacy Rust SDK](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) can be used. It is forward and backward compatible.
+
+<ImportContent source="json-rpc-deprecation.mdx" mode="snippet" />
+
+:::
+
+<ImportContent source="README.md" mode="code" org="MystenLabs" repo="sui-rust-sdk" />
+
+
