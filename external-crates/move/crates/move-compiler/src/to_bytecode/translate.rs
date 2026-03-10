@@ -1223,8 +1223,9 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     let [ty]: [IR::Type; 1] = types(context, e.ty)
                         .try_into()
                         .expect("ICE value type should have one element");
-                    let mv = crate::cfgir::translate::move_value_from_value(sp(loc, v_))
-                        .expect("ICE signed integer in LdConst bytecode");
+                    let mv =
+                        crate::cfgir::translate::move_value_from_value(&context.env, sp(loc, v_))
+                            .expect("ICE failed to translate address or vector");
                     B::LdConst(ty, mv)
                 }
             };
