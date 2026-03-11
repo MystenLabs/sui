@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "114",
+              "maxSupportedProtocolVersion": "115",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1400,6 +1400,7 @@
                 "narwhal_versioned_metadata": false,
                 "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
+                "normalize_depth_formula": false,
                 "normalize_ptb_arguments": false,
                 "object_runtime_charge_cache_load_gas": false,
                 "package_digest_hash_module": false,

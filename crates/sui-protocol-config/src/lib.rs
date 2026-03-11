@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 114;
+const MAX_PROTOCOL_VERSION: u64 = 115;
 
 // Record history of protocol version allocations here:
 //
@@ -941,6 +941,10 @@ struct FeatureFlags {
     // If true, deprecate global storage ops everywhere.
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops: bool,
+
+    // If true, normalize depth formula to not be empty for zero depth.
+    #[serde(skip_serializing_if = "is_false")]
+    normalize_depth_formula: bool,
 
     // If true, skip GC'ed accept votes in CommitFinalizer.
     #[serde(skip_serializing_if = "is_false")]
@@ -2555,6 +2559,10 @@ impl ProtocolConfig {
 
     pub fn deprecate_global_storage_ops(&self) -> bool {
         self.feature_flags.deprecate_global_storage_ops
+    }
+
+    pub fn normalize_depth_formula(&self) -> bool {
+        self.feature_flags.normalize_depth_formula
     }
 
     pub fn consensus_skip_gced_accept_votes(&self) -> bool {
@@ -4632,6 +4640,9 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .include_checkpoint_artifacts_digest_in_summary = true;
                     }
+                }
+                115 => {
+                    cfg.feature_flags.normalize_depth_formula = true;
                 }
                 // Use this template when making changes:
                 //
