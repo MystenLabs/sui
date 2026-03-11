@@ -717,9 +717,7 @@ fun verify_metadata(
     assert!(
         validator.next_epoch_primary_address() == &option::some(new_primary_address.to_string()),
     );
-    assert!(
-        validator.next_epoch_worker_address() == &option::some(new_worker_address.to_string()),
-    );
+    assert!(validator.next_epoch_worker_address() == &option::some(new_worker_address.to_string()));
     assert!(validator.next_epoch_protocol_pubkey_bytes() == &option::some(new_protocol_pub_key), 0);
     assert!(validator.next_epoch_proof_of_possession() == &option::some(new_pop), 0);
     assert!(validator.next_epoch_worker_pubkey_bytes() == &option::some(new_worker_pubkey), 0);

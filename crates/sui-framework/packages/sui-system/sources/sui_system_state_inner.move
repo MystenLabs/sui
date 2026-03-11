@@ -599,8 +599,10 @@ public(package) fun update_candidate_validator_network_address(
     network_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.candidate_validator_mut(ctx.sender());
-    candidate.update_candidate_network_address(network_address);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_network_address(network_address)
 }
 
 /// Update candidate validator's p2p address.
@@ -610,8 +612,7 @@ public(package) fun update_candidate_validator_p2p_address(
     p2p_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.candidate_validator_mut(ctx.sender());
-    candidate.update_candidate_p2p_address(p2p_address);
+    self.validators.candidate_validator_mut(ctx.sender()).update_candidate_p2p_address(p2p_address)
 }
 
 /// Update candidate validator's narwhal primary address.
@@ -621,8 +622,10 @@ public(package) fun update_candidate_validator_primary_address(
     primary_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.candidate_validator_mut(ctx.sender());
-    candidate.update_candidate_primary_address(primary_address);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_primary_address(primary_address)
 }
 
 /// Update candidate validator's narwhal worker address.
@@ -632,8 +635,10 @@ public(package) fun update_candidate_validator_worker_address(
     worker_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.candidate_validator_mut(ctx.sender());
-    candidate.update_candidate_worker_address(worker_address);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_worker_address(worker_address)
 }
 
 /// Update candidate validator's public key of protocol key and proof of possession.
@@ -644,8 +649,10 @@ public(package) fun update_candidate_validator_protocol_pubkey(
     proof_of_possession: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.candidate_validator_mut(ctx.sender());
-    candidate.update_candidate_protocol_pubkey(protocol_pubkey, proof_of_possession);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_protocol_pubkey(protocol_pubkey, proof_of_possession)
 }
 
 /// Update candidate validator's public key of worker key.
@@ -655,8 +662,10 @@ public(package) fun update_candidate_validator_worker_pubkey(
     worker_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.candidate_validator_mut(ctx.sender());
-    candidate.update_candidate_worker_pubkey(worker_pubkey);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_worker_pubkey(worker_pubkey)
 }
 
 /// Update candidate validator's public key of network key.
@@ -666,8 +675,10 @@ public(package) fun update_candidate_validator_network_pubkey(
     network_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.candidate_validator_mut(ctx.sender());
-    candidate.update_candidate_network_pubkey(network_pubkey);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_network_pubkey(network_pubkey)
 }
 
 // === Shared (Candidate & Validator) Metadata Bits ===
@@ -675,8 +686,10 @@ public(package) fun update_candidate_validator_network_pubkey(
 /// Create a new `UnverifiedValidatorOperationCap`, transfer it to the
 /// validator and registers it. The original object is thus revoked.
 public(package) fun rotate_operation_cap(self: &mut SuiSystemStateInnerV2, ctx: &mut TxContext) {
-    let validator = self.validators.any_validator_mut(ctx.sender());
-    validator.new_unverified_validator_operation_cap_and_transfer(ctx);
+    self
+        .validators
+        .any_validator_mut(ctx.sender())
+        .new_unverified_validator_operation_cap_and_transfer(ctx)
 }
 
 /// Update a validator's name.
@@ -705,8 +718,7 @@ public(package) fun update_validator_description(
     description: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.any_validator_mut(ctx.sender());
-    validator.update_description(description);
+    self.validators.any_validator_mut(ctx.sender()).update_description(description)
 }
 
 /// Update a validator's image url.
@@ -716,8 +728,7 @@ public(package) fun update_validator_image_url(
     image_url: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.any_validator_mut(ctx.sender());
-    validator.update_image_url(image_url);
+    self.validators.any_validator_mut(ctx.sender()).update_image_url(image_url)
 }
 
 /// Update a candidate or an active/pending validator's project url.
@@ -727,8 +738,7 @@ public(package) fun update_validator_project_url(
     project_url: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.any_validator_mut(ctx.sender());
-    validator.update_project_url(project_url);
+    self.validators.any_validator_mut(ctx.sender()).update_project_url(project_url)
 }
 
 // === Validator Metadata Management ===
