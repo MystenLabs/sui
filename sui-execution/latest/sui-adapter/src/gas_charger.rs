@@ -508,6 +508,24 @@ pub mod checked {
                         let balance_type = sui_types::balance::Balance::type_tag(
                             sui_types::gas_coin::GAS::type_tag(),
                         );
+                        // BUG: This creates a Merge (deposit) event with positive reservation
+                        // value, but this should be a Split (withdrawal) event with negative
+                        // value. The coin reservation is withdrawing SUI from the address
+                        // balance to merge into the smash target, so the accumulator event
+                        // should be negative (a withdrawal).
+                        tracing::error!(
+                            "DEBUG smash_gas secondary AddressBalance: \
+                             address={}, reservation={}, smash_target={:?}, \
+                             total_smashed={} -- passing +{} to from_balance_change \
+                             creates a DEPOSIT (Merge) but should be a WITHDRAWAL (Split, \
+                             i.e. -{})",
+                            sui_address,
+                            reservation,
+                            smash_location,
+                            total_smashed,
+                            reservation,
+                            reservation,
+                        );
                         let event = AccumulatorEvent::from_balance_change(
                             *sui_address,
                             balance_type,
@@ -527,6 +545,15 @@ pub mod checked {
                     // We do not need to withdraw here unless necessary, which will be done during
                     // gas charging
                     let net_deposit = total_smashed - *reservation;
+                    tracing::error!(
+                        "DEBUG smash_gas target AddressBalance: \
+                         address={}, reservation={}, total_smashed={}, \
+                         net_deposit={}",
+                        sui_address,
+                        reservation,
+                        total_smashed,
+                        net_deposit,
+                    );
                     if net_deposit != 0 {
                         let balance_type = sui_types::balance::Balance::type_tag(
                             sui_types::gas_coin::GAS::type_tag(),

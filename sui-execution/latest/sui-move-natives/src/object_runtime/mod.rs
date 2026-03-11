@@ -134,6 +134,7 @@ pub struct ObjectRuntime<'a> {
 
 impl<'a> NativeExtensionMarker<'a> for ObjectRuntime<'a> {}
 
+#[derive(Debug)]
 pub enum TransferResult {
     New,
     SameOwner,
@@ -326,6 +327,24 @@ impl<'a> ObjectRuntime<'a> {
         };
         // assert!(end of transaction ==> same owner)
         if end_of_transaction && !matches!(transfer_result, TransferResult::SameOwner) {
+            // BUG: Ephemeral gas coins (materialized from AddressBalance) are registered
+            // as new_ids, so they get TransferResult::New here instead of SameOwner.
+            // The end-of-transaction cleanup loop in context.rs iterates over all mutable
+            // inputs (including the gas coin) and calls transfer_object_ with
+            // end_of_transaction=true. For the ephemeral gas coin, this fails because
+            // new objects cannot satisfy the SameOwner check.
+            // The ephemeral gas coin is supposed to be destroyed by
+            // destroy_ephemeral_gas_coin() AFTER this point, but this check runs first.
+            eprintln!(
+                "DEBUG transfer end_of_transaction violation: id={}, \
+                 owner={:?}, transfer_result={:?}, \
+                 in_new_ids={}, in_input_objects={}",
+                id,
+                owner,
+                transfer_result,
+                self.state.new_ids.contains(&id),
+                self.state.input_objects.contains_key(&id),
+            );
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message(format!("Untransferred object {} had its owner change", id)),
