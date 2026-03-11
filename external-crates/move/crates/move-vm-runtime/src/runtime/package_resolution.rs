@@ -156,7 +156,7 @@ pub(crate) fn load_and_verify_packages(
     );
     let packages = packages
         .into_iter()
-        .map(|pkg| validate_package(natives, vm_config, pkg))
+        .map(|pkg| validate_package(natives, vm_config, pkg).map_err(expect_no_verification_errors))
         .collect();
     telemetry.report_time(validation_timer);
     packages
