@@ -46,7 +46,6 @@ const EInvalidValidatorSelector: u64 = 14;
 // same as in sui_system
 const ACTIVE_VALIDATOR_ONLY: u8 = 1;
 const ACTIVE_OR_PENDING_VALIDATOR: u8 = 2;
-#[allow(unused_const)]
 const ANY_VALIDATOR: u8 = 3;
 
 const BASIS_POINT_DENOMINATOR: u64 = 10000;
@@ -640,23 +639,19 @@ public fun total_stake(self: &ValidatorSet): u64 {
 }
 
 public fun validator_total_stake_amount(self: &ValidatorSet, validator_address: address): u64 {
-    let validator = get_validator_ref(&self.active_validators, validator_address);
-    validator.total_stake()
+    self.active_validator(validator_address).total_stake()
 }
 
 public fun validator_stake_amount(self: &ValidatorSet, validator_address: address): u64 {
-    let validator = get_validator_ref(&self.active_validators, validator_address);
-    validator.total_stake()
+    self.active_validator(validator_address).total_stake()
 }
 
 public fun validator_voting_power(self: &ValidatorSet, validator_address: address): u64 {
-    let validator = get_validator_ref(&self.active_validators, validator_address);
-    validator.voting_power()
+    self.active_validator(validator_address).voting_power()
 }
 
 public fun validator_staking_pool_id(self: &ValidatorSet, validator_address: address): ID {
-    let validator = get_validator_ref(&self.active_validators, validator_address);
-    validator.staking_pool_id()
+    self.active_validator(validator_address).staking_pool_id()
 }
 
 public fun staking_pool_mappings(self: &ValidatorSet): &Table<ID, address> {
@@ -675,28 +670,28 @@ public fun validator_address_by_pool_id(self: &mut ValidatorSet, pool_id: &ID): 
 
 public(package) fun pool_exchange_rates(
     self: &mut ValidatorSet,
-    pool_id: &ID,
+    pool_id: ID,
 ): &Table<u64, PoolTokenExchangeRate> {
     // If the pool id is recorded in the mapping, then it must be either candidate or active.
-    let validator = if (self.staking_pool_mappings.contains(*pool_id)) {
-        let validator_address = self.staking_pool_mappings[*pool_id];
+    let validator = if (self.staking_pool_mappings.contains(pool_id)) {
+        let validator_address = self.staking_pool_mappings[pool_id];
         self.any_validator(validator_address)
     } else {
         // otherwise it's inactive
-        self.inactive_validators[*pool_id].load_validator_maybe_upgrade()
+        self.inactive_validators[pool_id].load_validator_maybe_upgrade()
     };
 
     validator.get_staking_pool_ref().exchange_rates()
 }
 
-public(package) fun validator_by_pool_id(self: &mut ValidatorSet, pool_id: &ID): &Validator {
+public(package) fun validator_by_pool_id(self: &mut ValidatorSet, pool_id: ID): &Validator {
     // If the pool id is recorded in the mapping, then it must be either candidate or active.
-    let validator = if (self.staking_pool_mappings.contains(*pool_id)) {
-        let validator_address = self.staking_pool_mappings[*pool_id];
+    let validator = if (self.staking_pool_mappings.contains(pool_id)) {
+        let validator_address = self.staking_pool_mappings[pool_id];
         self.any_validator(validator_address)
     } else {
         // otherwise it's inactive
-        self.inactive_validators[*pool_id].load_validator_maybe_upgrade()
+        self.inactive_validators[pool_id].load_validator_maybe_upgrade()
     };
 
     validator

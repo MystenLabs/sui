@@ -668,7 +668,7 @@ fun staking_pool_exchange_rate_getter() {
 
     // Check the exchange rates in the system state.
     runner.system_tx!(|system, _| {
-        let rates = system.pool_exchange_rates(&pool_id);
+        let rates = system.pool_exchange_rates(pool_id);
         assert_eq!(rates.length(), 3);
         rates.assert_exchange_rate_eq(0, 0, 0); // no tokens at epoch 0
         rates.assert_exchange_rate_eq(1, 200, 200); // 200 SUI of self + delegate stake at epoch 1
