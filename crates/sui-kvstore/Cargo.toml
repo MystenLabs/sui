@@ -8,6 +8,7 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+arc-swap.workspace = true
 bytes.workspace = true
 async-trait.workspace = true
 base64.workspace = true
@@ -19,6 +20,7 @@ http.workspace = true
 num_cpus.workspace = true
 gcp_auth.workspace = true
 prometheus.workspace = true
+rand.workspace = true
 prost.workspace = true
 prost-types.workspace = true
 rustls.workspace = true
