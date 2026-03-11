@@ -1401,6 +1401,7 @@
                 "narwhal_versioned_metadata": false,
                 "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
+                "normalize_depth_formula": false,
                 "normalize_ptb_arguments": false,
                 "object_runtime_charge_cache_load_gas": false,
                 "package_digest_hash_module": false,

@@ -951,6 +951,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops: bool,
 
+    // If true, normalize depth formula to not be empty for zero depth.
+    #[serde(skip_serializing_if = "is_false")]
+    normalize_depth_formula: bool,
+
     // If true, skip GC'ed accept votes in CommitFinalizer.
     #[serde(skip_serializing_if = "is_false")]
     consensus_skip_gced_accept_votes: bool,
@@ -2572,6 +2576,10 @@ impl ProtocolConfig {
 
     pub fn deprecate_global_storage_ops(&self) -> bool {
         self.feature_flags.deprecate_global_storage_ops
+    }
+
+    pub fn normalize_depth_formula(&self) -> bool {
+        self.feature_flags.normalize_depth_formula
     }
 
     pub fn consensus_skip_gced_accept_votes(&self) -> bool {
@@ -4655,13 +4663,14 @@ impl ProtocolConfig {
                     }
                 }
                 115 => {
+                    cfg.feature_flags.normalize_depth_formula = true;
+                }
+                116 => {
                     cfg.feature_flags.gasless_transaction_drop_safety = true;
                     cfg.feature_flags.address_aliases = true;
                     cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
                     // Disabled while debugging
                     cfg.feature_flags.defer_unpaid_amplification = false;
-                }
-                116 => {
                     cfg.feature_flags.enable_display_registry = true;
                 }
                 // Use this template when making changes:

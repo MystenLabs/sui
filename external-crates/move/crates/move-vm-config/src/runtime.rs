@@ -33,6 +33,8 @@ pub struct VMConfig {
     pub variant_nodes: bool,
     /// Check for deprecated global storage operations during deserialization.
     pub deprecate_global_storage_ops_during_deserialization: bool,
+    /// Normalize all formula to have a consistent structure.
+    pub normalize_depth_formula: bool,
 }
 
 impl Default for VMConfig {
@@ -52,6 +54,7 @@ impl Default for VMConfig {
             max_type_to_layout_nodes: Some(512),
             variant_nodes: true,
             deprecate_global_storage_ops_during_deserialization: false,
+            normalize_depth_formula: true,
         }
     }
 }
