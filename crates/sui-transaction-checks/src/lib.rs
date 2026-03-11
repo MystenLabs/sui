@@ -418,6 +418,17 @@ mod checked {
         let gas_status =
             SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
 
+        if transaction.gas_owner() != transaction.sender() {
+            for obj_ref in gas {
+                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) {
+                    return Err(UserInputError::GasObjectNotOwnedObject {
+                        owner: Owner::AddressOwner(transaction.sender()),
+                    }
+                    .into());
+                }
+            }
+        }
+
         // check balance and coins consistency
         // load all gas coins
         let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();

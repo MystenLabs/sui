@@ -926,3 +926,73 @@ async fn test_gas_payment_mix_of_owners() {
 
     test_env.cluster.trigger_reconfiguration().await;
 }
+
+#[sim_test]
+async fn test_coin_reservation_rejected_in_sponsored_transaction() {
+    use shared_crypto::intent::Intent;
+    use sui_keys::keystore::AccountKeystore;
+    use sui_types::transaction::{GasData, ProgrammableTransaction, Transaction, TransactionData};
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let sponsor = test_env.get_sender(1);
+
+    test_env
+        .fund_one_address_balance(sender, 10_000_000_000)
+        .await;
+
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 5_000_000_000);
+
+    let tx_data = TransactionData::new_with_gas_data(
+        TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+            inputs: vec![],
+            commands: vec![],
+        }),
+        sender,
+        GasData {
+            payment: vec![coin_reservation],
+            owner: sponsor,
+            price: test_env.rgp,
+            budget: 5_000_000_000,
+        },
+    );
+
+    let sender_sig = test_env
+        .cluster
+        .wallet
+        .config
+        .keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await
+        .unwrap();
+    let sponsor_sig = test_env
+        .cluster
+        .wallet
+        .config
+        .keystore
+        .sign_secure(&sponsor, &tx_data, Intent::sui_transaction())
+        .await
+        .unwrap();
+    let tx = Transaction::from_data(tx_data, vec![sender_sig, sponsor_sig]);
+
+    let err = test_env
+        .cluster
+        .execute_transaction_directly(&tx)
+        .await
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Gas object is not an owned object with owner"),
+        "Expected sponsored coin reservation rejection, got: {}",
+        err
+    );
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
