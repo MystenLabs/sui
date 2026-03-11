@@ -1884,7 +1884,7 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::Vector(_loc, ty_opt, sp!(_, elems)) => {
-                w.write("vector");
+                w.write(crate::shared::builtin_type_names::VECTOR);
                 if let Some(ty) = ty_opt {
                     w.write("<");
                     ty.ast_debug(w);

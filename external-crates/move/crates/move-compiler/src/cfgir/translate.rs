@@ -490,7 +490,7 @@ fn constant(
                 .add(name, value.clone())
                 .expect("ICE constant name collision");
             let loc = value.loc;
-            let mv = move_value_from_value(&context.env, value);
+            let mv = move_value_from_value(context.env, value);
             if mv.is_none() {
                 context.add_diag(diag!(
                     CodeGeneration::UnfoldableConstant,
