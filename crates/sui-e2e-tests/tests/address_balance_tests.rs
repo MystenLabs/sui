@@ -3864,7 +3864,7 @@ async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
     );
 
     // Verify sender's address balance was correctly decremented
-    let expected_remaining_balance = deposit_amount - withdraw_amount - (net_gas_cost as u64);
+    let expected_remaining_balance = deposit_amount - withdraw_amount - net_gas_cost;
     test_env.verify_accumulator_exists(sender, expected_remaining_balance);
 }
 
