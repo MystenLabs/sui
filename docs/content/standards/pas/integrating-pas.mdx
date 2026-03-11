@@ -105,10 +105,10 @@ let cmd = ptb::move_call(
     "my_module",                                        // module
     "approve_transfer",                                 // function
     vector[
-        ptb::ext_input("pas:request"),                  // the request (resolved by SDK)
+        ptb::ext_input<PAS>("request"),                  // the request (resolved by SDK)
         ptb::object_by_id(@0x6.to_id()),                // Clock object
     ],
-    vector[(*type_name.as_string()).to_string()],       // type arguments
+    vector[],       // type arguments
 );
 
 templates.set_template_command(internal::permit<TransferApproval>(), cmd);
@@ -118,9 +118,8 @@ templates.set_template_command(internal::permit<TransferApproval>(), cmd);
 
 | **Constructor** | **Description** |
 |---|---|
-| `ptb::ext_input(name)` | Custom input resolved off-chain by the SDK. |
+| `ptb::ext_input<T>(name)` | Custom input resolved off-chain by the SDK, namespaced by type `T`. |
 | `ptb::object_by_id(id)` | Object resolved off-chain by its ID. |
-| `ptb::object_by_type<T>()` | Object resolved off-chain by its Move type. |
 | `ptb::receiving_object_by_id(id)` | Receiving object resolved off-chain by its ID. |
 | `ptb::pure(value)` | BCS-encoded pure value. |
 
@@ -128,14 +127,15 @@ For the full list of `ptb` constructors (including system shorthands and fully-r
 
 ### Supported `ext_input` names
 
-The following are the custom input names the PAS SDK resolves at PTB construction time:
+The following are the custom input names the PAS SDK resolves at PTB construction time.
+When using `ptb::ext_input<PAS>(name)`, the `PAS` type (from `pas::templates`) provides the namespace:
 
 | **Name** | **Resolves to** |
 |---|---|
-| `"pas:request"` | The active `Request` object being approved. |
-| `"pas:policy"` | The `Policy` object for the managed asset. |
-| `"pas:sender_chest"` | The sender's `Chest` object. |
-| `"pas:receiver_chest"` | The receiver's `Chest` object. |
+| `"request"` | The active `Request` object being approved. |
+| `"policy"` | The `Policy` object for the managed asset. |
+| `"sender_account"` | The sender's `Account` object. |
+| `"receiver_account"` | The receiver's `Account` object. |
 
 ### How clients use templates
 
