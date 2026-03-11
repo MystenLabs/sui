@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::{NumberFormat, NumericalAddress};
+use crate::shared::{NumberFormat, NumericalAddress, builtin_type_names as BT};
 use anyhow::{Result, anyhow};
 use move_binary_format::file_format::{
     Ability, AbilitySet, CompiledModule, DatatypeHandleIndex, DatatypeTyParameter,
@@ -345,15 +345,15 @@ fn write_return_type(ctx: &mut Context, tys: &[SignatureToken]) -> String {
 
 fn write_signature_token(ctx: &mut Context, t: &SignatureToken) -> String {
     match t {
-        SignatureToken::Bool => "bool".to_string(),
-        SignatureToken::U8 => "u8".to_string(),
-        SignatureToken::U16 => "u16".to_string(),
-        SignatureToken::U32 => "u32".to_string(),
-        SignatureToken::U64 => "u64".to_string(),
-        SignatureToken::U128 => "u128".to_string(),
-        SignatureToken::U256 => "u256".to_string(),
-        SignatureToken::Address => "address".to_string(),
-        SignatureToken::Signer => "signer".to_string(),
+        SignatureToken::Bool => BT::BOOL.to_string(),
+        SignatureToken::U8 => BT::U_8.to_string(),
+        SignatureToken::U16 => BT::U_16.to_string(),
+        SignatureToken::U32 => BT::U_32.to_string(),
+        SignatureToken::U64 => BT::U_64.to_string(),
+        SignatureToken::U128 => BT::U_128.to_string(),
+        SignatureToken::U256 => BT::U_256.to_string(),
+        SignatureToken::Address => BT::ADDRESS.to_string(),
+        SignatureToken::Signer => BT::SIGNER.to_string(),
         SignatureToken::Vector(inner) => format!("vector<{}>", write_signature_token(ctx, inner)),
         SignatureToken::Datatype(idx) => write_datatype_handle_type(ctx, *idx),
         SignatureToken::DatatypeInstantiation(inst) => {

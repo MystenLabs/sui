@@ -697,21 +697,21 @@ static BUILTIN_TYPE_ORDERED: LazyLock<BTreeSet<BuiltinTypeName_>> =
     LazyLock::new(|| BUILTIN_TYPE_BITS.clone());
 
 impl BuiltinTypeName_ {
-    pub const ADDRESS: &'static str = "address";
-    pub const SIGNER: &'static str = "signer";
-    pub const U_8: &'static str = "u8";
-    pub const U_16: &'static str = "u16";
-    pub const U_32: &'static str = "u32";
-    pub const U_64: &'static str = "u64";
-    pub const U_128: &'static str = "u128";
-    pub const U_256: &'static str = "u256";
-    pub const I_8: &'static str = "i8";
-    pub const I_16: &'static str = "i16";
-    pub const I_32: &'static str = "i32";
-    pub const I_64: &'static str = "i64";
-    pub const I_128: &'static str = "i128";
-    pub const BOOL: &'static str = "bool";
-    pub const VECTOR: &'static str = "vector";
+    pub const ADDRESS: &'static str = crate::shared::builtin_type_names::ADDRESS;
+    pub const SIGNER: &'static str = crate::shared::builtin_type_names::SIGNER;
+    pub const U_8: &'static str = crate::shared::builtin_type_names::U_8;
+    pub const U_16: &'static str = crate::shared::builtin_type_names::U_16;
+    pub const U_32: &'static str = crate::shared::builtin_type_names::U_32;
+    pub const U_64: &'static str = crate::shared::builtin_type_names::U_64;
+    pub const U_128: &'static str = crate::shared::builtin_type_names::U_128;
+    pub const U_256: &'static str = crate::shared::builtin_type_names::U_256;
+    pub const I_8: &'static str = crate::shared::builtin_type_names::I_8;
+    pub const I_16: &'static str = crate::shared::builtin_type_names::I_16;
+    pub const I_32: &'static str = crate::shared::builtin_type_names::I_32;
+    pub const I_64: &'static str = crate::shared::builtin_type_names::I_64;
+    pub const I_128: &'static str = crate::shared::builtin_type_names::I_128;
+    pub const BOOL: &'static str = crate::shared::builtin_type_names::BOOL;
+    pub const VECTOR: &'static str = crate::shared::builtin_type_names::VECTOR;
 
     pub fn all_names() -> &'static BTreeSet<Symbol> {
         &BUILTIN_TYPE_ALL_NAMES

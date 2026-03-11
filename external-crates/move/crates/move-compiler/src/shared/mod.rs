@@ -52,6 +52,7 @@ use std::{
 use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
+pub mod builtin_type_names;
 pub mod files;
 pub mod ide;
 pub mod known_attributes;
@@ -74,8 +75,7 @@ pub use move_core_types::parsing::parser::{
     parse_u128, parse_u256,
 };
 
-pub const UNSIGNED_INT_SUFFIXES: &[&str] = &["u8", "u16", "u32", "u64", "u128", "u256"];
-pub const SIGNED_INT_SUFFIXES: &[&str] = &["i8", "i16", "i32", "i64", "i128"];
+pub use builtin_type_names::{SIGNED_INT_SUFFIXES, UNSIGNED_INT_SUFFIXES};
 
 use std::num::ParseIntError;
 
