@@ -419,6 +419,7 @@ fun active_validator_update_metadata() {
     runner.set_sender(new_validator_addr).add_validator_candidate(validator);
     runner.set_sender(new_validator_addr).stake_with(new_validator_addr, 100);
     runner.set_sender(new_validator_addr).add_validator();
+    runner.advance_epoch(option::none()).destroy_for_testing();
 
     runner.scenario_fn!(|scenario| {
         let mut system_state = scenario.take_shared<SuiSystemState>();
@@ -437,7 +438,7 @@ fun active_validator_update_metadata() {
             vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
         );
 
-        let validator = system_state.pending_validator_by_address(new_validator_addr);
+        let validator = system_state.active_validator_by_address(new_validator_addr);
 
         // prettier-ignore
         verify_metadata(

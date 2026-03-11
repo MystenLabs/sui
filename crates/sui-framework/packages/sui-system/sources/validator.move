@@ -395,7 +395,7 @@ public(package) fun request_set_gas_price(
     new_price: u64,
 ) {
     assert!(new_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
-    let validator_address = *verified_cap.verified_operation_cap_address();
+    let validator_address = verified_cap.verified_operation_cap_address();
     assert!(validator_address == self.metadata.sui_address, EInvalidCap);
     self.next_epoch_gas_price = new_price;
 }
@@ -408,7 +408,7 @@ public(package) fun set_candidate_gas_price(
 ) {
     assert!(self.is_preactive(), ENotValidatorCandidate);
     assert!(new_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
-    let validator_address = *verified_cap.verified_operation_cap_address();
+    let validator_address = verified_cap.verified_operation_cap_address();
     assert!(validator_address == self.metadata.sui_address, EInvalidCap);
     self.next_epoch_gas_price = new_price;
     self.gas_price = new_price;
@@ -819,6 +819,7 @@ public(package) fun update_candidate_protocol_pubkey(
     proof_of_possession: vector<u8>,
 ) {
     assert!(self.is_preactive(), ENotValidatorCandidate);
+    assert!(protocol_pubkey.length() == 96, EInvalidProtocolPubKeyLength);
     self.metadata.protocol_pubkey_bytes = protocol_pubkey;
     self.metadata.proof_of_possession = proof_of_possession;
     self.metadata.validate();
@@ -862,7 +863,7 @@ public(package) fun update_candidate_worker_pubkey(
     self.metadata.validate();
 }
 
-/// Effectutate all staged next epoch metadata for this validator.
+/// Effectuate all staged next epoch metadata for this validator.
 /// NOTE: this function SHOULD ONLY be called by validator_set when
 /// advancing an epoch.
 public(package) fun effectuate_staged_metadata(self: &mut Validator) {

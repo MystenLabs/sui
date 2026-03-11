@@ -429,11 +429,10 @@ public(package) fun request_set_gas_price(
 ) {
     // Verify the represented address is an active or pending validator, and the capability is still valid.
     let verified_cap = self.validators.verify_cap(cap, ACTIVE_OR_PENDING_VALIDATOR);
-    let validator = self
+    self
         .validators
-        .get_validator_mut_with_verified_cap(&verified_cap, false /* include_candidate */);
-
-    validator.request_set_gas_price(verified_cap, new_gas_price);
+        .any_validator_mut(verified_cap.verified_operation_cap_address())
+        .request_set_gas_price(verified_cap, new_gas_price)
 }
 
 /// This function is used to set new gas price for candidate validators
@@ -444,10 +443,10 @@ public(package) fun set_candidate_validator_gas_price(
 ) {
     // Verify the represented address is an active or pending validator, and the capability is still valid.
     let verified_cap = self.validators.verify_cap(cap, ANY_VALIDATOR);
-    let candidate = self
+    self
         .validators
-        .get_validator_mut_with_verified_cap(&verified_cap, true /* include_candidate */);
-    candidate.set_candidate_gas_price(verified_cap, new_gas_price)
+        .candidate_validator_mut(verified_cap.verified_operation_cap_address())
+        .set_candidate_gas_price(verified_cap, new_gas_price)
 }
 
 /// A validator can call this function to set a new commission rate, updated at the end of
@@ -459,10 +458,8 @@ public(package) fun request_set_commission_rate(
 ) {
     self
         .validators
-        .request_set_commission_rate(
-            new_commission_rate,
-            ctx,
-        )
+        .active_validator_mut(ctx.sender())
+        .request_set_commission_rate(new_commission_rate)
 }
 
 /// This function is used to set new commission rate for candidate validators
@@ -471,8 +468,10 @@ public(package) fun set_candidate_validator_commission_rate(
     new_commission_rate: u64,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.set_candidate_commission_rate(new_commission_rate)
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .set_candidate_commission_rate(new_commission_rate)
 }
 
 /// Add stake to a validator's staking pool.
@@ -482,13 +481,7 @@ public(package) fun request_add_stake(
     validator_address: address,
     ctx: &mut TxContext,
 ): StakedSui {
-    self
-        .validators
-        .request_add_stake(
-            validator_address,
-            stake.into_balance(),
-            ctx,
-        )
+    self.validators.request_add_stake(validator_address, stake.into_balance(), ctx)
 }
 
 /// Add stake to a validator's staking pool using multiple coins.
@@ -568,7 +561,7 @@ fun report_validator_impl(
     reportee_addr: address,
     validator_report_records: &mut VecMap<address, VecSet<address>>,
 ) {
-    let reporter_address = *verified_cap.verified_operation_cap_address();
+    let reporter_address = verified_cap.verified_operation_cap_address();
     assert!(reporter_address != reportee_addr, ECannotReportOneself);
     if (!validator_report_records.contains(&reportee_addr)) {
         validator_report_records.insert(reportee_addr, vec_set::singleton(reporter_address));
@@ -588,7 +581,7 @@ fun undo_report_validator_impl(
     assert!(validator_report_records.contains(&reportee_addr), EReportRecordNotFound);
     let reporters = &mut validator_report_records[&reportee_addr];
 
-    let reporter_addr = *verified_cap.verified_operation_cap_address();
+    let reporter_addr = verified_cap.verified_operation_cap_address();
     assert!(reporters.contains(&reporter_addr), EReportRecordNotFound);
 
     reporters.remove(&reporter_addr);
@@ -606,7 +599,7 @@ public(package) fun update_candidate_validator_network_address(
     network_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let candidate = self.validators.candidate_validator_mut(ctx.sender());
     candidate.update_candidate_network_address(network_address);
 }
 
@@ -617,7 +610,7 @@ public(package) fun update_candidate_validator_p2p_address(
     p2p_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let candidate = self.validators.candidate_validator_mut(ctx.sender());
     candidate.update_candidate_p2p_address(p2p_address);
 }
 
@@ -628,7 +621,7 @@ public(package) fun update_candidate_validator_primary_address(
     primary_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let candidate = self.validators.candidate_validator_mut(ctx.sender());
     candidate.update_candidate_primary_address(primary_address);
 }
 
@@ -639,7 +632,7 @@ public(package) fun update_candidate_validator_worker_address(
     worker_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let candidate = self.validators.candidate_validator_mut(ctx.sender());
     candidate.update_candidate_worker_address(worker_address);
 }
 
@@ -651,7 +644,7 @@ public(package) fun update_candidate_validator_protocol_pubkey(
     proof_of_possession: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let candidate = self.validators.candidate_validator_mut(ctx.sender());
     candidate.update_candidate_protocol_pubkey(protocol_pubkey, proof_of_possession);
 }
 
@@ -662,7 +655,7 @@ public(package) fun update_candidate_validator_worker_pubkey(
     worker_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let candidate = self.validators.candidate_validator_mut(ctx.sender());
     candidate.update_candidate_worker_pubkey(worker_pubkey);
 }
 
@@ -673,7 +666,7 @@ public(package) fun update_candidate_validator_network_pubkey(
     network_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let candidate = self.validators.candidate_validator_mut(ctx.sender());
     candidate.update_candidate_network_pubkey(network_pubkey);
 }
 
@@ -682,7 +675,7 @@ public(package) fun update_candidate_validator_network_pubkey(
 /// Create a new `UnverifiedValidatorOperationCap`, transfer it to the
 /// validator and registers it. The original object is thus revoked.
 public(package) fun rotate_operation_cap(self: &mut SuiSystemStateInnerV2, ctx: &mut TxContext) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let validator = self.validators.any_validator_mut(ctx.sender());
     validator.new_unverified_validator_operation_cap_and_transfer(ctx);
 }
 
@@ -699,7 +692,7 @@ public(package) fun update_validator_name(
     name: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let validator = self.validators.any_validator_mut(ctx.sender());
     validator.update_name(name);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
@@ -712,7 +705,7 @@ public(package) fun update_validator_description(
     description: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let validator = self.validators.any_validator_mut(ctx.sender());
     validator.update_description(description);
 }
 
@@ -723,7 +716,7 @@ public(package) fun update_validator_image_url(
     image_url: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let validator = self.validators.any_validator_mut(ctx.sender());
     validator.update_image_url(image_url);
 }
 
@@ -734,7 +727,7 @@ public(package) fun update_validator_project_url(
     project_url: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let validator = self.validators.any_validator_mut(ctx.sender());
     validator.update_project_url(project_url);
 }
 
@@ -749,7 +742,7 @@ public(package) fun update_validator_next_epoch_network_address(
     network_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_network_address(network_address);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
@@ -764,7 +757,7 @@ public(package) fun update_validator_next_epoch_p2p_address(
     p2p_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_p2p_address(p2p_address);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
@@ -779,7 +772,7 @@ public(package) fun update_validator_next_epoch_primary_address(
     primary_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_primary_address(primary_address);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
@@ -794,7 +787,7 @@ public(package) fun update_validator_next_epoch_worker_address(
     worker_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_worker_address(worker_address);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
@@ -810,7 +803,7 @@ public(package) fun update_validator_next_epoch_protocol_pubkey(
     proof_of_possession: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
@@ -825,7 +818,7 @@ public(package) fun update_validator_next_epoch_worker_pubkey(
     worker_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_worker_pubkey(worker_pubkey);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
@@ -840,7 +833,7 @@ public(package) fun update_validator_next_epoch_network_pubkey(
     network_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_network_pubkey(network_pubkey);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
