@@ -16,9 +16,9 @@
 //
 // 1. If the first coin is a real coin: do nothing. The existing behavior works correctly.
 //
-// 2. If the payment list is empty, or if the first coin is a fake coin: we materialize a
-//    GasCoin by adding a new input to the transaction. This input is a FundsWithdrawalArg
-//    of type Balance<SUI>. The reservation size equals:
+// 2. If the first coin is a fake coin: we materialize a GasCoin by adding a new input to
+//    the transaction. This input is a FundsWithdrawalArg of type Balance<SUI>. The
+//    reservation size equals:
 //
 //        (total SUI reserved by fake coins in the payment list) - (gas budget)
 //
@@ -120,14 +120,13 @@ fn rewrite_programmable_transaction_for_coin_reservations(
 }
 
 /// Checks if GasCoin materialization is needed.
-/// Returns true if the payment list is empty or if the first coin is a fake coin.
+/// Returns true if the first coin in the payment list is a fake coin (coin reservation).
+/// An empty payment list means pure address balance gas (handled natively by PaymentKind::Smash),
+/// which does not need materialization.
 fn needs_gas_coin_materialization(chain_identifier: ChainIdentifier, gas_data: &GasData) -> bool {
-    match gas_data.payment.first() {
-        None => true,
-        Some(first_coin) => {
-            ParsedObjectRefWithdrawal::parse(first_coin, chain_identifier).is_some()
-        }
-    }
+    gas_data.payment.first().is_some_and(|first_coin| {
+        ParsedObjectRefWithdrawal::parse(first_coin, chain_identifier).is_some()
+    })
 }
 
 /// Materializes a GasCoin by adding a FundsWithdrawalArg input and rewriting Argument::GasCoin
