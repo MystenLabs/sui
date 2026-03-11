@@ -517,9 +517,6 @@ convert_to_fungible_staked_sui
 redeem_fungible_staked_sui
 	public(package) fun
 	0x3::validator_set
-request_set_commission_rate
-	public(package) fun
-	0x3::validator_set
 advance_epoch
 	public(package) fun
 	0x3::validator_set
@@ -592,19 +589,28 @@ find_validator_from_table_vec
 get_validator_indices
 	fun
 	0x3::validator_set
-get_validator_mut
+any_validator
 	public(package) fun
 	0x3::validator_set
-get_active_or_pending_or_candidate_validator_mut
-	fun
-	0x3::validator_set
-get_validator_mut_with_verified_cap
+any_validator_mut
 	public(package) fun
 	0x3::validator_set
-get_validator_mut_with_ctx
+active_validator
 	public(package) fun
 	0x3::validator_set
-get_validator_mut_with_ctx_including_candidates
+active_validator_mut
+	public(package) fun
+	0x3::validator_set
+pending_validator
+	public(package) fun
+	0x3::validator_set
+pending_validator_mut
+	public(package) fun
+	0x3::validator_set
+candidate_validator
+	public(package) fun
+	0x3::validator_set
+candidate_validator_mut
 	public(package) fun
 	0x3::validator_set
 get_validator_ref
@@ -612,12 +618,6 @@ get_validator_ref
 	0x3::validator_set
 get_active_or_pending_or_candidate_validator_ref
 	public(package) fun
-	0x3::validator_set
-get_active_validator_ref
-	public fun
-	0x3::validator_set
-get_pending_validator_ref
-	public fun
 	0x3::validator_set
 verify_cap
 	public(package) fun
@@ -681,6 +681,12 @@ is_at_risk_validator
 	0x3::validator_set
 active_validator_addresses
 	public(package) fun
+	0x3::validator_set
+get_active_validator_ref
+	public fun
+	0x3::validator_set
+get_pending_validator_ref
+	public fun
 	0x3::validator_set
 StorageFund
 	public struct

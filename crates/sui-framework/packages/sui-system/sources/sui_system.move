@@ -568,7 +568,7 @@ public(package) fun calculate_rewards(
 
     system_state
         .validators_mut()
-        .validator_by_pool_id(&staked_sui.pool_id())
+        .validator_by_pool_id(staked_sui.pool_id())
         .get_staking_pool_ref()
         .calculate_rewards(staked_sui, ctx.epoch())
 }

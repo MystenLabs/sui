@@ -1430,7 +1430,7 @@ Getter of the pool token exchange rate of a staking pool. Works for both active 
     wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>,
     pool_id: &ID,
 ): &Table&lt;u64, PoolTokenExchangeRate&gt; {
-    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_pool_exchange_rates">pool_exchange_rates</a>(pool_id)
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_pool_exchange_rates">pool_exchange_rates</a>(*pool_id)
 }
 </code></pre>
 
@@ -1538,7 +1538,7 @@ Used in the package, and can be dev-inspected.
     <b>let</b> system_state = self.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>();
     system_state
         .validators_mut()
-        .validator_by_pool_id(&staked_sui.pool_id())
+        .validator_by_pool_id(staked_sui.pool_id())
         .get_staking_pool_ref()
         .<a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards">calculate_rewards</a>(staked_sui, ctx.epoch())
 }
