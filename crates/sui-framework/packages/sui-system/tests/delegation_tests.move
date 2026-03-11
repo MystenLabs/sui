@@ -360,7 +360,6 @@ fun add_preactive_remove_preactive() {
 // 4. Try staking to the validator candidate. This should fail because the validator candidate is pending.
 fun add_preactive_remove_pending_failure() {
     let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
-    let preset = sui_system::validator_preset::preset(3);
     let validator = validator_builder::preset(2)
         .sui_address(NEW_VALIDATOR_ADDR)
         .build(runner.ctx());
@@ -373,11 +372,6 @@ fun add_preactive_remove_pending_failure() {
 
     // Try adding self to the active validator set.
     runner.set_sender(NEW_VALIDATOR_ADDR).add_validator();
-
-    runner.set_sender(NEW_VALIDATOR_ADDR).system_tx!(|system, ctx| {
-        // system.update_candidate_validator_primary_address(preset.primary_address(), ctx)
-        system.update_validator_next_epoch_primary_address(preset.primary_address(), ctx)
-    });
 
     // No advance epoch has happened yet.
     runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
