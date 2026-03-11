@@ -1978,6 +1978,7 @@ impl AuthorityState {
                 gas_data,
                 gas_status,
                 kind,
+                None, // compat_args
                 signer,
                 tx_digest,
                 &mut None,
@@ -2310,6 +2311,7 @@ impl AuthorityState {
                 gas_data,
                 gas_status,
                 kind,
+                None, // compat_args - not needed for dev_inspect
                 signer,
                 transaction_digest,
                 &mut None,
@@ -2536,6 +2538,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             kind,
+            None, // compat_args - not needed for dev_inspect
             signer,
             tx_digest,
             dev_inspect,
@@ -2571,6 +2574,7 @@ impl AuthorityState {
                     cloned_gas,
                     retry_gas_status,
                     cloned_kind,
+                    None, // compat_args
                     signer,
                     tx_digest,
                     dev_inspect,
@@ -2827,6 +2831,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             transaction_kind,
+            None, // compat_args - not needed for dev_inspect
             sender,
             transaction_digest,
             skip_checks,
