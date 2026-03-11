@@ -40,17 +40,18 @@ impl DepthFormula {
     }
 
     /// A stand alone type parameter value
-    pub fn type_parameter(tparam: TypeParameterIndex) -> Self {
+    pub fn type_parameter(tparam: TypeParameterIndex, normalize_formula: bool) -> Self {
+        let constant = if normalize_formula { Some(0) } else { None };
         Self {
             terms: vec![(tparam, 0)],
-            constant: None,
+            constant,
         }
     }
 
     /// We `max` over a list of formulas, and we normalize it to deal with duplicate terms, e.g.
     /// `max(max(t1 + 1, t2 + 2, 2), max(t1 + 3, t2 + 1, 4))` becomes
     /// `max(t1 + 3, t2 + 2, 4)`
-    pub fn normalize(formulas: Vec<Self>) -> Self {
+    pub fn normalize(formulas: Vec<Self>, normalize_formula: bool) -> Self {
         let mut var_map = BTreeMap::new();
         let mut constant_acc = None;
         for formula in formulas {
@@ -67,9 +68,14 @@ impl DepthFormula {
                 (Some(c1), Some(c2)) => constant_acc = Some(max(c1, c2)),
             }
         }
+        let constant = if normalize_formula {
+            constant_acc.or(Some(0))
+        } else {
+            constant_acc
+        };
         Self {
             terms: var_map.into_iter().collect(),
-            constant: constant_acc,
+            constant,
         }
     }
 
@@ -77,6 +83,7 @@ impl DepthFormula {
     pub fn subst(
         &self,
         mut map: BTreeMap<TypeParameterIndex, DepthFormula>,
+        normalize_formula: bool,
     ) -> PartialVMResult<DepthFormula> {
         let Self { terms, constant } = self;
         let mut formulas = vec![];
@@ -93,7 +100,7 @@ impl DepthFormula {
             u_form.add(*c_i);
             formulas.push(u_form)
         }
-        Ok(DepthFormula::normalize(formulas))
+        Ok(DepthFormula::normalize(formulas, normalize_formula))
     }
 
     /// Given depths for each type parameter, solve the formula giving the max depth for the type

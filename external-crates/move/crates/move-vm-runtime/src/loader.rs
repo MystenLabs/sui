@@ -123,6 +123,8 @@ pub struct ModuleCache {
     defining_linkages: BTreeMap<AccountAddress, AccountAddress>,
     /// Global list of loaded functions, shared among all modules.
     functions: Vec<Arc<Function>>,
+    /// VM config, used for configuring the loading process
+    vm_config: VMConfig,
 }
 
 /// Tracks the current end point of the `ModuleCache`'s `types`s and `function`s, so that we can
@@ -133,7 +135,7 @@ struct CacheCursor {
 }
 
 impl ModuleCache {
-    fn new() -> Self {
+    fn new(vm_config: VMConfig) -> Self {
         Self {
             compiled_modules: BinaryCache::new(),
             verified_dependencies: BTreeSet::new(),
@@ -141,6 +143,7 @@ impl ModuleCache {
             datatypes: BinaryCache::new(),
             functions: vec![],
             defining_linkages: BTreeMap::new(),
+            vm_config,
         }
     }
 
@@ -529,7 +532,7 @@ impl ModuleCache {
                 .map(|field_type| self.calculate_depth_of_type(field_type, depth_cache))
                 .collect::<PartialVMResult<Vec<_>>>()?,
         };
-        let mut formula = DepthFormula::normalize(formulas);
+        let mut formula = DepthFormula::normalize(formulas, self.vm_config.normalize_depth_formula);
         // add 1 for the struct/variant itself
         formula.add(1);
         let prev = depth_cache.insert(def_idx, formula.clone());
@@ -564,7 +567,9 @@ impl ModuleCache {
                 inner.add(1);
                 inner
             }
-            Type::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
+            Type::TyParam(ty_idx) => {
+                DepthFormula::type_parameter(*ty_idx, self.vm_config.normalize_depth_formula)
+            }
             Type::Datatype(cache_idx) => {
                 let datatype = self.type_at(*cache_idx);
                 let datatype_formula = self.calculate_depth_of_datatype(&datatype, depth_cache)?;
@@ -584,7 +589,7 @@ impl ModuleCache {
                     .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
                 let datatype_formula = self.calculate_depth_of_datatype(&datatype, depth_cache)?;
 
-                datatype_formula.subst(ty_arg_map)?
+                datatype_formula.subst(ty_arg_map, self.vm_config.normalize_depth_formula)?
             }
         })
     }
@@ -844,7 +849,7 @@ pub(crate) struct Loader {
 impl Loader {
     pub(crate) fn new(natives: NativeFunctions, vm_config: VMConfig) -> Self {
         Self {
-            module_cache: RwLock::new(ModuleCache::new()),
+            module_cache: RwLock::new(ModuleCache::new(vm_config.clone())),
             type_cache: RwLock::new(TypeCache::new()),
             natives,
             vm_config,

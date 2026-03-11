@@ -420,7 +420,7 @@ fn test_depth() {
             "Box",
             Some(DepthFormula {
                 terms: vec![(0, 1)],
-                constant: None,
+                constant: Some(1),
             }),
         ),
         (
@@ -428,7 +428,7 @@ fn test_depth() {
             "Box3",
             Some(DepthFormula {
                 terms: vec![(0, 3)],
-                constant: None,
+                constant: Some(3),
             }),
         ),
         (
@@ -436,7 +436,7 @@ fn test_depth() {
             "Box7",
             Some(DepthFormula {
                 terms: vec![(0, 7)],
-                constant: None,
+                constant: Some(7),
             }),
         ),
         (
@@ -444,7 +444,7 @@ fn test_depth() {
             "Box15",
             Some(DepthFormula {
                 terms: vec![(0, 15)],
-                constant: None,
+                constant: Some(15),
             }),
         ),
         (
@@ -452,7 +452,7 @@ fn test_depth() {
             "Box31",
             Some(DepthFormula {
                 terms: vec![(0, 31)],
-                constant: None,
+                constant: Some(31),
             }),
         ),
         (
@@ -460,7 +460,7 @@ fn test_depth() {
             "Box63",
             Some(DepthFormula {
                 terms: vec![(0, 63)],
-                constant: None,
+                constant: Some(63),
             }),
         ),
         (
@@ -468,7 +468,7 @@ fn test_depth() {
             "Box127",
             Some(DepthFormula {
                 terms: vec![(0, 127)],
-                constant: None,
+                constant: Some(127),
             }),
         ),
         (
