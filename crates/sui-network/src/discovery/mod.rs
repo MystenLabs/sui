@@ -120,7 +120,7 @@ struct State {
     connected_peers: HashMap<PeerId, ()>,
     known_peers: HashMap<PeerId, VerifiedSignedNodeInfo>,
     known_peers_v2: HashMap<PeerId, VerifiedSignedVersionedNodeInfo>,
-    peer_address_overrides: HashMap<PeerId, BTreeMap<AddressSource, Vec<anemo::types::Address>>>,
+    peer_addresses: HashMap<PeerId, BTreeMap<AddressSource, Vec<anemo::types::Address>>>,
 }
 
 /// The information necessary to dial another peer.
@@ -402,7 +402,7 @@ impl DiscoveryEventLoop {
             }
         }
 
-        self.save_stored_peers_if_changed();
+        self.save_stored_peers();
         info!("Discovery ended");
     }
 
@@ -424,11 +424,11 @@ impl DiscoveryEventLoop {
                     &self.endpoint_manager,
                 );
                 if changed {
-                    self.save_stored_peers_if_changed();
+                    self.save_stored_peers();
                 }
             }
             DiscoveryMessage::ConfiguredPeersUpdated => {
-                self.save_stored_peers_if_changed();
+                self.save_stored_peers();
             }
         }
     }
@@ -484,9 +484,23 @@ impl DiscoveryEventLoop {
     }
 
     fn configure_preferred_peers(&mut self) {
-        for peer_info in self.configured_peers.values() {
+        let peers: Vec<_> = self.configured_peers.values().cloned().collect();
+        for peer_info in peers {
             debug!(?peer_info, "Add configured preferred peer");
-            self.network.known_peers().insert(peer_info.clone());
+            match peer_info.affinity {
+                PeerAffinity::High => {
+                    self.handle_peer_address_change(
+                        peer_info.peer_id,
+                        AddressSource::Seed,
+                        peer_info.address,
+                    );
+                }
+                _ => {
+                    // Allowed peers accept inbound but aren't actively dialed,
+                    // so insert them directly without address priority tracking.
+                    self.network.known_peers().insert(peer_info);
+                }
+            }
         }
     }
 
@@ -525,24 +539,30 @@ impl DiscoveryEventLoop {
         // Update stored addresses.
         {
             let mut state = self.state.write().unwrap();
-            let source_map = state.peer_address_overrides.entry(peer_id).or_default();
+            let source_map = state.peer_addresses.entry(peer_id).or_default();
 
             if addresses.is_empty() {
                 source_map.remove(&source);
                 if source_map.is_empty() {
-                    state.peer_address_overrides.remove(&peer_id);
+                    state.peer_addresses.remove(&peer_id);
                 }
             } else {
                 source_map.insert(source, addresses);
             }
         }
 
-        // Reconfigure network if priority addresses changed.
+        // Check if we should use the updated addresses.
+        self.reconfigure_peer_addresses(peer_id);
+    }
+
+    /// Reads the highest-priority addresses from `peer_addresses` for the given peer
+    /// and updates `network.known_peers()` if they differ from the current addresses.
+    fn reconfigure_peer_addresses(&mut self, peer_id: PeerId) {
         let priority_addresses = self
             .state
             .read()
             .unwrap()
-            .peer_address_overrides
+            .peer_addresses
             .get(&peer_id)
             .and_then(|sources| sources.first_key_value().map(|(_, addrs)| addrs.clone()))
             .unwrap_or_default();
@@ -560,14 +580,18 @@ impl DiscoveryEventLoop {
             };
 
             self.network.known_peers().insert(new_peer_info);
-            let _ = self.network.disconnect(peer_id);
 
-            if let Some(address) = priority_addresses.first().cloned() {
-                let network = self.network.clone();
-                self.tasks.spawn(async move {
-                    // If this fails, ConnectionManager will retry.
-                    let _ = network.connect_with_peer_id(address, peer_id).await;
-                });
+            // Override existing connection if there might be one.
+            if !current_addresses.is_empty() {
+                let _ = self.network.disconnect(peer_id);
+
+                if let Some(address) = priority_addresses.first().cloned() {
+                    let network = self.network.clone();
+                    self.tasks.spawn(async move {
+                        // If this fails, ConnectionManager will retry.
+                        let _ = network.connect_with_peer_id(address, peer_id).await;
+                    });
+                }
             }
         }
     }
@@ -586,27 +610,6 @@ impl DiscoveryEventLoop {
             path.display()
         );
 
-        // Collect P2P address overrides for configured peers before passing to
-        // update_known_peers_versioned (which populates known_peers_v2 and
-        // forwards consensus addresses to EndpointManager).
-        let mut p2p_overrides: Vec<(PeerId, Vec<anemo::types::Address>)> = Vec::new();
-        for entry in &entries {
-            let Some(peer_id) = entry.peer_id() else {
-                continue;
-            };
-            if !self.configured_peers.contains_key(&peer_id) {
-                continue;
-            }
-            let anemo_addrs: Vec<_> = entry
-                .p2p_addresses()
-                .iter()
-                .filter_map(|addr| addr.to_anemo_address().ok())
-                .collect();
-            if !anemo_addrs.is_empty() {
-                p2p_overrides.push((peer_id, anemo_addrs));
-            }
-        }
-
         update_known_peers_versioned(
             self.state.clone(),
             self.metrics.clone(),
@@ -615,14 +618,14 @@ impl DiscoveryEventLoop {
             &self.endpoint_manager,
         );
 
-        // Call directly rather than through the mailbox: this runs before the
-        // event loop starts, so addresses are applied before the first tick.
-        for (peer_id, anemo_addrs) in p2p_overrides {
-            self.handle_peer_address_change(peer_id, AddressSource::Discovery, anemo_addrs);
+        // update_known_peers_versioned forwards addresses through the mailbox.
+        // Drain it now so addresses are applied before the event loop starts.
+        while let Ok(msg) = self.mailbox.try_recv() {
+            self.handle_message(msg);
         }
     }
 
-    fn save_stored_peers_if_changed(&self) {
+    fn save_stored_peers(&self) {
         let Some(path) = &self.store_path else {
             return;
         };
@@ -688,14 +691,26 @@ impl DiscoveryEventLoop {
             ));
 
         // Cull old peers older than a day
+        let mut culled_configured_peers = Vec::new();
         {
             let mut state = self.state.write().unwrap();
             state
                 .known_peers
                 .retain(|_k, v| now_unix.saturating_sub(v.timestamp_ms) < ONE_DAY_MILLISECONDS);
-            state
-                .known_peers_v2
-                .retain(|_k, v| now_unix.saturating_sub(v.timestamp_ms()) < ONE_DAY_MILLISECONDS);
+            state.known_peers_v2.retain(|k, v| {
+                let keep = now_unix.saturating_sub(v.timestamp_ms()) < ONE_DAY_MILLISECONDS;
+                if !keep && self.configured_peers.contains_key(k) {
+                    culled_configured_peers.push(*k);
+                }
+                keep
+            });
+        }
+
+        // Clear Discovery-sourced addresses for configured peers whose
+        // signed info expired, allowing fallback to lower-priority sources.
+        for peer_id in culled_configured_peers {
+            self.endpoint_manager
+                .clear_source(peer_id, AddressSource::Discovery);
         }
 
         // Clean out the pending_dials
@@ -1225,11 +1240,11 @@ fn update_known_peers_versioned(
             }
         };
 
-        // Forward non-P2P addresses from configured peers to EndpointManager.
+        // Forward discovered addresses for configured peers to EndpointManager.
         let is_configured = configured_peers.contains_key(&peer_id);
         if is_configured && let VersionedNodeInfo::V2(info_v2) = peer_info.data() {
             for (endpoint_id, addrs) in &info_v2.addresses {
-                if !matches!(endpoint_id, EndpointId::P2p(_)) && !addrs.is_empty() {
+                if !addrs.is_empty() {
                     let _ = endpoint_manager.update_endpoint(
                         endpoint_id.clone(),
                         AddressSource::Discovery,

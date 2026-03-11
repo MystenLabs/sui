@@ -119,7 +119,7 @@ impl Builder {
             connected_peers: HashMap::default(),
             known_peers: HashMap::default(),
             known_peers_v2: HashMap::default(),
-            peer_address_overrides: HashMap::default(),
+            peer_addresses: HashMap::default(),
         }
         .pipe(RwLock::new)
         .pipe(Arc::new);

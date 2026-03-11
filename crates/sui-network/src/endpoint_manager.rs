@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use arc_swap::ArcSwapOption;
 use mysten_network::Multiaddr;
 use serde::{Deserialize, Serialize};
-use sui_types::crypto::NetworkPublicKey;
+use sui_types::crypto::{NetworkPublicKey, ToFromBytes};
 use sui_types::error::SuiResult;
 use tap::TapFallible;
 use tracing::{info, warn};
@@ -123,6 +123,23 @@ impl EndpointManager {
 
         Ok(())
     }
+
+    /// Clears the given address source for a peer across all endpoint types.
+    pub fn clear_source(&self, peer_id: anemo::PeerId, source: AddressSource) {
+        let _ = self.update_endpoint(EndpointId::P2p(peer_id), source, vec![]);
+        if let Ok(network_pubkey) = NetworkPublicKey::from_bytes(&peer_id.0) {
+            let _ = self.update_endpoint(EndpointId::Consensus(network_pubkey), source, vec![]);
+        }
+
+        // If adding a new EndpointId, make sure it's covered in this function.
+        // (Unused fn below only serves to cause a build failure here if
+        // a new variant is added without updating.)
+        fn _assert_all_variants_handled(id: &EndpointId) {
+            match id {
+                EndpointId::P2p(_) | EndpointId::Consensus(_) => {}
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -134,10 +151,11 @@ pub enum EndpointId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 // NOTE: AddressSources are prioritized in order of the enum variants below.
 pub enum AddressSource {
-    Admin,
-    Config,
-    Discovery,
-    Committee,
+    Admin,     // override from admin server
+    Config,    // override from config file
+    Discovery, // address received from P2P peers via Discovery protocol
+    Seed,      // locally-configured seed address
+    Chain,     // public on-chain address
 }
 
 #[cfg(test)]

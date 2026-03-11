@@ -2346,7 +2346,7 @@ fn update_peer_addresses(
         endpoint_manager
             .update_endpoint(
                 EndpointId::P2p(peer_id),
-                AddressSource::Committee,
+                AddressSource::Chain,
                 vec![address],
             )
             .expect("Updating peer addresses should not fail");
