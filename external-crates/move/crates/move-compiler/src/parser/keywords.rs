@@ -33,8 +33,15 @@ pub const KEYWORDS: &[&str] = &[
     "for",
 ];
 
-pub const CONTEXTUAL_KEYWORDS: &[&str] = &["address", "mut", "phantom", "Self", "entry", "macro"];
+pub const CONTEXTUAL_KEYWORDS: &[&str] = &[
+    crate::shared::builtin_type_names::ADDRESS,
+    "mut",
+    "phantom",
+    "Self",
+    "entry",
+    "macro",
+];
 
-pub const PRIMITIVE_TYPES: &[&str] = &["u8", "u16", "u32", "u64", "u128", "u256", "bool", "vector"];
+pub use crate::shared::builtin_type_names::PRIMITIVE_TYPES;
 
 pub const BUILTINS: &[&str] = &["assert", "freeze"];

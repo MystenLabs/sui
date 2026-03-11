@@ -3665,15 +3665,16 @@ fn signed_num(context: &mut DefnContext, loc: Loc, s: &str, negated: bool) -> Op
             }
         }};
     }
-    if let Some(num) = s.strip_suffix("i128") {
+    use crate::shared::builtin_type_names as BT;
+    if let Some(num) = s.strip_suffix(BT::I_128) {
         parse_signed!(num, parse_i128, I128, "'i128'")
-    } else if let Some(num) = s.strip_suffix("i64") {
+    } else if let Some(num) = s.strip_suffix(BT::I_64) {
         parse_signed!(num, parse_i64, I64, "'i64'")
-    } else if let Some(num) = s.strip_suffix("i32") {
+    } else if let Some(num) = s.strip_suffix(BT::I_32) {
         parse_signed!(num, parse_i32, I32, "'i32'")
-    } else if let Some(num) = s.strip_suffix("i16") {
+    } else if let Some(num) = s.strip_suffix(BT::I_16) {
         parse_signed!(num, parse_i16, I16, "'i16'")
-    } else if let Some(num) = s.strip_suffix("i8") {
+    } else if let Some(num) = s.strip_suffix(BT::I_8) {
         parse_signed!(num, parse_i8, I8, "'i8'")
     } else {
         panic!("ICE expected signed integer suffix")
@@ -3697,17 +3698,18 @@ fn unsigned_num(context: &mut DefnContext, loc: Loc, s: &str) -> Option<E::Value
             }
         }};
     }
-    if let Some(num) = s.strip_suffix("u256") {
+    use crate::shared::builtin_type_names as BT;
+    if let Some(num) = s.strip_suffix(BT::U_256) {
         parse_unsigned!(num, parse_u256, U256, "'u256'")
-    } else if let Some(num) = s.strip_suffix("u128") {
+    } else if let Some(num) = s.strip_suffix(BT::U_128) {
         parse_unsigned!(num, parse_u128, U128, "'u128'")
-    } else if let Some(num) = s.strip_suffix("u64") {
+    } else if let Some(num) = s.strip_suffix(BT::U_64) {
         parse_unsigned!(num, parse_u64, U64, "'u64'")
-    } else if let Some(num) = s.strip_suffix("u32") {
+    } else if let Some(num) = s.strip_suffix(BT::U_32) {
         parse_unsigned!(num, parse_u32, U32, "'u32'")
-    } else if let Some(num) = s.strip_suffix("u16") {
+    } else if let Some(num) = s.strip_suffix(BT::U_16) {
         parse_unsigned!(num, parse_u16, U16, "'u16'")
-    } else if let Some(num) = s.strip_suffix("u8") {
+    } else if let Some(num) = s.strip_suffix(BT::U_8) {
         parse_unsigned!(num, parse_u8, U8, "'u8'")
     } else {
         panic!("ICE expected unsigned integer suffix")
