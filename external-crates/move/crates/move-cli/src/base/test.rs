@@ -79,6 +79,10 @@ pub struct Test {
     /// Enable tracing for tests.
     #[clap(long = "trace")]
     pub trace: bool,
+
+    /// Set custom gas price for tests (in gas units).
+    #[clap(name = "custom-gas-price", long = "gas-price")]
+    pub custom_gas_price: Option<u64>,
 }
 
 impl Test {
@@ -122,6 +126,7 @@ impl Test {
             seed,
             rand_num_iters,
             trace,
+            custom_gas_price
         } = self;
         UnitTestingConfig {
             gas_limit,
@@ -133,6 +138,7 @@ impl Test {
             seed,
             rand_num_iters,
             trace,
+            custom_gas_price,
             ..UnitTestingConfig::default_with_bound(None)
         }
     }

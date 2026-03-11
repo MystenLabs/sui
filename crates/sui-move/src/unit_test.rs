@@ -6,6 +6,7 @@ use move_cli::base::{
     self,
     test::{self, UnitTestResult},
 };
+use move_core_types::gas_algebra::InternalGas;
 use move_package_alt_compilation::build_config::BuildConfig;
 use move_unit_test::{UnitTestingConfig, vm_test_setup::VMTestSetup};
 use move_vm_config::runtime::VMConfig;
@@ -36,8 +37,8 @@ use sui_types::{
     metrics::LimitsMetrics,
 };
 
-// Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
-pub static MAX_UNIT_TEST_INSTRUCTIONS: LazyLock<u64> =
+// The maximum gas budget(limit) used for tests, in MIST. Execution bound.
+pub static DEFAULT_GAS_BUDGET_TESTS: LazyLock<u64> =
     LazyLock::new(|| ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas());
 
 /// Gas price used for the meter during Move unit tests.
@@ -58,6 +59,7 @@ impl Test {
         wallet: &WalletContext,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
+        let gas_price = self.test.custom_gas_price;
         if !cfg!(feature = "tracing") && compute_coverage {
             return Err(anyhow::anyhow!(
                 "The --coverage flag is currently supported only in builds built with the `tracing` feature enabled. \
@@ -75,6 +77,14 @@ impl Test {
         let rerooted_path = base::reroot_path(path)?;
         let unit_test_config = self.test.unit_test_config();
 
+        // TODO: 
+        // DEFAULT_GAS_BUDGET_TESTS is always bypassed, at this point gas_limit would be none
+        // it will be overridden in move_unit_tests::run_and_report_unit_tests()->test_runner with DEFAULT_EXECUTION_BOUND
+        // Maybe enable it here? (needs unit_test_config to be mutable)
+        // if unit_test_config.gas_limit.is_none() {
+        //     unit_test_config.gas_limit = Some(*DEFAULT_GAS_BUDGET_TESTS);
+        // }
+
         // set the environment (this is a little janky: we get it from the manifest here, then pass
         // it as the optional argument in the build-config, which then looks it up again, but it
         // should be ok.
@@ -88,6 +98,7 @@ impl Test {
             Some(unit_test_config),
             compute_coverage,
             save_disassembly,
+            gas_price,
         )
         .await
     }
@@ -101,9 +112,10 @@ pub async fn run_move_unit_tests(
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
+    gas_price: Option<u64>,
 ) -> anyhow::Result<UnitTestResult> {
     let config = config.unwrap_or_else(|| {
-        UnitTestingConfig::default_with_bound(Some(*MAX_UNIT_TEST_INSTRUCTIONS))
+        UnitTestingConfig::default_with_bound(Some(*DEFAULT_GAS_BUDGET_TESTS))
     });
 
     let result = move_cli::base::test::run_move_unit_tests::<sui_package_alt::SuiFlavor, _, _>(
@@ -113,7 +125,7 @@ pub async fn run_move_unit_tests(
             report_stacktrace_on_abort: true,
             ..config
         },
-        SuiVMTestSetup::new(),
+        SuiVMTestSetup::new(gas_price.unwrap_or(TEST_GAS_PRICE)),
         compute_coverage,
         save_disassembly,
         &mut std::io::stdout(),
@@ -139,18 +151,20 @@ pub struct SuiVMTestSetup {
 
 impl Default for SuiVMTestSetup {
     fn default() -> Self {
-        Self::new()
+        Self::new(TEST_GAS_PRICE)
     }
 }
 
 impl SuiVMTestSetup {
-    pub fn new() -> Self {
+    pub fn new(
+        gas_price: u64,
+    ) -> Self {
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let native_function_table =
             sui_move_natives::all_natives(/* silent */ false, &protocol_config);
         Self {
-            gas_price: TEST_GAS_PRICE,
-            reference_gas_price: TEST_GAS_PRICE,
+            gas_price,
+            reference_gas_price: gas_price,
             protocol_config,
             native_function_table,
         }
@@ -168,7 +182,7 @@ impl VMTestSetup for SuiVMTestSetup {
     fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a> {
         SuiGasMeter(SuiGasStatusTestWrapper(
             SuiGasStatus::new(
-                execution_bound.unwrap_or(*MAX_UNIT_TEST_INSTRUCTIONS),
+                execution_bound.unwrap_or(*DEFAULT_GAS_BUDGET_TESTS),
                 self.gas_price,
                 self.reference_gas_price,
                 &self.protocol_config,
@@ -178,11 +192,14 @@ impl VMTestSetup for SuiVMTestSetup {
     }
 
     fn used_gas<'a>(&'a self, execution_bound: u64, meter: Self::Meter<'a>) -> u64 {
-        let gas_status = &meter.0;
-        Gas::new(execution_bound)
-            .checked_sub(gas_status.remaining_gas())
-            .unwrap()
-            .into()
+        // execution_bound (gas budget) is in external units, create a Gas instance from it, normalized by gas price to match gas_left
+        let budget_external_units = Gas::new(execution_bound / self.gas_price);
+
+        // convert budget to internal units for output
+        let budget_internal_units: InternalGas = budget_external_units.to_unit();
+
+        // return: budget - left = used, in internal units
+        budget_internal_units.checked_sub(meter.0.gas_left).unwrap().into()
     }
 
     fn vm_config(&self) -> VMConfig {

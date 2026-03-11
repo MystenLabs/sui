@@ -31,6 +31,7 @@ const DEFAULT_RAND_ITERS: u64 = 10;
 const RAND_NUM_ITERS_FLAG: &str = "rand-num-iters";
 const SEED_FLAG: &str = "seed";
 const TRACE_FLAG: &str = "trace";
+const CUSTOM_GAS_PRICE_FLAG: &str = "custom-gas-price";
 /// The default directory to output test traces to if `--trace` is enabled.
 pub const TRACE_DIR: &str = "traces";
 
@@ -125,6 +126,10 @@ pub struct UnitTestingConfig {
     // Enable tracing for tests
     #[clap(long = TRACE_FLAG)]
     pub trace: bool,
+
+    /// Set custom gas price for tests (in gas units).
+    #[clap(long = CUSTOM_GAS_PRICE_FLAG)]
+    pub custom_gas_price: Option<u64>,
 }
 
 fn format_module_id(
@@ -157,6 +162,7 @@ impl UnitTestingConfig {
             seed: None,
             deterministic_generation: false,
             trace: false,
+            custom_gas_price: None,
         }
     }
 
@@ -272,6 +278,11 @@ impl UnitTestingConfig {
         } else {
             None
         };
+
+        if let Some(gas_price) = self.custom_gas_price {
+            writeln!(shared_writer.lock().unwrap(), "Using Custom Gas Price: {}", gas_price)?;
+        }
+
         let mut test_runner = TestRunner::new(
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
             self.num_threads,
