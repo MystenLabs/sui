@@ -638,22 +638,23 @@ impl SyntaxMethodEntry {
 }
 
 static BUILTIN_TYPE_ALL_NAMES: LazyLock<BTreeSet<Symbol>> = LazyLock::new(|| {
+    use crate::shared::builtin_type_names as BT;
     [
-        BuiltinTypeName_::ADDRESS,
-        BuiltinTypeName_::SIGNER,
-        BuiltinTypeName_::U_8,
-        BuiltinTypeName_::U_16,
-        BuiltinTypeName_::U_32,
-        BuiltinTypeName_::U_64,
-        BuiltinTypeName_::U_128,
-        BuiltinTypeName_::U_256,
-        BuiltinTypeName_::I_8,
-        BuiltinTypeName_::I_16,
-        BuiltinTypeName_::I_32,
-        BuiltinTypeName_::I_64,
-        BuiltinTypeName_::I_128,
-        BuiltinTypeName_::BOOL,
-        BuiltinTypeName_::VECTOR,
+        BT::ADDRESS,
+        BT::SIGNER,
+        BT::U_8,
+        BT::U_16,
+        BT::U_32,
+        BT::U_64,
+        BT::U_128,
+        BT::U_256,
+        BT::I_8,
+        BT::I_16,
+        BT::I_32,
+        BT::I_64,
+        BT::I_128,
+        BT::BOOL,
+        BT::VECTOR,
     ]
     .into_iter()
     .map(Symbol::from)
@@ -697,22 +698,6 @@ static BUILTIN_TYPE_ORDERED: LazyLock<BTreeSet<BuiltinTypeName_>> =
     LazyLock::new(|| BUILTIN_TYPE_BITS.clone());
 
 impl BuiltinTypeName_ {
-    pub const ADDRESS: &'static str = crate::shared::builtin_type_names::ADDRESS;
-    pub const SIGNER: &'static str = crate::shared::builtin_type_names::SIGNER;
-    pub const U_8: &'static str = crate::shared::builtin_type_names::U_8;
-    pub const U_16: &'static str = crate::shared::builtin_type_names::U_16;
-    pub const U_32: &'static str = crate::shared::builtin_type_names::U_32;
-    pub const U_64: &'static str = crate::shared::builtin_type_names::U_64;
-    pub const U_128: &'static str = crate::shared::builtin_type_names::U_128;
-    pub const U_256: &'static str = crate::shared::builtin_type_names::U_256;
-    pub const I_8: &'static str = crate::shared::builtin_type_names::I_8;
-    pub const I_16: &'static str = crate::shared::builtin_type_names::I_16;
-    pub const I_32: &'static str = crate::shared::builtin_type_names::I_32;
-    pub const I_64: &'static str = crate::shared::builtin_type_names::I_64;
-    pub const I_128: &'static str = crate::shared::builtin_type_names::I_128;
-    pub const BOOL: &'static str = crate::shared::builtin_type_names::BOOL;
-    pub const VECTOR: &'static str = crate::shared::builtin_type_names::VECTOR;
-
     pub fn all_names() -> &'static BTreeSet<Symbol> {
         &BUILTIN_TYPE_ALL_NAMES
     }
@@ -742,23 +727,23 @@ impl BuiltinTypeName_ {
     }
 
     pub fn resolve(name_str: &str) -> Option<Self> {
-        use BuiltinTypeName_ as BT;
+        use crate::shared::builtin_type_names as BTN;
         match name_str {
-            BT::ADDRESS => Some(BT::Address),
-            BT::SIGNER => Some(BT::Signer),
-            BT::U_8 => Some(BT::U8),
-            BT::U_16 => Some(BT::U16),
-            BT::U_32 => Some(BT::U32),
-            BT::U_64 => Some(BT::U64),
-            BT::U_128 => Some(BT::U128),
-            BT::U_256 => Some(BT::U256),
-            BT::I_8 => Some(BT::I8),
-            BT::I_16 => Some(BT::I16),
-            BT::I_32 => Some(BT::I32),
-            BT::I_64 => Some(BT::I64),
-            BT::I_128 => Some(BT::I128),
-            BT::BOOL => Some(BT::Bool),
-            BT::VECTOR => Some(BT::Vector),
+            BTN::ADDRESS => Some(Self::Address),
+            BTN::SIGNER => Some(Self::Signer),
+            BTN::U_8 => Some(Self::U8),
+            BTN::U_16 => Some(Self::U16),
+            BTN::U_32 => Some(Self::U32),
+            BTN::U_64 => Some(Self::U64),
+            BTN::U_128 => Some(Self::U128),
+            BTN::U_256 => Some(Self::U256),
+            BTN::I_8 => Some(Self::I8),
+            BTN::I_16 => Some(Self::I16),
+            BTN::I_32 => Some(Self::I32),
+            BTN::I_64 => Some(Self::I64),
+            BTN::I_128 => Some(Self::I128),
+            BTN::BOOL => Some(Self::Bool),
+            BTN::VECTOR => Some(Self::Vector),
             _ => None,
         }
     }
@@ -1210,26 +1195,26 @@ impl Clone for TypeName_ {
 
 impl fmt::Display for BuiltinTypeName_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        use BuiltinTypeName_ as BT;
+        use crate::shared::builtin_type_names as BTN;
         write!(
             f,
             "{}",
             match self {
-                BT::Address => BT::ADDRESS,
-                BT::Signer => BT::SIGNER,
-                BT::U8 => BT::U_8,
-                BT::U16 => BT::U_16,
-                BT::U32 => BT::U_32,
-                BT::U64 => BT::U_64,
-                BT::U128 => BT::U_128,
-                BT::U256 => BT::U_256,
-                BT::I8 => BT::I_8,
-                BT::I16 => BT::I_16,
-                BT::I32 => BT::I_32,
-                BT::I64 => BT::I_64,
-                BT::I128 => BT::I_128,
-                BT::Bool => BT::BOOL,
-                BT::Vector => BT::VECTOR,
+                Self::Address => BTN::ADDRESS,
+                Self::Signer => BTN::SIGNER,
+                Self::U8 => BTN::U_8,
+                Self::U16 => BTN::U_16,
+                Self::U32 => BTN::U_32,
+                Self::U64 => BTN::U_64,
+                Self::U128 => BTN::U_128,
+                Self::U256 => BTN::U_256,
+                Self::I8 => BTN::I_8,
+                Self::I16 => BTN::I_16,
+                Self::I32 => BTN::I_32,
+                Self::I64 => BTN::I_64,
+                Self::I128 => BTN::I_128,
+                Self::Bool => BTN::BOOL,
+                Self::Vector => BTN::VECTOR,
             }
         )
     }
