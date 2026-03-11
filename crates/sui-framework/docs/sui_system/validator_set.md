@@ -2198,7 +2198,7 @@ Get mutable reference to a pending validator by address.
 
 ## Function `candidate_validator`
 
-Get mutable reference to a pending validator by address.
+Get mutable reference to a candidate validator by address.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_candidate_validator">candidate_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, validator_address: <b>address</b>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>

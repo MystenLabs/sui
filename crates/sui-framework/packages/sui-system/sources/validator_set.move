@@ -876,7 +876,7 @@ public(package) fun pending_validator_mut(
     &mut self.pending_active_validators[idx]
 }
 
-/// Get mutable reference to a pending validator by address.
+/// Get mutable reference to a candidate validator by address.
 public(package) fun candidate_validator(
     self: &mut ValidatorSet,
     validator_address: address,
