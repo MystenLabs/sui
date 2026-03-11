@@ -231,6 +231,18 @@ impl ChainIdentifier {
     pub fn random() -> Self {
         Self(CheckpointDigest::random())
     }
+
+    /// Convert a Chain enum to a ChainIdentifier.
+    /// For mainnet and testnet, returns the known chain identifiers.
+    /// For other chains, returns a random identifier (which will cause coin reservation
+    /// checks to fail, as expected for non-standard chains).
+    pub fn from_chain(chain: Chain) -> Self {
+        match chain {
+            Chain::Mainnet => get_mainnet_chain_identifier(),
+            Chain::Testnet => get_testnet_chain_identifier(),
+            _ => Self::random(),
+        }
+    }
 }
 
 pub fn get_mainnet_chain_identifier() -> ChainIdentifier {
