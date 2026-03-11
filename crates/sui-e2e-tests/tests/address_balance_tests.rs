@@ -3771,8 +3771,7 @@ async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
         .find(|c| c.owner == sui_types::object::Owner::AddressOwner(receiver))
         .expect("Should have balance change for receiver");
     assert_eq!(
-        receiver_change.amount,
-        withdraw_amount as i128,
+        receiver_change.amount, withdraw_amount as i128,
         "Receiver should receive exactly the withdrawal amount"
     );
 
@@ -3813,8 +3812,7 @@ async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
         .find(|c| c.owner == sui_types::object::Owner::AddressOwner(receiver))
         .expect("execute_transaction_block should have balance change for receiver");
     assert_eq!(
-        exec_receiver_change.amount,
-        withdraw_amount as i128,
+        exec_receiver_change.amount, withdraw_amount as i128,
         "execute_transaction_block: Receiver should receive exactly the withdrawal amount"
     );
 }
