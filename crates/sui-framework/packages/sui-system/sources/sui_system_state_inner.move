@@ -1218,7 +1218,7 @@ public(package) fun active_validator_by_address(
     self: &SuiSystemStateInnerV2,
     validator_address: address,
 ): &Validator {
-    self.validators().get_active_validator_ref(validator_address)
+    self.validators().active_validator(validator_address)
 }
 
 #[test_only]
@@ -1227,16 +1227,16 @@ public(package) fun pending_validator_by_address(
     self: &SuiSystemStateInnerV2,
     validator_address: address,
 ): &Validator {
-    self.validators().get_pending_validator_ref(validator_address)
+    self.validators().pending_validator(validator_address)
 }
 
 #[test_only]
 /// Return the currently candidate validator by address
 public(package) fun candidate_validator_by_address(
-    self: &SuiSystemStateInnerV2,
+    self: &mut SuiSystemStateInnerV2,
     validator_address: address,
 ): &Validator {
-    self.validators().get_candidate_validator_ref(validator_address)
+    self.validators_mut().candidate_validator(validator_address)
 }
 
 #[test_only]

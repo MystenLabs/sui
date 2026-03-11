@@ -771,7 +771,7 @@ public fun active_validator_by_address(
     self: &mut SuiSystemState,
     validator_address: address,
 ): &Validator {
-    self.validators().get_active_validator_ref(validator_address)
+    self.validators().active_validator(validator_address)
 }
 
 #[test_only]
@@ -780,7 +780,7 @@ public fun pending_validator_by_address(
     self: &mut SuiSystemState,
     validator_address: address,
 ): &Validator {
-    self.validators().get_pending_validator_ref(validator_address)
+    self.validators().pending_validator(validator_address)
 }
 
 #[test_only]
@@ -789,7 +789,7 @@ public fun candidate_validator_by_address(
     self: &mut SuiSystemState,
     validator_address: address,
 ): &Validator {
-    self.validators().get_candidate_validator_ref(validator_address)
+    self.validators_mut().candidate_validator(validator_address)
 }
 
 #[test_only]
