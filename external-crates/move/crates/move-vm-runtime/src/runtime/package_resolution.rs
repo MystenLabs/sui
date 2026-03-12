@@ -85,7 +85,6 @@ pub(crate) fn resolve_packages(
     packages_to_read: BTreeSet<VersionId>,
 ) -> VMResult<BTreeMap<VersionId, Arc<move_cache::Package>>> {
     dbg_println!("loading {packages_to_read:#?}");
-    let allow_loading_failure = true;
 
     let initial_size = packages_to_read.len();
 
@@ -103,14 +102,9 @@ pub(crate) fn resolve_packages(
 
     // Load and cache anything that wasn't already there.
     // NB: packages can be loaded out of order here (e.g., in parallel) if so desired.
-    for pkg in load_and_verify_packages(
-        store,
-        telemetry,
-        &cache.vm_config,
-        natives,
-        allow_loading_failure,
-        &pkgs_to_cache,
-    )? {
+    for pkg in load_and_verify_packages(store, telemetry, &cache.vm_config, natives, &pkgs_to_cache)
+        .map_err(expect_no_verification_errors)?
+    {
         let pkg = jit_and_cache_package(telemetry, cache, natives, pkg)?;
         cached_packages.insert(pkg.verified.version_id, pkg);
     }
@@ -125,27 +119,20 @@ pub(crate) fn resolve_packages(
 }
 
 // Read the package from the data store, deserialize it, and verify it (internally).
+// May return various loading, deserialization, or verification errors if any of those steps fail.
 // NB: Does not perform cyclic dependency verification or linkage checking.
 pub(crate) fn load_and_verify_packages(
     store: impl ModuleResolver,
     telemetry: &mut TransactionTelemetryContext,
     vm_config: &VMConfig,
     natives: &NativeFunctions,
-    allow_loading_failure: bool,
     packages: &BTreeSet<VersionId>,
 ) -> VMResult<Vec<verification::ast::Package>> {
     let load_timer = telemetry.make_timer_with_count(
         crate::runtime::telemetry::TimerKind::Load,
         packages.len() as u64,
     );
-    let packages = match load_packages(store, packages) {
-        Ok(packages) => Ok(packages),
-        Err(err) if allow_loading_failure => Err(err),
-        Err(err) => {
-            tracing::error!("[VM] Error fetching packages {packages:?}");
-            Err(expect_no_verification_errors(err))
-        }
-    };
+    let packages = load_packages(store, packages);
     telemetry.report_time(load_timer);
     let packages = packages?;
     // FIXME: should all packages loaded this way be linkage-checked against their defined

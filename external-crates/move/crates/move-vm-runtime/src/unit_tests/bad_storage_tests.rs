@@ -88,8 +88,7 @@ fn test_malformed_module() {
         let Err(err) = adapter.make_vm(linkage) else {
             panic!("Expected an error, but passed");
         };
-        // NOTE(vm-rewrite): The error is now a deserialization error, not an invariant violation.
-        assert_eq!(err.status_type(), StatusType::Deserialization);
+        assert_eq!(err.status_type(), StatusType::InvariantViolation);
     }
 }
 
@@ -144,8 +143,7 @@ fn test_unverifiable_module() {
             panic!("Expected an error, but passed");
         };
 
-        // NOTE(vm-rewrite): The error is now a verification error, not an invariant violation.
-        assert_eq!(err.status_type(), StatusType::Verification);
+        assert_eq!(err.status_type(), StatusType::InvariantViolation);
     }
 }
 
@@ -359,7 +357,7 @@ fn test_unverifiable_module_dependency() {
             panic!("Expected an error, but passed");
         };
 
-        assert_eq!(err.status_type(), StatusType::Verification);
+        assert_eq!(err.status_type(), StatusType::InvariantViolation);
     }
 }
 
