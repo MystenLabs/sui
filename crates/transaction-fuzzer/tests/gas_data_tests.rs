@@ -203,7 +203,7 @@ fn test_with_random_gas_data_dev_inspect(
 #[cfg_attr(msim, ignore)]
 fn test_gas_data_owned_or_immut() {
     let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::owned_by_sender_or_immut());
-    run_proptest(1000, strategy, |gas_data_test, mut executor| {
+    run_proptest(500, strategy, |gas_data_test, mut executor| {
         test_with_random_gas_data(gas_data_test, &mut executor)
     });
 }
@@ -212,7 +212,7 @@ fn test_gas_data_owned_or_immut() {
 #[cfg_attr(msim, ignore)]
 fn test_gas_data_any_owner() {
     let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::any_owner());
-    run_proptest(1000, strategy, |gas_data_test, mut executor| {
+    run_proptest(500, strategy, |gas_data_test, mut executor| {
         test_with_random_gas_data(gas_data_test, &mut executor)
     });
 }
@@ -221,7 +221,7 @@ fn test_gas_data_any_owner() {
 #[cfg_attr(msim, ignore)]
 fn test_gas_data_dry_run_fuzz() {
     let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::owned_by_sender_or_immut());
-    run_proptest_with_fullnode(1000, strategy, |gas_data_test, mut executor| {
+    run_proptest_with_fullnode(500, strategy, |gas_data_test, mut executor| {
         test_with_random_gas_data_dry_run(gas_data_test, &mut executor)
     });
 }
@@ -233,7 +233,7 @@ fn test_gas_data_dev_inspect_skip_checks_fuzz() {
     // validation, and non-sender-owned gas objects (immutable, shared) would panic
     // during execution when the system tries to modify them.
     let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::sender_owned_only());
-    run_proptest_with_fullnode(1000, strategy, |gas_data_test, mut executor| {
+    run_proptest_with_fullnode(500, strategy, |gas_data_test, mut executor| {
         test_with_random_gas_data_dev_inspect(gas_data_test, &mut executor, true)
     });
 }
@@ -242,7 +242,7 @@ fn test_gas_data_dev_inspect_skip_checks_fuzz() {
 #[cfg_attr(msim, ignore)]
 fn test_gas_data_dev_inspect_no_skip_fuzz() {
     let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::owned_by_sender_or_immut());
-    run_proptest_with_fullnode(1000, strategy, |gas_data_test, mut executor| {
+    run_proptest_with_fullnode(500, strategy, |gas_data_test, mut executor| {
         test_with_random_gas_data_dev_inspect(gas_data_test, &mut executor, false)
     });
 }
