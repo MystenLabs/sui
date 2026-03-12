@@ -88,7 +88,7 @@ impl Test {
         // if we pass a higher value the budget in used_gas will produce inconsistent results.
         let max_computation_budget = *MAX_GAS_COMPUTATION_BUCKET * gas_price;
 
-        // TODO: 
+        // TODO:
         // (MAX_GAS_COMPUTATION_BUCKET * effective_gas_price) as a default value is always bypassed in this module's scope.
         // at this point `gas_limit` would be none. it will be overridden in:
         // move_unit_tests::run_and_report_unit_tests()->test_runner with DEFAULT_EXECUTION_BOUND
@@ -98,7 +98,10 @@ impl Test {
         // }
 
         // cap `gas_limit` to the effective max gas budget.
-        if unit_test_config.gas_limit.is_some_and(|gas_limit| gas_limit > max_computation_budget) {
+        if unit_test_config
+            .gas_limit
+            .is_some_and(|gas_limit| gas_limit > max_computation_budget)
+        {
             unit_test_config.gas_limit = Some(max_computation_budget);
         }
 
@@ -133,7 +136,9 @@ pub async fn run_move_unit_tests(
 ) -> anyhow::Result<UnitTestResult> {
     let effective_gas_price = gas_price.unwrap_or(TEST_GAS_PRICE);
     let config = config.unwrap_or_else(|| {
-        UnitTestingConfig::default_with_bound(Some(*MAX_GAS_COMPUTATION_BUCKET * effective_gas_price))
+        UnitTestingConfig::default_with_bound(Some(
+            *MAX_GAS_COMPUTATION_BUCKET * effective_gas_price,
+        ))
     });
 
     let result = move_cli::base::test::run_move_unit_tests::<sui_package_alt::SuiFlavor, _, _>(
@@ -174,9 +179,7 @@ impl Default for SuiVMTestSetup {
 }
 
 impl SuiVMTestSetup {
-    pub fn new(
-        gas_price: u64,
-    ) -> Self {
+    pub fn new(gas_price: u64) -> Self {
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let native_function_table =
             sui_move_natives::all_natives(/* silent */ false, &protocol_config);
@@ -217,7 +220,10 @@ impl VMTestSetup for SuiVMTestSetup {
         let budget_internal_units: InternalGas = budget_external_units.to_unit();
 
         // return: budget - left = used, in internal units
-        budget_internal_units.checked_sub(meter.0.gas_left).unwrap().into()
+        budget_internal_units
+            .checked_sub(meter.0.gas_left)
+            .unwrap()
+            .into()
     }
 
     fn vm_config(&self) -> VMConfig {
