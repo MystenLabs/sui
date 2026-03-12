@@ -7,8 +7,7 @@ use crate::{
         ast as G,
         visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor, CFGIRVisitorObj},
     },
-    command_line as cli,
-    diag,
+    command_line as cli, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics, DiagnosticsFormat,
         codes::{DiagnosticsID, Severity},
