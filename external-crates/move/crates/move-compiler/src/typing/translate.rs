@@ -612,6 +612,7 @@ mod check_valid_constant {
     use crate::{
         diag,
         diagnostics::codes::DiagnosticCode,
+        editions::FeatureGate,
         ice,
         naming::ast::{Type, Type_},
         shared::*,
@@ -639,14 +640,20 @@ mod check_valid_constant {
             Type_::u64(loc),
             Type_::u128(loc),
             Type_::u256(loc),
-            Type_::i8(loc),
-            Type_::i16(loc),
-            Type_::i32(loc),
-            Type_::i64(loc),
-            Type_::i128(loc),
-            Type_::bool(loc),
-            Type_::address(loc),
         ];
+        if context
+            .env()
+            .supports_feature(context.current_package(), FeatureGate::SignedIntegers)
+        {
+            acceptable_types.extend([
+                Type_::i8(loc),
+                Type_::i16(loc),
+                Type_::i32(loc),
+                Type_::i64(loc),
+                Type_::i128(loc),
+            ]);
+        }
+        acceptable_types.extend([Type_::bool(loc), Type_::address(loc)]);
         let ty_is_an_acceptable_type = acceptable_types.iter().any(|acceptable_type| {
             let old_subst = context.subst.clone();
             let result = subtype_no_report(context, ty, acceptable_type);

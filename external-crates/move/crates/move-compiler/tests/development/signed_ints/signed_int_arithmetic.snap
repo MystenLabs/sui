@@ -5,26 +5,4 @@ info:
   edition: development
   lint: false
 ---
-error[E13003]: feature is under active development
-  ┌─ tests/development/signed_ints/signed_int_arithmetic.move:4:16
-  │
-4 │         let a: i64 = 10i64;
-  │                ^^^ Signed integer types are under development
 
-error[E13003]: feature is under active development
-  ┌─ tests/development/signed_ints/signed_int_arithmetic.move:4:22
-  │
-4 │         let a: i64 = 10i64;
-  │                      ^^^^^ Signed integer types are under development
-
-error[E13003]: feature is under active development
-  ┌─ tests/development/signed_ints/signed_int_arithmetic.move:5:16
-  │
-5 │         let b: i64 = 5i64;
-  │                ^^^ Signed integer types are under development
-
-error[E13003]: feature is under active development
-  ┌─ tests/development/signed_ints/signed_int_arithmetic.move:5:22
-  │
-5 │         let b: i64 = 5i64;
-  │                      ^^^^ Signed integer types are under development

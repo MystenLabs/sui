@@ -15,6 +15,7 @@ use crate::{
         ast::{self as H, Value_, Var, Visibility},
         translate::{single_type as hlir_single_type, translate_var, type_},
     },
+    ice_assert,
     naming::{
         ast::{self as N, BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
@@ -1217,10 +1218,19 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     let [ty]: [IR::Type; 1] = types(context, e.ty)
                         .try_into()
                         .expect("ICE value type should have one element");
-                    let mv =
-                        crate::cfgir::translate::move_value_from_value(context.env, sp(loc, v_))
-                            .expect("ICE failed to translate address or vector");
-                    B::LdConst(ty, mv)
+                    match crate::cfgir::translate::move_value_from_value(context.env, sp(loc, v_)) {
+                        Some(mv) => B::LdConst(ty, mv),
+                        None => {
+                            let reporter = context.env.diagnostic_reporter_at_top_level();
+                            ice_assert!(
+                                reporter,
+                                context.env.has_errors(),
+                                loc,
+                                "Failed to translate value into bytecode value"
+                            );
+                            B::LdU64(0)
+                        }
+                    }
                 }
             };
             code.push(sp(loc, ld_value));

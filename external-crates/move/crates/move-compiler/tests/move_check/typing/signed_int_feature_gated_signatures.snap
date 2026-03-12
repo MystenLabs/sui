@@ -1,0 +1,63 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/typing/signed_int_feature_gated_signatures.move:8:12
+  │
+8 │         x: i32,
+  │            ^^^ Signed integer types are under development and should not be used right now.
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/typing/signed_int_feature_gated_signatures.move:9:12
+  │
+9 │         y: i64,
+  │            ^^^ Signed integer types are under development and should not be used right now.
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/signed_int_feature_gated_signatures.move:12:20
+   │
+12 │     fun params(_a: i8, _b: i128): i64 {
+   │                    ^^ Signed integer types are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/signed_int_feature_gated_signatures.move:12:28
+   │
+12 │     fun params(_a: i8, _b: i128): i64 {
+   │                            ^^^^ Signed integer types are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/signed_int_feature_gated_signatures.move:12:35
+   │
+12 │     fun params(_a: i8, _b: i128): i64 {
+   │                                   ^^^ Signed integer types are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/typing/signed_int_feature_gated_signatures.move:16:21
+   │
+16 │     const MY_CONST: i32 = 0;
+   │                     ^^^ Signed integer types are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_check/typing/signed_int_feature_gated_signatures.move:16:21
+   │
+16 │     const MY_CONST: i32 = 0;
+   │                     ^^^
+   │                     │
+   │                     Unpermitted constant type
+   │                     Found: 'i32'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
