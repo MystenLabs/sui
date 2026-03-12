@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E01006]: invalid number literal
+  ┌─ tests/development/typing/signed_int_negated_literal_overflow.move:7:23
+  │
+7 │         let _x: i8 = -129i8;
+  │                       ^^^^^ Invalid number literal. The given literal is too large to fit into 'i8'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_negated_literal_overflow.move:11:24
+   │
+11 │         let _x: i16 = -32769i16;
+   │                        ^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i16'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_negated_literal_overflow.move:15:24
+   │
+15 │         let _x: i32 = -2147483649i32;
+   │                        ^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i32'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_negated_literal_overflow.move:19:24
+   │
+19 │         let _x: i64 = -9223372036854775809i64;
+   │                        ^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i64'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/typing/signed_int_negated_literal_overflow.move:23:25
+   │
+23 │         let _x: i128 = -170141183460469231731687303715884105729i128;
+   │                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'i128'

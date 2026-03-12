@@ -3098,10 +3098,10 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::Dereference(pe) => EE::Dereference(exp(context, pe)),
         PE::UnaryExp(op, pe) if op.value == P::UnaryOp_::Neg => match *pe {
             sp!(vloc, PE::Value(sp!(_, P::Value_::Num(s)))) if has_signed_suffix(&s) => {
-                match signed_num(&mut context.defn_context, vloc, &s, /* negated */ true) {
-                    Some(v_) => EE::Value(sp(vloc, v_)),
-                    None => {
-                        assert!(context.env().has_errors());
+                match signed_num(vloc, &s, /* negated */ true) {
+                    Ok(v_) => EE::Value(sp(vloc, v_)),
+                    Err(err) => {
+                        context.defn_context.add_diag(err.into_diagnostic());
                         EE::UnresolvedError
                     }
                 }
@@ -3639,21 +3639,13 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
 // Numeric literal helpers
 //**************************************************************************************************
 
-fn signed_num(context: &mut DefnContext, loc: Loc, s: &str, negated: bool) -> Option<E::Value_> {
+fn signed_num(loc: Loc, s: &str, negated: bool) -> Result<E::Value_, ValueError> {
     use E::Value_ as EV;
     macro_rules! parse_signed {
         ($num_str:expr, $parse_fn:ident, $ctor:ident, $ty:expr) => {{
-            match $parse_fn($num_str, negated) {
-                Ok((v, _)) => Some(EV::$ctor(v)),
-                Err(_) => {
-                    let msg = format!(
-                        "Invalid number literal. The given literal is too large to fit into {}",
-                        $ty
-                    );
-                    context.add_diag(diag!(Syntax::InvalidNumber, (loc, msg)));
-                    None
-                }
-            }
+            $parse_fn($num_str, negated)
+                .map(|(v, _)| EV::$ctor(v))
+                .map_err(|_| ValueError::NumTooBig { loc, type_description: $ty })
         }};
     }
     use crate::shared::builtin_types as BT;
@@ -3672,21 +3664,13 @@ fn signed_num(context: &mut DefnContext, loc: Loc, s: &str, negated: bool) -> Op
     }
 }
 
-fn unsigned_num(context: &mut DefnContext, loc: Loc, s: &str) -> Option<E::Value_> {
+fn unsigned_num(loc: Loc, s: &str) -> Result<E::Value_, ValueError> {
     use E::Value_ as EV;
     macro_rules! parse_unsigned {
         ($num_str:expr, $parse_fn:ident, $ctor:ident, $ty:expr) => {{
-            match $parse_fn($num_str) {
-                Ok((v, _)) => Some(EV::$ctor(v)),
-                Err(_) => {
-                    let msg = format!(
-                        "Invalid number literal. The given literal is too large to fit into {}",
-                        $ty
-                    );
-                    context.add_diag(diag!(Syntax::InvalidNumber, (loc, msg)));
-                    None
-                }
-            }
+            $parse_fn($num_str)
+                .map(|(v, _)| EV::$ctor(v))
+                .map_err(|_| ValueError::NumTooBig { loc, type_description: $ty })
         }};
     }
     use crate::shared::builtin_types as BT;
@@ -3712,24 +3696,14 @@ fn unsigned_num(context: &mut DefnContext, loc: Loc, s: &str) -> Option<E::Value
 //**************************************************************************************************
 
 pub(super) fn value(context: &mut DefnContext, pvalue: P::Value) -> Option<E::Value> {
-    use P::Value_ as PV;
-    let sp!(loc, pvalue_) = pvalue;
-    match pvalue_ {
-        PV::Num(ref s) if has_signed_suffix(s) => {
-            signed_num(context, loc, s, /* negated */ false).map(|v_| sp(loc, v_))
-        }
-        PV::Num(ref s) if has_unsigned_suffix(s) => {
-            unsigned_num(context, loc, s).map(|v_| sp(loc, v_))
-        }
-        pvalue_ => match value_result(context, sp(loc, pvalue_)) {
-            Ok(v) => Some(v),
-            Err(errs) => {
-                for err in errs {
-                    context.add_diag(err.into_diagnostic());
-                }
-                None
+    match value_result(context, pvalue) {
+        Ok(v) => Some(v),
+        Err(errs) => {
+            for err in errs {
+                context.add_diag(err.into_diagnostic());
             }
-        },
+            None
+        }
     }
 }
 
@@ -3771,11 +3745,9 @@ pub(super) fn value_result(
                 context, /* suggest_declaration */ true, addr,
             )))
         }
-        PV::Num(ref s) if has_unsigned_suffix(s) => {
-            unsigned_num(context, loc, s).ok_or_else(Vec::new) // error already emitted
-        }
+        PV::Num(ref s) if has_unsigned_suffix(s) => unsigned_num(loc, s).map_err(|e| vec![e]),
         PV::Num(ref s) if has_signed_suffix(s) => {
-            signed_num(context, loc, s, /* negated */ false).ok_or_else(Vec::new)
+            signed_num(loc, s, /* negated */ false).map_err(|e| vec![e])
         }
         PV::Num(s) => parse_num!(
             parse_u256(&s),
