@@ -639,6 +639,11 @@ mod check_valid_constant {
             Type_::u64(loc),
             Type_::u128(loc),
             Type_::u256(loc),
+            Type_::i8(loc),
+            Type_::i16(loc),
+            Type_::i32(loc),
+            Type_::i64(loc),
+            Type_::i128(loc),
             Type_::bool(loc),
             Type_::address(loc),
         ];
