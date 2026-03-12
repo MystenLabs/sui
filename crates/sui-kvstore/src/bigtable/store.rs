@@ -21,6 +21,7 @@ use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::PrunerWatermark;
 use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
+use sui_indexer_alt_framework_store_traits::init_with_committer_watermark;
 
 use crate::Watermark;
 use crate::bigtable::client::BigTableClient;
@@ -86,15 +87,7 @@ impl Connection for BigTableConnection<'_> {
         pipeline_task: &str,
         init_watermark: InitWatermark,
     ) -> Result<InitWatermark> {
-        let checkpoint_hi_inclusive = self
-            .client
-            .get_pipeline_watermark(pipeline_task)
-            .await?
-            .map(|wm| wm.checkpoint_hi_inclusive);
-        Ok(InitWatermark {
-            checkpoint_hi_inclusive,
-            ..init_watermark
-        })
+        init_with_committer_watermark(self, pipeline_task, init_watermark).await
     }
 
     async fn committer_watermark(

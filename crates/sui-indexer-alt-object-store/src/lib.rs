@@ -20,6 +20,7 @@ use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::PrunerWatermark;
 use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
+use sui_indexer_alt_framework_store_traits::init_with_committer_watermark;
 use sui_indexer_alt_framework_store_traits::{self as framework_traits};
 use tracing::info;
 
@@ -92,14 +93,7 @@ impl Connection for ObjectStoreConnection {
         pipeline_task: &str,
         init_watermark: InitWatermark,
     ) -> anyhow::Result<InitWatermark> {
-        let checkpoint_hi_inclusive = self
-            .committer_watermark(pipeline_task)
-            .await?
-            .map(|w| w.checkpoint_hi_inclusive);
-        Ok(InitWatermark {
-            checkpoint_hi_inclusive,
-            ..init_watermark
-        })
+        init_with_committer_watermark(self, pipeline_task, init_watermark).await
     }
 
     async fn committer_watermark(

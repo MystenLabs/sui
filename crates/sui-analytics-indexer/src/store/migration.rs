@@ -24,7 +24,6 @@ use object_store::PutPayload;
 use object_store::UpdateVersion;
 use object_store::path::Path as ObjectPath;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
-use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_storage::object_store::util::find_all_dirs_with_epoch_prefix;
 use thiserror::Error;
 use tracing::debug;
@@ -250,27 +249,6 @@ impl MigrationStore {
             Err(ObjectStoreError::NotFound { .. }) => Ok(None),
             Err(e) => Err(e.into()),
         }
-    }
-
-    /// Initialize migration mode for a pipeline.
-    ///
-    /// Reads existing watermark file if present.
-    ///
-    /// Returns the last processed checkpoint if a watermark exists, or None if starting fresh.
-    /// The watermark file is created/updated by `update_watermark` after file uploads.
-    pub(crate) async fn init_watermark(
-        &self,
-        pipeline: &str,
-        init_watermark: InitWatermark,
-    ) -> anyhow::Result<InitWatermark> {
-        let checkpoint_hi_inclusive = self
-            .committer_watermark(pipeline)
-            .await?
-            .map(|w| w.checkpoint_hi_inclusive);
-        Ok(InitWatermark {
-            checkpoint_hi_inclusive,
-            ..init_watermark
-        })
     }
 
     /// Update watermark for a single pipeline after successful file upload.
