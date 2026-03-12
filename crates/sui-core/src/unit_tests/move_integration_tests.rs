@@ -2871,6 +2871,57 @@ pub async fn build_and_publish_test_package(
     .0
 }
 
+pub async fn build_and_publish_package_with_upgrade_cap(
+    authority: &AuthorityState,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    gas_object_id: &ObjectID,
+    modules: Vec<Vec<u8>>,
+    dep_ids: Vec<ObjectID>,
+) -> (ObjectRef, ObjectRef) {
+    let gas_price = authority.reference_gas_price_for_testing().unwrap();
+    let gas_budget = TEST_ONLY_GAS_UNIT_FOR_PUBLISH * gas_price;
+    let effects = {
+        let gas_object = authority.get_object(gas_object_id).await;
+        let gas_object_ref = gas_object.unwrap().compute_object_reference();
+
+        let data = TransactionData::new_module(
+            *sender,
+            gas_object_ref,
+            modules,
+            dep_ids,
+            gas_budget,
+            gas_price,
+        );
+        let transaction = to_sender_signed_transaction(data, sender_key);
+
+        submit_and_execute(authority, transaction)
+            .await
+            .unwrap()
+            .1
+            .into_data()
+    };
+
+    assert!(
+        matches!(effects.status(), ExecutionStatus::Success),
+        "{:?}",
+        effects.status()
+    );
+
+    let package = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap();
+    let upgrade_cap = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    (package.0, upgrade_cap.0)
+}
+
 pub async fn build_and_publish_test_package_with_upgrade_cap(
     authority: &AuthorityState,
     sender: &SuiAddress,

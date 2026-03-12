@@ -25,7 +25,7 @@ use crate::{
 use indexmap::IndexMap;
 use move_binary_format::{
     CompiledModule,
-    errors::VMResult,
+    errors::{VMError, VMResult},
     file_format::{
         AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex, empty_module,
     },
@@ -37,6 +37,7 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     resolver::IntraPackageName,
+    vm_status::StatusCode,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 use parking_lot::RwLock;
@@ -174,7 +175,7 @@ impl Adapter {
             .unwrap_or_else(|e| panic!("failure publishing modules: {e:?}"));
     }
 
-    fn publish_package_with_error(&mut self, mut pkg: StoredPackage) {
+    fn publish_package_with_error(&mut self, mut pkg: StoredPackage) -> VMError {
         if !self.store.linkage.linkage_table().is_empty() {
             pkg.0.linkage_table = self.store.linkage.linkage_table().clone();
         }
@@ -185,7 +186,7 @@ impl Adapter {
         self.runtime_adapter
             .write()
             .publish_package(original_id, pkg.into_serialized_package())
-            .expect_err("publishing must fail");
+            .expect_err("publishing must fail")
     }
 
     fn load_type(&self, type_tag: &TypeTag) -> Type {
@@ -1200,6 +1201,137 @@ fn deep_dependency_tree_ok_1() {
     adapter.publish_package(pkg);
 }
 
+#[test]
+fn publish_cyclic_modules() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter = Adapter::new(data_store);
+
+    let module_a =
+        empty_module_with_dependencies(ADDR2, "A".to_string(), (ADDR2, vec!["B".to_string()]));
+
+    let module_b =
+        empty_module_with_dependencies(ADDR2, "B".to_string(), (ADDR2, vec!["A".to_string()]));
+    let modules = vec![module_b, module_a];
+
+    // Fails with a linker error since it will look for B when linking A
+    let pkg = StoredPackage::from_modules_for_testing(ADDR2, modules).unwrap();
+    let err = adapter.publish_package_with_error(pkg);
+    assert_eq!(err.major_status(), StatusCode::CYCLIC_MODULE_DEPENDENCY);
+}
+
+#[test]
+fn publish_cyclic_modules_intra_package_long_chain() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter = Adapter::new(data_store);
+
+    // A -> B -> C -> A, all within the same package
+    let module_a =
+        empty_module_with_dependencies(ADDR2, "A".to_string(), (ADDR2, vec!["B".to_string()]));
+    let module_b =
+        empty_module_with_dependencies(ADDR2, "B".to_string(), (ADDR2, vec!["C".to_string()]));
+    let module_c =
+        empty_module_with_dependencies(ADDR2, "C".to_string(), (ADDR2, vec!["A".to_string()]));
+
+    let pkg =
+        StoredPackage::from_modules_for_testing(ADDR2, vec![module_a, module_b, module_c]).unwrap();
+    let err = adapter.publish_package_with_error(pkg);
+    assert_eq!(err.major_status(), StatusCode::CYCLIC_MODULE_DEPENDENCY);
+}
+
+#[test]
+fn publish_cyclic_modules_partial_package_cycle() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter = Adapter::new(data_store);
+
+    // Package has three modules: A (no cycle), B <-> C (cycle between them).
+    // A is fine on its own -- the cycle only exists between B and C.
+    // This ensures cycle detection checks all modules, not just the first.
+    let module_a = named_empty_module(ADDR2, "A".to_string());
+    let module_b =
+        empty_module_with_dependencies(ADDR2, "B".to_string(), (ADDR2, vec!["C".to_string()]));
+    let module_c =
+        empty_module_with_dependencies(ADDR2, "C".to_string(), (ADDR2, vec!["B".to_string()]));
+
+    let pkg =
+        StoredPackage::from_modules_for_testing(ADDR2, vec![module_a, module_b, module_c]).unwrap();
+    let err = adapter.publish_package_with_error(pkg);
+    assert_eq!(err.major_status(), StatusCode::CYCLIC_MODULE_DEPENDENCY);
+}
+
+#[test]
+fn publish_cyclic_modules_cross_direct() {
+    let data_store = InMemoryStorage::new();
+    let adapter = Adapter::new(data_store);
+
+    let a0 = named_empty_module(ADDR2, "A".to_string());
+    let b0 = empty_module_with_dependencies(ADDR3, "B".to_string(), (ADDR2, vec!["A".to_string()]));
+    let a1 = empty_module_with_dependencies(ADDR2, "A".to_string(), (ADDR3, vec!["B".to_string()]));
+
+    let pkg_a0 = StoredPackage::from_modules_for_testing(ADDR2, vec![a0]).unwrap();
+    let pkg_b0 = StoredPackage::from_modules_for_testing(ADDR3, vec![b0]).unwrap();
+    let pkg_a1 = StoredPackage::from_modules_for_testing(ADDR4, vec![a1]).unwrap();
+
+    // A => []
+    // B => [A]
+    // A => [B]  (direct cycle of A -> B -> A)
+    // Fails with a MISSING_DEPENDENCY linker error since it will look for A when trying to find
+    // the deps for `A` (from `B`) and w.r.t. to the linkage and will fail with a
+    // MISSING_DEPENDENCY since `A` is not yet published yet in that linkage.
+    adapter
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![])
+        .publish_package(pkg_a0);
+    adapter
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![])
+        .publish_package(pkg_b0);
+    // Fails with `CYCLIC_DEPENDENCY`
+    let err = adapter
+        .with_linkage(pkg_a1.0.linkage_table.clone(), vec![])
+        .publish_package_with_error(pkg_a1.clone());
+    assert_eq!(err.major_status(), StatusCode::MISSING_DEPENDENCY);
+}
+
+#[test]
+fn publish_cyclic_modules_cross_indirect() {
+    let data_store = InMemoryStorage::new();
+    let adapter = Adapter::new(data_store);
+
+    // A => []
+    // B => [A]
+    // C => [B]
+    // A => [C]  (indirect cycle of A -> C -> B -> A)
+    let a0 = named_empty_module(ADDR2, "A".to_string());
+    let b0 = empty_module_with_dependencies(ADDR3, "B".to_string(), (ADDR2, vec!["A".to_string()]));
+    let c0 = empty_module_with_dependencies(ADDR4, "C".to_string(), (ADDR3, vec!["B".to_string()]));
+    let a1 = empty_module_with_dependencies(ADDR2, "A".to_string(), (ADDR4, vec!["C".to_string()]));
+
+    let pkg_a0 = StoredPackage::from_modules_for_testing(ADDR2, vec![a0]).unwrap();
+    let pkg_b0 = StoredPackage::from_modules_for_testing(ADDR3, vec![b0]).unwrap();
+    let pkg_c0 = StoredPackage::from_modules_for_testing(ADDR4, vec![c0]).unwrap();
+    let pkg_a1 = StoredPackage::from_modules_for_testing(ADDR5, vec![a1]).unwrap();
+
+    adapter
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![])
+        .publish_package(pkg_a0);
+    adapter
+        .with_linkage(BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3)]), vec![])
+        .publish_package(pkg_b0);
+    adapter
+        .with_linkage(
+            BTreeMap::from([(ADDR2, ADDR2), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
+            vec![],
+        )
+        .publish_package(pkg_c0);
+    // Fails with `MISSING_DEPENDENCY` since when resolving the transitive deps
+    // (C -> B -> A), A maps to ADDR5 via linkage but ADDR5 is not yet published.
+    let err = adapter
+        .with_linkage(
+            BTreeMap::from([(ADDR2, ADDR5), (ADDR3, ADDR3), (ADDR4, ADDR4)]),
+            vec![],
+        )
+        .publish_package_with_error(pkg_a1.clone());
+    assert_eq!(err.major_status(), StatusCode::MISSING_DEPENDENCY);
+}
+
 fn leaf_module(name: &str) -> CompiledModule {
     let mut module = empty_module();
     module.identifiers[0] = Identifier::new(name).unwrap();
@@ -1244,7 +1376,7 @@ fn dependency_tree(width: u64, height: u64, modules: &mut Vec<CompiledModule>) {
 
 // Create a module that uses (depends on) the list of given modules
 fn empty_module_with_dependencies(
-    address: VersionId,
+    address: OriginalId,
     name: String,
     deps: (VersionId, Vec<String>),
 ) -> CompiledModule {
@@ -1264,5 +1396,12 @@ fn empty_module_with_dependencies(
             name: IdentifierIndex((module.identifiers.len() - 1) as TableIndex),
         });
     }
+    module
+}
+
+fn named_empty_module(address: OriginalId, name: String) -> CompiledModule {
+    let mut module = empty_module();
+    module.address_identifiers[0] = address;
+    module.identifiers[0] = Identifier::new(name).unwrap();
     module
 }
