@@ -136,9 +136,9 @@ pub struct DepthFormula {
     /// The terms for each type parameter, if present.
     /// Ti + Ci
     pub terms: Vec<(TypeParameterIndex, u64)>,
-    /// The depth for any non type parameter term, if one exists.
+    /// The minimal depth of the value of this type regardless of type parameters.
     /// CBase
-    pub constant: Option<u64>,
+    pub constant: u64,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -959,7 +959,7 @@ impl DepthFormula {
     pub fn constant(constant: u64) -> Self {
         Self {
             terms: vec![],
-            constant: Some(constant),
+            constant,
         }
     }
 
@@ -967,7 +967,7 @@ impl DepthFormula {
     pub fn type_parameter(tparam: TypeParameterIndex) -> Self {
         Self {
             terms: vec![(tparam, 0)],
-            constant: None,
+            constant: 0,
         }
     }
 
@@ -976,7 +976,7 @@ impl DepthFormula {
     /// `max(t1 + 3, t2 + 2, 4)`
     pub fn normalize(formulas: Vec<Self>) -> Self {
         let mut var_map = BTreeMap::new();
-        let mut constant_acc = None;
+        let mut constant_acc = 0;
         for formula in formulas {
             let Self { terms, constant } = formula;
             for (var, cur_factor) in terms {
@@ -987,11 +987,7 @@ impl DepthFormula {
                     })
                     .or_insert(cur_factor);
             }
-            match (constant_acc, constant) {
-                (_, None) => (),
-                (None, Some(_)) => constant_acc = constant,
-                (Some(c1), Some(c2)) => constant_acc = Some(std::cmp::max(c1, c2)),
-            }
+            constant_acc = std::cmp::max(constant_acc, constant);
         }
         Self {
             terms: var_map.into_iter().collect(),
@@ -1005,10 +1001,7 @@ impl DepthFormula {
         mut map: BTreeMap<TypeParameterIndex, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         let Self { terms, constant } = self;
-        let mut formulas = vec![];
-        if let Some(constant) = constant {
-            formulas.push(DepthFormula::constant(*constant))
-        }
+        let mut formulas = vec![DepthFormula::constant(*constant)];
         for (t_i, c_i) in terms {
             let Some(mut u_form) = map.remove(t_i) else {
                 return Err(partial_vm_error!(
@@ -1025,7 +1018,7 @@ impl DepthFormula {
     /// Given depths for each type parameter, solve the formula giving the max depth for the type
     pub fn solve(&self, tparam_depths: &[u64]) -> PartialVMResult<u64> {
         let Self { terms, constant } = self;
-        let mut depth = constant.as_ref().copied().unwrap_or(0);
+        let mut depth = *constant;
         for (t_i, c_i) in terms {
             match tparam_depths.get(*t_i as usize) {
                 None => {
@@ -1047,9 +1040,7 @@ impl DepthFormula {
         for (_t_i, c_i) in terms {
             *c_i = (*c_i).saturating_add(c);
         }
-        if let Some(cbase) = constant.as_mut() {
-            *cbase = (*cbase).saturating_add(c);
-        }
+        *constant = (*constant).saturating_add(c);
     }
 }
 
