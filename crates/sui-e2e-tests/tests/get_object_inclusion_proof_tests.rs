@@ -4,7 +4,7 @@
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_rpc::proto::sui::rpc::v2::GetObjectInclusionProofRequest;
-use sui_rpc::proto::sui::rpc::v2::proof_service_client::ProofServiceClient;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_types::base_types::ObjectID;
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -43,7 +43,7 @@ async fn test_feature_flag_disabled() {
         .build()
         .await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -51,7 +51,7 @@ async fn test_feature_flag_disabled() {
     req.object_id = Some(ObjectID::random().to_string());
     req.checkpoint = Some(1);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = ledger_client.get_object_inclusion_proof(req).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -70,7 +70,7 @@ async fn test_missing_object_id() {
         .build()
         .await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -78,7 +78,7 @@ async fn test_missing_object_id() {
     req.object_id = None;
     req.checkpoint = Some(1);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = ledger_client.get_object_inclusion_proof(req).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -94,7 +94,7 @@ async fn test_empty_object_id() {
         .build()
         .await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -102,7 +102,7 @@ async fn test_empty_object_id() {
     req.object_id = Some("".to_string());
     req.checkpoint = Some(1);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = ledger_client.get_object_inclusion_proof(req).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -118,7 +118,7 @@ async fn test_invalid_object_id_format() {
         .build()
         .await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -126,7 +126,7 @@ async fn test_invalid_object_id_format() {
     req.object_id = Some("invalid_object_id".to_string());
     req.checkpoint = Some(1);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = ledger_client.get_object_inclusion_proof(req).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -144,7 +144,7 @@ async fn test_missing_checkpoint() {
 
     let object_id = get_test_object(&test_cluster).await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -152,7 +152,7 @@ async fn test_missing_checkpoint() {
     req.object_id = Some(object_id.to_string());
     req.checkpoint = None;
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = ledger_client.get_object_inclusion_proof(req).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -170,7 +170,7 @@ async fn test_checkpoint_not_yet_indexed() {
 
     let object_id = get_test_object(&test_cluster).await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -178,7 +178,7 @@ async fn test_checkpoint_not_yet_indexed() {
     req.object_id = Some(object_id.to_string());
     req.checkpoint = Some(999999);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = ledger_client.get_object_inclusion_proof(req).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -199,7 +199,7 @@ async fn test_object_not_found_in_checkpoint() {
 
     let non_existent_object_id = ObjectID::random();
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -207,7 +207,7 @@ async fn test_object_not_found_in_checkpoint() {
     req.object_id = Some(non_existent_object_id.to_string());
     req.checkpoint = Some(latest_checkpoint);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = ledger_client.get_object_inclusion_proof(req).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -228,7 +228,7 @@ async fn test_valid_request() {
     let state = test_cluster.fullnode_handle.sui_node.state();
     let latest_checkpoint = state.get_latest_checkpoint_sequence_number().unwrap();
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -238,7 +238,7 @@ async fn test_valid_request() {
         req.object_id = Some(object_id.to_string());
         req.checkpoint = Some(checkpoint_seq);
 
-        let result = proof_client.get_object_inclusion_proof(req).await;
+        let result = ledger_client.get_object_inclusion_proof(req).await;
         if result.is_ok() {
             found_checkpoint = Some(checkpoint_seq);
             break;
@@ -255,7 +255,7 @@ async fn test_valid_request() {
     req.object_id = Some(object_id.to_string());
     req.checkpoint = Some(checkpoint_seq);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = ledger_client.get_object_inclusion_proof(req).await;
     assert!(result.is_ok());
     let response = result.unwrap().into_inner();
 

@@ -5,9 +5,9 @@ use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
     BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
     BatchGetTransactionsResponse, GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest,
-    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetServiceInfoRequest,
-    GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
-    ledger_service_server::LedgerService,
+    GetEpochResponse, GetObjectInclusionProofRequest, GetObjectInclusionProofResponse,
+    GetObjectRequest, GetObjectResponse, GetServiceInfoRequest, GetServiceInfoResponse,
+    GetTransactionRequest, GetTransactionResponse, ledger_service_server::LedgerService,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
@@ -110,6 +110,15 @@ impl LedgerService for KvRpcServer {
         .await
         .map(tonic::Response::new)
         .map_err(Into::into)
+    }
+
+    async fn get_object_inclusion_proof(
+        &self,
+        _request: tonic::Request<GetObjectInclusionProofRequest>,
+    ) -> Result<tonic::Response<GetObjectInclusionProofResponse>, tonic::Status> {
+        Err(tonic::Status::unimplemented(
+            "get_object_inclusion_proof is not supported by kv-rpc",
+        ))
     }
 }
 

@@ -136,12 +136,6 @@ impl RpcService {
                     self.clone(),
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-            let proof_service =
-                sui_rpc::proto::sui::rpc::v2::proof_service_server::ProofServiceServer::new(
-                    crate::grpc::v2::proof_service::ProofServiceImpl::new(self.clone()),
-                )
-                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
             let reflection_v1 = tonic_reflection::server::Builder::configure()
@@ -184,7 +178,6 @@ impl RpcService {
                 service_name(&move_package_service),
                 service_name(&name_service),
                 service_name(&event_service),
-                service_name(&proof_service),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -202,7 +195,6 @@ impl RpcService {
                 .add_service(move_package_service)
                 .add_service(name_service)
                 .add_service(event_service)
-                .add_service(proof_service)
                 // Reflection
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha);
