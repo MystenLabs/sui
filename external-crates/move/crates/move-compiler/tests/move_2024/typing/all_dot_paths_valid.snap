@@ -12,7 +12,7 @@ error[E04012]: invalid type for constant
   │                ^
   │                │
   │                Unpermitted constant type
-  │                Found: 'a::m::Z'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+  │                Found: 'a::m::Z'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
 
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_2024/typing/all_dot_paths_valid.move:2:20

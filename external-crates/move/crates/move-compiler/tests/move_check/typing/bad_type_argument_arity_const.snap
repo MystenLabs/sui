@@ -18,7 +18,7 @@ error[E04012]: invalid type for constant
   │               ^
   │               │
   │               Unpermitted constant type
-  │               Found: '0x42::M::S<_>'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+  │               Found: '0x42::M::S<_>'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
 
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/typing/bad_type_argument_arity_const.move:6:19
@@ -39,7 +39,7 @@ error[E04012]: invalid type for constant
   │               ^^^
   │               │
   │               Unpermitted constant type
-  │               Found: '0x42::M::S<_>'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+  │               Found: '0x42::M::S<_>'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
 
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/typing/bad_type_argument_arity_const.move:7:21
@@ -60,7 +60,7 @@ error[E04012]: invalid type for constant
   │               ^^^^^^^^^^^^
   │               │
   │               Unpermitted constant type
-  │               Found: '0x42::M::S<_>'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+  │               Found: '0x42::M::S<_>'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
 
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/typing/bad_type_argument_arity_const.move:8:30
@@ -75,7 +75,7 @@ error[E04012]: invalid type for constant
   │               ^^^^^^^^^^^^^^^
   │               │
   │               Unpermitted constant type
-  │               Found: '0x42::M::S<_>'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+  │               Found: '0x42::M::S<_>'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
 
 error[E03007]: too many type arguments
   ┌─ tests/move_check/typing/bad_type_argument_arity_const.move:9:17
