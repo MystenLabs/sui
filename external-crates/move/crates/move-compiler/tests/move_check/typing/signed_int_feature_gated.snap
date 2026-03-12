@@ -2,11 +2,11 @@
 source: crates/move-compiler/tests/move_check_testsuite.rs
 info:
   flavor: core
-  edition: 2024.alpha
+  edition: legacy
   lint: false
 ---
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_2024/typing/signed_int_feature_gated.move:7:17
+  ┌─ tests/move_check/typing/signed_int_feature_gated.move:7:17
   │
 7 │         let _a: i8 = 0;
   │                 ^^ Signed integer types are under development and should not be used right now.
@@ -14,7 +14,7 @@ error[E13001]: feature is not supported in specified edition
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_2024/typing/signed_int_feature_gated.move:8:17
+  ┌─ tests/move_check/typing/signed_int_feature_gated.move:8:17
   │
 8 │         let _b: i16 = 0;
   │                 ^^^ Signed integer types are under development and should not be used right now.
@@ -22,7 +22,7 @@ error[E13001]: feature is not supported in specified edition
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_2024/typing/signed_int_feature_gated.move:9:17
+  ┌─ tests/move_check/typing/signed_int_feature_gated.move:9:17
   │
 9 │         let _c: i32 = 0;
   │                 ^^^ Signed integer types are under development and should not be used right now.
@@ -30,7 +30,7 @@ error[E13001]: feature is not supported in specified edition
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated.move:10:17
+   ┌─ tests/move_check/typing/signed_int_feature_gated.move:10:17
    │
 10 │         let _d: i64 = 0;
    │                 ^^^ Signed integer types are under development and should not be used right now.
@@ -38,7 +38,7 @@ error[E13001]: feature is not supported in specified edition
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated.move:11:17
+   ┌─ tests/move_check/typing/signed_int_feature_gated.move:11:17
    │
 11 │         let _e: i128 = 0;
    │                 ^^^^ Signed integer types are under development and should not be used right now.
@@ -46,7 +46,7 @@ error[E13001]: feature is not supported in specified edition
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated.move:15:18
+   ┌─ tests/move_check/typing/signed_int_feature_gated.move:15:18
    │
 15 │         let _a = 1i8;
    │                  ^^^ Signed integer types are under development and should not be used right now.
@@ -54,7 +54,7 @@ error[E13001]: feature is not supported in specified edition
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated.move:16:18
+   ┌─ tests/move_check/typing/signed_int_feature_gated.move:16:18
    │
 16 │         let _b = 1i16;
    │                  ^^^^ Signed integer types are under development and should not be used right now.
@@ -62,7 +62,7 @@ error[E13001]: feature is not supported in specified edition
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated.move:17:18
+   ┌─ tests/move_check/typing/signed_int_feature_gated.move:17:18
    │
 17 │         let _c = 1i32;
    │                  ^^^^ Signed integer types are under development and should not be used right now.
@@ -70,7 +70,7 @@ error[E13001]: feature is not supported in specified edition
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated.move:18:18
+   ┌─ tests/move_check/typing/signed_int_feature_gated.move:18:18
    │
 18 │         let _d = 1i64;
    │                  ^^^^ Signed integer types are under development and should not be used right now.
@@ -78,7 +78,7 @@ error[E13001]: feature is not supported in specified edition
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated.move:19:18
+   ┌─ tests/move_check/typing/signed_int_feature_gated.move:19:18
    │
 19 │         let _e = 1i128;
    │                  ^^^^^ Signed integer types are under development and should not be used right now.

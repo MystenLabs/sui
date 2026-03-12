@@ -5,20 +5,4 @@ info:
   edition: development
   lint: false
 ---
-error[E13003]: feature is under active development
-   ┌─ tests/development/signed_ints/signed_int_equality.move:33:16
-   │
-33 │         let a: i64 = 5i64;
-   │                ^^^ Signed integer types are under development
 
-error[E13003]: feature is under active development
-   ┌─ tests/development/signed_ints/signed_int_equality.move:39:16
-   │
-39 │         let x: i32 = 1i32;
-   │                ^^^ Signed integer types are under development
-
-error[E13003]: feature is under active development
-   ┌─ tests/development/signed_ints/signed_int_equality.move:45:16
-   │
-45 │         let x: i64 = 42i64;
-   │                ^^^ Signed integer types are under development

@@ -12,7 +12,7 @@ error[E04012]: invalid type for constant
   │               ^^^^^^
   │               │
   │               Unpermitted constant type
-  │               Found: 'signer'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
+  │               Found: 'signer'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
 
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/typing/constant_invalid_base_type.move:6:24
@@ -27,7 +27,7 @@ error[E04012]: invalid type for constant
   │               ^
   │               │
   │               Unpermitted constant type
-  │               Found: '0x42::M::S'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
+  │               Found: '0x42::M::S'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
 
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/typing/constant_invalid_base_type.move:7:19
@@ -42,7 +42,7 @@ error[E04012]: invalid type for constant
   │               ^
   │               │
   │               Unpermitted constant type
-  │               Found: '0x42::M::R'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
+  │               Found: '0x42::M::R'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
 
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/typing/constant_invalid_base_type.move:8:19
@@ -56,7 +56,7 @@ error[E04012]: invalid type for constant
 9 │     const C4: vector<S> = abort 0;
   │               ^^^^^^^^^
   │               │      │
-  │               │      Found: '0x42::M::S'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
+  │               │      Found: '0x42::M::S'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
   │               Unpermitted constant type
 
 error[E04013]: invalid statement or expression in constant
@@ -71,7 +71,7 @@ error[E04012]: invalid type for constant
 10 │     const C5: vector<R> = abort 0;
    │               ^^^^^^^^^
    │               │      │
-   │               │      Found: '0x42::M::R'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
+   │               │      Found: '0x42::M::R'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
    │               Unpermitted constant type
 
 error[E04013]: invalid statement or expression in constant
@@ -86,7 +86,7 @@ error[E04012]: invalid type for constant
 11 │     const C6: vector<vector<S>> = abort 0;
    │               ^^^^^^^^^^^^^^^^^
    │               │             │
-   │               │             Found: '0x42::M::S'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
+   │               │             Found: '0x42::M::S'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
    │               Unpermitted constant type
 
 error[E04013]: invalid statement or expression in constant
@@ -101,7 +101,7 @@ error[E04012]: invalid type for constant
 12 │     const C7: vector<vector<R>> = abort 0;
    │               ^^^^^^^^^^^^^^^^^
    │               │             │
-   │               │             Found: '0x42::M::R'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'bool', 'address', 'vector<_>'
+   │               │             Found: '0x42::M::R'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
    │               Unpermitted constant type
 
 error[E04013]: invalid statement or expression in constant

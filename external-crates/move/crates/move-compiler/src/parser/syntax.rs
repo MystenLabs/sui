@@ -1539,6 +1539,10 @@ fn maybe_parse_value(context: &mut Context) -> Result<Option<Value>, Box<Diagnos
         }
         Tok::NumTypedValue => {
             let num = context.tokens.content().into();
+            if has_signed_suffix(context.tokens.content()) {
+                let loc = current_token_loc(context.tokens);
+                context.check_feature(FeatureGate::SignedIntegers, loc);
+            }
             context.tokens.advance()?;
             Value_::Num(num)
         }

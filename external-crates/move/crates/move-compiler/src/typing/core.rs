@@ -2678,6 +2678,16 @@ fn solve_builtin_type_constraint(
     ty: &Type,
 ) {
     use TypeName_::*;
+    let signed_supported = context
+        .env()
+        .supports_feature(context.current_package(), FeatureGate::SignedIntegers);
+    let filtered;
+    let builtin_set = if signed_supported {
+        builtin_set
+    } else {
+        filtered = builtin_set - BuiltinTypeName_::signed_numeric();
+        &filtered
+    };
     let t = unfold_type(&context.subst, ty);
     let tloc = t.loc;
     let mk_tmsg = || {

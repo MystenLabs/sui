@@ -628,7 +628,7 @@ fn find_token(
     let (res, len) = match c {
         '0'..='9' => {
             if text.starts_with("0x") && text.len() > 2 {
-                let (tok, hex_len) = get_hex_number(&text[2..], edition);
+                let (tok, hex_len) = get_hex_number(&text[2..]);
                 if hex_len == 0 {
                     // Fall back to treating this as a "0" token.
                     (Ok(Tok::NumValue), 1)
@@ -636,7 +636,7 @@ fn find_token(
                     (Ok(tok), 2 + hex_len)
                 }
             } else {
-                let (tok, len) = get_decimal_number(text, edition);
+                let (tok, len) = get_decimal_number(text);
                 (Ok(tok), len)
             }
         }
@@ -907,25 +907,25 @@ fn get_name_len(text: &str) -> usize {
         .unwrap_or(text.len())
 }
 
-fn get_decimal_number(text: &str, edition: Edition) -> (Tok, usize) {
+fn get_decimal_number(text: &str) -> (Tok, usize) {
     let num_text_len = text
         .chars()
         .position(|c| !matches!(c, '0'..='9' | '_'))
         .unwrap_or(text.len());
-    get_number_maybe_with_suffix(text, num_text_len, edition)
+    get_number_maybe_with_suffix(text, num_text_len)
 }
 
 // Return the length of the substring containing characters in [0-9a-fA-F].
-fn get_hex_number(text: &str, edition: Edition) -> (Tok, usize) {
+fn get_hex_number(text: &str) -> (Tok, usize) {
     let num_text_len = text
         .find(|c| !matches!(c, 'a'..='f' | 'A'..='F' | '0'..='9'| '_'))
         .unwrap_or(text.len());
-    get_number_maybe_with_suffix(text, num_text_len, edition)
+    get_number_maybe_with_suffix(text, num_text_len)
 }
 
 // Given the text for a number literal and the length for the characters that match to the number
 // portion, checks for a typed suffix.
-fn get_number_maybe_with_suffix(text: &str, num_text_len: usize, edition: Edition) -> (Tok, usize) {
+fn get_number_maybe_with_suffix(text: &str, num_text_len: usize) -> (Tok, usize) {
     use crate::shared::{SIGNED_INT_SUFFIXES, UNSIGNED_INT_SUFFIXES};
     let rest = &text[num_text_len..];
     for suffix in UNSIGNED_INT_SUFFIXES {
@@ -933,11 +933,9 @@ fn get_number_maybe_with_suffix(text: &str, num_text_len: usize, edition: Editio
             return (Tok::NumTypedValue, num_text_len + suffix.len());
         }
     }
-    if edition.supports(FeatureGate::SignedIntegers) {
-        for suffix in SIGNED_INT_SUFFIXES {
-            if rest.starts_with(suffix) {
-                return (Tok::NumTypedValue, num_text_len + suffix.len());
-            }
+    for suffix in SIGNED_INT_SUFFIXES {
+        if rest.starts_with(suffix) {
+            return (Tok::NumTypedValue, num_text_len + suffix.len());
         }
     }
     (Tok::NumValue, num_text_len)
