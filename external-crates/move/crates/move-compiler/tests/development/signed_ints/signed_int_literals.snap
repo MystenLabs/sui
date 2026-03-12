@@ -1,0 +1,78 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:4:17
+  │
+4 │         let _a: i8 = 1i8;
+  │                 ^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:4:22
+  │
+4 │         let _a: i8 = 1i8;
+  │                      ^^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:5:17
+  │
+5 │         let _b: i8 = 127i8;
+  │                 ^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:5:22
+  │
+5 │         let _b: i8 = 127i8;
+  │                      ^^^^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:6:17
+  │
+6 │         let _c: i16 = 100i16;
+  │                 ^^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:6:23
+  │
+6 │         let _c: i16 = 100i16;
+  │                       ^^^^^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:7:17
+  │
+7 │         let _d: i32 = 1000i32;
+  │                 ^^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:7:23
+  │
+7 │         let _d: i32 = 1000i32;
+  │                       ^^^^^^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:8:17
+  │
+8 │         let _e: i64 = 0i64;
+  │                 ^^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:8:23
+  │
+8 │         let _e: i64 = 0i64;
+  │                       ^^^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:9:17
+  │
+9 │         let _f: i128 = 42i128;
+  │                 ^^^^ Signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ tests/development/signed_ints/signed_int_literals.move:9:24
+  │
+9 │         let _f: i128 = 42i128;
+  │                        ^^^^^^ Signed integer types are under development
