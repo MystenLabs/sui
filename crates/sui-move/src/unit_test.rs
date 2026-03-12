@@ -37,12 +37,13 @@ use sui_types::{
     metrics::LimitsMetrics,
 };
 
-// The maximum gas budget(limit) used for tests, in MIST. Execution bound.
-pub static MAX_GAS_BUDGET_TESTS: LazyLock<u64> =
-    LazyLock::new(|| ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas());
+/// The actual max. computation units for unit tests.
+/// Max. gas limit/budget in tests will effectively be calculated as: `BUCKET * GAS_PRICE`.
+pub static MAX_GAS_COMPUTATION_BUCKET: LazyLock<u64> =
+    LazyLock::new(|| ProtocolConfig::get_for_max_version_UNSAFE().max_gas_computation_bucket());
 
 /// Gas price used for the meter during Move unit tests.
-const TEST_GAS_PRICE: u64 = 500;
+pub const TEST_GAS_PRICE: u64 = 500;
 
 #[derive(Parser)]
 #[group(id = "sui-move-test")]
@@ -80,17 +81,25 @@ impl Test {
         let rerooted_path = base::reroot_path(path)?;
         let mut unit_test_config = self.test.unit_test_config();
 
+        // Use custom gas price if set, otherwise use default.
+        let gas_price = self.gas_price.unwrap_or(TEST_GAS_PRICE);
+
+        // the gas meter silently caps the max. gas budget to `max_gas_computation_bucket * gas_price`, we reflect it here.
+        // if we pass a higher value the budget in used_gas will produce inconsistent results.
+        let max_computation_budget = *MAX_GAS_COMPUTATION_BUCKET * gas_price;
+
         // TODO: 
-        // MAX_GAS_BUDGET_TESTS as a default value is always bypassed, at this point gas_limit would be none
-        // it will be overridden in move_unit_tests::run_and_report_unit_tests()->test_runner with DEFAULT_EXECUTION_BOUND
+        // (MAX_GAS_COMPUTATION_BUCKET * effective_gas_price) as a default value is always bypassed in this module's scope.
+        // at this point `gas_limit` would be none. it will be overridden in:
+        // move_unit_tests::run_and_report_unit_tests()->test_runner with DEFAULT_EXECUTION_BOUND
+        // to enable it here, use:
         // if unit_test_config.gas_limit.is_none() {
-        //     unit_test_config.gas_limit = Some(*MAX_GAS_BUDGET_TESTS);
+        //     unit_test_config.gas_limit = Some(max_computation_budget);
         // }
 
-        // cap the gas limit to MAX_GAS_BUDGET_TESTS
-        let max_gas_budget = *MAX_GAS_BUDGET_TESTS;
-        if unit_test_config.gas_limit.is_some_and(|gas_limit| gas_limit > max_gas_budget) {
-            unit_test_config.gas_limit = Some(max_gas_budget);
+        // cap `gas_limit` to the effective max gas budget.
+        if unit_test_config.gas_limit.is_some_and(|gas_limit| gas_limit > max_computation_budget) {
+            unit_test_config.gas_limit = Some(max_computation_budget);
         }
 
         // set the environment (this is a little janky: we get it from the manifest here, then pass
@@ -122,8 +131,9 @@ pub async fn run_move_unit_tests(
     save_disassembly: bool,
     gas_price: Option<u64>,
 ) -> anyhow::Result<UnitTestResult> {
+    let effective_gas_price = gas_price.unwrap_or(TEST_GAS_PRICE);
     let config = config.unwrap_or_else(|| {
-        UnitTestingConfig::default_with_bound(Some(*MAX_GAS_BUDGET_TESTS))
+        UnitTestingConfig::default_with_bound(Some(*MAX_GAS_COMPUTATION_BUCKET * effective_gas_price))
     });
 
     let result = move_cli::base::test::run_move_unit_tests::<sui_package_alt::SuiFlavor, _, _>(
@@ -190,7 +200,7 @@ impl VMTestSetup for SuiVMTestSetup {
     fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a> {
         SuiGasMeter(SuiGasStatusTestWrapper(
             SuiGasStatus::new(
-                execution_bound.unwrap_or(*MAX_GAS_BUDGET_TESTS),
+                execution_bound.unwrap_or(*MAX_GAS_COMPUTATION_BUCKET * self.gas_price),
                 self.gas_price,
                 self.reference_gas_price,
                 &self.protocol_config,
@@ -200,7 +210,7 @@ impl VMTestSetup for SuiVMTestSetup {
     }
 
     fn used_gas<'a>(&'a self, execution_bound: u64, meter: Self::Meter<'a>) -> u64 {
-        // execution_bound (gas budget) is in external units, create a Gas instance from it, normalized by gas price to match gas_left
+        // execution_bound (gas budget) is in external units, create a Gas instance from it to convert to internal units.
         let budget_external_units = Gas::new(execution_bound / self.gas_price);
 
         // convert budget to internal units for output
