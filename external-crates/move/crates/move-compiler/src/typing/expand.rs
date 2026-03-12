@@ -387,7 +387,7 @@ fn inferred_numerical_value(
     };
     if value > max {
         let msg = format!(
-            "Expected a literal of type '{}', but the value is too large.",
+            "This literal does not fit into the type '{}'.",
             bt
         );
         let fix_bt = if bt.is_signed_numeric() {

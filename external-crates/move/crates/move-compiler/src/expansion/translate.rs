@@ -686,7 +686,7 @@ impl ValueError {
                 (
                     loc,
                     format!(
-                        "Invalid number literal. The given literal is too large to fit into {type_description}",
+                        "Invalid number literal. This literal does not fit into the type {type_description}",
                     )
                 ),
             ),
@@ -3752,7 +3752,7 @@ pub(super) fn value_result(
         PV::Num(s) => parse_num!(
             parse_u256(&s),
             EV::InferredNum,
-            "the largest possible integer type, 'u256'"
+            "'u256' (the largest possible integer type)"
         ),
         PV::Bool(b) => Ok(EV::Bool(b)),
         PV::HexString(s) => hex_string::decode(loc, &s)
