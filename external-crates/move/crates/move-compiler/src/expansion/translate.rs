@@ -3106,6 +3106,27 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                     }
                 }
             }
+            sp!(vloc, PE::Value(sp!(_, v_))) => {
+                let error_kind = match &v_ {
+                    P::Value_::Bool(_) => Some("'bool'"),
+                    P::Value_::Address(_) => Some("'address'"),
+                    P::Value_::HexString(_) => Some("a hex string"),
+                    P::Value_::ByteString(_) => Some("a byte string"),
+                    P::Value_::String(_) => Some("a string"),
+                    P::Value_::Num(_) => None,
+                };
+                if let Some(error_kind) = error_kind {
+                    let msg = format!(
+                        "Negation '-' is only valid for numeric types, but found {error_kind}"
+                    );
+                    context
+                        .defn_context
+                        .add_diag(diag!(TypeSafety::BuiltinOperation, (loc, msg)));
+                    EE::UnresolvedError
+                } else {
+                    EE::UnaryExp(op, exp(context, Box::new(sp(vloc, PE::Value(sp(vloc, v_))))))
+                }
+            }
             pe => EE::UnaryExp(op, exp(context, Box::new(pe))),
         },
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, pe)),
