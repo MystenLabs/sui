@@ -76,7 +76,15 @@ BODY="Sui v${SUI_VERSION} Framework Bytecode snapshot"
 
 # Commit, push, and create PR.
 git commit -m "$BODY"
-git push -u origin "$BRANCH"
+# Push using the app token URL so the push is attributed to the GitHub App,
+# not github-actions[bot]. Pushes made with GITHUB_TOKEN don't trigger CI workflows.
+if [[ -n "${GH_TOKEN:-}" ]]; then
+  git push -u \
+    "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+    "$BRANCH"
+else
+  git push -u origin "$BRANCH"
+fi
 
 # Create PR with proper error handling
 echo "Creating pull request..."
