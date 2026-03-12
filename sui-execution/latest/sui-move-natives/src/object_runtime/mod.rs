@@ -213,6 +213,21 @@ impl<'a> ObjectRuntime<'a> {
         }
     }
 
+    /// Register an ephemeral gas coin that was materialized from an address balance.
+    /// Unlike `new_id`, this adds the coin to `input_objects` (so the end-of-transaction
+    /// ownership check sees it as a pre-existing object) and to `generated_ids` (for
+    /// mutation authentication), but NOT to `new_ids` (which would cause
+    /// `TransferResult::New` and fail the ownership invariant).
+    pub fn register_ephemeral_gas_coin(
+        &mut self,
+        id: ObjectID,
+        owner: Owner,
+    ) -> PartialVMResult<()> {
+        self.state.input_objects.insert(id, owner);
+        self.state.generated_ids.insert(id);
+        Ok(())
+    }
+
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
         // If metered, we use the metered limit (non system tx limit) as the hard limit
         // This macro takes care of that

@@ -251,7 +251,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let withdrawal_inputs = Locals::new(withdrawal_values)?;
         let pure_inputs = Locals::new_invalid(pure_input_metadata.len())?;
         let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
-        let mut new_gas_coin_id = None;
+        let mut ephemeral_gas_coin = None;
         let gas = match payment_location {
             Some(gas_payment) => {
                 let ty = env.gas_coin_type()?;
@@ -266,7 +266,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                             "not enough gas to pay. How did we get this far?"
                         );
                         let id = tx_context.borrow_mut().fresh_id();
-                        new_gas_coin_id = Some(id);
+                        ephemeral_gas_coin = Some((id, Owner::AddressOwner(sui_address)));
 
                         let metadata = InputObjectMetadata {
                             id,
@@ -305,12 +305,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             metrics.clone(),
             tx_context.clone(),
         );
-        if let Some(new_gas_coin_id) = new_gas_coin_id {
-            // If we created a new gas coin for the transaction,
-            // we need to add it to the object runtime
+        if let Some((gas_coin_id, gas_coin_owner)) = ephemeral_gas_coin {
             native_extensions
                 .get_mut::<ObjectRuntime>()
-                .and_then(|object_runtime| object_runtime.new_id(new_gas_coin_id))
+                .and_then(|object_runtime| {
+                    object_runtime.register_ephemeral_gas_coin(gas_coin_id, gas_coin_owner)
+                })
                 .map_err(|e| env.convert_vm_error(e.finish(Location::Undefined)))?;
         }
 
