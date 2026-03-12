@@ -38,7 +38,7 @@ use sui_types::{
 };
 
 // The maximum gas budget(limit) used for tests, in MIST. Execution bound.
-pub static DEFAULT_GAS_BUDGET_TESTS: LazyLock<u64> =
+pub static MAX_GAS_BUDGET_TESTS: LazyLock<u64> =
     LazyLock::new(|| ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas());
 
 /// Gas price used for the meter during Move unit tests.
@@ -49,6 +49,10 @@ const TEST_GAS_PRICE: u64 = 500;
 pub struct Test {
     #[clap(flatten)]
     pub test: test::Test,
+
+    /// Set custom gas price for tests (default: 500)
+    #[clap(name = "gas-price", long = "gas-price")]
+    pub gas_price: Option<u64>,
 }
 
 impl Test {
@@ -59,7 +63,6 @@ impl Test {
         wallet: &WalletContext,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
-        let gas_price = self.test.custom_gas_price;
         if !cfg!(feature = "tracing") && compute_coverage {
             return Err(anyhow::anyhow!(
                 "The --coverage flag is currently supported only in builds built with the `tracing` feature enabled. \
@@ -75,15 +78,20 @@ impl Test {
 
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
-        let unit_test_config = self.test.unit_test_config();
+        let mut unit_test_config = self.test.unit_test_config();
 
         // TODO: 
-        // DEFAULT_GAS_BUDGET_TESTS is always bypassed, at this point gas_limit would be none
+        // MAX_GAS_BUDGET_TESTS as a default value is always bypassed, at this point gas_limit would be none
         // it will be overridden in move_unit_tests::run_and_report_unit_tests()->test_runner with DEFAULT_EXECUTION_BOUND
-        // Maybe enable it here? (needs unit_test_config to be mutable)
         // if unit_test_config.gas_limit.is_none() {
-        //     unit_test_config.gas_limit = Some(*DEFAULT_GAS_BUDGET_TESTS);
+        //     unit_test_config.gas_limit = Some(*MAX_GAS_BUDGET_TESTS);
         // }
+
+        // cap the gas limit to MAX_GAS_BUDGET_TESTS
+        let max_gas_budget = *MAX_GAS_BUDGET_TESTS;
+        if unit_test_config.gas_limit.is_some_and(|gas_limit| gas_limit > max_gas_budget) {
+            unit_test_config.gas_limit = Some(max_gas_budget);
+        }
 
         // set the environment (this is a little janky: we get it from the manifest here, then pass
         // it as the optional argument in the build-config, which then looks it up again, but it
@@ -98,7 +106,7 @@ impl Test {
             Some(unit_test_config),
             compute_coverage,
             save_disassembly,
-            gas_price,
+            self.gas_price,
         )
         .await
     }
@@ -115,7 +123,7 @@ pub async fn run_move_unit_tests(
     gas_price: Option<u64>,
 ) -> anyhow::Result<UnitTestResult> {
     let config = config.unwrap_or_else(|| {
-        UnitTestingConfig::default_with_bound(Some(*DEFAULT_GAS_BUDGET_TESTS))
+        UnitTestingConfig::default_with_bound(Some(*MAX_GAS_BUDGET_TESTS))
     });
 
     let result = move_cli::base::test::run_move_unit_tests::<sui_package_alt::SuiFlavor, _, _>(
@@ -182,7 +190,7 @@ impl VMTestSetup for SuiVMTestSetup {
     fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a> {
         SuiGasMeter(SuiGasStatusTestWrapper(
             SuiGasStatus::new(
-                execution_bound.unwrap_or(*DEFAULT_GAS_BUDGET_TESTS),
+                execution_bound.unwrap_or(*MAX_GAS_BUDGET_TESTS),
                 self.gas_price,
                 self.reference_gas_price,
                 &self.protocol_config,
