@@ -32,7 +32,7 @@ pub struct ObjectStoreConnection {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct ComitterWatermark {
+struct CommitterWatermark {
     epoch_hi_inclusive: u64,
     checkpoint_hi_inclusive: u64,
     tx_hi: u64,
@@ -51,7 +51,7 @@ impl ObjectStoreConnection {
     }
 }
 
-impl From<framework_traits::CommitterWatermark> for ComitterWatermark {
+impl From<framework_traits::CommitterWatermark> for CommitterWatermark {
     fn from(w: framework_traits::CommitterWatermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
@@ -62,8 +62,8 @@ impl From<framework_traits::CommitterWatermark> for ComitterWatermark {
     }
 }
 
-impl From<ComitterWatermark> for framework_traits::CommitterWatermark {
-    fn from(w: ComitterWatermark) -> Self {
+impl From<CommitterWatermark> for framework_traits::CommitterWatermark {
+    fn from(w: CommitterWatermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
@@ -101,7 +101,7 @@ impl Connection for ObjectStoreConnection {
         match self.object_store.get(&object_path).await {
             Ok(result) => {
                 let bytes = result.bytes().await?;
-                let watermark: ComitterWatermark = serde_json::from_slice(&bytes)
+                let watermark: CommitterWatermark = serde_json::from_slice(&bytes)
                     .context("Failed to parse watermark from object store")?;
 
                 info!(
@@ -137,7 +137,7 @@ impl Connection for ObjectStoreConnection {
         pipeline_task: &str,
         watermark: framework_traits::CommitterWatermark,
     ) -> anyhow::Result<bool> {
-        let new_watermark: ComitterWatermark = watermark.into();
+        let new_watermark: CommitterWatermark = watermark.into();
         let object_path = ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline_task));
 
         let (current_watermark, e_tag, version) = match self.object_store.get(&object_path).await {
@@ -145,7 +145,7 @@ impl Connection for ObjectStoreConnection {
                 let e_tag = result.meta.e_tag.clone();
                 let version = result.meta.version.clone();
                 let bytes = result.bytes().await?;
-                let watermark: ComitterWatermark = serde_json::from_slice(&bytes)
+                let watermark: CommitterWatermark = serde_json::from_slice(&bytes)
                     .context("Failed to parse watermark from object store")?;
                 (Some(watermark), e_tag, version)
             }
