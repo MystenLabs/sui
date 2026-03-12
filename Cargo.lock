@@ -13993,11 +13993,8 @@ dependencies = [
 [[package]]
 name = "sui-authenticated-events-client"
 version = "0.0.1"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk?rev=aa94b76fa755510486b4227f5da37c7e4c5c8667#aa94b76fa755510486b4227f5da37c7e4c5c8667"
 dependencies = [
- "anyhow",
  "bcs",
- "blake2",
  "bnum",
  "bytes",
  "futures",
@@ -14476,7 +14473,6 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.2.0"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk?rev=aa94b76fa755510486b4227f5da37c7e4c5c8667#aa94b76fa755510486b4227f5da37c7e4c5c8667"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -16342,7 +16338,6 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.2.2"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk?rev=aa94b76fa755510486b4227f5da37c7e4c5c8667#aa94b76fa755510486b4227f5da37c7e4c5c8667"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16531,7 +16526,6 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.2.2"
-source = "git+https://github.com/alex-mysten/sui-rust-sdk?rev=aa94b76fa755510486b4227f5da37c7e4c5c8667#aa94b76fa755510486b4227f5da37c7e4c5c8667"
 dependencies = [
  "base64ct",
  "bcs",
