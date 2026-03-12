@@ -2274,11 +2274,6 @@ fn binop(
             let operand_ty = join(context, bop.loc, msg, &el.ty, &er.ty);
             (Type_::bool(loc), operand_ty)
         }
-
-        Range | Implies | Iff => {
-            context.add_diag(ice!((loc, "ICE unexpect specification operator")));
-            (context.error_type(loc), context.error_type(loc))
-        }
     };
     Box::new(T::exp(
         ty,

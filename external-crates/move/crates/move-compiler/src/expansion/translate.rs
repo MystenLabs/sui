@@ -3106,10 +3106,6 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::Continue(name) => EE::Continue(name),
         PE::Dereference(pe) => EE::Dereference(exp(context, pe)),
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, pe)),
-        PE::BinopExp(_pl, op, _pr) if op.value.is_spec_only() => {
-            context.spec_deprecated(loc, /* is_error */ true);
-            EE::UnresolvedError
-        }
         e_ @ PE::BinopExp(..) => {
             process_binops!(
                 (P::BinOp, Loc),
