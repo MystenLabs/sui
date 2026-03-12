@@ -1978,9 +1978,6 @@ destroy_zero
 send_funds
 	public fun
 	0x2::balance
-gasless_send_funds
-	entry fun
-	0x2::balance
 redeem_funds
 	public fun
 	0x2::balance

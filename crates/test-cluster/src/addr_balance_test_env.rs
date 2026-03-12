@@ -246,8 +246,10 @@ impl TestEnv {
             .unwrap()
             .0;
         let package_id = self.setup_test_package(path).await;
-        let coin_a_type: TypeTag = format!("{}::coin_a::COIN_A", package_id).parse().unwrap();
-        (publisher, coin_a_type)
+        let kitesurf_type: TypeTag = format!("{}::kitesurf::KITESURF", package_id)
+            .parse()
+            .unwrap();
+        (publisher, kitesurf_type)
     }
 
     pub fn encode_coin_reservation(
@@ -428,7 +430,7 @@ impl TestEnv {
         builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
             Identifier::new("balance").unwrap(),
-            Identifier::new("gasless_send_funds").unwrap(),
+            Identifier::new("send_funds").unwrap(),
             vec![token_type],
             vec![balance, recipient_arg],
         );

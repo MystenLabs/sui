@@ -6,9 +6,9 @@ use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
-    BALANCE_GASLESS_SEND_FUNDS_FUNCTION_NAME, BALANCE_MODULE_NAME,
-    BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_STRUCT_NAME, Balance,
-    FUNDS_ACCUMULATOR_MODULE_NAME, FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME,
+    BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
+    BALANCE_STRUCT_NAME, Balance, FUNDS_ACCUMULATOR_MODULE_NAME,
+    FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME,
 };
 use crate::coin_reservation::{
     CoinReservationResolverTrait, ParsedDigest, ParsedObjectRefWithdrawal,
@@ -983,8 +983,7 @@ impl ProgrammableTransaction {
             match command {
                 Command::MoveCall(call) if call.package == SUI_FRAMEWORK_PACKAGE_ID => {
                     let is_balance_call = call.module.as_str() == BALANCE_MODULE_NAME.as_str()
-                        && (call.function.as_str()
-                            == BALANCE_GASLESS_SEND_FUNDS_FUNCTION_NAME.as_str()
+                        && (call.function.as_str() == BALANCE_SEND_FUNDS_FUNCTION_NAME.as_str()
                             || call.function.as_str()
                                 == BALANCE_REDEEM_FUNDS_FUNCTION_NAME.as_str());
                     let is_withdrawal_split = call.module.as_str()
@@ -994,7 +993,7 @@ impl ProgrammableTransaction {
                     fp_ensure!(
                         is_balance_call || is_withdrawal_split,
                         UserInputError::Unsupported(
-                            "Free tier transactions can only call balance::gasless_send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string()
+                            "Free tier transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string()
                         )
                     );
 
@@ -1024,27 +1023,9 @@ impl ProgrammableTransaction {
                 }
                 _ => {
                     return Err(UserInputError::Unsupported(
-                        "Free tier transactions can only call balance::gasless_send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string(),
+                        "Free tier transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string(),
                     ));
                 }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn validate_no_gasless_commands(&self) -> UserInputResult {
-        for command in &self.commands {
-            if let Command::MoveCall(call) = command {
-                let is_gasless_send = call.package == SUI_FRAMEWORK_PACKAGE_ID
-                    && call.module.as_str() == BALANCE_MODULE_NAME.as_str()
-                    && call.function.as_str() == BALANCE_GASLESS_SEND_FUNDS_FUNCTION_NAME.as_str();
-                fp_ensure!(
-                    !is_gasless_send,
-                    UserInputError::Unsupported(
-                        "balance::gasless_send_funds can only be called from free tier transactions"
-                            .to_string()
-                    )
-                );
             }
         }
         Ok(())
@@ -3252,12 +3233,11 @@ impl TransactionDataAPI for TransactionDataV1 {
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
 
-        if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
-            if config.enable_free_tier() && self.is_free_tier_transaction() {
-                pt.validate_free_tier_commands(config)?;
-            } else {
-                pt.validate_no_gasless_commands()?;
-            }
+        if let TransactionKind::ProgrammableTransaction(pt) = &self.kind
+            && config.enable_free_tier()
+            && self.is_free_tier_transaction()
+        {
+            pt.validate_free_tier_commands(config)?;
         }
 
         self.check_sponsorship()
