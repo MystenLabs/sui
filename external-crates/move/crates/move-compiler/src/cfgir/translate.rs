@@ -10,8 +10,9 @@ use crate::{
         cfg::{ImmForwardCFG, MutForwardCFG},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
-    diag,
+    dev_feature, diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
+    editions::FeatureGate,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
@@ -490,13 +491,7 @@ fn constant(
             let loc = value.loc;
             let mv = move_value_from_value(context.env, value);
             if mv.is_none() {
-                context.add_diag(diag!(
-                    CodeGeneration::UnfoldableConstant,
-                    (
-                        loc,
-                        "Signed integers are not yet supported in constant values"
-                    )
-                ));
+                context.add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
             }
             mv
         }
@@ -644,13 +639,8 @@ pub(crate) fn move_value_from_value(
             MV::Vector(mvs?)
         }
         V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) => {
-            env.diagnostic_reporter_at_top_level().add_diag(diag!(
-                CodeGeneration::UnfoldableConstant,
-                (
-                    vloc,
-                    "Signed integers are not yet supported in constant values"
-                )
-            ));
+            env.diagnostic_reporter_at_top_level()
+                .add_diag(dev_feature!(FeatureGate::SignedIntegers, vloc));
             return None;
         }
     })

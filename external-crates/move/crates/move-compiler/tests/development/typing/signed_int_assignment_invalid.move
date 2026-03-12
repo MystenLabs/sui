@@ -25,28 +25,4 @@ module 0x42::m {
         let mut x: i32 = 1i32;
         x = 2u32;
     }
-
-    // Reassignment same type (valid)
-    fun reassign_same_type() {
-        let mut x: i32 = 1i32;
-        x = 2i32;
-        let _y = x;
-    }
-
-    // Assign negated value
-    fun assign_negated() {
-        let mut x: i64 = 5i64;
-        x = -x;
-        let _y = x;
-    }
-
-    // Multiple assignment
-    fun multiple_assign() {
-        let (_a, _b): (i32, i64) = (1i32, 2i64);
-    }
-
-    // Signed in tuple with unsigned should be separate types
-    fun tuple_mixed() {
-        let (_a, _b): (i32, u32) = (1i32, 2u32);
-    }
 }
