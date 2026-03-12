@@ -36,6 +36,7 @@ use sui_types::{
     },
 };
 use sui_types::{
+    execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
     gas::SuiGasStatusAPI,
     transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind},
 };
@@ -127,6 +128,28 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
             bail!("Failed to load transaction {}: {:?}", tx_digest, e);
         }
     };
+
+    // If the on-chain effects show an early execution error (transaction never entered the VM),
+    // skip replay — there is nothing to re-execute.
+    // Record data and effects.
+    if is_early_execution_error(replay_txn.effects.status()) {
+        warn!(
+            tx_digest = %tx_digest,
+            status = ?replay_txn.effects.status(),
+            "Transaction had early execution error on-chain; skipping replay execution",
+        );
+        artifact_manager
+            .member(Artifact::TransactionData)
+            .serialize_artifact(&replay_txn.txn_data)
+            .transpose()?
+            .unwrap();
+        artifact_manager
+            .member(Artifact::TransactionEffects)
+            .serialize_artifact(&replay_txn.effects)
+            .transpose()?
+            .unwrap();
+        return Ok(0);
+    }
 
     // replay the transaction
     let mut trace_builder_opt = trace.then(MoveTraceBuilder::new);
@@ -708,5 +731,23 @@ fn packages_from_type_tag(typ: &TypeTag, packages: &mut BTreeSet<ObjectID>) {
         | TypeTag::U16
         | TypeTag::U32
         | TypeTag::U256 => (),
+    }
+}
+
+/// Returns true if the given execution status represents an early execution error
+/// (i.e., the transaction was predetermined to fail and the Move VM was never invoked).
+// REVIEW: there does not seem to be a predicate for this condition in core code.
+//         So this may be a bit of a brittle function, but it's replay anyway....
+fn is_early_execution_error(status: &ExecutionStatus) -> bool {
+    match status {
+        ExecutionStatus::Failure(ExecutionFailure { error, .. }) => matches!(
+            error,
+            ExecutionErrorKind::CertificateDenied
+                | ExecutionErrorKind::InputObjectDeleted
+                | ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. }
+                | ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable
+                | ExecutionErrorKind::InsufficientFundsForWithdraw
+        ),
+        ExecutionStatus::Success => false,
     }
 }
