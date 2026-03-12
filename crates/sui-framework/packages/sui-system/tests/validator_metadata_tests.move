@@ -295,6 +295,135 @@ fun cannot_set_duplicate_next_epoch_protocol_pubkey_bytes() {
     abort
 }
 
+// === Candidate Validator Metadata Tests ===
+
+#[test]
+/// Scenario:
+/// - create a candidate validator
+/// - update all possible metadata fields for the candidate
+fun candidate_validator_update_metadata() {
+    let mut runner = test_runner::new().validators_count(1).build();
+
+    let preset = validator_preset::preset(2);
+    let candidate = validator_builder::preset(1).initial_stake(10000).build(runner.ctx());
+    let candidate_addr = candidate.sui_address();
+
+    runner.set_sender(candidate_addr).add_validator_candidate(candidate);
+    runner.system_tx!(|system, ctx| {
+        system.update_candidate_validator_network_address(preset.net_address(), ctx);
+        system.update_candidate_validator_p2p_address(preset.p2p_address(), ctx);
+        system.update_candidate_validator_primary_address(preset.primary_address(), ctx);
+        system.update_candidate_validator_worker_address(preset.worker_address(), ctx);
+        system.update_candidate_validator_network_pubkey(preset.network_pubkey_bytes(), ctx);
+        system.update_candidate_validator_worker_pubkey(preset.worker_pubkey_bytes(), ctx);
+
+        system.update_validator_name(preset.name(), ctx);
+        system.update_validator_description(preset.description(), ctx);
+        system.update_validator_image_url(preset.image_url(), ctx);
+        system.update_validator_project_url(preset.project_url(), ctx);
+    });
+
+    runner.add_validator();
+    runner.advance_epoch(option::none()).destroy_zero();
+    runner.finish();
+}
+
+#[test, expected_failure(abort_code = validator_set::ENotValidatorCandidate)]
+fun cannot_update_net_address_of_non_candidate_validator() {
+    let mut runner = test_runner::new().validators_count(1).build();
+    let preset = validator_preset::preset(2);
+    let candidate = validator_builder::preset(1).initial_stake(10000).build(runner.ctx());
+    let candidate_addr = candidate.sui_address();
+
+    runner.set_sender(candidate_addr).add_validator_candidate(candidate);
+    runner.add_validator();
+    runner.system_tx!(|system, ctx| {
+        system.update_candidate_validator_network_address(preset.net_address(), ctx);
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = validator_set::ENotValidatorCandidate)]
+fun cannot_update_p2p_address_of_non_candidate_validator() {
+    let mut runner = test_runner::new().validators_count(1).build();
+    let preset = validator_preset::preset(2);
+    let candidate = validator_builder::preset(1).initial_stake(10000).build(runner.ctx());
+    let candidate_addr = candidate.sui_address();
+
+    runner.set_sender(candidate_addr).add_validator_candidate(candidate);
+    runner.add_validator();
+    runner.system_tx!(|system, ctx| {
+        system.update_candidate_validator_p2p_address(preset.p2p_address(), ctx);
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = validator_set::ENotValidatorCandidate)]
+fun cannot_update_primary_address_of_non_candidate_validator() {
+    let mut runner = test_runner::new().validators_count(1).build();
+    let preset = validator_preset::preset(2);
+    let candidate = validator_builder::preset(1).initial_stake(10000).build(runner.ctx());
+    let candidate_addr = candidate.sui_address();
+
+    runner.set_sender(candidate_addr).add_validator_candidate(candidate);
+    runner.add_validator();
+    runner.system_tx!(|system, ctx| {
+        system.update_candidate_validator_primary_address(preset.primary_address(), ctx);
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = validator_set::ENotValidatorCandidate)]
+fun cannot_update_worker_address_of_non_candidate_validator() {
+    let mut runner = test_runner::new().validators_count(1).build();
+    let preset = validator_preset::preset(2);
+    let candidate = validator_builder::preset(1).initial_stake(10000).build(runner.ctx());
+    let candidate_addr = candidate.sui_address();
+
+    runner.set_sender(candidate_addr).add_validator_candidate(candidate);
+    runner.add_validator();
+    runner.system_tx!(|system, ctx| {
+        system.update_candidate_validator_worker_address(preset.worker_address(), ctx);
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = validator_set::ENotValidatorCandidate)]
+fun cannot_update_network_pubkey_bytes_of_non_candidate_validator() {
+    let mut runner = test_runner::new().validators_count(1).build();
+    let preset = validator_preset::preset(2);
+    let candidate = validator_builder::preset(1).initial_stake(10000).build(runner.ctx());
+    let candidate_addr = candidate.sui_address();
+
+    runner.set_sender(candidate_addr).add_validator_candidate(candidate);
+    runner.add_validator();
+    runner.system_tx!(|system, ctx| {
+        system.update_candidate_validator_network_pubkey(preset.network_pubkey_bytes(), ctx);
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = validator_set::ENotValidatorCandidate)]
+fun cannot_update_worker_pubkey_bytes_of_non_candidate_validator() {
+    let mut runner = test_runner::new().validators_count(1).build();
+    let preset = validator_preset::preset(2);
+    let candidate = validator_builder::preset(1).initial_stake(10000).build(runner.ctx());
+    let candidate_addr = candidate.sui_address();
+
+    runner.set_sender(candidate_addr).add_validator_candidate(candidate);
+    runner.add_validator();
+    runner.system_tx!(|system, ctx| {
+        system.update_candidate_validator_worker_pubkey(preset.worker_pubkey_bytes(), ctx);
+    });
+
+    abort
+}
+
 #[test]
 fun active_validator_update_metadata() {
     let validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;

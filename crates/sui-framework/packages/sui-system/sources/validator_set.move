@@ -800,49 +800,44 @@ fun get_validator_indices(
 // === Validator Accessors ===
 
 /// Get reference to validator in any state: active, pending, or candidate.
-public(package) fun any_validator(self: &mut ValidatorSet, validator_address: address): &Validator {
-    let active_idx = find_validator(&self.active_validators, validator_address);
+public(package) fun any_validator(self: &mut ValidatorSet, validator: address): &Validator {
+    let active_idx = find_validator(&self.active_validators, validator);
     if (active_idx.is_some()) {
         return &self.active_validators[active_idx.destroy_some()]
     };
 
     let pending_idx = find_validator_from_table_vec(
         &self.pending_active_validators,
-        validator_address,
+        validator,
     );
     if (pending_idx.is_some()) {
         return &self.pending_active_validators[pending_idx.destroy_some()]
     };
 
-    self.validator_candidates[validator_address].load_validator_maybe_upgrade()
+    self.validator_candidates[validator].load_validator_maybe_upgrade()
 }
 
 /// Get mutable reference to validator in any state: active, pending, or candidate.
-public(package) fun any_validator_mut(
-    self: &mut ValidatorSet,
-    validator_address: address,
-): &mut Validator {
-    let active_idx = find_validator(&self.active_validators, validator_address);
+public(package) fun any_validator_mut(self: &mut ValidatorSet, validator: address): &mut Validator {
+    let active_idx = find_validator(&self.active_validators, validator);
     if (active_idx.is_some()) {
         return &mut self.active_validators[active_idx.destroy_some()]
     };
 
     let pending_idx = find_validator_from_table_vec(
         &self.pending_active_validators,
-        validator_address,
+        validator,
     );
     if (pending_idx.is_some()) {
         return &mut self.pending_active_validators[pending_idx.destroy_some()]
     };
 
-    self.validator_candidates[validator_address].load_validator_maybe_upgrade()
+    self.validator_candidates[validator].load_validator_maybe_upgrade()
 }
 
 /// Get reference to an active validator by address.
-public(package) fun active_validator(self: &ValidatorSet, validator_address: address): &Validator {
-    let idx = find_validator(&self.active_validators, validator_address).destroy_or!(
-        abort ENotAValidator,
-    );
+public(package) fun active_validator(self: &ValidatorSet, validator: address): &Validator {
+    let idx = find_validator(&self.active_validators, validator).destroy_or!(abort ENotAValidator);
     &self.active_validators[idx]
 }
 
@@ -856,11 +851,10 @@ public(package) fun active_validator_mut(
 }
 
 /// Get reference to a pending validator by address.
-public(package) fun pending_validator(self: &ValidatorSet, validator_address: address): &Validator {
-    let idx = find_validator_from_table_vec(
-        &self.pending_active_validators,
-        validator_address,
-    ).destroy_or!(abort ENotAPendingValidator);
+public(package) fun pending_validator(self: &ValidatorSet, validator: address): &Validator {
+    let idx = find_validator_from_table_vec(&self.pending_active_validators, validator).destroy_or!(
+        abort ENotAPendingValidator,
+    );
     &self.pending_active_validators[idx]
 }
 
@@ -877,11 +871,9 @@ public(package) fun pending_validator_mut(
 }
 
 /// Get mutable reference to a candidate validator by address.
-public(package) fun candidate_validator(
-    self: &mut ValidatorSet,
-    validator_address: address,
-): &Validator {
-    self.validator_candidates[validator_address].load_validator_maybe_upgrade()
+public(package) fun candidate_validator(self: &mut ValidatorSet, validator: address): &Validator {
+    assert!(self.validator_candidates.contains(validator), ENotValidatorCandidate);
+    self.validator_candidates[validator].load_validator_maybe_upgrade()
 }
 
 /// Get mutable reference to a candidate validator by address.
@@ -889,6 +881,7 @@ public(package) fun candidate_validator_mut(
     self: &mut ValidatorSet,
     validator: address,
 ): &mut Validator {
+    assert!(self.validator_candidates.contains(validator), ENotValidatorCandidate);
     self.validator_candidates[validator].load_validator_maybe_upgrade()
 }
 

@@ -604,20 +604,23 @@ public(package) fun rotate_operation_cap(self: &mut SuiSystemStateInnerV2, ctx: 
 /// Update a validator's name.
 ///
 /// Unlike `description` and `image_url`, `name` is checked against both active
-/// and pending validators and must be unique in the system, even for validator
-/// candidates.
+/// and pending validators and must be unique in the system.
 ///
-/// TODO: relax this check once there's a clear way to differentiate between a
-/// candidate validator and a pending validator.
+/// For candidate validators, the name is not checked for duplicates.
 public(package) fun update_validator_name(
     self: &mut SuiSystemStateInnerV2,
     name: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.any_validator_mut(ctx.sender());
+    let validator_address = ctx.sender();
+    let validator = self.validators.any_validator_mut(validator_address);
     validator.update_name(name);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
-    self.validators.assert_no_pending_or_active_duplicates(validator);
+
+    // only run the duplicate check for non-candidates
+    if (!self.validators.is_validator_candidate(validator_address)) {
+        self.validators.assert_no_pending_or_active_duplicates(validator);
+    };
 }
 
 /// Update a validator's description.
