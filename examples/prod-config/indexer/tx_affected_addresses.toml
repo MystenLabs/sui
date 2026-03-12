@@ -1,5 +1,5 @@
 [ingestion]
-ingest-concurrency = 20
+ingest-concurrency = { kind = "fixed", value = 20 }
 
 [committer]
 write-concurrency = 10
