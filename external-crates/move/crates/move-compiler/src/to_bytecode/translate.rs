@@ -7,14 +7,14 @@ use crate::{
     PreCompiledProgramInfo,
     cfgir::ast as G,
     compiled_unit::*,
-    diag,
+    dev_feature, diag,
     diagnostics::{DiagnosticReporter, Diagnostics, warning_filters::WarningFiltersScope},
+    editions::FeatureGate,
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::{
         ast::{self as H, Value_, Var, Visibility},
         translate::{single_type as hlir_single_type, translate_var, type_},
     },
-    ice,
     naming::{
         ast::{self as N, BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
@@ -987,10 +987,7 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
             context
                 .env
                 .diagnostic_reporter_at_top_level()
-                .add_diag(ice!((
-                    bt_loc,
-                    "Signed integers are not supported in bytecode",
-                )));
+                .add_diag(dev_feature!(FeatureGate::SignedIntegers, bt_loc));
             IRT::U64
         }
 
@@ -1206,10 +1203,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     context
                         .env
                         .diagnostic_reporter_at_top_level()
-                        .add_diag(ice!((
-                            loc,
-                            "Signed integer values are not supported in bytecode",
-                        )));
+                        .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
                     B::LdU64(0)
                 }
                 V::Bool(b) => {
@@ -1381,10 +1375,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     context
                         .env
                         .diagnostic_reporter_at_top_level()
-                        .add_diag(ice!((
-                            loc,
-                            "Signed integer casts are not supported in bytecode",
-                        )));
+                        .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
                     B::CastU64
                 }
                 BT::Address | BT::Signer | BT::Vector | BT::Bool => {
@@ -1425,7 +1416,7 @@ fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): 
                 context
                     .env
                     .diagnostic_reporter_at_top_level()
-                    .add_diag(ice!((loc, "Unary negation is not supported in bytecode",)));
+                    .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
                 B::Not
             }
         },
