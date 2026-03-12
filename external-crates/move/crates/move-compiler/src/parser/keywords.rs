@@ -34,7 +34,7 @@ pub const KEYWORDS: &[&str] = &[
 ];
 
 pub const CONTEXTUAL_KEYWORDS: &[&str] = &[
-    crate::shared::builtin_type_names::ADDRESS,
+    crate::shared::builtin_types::ADDRESS,
     "mut",
     "phantom",
     "Self",
@@ -42,6 +42,6 @@ pub const CONTEXTUAL_KEYWORDS: &[&str] = &[
     "macro",
 ];
 
-pub use crate::shared::builtin_type_names::PRIMITIVE_TYPES;
+pub use crate::shared::builtin_types::PRIMITIVE_TYPES;
 
 pub const BUILTINS: &[&str] = &["assert", "freeze"];

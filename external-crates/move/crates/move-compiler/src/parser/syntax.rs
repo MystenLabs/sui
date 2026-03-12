@@ -1773,7 +1773,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 //          | "match" "(" <Exp> ")" "{" (<MatchArm> ",")+ "}"
 #[growing_stack]
 fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
-    const VECTOR_IDENT: &str = crate::shared::builtin_type_names::VECTOR;
+    const VECTOR_IDENT: &str = crate::shared::builtin_types::VECTOR;
 
     let start_loc = context.tokens.start_loc();
     let term = match context.tokens.peek() {

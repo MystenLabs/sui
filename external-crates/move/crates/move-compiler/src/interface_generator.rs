@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::{NumberFormat, NumericalAddress, builtin_type_names as BT};
+use crate::shared::{NumberFormat, NumericalAddress, builtin_types as BT};
 use anyhow::{Result, anyhow};
 use move_binary_format::file_format::{
     Ability, AbilitySet, CompiledModule, DatatypeHandleIndex, DatatypeTyParameter,
