@@ -32,7 +32,9 @@ use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
-use crate::types::internal_operation::{PayCoin, PaySui, Stake, WithdrawStake};
+use crate::types::internal_operation::{
+    PayCoin, PaySui, SplitFungibleStakedSui, Stake, WithdrawStake,
+};
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
     InternalOperation, OperationIdentifier, OperationStatus, OperationType,
@@ -104,6 +106,9 @@ impl Operations {
             OperationType::PayCoin => self.pay_coin_ops_to_internal(),
             OperationType::Stake => self.stake_ops_to_internal(),
             OperationType::WithdrawStake => self.withdraw_stake_ops_to_internal(),
+            OperationType::SplitFungibleStakedSui => {
+                self.split_fungible_staked_sui_ops_to_internal()
+            }
             op => Err(Error::UnsupportedOperation(op)),
         }
     }
@@ -247,6 +252,47 @@ impl Operations {
             sender,
             stake_ids,
         }))
+    }
+
+    fn split_fungible_staked_sui_ops_to_internal(self) -> Result<InternalOperation, Error> {
+        let mut ops = self
+            .0
+            .into_iter()
+            .filter(|op| op.type_ == OperationType::SplitFungibleStakedSui)
+            .collect::<Vec<_>>();
+        if ops.len() != 1 {
+            return Err(Error::MalformedOperationError(
+                "SplitFungibleStakedSui should only have one operation.".into(),
+            ));
+        }
+        let op = ops.pop().unwrap();
+        let sender = op
+            .account
+            .ok_or_else(|| Error::MissingInput("Sender address".to_string()))?
+            .address;
+        let metadata = op
+            .metadata
+            .ok_or_else(|| {
+                Error::MissingInput("SplitFungibleStakedSui metadata".to_string())
+            })?;
+
+        let OperationMetadata::SplitFungibleStakedSui {
+            fungible_staked_sui_id,
+            split_amount,
+        } = metadata
+        else {
+            return Err(Error::InvalidInput(
+                "Cannot find split fungible staked sui info from metadata.".into(),
+            ));
+        };
+
+        Ok(InternalOperation::SplitFungibleStakedSui(
+            SplitFungibleStakedSui {
+                sender,
+                fungible_staked_sui_id,
+                split_amount,
+            },
+        ))
     }
 
     pub fn from_transaction(
@@ -519,6 +565,7 @@ impl Operations {
         let mut needs_generic = false;
         let mut operations = vec![];
         let mut stake_ids = vec![];
+        let mut split_fungible_staked_sui: Option<(ObjectID, u64)> = None;
         let mut currency: Option<Currency> = None;
 
         for command in commands {
@@ -585,6 +632,49 @@ impl Operations {
                 {
                     Some(vec![])
                 }
+                Some(Command::MoveCall(m))
+                    if Self::is_split_fungible_staked_sui_call(m) =>
+                {
+                    let args = &m.arguments;
+                    if let [obj_arg, amount_arg] = &args[..] {
+                        let object_id = match obj_arg.kind() {
+                            ArgumentKind::Input => inputs
+                                .get(obj_arg.input() as usize)
+                                .and_then(|input| {
+                                    if input.kind() == InputKind::ImmutableOrOwned {
+                                        input
+                                            .object_id
+                                            .as_ref()
+                                            .and_then(|oid| ObjectID::from_str(oid).ok())
+                                    } else {
+                                        None
+                                    }
+                                }),
+                            _ => None,
+                        };
+                        let amount = match amount_arg.kind() {
+                            ArgumentKind::Input => inputs
+                                .get(amount_arg.input() as usize)
+                                .and_then(|input| {
+                                    if input.kind() == InputKind::Pure {
+                                        let bytes = input.pure();
+                                        bcs::from_bytes::<u64>(bytes).ok()
+                                    } else {
+                                        None
+                                    }
+                                }),
+                            _ => None,
+                        };
+                        if let (Some(oid), Some(amt)) = (object_id, amount) {
+                            split_fungible_staked_sui = Some((oid, amt));
+                            break;
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
                 _ => None,
             };
             if let Some(result) = result {
@@ -646,6 +736,13 @@ impl Operations {
                 coin_change: None,
                 metadata,
             });
+        } else if let Some((fungible_staked_sui_id, split_amount)) = split_fungible_staked_sui {
+            operations.push(Operation::split_fungible_staked_sui(
+                status,
+                sender,
+                fungible_staked_sui_id,
+                split_amount,
+            ));
         } else if operations.is_empty() {
             let tx_kind = TransactionKind::default()
                 .with_kind(ProgrammableTransactionKind)
@@ -690,6 +787,16 @@ impl Operations {
             && tx.module() == SUI_SYSTEM_MODULE_NAME.as_str()
             && (tx.function() == WITHDRAW_STAKE_FUN_NAME.as_str()
                 || tx.function() == "request_withdraw_stake_non_entry")
+    }
+
+    fn is_split_fungible_staked_sui_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_SYSTEM_PACKAGE_ID
+            && tx.module() == "staking_pool"
+            && tx.function() == "split_fungible_staked_sui"
     }
 
     /// Recognizes `coin::redeem_funds<T>` calls used for address-balance withdrawals.
@@ -1168,6 +1275,10 @@ pub enum OperationMetadata {
     GenericTransaction(TransactionKind),
     Stake { validator: SuiAddress },
     WithdrawStake { stake_ids: Vec<ObjectID> },
+    SplitFungibleStakedSui {
+        fungible_staked_sui_id: ObjectID,
+        split_amount: u64,
+    },
 }
 
 impl Operation {
@@ -1283,6 +1394,25 @@ impl Operation {
             amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
+        }
+    }
+    fn split_fungible_staked_sui(
+        status: Option<OperationStatus>,
+        sender: SuiAddress,
+        fungible_staked_sui_id: ObjectID,
+        split_amount: u64,
+    ) -> Self {
+        Self {
+            operation_identifier: Default::default(),
+            type_: OperationType::SplitFungibleStakedSui,
+            status,
+            account: Some(sender.into()),
+            amount: None,
+            coin_change: None,
+            metadata: Some(OperationMetadata::SplitFungibleStakedSui {
+                fungible_staked_sui_id,
+                split_amount,
+            }),
         }
     }
 }
@@ -1412,5 +1542,207 @@ mod tests {
         assert_eq!(data, parsed_data);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_operation_data_parsing_split_fungible_staked_sui() -> Result<(), anyhow::Error> {
+        use crate::types::internal_operation::split_fungible_staked_sui_pt;
+
+        let gas = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+
+        let fungible_obj = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+
+        let sender = SuiAddress::random_for_testing_only();
+        let split_amount = 500_000_000u64;
+
+        let pt = split_fungible_staked_sui_pt(sender, vec![fungible_obj], split_amount)?;
+        let gas_price = 10;
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
+        );
+
+        let proto_tx: Transaction = data.clone().into();
+        let ops = Operations::new(Operations::from_transaction(
+            proto_tx
+                .kind
+                .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?,
+            sender,
+            None,
+        )?);
+        assert_eq!(1, ops.0.len());
+        assert_eq!(ops.0[0].type_, OperationType::SplitFungibleStakedSui);
+        assert_eq!(
+            ops.0[0].metadata,
+            Some(OperationMetadata::SplitFungibleStakedSui {
+                fungible_staked_sui_id: fungible_obj.0,
+                split_amount,
+            })
+        );
+
+        let metadata = ConstructionMetadata {
+            sender,
+            gas_coins: vec![gas],
+            extra_gas_coins: vec![],
+            objects: vec![fungible_obj],
+            party_objects: vec![],
+            total_coin_value: 0,
+            gas_price,
+            budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            currency: None,
+            address_balance_withdrawal: 0,
+            epoch: None,
+            chain_id: None,
+        };
+        let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
+        assert_eq!(data, parsed_data);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_split_fungible_staked_sui_read_path_fields() -> Result<(), anyhow::Error> {
+        use crate::types::internal_operation::split_fungible_staked_sui_pt;
+
+        let gas = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let fungible_obj = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let sender = SuiAddress::random_for_testing_only();
+        let split_amount = 500_000_000u64;
+
+        let pt = split_fungible_staked_sui_pt(sender, vec![fungible_obj], split_amount)?;
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
+            10,
+        );
+
+        let proto_tx: Transaction = data.into();
+        let ops = Operations::new(Operations::from_transaction(
+            proto_tx
+                .kind
+                .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?,
+            sender,
+            Some(OperationStatus::Success),
+        )?);
+
+        assert_eq!(1, ops.0.len());
+        let op = &ops.0[0];
+        assert_eq!(op.type_, OperationType::SplitFungibleStakedSui);
+        assert_eq!(op.status, Some(OperationStatus::Success));
+        assert_eq!(op.account, Some(AccountIdentifier::from(sender)));
+        assert!(op.amount.is_none(), "Split should have no amount");
+        assert!(op.coin_change.is_none(), "Split should have no coin change");
+        assert_eq!(
+            op.metadata,
+            Some(OperationMetadata::SplitFungibleStakedSui {
+                fungible_staked_sui_id: fungible_obj.0,
+                split_amount,
+            })
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_split_fungible_staked_sui_ops_missing_metadata() {
+        let sender = SuiAddress::random_for_testing_only();
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "SplitFungibleStakedSui",
+            "account": { "address": sender.to_string() },
+        }]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(result.is_err(), "Expected error when metadata is missing");
+    }
+
+    #[tokio::test]
+    async fn test_split_fungible_staked_sui_ops_wrong_metadata_type() {
+        let sender = SuiAddress::random_for_testing_only();
+        let validator = SuiAddress::random_for_testing_only();
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "SplitFungibleStakedSui",
+            "account": { "address": sender.to_string() },
+            "metadata": { "Stake": { "validator": validator.to_string() } }
+        }]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(
+            result.is_err(),
+            "Expected error when metadata type is wrong"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_split_fungible_staked_sui_ops_missing_account() {
+        let fungible_staked_sui_id = ObjectID::random();
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "SplitFungibleStakedSui",
+            "metadata": { "SplitFungibleStakedSui": {
+                "fungible_staked_sui_id": fungible_staked_sui_id.to_string(),
+                "split_amount": 500000000u64
+            }}
+        }]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(
+            result.is_err(),
+            "Expected error when account is missing"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_split_fungible_staked_sui_ops_duplicate_operations() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fungible_staked_sui_id = ObjectID::random();
+        let ops: Operations = serde_json::from_value(serde_json::json!([
+            {
+                "operation_identifier": {"index": 0},
+                "type": "SplitFungibleStakedSui",
+                "account": { "address": sender.to_string() },
+                "metadata": { "SplitFungibleStakedSui": {
+                    "fungible_staked_sui_id": fungible_staked_sui_id.to_string(),
+                    "split_amount": 500000000u64
+                }}
+            },
+            {
+                "operation_identifier": {"index": 1},
+                "type": "SplitFungibleStakedSui",
+                "account": { "address": sender.to_string() },
+                "metadata": { "SplitFungibleStakedSui": {
+                    "fungible_staked_sui_id": fungible_staked_sui_id.to_string(),
+                    "split_amount": 500000000u64
+                }}
+            }
+        ]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(
+            result.is_err(),
+            "Expected error when duplicate split operations are provided"
+        );
     }
 }

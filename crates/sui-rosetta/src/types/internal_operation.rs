@@ -39,9 +39,12 @@ pub use stake::Stake;
 use stake::{stake_pt_ab_gas, stake_pt_coin_gas};
 pub use withdraw_stake::WithdrawStake;
 use withdraw_stake::withdraw_stake_pt;
+pub use split_fungible_staked_sui::SplitFungibleStakedSui;
+pub(crate) use split_fungible_staked_sui::split_fungible_staked_sui_pt;
 
 mod pay_coin;
 mod pay_sui;
+mod split_fungible_staked_sui;
 mod stake;
 mod withdraw_stake;
 
@@ -82,6 +85,7 @@ pub enum InternalOperation {
     PayCoin(PayCoin),
     Stake(Stake),
     WithdrawStake(WithdrawStake),
+    SplitFungibleStakedSui(SplitFungibleStakedSui),
 }
 
 impl InternalOperation {
@@ -90,7 +94,10 @@ impl InternalOperation {
             InternalOperation::PaySui(PaySui { sender, .. })
             | InternalOperation::PayCoin(PayCoin { sender, .. })
             | InternalOperation::Stake(Stake { sender, .. })
-            | InternalOperation::WithdrawStake(WithdrawStake { sender, .. }) => *sender,
+            | InternalOperation::WithdrawStake(WithdrawStake { sender, .. })
+            | InternalOperation::SplitFungibleStakedSui(SplitFungibleStakedSui {
+                sender, ..
+            }) => *sender,
         }
     }
 
@@ -194,6 +201,11 @@ impl InternalOperation {
                 let withdraw_all = stake_ids.is_empty();
                 withdraw_stake_pt(metadata.objects, withdraw_all)?
             }
+            InternalOperation::SplitFungibleStakedSui(SplitFungibleStakedSui {
+                sender,
+                split_amount,
+                ..
+            }) => split_fungible_staked_sui_pt(sender, metadata.objects, split_amount)?,
         };
 
         if metadata.gas_coins.is_empty() {

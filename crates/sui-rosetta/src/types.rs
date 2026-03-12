@@ -439,6 +439,7 @@ pub enum OperationType {
     PayCoin,
     Stake,
     WithdrawStake,
+    SplitFungibleStakedSui,
     // All other Sui transaction types, readonly
     EpochChange,
     Genesis,
