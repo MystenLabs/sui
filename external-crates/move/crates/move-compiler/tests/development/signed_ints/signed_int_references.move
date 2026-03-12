@@ -23,7 +23,7 @@ module 0x42::m {
     }
 
     // Reference in struct field
-    struct RefHolder has drop {
+    public struct RefHolder has drop {
         val: i64,
     }
 

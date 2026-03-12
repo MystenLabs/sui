@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module 0x42::m {
-    enum MyEnum has drop {
+    public enum MyEnum has drop {
         Signed { val: i64 },
         Unsigned { val: u64 },
         Nothing,

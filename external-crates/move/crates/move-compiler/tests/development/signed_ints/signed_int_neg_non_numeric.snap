@@ -83,14 +83,6 @@ error[E04007]: incompatible types
    │                   Invalid argument to '-'
    │                   Expected: '_'
 
-error[E01003]: invalid modifier
-   ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:27:5
-   │
-27 │     struct S has copy, drop { val: i64 }
-   │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
-   │
-   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
-
 warning[W04039]: unable to determine principal type for literal
    ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:31:19
    │

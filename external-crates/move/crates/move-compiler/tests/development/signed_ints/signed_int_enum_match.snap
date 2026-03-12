@@ -5,10 +5,4 @@ info:
   edition: development
   lint: false
 ---
-error[E01003]: invalid modifier
-  ┌─ tests/development/signed_ints/signed_int_enum_match.move:5:5
-  │
-5 │     enum MyEnum has drop {
-  │     ^^^^ Invalid enum declaration. Internal enum declarations are not yet supported
-  │
-  = Visibility annotations are required on enum declarations.
+

@@ -5,10 +5,4 @@ info:
   edition: development
   lint: false
 ---
-warning[W09003]: unused assignment
-  ┌─ tests/development/signed_ints/signed_int_assignment_valid.move:7:13
-  │
-7 │         let mut x: i32 = 1i32;
-  │             ^^^^^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
-  │
-  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

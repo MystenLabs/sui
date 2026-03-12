@@ -24,8 +24,8 @@ module 0x42::m {
 
     // Vector with negated elements
     fun vector_neg() {
-        let x = 5i64;
-        let _v = vector[-x, 1i64, -x];
+        let _x = 5i64;
+        let _v = vector[-_x, 1i64, -_x];
     }
 
     // Empty vector with signed annotation

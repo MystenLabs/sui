@@ -14,7 +14,7 @@ module 0x42::m {
     }
 
     // Generic struct holding signed int
-    struct Box<T> has copy, drop {
+    public struct Box<T> has copy, drop {
         val: T,
     }
 
