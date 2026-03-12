@@ -158,13 +158,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    obj_info_deletion_reference (cp_sequence_number, object_id) {
-        object_id -> Bytea,
-        cp_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     obj_versions (object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -259,7 +252,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_packages,
     kv_protocol_configs,
     kv_transactions,
-    obj_info_deletion_reference,
     obj_versions,
     sum_displays,
     tx_affected_addresses,
