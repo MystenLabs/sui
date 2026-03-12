@@ -1,25 +1,43 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 4 tasks
+processed 7 tasks
 
 init:
 A: object(0,0)
 
-task 1, lines 8-35:
+task 1, lines 8-57:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 6452400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9553200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 37-38:
+task 2, lines 59-60:
 //# programmable --sender A
 //> test::m::x1()
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 40-41:
+task 3, lines 62-63:
 //# programmable --sender A
 //> test::m::x3()
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 65-66:
+//# programmable --sender A
+//> test::m::x4()
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 68-69:
+//# programmable --sender A
+//> test::m::e_x4()
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: TOO_MANY_TYPE_NODES, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+
+task 6, lines 71-72:
+//# programmable --sender A
+//> test::m::s_x4()
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: TOO_MANY_TYPE_NODES, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: None } }
