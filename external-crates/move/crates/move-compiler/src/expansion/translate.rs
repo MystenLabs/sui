@@ -347,17 +347,7 @@ impl<'env> Context<'env> {
     }
 
     pub fn spec_deprecated_diag(&mut self, loc: Loc, is_error: bool) -> Diagnostic {
-        diag!(
-            if is_error {
-                Uncategorized::DeprecatedSpecItem
-            } else {
-                Uncategorized::DeprecatedWillBeRemoved
-            },
-            (
-                loc,
-                "Specification blocks are deprecated and are no longer used"
-            )
-        )
+        crate::shared::spec_deprecated_diag(loc, is_error)
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
