@@ -57,6 +57,9 @@ scripts/simtest/cargo-simtest simtest \
   --profile simtestnightly \
   -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
 
+# Clean up temp files from the e2e phase to prevent /tmp (tmpfs) from filling up.
+rm -rf /tmp/tmp.* /tmp/sui-* 2>/dev/null
+
 echo ""
 echo "============================================="
 echo "Running $NUM_CPUS stress simtests in parallel"
@@ -84,6 +87,9 @@ done
 
 # wait for all the jobs to end
 wait
+
+# Clean up temp files from the stress phase before running determinism tests.
+rm -rf /tmp/tmp.* /tmp/sui-* 2>/dev/null
 
 echo ""
 echo "==========================="
