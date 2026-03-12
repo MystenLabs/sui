@@ -214,6 +214,7 @@ diesel::table! {
         reader_lo -> Int8,
         pruner_timestamp -> Timestamp,
         pruner_hi -> Int8,
+        chain_id -> Nullable<Bytea>,
     }
 }
 
