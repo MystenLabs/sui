@@ -32,7 +32,9 @@ use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
-use crate::types::internal_operation::{PayCoin, PaySui, Stake, WithdrawStake};
+use crate::types::internal_operation::{
+    MergeFungibleStakedSui, PayCoin, PaySui, Stake, WithdrawStake,
+};
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
     InternalOperation, OperationIdentifier, OperationStatus, OperationType,
@@ -104,6 +106,9 @@ impl Operations {
             OperationType::PayCoin => self.pay_coin_ops_to_internal(),
             OperationType::Stake => self.stake_ops_to_internal(),
             OperationType::WithdrawStake => self.withdraw_stake_ops_to_internal(),
+            OperationType::MergeFungibleStakedSui => {
+                self.merge_fungible_staked_sui_ops_to_internal()
+            }
             op => Err(Error::UnsupportedOperation(op)),
         }
     }
@@ -247,6 +252,45 @@ impl Operations {
             sender,
             stake_ids,
         }))
+    }
+
+    fn merge_fungible_staked_sui_ops_to_internal(self) -> Result<InternalOperation, Error> {
+        let mut ops = self
+            .0
+            .into_iter()
+            .filter(|op| op.type_ == OperationType::MergeFungibleStakedSui)
+            .collect::<Vec<_>>();
+        if ops.len() != 1 {
+            return Err(Error::MalformedOperationError(
+                "MergeFungibleStakedSui should only have one operation.".into(),
+            ));
+        }
+        let op = ops.pop().unwrap();
+        let sender = op
+            .account
+            .ok_or_else(|| Error::MissingInput("Sender address".to_string()))?
+            .address;
+        let metadata = op
+            .metadata
+            .ok_or_else(|| Error::MissingInput("MergeFungibleStakedSui metadata".to_string()))?;
+
+        let OperationMetadata::MergeFungibleStakedSui {
+            primary_id,
+            merge_id,
+        } = metadata
+        else {
+            return Err(Error::InvalidInput(
+                "Cannot find merge fungible staked sui info from metadata.".into(),
+            ));
+        };
+
+        Ok(InternalOperation::MergeFungibleStakedSui(
+            MergeFungibleStakedSui {
+                sender,
+                primary_id,
+                merge_id,
+            },
+        ))
     }
 
     pub fn from_transaction(
@@ -519,6 +563,7 @@ impl Operations {
         let mut needs_generic = false;
         let mut operations = vec![];
         let mut stake_ids = vec![];
+        let mut merge_fungible_staked_sui: Option<(ObjectID, ObjectID)> = None;
         let mut currency: Option<Currency> = None;
 
         for command in commands {
@@ -585,6 +630,51 @@ impl Operations {
                 {
                     Some(vec![])
                 }
+                Some(Command::MoveCall(m))
+                    if Self::is_join_fungible_staked_sui_call(m) =>
+                {
+                    let args = &m.arguments;
+                    if let [primary_arg, merge_arg] = &args[..] {
+                        let primary_id = match primary_arg.kind() {
+                            ArgumentKind::Input => inputs
+                                .get(primary_arg.input() as usize)
+                                .and_then(|input| {
+                                    if input.kind() == InputKind::ImmutableOrOwned {
+                                        input
+                                            .object_id
+                                            .as_ref()
+                                            .and_then(|oid| ObjectID::from_str(oid).ok())
+                                    } else {
+                                        None
+                                    }
+                                }),
+                            _ => None,
+                        };
+                        let merge_obj_id = match merge_arg.kind() {
+                            ArgumentKind::Input => inputs
+                                .get(merge_arg.input() as usize)
+                                .and_then(|input| {
+                                    if input.kind() == InputKind::ImmutableOrOwned {
+                                        input
+                                            .object_id
+                                            .as_ref()
+                                            .and_then(|oid| ObjectID::from_str(oid).ok())
+                                    } else {
+                                        None
+                                    }
+                                }),
+                            _ => None,
+                        };
+                        if let (Some(pid), Some(mid)) = (primary_id, merge_obj_id) {
+                            merge_fungible_staked_sui = Some((pid, mid));
+                            Some(vec![])
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
                 _ => None,
             };
             if let Some(result) = result {
@@ -646,6 +736,10 @@ impl Operations {
                 coin_change: None,
                 metadata,
             });
+        } else if let Some((primary_id, merge_id)) = merge_fungible_staked_sui {
+            operations.push(Operation::merge_fungible_staked_sui(
+                status, sender, primary_id, merge_id,
+            ));
         } else if operations.is_empty() {
             let tx_kind = TransactionKind::default()
                 .with_kind(ProgrammableTransactionKind)
@@ -690,6 +784,16 @@ impl Operations {
             && tx.module() == SUI_SYSTEM_MODULE_NAME.as_str()
             && (tx.function() == WITHDRAW_STAKE_FUN_NAME.as_str()
                 || tx.function() == "request_withdraw_stake_non_entry")
+    }
+
+    fn is_join_fungible_staked_sui_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_SYSTEM_PACKAGE_ID
+            && tx.module() == "staking_pool"
+            && tx.function() == "join_fungible_staked_sui"
     }
 
     /// Recognizes `coin::redeem_funds<T>` calls used for address-balance withdrawals.
@@ -1168,6 +1272,10 @@ pub enum OperationMetadata {
     GenericTransaction(TransactionKind),
     Stake { validator: SuiAddress },
     WithdrawStake { stake_ids: Vec<ObjectID> },
+    MergeFungibleStakedSui {
+        primary_id: ObjectID,
+        merge_id: ObjectID,
+    },
 }
 
 impl Operation {
@@ -1283,6 +1391,25 @@ impl Operation {
             amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
+        }
+    }
+    fn merge_fungible_staked_sui(
+        status: Option<OperationStatus>,
+        sender: SuiAddress,
+        primary_id: ObjectID,
+        merge_id: ObjectID,
+    ) -> Self {
+        Self {
+            operation_identifier: Default::default(),
+            type_: OperationType::MergeFungibleStakedSui,
+            status,
+            account: Some(sender.into()),
+            amount: None,
+            coin_change: None,
+            metadata: Some(OperationMetadata::MergeFungibleStakedSui {
+                primary_id,
+                merge_id,
+            }),
         }
     }
 }
@@ -1410,6 +1537,218 @@ mod tests {
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_operation_data_parsing_merge_fungible_staked_sui() -> Result<(), anyhow::Error> {
+        use crate::types::internal_operation::merge_fungible_staked_sui_pt;
+
+        let gas = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+
+        let primary = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let merge = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+
+        let sender = SuiAddress::random_for_testing_only();
+
+        let pt = merge_fungible_staked_sui_pt(vec![primary, merge])?;
+        let gas_price = 10;
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
+        );
+
+        let proto_tx: Transaction = data.clone().into();
+        let ops = Operations::new(Operations::from_transaction(
+            proto_tx
+                .kind
+                .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?,
+            sender,
+            None,
+        )?);
+        assert_eq!(1, ops.0.len());
+        assert_eq!(ops.0[0].type_, OperationType::MergeFungibleStakedSui);
+        assert_eq!(
+            ops.0[0].metadata,
+            Some(OperationMetadata::MergeFungibleStakedSui {
+                primary_id: primary.0,
+                merge_id: merge.0,
+            })
+        );
+
+        let metadata = ConstructionMetadata {
+            sender,
+            gas_coins: vec![gas],
+            extra_gas_coins: vec![],
+            objects: vec![primary, merge],
+            party_objects: vec![],
+            total_coin_value: 0,
+            gas_price,
+            budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            currency: None,
+            address_balance_withdrawal: 0,
+            epoch: None,
+            chain_id: None,
+        };
+        let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
+        assert_eq!(data, parsed_data);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_merge_fungible_staked_sui_ops_missing_metadata() {
+        let sender = SuiAddress::random_for_testing_only();
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "MergeFungibleStakedSui",
+            "account": { "address": sender.to_string() },
+        }]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(result.is_err(), "Expected error when metadata is missing");
+    }
+
+    #[tokio::test]
+    async fn test_merge_fungible_staked_sui_ops_wrong_metadata_type() {
+        let sender = SuiAddress::random_for_testing_only();
+        let validator = SuiAddress::random_for_testing_only();
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "MergeFungibleStakedSui",
+            "account": { "address": sender.to_string() },
+            "metadata": { "Stake": { "validator": validator.to_string() } }
+        }]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(
+            result.is_err(),
+            "Expected error when metadata type is wrong"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_merge_fungible_staked_sui_ops_missing_account() {
+        let primary_id = ObjectID::random();
+        let merge_id = ObjectID::random();
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "MergeFungibleStakedSui",
+            "metadata": { "MergeFungibleStakedSui": {
+                "primary_id": primary_id.to_string(),
+                "merge_id": merge_id.to_string()
+            }}
+        }]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(
+            result.is_err(),
+            "Expected error when account is missing"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_merge_fungible_staked_sui_ops_duplicate_operations() {
+        let sender = SuiAddress::random_for_testing_only();
+        let primary_id = ObjectID::random();
+        let merge_id = ObjectID::random();
+        let ops: Operations = serde_json::from_value(serde_json::json!([
+            {
+                "operation_identifier": {"index": 0},
+                "type": "MergeFungibleStakedSui",
+                "account": { "address": sender.to_string() },
+                "metadata": { "MergeFungibleStakedSui": {
+                    "primary_id": primary_id.to_string(),
+                    "merge_id": merge_id.to_string()
+                }}
+            },
+            {
+                "operation_identifier": {"index": 1},
+                "type": "MergeFungibleStakedSui",
+                "account": { "address": sender.to_string() },
+                "metadata": { "MergeFungibleStakedSui": {
+                    "primary_id": primary_id.to_string(),
+                    "merge_id": merge_id.to_string()
+                }}
+            }
+        ]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(
+            result.is_err(),
+            "Expected error when duplicate merge operations are provided"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_merge_fungible_staked_sui_read_path_fields() -> Result<(), anyhow::Error> {
+        use crate::types::internal_operation::merge_fungible_staked_sui_pt;
+
+        let gas = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let primary = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let merge = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let sender = SuiAddress::random_for_testing_only();
+
+        let pt = merge_fungible_staked_sui_pt(vec![primary, merge])?;
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
+            10,
+        );
+
+        let proto_tx: Transaction = data.into();
+        let ops = Operations::new(Operations::from_transaction(
+            proto_tx
+                .kind
+                .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?,
+            sender,
+            Some(OperationStatus::Success),
+        )?);
+
+        assert_eq!(1, ops.0.len());
+        let op = &ops.0[0];
+        assert_eq!(op.type_, OperationType::MergeFungibleStakedSui);
+        assert_eq!(op.status, Some(OperationStatus::Success));
+        assert_eq!(op.account, Some(AccountIdentifier::from(sender)));
+        assert!(op.amount.is_none(), "Merge should have no amount");
+        assert!(op.coin_change.is_none(), "Merge should have no coin change");
+        assert_eq!(
+            op.metadata,
+            Some(OperationMetadata::MergeFungibleStakedSui {
+                primary_id: primary.0,
+                merge_id: merge.0,
+            })
+        );
 
         Ok(())
     }

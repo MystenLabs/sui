@@ -39,7 +39,10 @@ pub use stake::Stake;
 use stake::{stake_pt_ab_gas, stake_pt_coin_gas};
 pub use withdraw_stake::WithdrawStake;
 use withdraw_stake::withdraw_stake_pt;
+pub use merge_fungible_staked_sui::MergeFungibleStakedSui;
+pub(crate) use merge_fungible_staked_sui::merge_fungible_staked_sui_pt;
 
+mod merge_fungible_staked_sui;
 mod pay_coin;
 mod pay_sui;
 mod stake;
@@ -82,6 +85,7 @@ pub enum InternalOperation {
     PayCoin(PayCoin),
     Stake(Stake),
     WithdrawStake(WithdrawStake),
+    MergeFungibleStakedSui(MergeFungibleStakedSui),
 }
 
 impl InternalOperation {
@@ -90,7 +94,10 @@ impl InternalOperation {
             InternalOperation::PaySui(PaySui { sender, .. })
             | InternalOperation::PayCoin(PayCoin { sender, .. })
             | InternalOperation::Stake(Stake { sender, .. })
-            | InternalOperation::WithdrawStake(WithdrawStake { sender, .. }) => *sender,
+            | InternalOperation::WithdrawStake(WithdrawStake { sender, .. })
+            | InternalOperation::MergeFungibleStakedSui(MergeFungibleStakedSui {
+                sender, ..
+            }) => *sender,
         }
     }
 
@@ -193,6 +200,9 @@ impl InternalOperation {
             InternalOperation::WithdrawStake(WithdrawStake { stake_ids, .. }) => {
                 let withdraw_all = stake_ids.is_empty();
                 withdraw_stake_pt(metadata.objects, withdraw_all)?
+            }
+            InternalOperation::MergeFungibleStakedSui(MergeFungibleStakedSui { .. }) => {
+                merge_fungible_staked_sui_pt(metadata.objects)?
             }
         };
 
