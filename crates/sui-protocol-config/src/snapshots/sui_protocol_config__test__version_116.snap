@@ -482,3 +482,4 @@ translation_per_reference_node_charge: 1
 translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
 free_tier_max_computation_units: 50000
+free_tier_allowed_token_types: []
