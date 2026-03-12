@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use async_trait::async_trait;
+use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Connection;
@@ -120,6 +121,17 @@ impl Handler for ObjVersions {
         let from = from as i64;
         let to_exclusive = to_exclusive as i64;
 
+        let conn: &mut diesel_async::AsyncPgConnection = &mut ***conn;
+        conn.transaction(|conn| {
+            Box::pin(async move {
+                  diesel::sql_query("SET LOCAL enable_mergejoin = off")
+          .execute(conn)
+          .await?;
+      diesel::sql_query("SET LOCAL enable_hashjoin = off")
+          .execute(conn)
+          .await?;
+
+
         // Computes the latest version of each object in [from, to_exclusive] using GROUP BY
         // rather than a window function to avoid materializing every row in the range — an
         // object can be modified many times within a single checkpoint. Subsequent phases use
@@ -210,6 +222,7 @@ impl Handler for ObjVersions {
                         ORDER BY cp_sequence_number DESC
                         LIMIT 1
                     ) pred
+                    -- The NOT EXISTS ensures only the chunk with the non-superseded (true latest at reader_lo) entry does the cleanup
                     WHERE NOT EXISTS (
                         SELECT 1 FROM phase2 p2 WHERE p2.object_id = ll.object_id
                     )
@@ -244,6 +257,8 @@ impl Handler for ObjVersions {
         .await?;
 
         Ok(rows_deleted)
+    })
+}).await
     }
 }
 
