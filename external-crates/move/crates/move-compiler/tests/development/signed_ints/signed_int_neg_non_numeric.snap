@@ -5,24 +5,11 @@ info:
   edition: development
   lint: false
 ---
-warning[W04039]: unable to determine principal type for literal
-  ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:7:19
+error[E04003]: built-in operation not supported
+  ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:7:18
   │
 7 │         let _x = -true;
-  │                   ^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
-  │
-  = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
-  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E04007]: incompatible types
-  ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:7:19
-  │
-7 │         let _x = -true;
-  │                   ^^^^
-  │                   │
-  │                   Invalid argument to '-'
-  │                   Expected: '_'
-  │                   Given: 'bool'
+  │                  ^^^^^ Negation '-' is only valid for numeric types, but found 'bool'
 
 warning[W04039]: unable to determine principal type for literal
    ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:12:19
@@ -44,24 +31,11 @@ error[E04007]: incompatible types
    │                   Invalid argument to '-'
    │                   Expected: '_'
 
-warning[W04039]: unable to determine principal type for literal
-   ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:17:19
+error[E04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:17:18
    │
 17 │         let _x = -@0x42;
-   │                   ^^^^^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
-   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E04007]: incompatible types
-   ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:17:19
-   │
-17 │         let _x = -@0x42;
-   │                   ^^^^^
-   │                   │
-   │                   Invalid argument to '-'
-   │                   Expected: '_'
-   │                   Given: 'address'
+   │                  ^^^^^^ Negation '-' is only valid for numeric types, but found 'address'
 
 warning[W04039]: unable to determine principal type for literal
    ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:23:19
