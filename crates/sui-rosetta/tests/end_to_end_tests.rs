@@ -19,7 +19,9 @@ use sui_rosetta::types::{
 use sui_rosetta::types::{Currencies, OperationType, TransactionIdentifierResponse};
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest, GetTransactionRequest};
+use sui_rpc::proto::sui::rpc::v2::{
+    GetCheckpointRequest, GetEpochRequest, GetTransactionRequest, ListOwnedObjectsRequest,
+};
 
 mod test_utils;
 use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
@@ -1783,4 +1785,369 @@ async fn test_block_transaction() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_convert_to_fungible_staked_sui() {
+    telemetry_subscribers::init_for_testing();
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(60000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    let gas_price = client.get_reference_gas_price().await.unwrap();
+    let coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+
+    // Stake a coin to create a StakedSui object
+    let staking_coin_ref = get_object_ref(&mut client.clone(), coins[0].id())
+        .await
+        .unwrap();
+    let gas_object = get_random_sui(&mut client.clone(), sender, vec![coins[0].id()]).await;
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let arguments = vec![
+        ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap(),
+        ptb.make_obj_vec(vec![ObjectArg::ImmOrOwnedObject(
+            staking_coin_ref.as_object_ref(),
+        )])
+        .unwrap(),
+        ptb.pure(Some(1_000_000_000u64)).unwrap(),
+        ptb.pure(validator).unwrap(),
+    ];
+    ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        ADD_STAKE_MUL_COIN_FUN_NAME.to_owned(),
+        vec![],
+        arguments,
+    ));
+    let tx_data = TransactionData::new_programmable(
+        sender,
+        vec![gas_object],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(tx_data, keystore.export(&sender).unwrap());
+    execute_transaction(&mut client.clone(), &tx)
+        .await
+        .unwrap();
+
+    // Advance epoch so stake becomes active
+    test_cluster.trigger_reconfiguration().await;
+
+    // Find the StakedSui object
+    use futures::TryStreamExt;
+    let list_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+
+    let staked_sui_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(list_request)
+        .map_err(sui_rosetta::errors::Error::from)
+        .and_then(|object| async move {
+            let object_id = ObjectID::from_hex_literal(object.object_id()).map_err(|e| {
+                sui_rosetta::errors::Error::InvalidInput(format!("Invalid object_id: {}", e))
+            })?;
+            let version: u64 = object.version.ok_or_else(|| {
+                sui_rosetta::errors::Error::InvalidInput("Version missing".to_string())
+            })?;
+            let digest_str = object.digest.as_ref().ok_or_else(|| {
+                sui_rosetta::errors::Error::InvalidInput("Digest missing".to_string())
+            })?;
+            let digest: sui_types::base_types::ObjectDigest = digest_str.parse().map_err(|e| {
+                sui_rosetta::errors::Error::InvalidInput(format!("Invalid digest: {}", e))
+            })?;
+            Ok((
+                object_id,
+                sui_types::base_types::SequenceNumber::from_u64(version),
+                digest,
+            ))
+        })
+        .try_collect()
+        .await
+        .unwrap();
+
+    assert!(
+        !staked_sui_objects.is_empty(),
+        "Expected at least 1 StakedSui object, got 0",
+    );
+
+    let staked_sui_id = staked_sui_objects[0].0;
+
+    // Now use Rosetta to convert StakedSui to FungibleStakedSui
+    let ops: Operations = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConvertToFungibleStakedSui",
+        "account": { "address": sender.to_string() },
+        "metadata": { "ConvertToFungibleStakedSui": {
+            "staked_sui_id": staked_sui_id.to_string(),
+        }}
+    }]))
+    .unwrap();
+
+    let response = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Fetch and verify the transaction
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(response.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events",
+        ]));
+
+    let grpc_response = client
+        .clone()
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let tx = grpc_response
+        .transaction
+        .expect("Response transaction should not be empty");
+
+    assert!(
+        tx.effects().status().success(),
+        "ConvertToFungibleStakedSui transaction failed: {:?}",
+        tx.effects().status().error()
+    );
+
+    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
+    let ops2 = fetch_transaction_and_get_operations(
+        &test_cluster,
+        tx.digest().parse().unwrap(),
+        &coin_cache,
+    )
+    .await
+    .unwrap();
+    assert!(
+        ops2.contains(&ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string(&ops).unwrap(),
+        serde_json::to_string(&ops2).unwrap()
+    );
+}
+
+#[tokio::test]
+async fn test_convert_to_fungible_staked_sui_read_path() {
+    telemetry_subscribers::init_for_testing();
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(60000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    let gas_price = client.get_reference_gas_price().await.unwrap();
+    let coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+
+    // Stake a coin
+    let staking_coin_ref = get_object_ref(&mut client.clone(), coins[0].id())
+        .await
+        .unwrap();
+    let gas_object = get_random_sui(&mut client.clone(), sender, vec![coins[0].id()]).await;
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let arguments = vec![
+        ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap(),
+        ptb.make_obj_vec(vec![ObjectArg::ImmOrOwnedObject(
+            staking_coin_ref.as_object_ref(),
+        )])
+        .unwrap(),
+        ptb.pure(Some(1_000_000_000u64)).unwrap(),
+        ptb.pure(validator).unwrap(),
+    ];
+    ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        ADD_STAKE_MUL_COIN_FUN_NAME.to_owned(),
+        vec![],
+        arguments,
+    ));
+    let tx_data = TransactionData::new_programmable(
+        sender,
+        vec![gas_object],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(tx_data, keystore.export(&sender).unwrap());
+    execute_transaction(&mut client.clone(), &tx)
+        .await
+        .unwrap();
+
+    test_cluster.trigger_reconfiguration().await;
+
+    // Find StakedSui object
+    use futures::TryStreamExt;
+    let list_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+
+    let staked_sui_objects: Vec<ObjectRef> = client
+        .clone()
+        .list_owned_objects(list_request)
+        .map_err(sui_rosetta::errors::Error::from)
+        .and_then(|object| async move {
+            let object_id = ObjectID::from_hex_literal(object.object_id()).map_err(|e| {
+                sui_rosetta::errors::Error::InvalidInput(format!("Invalid object_id: {}", e))
+            })?;
+            let version: u64 = object.version.ok_or_else(|| {
+                sui_rosetta::errors::Error::InvalidInput("Version missing".to_string())
+            })?;
+            let digest_str = object.digest.as_ref().ok_or_else(|| {
+                sui_rosetta::errors::Error::InvalidInput("Digest missing".to_string())
+            })?;
+            let digest: sui_types::base_types::ObjectDigest = digest_str.parse().map_err(|e| {
+                sui_rosetta::errors::Error::InvalidInput(format!("Invalid digest: {}", e))
+            })?;
+            Ok((
+                object_id,
+                sui_types::base_types::SequenceNumber::from_u64(version),
+                digest,
+            ))
+        })
+        .try_collect()
+        .await
+        .unwrap();
+
+    assert!(!staked_sui_objects.is_empty());
+
+    let staked_ref = staked_sui_objects[0];
+
+    // Convert StakedSui to FungibleStakedSui using direct PTB
+    let gas_object = get_random_sui(&mut client.clone(), sender, vec![staked_ref.0]).await;
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let system_state = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+    let staked_sui = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
+    let result = ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        Identifier::new("sui_system").unwrap(),
+        Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+        vec![],
+        vec![system_state, staked_sui],
+    ));
+    let sender_arg = ptb.pure(sender).unwrap();
+    ptb.command(Command::TransferObjects(vec![result], sender_arg));
+    let tx_data = TransactionData::new_programmable(
+        sender,
+        vec![gas_object],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(tx_data, keystore.export(&sender).unwrap());
+    let response = execute_transaction(&mut client.clone(), &tx)
+        .await
+        .unwrap();
+
+    assert!(
+        response.effects().status().success(),
+        "Direct convert to fungible staked sui failed: {:?}",
+        response.effects().status().error()
+    );
+
+    // Now read back the transaction through Rosetta and verify the operation is recognized
+    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
+    let ops = fetch_transaction_and_get_operations(
+        &test_cluster,
+        response.digest().parse().unwrap(),
+        &coin_cache,
+    )
+    .await
+    .unwrap();
+
+    // Construct the expected operation and verify it is found in the parsed transaction
+    let expected_ops: Operations = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConvertToFungibleStakedSui",
+        "account": { "address": sender.to_string() },
+        "metadata": { "ConvertToFungibleStakedSui": {
+            "staked_sui_id": staked_ref.0.to_string(),
+        }}
+    }]))
+    .unwrap();
+    assert!(
+        ops.contains(&expected_ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string(&expected_ops).unwrap(),
+        serde_json::to_string(&ops).unwrap()
+    );
+
+    // Also verify the operation type appears in serialized form
+    let ops_json = serde_json::to_string(&ops).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&ops_json).unwrap();
+    let ops_array = parsed.as_array().unwrap();
+    let convert_op = ops_array
+        .iter()
+        .find(|op| op["type"] == "ConvertToFungibleStakedSui")
+        .expect("Expected ConvertToFungibleStakedSui operation in parsed transaction");
+    assert_eq!(convert_op["account"]["address"], sender.to_string());
+    assert!(
+        convert_op.get("amount").is_none() || convert_op["amount"].is_null()
+    );
+    assert_eq!(
+        convert_op["metadata"]["ConvertToFungibleStakedSui"]["staked_sui_id"],
+        staked_ref.0.to_string()
+    );
 }
