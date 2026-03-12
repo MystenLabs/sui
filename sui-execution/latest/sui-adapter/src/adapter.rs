@@ -32,8 +32,8 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         base_types::*,
-        error::ExecutionError,
-        error::{ExecutionErrorKind, SuiError},
+        error::{ExecutionError, SuiError},
+        execution_status::ExecutionErrorKind,
         metrics::LimitsMetrics,
         storage::ChildObjectResolver,
     };
@@ -69,6 +69,7 @@ mod checked {
             variant_nodes: protocol_config.variant_nodes(),
             deprecate_global_storage_ops_during_deserialization: protocol_config
                 .deprecate_global_storage_ops_during_deserialization(),
+            normalize_depth_formula: protocol_config.normalize_depth_formula(),
         }
     }
 

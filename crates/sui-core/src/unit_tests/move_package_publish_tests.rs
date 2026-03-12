@@ -23,7 +23,7 @@ use crate::authority::move_integration_tests::{
 use std::collections::HashSet;
 use sui_framework::BuiltInFramework;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 #[tokio::test]
@@ -133,7 +133,7 @@ async fn test_publish_empty_package() {
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            error: ExecutionErrorKind::VMVerificationOrDeserializationError,
             command: Some(0)
         })
     )
@@ -166,7 +166,7 @@ async fn test_publish_duplicate_modules() {
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            error: ExecutionErrorKind::VMVerificationOrDeserializationError,
             command: Some(0)
         })
     )
@@ -217,7 +217,7 @@ async fn test_publish_extraneous_bytes_modules() {
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            error: ExecutionErrorKind::VMVerificationOrDeserializationError,
             command: Some(0)
         })
     );
@@ -242,7 +242,7 @@ async fn test_publish_extraneous_bytes_modules() {
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            error: ExecutionErrorKind::VMVerificationOrDeserializationError,
             command: Some(0)
         })
     );
@@ -276,7 +276,7 @@ async fn test_publish_extraneous_bytes_modules() {
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            error: ExecutionErrorKind::VMVerificationOrDeserializationError,
             command: Some(0)
         })
     )

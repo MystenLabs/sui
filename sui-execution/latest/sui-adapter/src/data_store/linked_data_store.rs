@@ -14,10 +14,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_types::data_store::DataStore;
-use sui_types::{
-    base_types::ObjectID,
-    error::{ExecutionErrorKind, SuiError},
-};
+use sui_types::{base_types::ObjectID, error::SuiError, execution_status::ExecutionErrorKind};
 
 /// A `LinkedDataStore` is a wrapper around a `PackageStore` (i.e., a package store where
 /// we can also resolve types to defining IDs) along with a specific `linkage`. These two together

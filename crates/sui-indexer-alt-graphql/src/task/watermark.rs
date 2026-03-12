@@ -261,6 +261,10 @@ impl Watermarks {
             .as_millis() as u64
     }
 
+    pub(crate) fn initialized(&self) -> bool {
+        self.global_hi.checkpoint != i64::MAX
+    }
+
     fn merge(&mut self, row: WatermarkRow) {
         let pipeline = Pipeline {
             hi: Watermark {

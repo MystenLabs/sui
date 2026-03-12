@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --simulator --accounts A --addresses test=0x0 --reference-gas-price 700 
+//# init --accounts A --addresses test=0x0 --reference-gas-price 700
 
 //# publish
 module test::gas_test;

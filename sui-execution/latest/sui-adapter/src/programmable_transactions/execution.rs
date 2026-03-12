@@ -58,9 +58,11 @@ mod checked {
             TxContext, TxContextKind,
         },
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+        error::{ExecutionError, command_argument_error},
         execution::{ExecutionTiming, ResultWithTimings},
-        execution_status::{CommandArgumentError, PackageUpgradeError, TypeArgumentError},
+        execution_status::{
+            CommandArgumentError, ExecutionErrorKind, PackageUpgradeError, TypeArgumentError,
+        },
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{

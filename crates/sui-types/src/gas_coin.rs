@@ -16,7 +16,8 @@ use crate::{
     balance::Balance,
     base_types::{ObjectID, SequenceNumber},
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind},
+    error::ExecutionError,
+    execution_status::ExecutionErrorKind,
     object::{Data, MoveObject, Object},
 };
 

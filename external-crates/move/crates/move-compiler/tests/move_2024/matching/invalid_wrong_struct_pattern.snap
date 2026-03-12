@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/invalid_wrong_struct_pattern.move:12:13
+   │
+10 │     fun f(s: S): u64 {
+   │              - Expected: '0x0::M::S'
+11 │         match (s) {
+12 │             T { y } => y,
+   │             ^^^^^^^
+   │             │
+   │             Invalid pattern
+   │             Given: '0x0::M::T'

@@ -114,7 +114,6 @@ feature_flags:
   address_balance_gas_check_rgp_at_signing: true
   address_balance_gas_reject_gas_coin_arg: true
   enable_multi_epoch_transaction_expiration: true
-  relax_valid_during_for_owned_inputs: true
   enable_ptb_execution_v2: true
   better_adapter_type_resolution_errors: true
   record_time_estimate_processed: true
@@ -135,9 +134,9 @@ feature_flags:
   generate_df_type_layouts: true
   private_generics_verifier_v2: true
   deprecate_global_storage_ops: true
+  normalize_depth_formula: true
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
-  address_aliases: true
   fix_checkpoint_signature_mapping: true
   consensus_skip_gced_blocks_in_direct_finalization: true
   gas_rounding_halve_digits: true
@@ -147,7 +146,6 @@ feature_flags:
   consensus_always_accept_system_transactions: true
   validator_metadata_verify_v2: true
   randomize_checkpoint_tx_limit_in_tests: true
-  gasless_transaction_drop_safety: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

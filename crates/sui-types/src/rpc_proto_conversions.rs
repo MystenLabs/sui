@@ -1181,9 +1181,9 @@ fn index_error(index: u32, secondary_idx: Option<u32>) -> IndexError {
     message
 }
 
-impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
-    fn from(value: crate::execution_status::ExecutionFailureStatus) -> Self {
-        use crate::execution_status::ExecutionFailureStatus as E;
+impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
+    fn from(value: crate::execution_status::ExecutionErrorKind) -> Self {
+        use crate::execution_status::ExecutionErrorKind as E;
         use execution_error::ErrorDetails;
         use execution_error::ExecutionErrorKind;
 

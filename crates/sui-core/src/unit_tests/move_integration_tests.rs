@@ -17,7 +17,7 @@ use move_core_types::{
 use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
-    error::ExecutionErrorKind,
+    execution_status::ExecutionErrorKind,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
 };
@@ -33,9 +33,7 @@ use sui_types::{
 
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
-use sui_types::execution_status::{
-    CommandArgumentError, ExecutionFailure, ExecutionFailureStatus, ExecutionStatus,
-};
+use sui_types::execution_status::{CommandArgumentError, ExecutionFailure, ExecutionStatus};
 use sui_types::move_package::UpgradeCap;
 
 #[tokio::test]
@@ -2044,7 +2042,7 @@ async fn test_entry_point_string_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2079,7 +2077,7 @@ async fn test_entry_point_string_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2114,7 +2112,7 @@ async fn test_entry_point_string_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2169,7 +2167,7 @@ async fn test_entry_point_string_vec_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2214,7 +2212,7 @@ async fn test_entry_point_string_option_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2244,7 +2242,7 @@ async fn test_entry_point_string_option_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2272,7 +2270,7 @@ async fn test_entry_point_string_option_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2580,7 +2578,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::command_argument_error(
+            error: ExecutionErrorKind::command_argument_error(
                 CommandArgumentError::InvalidMakeMoveVecNonObjectArgument,
                 0
             ),
@@ -2609,7 +2607,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::command_argument_error(
+            error: ExecutionErrorKind::command_argument_error(
                 CommandArgumentError::InvalidBCSBytes,
                 0
             ),
@@ -2640,7 +2638,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::command_argument_error(
+            error: ExecutionErrorKind::command_argument_error(
                 CommandArgumentError::InvalidBCSBytes,
                 3,
             ),

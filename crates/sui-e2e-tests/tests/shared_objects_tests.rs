@@ -16,7 +16,7 @@ use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{
-    CommandArgumentError, ExecutionFailure, ExecutionFailureStatus, ExecutionStatus,
+    CommandArgumentError, ExecutionErrorKind, ExecutionFailure, ExecutionStatus,
 };
 use sui_types::messages_grpc::WaitForEffectsResponse;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
@@ -419,7 +419,7 @@ async fn call_shared_object_contract() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidObjectByMutRef,
             },

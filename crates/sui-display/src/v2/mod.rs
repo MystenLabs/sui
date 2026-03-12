@@ -7,12 +7,12 @@ use futures::future::try_join_all;
 use futures::join;
 use indexmap::IndexMap;
 
-use crate::v2::error::Error;
 use crate::v2::meter::Meter;
 use crate::v2::parser::Chain;
 use crate::v2::parser::Literal;
 use crate::v2::parser::Parser;
 use crate::v2::parser::Strand;
+use crate::v2::writer::JsonValue;
 use crate::v2::writer::Writer;
 
 mod error;
@@ -25,6 +25,7 @@ mod value;
 mod visitor;
 mod writer;
 
+pub use crate::v2::error::Error;
 pub use crate::v2::error::FormatError;
 pub use crate::v2::interpreter::Interpreter;
 pub use crate::v2::meter::Limits;
@@ -121,15 +122,15 @@ impl<'s> Format<'s> {
     }
 
     /// Evaluate the format string returning a formatted JSON value.
-    pub async fn format<S: Store>(
+    pub async fn format<V: JsonValue>(
         &'s self,
-        interpreter: &'s Interpreter<S>,
+        interpreter: &'s Interpreter<impl Store>,
         max_depth: usize,
         max_output_size: usize,
-    ) -> Result<serde_json::Value, FormatError> {
+    ) -> Result<V, FormatError> {
         let writer = Writer::new(max_depth, max_output_size);
         let Some(value) = interpreter.eval_strands(&self.0).await? else {
-            return Ok(serde_json::Value::Null);
+            return Ok(V::null());
         };
 
         writer.write(value)
@@ -178,12 +179,12 @@ impl<'s> Display<'s> {
     /// This operation requires all field names to evaluate successfully to unique strings, and for
     /// the overall output to be bounded by `max_depth` and `max_output_size`, but otherwise
     /// supports partial failures (if one of the field values fails to parse or evaluate).
-    pub async fn display<S: Store>(
+    pub async fn display<V: JsonValue>(
         &'s self,
-        interpreter: &'s Interpreter<S>,
         max_depth: usize,
         max_output_size: usize,
-    ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
+        interpreter: &'s Interpreter<impl Store>,
+    ) -> Result<IndexMap<String, Result<V, FormatError>>, Error> {
         let writer = Arc::new(Writer::new(max_depth, max_output_size));
         let mut output = IndexMap::new();
 
@@ -200,7 +201,7 @@ impl<'s> Display<'s> {
 
                 let evaluated = match interpreter.eval_strands(strands).await {
                     Ok(Some(v)) => v,
-                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Ok(None) => return Ok(Ok(V::null())),
                     Err(e) => return Ok(Err(e)),
                 };
 
@@ -221,7 +222,7 @@ impl<'s> Display<'s> {
 
                 let evaluated = match interpreter.eval_strands(strands).await {
                     Ok(Some(v)) => v,
-                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Ok(None) => return Ok(Ok(V::null())),
                     Err(e) => return Ok(Err(e)),
                 };
 
@@ -242,13 +243,12 @@ impl<'s> Display<'s> {
 
         for ((field, name), value) in self.fields.iter().zip(names).zip(values) {
             use indexmap::map::Entry;
-            use serde_json::Value as JSON;
 
             let src = field.key.src;
 
             let n = match name {
-                Ok(JSON::String(n)) => n,
-                Ok(JSON::Null) => return Err(Error::NameEmpty(src.to_owned())),
+                Ok(v) if v.is_string() => v.as_string().unwrap().to_owned(),
+                Ok(v) if v.is_null() => return Err(Error::NameEmpty(src.to_owned())),
                 Ok(_) => return Err(Error::NameInvalid(src.to_owned())),
                 Err(e) => return Err(Error::NameEvaluation(src.to_owned(), e)),
             };
@@ -268,8 +268,10 @@ impl<'s> Display<'s> {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
 
+    use async_trait::async_trait;
     use base64::Engine as _;
     use base64::engine::general_purpose::STANDARD;
     use insta::assert_debug_snapshot;
@@ -287,6 +289,8 @@ mod tests {
     use sui_types::dynamic_field::derive_dynamic_field_id;
     use sui_types::id::ID;
     use sui_types::id::UID;
+    use tokio::sync::Barrier;
+    use tokio::time::Duration;
 
     use crate::v2::value::tests::MockStore;
     use crate::v2::value::tests::enum_;
@@ -315,7 +319,7 @@ mod tests {
             return Ok(None);
         };
 
-        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+        let writer: JsonWriter = JsonWriter::new(&used, usize::MAX, usize::MAX);
         Ok(Some(value.format_json(writer)?))
     }
 
@@ -355,7 +359,7 @@ mod tests {
 
     /// Helper to parse display fields and render them against the provided object.
     async fn format<'s>(
-        store: MockStore,
+        store: impl Store,
         limits: Limits,
         bytes: Vec<u8>,
         layout: MoveTypeLayout,
@@ -365,7 +369,7 @@ mod tests {
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
         let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
         Display::parse(limits, fields)?
-            .display(&interpreter, max_depth, max_output_size)
+            .display(max_depth, max_output_size, &interpreter)
             .await
     }
 
@@ -701,7 +705,7 @@ mod tests {
             bytes,
         };
 
-        let mut output = Vec::with_capacity(formats.len());
+        let mut output: Vec<serde_json::Value> = Vec::with_capacity(formats.len());
         let interpreter = Interpreter::new(root, store);
         for s in formats {
             let format = Format::parse(Limits::default(), s).unwrap();
@@ -1428,6 +1432,67 @@ mod tests {
             ),
             "miss": Ok(
                 Null,
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_display_concurrent_dynamic_field_fetch() {
+        // Define a store that intentionally holds back requests to the store so they operate
+        // concurrently.
+        #[derive(Clone)]
+        struct BlockingStore {
+            barrier: Arc<Barrier>,
+            inner: MockStore,
+        }
+
+        #[async_trait]
+        impl Store for BlockingStore {
+            async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>> {
+                self.barrier.wait().await;
+                self.inner.object(id).await
+            }
+        }
+
+        let parent = AccountAddress::from_str("0x1200").unwrap();
+        let bytes = bcs::to_bytes(&parent).unwrap();
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![("id", L::Struct(Box::new(UID::layout())))],
+        );
+
+        let store = BlockingStore {
+            barrier: Arc::new(Barrier::new(2)),
+            inner: MockStore::default().with_dynamic_field(
+                parent,
+                "key",
+                L::Struct(Box::new(move_utf8_str_layout())),
+                42u64,
+                L::U64,
+            ),
+        };
+
+        let rendered = tokio::time::timeout(
+            Duration::from_secs(10),
+            format(
+                store,
+                Limits::default(),
+                bytes,
+                layout,
+                usize::MAX,
+                ONE_MB,
+                [("concurrent", "{id->['key']}{id->['key']}")],
+            ),
+        )
+        .await
+        .expect("back-to-back dynamic field expressions should not block")
+        .unwrap();
+
+        assert_debug_snapshot!(rendered, @r###"
+        {
+            "concurrent": Ok(
+                String("4242"),
             ),
         }
         "###);

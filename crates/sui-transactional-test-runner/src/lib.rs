@@ -67,6 +67,8 @@ pub struct ValidatorWithFullnode {
     pub validator: Arc<AuthorityState>,
     pub fullnode: Arc<AuthorityState>,
     pub kv_store: Arc<TransactionKeyValueStore>,
+    pending_effects: Vec<TransactionEffects>,
+    next_checkpoint_seq: u64,
 }
 
 #[allow(unused_variables)]
@@ -143,7 +145,9 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             is_consensus_tx,
         )
         .await?;
-        Ok((effects.into_data(), execution_error))
+        let effects = effects.into_data();
+        self.pending_effects.push(effects.clone());
+        Ok((effects, execution_error))
     }
 
     async fn read_input_objects(
@@ -239,7 +243,20 @@ impl TransactionalAdapter for ValidatorWithFullnode {
     }
 
     async fn create_checkpoint(&mut self) -> anyhow::Result<VerifiedCheckpoint> {
-        unimplemented!("create_checkpoint not supported")
+        let checkpoint_seq = self.next_checkpoint_seq;
+        self.next_checkpoint_seq += 1;
+        let effects = std::mem::take(&mut self.pending_effects);
+        if !effects.is_empty() {
+            let replay_txns = self
+                .validator
+                .settle_accumulator_for_testing(&effects, Some(checkpoint_seq))
+                .await;
+            self.fullnode
+                .replay_settlement_for_testing(&replay_txns)
+                .await;
+        }
+        self.get_checkpoint_by_sequence_number(0)
+            .ok_or_else(|| anyhow::anyhow!("No genesis checkpoint found"))
     }
 
     async fn advance_clock(
@@ -295,6 +312,13 @@ impl ReadStore for ValidatorWithFullnode {
 
     fn get_latest_epoch_id(&self) -> sui_types::storage::error::Result<EpochId> {
         Ok(self.validator.epoch_store_for_testing().epoch())
+    }
+
+    fn get_latest_checkpoint_sequence_number(
+        &self,
+    ) -> sui_types::storage::error::Result<sui_types::messages_checkpoint::CheckpointSequenceNumber>
+    {
+        Ok(self.next_checkpoint_seq.saturating_sub(1))
     }
 
     fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {

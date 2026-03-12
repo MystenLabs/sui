@@ -7,7 +7,7 @@ use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
 use crate::{TransactionalAdapter, ValidatorWithFullnode, cursor};
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use anyhow::{Context, anyhow, bail, ensure};
+use anyhow::{Context, anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
 use criterion::Criterion;
@@ -79,7 +79,7 @@ use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest, TransactionDige
 use sui_types::effects::{
     AccumulatorOperation, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
 };
-use sui_types::execution_status::ExecutionFailureStatus;
+use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
@@ -273,7 +273,6 @@ impl AdapterInitConfig {
             ProtocolConfig::get_for_max_version_UNSAFE()
         };
         if enable_accumulators {
-            assert!(simulator, "enable-accumulators requires simulator");
             protocol_config.enable_accumulators_for_testing();
         }
         if enable_authenticated_event_streams {
@@ -289,10 +288,6 @@ impl AdapterInitConfig {
             protocol_config.set_shared_object_deletion_for_testing(enable);
         }
         if enable_address_balance_gas_payments {
-            assert!(
-                simulator,
-                "enable-address-balance-gas-payments requires simulator"
-            );
             protocol_config.enable_address_balance_gas_payments_for_testing();
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
@@ -316,9 +311,6 @@ impl AdapterInitConfig {
         let num_custom_validator_accounts = num_custom_validator_accounts.unwrap_or(0);
         if num_custom_validator_accounts > 0 && !simulator {
             panic!("Can only set custom validator account in simulator mode");
-        }
-        if reference_gas_price.is_some() && !simulator {
-            panic!("Can only set reference gas price in simulator mode");
         }
 
         let offchain_config = if simulator {
@@ -448,8 +440,14 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             )
             .await
         } else {
-            init_val_fullnode_executor(rng, account_names, additional_mapping, &protocol_config)
-                .await
+            init_val_fullnode_executor(
+                rng,
+                account_names,
+                additional_mapping,
+                &protocol_config,
+                reference_gas_price,
+            )
+            .await
         };
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
@@ -965,11 +963,6 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 address_balance_gas,
                 gas_price,
             }) => {
-                // address_balance_gas ==> is simulator
-                ensure!(
-                    !address_balance_gas || self.is_simulator(),
-                    "Address balance gas payments are only supported in simulator mode"
-                );
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let obj_arg = SuiValue::Object(fake_id, None).into_argument(&mut builder, self)?;
                 let recipient = match self.accounts.get(&recipient) {
@@ -1026,11 +1019,6 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 expiration,
                 inputs,
             }) => {
-                // address_balance_gas ==> is simulator
-                ensure!(
-                    !address_balance_gas || self.is_simulator(),
-                    "Address balance gas payments are only supported in simulator mode"
-                );
                 if dev_inspect && self.is_simulator() {
                     bail!("Dev inspect is not supported on simulator mode");
                 }
@@ -1160,11 +1148,6 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 policy,
                 gas_price,
             }) => {
-                // address_balance_gas ==> is simulator
-                ensure!(
-                    !address_balance_gas || self.is_simulator(),
-                    "Address balance gas payments are only supported in simulator mode"
-                );
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 // zero out the package name
                 let zero =
@@ -1981,7 +1964,7 @@ impl SuiTestAdapter {
                     format!("Execution Error: {}", error_opt.unwrap())
                 };
                 let error = match error {
-                    ExecutionFailureStatus::MoveAbort(loc, code)
+                    ExecutionErrorKind::MoveAbort(loc, code)
                         if ErrorBitset::from_u64(*code).is_some() =>
                     {
                         let clever_code = ErrorBitset::from_u64(*code).unwrap();
@@ -2570,12 +2553,13 @@ pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
 async fn create_validator_fullnode(
     protocol_config: &ProtocolConfig,
     objects: &[Object],
+    reference_gas_price: Option<u64>,
 ) -> (Arc<AuthorityState>, Arc<AuthorityState>) {
     // Build network config once and share it between validator and fullnode
     let network_config = {
         let mut builder =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                .with_reference_gas_price(500);
+                .with_reference_gas_price(reference_gas_price.unwrap_or(500));
         builder = builder.with_protocol_version(protocol_config.version);
         builder.build()
     };
@@ -2584,6 +2568,7 @@ async fn create_validator_fullnode(
         .with_protocol_config(protocol_config.clone())
         .with_starting_objects(objects)
         .with_shared_network_config(&network_config)
+        .insert_genesis_checkpoint()
         .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
@@ -2595,6 +2580,7 @@ async fn create_validator_fullnode(
         .with_starting_objects(objects)
         .with_shared_network_config(&network_config)
         .with_keypair(&fullnode_key_pair)
+        .insert_genesis_checkpoint()
         .skip_rpc_index_init()
         .skip_genesis_owner_index()
         .build()
@@ -2606,8 +2592,10 @@ async fn create_validator_fullnode(
 async fn create_val_fullnode_executor(
     protocol_config: &ProtocolConfig,
     objects: &[Object],
+    reference_gas_price: Option<u64>,
 ) -> ValidatorWithFullnode {
-    let (validator, fullnode) = create_validator_fullnode(protocol_config, objects).await;
+    let (validator, fullnode) =
+        create_validator_fullnode(protocol_config, objects, reference_gas_price).await;
 
     let metrics = KeyValueStoreMetrics::new_for_tests();
     let kv_store = Arc::new(TransactionKeyValueStore::new(
@@ -2620,6 +2608,8 @@ async fn create_val_fullnode_executor(
         validator,
         fullnode,
         kv_store,
+        pending_effects: Vec::new(),
+        next_checkpoint_seq: 1, // 0 is genesis
     }
 }
 
@@ -2639,6 +2629,7 @@ async fn init_val_fullnode_executor(
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
+    reference_gas_price: Option<u64>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -2678,7 +2669,9 @@ async fn init_val_fullnode_executor(
     // Make a default account with a gas object
     let default_account = mk_account();
 
-    let executor = Box::new(create_val_fullnode_executor(protocol_config, &objects).await);
+    let executor = Box::new(
+        create_val_fullnode_executor(protocol_config, &objects, reference_gas_price).await,
+    );
 
     update_named_address_mapping(
         &mut named_address_mapping,
