@@ -1040,9 +1040,6 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_free_tier: bool,
-
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    free_tier_allowed_token_types: Vec<String>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1913,6 +1910,9 @@ pub struct ProtocolConfig {
 
     /// Maximum computation units allowed for a free tier transaction.
     free_tier_max_computation_units: Option<u64>,
+
+    /// Allowed token types for free tier transactions.
+    free_tier_allowed_token_types: Option<Vec<String>>,
 }
 
 /// An aliased address.
@@ -2701,7 +2701,9 @@ impl ProtocolConfig {
     }
 
     pub fn free_tier_allowed_token_types(&self) -> &[String] {
-        &self.feature_flags.free_tier_allowed_token_types
+        self.free_tier_allowed_token_types
+            .as_deref()
+            .expect(Self::CONSTANT_ERR_MSG)
     }
 }
 
@@ -3291,6 +3293,7 @@ impl ProtocolConfig {
             max_updates_per_settlement_txn: None,
 
             free_tier_max_computation_units: None,
+            free_tier_allowed_token_types: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4720,6 +4723,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_free_tier = true;
                         cfg.free_tier_max_computation_units = Some(50_000);
+                        cfg.free_tier_allowed_token_types = Some(vec![]);
                     }
                 }
                 117 => {}
@@ -5081,6 +5085,7 @@ impl ProtocolConfig {
         self.enable_address_balance_gas_payments_for_testing();
         self.feature_flags.enable_free_tier = true;
         self.free_tier_max_computation_units = Some(50_000);
+        self.free_tier_allowed_token_types = Some(vec![]);
     }
 
     pub fn disable_free_tier_for_testing(&mut self) {
@@ -5088,7 +5093,7 @@ impl ProtocolConfig {
     }
 
     pub fn set_free_tier_allowed_token_types_for_testing(&mut self, types: Vec<String>) {
-        self.feature_flags.free_tier_allowed_token_types = types;
+        self.free_tier_allowed_token_types = Some(types);
     }
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {

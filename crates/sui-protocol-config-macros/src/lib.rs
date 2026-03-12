@@ -78,6 +78,14 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
                             panic!("Expected angle bracketed arguments.");
                         };
 
+                        // Skip vec types - write your own accessor
+                        let is_vec = matches!(&inner_type, Type::Path(tp)
+                            if tp.path.segments.last()
+                                .is_some_and(|s| s.ident == "Vec"));
+                        if is_vec {
+                            return None;
+                        }
+
                         let as_option_name = format!("{field_name}_as_option");
                         let as_option_name: proc_macro2::TokenStream =
                         as_option_name.parse().unwrap();

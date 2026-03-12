@@ -246,10 +246,8 @@ impl TestEnv {
             .unwrap()
             .0;
         let package_id = self.setup_test_package(path).await;
-        let kitesurf_type: TypeTag = format!("{}::kitesurf::KITESURF", package_id)
-            .parse()
-            .unwrap();
-        (publisher, kitesurf_type)
+        let coin_a_type: TypeTag = format!("{}::coin_a::COIN_A", package_id).parse().unwrap();
+        (publisher, coin_a_type)
     }
 
     pub fn encode_coin_reservation(
