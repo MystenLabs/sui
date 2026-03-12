@@ -5,14 +5,4 @@ info:
   edition: development
   lint: false
 ---
-error[E01002]: unexpected token
-   ┌─ tests/development/signed_ints/signed_int_in_vector.move:28:25
-   │
-28 │         let _v = vector[-_x, 1i64, -_x];
-   │                         ^ Unexpected '-'. Expected a vector argument expression
 
-error[E01002]: unexpected token
-   ┌─ tests/development/signed_ints/signed_int_in_vector.move:28:36
-   │
-28 │         let _v = vector[-_x, 1i64, -_x];
-   │                                    ^ Unexpected '-'. Expected a vector argument expression
