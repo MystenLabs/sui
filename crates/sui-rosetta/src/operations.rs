@@ -32,7 +32,9 @@ use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
-use crate::types::internal_operation::{PayCoin, PaySui, Stake, WithdrawStake};
+use crate::types::internal_operation::{
+    PayCoin, PaySui, RedeemFungibleStakedSui, Stake, WithdrawStake,
+};
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
     InternalOperation, OperationIdentifier, OperationStatus, OperationType,
@@ -104,6 +106,9 @@ impl Operations {
             OperationType::PayCoin => self.pay_coin_ops_to_internal(),
             OperationType::Stake => self.stake_ops_to_internal(),
             OperationType::WithdrawStake => self.withdraw_stake_ops_to_internal(),
+            OperationType::RedeemFungibleStakedSui => {
+                self.redeem_fungible_staked_sui_ops_to_internal()
+            }
             op => Err(Error::UnsupportedOperation(op)),
         }
     }
@@ -247,6 +252,43 @@ impl Operations {
             sender,
             stake_ids,
         }))
+    }
+
+    fn redeem_fungible_staked_sui_ops_to_internal(self) -> Result<InternalOperation, Error> {
+        let mut ops = self
+            .0
+            .into_iter()
+            .filter(|op| op.type_ == OperationType::RedeemFungibleStakedSui)
+            .collect::<Vec<_>>();
+        if ops.len() != 1 {
+            return Err(Error::MalformedOperationError(
+                "RedeemFungibleStakedSui should only have one operation.".into(),
+            ));
+        }
+        let op = ops.pop().unwrap();
+        let sender = op
+            .account
+            .ok_or_else(|| Error::MissingInput("Sender address".to_string()))?
+            .address;
+        let metadata = op.metadata.ok_or_else(|| {
+            Error::MissingInput("RedeemFungibleStakedSui metadata".to_string())
+        })?;
+
+        let OperationMetadata::RedeemFungibleStakedSui {
+            fungible_staked_sui_id,
+        } = metadata
+        else {
+            return Err(Error::InvalidInput(
+                "Cannot find redeem fungible staked sui info from metadata.".into(),
+            ));
+        };
+
+        Ok(InternalOperation::RedeemFungibleStakedSui(
+            RedeemFungibleStakedSui {
+                sender,
+                fungible_staked_sui_id,
+            },
+        ))
     }
 
     pub fn from_transaction(
@@ -519,6 +561,7 @@ impl Operations {
         let mut needs_generic = false;
         let mut operations = vec![];
         let mut stake_ids = vec![];
+        let mut redeem_fungible: Option<ObjectID> = None;
         let mut currency: Option<Currency> = None;
 
         for command in commands {
@@ -556,6 +599,40 @@ impl Operations {
                     let stake_id = unstake_call(inputs, m)?;
                     stake_ids.push(stake_id);
                     Some(vec![])
+                }
+                Some(Command::MoveCall(m))
+                    if Self::is_redeem_fungible_staked_sui_call(m) =>
+                {
+                    let args = &m.arguments;
+                    if let [_system_state_arg, fungible_arg] = &args[..] {
+                        let fss_id = match fungible_arg.kind() {
+                            ArgumentKind::Input => inputs
+                                .get(fungible_arg.input() as usize)
+                                .and_then(|input| {
+                                    if input.kind() == InputKind::ImmutableOrOwned {
+                                        input
+                                            .object_id
+                                            .as_ref()
+                                            .and_then(|oid| ObjectID::from_str(oid).ok())
+                                    } else {
+                                        None
+                                    }
+                                }),
+                            _ => None,
+                        };
+                        if let Some(id) = fss_id {
+                            redeem_fungible = Some(id);
+                            // Skip remaining commands (from_balance + TransferObjects)
+                            break;
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+                Some(Command::MoveCall(m)) if Self::is_coin_from_balance_call(m) => {
+                    into_balance_passthrough(&known_results, m)
                 }
                 Some(Command::MergeCoins(_)) => {
                     // We don't care about merge-coins, we can just skip it.
@@ -646,6 +723,12 @@ impl Operations {
                 coin_change: None,
                 metadata,
             });
+        } else if let Some(fungible_staked_sui_id) = redeem_fungible {
+            operations.push(Operation::redeem_fungible_staked_sui(
+                status,
+                sender,
+                fungible_staked_sui_id,
+            ));
         } else if operations.is_empty() {
             let tx_kind = TransactionKind::default()
                 .with_kind(ProgrammableTransactionKind)
@@ -690,6 +773,26 @@ impl Operations {
             && tx.module() == SUI_SYSTEM_MODULE_NAME.as_str()
             && (tx.function() == WITHDRAW_STAKE_FUN_NAME.as_str()
                 || tx.function() == "request_withdraw_stake_non_entry")
+    }
+
+    fn is_redeem_fungible_staked_sui_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_SYSTEM_PACKAGE_ID
+            && tx.module() == SUI_SYSTEM_MODULE_NAME.as_str()
+            && tx.function() == "redeem_fungible_staked_sui"
+    }
+
+    fn is_coin_from_balance_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
+        package_id == SUI_FRAMEWORK_PACKAGE_ID
+            && tx.module() == "coin"
+            && tx.function() == "from_balance"
     }
 
     /// Recognizes `coin::redeem_funds<T>` calls used for address-balance withdrawals.
@@ -1168,6 +1271,7 @@ pub enum OperationMetadata {
     GenericTransaction(TransactionKind),
     Stake { validator: SuiAddress },
     WithdrawStake { stake_ids: Vec<ObjectID> },
+    RedeemFungibleStakedSui { fungible_staked_sui_id: ObjectID },
 }
 
 impl Operation {
@@ -1283,6 +1387,23 @@ impl Operation {
             amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
+        }
+    }
+    fn redeem_fungible_staked_sui(
+        status: Option<OperationStatus>,
+        sender: SuiAddress,
+        fungible_staked_sui_id: ObjectID,
+    ) -> Self {
+        Self {
+            operation_identifier: Default::default(),
+            type_: OperationType::RedeemFungibleStakedSui,
+            status,
+            account: Some(sender.into()),
+            amount: None,
+            coin_change: None,
+            metadata: Some(OperationMetadata::RedeemFungibleStakedSui {
+                fungible_staked_sui_id,
+            }),
         }
     }
 }
@@ -1412,5 +1533,200 @@ mod tests {
         assert_eq!(data, parsed_data);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_operation_data_parsing_redeem_fungible_staked_sui() -> Result<(), anyhow::Error> {
+        use crate::types::internal_operation::redeem_fungible_staked_sui_pt;
+
+        let gas = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+
+        let fungible_obj = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+
+        let sender = SuiAddress::random_for_testing_only();
+
+        let pt = redeem_fungible_staked_sui_pt(sender, vec![fungible_obj])?;
+        let gas_price = 10;
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
+        );
+
+        let proto_tx: Transaction = data.clone().into();
+        let ops = Operations::new(Operations::from_transaction(
+            proto_tx
+                .kind
+                .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?,
+            sender,
+            None,
+        )?);
+        assert_eq!(1, ops.0.len());
+        assert_eq!(ops.0[0].type_, OperationType::RedeemFungibleStakedSui);
+        assert_eq!(
+            ops.0[0].metadata,
+            Some(OperationMetadata::RedeemFungibleStakedSui {
+                fungible_staked_sui_id: fungible_obj.0,
+            })
+        );
+
+        let metadata = ConstructionMetadata {
+            sender,
+            gas_coins: vec![gas],
+            extra_gas_coins: vec![],
+            objects: vec![fungible_obj],
+            party_objects: vec![],
+            total_coin_value: 0,
+            gas_price,
+            budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            currency: None,
+            address_balance_withdrawal: 0,
+            epoch: None,
+            chain_id: None,
+        };
+        let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
+        assert_eq!(data, parsed_data);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_redeem_fungible_staked_sui_read_path_fields() -> Result<(), anyhow::Error> {
+        use crate::types::internal_operation::redeem_fungible_staked_sui_pt;
+
+        let gas = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let fungible_obj = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let sender = SuiAddress::random_for_testing_only();
+
+        let pt = redeem_fungible_staked_sui_pt(sender, vec![fungible_obj])?;
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
+            10,
+        );
+
+        let proto_tx: Transaction = data.into();
+        let ops = Operations::new(Operations::from_transaction(
+            proto_tx
+                .kind
+                .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?,
+            sender,
+            Some(OperationStatus::Success),
+        )?);
+
+        assert_eq!(1, ops.0.len());
+        let op = &ops.0[0];
+        assert_eq!(op.type_, OperationType::RedeemFungibleStakedSui);
+        assert_eq!(op.status, Some(OperationStatus::Success));
+        assert_eq!(op.account, Some(AccountIdentifier::from(sender)));
+        assert!(op.amount.is_none(), "Redeem should have no amount");
+        assert!(
+            op.coin_change.is_none(),
+            "Redeem should have no coin change"
+        );
+        assert_eq!(
+            op.metadata,
+            Some(OperationMetadata::RedeemFungibleStakedSui {
+                fungible_staked_sui_id: fungible_obj.0,
+            })
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_redeem_fungible_staked_sui_ops_missing_metadata() {
+        let sender = SuiAddress::random_for_testing_only();
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "RedeemFungibleStakedSui",
+            "account": { "address": sender.to_string() },
+        }]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(result.is_err(), "Expected error when metadata is missing");
+    }
+
+    #[tokio::test]
+    async fn test_redeem_fungible_staked_sui_ops_wrong_metadata_type() {
+        let sender = SuiAddress::random_for_testing_only();
+        let validator = SuiAddress::random_for_testing_only();
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "RedeemFungibleStakedSui",
+            "account": { "address": sender.to_string() },
+            "metadata": { "Stake": { "validator": validator.to_string() } }
+        }]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(
+            result.is_err(),
+            "Expected error when metadata type is wrong"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_redeem_fungible_staked_sui_ops_missing_account() {
+        let fungible_id = ObjectID::random();
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "RedeemFungibleStakedSui",
+            "metadata": { "RedeemFungibleStakedSui": {
+                "fungible_staked_sui_id": fungible_id.to_string()
+            }}
+        }]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(result.is_err(), "Expected error when account is missing");
+    }
+
+    #[tokio::test]
+    async fn test_redeem_fungible_staked_sui_ops_duplicate_operations() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fungible_id = ObjectID::random();
+        let ops: Operations = serde_json::from_value(serde_json::json!([
+            {
+                "operation_identifier": {"index": 0},
+                "type": "RedeemFungibleStakedSui",
+                "account": { "address": sender.to_string() },
+                "metadata": { "RedeemFungibleStakedSui": {
+                    "fungible_staked_sui_id": fungible_id.to_string()
+                }}
+            },
+            {
+                "operation_identifier": {"index": 1},
+                "type": "RedeemFungibleStakedSui",
+                "account": { "address": sender.to_string() },
+                "metadata": { "RedeemFungibleStakedSui": {
+                    "fungible_staked_sui_id": fungible_id.to_string()
+                }}
+            }
+        ]))
+        .unwrap();
+        let result = ops.into_internal();
+        assert!(
+            result.is_err(),
+            "Expected error when duplicate redeem operations are provided"
+        );
     }
 }
