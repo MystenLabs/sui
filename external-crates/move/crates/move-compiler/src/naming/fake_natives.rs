@@ -14,7 +14,7 @@ use crate::{
     naming::ast as N,
     parser::ast::FunctionName,
     shared::{
-        Identifier, builtin_type_names as BT,
+        Identifier,
         known_attributes::{AttributeKind_, BytecodeInstructionAttribute},
         stdlib_definitions::STDLIB_ADDRESS_NAME,
     },
@@ -82,14 +82,14 @@ pub fn resolve_builtin(
         _ => return None,
     };
     Some(match (module.value().as_str(), function.value().as_str()) {
-        (BT::VECTOR, "empty") => |tys| IR::Bytecode_::VecPack(expect_one_ty_arg(tys), 0),
-        (BT::VECTOR, "length") => |tys| IR::Bytecode_::VecLen(expect_one_ty_arg(tys)),
-        (BT::VECTOR, "borrow") => |tys| IR::Bytecode_::VecImmBorrow(expect_one_ty_arg(tys)),
-        (BT::VECTOR, "push_back") => |tys| IR::Bytecode_::VecPushBack(expect_one_ty_arg(tys)),
-        (BT::VECTOR, "borrow_mut") => |tys| IR::Bytecode_::VecMutBorrow(expect_one_ty_arg(tys)),
-        (BT::VECTOR, "pop_back") => |tys| IR::Bytecode_::VecPopBack(expect_one_ty_arg(tys)),
-        (BT::VECTOR, "destroy_empty") => |tys| IR::Bytecode_::VecUnpack(expect_one_ty_arg(tys), 0),
-        (BT::VECTOR, "swap") => |tys| IR::Bytecode_::VecSwap(expect_one_ty_arg(tys)),
+        ("vector", "empty") => |tys| IR::Bytecode_::VecPack(expect_one_ty_arg(tys), 0),
+        ("vector", "length") => |tys| IR::Bytecode_::VecLen(expect_one_ty_arg(tys)),
+        ("vector", "borrow") => |tys| IR::Bytecode_::VecImmBorrow(expect_one_ty_arg(tys)),
+        ("vector", "push_back") => |tys| IR::Bytecode_::VecPushBack(expect_one_ty_arg(tys)),
+        ("vector", "borrow_mut") => |tys| IR::Bytecode_::VecMutBorrow(expect_one_ty_arg(tys)),
+        ("vector", "pop_back") => |tys| IR::Bytecode_::VecPopBack(expect_one_ty_arg(tys)),
+        ("vector", "destroy_empty") => |tys| IR::Bytecode_::VecUnpack(expect_one_ty_arg(tys), 0),
+        ("vector", "swap") => |tys| IR::Bytecode_::VecSwap(expect_one_ty_arg(tys)),
         _ => return None,
     })
 }
