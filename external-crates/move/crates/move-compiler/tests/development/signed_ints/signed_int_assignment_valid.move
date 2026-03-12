@@ -4,9 +4,9 @@
 module 0x42::m {
     // Reassignment same type
     fun reassign_same_type() {
-        let mut x: i32 = 1i32;
-        x = 2i32;
-        let _y = x;
+        let mut _x: i32 = 1i32;
+        _x = 2i32;
+        let _y = _x;
     }
 
     // Assign negated value

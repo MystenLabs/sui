@@ -5,22 +5,14 @@ info:
   edition: development
   lint: false
 ---
-warning[W09002]: unused variable
-   ┌─ tests/development/signed_ints/signed_int_in_vector.move:27:13
-   │
-27 │         let x = 5i64;
-   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 error[E01002]: unexpected token
    ┌─ tests/development/signed_ints/signed_int_in_vector.move:28:25
    │
-28 │         let _v = vector[-x, 1i64, -x];
+28 │         let _v = vector[-_x, 1i64, -_x];
    │                         ^ Unexpected '-'. Expected a vector argument expression
 
 error[E01002]: unexpected token
-   ┌─ tests/development/signed_ints/signed_int_in_vector.move:28:35
+   ┌─ tests/development/signed_ints/signed_int_in_vector.move:28:36
    │
-28 │         let _v = vector[-x, 1i64, -x];
-   │                                   ^ Unexpected '-'. Expected a vector argument expression
+28 │         let _v = vector[-_x, 1i64, -_x];
+   │                                    ^ Unexpected '-'. Expected a vector argument expression

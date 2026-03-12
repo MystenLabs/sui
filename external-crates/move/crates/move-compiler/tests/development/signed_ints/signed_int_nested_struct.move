@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module 0x42::m {
-    struct Point has copy, drop {
+    public struct Point has copy, drop {
         x: i32,
         y: i32,
     }
 
-    struct Rect has copy, drop {
+    public struct Rect has copy, drop {
         top_left: Point,
         bottom_right: Point,
     }

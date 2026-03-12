@@ -5,18 +5,4 @@ info:
   edition: development
   lint: false
 ---
-error[E01003]: invalid modifier
-  ┌─ tests/development/signed_ints/signed_int_nested_struct.move:5:5
-  │
-5 │     struct Point has copy, drop {
-  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
-  │
-  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
 
-error[E01003]: invalid modifier
-   ┌─ tests/development/signed_ints/signed_int_nested_struct.move:10:5
-   │
-10 │     struct Rect has copy, drop {
-   │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
-   │
-   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.

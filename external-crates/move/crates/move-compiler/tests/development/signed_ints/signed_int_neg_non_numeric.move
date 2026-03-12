@@ -24,7 +24,7 @@ module 0x42::m {
     }
 
     // Negating struct should error
-    struct S has copy, drop { val: i64 }
+    public struct S has copy, drop { val: i64 }
 
     fun neg_struct() {
         let s = S { val: 1i64 };
