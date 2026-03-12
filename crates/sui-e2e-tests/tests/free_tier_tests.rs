@@ -179,7 +179,7 @@ async fn test_free_tier_multi_recipient() {
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("balance").unwrap(),
-        Identifier::new("gasless_send_funds").unwrap(),
+        Identifier::new("send_funds").unwrap(),
         vec![coin_type.clone()],
         vec![balance1, recipient1_arg],
     );
@@ -194,7 +194,7 @@ async fn test_free_tier_multi_recipient() {
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("balance").unwrap(),
-        Identifier::new("gasless_send_funds").unwrap(),
+        Identifier::new("send_funds").unwrap(),
         vec![coin_type.clone()],
         vec![balance2, recipient2_arg],
     );
@@ -296,29 +296,6 @@ async fn test_free_tier_paid_tx_still_works() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_rejects_regular_send_funds() {
-    let mut test_env = setup_free_tier_env().await;
-    let sender = test_env.get_sender(1);
-    let recipient = test_env.get_sender(2);
-
-    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
-
-    let tx_kind = build_send_funds_ptb(1000, coin_type, recipient);
-    let tx = test_env.free_tier_transaction_data(tx_kind, sender, 0, 0);
-    let result = test_env.exec_tx_directly(tx).await;
-
-    let err = result.unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("can only call balance::gasless_send_funds"),
-        "Expected function whitelist error, got: {err}"
-    );
-
-    test_env.trigger_reconfiguration().await;
-}
-
-#[cfg_attr(not(msim), ignore)]
-#[sim_test]
 async fn test_free_tier_rejects_transfer_objects() {
     let mut test_env = setup_free_tier_env().await;
     let sender = test_env.get_sender(1);
@@ -352,7 +329,7 @@ async fn test_free_tier_rejects_transfer_objects() {
     let err = result.unwrap_err();
     assert!(
         err.to_string()
-            .contains("can only call balance::gasless_send_funds")
+            .contains("can only call balance::send_funds")
             || err.to_string().contains("can only contain MoveCall"),
         "Expected function whitelist or MoveCall-only error, got: {err}"
     );
@@ -455,49 +432,6 @@ async fn test_free_tier_rejects_non_whitelisted_token() {
         err.to_string()
             .contains("only support whitelisted token types"),
         "Expected token whitelist error, got: {err}"
-    );
-
-    test_env.trigger_reconfiguration().await;
-}
-
-#[cfg_attr(not(msim), ignore)]
-#[sim_test]
-async fn test_non_free_tier_rejects_gasless_send_funds() {
-    let mut test_env = setup_free_tier_env().await;
-    let sender = test_env.get_sender(0);
-    let recipient = test_env.get_sender(1);
-
-    test_env
-        .fund_one_address_balance(sender, 10_000_000_000)
-        .await;
-
-    let mut builder = test_env.tx_builder(sender);
-    let ptb = builder.ptb_builder_mut();
-    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(1000, GAS::type_tag());
-    let withdraw_arg = ptb.funds_withdrawal(withdraw_arg).unwrap();
-    let balance = ptb.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("balance").unwrap(),
-        Identifier::new("redeem_funds").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![withdraw_arg],
-    );
-    let recipient_arg = ptb.pure(recipient).unwrap();
-    ptb.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("balance").unwrap(),
-        Identifier::new("gasless_send_funds").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![balance, recipient_arg],
-    );
-    let tx = builder.build();
-    let result = test_env.exec_tx_directly(tx).await;
-
-    let err = result.unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("gasless_send_funds can only be called from free tier transactions"),
-        "Expected free-tier-only error, got: {err}"
     );
 
     test_env.trigger_reconfiguration().await;
