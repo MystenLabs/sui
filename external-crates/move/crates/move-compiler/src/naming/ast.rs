@@ -640,7 +640,7 @@ impl SyntaxMethodEntry {
 }
 
 static BUILTIN_TYPE_ALL_NAMES: LazyLock<BTreeSet<Symbol>> = LazyLock::new(|| {
-    use crate::shared::builtin_type_names as BT;
+    use crate::shared::builtin_types as BT;
     [
         BT::ADDRESS,
         BT::SIGNER,
@@ -729,7 +729,7 @@ impl BuiltinTypeName_ {
     }
 
     pub fn resolve(name_str: &str) -> Option<Self> {
-        use crate::shared::builtin_type_names as BTN;
+        use crate::shared::builtin_types as BTN;
         match name_str {
             BTN::ADDRESS => Some(Self::Address),
             BTN::SIGNER => Some(Self::Signer),
@@ -1184,7 +1184,7 @@ impl Clone for TypeName_ {
 
 impl fmt::Display for BuiltinTypeName_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        use crate::shared::builtin_type_names as BTN;
+        use crate::shared::builtin_types as BTN;
         write!(
             f,
             "{}",
@@ -1884,7 +1884,7 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::Vector(_loc, ty_opt, sp!(_, elems)) => {
-                w.write(crate::shared::builtin_type_names::VECTOR);
+                w.write(crate::shared::builtin_types::VECTOR);
                 if let Some(ty) = ty_opt {
                     w.write("<");
                     ty.ast_debug(w);

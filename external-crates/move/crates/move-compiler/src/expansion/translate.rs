@@ -50,7 +50,6 @@ use crate::{
     },
 };
 use move_core_types::account_address::AccountAddress;
-use move_core_types::parsing::parser::{parse_u16, parse_u32, parse_u256};
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -3640,14 +3639,6 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
 // Numeric literal helpers
 //**************************************************************************************************
 
-fn has_signed_suffix(s: &str) -> bool {
-    SIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
-}
-
-fn has_unsigned_suffix(s: &str) -> bool {
-    UNSIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
-}
-
 fn signed_num(context: &mut DefnContext, loc: Loc, s: &str, negated: bool) -> Option<E::Value_> {
     use E::Value_ as EV;
     macro_rules! parse_signed {
@@ -3665,7 +3656,7 @@ fn signed_num(context: &mut DefnContext, loc: Loc, s: &str, negated: bool) -> Op
             }
         }};
     }
-    use crate::shared::builtin_type_names as BT;
+    use crate::shared::builtin_types as BT;
     if let Some(num) = s.strip_suffix(BT::I_128) {
         parse_signed!(num, parse_i128, I128, "'i128'")
     } else if let Some(num) = s.strip_suffix(BT::I_64) {
@@ -3698,7 +3689,7 @@ fn unsigned_num(context: &mut DefnContext, loc: Loc, s: &str) -> Option<E::Value
             }
         }};
     }
-    use crate::shared::builtin_type_names as BT;
+    use crate::shared::builtin_types as BT;
     if let Some(num) = s.strip_suffix(BT::U_256) {
         parse_unsigned!(num, parse_u256, U256, "'u256'")
     } else if let Some(num) = s.strip_suffix(BT::U_128) {
