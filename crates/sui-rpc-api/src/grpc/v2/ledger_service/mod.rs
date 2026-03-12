@@ -10,6 +10,8 @@ use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointResponse;
 use sui_rpc::proto::sui::rpc::v2::GetEpochRequest;
 use sui_rpc::proto::sui::rpc::v2::GetEpochResponse;
+use sui_rpc::proto::sui::rpc::v2::GetObjectInclusionProofRequest;
+use sui_rpc::proto::sui::rpc::v2::GetObjectInclusionProofResponse;
 use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
 use sui_rpc::proto::sui::rpc::v2::GetObjectResponse;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
@@ -21,6 +23,7 @@ use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
 pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
+mod get_object_inclusion_proof;
 mod get_service_info;
 mod get_transaction;
 pub use get_epoch::protocol_config_to_proto;
@@ -87,6 +90,15 @@ impl LedgerService for RpcService {
         request: tonic::Request<GetEpochRequest>,
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
         get_epoch::get_epoch(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn get_object_inclusion_proof(
+        &self,
+        request: tonic::Request<GetObjectInclusionProofRequest>,
+    ) -> Result<tonic::Response<GetObjectInclusionProofResponse>, tonic::Status> {
+        get_object_inclusion_proof::get_object_inclusion_proof(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }

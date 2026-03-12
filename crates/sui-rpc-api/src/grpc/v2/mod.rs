@@ -12,6 +12,5 @@ mod transaction_execution_service;
 
 mod event_service;
 mod list_authenticated_events;
-pub mod proof_service;
 
 mod render;

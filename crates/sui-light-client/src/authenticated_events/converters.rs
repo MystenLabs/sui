@@ -4,7 +4,7 @@
 use crate::authenticated_events::ClientError;
 use crate::proof::ocs::OCSInclusionProof;
 use std::str::FromStr;
-use sui_rpc::proto::sui::rpc::v2::OcsInclusionProof as ProtoOcsInclusionProof;
+use sui_rpc::proto::sui::rpc::v2::ObjectInclusionProof as ProtoObjectInclusionProof;
 use sui_types::base_types::ObjectID;
 
 pub(super) fn proto_object_ref_to_sui_object_ref(
@@ -35,7 +35,7 @@ pub(super) fn proto_object_ref_to_sui_object_ref(
 }
 
 pub(super) fn proto_ocs_inclusion_proof_to_light_client_proof(
-    proto: &ProtoOcsInclusionProof,
+    proto: &ProtoObjectInclusionProof,
 ) -> Result<OCSInclusionProof, ClientError> {
     let merkle_proof_bytes = proto
         .merkle_proof

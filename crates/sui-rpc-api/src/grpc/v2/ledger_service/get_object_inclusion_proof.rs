@@ -8,8 +8,7 @@ use fastcrypto::hash::Blake2b256;
 use fastcrypto::merkle::MerkleTree;
 use std::str::FromStr;
 use sui_rpc::proto::sui::rpc::v2::{
-    GetObjectInclusionProofRequest, GetObjectInclusionProofResponse, OcsInclusionProof,
-    proof_service_server::ProofService,
+    GetObjectInclusionProofRequest, GetObjectInclusionProofResponse, ObjectInclusionProof,
 };
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
@@ -17,33 +16,11 @@ use sui_types::{
     messages_checkpoint::CheckpointArtifacts,
 };
 
-pub struct ProofServiceImpl {
-    service: RpcService,
-}
-
-impl ProofServiceImpl {
-    pub fn new(service: RpcService) -> Self {
-        Self { service }
-    }
-}
-
-#[tonic::async_trait]
-impl ProofService for ProofServiceImpl {
-    async fn get_object_inclusion_proof(
-        &self,
-        request: tonic::Request<GetObjectInclusionProofRequest>,
-    ) -> Result<tonic::Response<GetObjectInclusionProofResponse>, tonic::Status> {
-        let response = get_object_inclusion_proof_impl(&self.service, request.into_inner())
-            .map_err(tonic::Status::from)?;
-        Ok(tonic::Response::new(response))
-    }
-}
-
-fn build_ocs_inclusion_proof(
+fn build_inclusion_proof(
     checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
     object_id: ObjectID,
     checkpoint_seq: u64,
-) -> Result<(OcsInclusionProof, ObjectRef), RpcError> {
+) -> Result<(ObjectInclusionProof, ObjectRef), RpcError> {
     let effects_refs: Vec<&_> = checkpoint
         .transactions
         .iter()
@@ -99,7 +76,7 @@ fn build_ocs_inclusion_proof(
     let merkle_proof_bytes = bcs::to_bytes(&merkle_proof)
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-    let mut proto_inclusion_proof = OcsInclusionProof::default();
+    let mut proto_inclusion_proof = ObjectInclusionProof::default();
     proto_inclusion_proof.merkle_proof = Some(merkle_proof_bytes.into());
     proto_inclusion_proof.leaf_index = Some(leaf_index as u64);
     proto_inclusion_proof.tree_root = Some(
@@ -112,7 +89,7 @@ fn build_ocs_inclusion_proof(
 }
 
 #[tracing::instrument(skip(service))]
-fn get_object_inclusion_proof_impl(
+pub fn get_object_inclusion_proof(
     service: &RpcService,
     request: GetObjectInclusionProofRequest,
 ) -> Result<GetObjectInclusionProofResponse, RpcError> {
@@ -206,7 +183,7 @@ fn get_object_inclusion_proof_impl(
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
     let (proto_inclusion_proof, object_ref) =
-        build_ocs_inclusion_proof(&checkpoint_data, object_id, checkpoint_seq)?;
+        build_inclusion_proof(&checkpoint_data, object_id, checkpoint_seq)?;
 
     let object = reader
         .get_object_by_key(&object_id, object_ref.1)

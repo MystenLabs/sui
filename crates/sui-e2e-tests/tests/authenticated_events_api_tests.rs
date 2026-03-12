@@ -17,7 +17,6 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetObjectInclusionProofRequest;
 use sui_rpc::proto::sui::rpc::v2::event_service_client::EventServiceClient;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2::proof_service_client::ProofServiceClient;
 use sui_rpc::proto::sui::rpc::v2::{AuthenticatedEvent, ListAuthenticatedEventsRequest};
 use sui_rpc::proto::sui::rpc::v2::{Event, GetCheckpointRequest, GetEpochRequest};
 use sui_sdk_types::ValidatorCommittee;
@@ -274,9 +273,6 @@ async fn verify_events_with_stream_head(
     let stream_id = sui_types::base_types::SuiAddress::from(package_id);
     let event_stream_head_id = get_event_stream_head_object_id(stream_id).unwrap();
 
-    let mut proof_client =
-        connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
-
     let mut ledger_client =
         connect_with_retry(|| LedgerServiceClient::connect(test_cluster.rpc_url().to_owned()))
             .await;
@@ -296,7 +292,6 @@ async fn verify_events_with_stream_head(
     let last_event_checkpoint = events.last().unwrap().checkpoint.unwrap();
 
     let first_stream_head = fetch_and_verify_event_stream_head(
-        &mut proof_client,
         &mut ledger_client,
         &epoch_cache,
         event_stream_head_id,
@@ -305,7 +300,6 @@ async fn verify_events_with_stream_head(
     .await;
 
     let last_stream_head = fetch_and_verify_event_stream_head(
-        &mut proof_client,
         &mut ledger_client,
         &epoch_cache,
         event_stream_head_id,
@@ -376,7 +370,7 @@ fn proto_bytes_to_digest(bytes: &[u8]) -> Result<Digest, String> {
 }
 
 fn proto_ocs_inclusion_proof_to_light_client_proof(
-    grpc_proof: &sui_rpc::proto::sui::rpc::v2::OcsInclusionProof,
+    grpc_proof: &sui_rpc::proto::sui::rpc::v2::ObjectInclusionProof,
 ) -> Result<OCSInclusionProof, String> {
     let merkle_proof_bytes = grpc_proof
         .merkle_proof
@@ -616,7 +610,7 @@ async fn verify_ocs_inclusion_proof(
     epoch_cache: &EpochCache,
     checkpoint_summary: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
     object_ref_proto: &sui_rpc::proto::sui::rpc::v2::ObjectReference,
-    grpc_proof: &sui_rpc::proto::sui::rpc::v2::OcsInclusionProof,
+    grpc_proof: &sui_rpc::proto::sui::rpc::v2::ObjectInclusionProof,
     checkpoint_seq: u64,
 ) -> Result<(), String> {
     let object_ref = proto_object_ref_to_sui_object_ref(object_ref_proto)?;
@@ -642,7 +636,6 @@ async fn verify_ocs_inclusion_proof(
 }
 
 async fn fetch_and_verify_event_stream_head(
-    proof_client: &mut ProofServiceClient<tonic::transport::Channel>,
     ledger_client: &mut LedgerServiceClient<tonic::transport::Channel>,
     epoch_cache: &EpochCache,
     object_id: ObjectID,
@@ -652,7 +645,7 @@ async fn fetch_and_verify_event_stream_head(
     req.object_id = Some(object_id.to_string());
     req.checkpoint = Some(checkpoint);
 
-    let response = proof_client
+    let response = ledger_client
         .get_object_inclusion_proof(req)
         .await
         .unwrap()
@@ -1086,14 +1079,15 @@ async fn test_object_inclusion_proof_error_code() {
             .unwrap()
     });
 
-    let mut proof_client =
-        connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
+    let mut ledger_client =
+        connect_with_retry(|| LedgerServiceClient::connect(test_cluster.rpc_url().to_owned()))
+            .await;
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some(event_stream_head_id.to_string());
     req.checkpoint = Some(highest_checkpoint);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = ledger_client.get_object_inclusion_proof(req).await;
 
     assert!(
         result.is_err(),

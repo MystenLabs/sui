@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
 use sui_rpc::proto::sui::rpc::v2::event_service_client::EventServiceClient;
-use sui_rpc::proto::sui::rpc::v2::proof_service_client::ProofServiceClient;
 use sui_rpc_api::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc_api::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
 use sui_types::accumulator_root::{EventStreamHead, derive_event_stream_head_object_id};
@@ -228,7 +227,6 @@ impl ClientError {
 
 pub struct AuthenticatedEventsClient {
     event_service: EventServiceClient<tonic::transport::Channel>,
-    proof_service: ProofServiceClient<tonic::transport::Channel>,
     ledger_service: LedgerServiceClient<tonic::transport::Channel>,
     epoch_cache: Arc<tokio::sync::Mutex<EpochCache>>,
     config: ClientConfig,
@@ -255,13 +253,11 @@ impl AuthenticatedEventsClient {
             match endpoint.connect().await {
                 Ok(ch) => {
                     let event_service = EventServiceClient::new(ch.clone());
-                    let proof_service = ProofServiceClient::new(ch.clone());
                     let ledger_service = LedgerServiceClient::new(ch);
                     let epoch_cache = EpochCache::new(genesis_committee);
 
                     return Ok(Self {
                         event_service,
-                        proof_service,
                         ledger_service,
                         epoch_cache: Arc::new(tokio::sync::Mutex::new(epoch_cache)),
                         config,
@@ -534,13 +530,13 @@ impl AuthenticatedEventsClient {
     ) -> Result<EventStreamHead, ClientError> {
         let committee = self.get_committee_for_checkpoint(checkpoint).await?;
 
-        let mut proof_client = self.proof_service.clone();
+        let mut ledger_client = self.ledger_service.clone();
 
         let mut request = sui_rpc::proto::sui::rpc::v2::GetObjectInclusionProofRequest::default();
         request.object_id = Some(stream_object_id.to_string());
         request.checkpoint = Some(checkpoint);
 
-        let response = match proof_client.get_object_inclusion_proof(request).await {
+        let response = match ledger_client.get_object_inclusion_proof(request).await {
             Ok(resp) => resp.into_inner(),
             Err(status) if status.code() == tonic::Code::FailedPrecondition => {
                 return Err(ClientError::InternalError(format!(
