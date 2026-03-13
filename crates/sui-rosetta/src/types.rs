@@ -85,6 +85,7 @@ pub enum SubAccountType {
     Stake,
     PendingStake,
     EstimatedReward,
+    FungibleStake,
 }
 
 impl From<SuiAddress> for AccountIdentifier {
@@ -976,6 +977,42 @@ mod tests {
         assert_eq!(
             expected,
             account_balance_request.currencies.0.clone().pop().unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sub_account_type_fungible_stake_serde() {
+        let sub_account = SubAccount {
+            account_type: SubAccountType::FungibleStake,
+        };
+        let json = serde_json::to_value(&sub_account).unwrap();
+        assert_eq!(json["address"], "FungibleStake");
+        let deserialized: SubAccount = serde_json::from_value(json).unwrap();
+        assert_eq!(deserialized.account_type, SubAccountType::FungibleStake);
+    }
+
+    #[tokio::test]
+    async fn test_sub_account_type_fungible_stake_in_account_identifier() {
+        let request: AccountBalanceRequest = serde_json::from_value(json!({
+            "network_identifier": {
+                "blockchain": "sui",
+                "network": "mainnet"
+            },
+            "account_identifier": {
+                "address": "0xadc3a0bb21840f732435f8b649e99df6b29cd27854dfa4b020e3bee07ea09b96",
+                "sub_account": {
+                    "address": "FungibleStake"
+                }
+            }
+        }))
+        .unwrap();
+        assert_eq!(
+            request
+                .account_identifier
+                .sub_account
+                .unwrap()
+                .account_type,
+            SubAccountType::FungibleStake
         );
     }
 

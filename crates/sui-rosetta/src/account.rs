@@ -12,6 +12,7 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{
     GetBalanceRequest, GetCheckpointRequest, ListOwnedObjectsRequest,
 };
+use std::str::FromStr;
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::SuiAddress;
 
@@ -150,6 +151,10 @@ async fn get_sub_account_balances(
                 value: stake.rewards as i128,
             })
             .collect(),
+
+        SubAccountType::FungibleStake => {
+            return get_fungible_stake_balances(client, address).await;
+        }
     };
 
     Ok(if amounts.is_empty() {
@@ -157,6 +162,139 @@ async fn get_sub_account_balances(
     } else {
         vec![Amount::new_from_sub_balances(amounts)]
     })
+}
+
+async fn get_fungible_stake_balances(
+    client: &mut Client,
+    address: Address,
+) -> Result<Vec<Amount>, Error> {
+    let request = ListOwnedObjectsRequest::default()
+        .with_owner(address.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(1000u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "bcs"]));
+
+    let objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(request)
+        .map_err(Error::from)
+        .and_then(|object| async move {
+            let object_id = ObjectID::from_str(object.object_id())
+                .map_err(|e| Error::DataError(format!("Invalid object_id: {}", e)))?;
+
+            let bcs_data = object
+                .bcs
+                .as_ref()
+                .ok_or_else(|| Error::DataError("BCS data missing for object".to_string()))?;
+
+            let sui_object: sui_types::object::Object =
+                bcs_data.deserialize().map_err(|e| {
+                    Error::DataError(format!("Failed to deserialize object BCS: {}", e))
+                })?;
+
+            let move_object = sui_object.data.try_as_move().ok_or_else(|| {
+                Error::DataError("FungibleStakedSui is not a Move object".to_string())
+            })?;
+
+            let content: FungibleStakedSuiContent =
+                bcs::from_bytes(move_object.contents()).map_err(|e| {
+                    Error::DataError(format!(
+                        "Failed to parse FungibleStakedSui content: {}",
+                        e
+                    ))
+                })?;
+
+            let pool_object_id: ObjectID = content.pool_id.bytes;
+            Ok(SubBalance {
+                stake_id: object_id.into(),
+                validator: pool_object_id.into(),
+                value: content.value as i128,
+            })
+        })
+        .try_collect()
+        .await?;
+
+    Ok(if objects.is_empty() {
+        vec![Amount::new(0, None)]
+    } else {
+        vec![Amount::new_from_sub_balances(objects)]
+    })
+}
+
+#[derive(serde::Deserialize)]
+struct FungibleStakedSuiContent {
+    _id: sui_types::id::UID,
+    pool_id: sui_types::id::ID,
+    value: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::id::{ID, UID};
+
+    #[test]
+    fn test_fungible_staked_sui_content_bcs_parsing() {
+        let object_id = ObjectID::random();
+        let pool_id = ObjectID::random();
+        let value: u64 = 1_500_000_000;
+
+        let uid = UID::new(object_id);
+        let id = ID::new(pool_id);
+
+        let bcs_bytes = bcs::to_bytes(&(uid, id, value)).unwrap();
+        let parsed: FungibleStakedSuiContent = bcs::from_bytes(&bcs_bytes).unwrap();
+
+        assert_eq!(parsed.pool_id.bytes, pool_id);
+        assert_eq!(parsed.value, value);
+    }
+
+    #[test]
+    fn test_fungible_staked_sui_content_zero_value() {
+        let uid = UID::new(ObjectID::random());
+        let id = ID::new(ObjectID::random());
+        let value: u64 = 0;
+
+        let bcs_bytes = bcs::to_bytes(&(uid, id, value)).unwrap();
+        let parsed: FungibleStakedSuiContent = bcs::from_bytes(&bcs_bytes).unwrap();
+
+        assert_eq!(parsed.value, 0);
+    }
+
+    #[test]
+    fn test_fungible_staked_sui_content_max_value() {
+        let uid = UID::new(ObjectID::random());
+        let id = ID::new(ObjectID::random());
+        let value: u64 = u64::MAX;
+
+        let bcs_bytes = bcs::to_bytes(&(uid, id, value)).unwrap();
+        let parsed: FungibleStakedSuiContent = bcs::from_bytes(&bcs_bytes).unwrap();
+
+        assert_eq!(parsed.value, u64::MAX);
+    }
+
+    #[test]
+    fn test_fungible_staked_sui_content_invalid_bcs() {
+        let result: Result<FungibleStakedSuiContent, _> = bcs::from_bytes(&[0u8; 10]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_fungible_staked_sui_pool_id_extraction() {
+        let pool_id = ObjectID::random();
+        let uid = UID::new(ObjectID::random());
+        let id = ID::new(pool_id);
+        let value: u64 = 500_000_000;
+
+        let bcs_bytes = bcs::to_bytes(&(uid, id, value)).unwrap();
+        let parsed: FungibleStakedSuiContent = bcs::from_bytes(&bcs_bytes).unwrap();
+
+        let extracted_pool_id: ObjectID = parsed.pool_id.bytes;
+        assert_eq!(extracted_pool_id, pool_id);
+
+        let address: sui_sdk_types::Address = extracted_pool_id.into();
+        assert_eq!(address.to_string(), pool_id.to_hex_literal());
+    }
 }
 
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
