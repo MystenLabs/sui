@@ -1731,7 +1731,6 @@ mod tests {
     #[tokio::test]
     async fn test_init_watermark_concurrent_no_first_checkpoint() {
         let (committer_watermark, pruner_watermark) = test_init_watermark(None, true).await;
-        // Indexer will not init the watermark, pipeline tasks will write commit watermarks as normal.
         assert_eq!(committer_watermark, None);
         assert_eq!(pruner_watermark, None);
     }
@@ -1739,7 +1738,6 @@ mod tests {
     #[tokio::test]
     async fn test_init_watermark_concurrent_first_checkpoint_0() {
         let (committer_watermark, pruner_watermark) = test_init_watermark(Some(0), true).await;
-        // Indexer will not init the watermark, pipeline tasks will write commit watermarks as normal.
         assert_eq!(committer_watermark, None);
         assert_eq!(pruner_watermark, None);
     }
