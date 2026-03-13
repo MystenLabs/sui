@@ -4,11 +4,15 @@
 use std::sync::Arc;
 
 use crate::error::Error;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use sui_rpc::proto::sui::rpc::v2::{Bcs, UserSignature, VerifySignatureRequest};
 use sui_rpc_api::Client;
 use sui_types::{
+    SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS,
     base_types::SuiAddress,
+    derived_object,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     signature_verification::VerifiedDigestCache,
 };
@@ -21,6 +25,13 @@ pub async fn verify_personal_message_signature(
     address: SuiAddress,
     client: Option<Client>,
 ) -> Result<(), Error> {
+    // If client is provided, check if the address has aliases enabled - if so, reject verification
+    if let Some(mut client_clone) = client.clone()
+        && has_address_aliases(&mut client_clone, address).await?
+    {
+        return Err(Error::InvalidSignature);
+    }
+
     let intent_msg = IntentMessage::new(
         Intent::personal_message(),
         PersonalMessage {
@@ -64,5 +75,27 @@ pub async fn verify_personal_message_signature(
                 Arc::new(VerifiedDigestCache::new_empty()),
             )
             .map_err(|_| Error::InvalidSignature),
+    }
+}
+
+async fn has_address_aliases(client: &mut Client, address: SuiAddress) -> Result<bool, Error> {
+    let alias_key_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: Identifier::new("address_alias").unwrap(),
+        name: Identifier::new("AliasKey").unwrap(),
+        type_params: vec![],
+    }));
+
+    let key_bytes = bcs::to_bytes(&address).unwrap();
+    let address_aliases_id = derived_object::derive_object_id(
+        SuiAddress::from(SUI_ADDRESS_ALIAS_STATE_OBJECT_ID),
+        &alias_key_type,
+        &key_bytes,
+    )
+    .map_err(|_| Error::InvalidSignature)?;
+
+    match client.get_object(address_aliases_id).await {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
     }
 }

@@ -1,20 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::sync::Arc;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::safe_client::SafeClient;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::{register_fail_point_arg, sim_test};
 use sui_protocol_config::ProtocolConfig;
+use sui_sdk::verify_personal_message_signature::verify_personal_message_signature;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
 use sui_types::base_types::AuthorityName;
+use sui_types::crypto::Signature;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::{
     SubmitTxRequest, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
 };
+use sui_types::signature::GenericSignature;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction};
 use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
@@ -378,5 +382,129 @@ async fn test_alias_race() {
         matches!(effects, WaitForEffectsResponse::Rejected { .. }),
         "Expected Rejected response, got: {:?}",
         effects
+    );
+}
+
+#[sim_test]
+async fn test_alias_personal_message_signature_verification() {
+    telemetry_subscribers::init_for_testing();
+
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_address_aliases_for_testing(true);
+        config
+    });
+
+    let accounts = vec![AccountConfig {
+        address: None,
+        gas_amounts: vec![30_000_000_000; 5],
+    }];
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(3)
+        .with_additional_accounts(accounts)
+        .with_state_sync_config(sui_config::p2p::StateSyncConfig {
+            use_get_checkpoint_contents_v2: Some(true),
+            ..Default::default()
+        })
+        .build()
+        .await;
+
+    let validator_handle = test_cluster
+        .swarm
+        .validator_node_handles()
+        .into_iter()
+        .next()
+        .expect("No validator found");
+
+    let address_alias_state_initial_shared_version = validator_handle.with(|node| {
+        get_address_alias_state_obj_initial_shared_version(node.state().get_object_store().as_ref())
+            .expect("failed to get address alias state object")
+            .expect("address alias state object should exist")
+    });
+
+    let accounts = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+
+    let (account1, gas_objects1) = &accounts[0];
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+
+    let grpc_client = test_cluster.grpc_client();
+    let client = test_cluster
+        .authority_aggregator()
+        .authority_clients
+        .iter()
+        .next()
+        .unwrap()
+        .1
+        .clone();
+
+    // Create a personal message and sign it with account1
+    let message = b"hello world";
+    let intent_message = IntentMessage::new(
+        Intent::personal_message(),
+        PersonalMessage {
+            message: message.to_vec(),
+        },
+    );
+
+    let account1_keypair = test_cluster
+        .wallet
+        .config
+        .keystore
+        .export(account1)
+        .unwrap();
+
+    let sig = Signature::new_secure(&intent_message, account1_keypair);
+    let signature = GenericSignature::Signature(sig);
+
+    // Before enabling aliases, signature verification should work
+    let res = verify_personal_message_signature(
+        signature.clone(),
+        message,
+        *account1,
+        Some(grpc_client.clone()),
+    )
+    .await;
+    assert!(
+        res.is_ok(),
+        "Signature verification should succeed before enabling aliases"
+    );
+
+    // Enable aliases for account1
+    let enable_tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(*account1, gas_objects1[0], gas_price)
+                .move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    "address_alias",
+                    "enable",
+                    vec![CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+                        initial_shared_version: address_alias_state_initial_shared_version,
+                        mutability: sui_types::transaction::SharedObjectMutability::Mutable,
+                    })],
+                )
+                .build(),
+        )
+        .await;
+
+    let enable_effects = submit_and_wait_for_effects(&client, enable_tx).await;
+    assert!(enable_effects.status().is_ok());
+
+    // Wait for all validators to execute the enable tx
+    test_cluster
+        .wait_for_tx_settlement(&[*enable_effects.transaction_digest()])
+        .await;
+
+    // After enabling aliases, signature verification should be rejected
+    let res =
+        verify_personal_message_signature(signature, message, *account1, Some(grpc_client)).await;
+    assert!(
+        res.is_err(),
+        "Signature verification should fail after enabling aliases"
     );
 }
