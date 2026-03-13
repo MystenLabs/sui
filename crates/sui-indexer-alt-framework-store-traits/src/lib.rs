@@ -119,7 +119,9 @@ pub trait TransactionalStore: Store {
 /// Used during watermark initialization to set and return state.
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct InitWatermark {
+    /// Calculated by the framework as `default_next_checkpoint.checked_sub(1)`.
     pub checkpoint_hi_inclusive: Option<u64>,
+    /// Calculated by the framework as `default_next_checkpoint`.
     pub reader_lo: u64,
 }
 
