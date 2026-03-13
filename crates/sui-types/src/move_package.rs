@@ -399,7 +399,8 @@ impl MovePackage {
                 VERSION_6
             };
             module.serialize_with_version(version, &mut bytes).unwrap();
-            if module_map.insert(name, bytes).is_some() {
+            let prev = module_map.insert(name, bytes);
+            if protocol_config.new_vm_enabled() && prev.is_some() {
                 return Err(ExecutionError::new_with_source(
                     ExecutionErrorKind::VMVerificationOrDeserializationError,
                     format!(
