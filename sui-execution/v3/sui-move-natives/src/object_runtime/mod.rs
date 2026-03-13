@@ -17,13 +17,15 @@ use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveTypeLayout, MoveValue},
     annotated_visitor as AV,
-    effects::Op,
     language_storage::StructTag,
     runtime_value as R,
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_extensions::NativeExtensionMarker;
-use move_vm_types::values::{GlobalValue, Value};
+use move_vm_types::{
+    effects::Op,
+    values::{GlobalValue, Value},
+};
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},

@@ -4,10 +4,11 @@
 use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+use move_vm_runtime::pop_arg;
+use move_vm_runtime::{
+    execution::Type, execution::values::Value, natives::functions::NativeResult,
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadataV1;

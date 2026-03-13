@@ -305,7 +305,7 @@ const MAX_PROTOCOL_VERSION: u64 = 118;
 //              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
 // Version 117: Update Sui System metadata handling.
-// Version 118: Reserved for bella-ciao.
+// Version 118: Enable the new VM.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1025,6 +1025,10 @@ struct FeatureFlags {
     // If true, mark the gas coin as uninitialized in drop safety when there is no gas coin.
     #[serde(skip_serializing_if = "is_false")]
     gasless_transaction_drop_safety: bool,
+
+    // Set to true if new VM (bella ciao) is enabled in this protocol version.
+    #[serde(skip_serializing_if = "is_false")]
+    new_vm_enabled: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2661,6 +2665,10 @@ impl ProtocolConfig {
 
     pub fn gasless_transaction_drop_safety(&self) -> bool {
         self.feature_flags.gasless_transaction_drop_safety
+    }
+
+    pub fn new_vm_enabled(&self) -> bool {
+        self.feature_flags.new_vm_enabled
     }
 }
 
@@ -4677,7 +4685,9 @@ impl ProtocolConfig {
                 }
                 117 => {}
                 118 => {
-                    // TODO: set new execution version here for bella-ciao
+                    // Enable new VM.
+                    cfg.execution_version = Some(4);
+                    cfg.feature_flags.new_vm_enabled = true;
                 }
                 // Use this template when making changes:
                 //

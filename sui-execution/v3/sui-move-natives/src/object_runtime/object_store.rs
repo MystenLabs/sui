@@ -3,10 +3,11 @@
 
 use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{
-    annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
+use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
+use move_vm_types::{
+    effects::Op,
+    values::{GlobalValue, StructRef, Value},
 };
-use move_vm_types::values::{GlobalValue, StructRef, Value};
 use std::{
     collections::{BTreeMap, btree_map},
     sync::Arc,

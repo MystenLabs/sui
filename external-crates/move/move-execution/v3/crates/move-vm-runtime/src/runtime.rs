@@ -22,14 +22,13 @@ use move_core_types::{
     annotated_value as A,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
-    resolver::MoveResolver,
     runtime_value::MoveTypeLayout,
     vm_status::StatusCode,
 };
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
-    data_store::DataStore,
+    data_store::{DataStore, MoveResolver},
     gas::GasMeter,
     loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
     values::{Locals, Reference, VMValueCast, Value},

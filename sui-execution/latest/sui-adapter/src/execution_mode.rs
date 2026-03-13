@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_value::{RawValueType, Value};
-use crate::type_resolver::TypeTagResolver;
 use move_core_types::language_storage::TypeTag;
 use sui_types::{
     error::ExecutionError, execution::ExecutionResult, transaction::Argument, transfer::Receiving,
@@ -35,14 +34,12 @@ pub trait ExecutionMode {
     fn empty_results() -> Self::ExecutionResults;
 
     fn add_argument_update(
-        resolver: &impl TypeTagResolver,
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         _new_value: &Value,
     ) -> Result<(), ExecutionError>;
 
     fn finish_command(
-        resolver: &impl TypeTagResolver,
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
@@ -94,7 +91,6 @@ impl ExecutionMode for Normal {
     fn empty_results() -> Self::ExecutionResults {}
 
     fn add_argument_update(
-        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
@@ -103,7 +99,6 @@ impl ExecutionMode for Normal {
     }
 
     fn finish_command(
-        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
@@ -159,7 +154,6 @@ impl ExecutionMode for Genesis {
     fn empty_results() -> Self::ExecutionResults {}
 
     fn add_argument_update(
-        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
@@ -168,7 +162,6 @@ impl ExecutionMode for Genesis {
     }
 
     fn finish_command(
-        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
@@ -230,7 +223,6 @@ impl ExecutionMode for System {
     fn empty_results() -> Self::ExecutionResults {}
 
     fn add_argument_update(
-        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
@@ -239,7 +231,6 @@ impl ExecutionMode for System {
     }
 
     fn finish_command(
-        _resolver: &impl TypeTagResolver,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
@@ -301,25 +292,23 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
     }
 
     fn add_argument_update(
-        resolver: &impl TypeTagResolver,
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         new_value: &Value,
     ) -> Result<(), ExecutionError> {
-        let (bytes, type_tag) = value_to_bytes_and_tag(resolver, new_value)?;
+        let (bytes, type_tag) = value_to_bytes_and_tag(new_value)?;
         acc.push((arg, bytes, type_tag));
         Ok(())
     }
 
     fn finish_command(
-        resolver: &impl TypeTagResolver,
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
     ) -> Result<(), ExecutionError> {
         let command_bytes = command_result
             .iter()
-            .map(|value| value_to_bytes_and_tag(resolver, value))
+            .map(value_to_bytes_and_tag)
             .collect::<Result<_, _>>()?;
         acc.push((argument_updates, command_bytes));
         Ok(())
@@ -347,13 +336,10 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
     }
 }
 
-fn value_to_bytes_and_tag(
-    resolver: &impl TypeTagResolver,
-    value: &Value,
-) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
+fn value_to_bytes_and_tag(value: &Value) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
     let (type_tag, bytes) = match value {
         Value::Object(obj) => {
-            let tag = resolver.get_type_tag(&obj.type_)?;
+            let tag = obj.type_.type_.clone();
             let mut bytes = vec![];
             obj.write_bcs_bytes(&mut bytes, None)?;
             (tag, bytes)
@@ -363,7 +349,7 @@ fn value_to_bytes_and_tag(
             (TypeTag::Vector(Box::new(TypeTag::U8)), bytes.clone())
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
-            let tag = resolver.get_type_tag(ty)?;
+            let tag = ty.type_.clone();
             (tag, bytes.clone())
         }
         Value::Receiving(id, seqno, _) => (

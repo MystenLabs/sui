@@ -13,7 +13,7 @@ module 0x42.M {
 }
 
 //# run --args 0 0 0
-module 0x42.m {
+module 0x43.m {
 import 0x42.M;
 entry foo(s: M.S, i: &M.S, m: &mut M.S) {
     label l0:

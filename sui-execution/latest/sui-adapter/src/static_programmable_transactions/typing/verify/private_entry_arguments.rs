@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use crate::execution_mode::ExecutionMode;
 use crate::sp;
 use crate::static_programmable_transactions::{env::Env, typing::ast as T};
-use move_binary_format::{CompiledModule, file_format::Visibility};
+use move_binary_format::file_format::Visibility;
 use sui_types::error::SafeIndex;
 use sui_types::{
     error::{ExecutionError, command_argument_error},
@@ -480,18 +480,8 @@ fn move_call<Mode: ExecutionMode>(
         function,
         arguments: _,
     } = call;
-    let module = env.module_definition(&function.runtime_id, &function.linkage)?;
-    let module: &CompiledModule = module.as_ref();
-    let Some((_index, fdef)) = module.find_function_def_by_name(function.name.as_str()) else {
-        invariant_violation!(
-            "Could not resolve function '{}' in module {}. \
-            This should have been checked when linking",
-            &function.name,
-            module.self_id(),
-        );
-    };
-    let visibility = fdef.visibility;
-    let is_entry = fdef.is_entry;
+    let visibility = function.visibility;
+    let is_entry = function.is_entry;
     // check rules around hot arguments and entry functions
     let is_non_public = if env.protocol_config.restrict_hot_or_not_entry_functions() {
         !matches!(visibility, Visibility::Public)

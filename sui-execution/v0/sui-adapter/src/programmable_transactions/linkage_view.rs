@@ -12,8 +12,9 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
-    resolver::{LinkageResolver, ModuleResolver},
+    resolver::{ModuleResolver, SerializedPackage},
 };
+use move_vm_types::data_store::LinkageResolver;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     base_types::ObjectID,
@@ -332,6 +333,20 @@ impl ModuleResolver for LinkageView<'_> {
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         get_module(self, id)
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        _ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        unreachable!("v0 get_packages_static should not be called on LinkageView")
+    }
+
+    fn get_packages<'a>(
+        &self,
+        _ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        unreachable!("v0 get_packages should not be called on LinkageView")
     }
 }
 

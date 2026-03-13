@@ -7,13 +7,10 @@ use crate::{
 };
 use move_binary_format::errors::{Location, PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{
-    account_address::AccountAddress,
-    identifier::IdentStr,
-    language_storage::ModuleId,
-    resolver::{LinkageResolver, ModuleResolver},
-    vm_status::StatusCode,
+    account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
+    resolver::ModuleResolver, vm_status::StatusCode,
 };
-use move_vm_types::data_store::DataStore;
+use move_vm_types::data_store::{DataStore, LinkageResolver};
 use sui_types::{base_types::ObjectID, error::SuiError, execution_status::ExecutionErrorKind};
 
 /// A `LinkedDataStore` is a wrapper around a `PackageStore` (i.e., a package store where
@@ -133,6 +130,20 @@ impl ModuleResolver for LinkedDataStore<'_> {
         self.load_module(id)
             .map(Some)
             .map_err(|_| SuiError::from(ExecutionErrorKind::VMVerificationOrDeserializationError))
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        _ids: [AccountAddress; N],
+    ) -> Result<[Option<move_core_types::resolver::SerializedPackage>; N], Self::Error> {
+        unreachable!("v3 get_packages_static should not be called on LinkedDataStore")
+    }
+
+    fn get_packages<'a>(
+        &self,
+        _ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
+    ) -> Result<Vec<Option<move_core_types::resolver::SerializedPackage>>, Self::Error> {
+        unreachable!("v3 get_packages should not be called on LinkedDataStore")
     }
 }
 

@@ -13,15 +13,14 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
-    effects::ChangeSet,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    resolver::MoveResolver,
     runtime_value::MoveTypeLayout,
 };
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_types::{
-    data_store::DataStore,
+    data_store::{DataStore, MoveResolver},
+    effects::ChangeSet,
     gas::GasMeter,
     loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
 };

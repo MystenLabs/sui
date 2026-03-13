@@ -8,10 +8,10 @@ task 1, lines 15-22:
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
-    location: 0x42::m,
+    location: 0x43::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "0x0000000000000000000000000000000000000000000000000000000000000042::m::foo at offset 1",
+    message: "0x0000000000000000000000000000000000000000000000000000000000000043::m::foo at offset 1",
 }
 
 task 2, line 24:

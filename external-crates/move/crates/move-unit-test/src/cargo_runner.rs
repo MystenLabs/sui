@@ -2,9 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_command_line_common::files::find_filenames;
-
 use crate::{UnitTestingConfig, vm_test_setup::VMTestSetup};
+use move_command_line_common::files::find_filenames;
 
 pub fn run_tests_with_config_and_filter<V: VMTestSetup + Sync>(
     mut config: UnitTestingConfig,

@@ -35,7 +35,7 @@ fn command_linkage(cmd: &L::Command) -> Option<&ResolvedLinkage> {
         L::Command::Publish(_, _, linkage) | L::Command::Upgrade(_, _, _, _, linkage) => {
             Some(linkage)
         }
-        L::Command::MoveCall(call) => Some(&call.function.linkage.resolved_linkage),
+        L::Command::MoveCall(call) => Some(&call.function.linkage.0),
         L::Command::MakeMoveVec(_, _)
         | L::Command::TransferObjects(_, _)
         | L::Command::SplitCoins(_, _)

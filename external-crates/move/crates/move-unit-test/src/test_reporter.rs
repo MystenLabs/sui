@@ -150,7 +150,7 @@ fn clever_error_line_number_to_loc(test_plan: &TestPlan, vm_error: &VMError) -> 
     let line_number = bitset.line_number()? - 1;
 
     match location {
-        Location::Undefined => None,
+        Location::Undefined | Location::Package(_) => None,
         Location::Module(module_id) => {
             let source_map = &test_plan.module_info.get(module_id)?.source_map;
             let file_hash = source_map.definition_location.file_hash();

@@ -11,7 +11,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(4), 1)],
-    message: "Variant tag mismatch: expected 1, got 0",
+    message: "Variant tag mismatch: expected 1, found 0",
 }
 
 task 3, line 224:
@@ -22,7 +22,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(5), 1)],
-    message: "Variant tag mismatch: expected 1, got 0",
+    message: "Variant tag mismatch: expected 1, found 0",
 }
 
 task 4, line 226:
@@ -44,7 +44,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(1), 1)],
-    message: "Variant tag mismatch: expected 0, got 1",
+    message: "Variant tag mismatch: expected 0, found 1",
 }
 
 task 6, line 230:
@@ -55,7 +55,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(2), 1)],
-    message: "Variant tag mismatch: expected 0, got 1",
+    message: "Variant tag mismatch: expected 0, found 1",
 }
 
 task 7, line 232:
@@ -77,7 +77,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(10), 1)],
-    message: "Variant tag mismatch: expected 1, got 0",
+    message: "Variant tag mismatch: expected 1, found 0",
 }
 
 task 9, line 236:
@@ -88,7 +88,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(11), 1)],
-    message: "Variant tag mismatch: expected 1, got 0",
+    message: "Variant tag mismatch: expected 1, found 0",
 }
 
 task 10, line 238:
@@ -110,7 +110,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(7), 1)],
-    message: "Variant tag mismatch: expected 0, got 1",
+    message: "Variant tag mismatch: expected 0, found 1",
 }
 
 task 12, line 242:
@@ -121,7 +121,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::Enums,
     indices: [],
     offsets: [(FunctionDefinitionIndex(8), 1)],
-    message: "Variant tag mismatch: expected 0, got 1",
+    message: "Variant tag mismatch: expected 0, found 1",
 }
 
 task 13, line 244:

@@ -6,12 +6,13 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
 
+    use crate::adapter::new_move_runtime;
     use crate::execution_mode::{self, ExecutionMode};
     use crate::execution_value::SuiResolver;
     use crate::gas_charger::PaymentMethod;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
-    use move_vm_runtime::move_vm::MoveVM;
+    use move_vm_runtime::runtime::MoveRuntime;
     use mysten_common::debug_fatal;
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
@@ -33,8 +34,7 @@ mod checked {
     use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
-    use crate::adapter::new_move_vm;
-    use crate::programmable_transactions;
+    use crate::static_programmable_transactions as SPT;
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
@@ -95,7 +95,7 @@ mod checked {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         protocol_config: &ProtocolConfig,
@@ -189,21 +189,11 @@ mod checked {
             use ExecutionErrorKind as K;
             match error.kind() {
                 K::InvariantViolation | K::VMInvariantViolation => {
-                    if protocol_config.debug_fatal_on_move_invariant_violation() {
-                        debug_fatal!(
-                            "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
-                            transaction_digest,
-                            error.source(),
-                        );
-                    } else {
-                        #[skip_checked_arithmetic]
-                        tracing::error!(
-                            kind = ?error.kind(),
-                            tx_digest = ?transaction_digest,
-                            "INVARIANT VIOLATION! Source: {:?}",
-                            error.source(),
-                        );
-                    }
+                    debug_fatal!(
+                        "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
+                        transaction_digest,
+                        error.source(),
+                    );
                 }
 
                 K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
@@ -285,7 +275,7 @@ mod checked {
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         tx_context: Rc<RefCell<TxContext>>,
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
@@ -300,7 +290,7 @@ mod checked {
             0,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
-        programmable_transactions::execution::execute::<execution_mode::Genesis>(
+        SPT::execute::<execution_mode::Genesis>(
             protocol_config,
             metrics,
             move_vm,
@@ -324,7 +314,7 @@ mod checked {
         transaction_kind: TransactionKind,
         gas_charger: &mut GasCharger,
         tx_ctx: Rc<RefCell<TxContext>>,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
@@ -438,7 +428,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
         tx_digest: TransactionDigest,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         simple_conservation_checks: bool,
         enable_expensive_checks: bool,
         cost_summary: &GasCostSummary,
@@ -594,7 +584,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
         tx_ctx: Rc<RefCell<TxContext>>,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -698,22 +688,20 @@ mod checked {
                 .expect("ConsensusCommitPrologue cannot fail");
                 Ok((Mode::empty_results(), vec![]))
             }
-            TransactionKind::ProgrammableTransaction(pt) => {
-                programmable_transactions::execution::execute::<Mode>(
-                    protocol_config,
-                    metrics,
-                    move_vm,
-                    temporary_store,
-                    store.as_backing_package_store(),
-                    tx_ctx,
-                    gas_charger,
-                    None,
-                    pt,
-                    trace_builder_opt,
-                )
-            }
+            TransactionKind::ProgrammableTransaction(pt) => SPT::execute::<Mode>(
+                protocol_config,
+                metrics,
+                move_vm,
+                temporary_store,
+                store.as_backing_package_store(),
+                tx_ctx,
+                gas_charger,
+                None,
+                pt,
+                trace_builder_opt,
+            ),
             TransactionKind::ProgrammableSystemTransaction(pt) => {
-                programmable_transactions::execution::execute::<execution_mode::System>(
+                SPT::execute::<execution_mode::System>(
                     protocol_config,
                     metrics,
                     move_vm,
@@ -946,7 +934,6 @@ mod checked {
 
     pub fn construct_advance_epoch_safe_mode_pt(
         params: &AdvanceEpochParams,
-        protocol_config: &ProtocolConfig,
     ) -> Result<ProgrammableTransaction, ExecutionError> {
         let mut builder = ProgrammableTransactionBuilder::new();
         // Step 1: Create storage and computation rewards.
@@ -963,11 +950,9 @@ mod checked {
             CallArg::Pure(bcs::to_bytes(&params.non_refundable_storage_fee).unwrap()),
         ];
 
-        if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
-            args.push(CallArg::Pure(
-                bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap(),
-            ));
-        }
+        args.push(CallArg::Pure(
+            bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap(),
+        ));
 
         let call_arg_arguments = args
             .into_iter()
@@ -1000,7 +985,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -1018,7 +1003,7 @@ mod checked {
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
         let advance_epoch_pt = construct_advance_epoch_pt(builder, &params)?;
-        let result = programmable_transactions::execution::execute::<execution_mode::System>(
+        let result = SPT::execute::<execution_mode::System>(
             protocol_config,
             metrics.clone(),
             move_vm,
@@ -1045,58 +1030,25 @@ mod checked {
             // Must reset the storage rebate since we are re-executing.
             gas_charger.reset_storage_cost_and_rebate();
 
-            if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
-                temporary_store.advance_epoch_safe_mode(&params, protocol_config);
-            } else {
-                let advance_epoch_safe_mode_pt =
-                    construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
-                programmable_transactions::execution::execute::<execution_mode::System>(
-                    protocol_config,
-                    metrics.clone(),
-                    move_vm,
-                    temporary_store,
-                    store.as_backing_package_store(),
-                    tx_ctx.clone(),
-                    gas_charger,
-                    None,
-                    advance_epoch_safe_mode_pt,
-                    trace_builder_opt,
-                )
-                .map_err(|(e, _)| e)
-                .expect("Advance epoch with safe mode must succeed");
-            }
+            temporary_store.advance_epoch_safe_mode(&params, protocol_config);
         }
 
-        if protocol_config.fresh_vm_on_framework_upgrade() {
-            let new_vm = new_move_vm(
-                all_natives(/* silent */ true, protocol_config),
-                protocol_config,
-            )
-            .expect("Failed to create new MoveVM");
-            process_system_packages(
-                change_epoch,
-                temporary_store,
-                store,
-                tx_ctx,
-                &new_vm,
-                gas_charger,
-                protocol_config,
-                metrics,
-                trace_builder_opt,
-            );
-        } else {
-            process_system_packages(
-                change_epoch,
-                temporary_store,
-                store,
-                tx_ctx,
-                move_vm,
-                gas_charger,
-                protocol_config,
-                metrics,
-                trace_builder_opt,
-            );
-        }
+        let new_vm = new_move_runtime(
+            all_natives(/* silent */ true, protocol_config),
+            protocol_config,
+        )
+        .expect("Failed to create new MoveRuntime");
+        process_system_packages(
+            change_epoch,
+            temporary_store,
+            store,
+            tx_ctx,
+            &new_vm,
+            gas_charger,
+            protocol_config,
+            metrics,
+            trace_builder_opt,
+        );
         Ok(())
     }
 
@@ -1105,7 +1057,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
-        move_vm: &MoveVM,
+        move_vm: &MoveRuntime,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -1129,7 +1081,7 @@ mod checked {
                     b.finish()
                 };
 
-                programmable_transactions::execution::execute::<execution_mode::System>(
+                SPT::execute::<execution_mode::System>(
                     protocol_config,
                     metrics.clone(),
                     move_vm,
@@ -1179,7 +1131,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -1203,7 +1155,7 @@ mod checked {
             );
             builder.finish()
         };
-        programmable_transactions::execution::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System>(
             protocol_config,
             metrics,
             move_vm,
@@ -1323,7 +1275,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -1351,7 +1303,7 @@ mod checked {
             );
             builder.finish()
         };
-        programmable_transactions::execution::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System>(
             protocol_config,
             metrics,
             move_vm,
@@ -1395,7 +1347,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
-        move_vm: &Arc<MoveVM>,
+        move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -1424,7 +1376,7 @@ mod checked {
             );
             builder.finish()
         };
-        programmable_transactions::execution::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System>(
             protocol_config,
             metrics,
             move_vm,

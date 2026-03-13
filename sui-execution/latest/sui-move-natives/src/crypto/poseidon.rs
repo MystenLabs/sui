@@ -6,14 +6,15 @@ use fastcrypto_zkp::bn254::poseidon::poseidon_bytes;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::natives::function::PartialVMError;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Value, VectorRef},
+    },
+    natives::functions::{NativeResult, PartialVMError},
     pop_arg,
-    values::{Value, VectorRef},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use std::ops::Mul;
@@ -100,7 +101,7 @@ pub fn poseidon_bn254_internal(
     let field_elements = (0..length)
         .map(|i| {
             let reference = inputs.borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))?;
-            let value = reference.value_as::<VectorRef>()?.as_bytes_ref().clone();
+            let value = reference.value_as::<VectorRef>()?.as_bytes_ref()?.clone();
             Ok(value)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;

@@ -7,13 +7,15 @@ use fastcrypto::{
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Value, VectorRef},
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{Value, VectorRef},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -56,11 +58,11 @@ pub fn ed25519_verify(
     );
 
     let msg = pop_arg!(args, VectorRef);
-    let msg_ref = msg.as_bytes_ref();
+    let msg_ref = msg.as_bytes_ref()?;
     let public_key_bytes = pop_arg!(args, VectorRef);
-    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref()?;
     let signature_bytes = pop_arg!(args, VectorRef);
-    let signature_bytes_ref = signature_bytes.as_bytes_ref();
+    let signature_bytes_ref = signature_bytes.as_bytes_ref()?;
 
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(

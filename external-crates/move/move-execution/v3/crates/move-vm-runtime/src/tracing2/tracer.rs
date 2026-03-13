@@ -8,6 +8,7 @@ use crate::{
 use move_binary_format::{
     errors::{PartialVMError, VMError, VMResult},
     file_format::{ConstantPoolIndex, SignatureIndex},
+    file_format_common::instruction_opcode,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -1090,8 +1091,9 @@ impl VMTracer<'_> {
         // the type stack in the tracer are _out of sync_. This is because the VM has already
         // executed the instruction and we now need to manage the type transition of the
         // instruction along with snapshoting the effects of the instruction's execution.
-        let instruction = &frame.function.code()[pc as usize];
-        match instruction {
+        let bytecode_instr = &frame.function.code()[pc as usize];
+        let instruction = instruction_opcode(bytecode_instr);
+        match bytecode_instr {
             B::Pop | B::BrTrue(_) | B::BrFalse(_) => {
                 self.type_stack.pop()?;
                 let effects = self.register_post_effects(vec![]);
@@ -1844,7 +1846,7 @@ impl<'a> VMTracer<'a> {
             let pc = self
                 .pc
                 .expect("PC always set by this point by `open_instruction`");
-            let instruction = &frame.function.code()[pc as usize];
+            let instruction = instruction_opcode(&frame.function.code()[pc as usize]);
             let effects = self.register_post_effects(vec![EF::ExecutionError(error_string)]);
             // TODO: type params here?
             self.trace

@@ -316,6 +316,9 @@ pub enum StatusCode {
 
     INVALID_IDENTIFIER = 1136,
 
+    MISMATCHED_MODULE_IDS_IN_PACKAGE = 1137,
+    CYCLIC_PACKAGE_DEPENDENCY = 1138,
+
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.
     // Invariant Violation Errors: 2000-2999
@@ -339,6 +342,9 @@ pub enum StatusCode {
     DUPLICATE_NATIVE_FUNCTION = 2022,
     ARITHMETIC_OVERFLOW = 2023,
     REFERENCE_SAFETY_INCONSISTENT = 2024,
+
+    DUPLICATE_TYPE_DEFINITION = 2050,
+    VTABLE_KEY_LOOKUP_ERROR = 2033,
 
     // Errors that can arise from binary decoding (deserialization)
     // Deserializtion Errors: 3000-3999
@@ -368,6 +374,7 @@ pub enum StatusCode {
     UNKNOWN_ENUM_FLAG = 3027,
     UNKNOWN_JUMP_TABLE_FLAG = 3028,
     DEPRECATED_BYTECODE_FORMAT = 3029,
+    EMPTY_PACKAGE = 3030,
 
     // Errors that can arise at runtime
     // Runtime Errors: 4000-4999
@@ -393,6 +400,9 @@ pub enum StatusCode {
     MEMORY_LIMIT_EXCEEDED = 4028,
     VM_MAX_TYPE_NODES_REACHED = 4029,
     VARIANT_TAG_MISMATCH = 4030,
+    PACKAGE_ARENA_LIMIT_REACHED = 4031,
+    INTERNER_LIMIT_REACHED = 4032,
+    EXTERNAL_RESOLUTION_REQUEST_ERROR = 4033,
 
     // A reserved status to represent an unknown vm status.
     // this is std::u64::MAX, but we can't pattern match on that, so put the hardcoded value in

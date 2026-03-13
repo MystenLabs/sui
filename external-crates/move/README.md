@@ -13,7 +13,6 @@ The Move language directory consists of three distinct parts: the Move bytecode 
 - The Move bytecode language defines programs published to the blockchain. It has a static type system that guarantees the absence of certain critical errors, including the prevention of duplicating certain values. Relevant crates include:
   - [move-binary-format](crates/move-binary-format/) defines the binary format for Move bytecode.
   - [move-bytecode-verifier](crates/move-bytecode-verifier/) provides the static safety checks for Move bytecode.
-  - [move-vm-types](crates/move-vm-types/) provides a shared utility crate types used by the Move VM and adapting layers.
   - [move-vm-runtime](crates/move-vm-runtime/) provides the runtime for the Move VM, used for executing Move programs.
 
 - The Move IR is a low-level intermediate representation that closely mirrors Move bytecode. What mainly differentiates it from the bytecode is that names are used as opposed to indexes into pools/tables. Relevant crates include:

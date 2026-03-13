@@ -91,7 +91,7 @@ impl MockConnection<'_> {
     async fn get_watermark(
         &self,
         pipeline: &str,
-    ) -> anyhow::Result<Option<(Ref<String, MockWatermark>, u64)>> {
+    ) -> anyhow::Result<Option<(Ref<'_, String, MockWatermark>, u64)>> {
         let Some(watermark) = self.0.watermarks.get(pipeline) else {
             return Err(anyhow::anyhow!("Pipeline {} not found", pipeline));
         };

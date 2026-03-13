@@ -33,7 +33,6 @@ mod checked {
         account_address::AccountAddress,
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
-        resolver::MoveResolver,
         u256::U256,
         vm_status::StatusCode,
     };
@@ -43,7 +42,7 @@ mod checked {
         native_extensions::NativeContextExtensions,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
-    use move_vm_types::loaded_data::runtime_types::Type;
+    use move_vm_types::{data_store::MoveResolver, loaded_data::runtime_types::Type};
     use mysten_common::debug_fatal;
     use nonempty::nonempty;
     use std::{
