@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+
 use clap::Parser;
 use move_cli::base::test::UnitTestResult;
 use move_package_alt_compilation::build_config::BuildConfig;
-use std::path::Path;
 use sui_sdk::wallet_context::WalletContext;
+
+use crate::unit_test::SuiVMTestSetup;
 
 pub mod build;
 pub mod cache_package;
@@ -62,7 +65,9 @@ pub async fn execute_move_command(
                 .await
         }
         Command::Test(c) => {
-            let result = c.execute(package_path, build_config, wallet).await?;
+            let result = c
+                .execute(package_path, build_config, wallet, SuiVMTestSetup::new())
+                .await?;
 
             // Return a non-zero exit code if any test failed
             if let UnitTestResult::Failure = result {

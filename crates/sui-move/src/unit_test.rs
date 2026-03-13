@@ -1,6 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+    path::Path,
+    rc::Rc,
+    sync::{Arc, LazyLock},
+};
+
 use clap::Parser;
 use move_cli::base::{
     self,
@@ -9,14 +18,8 @@ use move_cli::base::{
 use move_package_alt_compilation::build_config::BuildConfig;
 use move_unit_test::{UnitTestingConfig, vm_test_setup::VMTestSetup};
 use move_vm_config::runtime::VMConfig;
-use move_vm_runtime::native_extensions::NativeContextExtensions;
-use std::{
-    cell::RefCell,
-    collections::BTreeMap,
-    ops::{Deref, DerefMut},
-    path::Path,
-    rc::Rc,
-    sync::{Arc, LazyLock},
+use move_vm_runtime::{
+    native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
 };
 use sui_adapter::gas_meter::SuiGasMeter;
 use sui_move_build::decorate_warnings;
@@ -56,6 +59,7 @@ impl Test {
         path: Option<&Path>,
         mut build_config: BuildConfig,
         wallet: &WalletContext,
+        vm_test_setup: SuiVMTestSetup,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
         if !cfg!(feature = "tracing") && compute_coverage {
@@ -88,6 +92,7 @@ impl Test {
             Some(unit_test_config),
             compute_coverage,
             save_disassembly,
+            vm_test_setup,
         )
         .await
     }
@@ -101,6 +106,7 @@ pub async fn run_move_unit_tests(
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
+    vm_test_setup: SuiVMTestSetup,
 ) -> anyhow::Result<UnitTestResult> {
     let config = config.unwrap_or_else(|| {
         UnitTestingConfig::default_with_bound(Some(*MAX_UNIT_TEST_INSTRUCTIONS))
@@ -113,7 +119,7 @@ pub async fn run_move_unit_tests(
             report_stacktrace_on_abort: true,
             ..config
         },
-        SuiVMTestSetup::new(),
+        vm_test_setup,
         compute_coverage,
         save_disassembly,
         &mut std::io::stdout(),
@@ -148,6 +154,16 @@ impl SuiVMTestSetup {
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let native_function_table =
             sui_move_natives::all_natives(/* silent */ false, &protocol_config);
+        Self {
+            gas_price: TEST_GAS_PRICE,
+            reference_gas_price: TEST_GAS_PRICE,
+            protocol_config,
+            native_function_table,
+        }
+    }
+
+    pub fn new_with_custom_natives(native_function_table: NativeFunctionTable) -> Self {
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         Self {
             gas_price: TEST_GAS_PRICE,
             reference_gas_price: TEST_GAS_PRICE,
