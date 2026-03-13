@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::sync::Arc;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::safe_client::SafeClient;
@@ -15,6 +16,8 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::{
     SubmitTxRequest, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
 };
+use sui_types::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
+use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction};
 use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
@@ -211,14 +214,96 @@ async fn test_alias_changes() {
         .wait_for_tx_settlement(&[*effects.transaction_digest()])
         .await;
 
-    // Submit a transaction with account1 as sender and account2 as signer
-    // Since account2 is now an alias for account1, account2 can sign transactions on behalf of account1
+    // Test personal message signature verification with aliases
     let account2_keypair = test_cluster
         .wallet
         .config
         .keystore
         .export(account2)
         .unwrap();
+
+    {
+        let message = b"Test message for alias verification";
+        let intent_msg = IntentMessage::new(
+            Intent::personal_message(),
+            PersonalMessage {
+                message: message.to_vec(),
+            },
+        );
+
+        // Account2 signs a message
+        let signature = GenericSignature::Signature(
+            sui_types::crypto::Signature::new_secure(&intent_msg, account2_keypair).into(),
+        );
+
+        // Test 1: Verify without client (should fail - no alias checking)
+        let result_without_client = signature.verify_claims::<PersonalMessage>(
+            &intent_msg,
+            account1,
+            &VerifyParams::default(),
+            Arc::new(VerifiedDigestCache::new_empty()),
+        );
+        assert!(
+            result_without_client.is_err(),
+            "Verification without client should fail when signer is an alias"
+        );
+
+        // Test 2: Verify that account2's signature is valid for account1 using alias checking
+        // This simulates what the gRPC SignatureVerificationService does
+        let validator_handle = test_cluster
+            .swarm
+            .validator_node_handles()
+            .into_iter()
+            .next()
+            .expect("No validator found");
+
+        let verification_succeeds = validator_handle.with(|node| {
+            use sui_types::address_alias::get_address_aliases_from_store;
+
+            // First, verify that direct signature verification fails (account2 signed, but we're checking account1)
+            let direct_verification = signature.verify_claims::<PersonalMessage>(
+                &intent_msg,
+                account1,
+                &VerifyParams::default(),
+                Arc::new(VerifiedDigestCache::new_empty()),
+            );
+            assert!(direct_verification.is_err(), "Direct verification should fail");
+
+            // Now check if the signer (account2) is in account1's alias set
+            // This is what the gRPC service does when direct verification fails
+            let aliases = get_address_aliases_from_store(
+                node.state().get_object_store().as_ref(),
+                account1,
+            ).expect("Failed to get aliases");
+
+            if let Some((alias_set, _version)) = aliases {
+                // Account2 should be in account1's alias set
+                let is_alias = alias_set.aliases.contents.contains(account2);
+
+                // If account2 is in the alias set, verify the signature is valid for account2
+                if is_alias {
+                    signature.verify_claims::<PersonalMessage>(
+                        &intent_msg,
+                        *account2,
+                        &VerifyParams::default(),
+                        Arc::new(VerifiedDigestCache::new_empty()),
+                    ).is_ok()
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        });
+
+        assert!(
+            verification_succeeds,
+            "Signature verification with alias checking should succeed: account2 signed the message and is in account1's alias set"
+        );
+    }
+
+    // Submit a transaction with account1 as sender and account2 as signer
+    // Since account2 is now an alias for account1, account2 can sign transactions on behalf of account1
     let alias_signer_tx_data = TestTransactionBuilder::new(account1, gas_objects1[3], gas_price)
         .transfer_sui(None, account1)
         .build();
