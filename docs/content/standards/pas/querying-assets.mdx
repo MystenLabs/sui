@@ -1,0 +1,94 @@
+---
+title: Querying Balances and Assets
+sidebar_label: Querying Assets
+description: How to read PAS-managed balances for a wallet address using the PAS SDK and standard Sui APIs.
+keywords: [ PAS, query, balance, assets, derived address, explorer, wallet, portfolio ]
+---
+
+PAS does not expose dedicated read APIs in the SDK. This is by design: under the hood, PAS stores assets in standard Sui objects with deterministic addresses, so you query them using the same RPC methods you use for any other on-chain data.
+
+## Overview
+
+A wallet address on Sui can hold two kinds of balances:
+
+```
+Regular balances:  owned directly by the wallet address
+PAS balances:      managed by PAS on behalf of the wallet address
+```
+
+From the user's perspective, both belong to the same address. PAS balances are held in a derived Account object, but transfers always target the **wallet address**, not the Account address. The SDK resolves the underlying Account transparently.
+
+To read a wallet's PAS balances, you derive the internal Account address from the wallet address, then query it with standard RPC. The derivation is deterministic and requires no on-chain lookups.
+
+## How to query PAS balances
+
+### Step 1: Resolve the wallet's PAS balances
+
+The PAS SDK derives the internal Account address from a wallet address. This is a pure computation with no RPC calls:
+
+```
+Wallet Address (e.g. 0xAlice)
+        │
+        ▼
+┌──────────────────────────────┐
+│  client.pas                  │
+│    .deriveAccountAddress(    │
+│       '0xAlice'              │
+│    )                         │
+└──────────────────────────────┘
+        │
+        ▼
+Account Address (deterministic, same every time)
+```
+
+```tsx
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { pas } from '@mysten/pas';
+
+const client = new SuiGrpcClient({ network: 'testnet' }).$extend(pas());
+
+const walletAddress = '0xAlice...';
+const accountAddress = client.pas.deriveAccountAddress(walletAddress);
+```
+
+### Step 2: Query balances
+
+Use standard `getBalance` / `getAllBalances` RPC methods with the derived address:
+
+```tsx
+// All PAS-held asset types for this wallet
+const allBalances = await client.core.getAllBalances({
+    owner: accountAddress,
+});
+
+// Single asset type
+const { balance } = await client.core.getBalance({
+    owner: accountAddress,
+    coinType: '0xabc...::my_coin::MY_COIN',
+});
+console.log(balance.balance); // e.g. "100000000" (raw units)
+```
+
+### Checking if a wallet has a PAS Account
+
+If `getObject` returns null for the derived address, the wallet has no PAS Account yet (and therefore no PAS balances):
+
+```tsx
+const { object } = await client.core.getObject({ objectId: accountAddress });
+if (!object) {
+    // No PAS account — wallet has no managed balances
+}
+```
+
+## Non-policy assets in Accounts
+
+An Account can hold asset types that are not governed by a PAS policy. For example, `Balance<SUI>` might end up in an Account through a direct `balance::send_funds` call. When you call `getAllBalances`, these show up alongside policy-managed assets.
+
+## Key points
+
+- **Wallet-centric**: PAS balances belong to the wallet address. The Account is an internal detail that the SDK handles.
+- **Deterministic**: The same wallet address always resolves to the same Account.
+- **Standard RPC**: `getBalance` / `getAllBalances` work on the derived address — no custom endpoints needed.
+- **No indexing needed**: Derivation is client-side. No event subscriptions or custom indexers required.
+- **Account may not exist**: If `getObject` returns null, the wallet has no PAS balances.
+- **Mixed assets**: `getAllBalances` returns all asset types on the Account, including those without a PAS policy.
