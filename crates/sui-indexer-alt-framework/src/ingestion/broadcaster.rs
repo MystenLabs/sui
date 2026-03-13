@@ -439,30 +439,31 @@ mod tests {
     use std::fmt::Debug;
     use std::sync::Arc;
     use std::time::Duration;
+
+    use async_trait::async_trait;
     use tokio::time::error::Elapsed;
     use tokio::time::timeout;
 
-    use super::*;
     use crate::ingestion::IngestionConfig;
-    use crate::ingestion::ingestion_client::FetchData;
+    use crate::ingestion::ingestion_client::CheckpointData;
+    use crate::ingestion::ingestion_client::CheckpointResult;
+    use crate::ingestion::ingestion_client::IngestionClientTrait;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
 
+    use super::*;
+
     /// Create a mock IngestionClient for tests
     fn mock_client(metrics: Arc<IngestionMetrics>) -> IngestionClient {
-        use crate::ingestion::ingestion_client::FetchError;
-        use crate::ingestion::ingestion_client::IngestionClientTrait;
-        use async_trait::async_trait;
-
         struct MockClient;
 
         #[async_trait]
         impl IngestionClientTrait for MockClient {
-            async fn fetch(&self, checkpoint: u64) -> Result<FetchData, FetchError> {
+            async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
                 // Return mock checkpoint data for any checkpoint number
                 let bytes = test_checkpoint_data(checkpoint);
-                Ok(FetchData::Raw(bytes.into()))
+                Ok(CheckpointData::Raw(bytes.into()))
             }
         }
 

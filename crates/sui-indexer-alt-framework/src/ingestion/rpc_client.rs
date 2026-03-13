@@ -10,14 +10,14 @@ use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_types::full_checkpoint_content::Checkpoint;
 use tonic::Code;
 
-use crate::ingestion::ingestion_client::FetchData;
-use crate::ingestion::ingestion_client::FetchError;
-use crate::ingestion::ingestion_client::FetchResult;
+use crate::ingestion::ingestion_client::CheckpointData;
+use crate::ingestion::ingestion_client::CheckpointError;
+use crate::ingestion::ingestion_client::CheckpointResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
 
 #[async_trait]
 impl IngestionClientTrait for RpcClient {
-    async fn fetch(&self, checkpoint: u64) -> FetchResult {
+    async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
         let request: GetCheckpointRequest = GetCheckpointRequest::by_sequence_number(checkpoint)
             .with_read_mask(FieldMask::from_paths([
                 "summary.bcs",
@@ -36,20 +36,21 @@ impl IngestionClientTrait for RpcClient {
             .get_checkpoint(request)
             .await
             .map_err(|status| match status.code() {
-                Code::NotFound => FetchError::NotFound,
-                _ => FetchError::Transient {
+                Code::NotFound => CheckpointError::NotFound,
+                _ => CheckpointError::Transient {
                     reason: "get_checkpoint",
                     error: anyhow!(status),
                 },
             })?
             .into_inner();
 
-        let checkpoint =
-            Checkpoint::try_from(response.checkpoint()).map_err(|e| FetchError::Permanent {
+        let checkpoint = Checkpoint::try_from(response.checkpoint()).map_err(|e| {
+            CheckpointError::Permanent {
                 reason: "proto_conversion",
                 error: e.into(),
-            })?;
+            }
+        })?;
 
-        Ok(FetchData::Checkpoint(checkpoint))
+        Ok(CheckpointData::Checkpoint(checkpoint))
     }
 }
