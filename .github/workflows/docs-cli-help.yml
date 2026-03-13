@@ -120,12 +120,11 @@ jobs:
       - name: Diff guard
         id: diff
         run: |
-          if git diff --quiet docs/content/snippets/console-output/; then
+          if git diff --quiet docs/content/snippets/console-output/ && \
+             [ -z "$(git ls-files --others --exclude-standard docs/content/snippets/console-output/)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No changes detected."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Changes detected."
           fi
 
       - name: Commit & push changes
