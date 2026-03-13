@@ -5,7 +5,7 @@ description: How to read PAS-managed balances for a wallet address using the PAS
 keywords: [ PAS, query, balance, assets, derived address, explorer, wallet, portfolio ]
 ---
 
-PAS does not expose dedicated read APIs in the SDK. This is by design: under the hood, PAS stores assets in standard Sui objects with deterministic addresses, so you query them using the same RPC methods you use for any other on-chain data.
+PAS does not expose dedicated read APIs in the SDK. This is by design: under the hood, PAS stores assets in standard Sui objects with deterministic addresses, so you query them using the same RPC methods you use for any other address-owned data (e.g. balance queries, owned object queries).
 
 ## Overview
 
