@@ -120,8 +120,8 @@ if (!FORCE && existsSync(binPath)) {
 try {
   execFileSync(binPath, ["--version"], { encoding: "utf-8" });
 } catch {
-  console.error("Binary is not executable or incompatible with this platform.");
-  process.exit(1);
+  console.warn("⚠ Sui binary not compatible with this platform — using existing snippets.");
+  process.exit(0);
 }
 
 // ---------------------------------------------------------------------------
