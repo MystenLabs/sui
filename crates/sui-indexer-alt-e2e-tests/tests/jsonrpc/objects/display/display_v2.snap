@@ -57,9 +57,9 @@ Response: {
   "result": [
     {
       "data": {
-        "objectId": "0x406a6a87303b52b32ee7168e60401f0b8db85750e4e29fda65a77d556c051a82",
+        "objectId": "0x4f4f8a1ebebaa50008c85f2d4aadc5fc9473a9b9b4c83a701670482ea76f22b2",
         "version": "4",
-        "digest": "C2GfzaAYdUuqZs7QWS2aYjsiThc3KR3L8Q4XwaRcKitd",
+        "digest": "B3qukekuNpcyt1ScxMbz5oV55XgfqZqJzuigWDRCpfau",
         "display": {
           "data": {
             "bar": "bar is 42!",
@@ -83,9 +83,9 @@ Response: {
     },
     {
       "data": {
-        "objectId": "0x815b49d6c08e25422c1701dfdba2d8f0cb13d4add500903ae4576170667ca53f",
+        "objectId": "0x9d0e1dcfaa81ab0cd53174d7ac3d6c795594ad43ec8b6e01e38a275401a19bc7",
         "version": "6",
-        "digest": "2ixM47xSCTbwNSYnW4xAbZXw12pwAvx8Qwu1zw9BiiZH",
+        "digest": "B7Ub2QVP7y5j1LFAoECoqpqooki7GK6Y8ysmfJJkmmP5",
         "display": {
           "data": {
             "bar": "bar is 42!",

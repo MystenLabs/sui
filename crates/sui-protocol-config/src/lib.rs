@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 116;
+const MAX_PROTOCOL_VERSION: u64 = 117;
 
 // Record history of protocol version allocations here:
 //
@@ -304,6 +304,7 @@ const MAX_PROTOCOL_VERSION: u64 = 116;
 //              Relax ValidDuring requirement for transactions with owned inputs.
 //              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
+// Version 117: Update Sui System metadata handling.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4673,6 +4674,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.defer_unpaid_amplification = false;
                     cfg.feature_flags.enable_display_registry = true;
                 }
+                117 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
