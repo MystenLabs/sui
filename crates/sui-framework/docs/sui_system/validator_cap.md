@@ -129,7 +129,7 @@ This is only constructed after successful verification.
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">sui_system::validator_cap::ValidatorOperationCap</a>): &<b>address</b>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">sui_system::validator_cap::ValidatorOperationCap</a>): <b>address</b>
 </code></pre>
 
 
@@ -138,8 +138,8 @@ This is only constructed after successful verification.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a>): &<b>address</b> {
-    &cap.authorizer_validator_address
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a>): <b>address</b> {
+    cap.authorizer_validator_address
 }
 </code></pre>
 

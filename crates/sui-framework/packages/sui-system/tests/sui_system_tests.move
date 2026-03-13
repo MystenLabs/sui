@@ -146,7 +146,7 @@ fun report_validator_by_stakee_ok(initial_stake: u8) {
 
     // Add a new pending validator
     runner.set_sender(@0);
-    let validator = validator_builder::preset().initial_stake(initial_stake).build(runner.ctx());
+    let validator = validator_builder::preset(0).initial_stake(initial_stake).build(runner.ctx());
     let new_validator = validator.sui_address();
     runner.add_validator_candidate(validator);
     runner.set_sender(new_validator).add_validator();
@@ -350,7 +350,7 @@ fun staking_pool_mappings() {
 
     // Add a new validator.
     runner.set_sender(@0);
-    let validator = validator_builder::preset().initial_stake(100).build(runner.ctx());
+    let validator = validator_builder::preset(0).initial_stake(100).build(runner.ctx());
     let new_validator = validator.sui_address();
     runner.add_validator_candidate(validator);
     runner.set_sender(new_validator).add_validator();

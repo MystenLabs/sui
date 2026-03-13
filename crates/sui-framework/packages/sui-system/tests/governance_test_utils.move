@@ -369,7 +369,7 @@ public fun stake_plus_current_rewards_for_validator(
     system_state: &mut SuiSystemState,
     scenario: &mut Scenario,
 ): u64 {
-    let validator_ref = system_state.validators().get_active_validator_ref(addr);
+    let validator_ref = system_state.validators().active_validator(addr);
     let amount = stake_plus_current_rewards(addr, validator_ref.get_staking_pool_ref(), scenario);
     amount
 }
