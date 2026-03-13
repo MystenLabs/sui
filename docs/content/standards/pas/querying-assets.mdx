@@ -22,8 +22,6 @@ To read a wallet's PAS balances, you derive the internal Account address from th
 
 ## How to query PAS balances
 
-### Step 1: Resolve the wallet's PAS balances
-
 The PAS SDK derives the internal Account address from a wallet address. This is a pure computation with no RPC calls:
 
 ```
@@ -41,32 +39,30 @@ Wallet Address (e.g. 0xAlice)
 Account Address (deterministic, same every time)
 ```
 
+The derived address is **different per network** (mainnet vs testnet) because the PAS Namespace object has a different ID on each network. The SDK handles this based on the client's network configuration.
+
 ```tsx
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { pas } from '@mysten/pas';
 
 const client = new SuiGrpcClient({ network: 'testnet' }).$extend(pas());
+const walletAddress = '0xAlice';
 
-const walletAddress = '0xAlice...';
-const accountAddress = client.pas.deriveAccountAddress(walletAddress);
-```
+// Regular balances — query the wallet address directly
+const regularBalances = await client.core.getAllBalances({
+    owner: walletAddress,
+});
 
-### Step 2: Query balances
-
-Use standard `getBalance` / `getAllBalances` RPC methods with the derived address:
-
-```tsx
-// All PAS-held asset types for this wallet
-const allBalances = await client.core.getAllBalances({
-    owner: accountAddress,
+// PAS-managed balances — derive the Account address, then query it
+const pasBalances = await client.core.getAllBalances({
+    owner: client.pas.deriveAccountAddress(walletAddress),
 });
 
 // Single asset type
 const { balance } = await client.core.getBalance({
-    owner: accountAddress,
+    owner: client.pas.deriveAccountAddress(walletAddress),
     coinType: '0xabc...::my_coin::MY_COIN',
 });
-console.log(balance.balance); // e.g. "100000000" (raw units)
 ```
 
 ### Checking if a wallet has a PAS Account
@@ -90,5 +86,3 @@ An Account can hold asset types that are not governed by a PAS policy. For examp
 - **Deterministic**: The same wallet address always resolves to the same Account.
 - **Standard RPC**: `getBalance` / `getAllBalances` work on the derived address — no custom endpoints needed.
 - **No indexing needed**: Derivation is client-side. No event subscriptions or custom indexers required.
-- **Account may not exist**: If `getObject` returns null, the wallet has no PAS balances.
-- **Mixed assets**: `getAllBalances` returns all asset types on the Account, including those without a PAS policy.
