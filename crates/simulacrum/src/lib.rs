@@ -21,7 +21,7 @@ use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_framework_snapshot::load_bytecode_snapshot;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc;
@@ -29,7 +29,9 @@ use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
-use sui_types::crypto::{AccountKeyPair, AuthoritySignature, get_account_key_pair};
+use sui_types::crypto::{
+    AccountKeyPair, AuthoritySignature, SuiKeyPair, get_account_key_pair, get_key_pair,
+};
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
@@ -37,7 +39,8 @@ use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
 use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::transaction::EndOfEpochTransactionKind;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::{EndOfEpochTransactionKind, SenderSignedData};
 use sui_types::{
     base_types::{EpochId, SuiAddress},
     committee::Committee,
@@ -50,17 +53,27 @@ use sui_types::{
     transaction::{Transaction, VerifiedTransaction},
 };
 
-use self::epoch_state::EpochState;
+pub use self::epoch_state::EpochState;
 pub use self::store::SimulatorStore;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
+use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
+use sui_types::sui_system_state::SuiSystemState;
+pub use sui_types::transaction_executor::TransactionChecks;
 use sui_types::{
+    error::{SuiError, SuiErrorKind},
+    full_checkpoint_content::ObjectSet,
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{GasData, TransactionData, TransactionKind},
+    transaction_driver_types::{
+        ExecuteTransactionRequestV3, ExecuteTransactionResponseV3, TransactionSubmissionError,
+    },
+    transaction_executor::SimulateTransactionResult,
 };
+use tracing::info;
 
 /// Configuration for advancing epochs in the Simulacrum.
 ///
@@ -114,6 +127,7 @@ pub struct Simulacrum<R = OsRng, Store: SimulatorStore = InMemoryStore> {
     deny_config: TransactionDenyConfig,
     data_ingestion_path: Option<PathBuf>,
     verifier_signing_config: VerifierSigningConfig,
+    certificate_deny_config: CertificateDenyConfig,
 }
 
 impl Simulacrum {
@@ -187,7 +201,7 @@ where
 impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     pub fn new_with_network_config_store(config: &NetworkConfig, rng: R, store: S) -> Self {
         let keystore = KeyStore::from_network_config(config);
-        let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint());
+        let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint(), None);
 
         let genesis = &config.genesis;
         let epoch_state = EpochState::new(genesis.sui_system_object());
@@ -201,8 +215,77 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             epoch_state,
             deny_config: TransactionDenyConfig::default(),
             verifier_signing_config: VerifierSigningConfig::default(),
+            certificate_deny_config: CertificateDenyConfig::default(),
             data_ingestion_path: None,
         }
+    }
+
+    /// Create a new Simulacrum instance with the provided custom state.
+    ///
+    /// This function creates a Simulacrum with a custom checkpoint and system state, which can
+    /// be useful for testing specific scenarios or starting from a non-genesis state.
+    ///
+    /// Note: The provided `checkpoint` and `system_state` should be consistent with each other, i.e.
+    /// the checkpoint's epoch and sequence number should align with the system state's epoch and
+    /// the objects in the checkpoint should be reflected in the system state. Inconsistencies may
+    /// lead to unexpected behavior.
+    pub fn new_from_custom_state(
+        keystore: KeyStore,
+        checkpoint: VerifiedCheckpoint,
+        system_state: SuiSystemState,
+        config: &NetworkConfig,
+        store: S,
+        rng: R,
+        acc_initial_shared_obj_version: Option<SequenceNumber>,
+    ) -> Self {
+        let checkpoint_builder =
+            MockCheckpointBuilder::new(checkpoint, acc_initial_shared_obj_version);
+        let epoch_state = EpochState::new(system_state);
+        Self {
+            rng,
+            keystore,
+            // this genesis is not used whatsoever, but it's required for Simulacrum type
+            genesis: config.genesis.clone(),
+            store,
+            checkpoint_builder,
+            epoch_state,
+            deny_config: TransactionDenyConfig::default(),
+            verifier_signing_config: VerifierSigningConfig::default(),
+            certificate_deny_config: CertificateDenyConfig::default(),
+            data_ingestion_path: None,
+        }
+    }
+
+    /// Execute a transaction while impersonating a specific sender.
+    ///
+    /// This method allows executing transactions as any account without requiring the private
+    /// keys for that account. This is useful for testing scenarios where you want to simulate
+    /// transactions from accounts you don't control.
+    ///
+    /// # Arguments
+    /// * `transaction_data` - The transaction data to execute
+    ///
+    /// # Returns
+    /// The transaction effects and optional execution error
+    pub fn execute_transaction_impersonating(
+        &mut self,
+        transaction_data: TransactionData,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        info!(
+            "Executing transaction impersonating sender: {:?}",
+            transaction_data.sender()
+        );
+        // Create dummy signatures for each required signer
+        let pk = SuiKeyPair::Ed25519(get_key_pair().1);
+        let sig = pk.sign(transaction_data.sender().as_ref());
+        // Create sender signed data with dummy signatures
+        let sender_signed_data = SenderSignedData::new(transaction_data, vec![sig.into()]);
+
+        // Create transaction and mark it as verified without checking signatures
+        let transaction = Transaction::new(sender_signed_data);
+        let verified_transaction = VerifiedTransaction::new_unchecked(transaction);
+
+        self.execute_transaction_impl(verified_transaction)
     }
 
     /// Attempts to execute the provided Transaction.
@@ -420,6 +503,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             epoch_commitments: vec![],
         };
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
+        println!(
+            "Creating checkpoint for end of epoch {} with committee {:?}",
+            next_epoch, committee.committee
+        );
         let (checkpoint, contents, _) = self.checkpoint_builder.build_end_of_epoch(
             &committee,
             self.store.get_clock().timestamp_ms(),
@@ -437,12 +524,28 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &self.store
     }
 
+    pub fn store_typed(&self) -> &S {
+        &self.store
+    }
+
+    pub fn store_mut(&mut self) -> &mut S {
+        &mut self.store
+    }
+
     pub fn keystore(&self) -> &KeyStore {
         &self.keystore
     }
 
     pub fn epoch_start_state(&self) -> &EpochStartSystemState {
         self.epoch_state.epoch_start_state()
+    }
+
+    pub fn system_state(&self) -> SuiSystemState {
+        self.store.get_system_state()
+    }
+
+    pub fn protocol_config(&self) -> ProtocolConfig {
+        self.epoch_state.protocol_config().clone()
     }
 
     /// Return a handle to the internally held RNG.
@@ -829,6 +932,49 @@ impl Simulacrum {
         let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
         let tx = Transaction::from_data_and_signer(tx_data, vec![key]);
         (tx, transfer_amount)
+    }
+}
+
+#[async_trait::async_trait]
+impl<R: Send + Sync, S: SimulatorStore + Send + Sync>
+    sui_types::transaction_executor::TransactionExecutor for Simulacrum<R, S>
+{
+    async fn execute_transaction(
+        &self,
+        _request: ExecuteTransactionRequestV3,
+        _client_addr: Option<std::net::SocketAddr>,
+    ) -> Result<ExecuteTransactionResponseV3, TransactionSubmissionError> {
+        unimplemented!("Simulacrum does not support execute_transaction via TransactionExecutor")
+    }
+
+    fn simulate_transaction(
+        &self,
+        transaction: TransactionData,
+        checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
+    ) -> Result<SimulateTransactionResult, SuiError> {
+        let (_inner_temp_store, effects, events, execution_result, mock_gas_id) = self
+            .epoch_state
+            .simulate_transaction_impl(
+                &self.store,
+                &self.deny_config,
+                &self.certificate_deny_config,
+                &self.verifier_signing_config,
+                transaction,
+                checks,
+                allow_mock_gas_coin,
+            )
+            .map_err(|e| SuiErrorKind::Unknown(e.to_string()))?;
+
+        Ok(SimulateTransactionResult {
+            effects,
+            events: Some(events),
+            objects: ObjectSet::default(),
+            execution_result,
+            mock_gas_id,
+            unchanged_loaded_runtime_objects: vec![],
+            suggested_gas_price: None,
+        })
     }
 }
 
