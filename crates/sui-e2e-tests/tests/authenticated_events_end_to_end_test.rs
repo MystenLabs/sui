@@ -327,7 +327,7 @@ async fn authenticated_events_mmr_validation_test() {
         .map(|batch| batch.iter().map(convert_event_commitment).collect())
         .collect();
     let calculated_stream_head_x =
-        apply_stream_updates(&SdkEventStreamHead::new(), sdk_events_up_to_x);
+        apply_stream_updates(&SdkEventStreamHead::new(), sdk_events_up_to_x).unwrap();
     let expected_stream_head_x = convert_event_stream_head(&sui_stream_head_x);
 
     assert_eq!(
@@ -400,7 +400,7 @@ async fn authenticated_events_mmr_validation_test() {
         .collect();
     let sdk_stream_head_x = convert_event_stream_head(stream_head_x);
     let calculated_stream_head_x_prime =
-        apply_stream_updates(&sdk_stream_head_x, sdk_events_between);
+        apply_stream_updates(&sdk_stream_head_x, sdk_events_between).unwrap();
     let expected_stream_head_x_prime = convert_event_stream_head(&actual_stream_head_x_prime);
 
     assert_eq!(

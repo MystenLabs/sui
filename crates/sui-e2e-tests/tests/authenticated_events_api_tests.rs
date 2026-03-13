@@ -6,9 +6,7 @@ use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use std::time::Duration;
 use sui_authenticated_events_client::mmr::apply_stream_updates;
-use sui_authenticated_events_client::proof::base::{
-    Proof, ProofContents, ProofTarget, ProofVerifier,
-};
+use sui_authenticated_events_client::proof::base::{Proof, ProofContents, ProofTarget};
 use sui_authenticated_events_client::proof::committee::extract_new_committee_info;
 use sui_authenticated_events_client::proof::ocs::{OCSInclusionProof, OCSProof, OCSTarget};
 use sui_authenticated_events_client::types::{
@@ -387,7 +385,7 @@ async fn verify_events_with_stream_head(
         .collect();
 
     let sdk_first_head = to_sdk_event_stream_head(&first_stream_head.value);
-    let calculated_stream_head = apply_stream_updates(&sdk_first_head, events_by_accum_version);
+    let calculated_stream_head = apply_stream_updates(&sdk_first_head, events_by_accum_version).unwrap();
     let sdk_last_head = to_sdk_event_stream_head(&last_stream_head.value);
 
     assert_eq!(

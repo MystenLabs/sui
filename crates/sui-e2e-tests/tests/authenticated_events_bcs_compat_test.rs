@@ -22,7 +22,7 @@ async fn test_derive_event_stream_head_object_id_compat() {
         let sui_types_id = accumulator_root::derive_event_stream_head_object_id(*sui_addr)
             .expect("sui-types derivation failed");
 
-        let sdk_id = derive_event_stream_head_object_id(sdk_addr).expect("sdk derivation failed");
+        let sdk_id = derive_event_stream_head_object_id(sdk_addr);
 
         assert_eq!(
             sui_types_id.to_vec(),
