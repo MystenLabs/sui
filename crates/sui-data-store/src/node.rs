@@ -4,7 +4,7 @@
 //! Network node configuration for Sui data stores.
 //!
 //! Defines the [`Node`] enum for specifying which Sui network to connect to
-//! (mainnet, testnet, or custom) and provides URL resolution for both
+//! (mainnet, testnet, devnet, or custom) and provides URL resolution for both
 //! GraphQL and JSON-RPC endpoints.
 
 use std::str::FromStr;
@@ -14,10 +14,14 @@ use sui_types::supported_protocol_versions::Chain;
 pub const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
 /// GraphQL endpoint for Sui testnet.
 pub const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
+/// GraphQL endpoint for Sui devnet.
+pub const DEVNET_GQL_URL: &str = "https://graphql.devnet.sui.io/graphql";
 /// JSON-RPC endpoint for Sui mainnet.
 pub const MAINNET_RPC_URL: &str = "https://fullnode.mainnet.sui.io:443";
 /// JSON-RPC endpoint for Sui testnet.
 pub const TESTNET_RPC_URL: &str = "https://fullnode.testnet.sui.io:443";
+/// JSON-RPC endpoint for Sui devnet.
+pub const DEVNET_RPC_URL: &str = "https://fullnode.devnet.sui.io:443";
 
 /// Represents a Sui network node configuration.
 ///
@@ -28,6 +32,8 @@ pub enum Node {
     Mainnet,
     /// Sui testnet
     Testnet,
+    /// Sui devnet
+    Devnet,
     /// Custom network with a user-provided URL
     Custom(String),
 }
@@ -38,6 +44,7 @@ impl Node {
         match self {
             Node::Mainnet => Chain::Mainnet,
             Node::Testnet => Chain::Testnet,
+            Node::Devnet => Chain::Unknown,
             Node::Custom(_) => Chain::Unknown,
         }
     }
@@ -47,6 +54,7 @@ impl Node {
         match self {
             Node::Mainnet => "mainnet".to_string(),
             Node::Testnet => "testnet".to_string(),
+            Node::Devnet => "devnet".to_string(),
             Node::Custom(url) => url.clone(),
         }
     }
@@ -56,7 +64,8 @@ impl Node {
         match self {
             Node::Mainnet => MAINNET_GQL_URL,
             Node::Testnet => TESTNET_GQL_URL,
-            Node::Custom(_url) => todo!("custom gql url not implemented"),
+            Node::Devnet => DEVNET_GQL_URL,
+            Node::Custom(url) => url.as_str(),
         }
     }
 
@@ -65,6 +74,7 @@ impl Node {
         match self {
             Node::Mainnet => MAINNET_RPC_URL,
             Node::Testnet => TESTNET_RPC_URL,
+            Node::Devnet => DEVNET_RPC_URL,
             // For custom, assume it's already an RPC URL
             Node::Custom(url) => url.as_str(),
         }
@@ -78,6 +88,7 @@ impl FromStr for Node {
         match s {
             "mainnet" => Ok(Node::Mainnet),
             "testnet" => Ok(Node::Testnet),
+            "devnet" => Ok(Node::Devnet),
             _ => Ok(Node::Custom(s.to_string())),
         }
     }

@@ -38,8 +38,14 @@ pub use node::Node;
 use anyhow::{Error, Result};
 use std::io::Write;
 use sui_types::{
-    base_types::ObjectID, effects::TransactionEffects, object::Object,
-    supported_protocol_versions::ProtocolConfig, transaction::TransactionData,
+    base_types::ObjectID,
+    digests::{CheckpointContentsDigest, CheckpointDigest},
+    effects::TransactionEffects,
+    full_checkpoint_content::Checkpoint as FullCheckpointPayload,
+    messages_checkpoint::CheckpointSequenceNumber,
+    object::Object,
+    supported_protocol_versions::ProtocolConfig,
+    transaction::TransactionData,
 };
 
 // ============================================================================
@@ -123,6 +129,62 @@ pub trait ObjectStore {
     /// - `Object`: The object data
     /// - `u64`: The actual version of the object
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error>;
+}
+
+/// Canonical checkpoint payload used by checkpoint store APIs.
+pub type FullCheckpointData = FullCheckpointPayload;
+
+/// Read interface for checkpoint data.
+pub trait CheckpointStore {
+    /// Return a full checkpoint payload by sequence number.
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointData>, Error>;
+
+    /// Return the highest locally known checkpoint.
+    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error>;
+}
+
+/// Write interface for checkpoint data.
+pub trait CheckpointStoreWriter: CheckpointStore {
+    /// Persist a full checkpoint payload.
+    fn write_checkpoint(&self, checkpoint: &FullCheckpointData) -> Result<(), Error>;
+}
+
+/// Local digest index interface for checkpoints.
+pub trait CheckpointIndexStore {
+    /// Resolve a checkpoint digest to a sequence number.
+    fn get_sequence_by_checkpoint_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error>;
+
+    /// Resolve a checkpoint contents digest to a sequence number.
+    fn get_sequence_by_contents_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error>;
+}
+
+/// Write interface for local checkpoint digest indexes.
+pub trait CheckpointIndexStoreWriter: CheckpointIndexStore {
+    /// Persist digest indexes for a checkpoint.
+    fn write_checkpoint_indexes(
+        &self,
+        sequence: CheckpointSequenceNumber,
+        checkpoint_digest: CheckpointDigest,
+        contents_digest: CheckpointContentsDigest,
+    ) -> Result<(), Error>;
+}
+
+/// Trait combining all checkpoint read capabilities for a data store.
+pub trait ReadCheckpointDataStore: CheckpointStore + CheckpointIndexStore {}
+
+/// Trait combining all checkpoint read/write capabilities for a data store.
+pub trait ReadWriteCheckpointDataStore:
+    ReadCheckpointDataStore + CheckpointStoreWriter + CheckpointIndexStoreWriter
+{
 }
 
 // ============================================================================
@@ -218,5 +280,12 @@ impl<T> ReadDataStore for T where T: TransactionStore + EpochStore + ObjectStore
 
 impl<T> ReadWriteDataStore for T where
     T: ReadDataStore + TransactionStoreWriter + EpochStoreWriter + ObjectStoreWriter
+{
+}
+
+impl<T> ReadCheckpointDataStore for T where T: CheckpointStore + CheckpointIndexStore {}
+
+impl<T> ReadWriteCheckpointDataStore for T where
+    T: ReadCheckpointDataStore + CheckpointStoreWriter + CheckpointIndexStoreWriter
 {
 }
