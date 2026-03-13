@@ -71,9 +71,8 @@ pub enum DiscoveryMessage {
     /// A spawned peer-query task discovered updated info for a configured peer,
     /// signaling the event loop to update the stored peer addresses.
     ConfiguredPeersUpdated,
-    PeerFailureReport {
-        peer_id: PeerId,
-    },
+    /// A peer has been reported as continuously failing, triggering disconnect and cooldown.
+    PeerFailureReport { peer_id: PeerId },
 }
 
 /// A Handle to the Discovery subsystem. The Discovery system will be shut down once all Handles
