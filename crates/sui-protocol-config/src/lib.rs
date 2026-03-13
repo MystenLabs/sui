@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 117;
+const MAX_PROTOCOL_VERSION: u64 = 118;
 
 // Record history of protocol version allocations here:
 //
@@ -305,6 +305,7 @@ const MAX_PROTOCOL_VERSION: u64 = 117;
 //              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
 // Version 117: Update Sui System metadata handling.
+// Version 118: Reserved for bella-ciao.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4675,6 +4676,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_display_registry = true;
                 }
                 117 => {}
+                118 => {
+                    // TODO: set new execution version here for bella-ciao
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

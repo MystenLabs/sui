@@ -18,6 +18,7 @@ mod latest;
 mod v0;
 mod v1;
 mod v2;
+mod v3;
 
 #[cfg(test)]
 mod tests;
@@ -34,7 +35,9 @@ pub fn executor(
 
         2 => Arc::new(v2::Executor::new(protocol_config, silent)?),
 
-        3 => Arc::new(latest::Executor::new(protocol_config, silent)?),
+        3 => Arc::new(v3::Executor::new(protocol_config, silent)?),
+
+        4 => Arc::new(latest::Executor::new(protocol_config, silent)?),
 
         v => panic!("Unsupported execution version {v}"),
     })
@@ -51,7 +54,8 @@ pub fn verifier<'m>(
         0 => Box::new(v0::Verifier::new(config, metrics)),
         1 => Box::new(v1::Verifier::new(config, metrics)),
         2 => Box::new(v2::Verifier::new(config, metrics)),
-        3 => Box::new(latest::Verifier::new(config, metrics)),
+        3 => Box::new(v3::Verifier::new(config, metrics)),
+        4 => Box::new(latest::Verifier::new(config, metrics)),
         v => panic!("Unsupported execution version {v}"),
     }
 }
