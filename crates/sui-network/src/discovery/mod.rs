@@ -451,6 +451,15 @@ impl DiscoveryEventLoop {
             info!(?peer_id, "ignoring failure report for configured peer");
             return;
         }
+        let min_peers = self.discovery_config.min_peers_for_disconnect();
+        let connected_count = self.state.read().unwrap().connected_peers.len();
+        if connected_count < min_peers {
+            info!(
+                ?peer_id,
+                connected_count, min_peers, "skipping disconnect, too few connected peers"
+            );
+            return;
+        }
         info!(
             ?peer_id,
             "peer failure reported, disconnecting and adding cooldown"
@@ -812,20 +821,16 @@ impl DiscoveryEventLoop {
         use rand::seq::IteratorRandom;
         let mut rng = rand::thread_rng();
 
-        let preferred_to_dial = std::cmp::min(preferred.len(), number_to_dial);
         let mut to_dial: Vec<_> = preferred
             .into_iter()
-            .choose_multiple(&mut rng, preferred_to_dial);
+            .choose_multiple(&mut rng, number_to_dial);
 
         let remaining = number_to_dial.saturating_sub(to_dial.len());
-        if remaining > 0 {
-            let cooldown_to_dial = std::cmp::min(cooldown_peers.len(), remaining);
-            to_dial.extend(
-                cooldown_peers
-                    .into_iter()
-                    .choose_multiple(&mut rng, cooldown_to_dial),
-            );
-        }
+        to_dial.extend(
+            cooldown_peers
+                .into_iter()
+                .choose_multiple(&mut rng, remaining),
+        );
 
         for (peer_id, info) in to_dial {
             let abort_handle = self

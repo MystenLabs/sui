@@ -5,7 +5,7 @@
 mod test {
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_config::p2p::StateSyncConfig;
+    use sui_config::p2p::{DiscoveryConfig, StateSyncConfig};
     use sui_macros::sim_test;
     use sui_simulator::SimConfig;
     use sui_simulator::configs::uniform_latency_ms;
@@ -95,12 +95,21 @@ mod test {
 
         let state_sync_config = StateSyncConfig {
             peer_disconnect_threshold_ms: Some(10_000), // 10 seconds of consistent failing
-            min_peers_for_disconnect: Some(0),
-            peer_scoring_window_ms: Some(120_000), // 2 minute window to accumulate samples
-            interval_period_ms: Some(1_000),       // 1 second tick
-            timeout_ms: Some(500),                 // 500ms timeout
+            peer_scoring_window_ms: Some(120_000),      // 2 minute window to accumulate samples
+            interval_period_ms: Some(1_000),            // 1 second tick
+            timeout_ms: Some(500),                      // 500ms timeout
             checkpoint_content_timeout_ms: Some(500),
             ..Default::default()
+        };
+
+        let discovery_config = DiscoveryConfig {
+            min_peers_for_disconnect: Some(0),
+            ..Default::default()
+        };
+
+        let set_discovery = |mut config: sui_config::NodeConfig| {
+            config.p2p_config.discovery = Some(discovery_config.clone());
+            config
         };
 
         let mut test_cluster = TestClusterBuilder::new()
@@ -109,18 +118,22 @@ mod test {
             .build()
             .await;
 
-        let healthy_config = test_cluster
-            .fullnode_config_builder()
-            .with_state_sync_config(state_sync_config.clone())
-            .build(&mut OsRng, test_cluster.swarm.config());
+        let healthy_config = set_discovery(
+            test_cluster
+                .fullnode_config_builder()
+                .with_state_sync_config(state_sync_config.clone())
+                .build(&mut OsRng, test_cluster.swarm.config()),
+        );
         let healthy_fullnode = test_cluster
             .start_fullnode_from_config(healthy_config)
             .await;
 
-        let degraded_config = test_cluster
-            .fullnode_config_builder()
-            .with_state_sync_config(state_sync_config.clone())
-            .build(&mut OsRng, test_cluster.swarm.config());
+        let degraded_config = set_discovery(
+            test_cluster
+                .fullnode_config_builder()
+                .with_state_sync_config(state_sync_config.clone())
+                .build(&mut OsRng, test_cluster.swarm.config()),
+        );
         let degraded_fullnode = test_cluster
             .start_fullnode_from_config(degraded_config)
             .await;
@@ -138,10 +151,12 @@ mod test {
         tokio::time::sleep(Duration::from_secs(10)).await;
 
         // Build and start the syncing node - it will be behind and need to sync
-        let syncing_config = test_cluster
-            .fullnode_config_builder()
-            .with_state_sync_config(state_sync_config)
-            .build(&mut OsRng, test_cluster.swarm.config());
+        let syncing_config = set_discovery(
+            test_cluster
+                .fullnode_config_builder()
+                .with_state_sync_config(state_sync_config)
+                .build(&mut OsRng, test_cluster.swarm.config()),
+        );
         let syncing_node = test_cluster
             .start_fullnode_from_config(syncing_config)
             .await;
@@ -187,28 +202,24 @@ mod test {
             cfg.latency.inter_node_latency = Some(Arc::new(latency_map));
         });
 
-        // Poll for disconnects. We need:
-        // - ~5s for 10 timeout failures at 500ms each to trigger is_failing()
-        // - 10s of consistent failing to trigger disconnect
-        // - Buffer for timing variability
         let timeout = Duration::from_secs(60);
         let start = tokio::time::Instant::now();
-        let mut disconnects = 0;
+        let mut reports = 0;
         while start.elapsed() < timeout {
-            disconnects = syncing_node
+            reports = syncing_node
                 .sui_node
-                .with(|n| n.state_sync_handle().get_peers_disconnected_for_failure());
-            if disconnects > 0 {
-                tracing::info!("Peer disconnected for failure after {:?}", start.elapsed());
+                .with(|n| n.state_sync_handle().get_peers_reported_for_failure());
+            if reports > 0 {
+                tracing::info!("Peer reported for failure after {:?}", start.elapsed());
                 break;
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
         assert!(
-            disconnects > 0,
-            "Expected at least one peer disconnect for failure, got {} after {:?}",
-            disconnects,
+            reports > 0,
+            "Expected at least one peer report for failure, got {} after {:?}",
+            reports,
             start.elapsed()
         );
 

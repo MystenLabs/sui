@@ -10,7 +10,7 @@ use anemo::Result;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use futures::stream::FuturesUnordered;
 use std::collections::HashSet;
-use sui_config::p2p::{AllowlistedPeer, SeedPeer};
+use sui_config::p2p::{AllowlistedPeer, DiscoveryConfig, SeedPeer};
 use tokio::time::timeout;
 
 #[tokio::test]
@@ -1852,7 +1852,13 @@ async fn test_runtime_gossip_updates_configured_peer_address() -> Result<()> {
 
 #[tokio::test]
 async fn peer_failure_report_adds_cooldown() -> Result<()> {
-    let config = P2pConfig::default();
+    let config = P2pConfig {
+        discovery: Some(DiscoveryConfig {
+            min_peers_for_disconnect: Some(0),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
     let (builder, _server, _em) = Builder::new().config(config).build();
     let (network, keypair) = build_network_and_key(|router| router);
     let (mut event_loop, _handle) = builder.build(network.clone(), keypair);

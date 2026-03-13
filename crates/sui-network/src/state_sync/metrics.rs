@@ -64,16 +64,16 @@ impl Metrics {
         None
     }
 
-    pub fn inc_peers_disconnected_for_failure(&self) {
+    pub fn inc_peers_reported_for_failure(&self) {
         if let Some(inner) = &self.0 {
-            inner.peers_disconnected_for_failure.inc();
+            inner.peers_reported_for_failure.inc();
         }
     }
 
-    pub fn get_peers_disconnected_for_failure(&self) -> u64 {
+    pub fn get_peers_reported_for_failure(&self) -> u64 {
         self.0
             .as_ref()
-            .map(|inner| inner.peers_disconnected_for_failure.get())
+            .map(|inner| inner.peers_reported_for_failure.get())
             .unwrap_or(0)
     }
 }
@@ -83,7 +83,7 @@ struct Inner {
     highest_verified_checkpoint: IntGauge,
     highest_synced_checkpoint: IntGauge,
     checkpoints_synced_from_archive: IntCounter,
-    peers_disconnected_for_failure: IntCounter,
+    peers_reported_for_failure: IntCounter,
     checkpoint_summary_age: Histogram,
     // TODO: delete once users are migrated to non-Mysten histogram.
     checkpoint_summary_age_ms: MystenHistogram,
@@ -118,9 +118,9 @@ impl Inner {
                 registry
             )
             .unwrap(),
-            peers_disconnected_for_failure: register_int_counter_with_registry!(
-                "state_sync_peers_disconnected_for_failure",
-                "Peers disconnected due to consistent state sync failures",
+            peers_reported_for_failure: register_int_counter_with_registry!(
+                "state_sync_peers_reported_for_failure",
+                "Peers reported due to consistent state sync failures",
                 registry
             )
             .unwrap(),

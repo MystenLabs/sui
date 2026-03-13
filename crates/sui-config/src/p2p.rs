@@ -257,18 +257,12 @@ pub struct StateSyncConfig {
     pub peer_failure_rate: Option<f64>,
 
     /// Duration in milliseconds that a peer must be continuously failing before it is
-    /// disconnected. Set to 0 to disable automatic disconnect of failing peers.
+    /// reported to discovery for disconnection. Set to 0 to disable automatic reporting
+    /// of failing peers.
     ///
-    /// If unspecified, this will default to `120,000` (2 minutes).
+    /// If unspecified, this will default to `30,000` (30 seconds).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_disconnect_threshold_ms: Option<u64>,
-
-    /// Minimum number of same-chain connected peers below which no failing-peer disconnect
-    /// will occur.
-    ///
-    /// If unspecified, this will default to `2`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub min_peers_for_disconnect: Option<usize>,
 }
 
 impl StateSyncConfig {
@@ -393,24 +387,27 @@ impl StateSyncConfig {
 
     pub fn exploration_probability(&self) -> f64 {
         const DEFAULT: f64 = 0.1;
-        self.exploration_probability
-            .unwrap_or(DEFAULT)
-            .clamp(0.0, 1.0)
+        let value = self.exploration_probability.unwrap_or(DEFAULT);
+        assert!(
+            (0.0..=1.0).contains(&value),
+            "exploration_probability must be in [0, 1], got {value}"
+        );
+        value
     }
 
     pub fn peer_failure_rate(&self) -> f64 {
         const DEFAULT: f64 = 0.3;
-        self.peer_failure_rate.unwrap_or(DEFAULT).clamp(0.0, 1.0)
+        let value = self.peer_failure_rate.unwrap_or(DEFAULT);
+        assert!(
+            (0.0..=1.0).contains(&value),
+            "peer_failure_rate must be in [0, 1], got {value}"
+        );
+        value
     }
 
     pub fn peer_disconnect_threshold(&self) -> Duration {
-        const DEFAULT_MS: u64 = 120_000; // 2 minutes
+        const DEFAULT_MS: u64 = 30_000; // 30 seconds
         Duration::from_millis(self.peer_disconnect_threshold_ms.unwrap_or(DEFAULT_MS))
-    }
-
-    pub fn min_peers_for_disconnect(&self) -> usize {
-        const DEFAULT: usize = 2;
-        self.min_peers_for_disconnect.unwrap_or(DEFAULT)
     }
 
     pub fn randomized_for_testing() -> Self {
@@ -530,6 +527,12 @@ pub struct DiscoveryConfig {
     /// If unspecified, this will default to `3,600,000` (1 hour).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_failure_cooldown_ms: Option<u64>,
+
+    /// Minimum number of connected peers below which no failing-peer disconnect will occur.
+    ///
+    /// If unspecified, this will default to `2`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_peers_for_disconnect: Option<usize>,
 }
 
 impl DiscoveryConfig {
@@ -570,6 +573,11 @@ impl DiscoveryConfig {
     pub fn peer_failure_cooldown(&self) -> Duration {
         const DEFAULT_MS: u64 = 3_600_000; // 1 hour
         Duration::from_millis(self.peer_failure_cooldown_ms.unwrap_or(DEFAULT_MS))
+    }
+
+    pub fn min_peers_for_disconnect(&self) -> usize {
+        const DEFAULT: usize = 2;
+        self.min_peers_for_disconnect.unwrap_or(DEFAULT)
     }
 }
 

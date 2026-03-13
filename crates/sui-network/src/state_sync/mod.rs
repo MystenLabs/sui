@@ -128,9 +128,9 @@ impl Handle {
         self.checkpoint_event_sender.subscribe()
     }
 
-    /// Returns the number of peers disconnected due to consistent state sync failures.
-    pub fn get_peers_disconnected_for_failure(&self) -> u64 {
-        self.metrics.get_peers_disconnected_for_failure()
+    /// Returns the number of peers reported due to consistent state sync failures.
+    pub fn get_peers_reported_for_failure(&self) -> u64 {
+        self.metrics.get_peers_reported_for_failure()
     }
 }
 
@@ -218,6 +218,10 @@ impl PeerScore {
         if self.is_failing() && self.failing_since.is_none() {
             self.failing_since = Some(Instant::now());
         }
+    }
+
+    pub(super) fn reset_failing_since(&mut self) {
+        self.failing_since = None;
     }
 
     pub(super) fn consistently_failing(&self, threshold: Duration) -> bool {
@@ -471,7 +475,7 @@ impl PeerHeights {
         }
     }
 
-    pub fn find_peer_to_disconnect(&self, threshold: Duration) -> Option<PeerId> {
+    pub fn find_peer_to_report_for_failure(&self, threshold: Duration) -> Option<PeerId> {
         self.scores
             .iter()
             .filter(|(peer_id, score)| {
@@ -968,40 +972,38 @@ where
             layer.maybe_prune_map();
         }
 
-        self.maybe_disconnect_failing_peer();
+        self.maybe_report_failing_peer();
     }
 
-    fn maybe_disconnect_failing_peer(&mut self) {
+    fn maybe_report_failing_peer(&mut self) {
         let threshold = self.config.peer_disconnect_threshold();
         if threshold.is_zero() {
             return;
         }
 
-        let min_peers = self.config.min_peers_for_disconnect();
-
         let mut peer_heights = self.peer_heights.write().unwrap();
         peer_heights.update_failing_states();
 
-        let same_chain_connected_count = peer_heights
-            .peers_on_same_chain()
-            .filter(|(peer_id, _)| self.network.peer(**peer_id).is_some())
-            .count();
-        if same_chain_connected_count <= min_peers {
-            return;
-        }
-
-        let Some(peer_id) = peer_heights.find_peer_to_disconnect(threshold) else {
+        let Some(peer_id) = peer_heights.find_peer_to_report_for_failure(threshold) else {
             return;
         };
+        // Reset the failing clock so this peer isn't re-reported on the next tick.
+        // If the peer is still failing, update_failing_states will restart the clock
+        // and the peer must fail for another full threshold before being reported again.
+        // Discovery may decline to disconnect (e.g. too few peers), so this also
+        // prevents spamming reports every tick in that case.
+        if let Some(score) = peer_heights.scores.get_mut(&peer_id) {
+            score.reset_failing_since();
+        }
         drop(peer_heights);
 
-        info!("disconnecting peer {peer_id} for consistent state sync failures");
+        info!("reporting peer {peer_id} for consistent state sync failures");
         if let Some(sender) = &self.discovery_sender {
             sender.report_peer_failure(peer_id);
         } else {
             let _ = self.network.disconnect(peer_id);
         }
-        self.metrics.inc_peers_disconnected_for_failure();
+        self.metrics.inc_peers_reported_for_failure();
     }
 
     fn maybe_start_checkpoint_summary_sync_task(&mut self) {

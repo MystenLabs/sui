@@ -1396,7 +1396,7 @@ fn test_peer_score_consistently_failing() {
 }
 
 #[test]
-fn test_find_peer_to_disconnect() {
+fn test_find_peer_to_report_for_failure() {
     use super::{PeerHeights, PeerScore, PeerStateSyncInfo};
     use anemo::PeerId;
 
@@ -1439,7 +1439,7 @@ fn test_find_peer_to_disconnect() {
     // No scores yet, should return None
     assert!(
         peer_heights
-            .find_peer_to_disconnect(Duration::from_secs(1))
+            .find_peer_to_report_for_failure(Duration::from_secs(1))
             .is_none()
     );
 
@@ -1467,20 +1467,20 @@ fn test_find_peer_to_disconnect() {
     peer_heights.scores.insert(peer_b, score_b);
 
     // With a 10-second threshold, both are eligible but peer_a has been failing longer
-    let result = peer_heights.find_peer_to_disconnect(Duration::from_secs(10));
+    let result = peer_heights.find_peer_to_report_for_failure(Duration::from_secs(10));
     assert_eq!(result, Some(peer_a));
 
     // With a 60-second threshold, only peer_a qualifies
-    let result = peer_heights.find_peer_to_disconnect(Duration::from_secs(60));
+    let result = peer_heights.find_peer_to_report_for_failure(Duration::from_secs(60));
     assert_eq!(result, Some(peer_a));
 
     // With a 200-second threshold, neither qualifies
-    let result = peer_heights.find_peer_to_disconnect(Duration::from_secs(200));
+    let result = peer_heights.find_peer_to_report_for_failure(Duration::from_secs(200));
     assert!(result.is_none());
 }
 
 #[test]
-fn test_min_peer_count_prevents_disconnect() {
+fn test_find_peer_to_report_respects_same_chain() {
     use super::{PeerHeights, PeerScore, PeerStateSyncInfo};
     use anemo::PeerId;
 
@@ -1543,8 +1543,8 @@ fn test_min_peer_count_prevents_disconnect() {
     score_b.failing_since = Some(StdInstant::now() - Duration::from_secs(600));
     peer_heights.scores.insert(peer_b, score_b);
 
-    // find_peer_to_disconnect should only return peer_a (same chain)
-    let result = peer_heights.find_peer_to_disconnect(Duration::from_secs(10));
+    // find_peer_to_report should only return peer_a (on same chain)
+    let result = peer_heights.find_peer_to_report_for_failure(Duration::from_secs(10));
     assert_eq!(result, Some(peer_a));
 }
 
