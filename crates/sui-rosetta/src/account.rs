@@ -155,6 +155,38 @@ async fn get_sub_account_balances(
         SubAccountType::FungibleStake => {
             return get_fungible_stake_balances(client, address).await;
         }
+
+        SubAccountType::AllStakes => {
+            let staked_sui: Vec<SubBalance> = delegated_stakes
+                .into_iter()
+                .filter(|stake| current_epoch >= stake.activation_epoch)
+                .map(|stake| SubBalance {
+                    stake_id: stake.staked_sui_id,
+                    validator: stake.validator_address,
+                    value: stake.principal as i128,
+                })
+                .collect();
+
+            let fungible_result = get_fungible_stake_balances(client, address).await?;
+            let fungible_subs: Vec<SubBalance> = fungible_result
+                .into_iter()
+                .flat_map(|amount| {
+                    amount
+                        .metadata
+                        .map(|m| m.sub_balances)
+                        .unwrap_or_default()
+                })
+                .collect();
+
+            let mut all: Vec<SubBalance> = staked_sui;
+            all.extend(fungible_subs);
+
+            return Ok(if all.is_empty() {
+                vec![Amount::new(0, None)]
+            } else {
+                vec![Amount::new_from_sub_balances(all)]
+            });
+        }
     };
 
     Ok(if amounts.is_empty() {
@@ -228,6 +260,48 @@ struct FungibleStakedSuiContent {
     value: u64,
 }
 
+/// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
+/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/account/get-an-account-unspent-coins)
+/// TODO This API is supposed to return coins of all types, not just SUI. It also has a 'currencies' parameter that we
+/// are igorning which can be used to filter the type of coins that are returned.
+pub async fn coins(
+    State(context): State<OnlineServerContext>,
+    Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<AccountCoinsRequest>, Error>,
+) -> Result<AccountCoinsResponse, Error> {
+    env.check_network_identifier(&request.network_identifier)?;
+
+    let coin_request = ListOwnedObjectsRequest::default()
+        .with_owner(request.account_identifier.address.to_string())
+        .with_object_type(StructTag::gas_coin().to_string())
+        .with_page_size(5000u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "balance"]));
+
+    let coins = context
+        .client
+        .list_owned_objects(coin_request)
+        .map_err(Error::from)
+        .and_then(|object| async move {
+            Ok(Coin {
+                coin_identifier: CoinIdentifier {
+                    identifier: CoinID {
+                        id: ObjectID::from_hex_literal(object.object_id())
+                            .map_err(|e| Error::DataError(format!("Invalid object_id: {}", e)))?,
+                        version: SequenceNumber::from(object.version()),
+                    },
+                },
+                amount: Amount::new(object.balance() as i128, None),
+            })
+        })
+        .try_collect()
+        .await?;
+
+    Ok(AccountCoinsResponse {
+        block_identifier: context.blocks().current_block_identifier().await?,
+        coins,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,46 +369,4 @@ mod tests {
         let address: sui_sdk_types::Address = extracted_pool_id.into();
         assert_eq!(address.to_string(), pool_id.to_hex_literal());
     }
-}
-
-/// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
-/// [Mesh API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/account/get-an-account-unspent-coins)
-/// TODO This API is supposed to return coins of all types, not just SUI. It also has a 'currencies' parameter that we
-/// are igorning which can be used to filter the type of coins that are returned.
-pub async fn coins(
-    State(context): State<OnlineServerContext>,
-    Extension(env): Extension<SuiEnv>,
-    WithRejection(Json(request), _): WithRejection<Json<AccountCoinsRequest>, Error>,
-) -> Result<AccountCoinsResponse, Error> {
-    env.check_network_identifier(&request.network_identifier)?;
-
-    let coin_request = ListOwnedObjectsRequest::default()
-        .with_owner(request.account_identifier.address.to_string())
-        .with_object_type(StructTag::gas_coin().to_string())
-        .with_page_size(5000u32)
-        .with_read_mask(FieldMask::from_paths(["object_id", "version", "balance"]));
-
-    let coins = context
-        .client
-        .list_owned_objects(coin_request)
-        .map_err(Error::from)
-        .and_then(|object| async move {
-            Ok(Coin {
-                coin_identifier: CoinIdentifier {
-                    identifier: CoinID {
-                        id: ObjectID::from_hex_literal(object.object_id())
-                            .map_err(|e| Error::DataError(format!("Invalid object_id: {}", e)))?,
-                        version: SequenceNumber::from(object.version()),
-                    },
-                },
-                amount: Amount::new(object.balance() as i128, None),
-            })
-        })
-        .try_collect()
-        .await?;
-
-    Ok(AccountCoinsResponse {
-        block_identifier: context.blocks().current_block_identifier().await?,
-        coins,
-    })
 }
