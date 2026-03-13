@@ -1150,12 +1150,11 @@ async fn test_upgrade_package_compatible_in_dep_only_mode() {
     );
 }
 
-// TODO(bella-ciao): Ignore this test until we do an execution version cut and then re-enable
 #[tokio::test]
-#[ignore]
 async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
     // Allow new modules in deps-only mode for this test.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_execution_version_for_testing(3);
         config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
         config
     });
