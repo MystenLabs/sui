@@ -1595,11 +1595,9 @@ validator and registers it. The original object is thus revoked.
 Update a validator's name.
 
 Unlike <code>description</code> and <code>image_url</code>, <code>name</code> is checked against both active
-and pending validators and must be unique in the system, even for validator
-candidates.
+and pending validators and must be unique in the system.
 
-TODO: relax this check once there's a clear way to differentiate between a
-candidate validator and a pending validator.
+For candidate validators, the name is not checked for duplicates.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_name">update_validator_name</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, name: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1616,10 +1614,14 @@ candidate validator and a pending validator.
     name: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.any_validator_mut(ctx.sender());
+    <b>let</b> validator_address = ctx.sender();
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.any_validator_mut(validator_address);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_name(name);
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
-    self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
+    // only run the duplicate check <b>for</b> non-candidates
+    <b>if</b> (!self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.is_validator_candidate(validator_address)) {
+        self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
+    };
 }
 </code></pre>
 
