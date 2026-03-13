@@ -36,6 +36,7 @@ use sui_kvstore::PipelineLayer;
 use sui_protocol_config::Chain;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
@@ -513,6 +514,44 @@ async fn test_indexer_e2e() -> Result<()> {
         assert_eq!(indexed.transaction, *signed);
         assert!(indexed.checkpoint_number > 0);
         assert!(indexed.timestamp > 0);
+    }
+
+    // -- Balance changes parity with fullnode gRPC batch_get_transactions --
+    let batch_response = harness
+        .grpc_client
+        .ledger_client()
+        .batch_get_transactions(BatchGetTransactionsRequest {
+            digests: tx_digests.iter().map(ToString::to_string).collect(),
+            read_mask: Some(FieldMask::from_paths(["balance_changes"])),
+        })
+        .await
+        .context("batch_get_transactions RPC failed")?
+        .into_inner();
+
+    assert_eq!(batch_response.transactions.len(), tx_digests.len());
+    for ((digest, indexed), grpc_result) in tx_digests
+        .iter()
+        .zip(transactions.iter())
+        .zip(batch_response.transactions.into_iter())
+    {
+        let grpc_transaction = grpc_result.to_result().unwrap_or_else(|status| {
+            panic!("batch_get_transactions failed for {digest}: {status:?}")
+        });
+
+        assert!(
+            !indexed.balance_changes.is_empty(),
+            "indexed transaction {digest} should contain balance changes"
+        );
+        assert_eq!(
+            grpc_transaction.balance_changes,
+            indexed
+                .balance_changes
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect::<Vec<_>>(),
+            "balance_changes mismatch for transaction {digest}"
+        );
     }
 
     // -- Checkpoint lookup --

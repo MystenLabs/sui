@@ -90,6 +90,8 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
     let mut events = None;
     let mut timestamp = 0;
     let mut checkpoint_number = 0;
+    let mut balance_changes = Vec::new();
+    let mut unchanged_loaded_runtime_objects = Vec::new();
 
     for (column, value) in row {
         match column.as_ref() {
@@ -99,6 +101,8 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
             b"ev" => events = Some(bcs::from_bytes(value)?),
             b"ts" => timestamp = bcs::from_bytes(value)?,
             b"cn" => checkpoint_number = bcs::from_bytes(value)?,
+            b"bc" => balance_changes = bcs::from_bytes(value)?,
+            b"ul" => unchanged_loaded_runtime_objects = bcs::from_bytes(value)?,
             _ => {}
         }
     }
@@ -116,8 +120,8 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
         events: events.context("events field is missing")?,
         timestamp,
         checkpoint_number,
-        balance_changes: Vec::new(),
-        unchanged_loaded_runtime_objects: Vec::new(),
+        balance_changes,
+        unchanged_loaded_runtime_objects,
     })
 }
 
@@ -143,4 +147,92 @@ pub fn decode_events(row: &[(Bytes, Bytes)]) -> Result<TransactionEventsData> {
         events,
         timestamp_ms,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use sui_types::TypeTag;
+    use sui_types::balance_change::BalanceChange;
+    use sui_types::base_types::{ObjectID, SuiAddress};
+    use sui_types::effects::TestEffectsBuilder;
+    use sui_types::object::Object;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::storage::ObjectKey;
+    use sui_types::transaction::{SenderSignedData, Transaction, TransactionData};
+
+    fn test_transaction() -> Transaction {
+        let sender = SuiAddress::random_for_testing_only();
+        let gas = Object::immutable_with_id_for_testing(ObjectID::random());
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_sui(SuiAddress::random_for_testing_only(), None);
+            builder.finish()
+        };
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas.compute_object_reference()],
+            pt,
+            1_000_000,
+            1,
+        );
+        Transaction::new(SenderSignedData::new(data, vec![]))
+    }
+
+    #[test]
+    fn decode_preserves_balance_changes() {
+        let transaction = test_transaction();
+        let effects = TestEffectsBuilder::new(transaction.data()).build();
+        let balance_change = BalanceChange {
+            address: SuiAddress::random_for_testing_only(),
+            coin_type: TypeTag::U64,
+            amount: 42,
+        };
+
+        let encoded = encode(
+            &transaction,
+            &effects,
+            &None,
+            7,
+            42,
+            std::slice::from_ref(&balance_change),
+            &[],
+        )
+        .expect("encoding should succeed");
+        let row: Vec<(Bytes, Bytes)> = encoded
+            .into_iter()
+            .map(|(column, value)| (Bytes::from_static(column.as_bytes()), value))
+            .collect();
+
+        let decoded = decode(&row).expect("decoding should succeed");
+
+        assert_eq!(decoded.balance_changes, vec![balance_change]);
+    }
+
+    #[test]
+    fn decode_preserves_unchanged_loaded_runtime_objects() {
+        let transaction = test_transaction();
+        let effects = TestEffectsBuilder::new(transaction.data()).build();
+        let obj_key = ObjectKey(ObjectID::random(), 3.into());
+
+        let encoded = encode(
+            &transaction,
+            &effects,
+            &None,
+            7,
+            42,
+            &[],
+            std::slice::from_ref(&obj_key),
+        )
+        .expect("encoding should succeed");
+        let row: Vec<(Bytes, Bytes)> = encoded
+            .into_iter()
+            .map(|(column, value)| (Bytes::from_static(column.as_bytes()), value))
+            .collect();
+
+        let decoded = decode(&row).expect("decoding should succeed");
+
+        assert_eq!(decoded.unchanged_loaded_runtime_objects, vec![obj_key]);
+    }
 }
