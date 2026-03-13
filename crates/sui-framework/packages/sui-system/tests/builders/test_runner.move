@@ -68,8 +68,16 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
     } = builder;
 
     let validators = validators.destroy_or!({
-        vector::tabulate!(validators_count.destroy_or!(4), |_| {
-            validator_builder::new().initial_stake(validators_initial_stake.destroy_or!(100))
+        let validators_count = validators_count.destroy_or!(4);
+        let initial_stake = validators_initial_stake.destroy_or!(100);
+        vector::tabulate!(validators_count, |idx| {
+            if (idx < 4) {
+                validator_builder::preset(idx).initial_stake(initial_stake)
+            } else {
+                let mut name = b"Validator_".to_string();
+                name.append(idx.to_string());
+                validator_builder::new().name(name.into_bytes()).initial_stake(initial_stake)
+            }
         })
     });
 

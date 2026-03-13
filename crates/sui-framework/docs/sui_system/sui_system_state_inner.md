@@ -1159,10 +1159,10 @@ used for the reference gas price calculation at the end of the epoch.
 ) {
     // Verify the represented <b>address</b> is an active or pending <a href="../sui_system/validator.md#sui_system_validator">validator</a>, and the capability is still valid.
     <b>let</b> verified_cap = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.verify_cap(cap, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self
+    self
         .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
-        .get_validator_mut_with_verified_cap(&verified_cap, <b>false</b> /* include_candidate */);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_set_gas_price">request_set_gas_price</a>(verified_cap, new_gas_price);
+        .any_validator_mut(verified_cap.verified_operation_cap_address())
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_set_gas_price">request_set_gas_price</a>(verified_cap, new_gas_price)
 }
 </code></pre>
 
@@ -1193,10 +1193,10 @@ This function is used to set new gas price for candidate validators
 ) {
     // Verify the represented <b>address</b> is an active or pending <a href="../sui_system/validator.md#sui_system_validator">validator</a>, and the capability is still valid.
     <b>let</b> verified_cap = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.verify_cap(cap, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ANY_VALIDATOR">ANY_VALIDATOR</a>);
-    <b>let</b> candidate = self
+    self
         .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
-        .get_validator_mut_with_verified_cap(&verified_cap, <b>true</b> /* include_candidate */);
-    candidate.set_candidate_gas_price(verified_cap, new_gas_price)
+        .candidate_validator_mut(verified_cap.verified_operation_cap_address())
+        .set_candidate_gas_price(verified_cap, new_gas_price)
 }
 </code></pre>
 
@@ -1228,10 +1228,8 @@ the epoch.
 ) {
     self
         .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
-        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_set_commission_rate">request_set_commission_rate</a>(
-            new_commission_rate,
-            ctx,
-        )
+        .active_validator_mut(ctx.sender())
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_set_commission_rate">request_set_commission_rate</a>(new_commission_rate)
 }
 </code></pre>
 
@@ -1260,8 +1258,10 @@ This function is used to set new commission rate for candidate validators
     new_commission_rate: u64,
     ctx: &TxContext,
 ) {
-    <b>let</b> candidate = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.set_candidate_commission_rate(new_commission_rate)
+    self
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+        .candidate_validator_mut(ctx.sender())
+        .set_candidate_commission_rate(new_commission_rate)
 }
 </code></pre>
 
@@ -1291,13 +1291,7 @@ Add stake to a validator's staking pool.
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ): StakedSui {
-    self
-        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
-        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_stake">request_add_stake</a>(
-            validator_address,
-            stake.into_balance(),
-            ctx,
-        )
+    self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_stake">request_add_stake</a>(validator_address, stake.into_balance(), ctx)
 }
 </code></pre>
 
@@ -1513,7 +1507,7 @@ Undo a <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_sys
     reportee_addr: <b>address</b>,
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
 ) {
-    <b>let</b> reporter_address = *verified_cap.verified_operation_cap_address();
+    <b>let</b> reporter_address = verified_cap.verified_operation_cap_address();
     <b>assert</b>!(reporter_address != reportee_addr, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ECannotReportOneself">ECannotReportOneself</a>);
     <b>if</b> (!validator_report_records.contains(&reportee_addr)) {
         validator_report_records.insert(reportee_addr, vec_set::singleton(reporter_address));
@@ -1552,7 +1546,7 @@ Undo a <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_sys
 ) {
     <b>assert</b>!(validator_report_records.contains(&reportee_addr), <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EReportRecordNotFound">EReportRecordNotFound</a>);
     <b>let</b> reporters = &<b>mut</b> validator_report_records[&reportee_addr];
-    <b>let</b> reporter_addr = *verified_cap.verified_operation_cap_address();
+    <b>let</b> reporter_addr = verified_cap.verified_operation_cap_address();
     <b>assert</b>!(reporters.contains(&reporter_addr), <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EReportRecordNotFound">EReportRecordNotFound</a>);
     reporters.remove(&reporter_addr);
     <b>if</b> (reporters.is_empty()) {
@@ -1583,8 +1577,10 @@ validator and registers it. The original object is thus revoked.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_rotate_operation_cap">rotate_operation_cap</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.new_unverified_validator_operation_cap_and_transfer(ctx);
+    self
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+        .any_validator_mut(ctx.sender())
+        .new_unverified_validator_operation_cap_and_transfer(ctx)
 }
 </code></pre>
 
@@ -1597,6 +1593,11 @@ validator and registers it. The original object is thus revoked.
 ## Function `update_validator_name`
 
 Update a validator's name.
+
+Unlike <code>description</code> and <code>image_url</code>, <code>name</code> is checked against both active
+and pending validators and must be unique in the system.
+
+For candidate validators, the name is not checked for duplicates.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_name">update_validator_name</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, name: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1613,8 +1614,14 @@ Update a validator's name.
     name: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
+    <b>let</b> validator_address = ctx.sender();
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.any_validator_mut(validator_address);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_name(name);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
+    // only run the duplicate check <b>for</b> non-candidates
+    <b>if</b> (!self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.is_validator_candidate(validator_address)) {
+        self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
+    };
 }
 </code></pre>
 
@@ -1626,7 +1633,8 @@ Update a validator's name.
 
 ## Function `update_validator_description`
 
-Update a validator's description
+Update a validator's description.
+Never checked for duplicates.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_description">update_validator_description</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, description: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1643,8 +1651,7 @@ Update a validator's description
     description: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_description(description);
+    self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.any_validator_mut(ctx.sender()).update_description(description)
 }
 </code></pre>
 
@@ -1656,7 +1663,8 @@ Update a validator's description
 
 ## Function `update_validator_image_url`
 
-Update a validator's image url
+Update a validator's image url.
+Never checked for duplicates.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_image_url">update_validator_image_url</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, image_url: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1673,8 +1681,7 @@ Update a validator's image url
     image_url: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_image_url(image_url);
+    self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.any_validator_mut(ctx.sender()).update_image_url(image_url)
 }
 </code></pre>
 
@@ -1686,7 +1693,8 @@ Update a validator's image url
 
 ## Function `update_validator_project_url`
 
-Update a validator's project url
+Update a candidate or an active/pending validator's project url.
+Never checked for duplicates.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_project_url">update_validator_project_url</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, project_url: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1703,8 +1711,7 @@ Update a validator's project url
     project_url: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_project_url(project_url);
+    self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.any_validator_mut(ctx.sender()).update_project_url(project_url)
 }
 </code></pre>
 
@@ -1718,6 +1725,8 @@ Update a validator's project url
 
 Update a validator's network address.
 The change will only take effects starting from the next epoch.
+
+Aborts if there's a duplicate network address in the system.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_next_epoch_network_address">update_validator_next_epoch_network_address</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, network_address: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1734,7 +1743,7 @@ The change will only take effects starting from the next epoch.
     network_address: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx(ctx);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.active_validator_mut(ctx.sender());
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_network_address(network_address);
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
@@ -1750,6 +1759,7 @@ The change will only take effects starting from the next epoch.
 ## Function `update_candidate_validator_network_address`
 
 Update candidate validator's network address.
+Not checked for duplicates. Uniqueness check is performed in <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a></code>.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_candidate_validator_network_address">update_candidate_validator_network_address</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, network_address: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1766,8 +1776,10 @@ Update candidate validator's network address.
     network_address: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> candidate = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_network_address(network_address);
+    self
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_network_address(network_address)
 }
 </code></pre>
 
@@ -1781,6 +1793,8 @@ Update candidate validator's network address.
 
 Update a validator's p2p address.
 The change will only take effects starting from the next epoch.
+
+Aborts if there's a duplicate p2p address in the system.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_next_epoch_p2p_address">update_validator_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, p2p_address: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1797,7 +1811,7 @@ The change will only take effects starting from the next epoch.
     p2p_address: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx(ctx);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.active_validator_mut(ctx.sender());
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_p2p_address(p2p_address);
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
@@ -1813,6 +1827,7 @@ The change will only take effects starting from the next epoch.
 ## Function `update_candidate_validator_p2p_address`
 
 Update candidate validator's p2p address.
+Not checked for duplicates. Uniqueness check is performed in <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a></code>.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_candidate_validator_p2p_address">update_candidate_validator_p2p_address</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, p2p_address: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1829,8 +1844,7 @@ Update candidate validator's p2p address.
     p2p_address: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> candidate = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_p2p_address(p2p_address);
+    self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.candidate_validator_mut(ctx.sender()).update_candidate_p2p_address(p2p_address)
 }
 </code></pre>
 
@@ -1844,6 +1858,8 @@ Update candidate validator's p2p address.
 
 Update a validator's narwhal primary address.
 The change will only take effects starting from the next epoch.
+
+Aborts if there's a duplicate primary address in the system.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_next_epoch_primary_address">update_validator_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, primary_address: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1860,8 +1876,10 @@ The change will only take effects starting from the next epoch.
     primary_address: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx(ctx);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.active_validator_mut(ctx.sender());
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_primary_address(primary_address);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
+    self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
 
@@ -1874,6 +1892,7 @@ The change will only take effects starting from the next epoch.
 ## Function `update_candidate_validator_primary_address`
 
 Update candidate validator's narwhal primary address.
+Not checked for duplicates. Uniqueness check is performed in <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a></code>.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_candidate_validator_primary_address">update_candidate_validator_primary_address</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, primary_address: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1890,8 +1909,10 @@ Update candidate validator's narwhal primary address.
     primary_address: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> candidate = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_primary_address(primary_address);
+    self
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_primary_address(primary_address)
 }
 </code></pre>
 
@@ -1905,6 +1926,8 @@ Update candidate validator's narwhal primary address.
 
 Update a validator's narwhal worker address.
 The change will only take effects starting from the next epoch.
+
+Aborts if there's a duplicate worker address in the system.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_next_epoch_worker_address">update_validator_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, worker_address: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1921,8 +1944,10 @@ The change will only take effects starting from the next epoch.
     worker_address: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx(ctx);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.active_validator_mut(ctx.sender());
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_worker_address(worker_address);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
+    self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
 
@@ -1935,6 +1960,7 @@ The change will only take effects starting from the next epoch.
 ## Function `update_candidate_validator_worker_address`
 
 Update candidate validator's narwhal worker address.
+Not checked for duplicates. Uniqueness check is performed in <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a></code>.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_candidate_validator_worker_address">update_candidate_validator_worker_address</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, worker_address: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1951,8 +1977,10 @@ Update candidate validator's narwhal worker address.
     worker_address: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> candidate = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_worker_address(worker_address);
+    self
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_worker_address(worker_address)
 }
 </code></pre>
 
@@ -1966,6 +1994,8 @@ Update candidate validator's narwhal worker address.
 
 Update a validator's public key of protocol key and proof of possession.
 The change will only take effects starting from the next epoch.
+
+Aborts if there's a duplicate protocol public key in the system.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_next_epoch_protocol_pubkey">update_validator_next_epoch_protocol_pubkey</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, protocol_pubkey: vector&lt;u8&gt;, proof_of_possession: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1983,7 +2013,7 @@ The change will only take effects starting from the next epoch.
     proof_of_possession: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx(ctx);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.active_validator_mut(ctx.sender());
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession);
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
@@ -1999,6 +2029,7 @@ The change will only take effects starting from the next epoch.
 ## Function `update_candidate_validator_protocol_pubkey`
 
 Update candidate validator's public key of protocol key and proof of possession.
+Not checked for duplicates. Uniqueness check is performed in <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a></code>.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_candidate_validator_protocol_pubkey">update_candidate_validator_protocol_pubkey</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, protocol_pubkey: vector&lt;u8&gt;, proof_of_possession: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -2016,8 +2047,10 @@ Update candidate validator's public key of protocol key and proof of possession.
     proof_of_possession: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> candidate = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_protocol_pubkey(protocol_pubkey, proof_of_possession);
+    self
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_protocol_pubkey(protocol_pubkey, proof_of_possession)
 }
 </code></pre>
 
@@ -2031,6 +2064,8 @@ Update candidate validator's public key of protocol key and proof of possession.
 
 Update a validator's public key of worker key.
 The change will only take effects starting from the next epoch.
+
+Aborts if there's a duplicate worker public key in the system.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_next_epoch_worker_pubkey">update_validator_next_epoch_worker_pubkey</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, worker_pubkey: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -2047,7 +2082,7 @@ The change will only take effects starting from the next epoch.
     worker_pubkey: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx(ctx);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.active_validator_mut(ctx.sender());
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_worker_pubkey(worker_pubkey);
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
@@ -2063,6 +2098,7 @@ The change will only take effects starting from the next epoch.
 ## Function `update_candidate_validator_worker_pubkey`
 
 Update candidate validator's public key of worker key.
+Not checked for duplicates. Uniqueness check is performed in <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a></code>.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_candidate_validator_worker_pubkey">update_candidate_validator_worker_pubkey</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, worker_pubkey: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -2079,8 +2115,10 @@ Update candidate validator's public key of worker key.
     worker_pubkey: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> candidate = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_worker_pubkey(worker_pubkey);
+    self
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_worker_pubkey(worker_pubkey)
 }
 </code></pre>
 
@@ -2094,6 +2132,8 @@ Update candidate validator's public key of worker key.
 
 Update a validator's public key of network key.
 The change will only take effects starting from the next epoch.
+
+Aborts if there's a duplicate network public key in the system.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_validator_next_epoch_network_pubkey">update_validator_next_epoch_network_pubkey</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, network_pubkey: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -2110,7 +2150,7 @@ The change will only take effects starting from the next epoch.
     network_pubkey: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx(ctx);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.active_validator_mut(ctx.sender());
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_network_pubkey(network_pubkey);
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
@@ -2126,6 +2166,7 @@ The change will only take effects starting from the next epoch.
 ## Function `update_candidate_validator_network_pubkey`
 
 Update candidate validator's public key of network key.
+Not checked for duplicates. Uniqueness check is performed in <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a></code>.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_update_candidate_validator_network_pubkey">update_candidate_validator_network_pubkey</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, network_pubkey: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -2142,8 +2183,10 @@ Update candidate validator's public key of network key.
     network_pubkey: vector&lt;u8&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> candidate = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_network_pubkey(network_pubkey);
+    self
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_network_pubkey(network_pubkey)
 }
 </code></pre>
 
@@ -2681,7 +2724,7 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, pool_id: &<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<a href="../sui/table.md#sui_table_Table">sui::table::Table</a>&lt;u64, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_PoolTokenExchangeRate">sui_system::staking_pool::PoolTokenExchangeRate</a>&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<a href="../sui/table.md#sui_table_Table">sui::table::Table</a>&lt;u64, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_PoolTokenExchangeRate">sui_system::staking_pool::PoolTokenExchangeRate</a>&gt;
 </code></pre>
 
 
@@ -2692,7 +2735,7 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
-    pool_id: &ID,
+    pool_id: ID,
 ): &Table&lt;u64, PoolTokenExchangeRate&gt; {
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(pool_id)
 }

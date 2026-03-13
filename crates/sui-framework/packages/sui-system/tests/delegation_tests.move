@@ -330,7 +330,9 @@ fun add_stake_post_active_flow() {
 // 4. Unstake from the preactive validator. There should be no rewards earned.
 fun add_preactive_remove_preactive() {
     let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
-    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
+    let validator = validator_builder::preset(2)
+        .sui_address(NEW_VALIDATOR_ADDR)
+        .build(runner.ctx());
 
     runner.add_validator_candidate(validator);
     runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
@@ -358,7 +360,9 @@ fun add_preactive_remove_preactive() {
 // 4. Try staking to the validator candidate. This should fail because the validator candidate is pending.
 fun add_preactive_remove_pending_failure() {
     let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
-    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
+    let validator = validator_builder::preset(2)
+        .sui_address(NEW_VALIDATOR_ADDR)
+        .build(runner.ctx());
 
     // Add the validator candidate.
     runner.add_validator_candidate(validator);
@@ -390,7 +394,9 @@ fun add_preactive_remove_active() {
         .storage_fund_amount(100)
         .build();
 
-    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
+    let validator = validator_builder::preset(0)
+        .sui_address(NEW_VALIDATOR_ADDR)
+        .build(runner.ctx());
 
     // Add the validator candidate.
     runner.add_validator_candidate(validator);
@@ -464,9 +470,20 @@ fun add_preactive_remove_active() {
 }
 
 #[test]
+// Scenario:
+// 1. Add a validator candidate
+// 2. Stake 100 SUI to the validator candidate
+// 3. Request to add the validator candidate to the active validator set.
+// 4. Advance epoch with no rewards.
+// 5. Advance epoch with some rewards.
+// 6. Request to remove the validator candidate from the active validator set.
+// 7. Advance epoch with no rewards.
+// 8. Unstake from the validator candidate.
 fun add_preactive_remove_post_active() {
     let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
-    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
+    let validator = validator_builder::preset(2)
+        .sui_address(NEW_VALIDATOR_ADDR)
+        .build(runner.ctx());
 
     // Add the validator candidate.
     runner.add_validator_candidate(validator);
@@ -499,9 +516,21 @@ fun add_preactive_remove_post_active() {
 }
 
 #[test]
+// Scenario:
+// 1. Add a validator candidate
+// 2. Stake 100 SUI to the validator candidate from each of the two stakers.
+// 3. Check values for the candidate.
+// 4. Withdraw the stake. And check that the stake is withdrawn and appears in the sender balance.
+// 5. Advance epoch, so that the stake 2 becomes active.
+// 6. Unstake and check that the stake is withdrawn immediately and appears in the sender balance.
+// 7. Check that the stake is removed completely, and that no pending stake is present.
 fun add_remove_stake_preactive_candidate() {
     let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
-    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
+
+    // The first 2 validators are using presets 0-1.
+    let validator = validator_builder::preset(2)
+        .sui_address(NEW_VALIDATOR_ADDR)
+        .build(runner.ctx());
     runner.add_validator_candidate(validator);
 
     // Stake 100 SUI to the validator candidate from each of the two stakers.
@@ -549,7 +578,7 @@ fun add_remove_stake_preactive_candidate() {
 // 5. Staker unstakes and gets no rewards.
 fun add_preactive_candidate_drop_out() {
     let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
-    let validator = validator_builder::preset().build(runner.ctx());
+    let validator = validator_builder::preset(2).build(runner.ctx());
     let validator_address = validator.sui_address();
     runner.add_validator_candidate(validator);
 
@@ -583,7 +612,9 @@ fun add_preactive_candidate_drop_out() {
 // 4. Unstake from the validator candidate
 fun remove_inactive_stake_from_inactive_candidate() {
     let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
-    let validator = validator_builder::preset().build(runner.ctx());
+
+    // The first 2 validators are using presets 0-1.
+    let validator = validator_builder::preset(2).build(runner.ctx());
     let validator_address = validator.sui_address();
 
     runner.add_validator_candidate(validator);
