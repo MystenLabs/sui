@@ -474,20 +474,22 @@ impl LocalValidatorAggregatorProxy {
     /// Submit a transaction to multiple validators to cause consensus amplification.
     /// This is used to test the unpaid amplification deferral logic.
     ///
-    /// `num_validators` specifies how many additional validators to submit to beyond
-    /// the normal submission path. For example, if `num_validators == 2`, the transaction
-    /// will be submitted to 2 validators directly, plus once via the normal driver path.
+    /// `num_validators` specifies how many validators to submit the transaction to directly.
+    /// Unlike the normal submission path, this does NOT retry on failure to avoid
+    /// compounding the amplification effect.
     pub async fn submit_transaction_with_amplification(
         &self,
         tx: Transaction,
         num_validators: usize,
     ) -> anyhow::Result<ExecutionEffects> {
         use sui_core::authority_client::AuthorityAPI;
-        use sui_types::messages_grpc::SubmitTxRequest;
+        use sui_types::messages_grpc::{SubmitTxRequest, WaitForEffectsRequest, WaitForEffectsResponse};
+
+        let tx_digest = *tx.digest();
 
         // Submit to multiple validators in parallel
         let validators: Vec<_> = self.clients.values().take(num_validators).collect();
-        let request = SubmitTxRequest::new_transaction(tx.clone());
+        let request = SubmitTxRequest::new_transaction(tx);
 
         let futures: Vec<_> = validators
             .iter()
@@ -497,11 +499,49 @@ impl LocalValidatorAggregatorProxy {
             })
             .collect();
 
-        // Fire off all submissions but don't wait for responses
+        // Fire off all submissions and wait for them to complete
         let _ = futures::future::join_all(futures).await;
 
-        // Use the normal path to get the final result
-        self.submit_transaction_block(tx).await
+        // Try each validator until we get effects (no retries to avoid amplification)
+        let epoch = self.td.authority_aggregator().load().committee.epoch;
+        for client in self.clients.values() {
+            let wait_request = WaitForEffectsRequest {
+                transaction_digest: Some(tx_digest),
+                consensus_position: None,
+                include_details: true,
+                ping_type: None,
+            };
+            match client.wait_for_effects(wait_request, None).await {
+                Ok(WaitForEffectsResponse::Executed { details, .. }) => {
+                    if let Some(data) = details {
+                        let finalized = FinalizedEffects {
+                            effects: data.effects,
+                            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
+                        };
+                        return Ok(ExecutionEffects::FinalizedTransactionEffects(
+                            finalized,
+                            data.events.unwrap_or_default(),
+                        ));
+                    }
+                }
+                Ok(WaitForEffectsResponse::Rejected { error }) => {
+                    return Err(anyhow::anyhow!(
+                        "Transaction {:?} rejected: {:?}",
+                        tx_digest,
+                        error
+                    ));
+                }
+                Ok(WaitForEffectsResponse::Expired { .. }) | Err(_) => {
+                    // Try next validator
+                    continue;
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!(
+            "Failed to get effects for amplified transaction {:?}",
+            tx_digest
+        ))
     }
 }
 
