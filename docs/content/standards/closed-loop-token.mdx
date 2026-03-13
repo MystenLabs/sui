@@ -15,41 +15,7 @@ Some applications, however, require constraining the scope of the token to a spe
 
 ## Difference with Coin
 
-```mermaid
-flowchart RL
-    subgraph "&nbsp;&nbsp;Balance has store { u64 }&nbsp;&nbsp;"
-        A["Balance&lt;T>
-        Supply&lt;T>"];
-    end
-    subgraph "&nbsp;&nbsp;Coin has key, store { Balance }&nbsp;&nbsp;"
-        B["Coin&lt;T>
-        TreasuryCap&lt;T>"];
-    end
-        subgraph "&nbsp;&nbsp;Token has key { Balance }&nbsp;&nbsp;"
-        C["Token&lt;T>
-        TreasuryCap&lt;T>"];
-    end
-    B-- to_balance -->A;
-    C-- to_coin -->B;
-```
-
-```mermaid
-flowchart LR
-    subgraph "&nbsp;&nbsp;Balance has store { u64 }&nbsp;&nbsp;"
-        A["Balance&lt;T>
-        Supply&lt;T>"];
-    end
-    subgraph "&nbsp;&nbsp;Coin has key, store { Balance }&nbsp;&nbsp;"
-        B["Coin&lt;T>
-        TreasuryCap&lt;T>"];
-    end
-        subgraph "&nbsp;&nbsp;Token has key { Balance }&nbsp;&nbsp;"
-        C["Token&lt;T>
-        TreasuryCap&lt;T>"];
-    end
-    A-- from_balance -->B;
-    B-- from_coin -->C;
-```
+![Difference with coin](./images/difference-with-coin_closed-loop-token_v1.png)
 
 Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, [it can be spent](/standards/closed-loop-token/spending.mdx).
 

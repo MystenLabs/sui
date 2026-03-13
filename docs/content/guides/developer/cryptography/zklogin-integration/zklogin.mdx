@@ -117,7 +117,7 @@ At a high level, the zkLogin protocol works as follows:
 
 4. Instead of deriving the Sui address based on a public key, the zkLogin address is derived from `sub` (user identifier), `iss` (provider), `aud` (application), and `user_salt` (a value that unlinks the OAuth identifier from the on-chain address).
 
-![zkLogin flow diagram](images/zklogin-flow.png 'zkLogin complete flow')
+![zkLogin flow diagram](./images/zklogin-steps_zklogin_v1.png 'zkLogin steps 0-7')
 
 #### Step 0: zkLogin uses Groth16 for zkSNARK instantiation, which requires a common reference string (CRS) linked to the circuit.
 
@@ -140,6 +140,8 @@ The proving service generates a zero-knowledge proof that:
 - Verifies the RSA signature from the provider on the JWT.
 
 - Confirms the address is consistent with the key claim and user salt.
+
+![zkLogin authority](./images/zklogin-authority_zklogin_v1.png 'zkLogin steps 8-10')
 
 #### Step 8: The application computes your address based on `iss`, `aud`, and `sub`.
 
