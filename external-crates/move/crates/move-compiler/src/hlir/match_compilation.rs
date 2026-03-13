@@ -642,13 +642,12 @@ fn make_arm_unpack(
 
     let mut queue: VecDeque<(FringeEntry, MatchPattern)> = VecDeque::from([(subject, pattern)]);
 
-    // TODO(cgswords): we can coalese patterns a bit here, but don't for now.
     while let Some((entry, pat)) = queue.pop_front() {
         let ploc = pat.pat.loc;
         match pat.pat.value {
             TP::Variant(m, e, v, tys, fs) => {
                 let Some((queue_entries, unpack)) =
-                    arm_variant_unpack(context, None, ploc, m, e, tys, v, fs, entry)
+                    arm_variant_unpack(context, None, ploc, m, e, tys, v, fs, entry, rhs_binders)
                 else {
                     context.hlir_context.add_diag(ice!((
                         ploc,
@@ -663,7 +662,18 @@ fn make_arm_unpack(
             }
             TP::BorrowVariant(mut_, m, e, v, tys, fs) => {
                 let Some((queue_entries, unpack)) =
-                    arm_variant_unpack(context, Some(mut_), ploc, m, e, tys, v, fs, entry)
+                    arm_variant_unpack(
+                        context,
+                        Some(mut_),
+                        ploc,
+                        m,
+                        e,
+                        tys,
+                        v,
+                        fs,
+                        entry,
+                        rhs_binders,
+                    )
                 else {
                     continue;
                 };
@@ -674,7 +684,7 @@ fn make_arm_unpack(
             }
             TP::Struct(m, s, tys, fs) => {
                 let Some((queue_entries, unpack)) =
-                    arm_struct_unpack(context, None, ploc, m, s, tys, fs, entry)
+                    arm_struct_unpack(context, None, ploc, m, s, tys, fs, entry, rhs_binders)
                 else {
                     context.hlir_context.add_diag(ice!((
                         ploc,
@@ -689,7 +699,17 @@ fn make_arm_unpack(
             }
             TP::BorrowStruct(mut_, m, s, tys, fs) => {
                 let Some((queue_entries, unpack)) =
-                    arm_struct_unpack(context, Some(mut_), ploc, m, s, tys, fs, entry)
+                    arm_struct_unpack(
+                        context,
+                        Some(mut_),
+                        ploc,
+                        m,
+                        s,
+                        tys,
+                        fs,
+                        entry,
+                        rhs_binders,
+                    )
                 else {
                     continue;
                 };
@@ -772,6 +792,7 @@ fn arm_variant_unpack(
     variant: VariantName,
     fields: Fields<(Type, MatchPattern)>,
     rhs: FringeEntry,
+    rhs_binders: &BTreeSet<Var>,
 ) -> Option<(Vec<(FringeEntry, MatchPattern)>, T::SequenceItem)> {
     let all_wild = fields
         .iter()
@@ -783,8 +804,9 @@ fn arm_variant_unpack(
         return None;
     }
 
-    let (queue_entries, fields) =
-        make_arm_variant_unpack_fields(context, mut_ref, pat_loc, mident, enum_, variant, fields);
+    let (queue_entries, fields) = make_arm_variant_unpack_fields(
+        context, mut_ref, pat_loc, mident, enum_, variant, fields, rhs_binders,
+    );
     let unpack = make_arm_variant_unpack_stmt(mut_ref, mident, enum_, variant, tyargs, fields, rhs);
     Some((queue_entries, unpack))
 }
@@ -798,6 +820,7 @@ fn arm_struct_unpack(
     tyargs: Vec<Type>,
     fields: Fields<(Type, MatchPattern)>,
     rhs: FringeEntry,
+    rhs_binders: &BTreeSet<Var>,
 ) -> Option<(Vec<(FringeEntry, MatchPattern)>, T::SequenceItem)> {
     let all_wild = fields
         .iter()
@@ -809,8 +832,9 @@ fn arm_struct_unpack(
         return None;
     }
 
-    let (queue_entries, fields) =
-        make_arm_struct_unpack_fields(context, mut_ref, pat_loc, mident, struct_, fields)?;
+    let (queue_entries, fields) = make_arm_struct_unpack_fields(
+        context, mut_ref, pat_loc, mident, struct_, fields, rhs_binders,
+    )?;
     let unpack = make_arm_struct_unpack_stmt(mut_ref, mident, struct_, tyargs, fields, rhs);
     Some((queue_entries, unpack))
 }
@@ -827,7 +851,8 @@ fn make_arm_variant_unpack_fields(
     enum_: DatatypeName,
     variant: VariantName,
     fields: Fields<(Type, MatchPattern)>,
-) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>) {
+    rhs_binders: &BTreeSet<Var>,
+) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Mutability, Type)>) {
     let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
 
     let decl_fields = context
@@ -860,21 +885,8 @@ fn make_arm_variant_unpack_fields(
 
     let ordered_pats = order_fields_by_decl(context.hlir_context, decl_fields, field_pats);
 
-    let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
     assert!(fringe_exps.len() == ordered_pats.len());
-    for (fringe_exp, (_, field, _)) in fringe_exps.iter().zip(ordered_pats.iter()) {
-        unpack_fields.push((*field, fringe_exp.var, fringe_exp.ty.clone()));
-    }
-    let queue_entries = fringe_exps
-        .into_iter()
-        .zip(
-            ordered_pats
-                .into_iter()
-                .map(|(_, _, ordered_pat)| ordered_pat),
-        )
-        .collect::<Vec<_>>();
-
-    (queue_entries, unpack_fields)
+    coalesce_unpack_fields(fringe_exps, ordered_pats, rhs_binders)
 }
 
 fn make_arm_struct_unpack_fields(
@@ -884,7 +896,8 @@ fn make_arm_struct_unpack_fields(
     mident: ModuleIdent,
     struct_: DatatypeName,
     fields: Fields<(Type, MatchPattern)>,
-) -> Option<(Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>)> {
+    rhs_binders: &BTreeSet<Var>,
+) -> Option<(Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Mutability, Type)>)> {
     let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
     let Some(decl_fields) = context.hlir_context.info.struct_fields(&mident, &struct_) else {
         ice_assert!(
@@ -920,21 +933,46 @@ fn make_arm_struct_unpack_fields(
 
     let ordered_pats = order_fields_by_decl(context.hlir_context, decl_fields, field_pats);
 
-    let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
     assert!(fringe_exps.len() == ordered_pats.len());
-    for (fringe_exp, (_, field, _)) in fringe_exps.iter().zip(ordered_pats.iter()) {
-        unpack_fields.push((*field, fringe_exp.var, fringe_exp.ty.clone()));
-    }
-    let queue_entries = fringe_exps
-        .into_iter()
-        .zip(
-            ordered_pats
-                .into_iter()
-                .map(|(_, _, ordered_pat)| ordered_pat),
-        )
-        .collect::<Vec<_>>();
+    Some(coalesce_unpack_fields(fringe_exps, ordered_pats, rhs_binders))
+}
 
-    Some((queue_entries, unpack_fields))
+/// When a field's sub-pattern is a simple binder used in the arm body, we can bind that variable
+/// directly in the unpack rather than creating a temporary and an extra move. For example,
+/// `let Foo { a: tmp } = x; let y = tmp;` becomes `let Foo { a: y } = x;`.
+fn coalesce_unpack_fields(
+    fringe_exps: VecDeque<FringeEntry>,
+    ordered_pats: Vec<(usize, Field, MatchPattern)>,
+    rhs_binders: &BTreeSet<Var>,
+) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Mutability, Type)>) {
+    let mut unpack_fields = vec![];
+    let mut queue_entries = vec![];
+    for (mut fringe_exp, (_, field, pat)) in fringe_exps.into_iter().zip(ordered_pats) {
+        if let TP::Binder(mut_, x) = &pat.pat.value {
+            if rhs_binders.contains(x) {
+                // Coalesce: use the binder var directly in the unpack field, and mark the
+                // pattern as a wildcard so the main loop doesn't generate a redundant move.
+                let binder_var = *x;
+                let binder_mut = *mut_;
+                unpack_fields.push((
+                    field,
+                    binder_var,
+                    binder_mut,
+                    fringe_exp.ty.clone(),
+                ));
+                fringe_exp.var = binder_var;
+                let wild_pat = MatchPattern {
+                    pat: sp(pat.pat.loc, TP::Wildcard),
+                    ..pat
+                };
+                queue_entries.push((fringe_exp, wild_pat));
+                continue;
+            }
+        }
+        unpack_fields.push((field, fringe_exp.var, Mutability::Imm, fringe_exp.ty.clone()));
+        queue_entries.push((fringe_exp, pat));
+    }
+    (queue_entries, unpack_fields)
 }
 
 //------------------------------------------------
@@ -1057,14 +1095,14 @@ fn make_arm_variant_unpack_stmt(
     enum_: DatatypeName,
     variant: VariantName,
     tyargs: Vec<Type>,
-    fields: Vec<(Field, Var, Type)>,
+    fields: Vec<(Field, Var, Mutability, Type)>,
     rhs: FringeEntry,
 ) -> T::SequenceItem {
     let rhs_loc = rhs.var.loc;
     let mut lvalue_fields: Fields<(Type, T::LValue)> = UniqueMap::new();
 
-    for (ndx, (field_name, var, ty)) in fields.into_iter().enumerate() {
-        let var_lvalue = make_lvalue(var, Mutability::Imm, ty.clone());
+    for (ndx, (field_name, var, mut_, ty)) in fields.into_iter().enumerate() {
+        let var_lvalue = make_lvalue(var, mut_, ty.clone());
         let lhs_ty = sp(ty.loc, ty.value.base_type_());
         lvalue_fields
             .add(field_name, (ndx, (lhs_ty, var_lvalue)))
@@ -1091,14 +1129,14 @@ fn make_arm_struct_unpack_stmt(
     mident: ModuleIdent,
     struct_: DatatypeName,
     tyargs: Vec<Type>,
-    fields: Vec<(Field, Var, Type)>,
+    fields: Vec<(Field, Var, Mutability, Type)>,
     rhs: FringeEntry,
 ) -> T::SequenceItem {
     let rhs_loc = rhs.var.loc;
     let mut lvalue_fields: Fields<(Type, T::LValue)> = UniqueMap::new();
 
-    for (ndx, (field_name, var, ty)) in fields.into_iter().enumerate() {
-        let var_lvalue = make_lvalue(var, Mutability::Imm, ty.clone());
+    for (ndx, (field_name, var, mut_, ty)) in fields.into_iter().enumerate() {
+        let var_lvalue = make_lvalue(var, mut_, ty.clone());
         let lhs_ty = sp(ty.loc, ty.value.base_type_());
         lvalue_fields
             .add(field_name, (ndx, (lhs_ty, var_lvalue)))
