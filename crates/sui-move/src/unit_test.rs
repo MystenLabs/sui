@@ -212,15 +212,16 @@ impl VMTestSetup for SuiVMTestSetup {
         ))
     }
 
+    /// Returns gas consumed so far in the VM, in internal units, by computing `initial gas_budget - gas_left`
+    ///
+    /// `execution_bound` is the total gas budget passed by the test runner, in external units and not scaled by gas price.
+    /// It is the same as the initial gas budget of the meter.
     fn used_gas<'a>(&'a self, execution_bound: u64, meter: Self::Meter<'a>) -> u64 {
-        // execution_bound (gas budget) is in external units, create a Gas instance from it to convert to internal units.
-        let budget_external_units = Gas::new(execution_bound / self.gas_price);
+        // `gas_left` is in internal units and is scaled by the gas price. Normalize the gas budget to match its scale
+        let gas_budget_normalized = Gas::new(execution_bound / self.gas_price).to_unit();
 
-        // convert budget to internal units for output
-        let budget_internal_units: InternalGas = budget_external_units.to_unit();
-
-        // return: budget - left = used, in internal units
-        budget_internal_units
+        // Safe: gas_left can never exceed the budget at this point, so this never underflows
+        gas_budget_normalized
             .checked_sub(meter.0.gas_left)
             .unwrap()
             .into()
