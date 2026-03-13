@@ -30,13 +30,7 @@ simple_visitor!(
                 BinOp_::BitOr | BinOp_::BitAnd | BinOp_::And | BinOp_::Or => "the same value",
                 BinOp_::Neq | BinOp_::Lt | BinOp_::Gt => "'false'",
                 BinOp_::Eq | BinOp_::Le | BinOp_::Ge => "'true'",
-                BinOp_::Add
-                | BinOp_::Mul
-                | BinOp_::Shl
-                | BinOp_::Shr
-                | BinOp_::Range
-                | BinOp_::Implies
-                | BinOp_::Iff => return false,
+                BinOp_::Add | BinOp_::Mul | BinOp_::Shl | BinOp_::Shr => return false,
             };
             let msg = format!(
                 "Always equal operands detected in binary operation, \

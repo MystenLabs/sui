@@ -62,6 +62,7 @@ mod checked {
                 variant_nodes: protocol_config.variant_nodes(),
                 deprecate_global_storage_ops_during_deserialization: protocol_config
                     .deprecate_global_storage_ops_during_deserialization(),
+                normalize_depth_formula: protocol_config.normalize_depth_formula(),
             },
         )
         .map_err(|_| SuiErrorKind::ExecutionInvariantViolation.into())

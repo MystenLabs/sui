@@ -14,14 +14,25 @@ fi
 
 # Pre-build generation steps
 echo "Running pre-build generation..."
-
 node scripts/generate-import-context.js || { echo "❌ generate-import-context failed"; exit 1; }
 node scripts/grpc-download.js || { echo "❌ grpc-download failed"; exit 1; }
 docusaurus graphql-to-doc:beta && node scripts/remove-no-desc.mjs ../content/references/sui-api/sui-graphql/beta/reference || { echo "❌ graphql-to-doc step failed"; exit 1; }
 node scripts/getopenrpcspecs.js || { echo "❌ getopenrpcspecs failed"; exit 1; }
 node scripts/massagegraphql.js || { echo "❌ massagegraphql failed"; exit 1; }
-
 echo "✅ Pre-build generation complete"
+
+## Build displayV2 app - only download during build process, do not commit files locally
+
+SITE_DIR="$(pwd)"
+
+TEMP_DIR=$(mktemp -d)
+git clone --depth 1 https://github.com/MystenLabs/display-preview.git "$TEMP_DIR/display-preview"
+cd "$TEMP_DIR/display-preview"
+pnpm install
+pnpm build
+cp -r dist/ "$SITE_DIR/static/display-preview"
+cd "$SITE_DIR"
+rm -rf "$TEMP_DIR"
 
 ## Begin Docusaurus build
 
@@ -32,9 +43,7 @@ done
 
 ## Generate markdown, llms.txt, and check relative link files 
 node scripts/copy-markdown-files.js || { echo "❌ copy-markdown-files failed"; exit 1; }
-
 node src/shared/js/generate-llmstxt.mjs build/markdown/ --output static/llms.txt || { echo "❌ generate-llmstxt failed"; exit 1; }
-
 node src/shared/js/check-links.mjs ../content || { echo "❌ generate-llmstxt failed"; exit 1; }
 
 BUILD_EXIT=${PIPESTATUS[0]}

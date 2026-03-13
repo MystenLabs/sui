@@ -600,7 +600,7 @@ mod tests {
         }
 
         // Verify watermark progression
-        assert_eq!(watermark.checkpoint_hi_inclusive, 9);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(9));
         assert_eq!(watermark.tx_hi, 18); // 9 * 2
         assert_eq!(watermark.timestamp_ms_hi_inclusive, 1000009000); // 1000000000 + 9 * 1000
 
@@ -662,7 +662,7 @@ mod tests {
 
         // Watermark should only progress to 1 (can't progress past the gap)
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(1));
 
         // Now send the missing checkpoint 2
         setup
@@ -675,7 +675,7 @@ mod tests {
             .store
             .wait_for_watermark(DataPipeline::NAME, 4, TEST_TIMEOUT)
             .await;
-        assert_eq!(watermark.checkpoint_hi_inclusive, 4);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(4));
     }
 
     // ==================== BACK-PRESSURE TESTING ====================

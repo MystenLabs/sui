@@ -192,7 +192,7 @@
     },
     {
       "source": "/build/sui-object-display",
-      "destination": "/standards/display",
+      "destination": "/guides/developer/objects/display/display-overview",
       "permanent": true
     },
     {
@@ -3364,7 +3364,9 @@
     { "source": "/references/framework/sui_std.md", "destination": "/references/framework/sui_std/index.md" },
     { "source": "/references/framework/sui_sui.md", "destination": "/references/framework/sui_sui/index.md" },
     { "source": "/references/framework/sui_sui_system.md", "destination": "/references/framework/sui_sui_system/index.md" },
-    { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" }
+    { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" },
+    { "source": "/standards/display", "destination": "/guides/developer/objects/display/display-overview" },
+    { "source": "/standards/display-v2-migration", "destination": "/guides/developer/objects/display" }
   ],
   "rewrites": [
     {

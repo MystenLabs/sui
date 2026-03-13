@@ -2694,9 +2694,15 @@ fn parse_binop_exp(context: &mut Context, lhs: Exp, min_prec: u32) -> Result<Exp
             Tok::Star => BinOp_::Mul,
             Tok::Slash => BinOp_::Div,
             Tok::Percent => BinOp_::Mod,
-            Tok::PeriodPeriod => BinOp_::Range,
-            Tok::EqualEqualGreater => BinOp_::Implies,
-            Tok::LessEqualEqualGreater => BinOp_::Iff,
+            Tok::PeriodPeriod | Tok::EqualEqualGreater | Tok::LessEqualEqualGreater => {
+                let loc = make_loc(context.tokens.file_hash(), op_start_loc, op_end_loc);
+                context.add_diag(crate::shared::spec_deprecated_diag(
+                    loc, /* is_error */ true,
+                ));
+                // Skip the RHS and keep the LHS as the result.
+                next_tok_prec = get_precedence(context.tokens.peek());
+                continue;
+            }
             _ => panic!("Unexpected token that is not a binary operator"),
         };
         let sp_op = spanned(context.tokens.file_hash(), op_start_loc, op_end_loc, op);

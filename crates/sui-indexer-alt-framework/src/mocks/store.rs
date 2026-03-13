@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
@@ -12,7 +11,9 @@ use std::time::UNIX_EPOCH;
 use anyhow::ensure;
 use async_trait::async_trait;
 use dashmap::DashMap;
+use dashmap::mapref::one::Ref;
 use scoped_futures::ScopedBoxFuture;
+use sui_indexer_alt_framework_store_traits::InitWatermark;
 use tokio::time::Duration;
 
 use crate::store::CommitterWatermark;
@@ -25,7 +26,9 @@ use crate::store::TransactionalStore;
 #[derive(Default, Clone)]
 pub struct MockWatermark {
     pub epoch_hi_inclusive: u64,
-    pub checkpoint_hi_inclusive: u64,
+    // Some -> highest indexed checkpoint
+    // None -> pipeline has been initialized, but no checkpoints have been indexed
+    pub checkpoint_hi_inclusive: Option<u64>,
     pub tx_hi: u64,
     pub timestamp_ms_hi_inclusive: u64,
     pub reader_lo: u64,
@@ -84,52 +87,60 @@ pub struct MockStore {
 #[derive(Clone)]
 pub struct MockConnection<'c>(pub &'c MockStore);
 
+impl MockConnection<'_> {
+    async fn get_watermark(
+        &self,
+        pipeline: &str,
+    ) -> anyhow::Result<Option<(Ref<String, MockWatermark>, u64)>> {
+        let Some(watermark) = self.0.watermarks.get(pipeline) else {
+            return Err(anyhow::anyhow!("Pipeline {} not found", pipeline));
+        };
+
+        Ok(watermark.checkpoint_hi_inclusive.map(|cp| (watermark, cp)))
+    }
+}
+
 #[async_trait]
 impl Connection for MockConnection<'_> {
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
-        let Some(checkpoint_hi_inclusive) = default_next_checkpoint.checked_sub(1) else {
-            // Do not create a watermark record with checkpoint_hi_inclusive = -1.
-            return Ok(self
-                .committer_watermark(pipeline_task)
-                .await?
-                .map(|w| w.checkpoint_hi_inclusive));
-        };
-
-        let &MockWatermark {
-            checkpoint_hi_inclusive,
-            ..
-        } = self
+        init_watermark: InitWatermark,
+    ) -> anyhow::Result<InitWatermark> {
+        let watermark = self
             .0
             .watermarks
             .entry(pipeline_task.to_string())
             .or_insert(MockWatermark {
                 epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive,
+                checkpoint_hi_inclusive: init_watermark.checkpoint_hi_inclusive,
                 tx_hi: 0,
                 timestamp_ms_hi_inclusive: 0,
-                reader_lo: default_next_checkpoint,
+                reader_lo: init_watermark.reader_lo,
                 pruner_timestamp: 0,
-                pruner_hi: default_next_checkpoint,
-            })
-            .deref();
+                pruner_hi: init_watermark.reader_lo,
+            });
 
-        Ok(Some(checkpoint_hi_inclusive))
+        Ok(InitWatermark {
+            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+            reader_lo: watermark.reader_lo,
+        })
     }
 
     async fn committer_watermark(
         &mut self,
         pipeline_task: &str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
-        let watermark = self.0.watermarks.get(pipeline_task);
-        Ok(watermark.map(|w| CommitterWatermark {
-            epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
-            tx_hi: w.tx_hi,
-            timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
+        let Some((watermark, checkpoint_hi_inclusive)) = self.get_watermark(pipeline_task).await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(CommitterWatermark {
+            epoch_hi_inclusive: watermark.epoch_hi_inclusive,
+            checkpoint_hi_inclusive,
+            tx_hi: watermark.tx_hi,
+            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
         }))
     }
 
@@ -137,10 +148,13 @@ impl Connection for MockConnection<'_> {
         &mut self,
         pipeline: &'static str,
     ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
-        let watermark = self.0.watermarks.get(pipeline);
-        Ok(watermark.map(|w| ReaderWatermark {
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
-            reader_lo: w.reader_lo,
+        let Some((watermark, checkpoint_hi_inclusive)) = self.get_watermark(pipeline).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(ReaderWatermark {
+            checkpoint_hi_inclusive,
+            reader_lo: watermark.reader_lo,
         }))
     }
 
@@ -149,19 +163,20 @@ impl Connection for MockConnection<'_> {
         pipeline: &'static str,
         delay: Duration,
     ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
-        let watermark = self.0.watermarks.get(pipeline);
-        Ok(watermark.map(|w| {
-            let elapsed_ms = w.pruner_timestamp as i64
-                - SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as i64;
-            let wait_for_ms = delay.as_millis() as i64 + elapsed_ms;
-            PrunerWatermark {
-                pruner_hi: w.pruner_hi,
-                reader_lo: w.reader_lo,
-                wait_for_ms,
-            }
+        let Some((watermark, _)) = self.get_watermark(pipeline).await? else {
+            return Ok(None);
+        };
+
+        let elapsed_ms = watermark.pruner_timestamp as i64
+            - SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+        let wait_for_ms = delay.as_millis() as i64 + elapsed_ms;
+        Ok(Some(PrunerWatermark {
+            pruner_hi: watermark.pruner_hi,
+            reader_lo: watermark.reader_lo,
+            wait_for_ms,
         }))
     }
 
@@ -189,7 +204,7 @@ impl Connection for MockConnection<'_> {
             .or_default();
 
         wm.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
-        wm.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;
+        wm.checkpoint_hi_inclusive = Some(watermark.checkpoint_hi_inclusive);
         wm.tx_hi = watermark.tx_hi;
         wm.timestamp_ms_hi_inclusive = watermark.timestamp_ms_hi_inclusive;
         Ok(true)
@@ -563,7 +578,9 @@ impl MockStore {
         let start = tokio::time::Instant::now();
         while start.elapsed() < timeout_duration {
             if let Some(watermark) = self.watermark(pipeline_task)
-                && watermark.checkpoint_hi_inclusive >= checkpoint
+                && watermark
+                    .checkpoint_hi_inclusive
+                    .is_some_and(|c| c >= checkpoint)
             {
                 return watermark;
             }

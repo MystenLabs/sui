@@ -31,8 +31,8 @@ public(package) fun unverified_operation_cap_address(
     &cap.authorizer_validator_address
 }
 
-public(package) fun verified_operation_cap_address(cap: &ValidatorOperationCap): &address {
-    &cap.authorizer_validator_address
+public(package) fun verified_operation_cap_address(cap: &ValidatorOperationCap): address {
+    cap.authorizer_validator_address
 }
 
 /// Should be only called by the friend modules when adding a `Validator`

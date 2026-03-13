@@ -51,10 +51,6 @@
     Description: The `sui-indexer-alt-framework` provides two distinct pipeline architectures.
         Understand the differences between the sequential and concurrent pipelines that the
         `sui-indexer-alt-framework` provides to decide which best suits your project needs.
-- [Gaming on Sui](https://docs.sui.io/concepts/gaming.md)
-    Description: Sui offers features like dynamic NFTs, Kiosk, soulbound assets, and on-chain
-        randomness to provide builders with the tools to create immersive, transparent, and fair
-        gaming experiences.
 
 ## General
 
@@ -261,6 +257,10 @@
         applications.
 - [Using Nautilus](https://docs.sui.io/guides/developer/nautilus/using-nautilus.md)
     Description: Details on how to use Nautilus with the reproducible build template.
+- [Asset Tokenization](https://docs.sui.io/guides/developer/nft/asset-tokenization.md)
+    Description: Learn how to tokenize assets on the Sui blockchain. Asset tokenization refers to
+        the process of representing real-world assets, such as real estate, art, commodities,
+        stocks, or other valuable assets, as digital tokens on the blockchain network.
 
 ## References
 
@@ -789,6 +789,9 @@
 - [Move Analyzer VS Code Extension](https://docs.sui.io/references/ide/move.md)
     Description: The Move extension provides language support features like code navigation,
         completion, and diagnostics for Move source code.
+- [Object Display V2 Syntax](https://docs.sui.io/references/object-display-syntax.md)
+    Description: Learn how to use Display V2 format strings to render Sui Move object values into
+        human-readable strings, JSON, or encoded representations.
 - [Manifest Reference](https://docs.sui.io/references/package-managers/manifest-reference.md)
     Description: Explore examples of package manifest files.
 - [Package Management
@@ -1172,6 +1175,3 @@
     Referral](https://docs.sui.io/standards/deepbook-margin/contract-information/supply-referral.md)
     Description: Learn how supply referrals work in DeepBook Margin and how to earn fees by
         referring liquidity suppliers.
-- [Take Profit Stop
-    Loss](https://docs.sui.io/standards/deepbook-margin/contract-information/tpsl.md)
-    Description: Learn about conditional orders for automated trading strategies on DeepBook Margin.

@@ -141,9 +141,6 @@ fn bool_op(sp!(_, bop_): &BinOp) -> Option<BoolOp> {
         | BinOp_::Xor
         | BinOp_::Shl
         | BinOp_::Shr
-        | BinOp_::Range
-        | BinOp_::Implies
-        | BinOp_::Iff
         | BinOp_::Neq => return None,
     })
 }
@@ -167,9 +164,6 @@ fn cmp_op(sp!(_, bop_): &BinOp) -> Option<CmpOp> {
         | BinOp_::Xor
         | BinOp_::Shl
         | BinOp_::Shr
-        | BinOp_::Range
-        | BinOp_::Implies
-        | BinOp_::Iff
         | BinOp_::And
         | BinOp_::Or => return None,
     })

@@ -15,6 +15,7 @@ use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
 use prometheus::Registry;
 use sui_indexer_alt_framework_store_traits::Connection;
+use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
 use sui_indexer_alt_framework_store_traits::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
@@ -375,13 +376,21 @@ impl<S: Store> Indexer<S> {
         let pipeline_task =
             pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
 
-        let checkpoint_hi_inclusive = conn
-            .init_watermark(&pipeline_task, self.default_next_checkpoint)
+        let InitWatermark {
+            checkpoint_hi_inclusive,
+            reader_lo,
+        } = conn
+            .init_watermark(
+                &pipeline_task,
+                InitWatermark {
+                    checkpoint_hi_inclusive: self.default_next_checkpoint.checked_sub(1),
+                    reader_lo: self.default_next_checkpoint,
+                },
+            )
             .await
             .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
 
-        let next_checkpoint =
-            checkpoint_hi_inclusive.map_or(self.default_next_checkpoint, |c| c + 1);
+        let next_checkpoint = checkpoint_hi_inclusive.map_or(reader_lo, |c| c + 1);
 
         self.first_ingestion_checkpoint = next_checkpoint.min(self.first_ingestion_checkpoint);
 
@@ -698,6 +707,10 @@ mod tests {
         test_pipeline!(D, "sequential_d");
 
         let mut conn = store.connect().await.unwrap();
+
+        conn.init_watermark(A::NAME, InitWatermark::default())
+            .await
+            .unwrap();
         conn.set_committer_watermark(
             A::NAME,
             CommitterWatermark {
@@ -707,6 +720,10 @@ mod tests {
         )
         .await
         .unwrap();
+
+        conn.init_watermark(B::NAME, InitWatermark::default())
+            .await
+            .unwrap();
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
@@ -716,6 +733,10 @@ mod tests {
         )
         .await
         .unwrap();
+
+        conn.init_watermark(C::NAME, InitWatermark::default())
+            .await
+            .unwrap();
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
@@ -725,6 +746,10 @@ mod tests {
         )
         .await
         .unwrap();
+
+        conn.init_watermark(D::NAME, InitWatermark::default())
+            .await
+            .unwrap();
         conn.set_committer_watermark(
             D::NAME,
             CommitterWatermark {
@@ -2053,10 +2078,10 @@ mod tests {
         }
         let main_pipeline_watermark = store.watermark("test").unwrap();
         // assert that the main pipeline's watermarks are not updated
-        assert_eq!(main_pipeline_watermark.checkpoint_hi_inclusive, 10);
+        assert_eq!(main_pipeline_watermark.checkpoint_hi_inclusive, Some(10));
         assert_eq!(main_pipeline_watermark.reader_lo, 5);
         let tasked_pipeline_watermark = store.watermark("test@task").unwrap();
-        assert_eq!(tasked_pipeline_watermark.checkpoint_hi_inclusive, 25);
+        assert_eq!(tasked_pipeline_watermark.checkpoint_hi_inclusive, Some(25));
         assert_eq!(tasked_pipeline_watermark.reader_lo, 9);
     }
 

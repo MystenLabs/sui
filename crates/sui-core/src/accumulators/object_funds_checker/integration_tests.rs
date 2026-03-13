@@ -123,7 +123,7 @@ impl TestEnv {
         assert!(effects.status().is_ok());
 
         self.authority
-            .settle_accumulator_for_testing(&[effects])
+            .settle_accumulator_for_testing(&[effects], None)
             .await;
     }
 
@@ -228,7 +228,7 @@ async fn test_object_withdraw_multiple_withdraws() {
         all_effects.push(effects);
     }
     env.authority
-        .settle_accumulator_for_testing(&all_effects)
+        .settle_accumulator_for_testing(&all_effects, None)
         .await;
 
     assert_eq!(env.get_latest_balance(GAS::type_tag()), 1000 - 300 * 3);
@@ -284,7 +284,7 @@ async fn test_object_withdraw_multiple_withdraws() {
         all_effects.push(effects);
     }
     env.authority
-        .settle_accumulator_for_testing(&all_effects)
+        .settle_accumulator_for_testing(&all_effects, None)
         .await;
 
     assert_eq!(

@@ -115,8 +115,6 @@ const standards = [
 			},
 		],
 	},
-	'standards/display',
-	'standards/display-v2-migration',
 	'standards/payment-kit',
 	'standards/sagat',
 	'standards/wallet-standard',

@@ -75,6 +75,19 @@ const guides = [
           'guides/developer/objects/transfers/transfer-to-object',
         ],
       },
+      {
+        type: 'category',
+        label: 'Object Display',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/objects/display/index',
+        },
+        items: [
+          'guides/developer/objects/display/display-overview',
+          'guides/developer/objects/display/using-display',
+          'guides/developer/objects/display/display-preview'
+        ],
+      },
       'guides/developer/objects/derived-objects',
       {
         type: 'category',
@@ -140,7 +153,6 @@ const guides = [
           'guides/developer/transactions/transaction-auth/intent-signing',
           'guides/developer/transactions/transaction-auth/multisig',
           'guides/developer/transactions/transaction-auth/offline-signing',
-		  'guides/developer/transactions/transaction-auth/address-aliases',
         ],
       },
       'guides/developer/transactions/sponsor-txn',

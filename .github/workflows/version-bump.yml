@@ -123,7 +123,11 @@ jobs:
             crates/sui-open-rpc/tests/snapshots/generate_spec__openrpc.snap.json
           BODY="Sui v${NEW_VERSION} Version Bump"
           git commit -m "$BODY"
-          git push -u origin "$BRANCH"
+          # Push using the app token URL so the push is attributed to the GitHub App,
+          # not github-actions[bot]. Pushes with GITHUB_TOKEN don't trigger CI workflows.
+          git push -u \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "$BRANCH"
 
           gh pr create \
             --base "$REF_NAME" \

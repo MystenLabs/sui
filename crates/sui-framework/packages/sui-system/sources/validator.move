@@ -54,6 +54,8 @@ const ENewCapNotCreatedByValidatorItself: u64 = 100;
 const EInvalidCap: u64 = 101;
 /// Validator trying to set gas price higher than threshold.
 const EGasPriceHigherThanThreshold: u64 = 102;
+/// Invalid protocol public key length.
+const EInvalidProtocolPubKeyLength: u64 = 16;
 
 // TODO: potentially move this value to onchain config.
 const MAX_COMMISSION_RATE: u64 = 2_000; // Max rate is 20%, which is 2000 base points
@@ -393,7 +395,7 @@ public(package) fun request_set_gas_price(
     new_price: u64,
 ) {
     assert!(new_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
-    let validator_address = *verified_cap.verified_operation_cap_address();
+    let validator_address = verified_cap.verified_operation_cap_address();
     assert!(validator_address == self.metadata.sui_address, EInvalidCap);
     self.next_epoch_gas_price = new_price;
 }
@@ -406,7 +408,7 @@ public(package) fun set_candidate_gas_price(
 ) {
     assert!(self.is_preactive(), ENotValidatorCandidate);
     assert!(new_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
-    let validator_address = *verified_cap.verified_operation_cap_address();
+    let validator_address = verified_cap.verified_operation_cap_address();
     assert!(validator_address == self.metadata.sui_address, EInvalidCap);
     self.next_epoch_gas_price = new_price;
     self.gas_price = new_price;
@@ -597,6 +599,8 @@ public fun is_duplicate(self: &Validator, other: &Validator): bool {
         || self.name == other.name
         || self.net_address == other.net_address
         || self.p2p_address == other.p2p_address
+        || self.primary_address == other.primary_address
+        || self.worker_address == other.worker_address
         || self.protocol_pubkey_bytes == other.protocol_pubkey_bytes
         || self.network_pubkey_bytes == other.network_pubkey_bytes
         || self.network_pubkey_bytes == other.worker_pubkey_bytes
@@ -605,6 +609,8 @@ public fun is_duplicate(self: &Validator, other: &Validator): bool {
         // All next epoch parameters.
         || both_some_and_equal!(self.next_epoch_net_address, other.next_epoch_net_address)
         || both_some_and_equal!(self.next_epoch_p2p_address, other.next_epoch_p2p_address)
+        || both_some_and_equal!(self.next_epoch_primary_address, other.next_epoch_primary_address)
+        || both_some_and_equal!(self.next_epoch_worker_address, other.next_epoch_worker_address)
         || both_some_and_equal!(self.next_epoch_protocol_pubkey_bytes, other.next_epoch_protocol_pubkey_bytes)
         || both_some_and_equal!(self.next_epoch_network_pubkey_bytes, other.next_epoch_network_pubkey_bytes)
         || both_some_and_equal!(self.next_epoch_network_pubkey_bytes, other.next_epoch_worker_pubkey_bytes)
@@ -613,6 +619,8 @@ public fun is_duplicate(self: &Validator, other: &Validator): bool {
         // My next epoch parameters with other current epoch parameters.
         || self.next_epoch_net_address.is_some_and!(|v| v == other.net_address)
         || self.next_epoch_p2p_address.is_some_and!(|v| v == other.p2p_address)
+        || self.next_epoch_primary_address.is_some_and!(|v| v == other.primary_address)
+        || self.next_epoch_worker_address.is_some_and!(|v| v == other.worker_address)
         || self.next_epoch_protocol_pubkey_bytes.is_some_and!(|v| v == other.protocol_pubkey_bytes)
         || self.next_epoch_network_pubkey_bytes.is_some_and!(|v| v == other.network_pubkey_bytes)
         || self.next_epoch_network_pubkey_bytes.is_some_and!(|v| v == other.worker_pubkey_bytes)
@@ -621,6 +629,8 @@ public fun is_duplicate(self: &Validator, other: &Validator): bool {
         // Other next epoch parameters with my current epoch parameters.
         || other.next_epoch_net_address.is_some_and!(|v| v == self.net_address)
         || other.next_epoch_p2p_address.is_some_and!(|v| v == self.p2p_address)
+        || other.next_epoch_primary_address.is_some_and!(|v| v == self.primary_address)
+        || other.next_epoch_worker_address.is_some_and!(|v| v == self.worker_address)
         || other.next_epoch_protocol_pubkey_bytes.is_some_and!(|v| v == self.protocol_pubkey_bytes)
         || other.next_epoch_network_pubkey_bytes.is_some_and!(|v| v == self.network_pubkey_bytes)
         || other.next_epoch_network_pubkey_bytes.is_some_and!(|v| v == self.worker_pubkey_bytes)
@@ -796,6 +806,7 @@ public(package) fun update_next_epoch_protocol_pubkey(
     protocol_pubkey: vector<u8>,
     proof_of_possession: vector<u8>,
 ) {
+    assert!(protocol_pubkey.length() == 96, EInvalidProtocolPubKeyLength);
     self.metadata.next_epoch_protocol_pubkey_bytes = option::some(protocol_pubkey);
     self.metadata.next_epoch_proof_of_possession = option::some(proof_of_possession);
     self.metadata.validate();
@@ -808,6 +819,7 @@ public(package) fun update_candidate_protocol_pubkey(
     proof_of_possession: vector<u8>,
 ) {
     assert!(self.is_preactive(), ENotValidatorCandidate);
+    assert!(protocol_pubkey.length() == 96, EInvalidProtocolPubKeyLength);
     self.metadata.protocol_pubkey_bytes = protocol_pubkey;
     self.metadata.proof_of_possession = proof_of_possession;
     self.metadata.validate();
@@ -851,7 +863,7 @@ public(package) fun update_candidate_worker_pubkey(
     self.metadata.validate();
 }
 
-/// Effectutate all staged next epoch metadata for this validator.
+/// Effectuate all staged next epoch metadata for this validator.
 /// NOTE: this function SHOULD ONLY be called by validator_set when
 /// advancing an epoch.
 public(package) fun effectuate_staged_metadata(self: &mut Validator) {
