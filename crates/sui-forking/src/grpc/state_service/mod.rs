@@ -28,9 +28,6 @@ impl StateService for ForkingStateService {
         Err(tonic::Status::unimplemented(
             "get_coin_info is not implemented in sui-forking yet",
         ))
-        // let checkpoint = self.checkpoint(&request)?;
-        // let response = get_coin(self, checkpoint, request.into_inner())?;
-        // Ok(checkpointed_response(checkpoint, response)?)
     }
 
     async fn list_dynamic_fields(
@@ -41,9 +38,6 @@ impl StateService for ForkingStateService {
         Err(tonic::Status::unimplemented(
             "list_dynamic_fields is not implemented in sui-forking yet",
         ))
-        // let checkpoint = self.checkpoint(&request)?;
-        // let response = list_dynamic_fields(self, checkpoint, request.into_inner())?;
-        // Ok(checkpointed_response(checkpoint, response)?)
     }
 
     async fn get_balance(
@@ -54,9 +48,6 @@ impl StateService for ForkingStateService {
         Err(tonic::Status::unimplemented(
             "get_balance is not implemented in sui-forking yet",
         ))
-        // let checkpoint = self.checkpoint(&request)?;
-        // let response = get_balance(self, checkpoint, request.into_inner())?;
-        // Ok(checkpointed_response(checkpoint, response)?)
     }
 
     async fn list_balances(
@@ -67,9 +58,6 @@ impl StateService for ForkingStateService {
         Err(tonic::Status::unimplemented(
             "list_balances is not implemented in sui-forking yet",
         ))
-        // let checkpoint = self.checkpoint(&request)?;
-        // let response = list_balances(self, checkpoint, request.into_inner())?;
-        // Ok(checkpointed_response(checkpoint, response)?)
     }
 
     async fn list_owned_objects(

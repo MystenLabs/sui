@@ -28,11 +28,15 @@ use crate::graphql::GraphQLClient;
 use crate::seeds::StartupSeeds;
 use crate::store::ForkingStore;
 
+/// Bootstrapped runtime artifacts needed by server startup.
 pub(super) struct InitializedSimulacrum {
+    /// Local simulacrum initialized from the selected checkpoint.
     pub(super) simulacrum: Simulacrum<OsRng, ForkingStore>,
+    /// Optional local account used by the faucet endpoint.
     pub(super) faucet_owner: Option<SuiAddress>,
 }
 
+/// Builds a deterministic single-validator config for local execution.
 fn build_network_config(protocol_version: u64, chain: Chain, rng: &mut OsRng) -> NetworkConfig {
     ConfigBuilder::new_with_temp_dir()
         .rng(rng)
@@ -43,6 +47,7 @@ fn build_network_config(protocol_version: u64, chain: Chain, rng: &mut OsRng) ->
         .build()
 }
 
+/// Loads startup checkpoint data from local storage, falling back to read-through RPC.
 fn load_startup_checkpoint_data(
     fs_store: &FileSystemStore,
     fs_gql_store: &ReadThroughStore<FileSystemStore, DataStore>,
@@ -60,6 +65,7 @@ fn load_startup_checkpoint_data(
     }
 }
 
+/// Converts full checkpoint data into a verified checkpoint envelope.
 fn build_verified_startup_checkpoint(
     startup_checkpoint_data: &FullCheckpointData,
 ) -> VerifiedCheckpoint {
@@ -71,10 +77,12 @@ fn build_verified_startup_checkpoint(
     VerifiedCheckpoint::new_unchecked(env_checkpoint)
 }
 
+/// Picks the first local account as faucet owner when available.
 fn resolve_faucet_owner(keystore: &KeyStore) -> Option<SuiAddress> {
     keystore.accounts().next().map(|(owner, _)| *owner)
 }
 
+/// Stores the object in local cache only when it is not already present.
 fn cache_object_if_missing(
     fs_store: &FileSystemStore,
     fs_gql_store: &ReadThroughStore<FileSystemStore, DataStore>,
@@ -143,6 +151,7 @@ fn seed_genesis_faucet_coin(
     Ok(())
 }
 
+/// Builds initial system state from checkpoint data while reusing genesis validators.
 fn build_initial_system_state(
     store: &ForkingStore,
     config: &NetworkConfig,
@@ -171,10 +180,8 @@ fn build_initial_system_state(
     }
 }
 
-fn install_validator_override_and_committee(
-    store: &mut ForkingStore,
-    initial_sui_system_state: &SuiSystemState,
-) {
+/// Installs validator override and committee required by local execution.
+fn override_system_validators(store: &mut ForkingStore, initial_sui_system_state: &SuiSystemState) {
     let validator_set_override = match initial_sui_system_state {
         SuiSystemState::V1(inner) => inner.validators.clone(),
         SuiSystemState::V2(inner) => inner.validators.clone(),
@@ -188,7 +195,8 @@ fn install_validator_override_and_committee(
     store.insert_committee(initial_committee);
 }
 
-fn build_simulacrum_from_bootstrap(
+/// Constructs a simulacrum from preloaded checkpoint, state, and store.
+fn build_simulacrum(
     keystore: KeyStore,
     verified_checkpoint: VerifiedCheckpoint,
     initial_sui_system_state: SuiSystemState,
@@ -214,6 +222,7 @@ fn build_simulacrum_from_bootstrap(
     ))
 }
 
+/// Initializes simulacrum state and faucet owner for server startup.
 pub(super) async fn initialize_simulacrum(
     forked_at_checkpoint: u64,
     startup_checkpoint: u64,
@@ -263,9 +272,9 @@ pub(super) async fn initialize_simulacrum(
         .context("Failed to prefetch startup objects")?;
 
     let initial_sui_system_state = build_initial_system_state(&store, &config)?;
-    install_validator_override_and_committee(&mut store, &initial_sui_system_state);
+    override_system_validators(&mut store, &initial_sui_system_state);
 
-    let simulacrum = build_simulacrum_from_bootstrap(
+    let simulacrum = build_simulacrum(
         keystore,
         verified_checkpoint,
         initial_sui_system_state,
