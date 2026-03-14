@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod setup;
 mod data_store;
 mod handlers;
+mod setup;
 
 use std::{net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
 
@@ -44,11 +44,11 @@ use crate::grpc::{
 };
 use crate::{graphql::GraphQLClient, network::ForkNetwork, seeds::StartupSeeds};
 
-use self::setup::{SimulacrumSetup, setup_simulacrum};
 use self::data_store::{determine_startup_checkpoint, initialize_data_store};
 use self::handlers::{
     AppState, advance_checkpoint, advance_clock, advance_epoch, faucet, get_status, health,
 };
+use self::setup::{SimulacrumSetup, setup_simulacrum};
 
 /// Start the forking server
 pub(crate) async fn start_server(

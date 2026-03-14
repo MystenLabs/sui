@@ -257,9 +257,11 @@ mod tests {
 
         for input in inputs {
             let output = sanitize_cache_path_component(input);
-            assert!(output.chars().all(
-                |ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_'
-            ));
+            assert!(
+                output
+                    .chars()
+                    .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+            );
             assert!(!output.starts_with('_'));
             assert!(!output.ends_with('_'));
             assert!(!output.contains("__"));
