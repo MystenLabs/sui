@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use axum::{Json, extract::State, response::IntoResponse};
 use rand::rngs::OsRng;
-use serde::Deserialize;
 use tracing::{info, warn};
 
 use simulacrum::Simulacrum;
@@ -18,7 +17,9 @@ use sui_types::{
     transaction::{GasData, TransactionData, TransactionKind},
 };
 
-use crate::api::types::{AdvanceClockRequest, ApiResponse, ExecuteTxResponse, ForkingStatus};
+use crate::api::types::{
+    AdvanceClockRequest, ApiResponse, ExecuteTxResponse, FaucetRequest, ForkingStatus,
+};
 use crate::store::ForkingStore;
 
 /// The shared state for the forking server
@@ -144,12 +145,6 @@ pub(super) async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl In
         data: Some("Advanced to next epoch".to_string()),
         error: None,
     })
-}
-
-#[derive(Deserialize)]
-pub(super) struct FaucetRequest {
-    address: SuiAddress,
-    amount: u64,
 }
 
 pub(super) async fn faucet(

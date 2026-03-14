@@ -4,6 +4,7 @@
 //! Public wire-compatible types used by the control HTTP API.
 
 use serde::{Deserialize, Serialize};
+use sui_types::base_types::SuiAddress;
 
 /// Request payload for advancing simulated on-chain time.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -19,6 +20,12 @@ pub struct ExecuteTxResponse {
     pub effects: String,
     /// Optional error returned by execution.
     pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct FaucetRequest {
+    pub address: SuiAddress,
+    pub amount: u64,
 }
 
 /// Status response for the local forking runtime.

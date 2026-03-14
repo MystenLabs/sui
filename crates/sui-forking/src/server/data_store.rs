@@ -32,7 +32,7 @@ pub(super) fn initialize_data_store(
 > {
     let forking_path = format!(
         "forking/{}/forked_at_checkpoint_{}",
-        fork_network.cache_namespace(),
+        fork_network.cache_path_component(),
         at_checkpoint
     );
 

@@ -8,3 +8,5 @@ pub mod config;
 pub mod error;
 pub mod node;
 pub mod types;
+
+pub(crate) mod endpoints;

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Lifecycle API for running `sui-forking` in-process.
+//! API for running `sui-forking` in-process.
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};

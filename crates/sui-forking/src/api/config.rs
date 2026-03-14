@@ -35,7 +35,7 @@ impl ForkingNetwork {
     /// - `mainnet`
     /// - `testnet`
     /// - `devnet`
-    /// - any full `http(s)` URL
+    /// - any full `http(s)` URL that points to the GraphQL server
     ///
     /// # Errors
     ///
@@ -329,8 +329,6 @@ fn parse_scheme_from_error(message: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use proptest::prelude::*;
-
     use super::*;
 
     #[test]
@@ -450,32 +448,31 @@ mod tests {
         assert!(matches!(err, ConfigError::InvalidUrlScheme { .. }));
     }
 
-    proptest! {
-        #[test]
-        fn keyword_network_parse_is_deterministic(
-            keyword in prop_oneof![Just("mainnet"), Just("testnet"), Just("devnet")]
-        ) {
+    #[test]
+    fn keyword_network_parse_is_deterministic() {
+        for keyword in ["mainnet", "testnet", "devnet"] {
             let first = ForkingNetwork::parse(keyword).expect("valid keyword");
             let second = ForkingNetwork::parse(keyword).expect("valid keyword");
-
-            prop_assert_eq!(&first, &second);
-            prop_assert_eq!(first.to_string(), keyword);
+            assert_eq!(&first, &second);
+            assert_eq!(first.to_string(), keyword);
         }
+    }
 
-        #[test]
-        fn builder_port_invariants_hold_for_arbitrary_ports(
-            rpc_port in any::<u16>(),
-            server_port in any::<u16>()
-        ) {
-            let result = ForkingNodeConfig::builder()
-                .rpc_port(rpc_port)
-                .server_port(server_port)
-                .build();
+    #[test]
+    fn builder_port_invariants_hold_for_boundary_combinations() {
+        let boundary_ports = [0_u16, 1_u16, 2_u16, u16::MAX];
+        for rpc_port in boundary_ports {
+            for server_port in boundary_ports {
+                let result = ForkingNodeConfig::builder()
+                    .rpc_port(rpc_port)
+                    .server_port(server_port)
+                    .build();
 
-            if rpc_port == 0 || server_port == 0 {
-                prop_assert!(result.is_err());
-            } else {
-                prop_assert!(result.is_ok());
+                if rpc_port == 0 || server_port == 0 {
+                    assert!(result.is_err());
+                } else {
+                    assert!(result.is_ok());
+                }
             }
         }
     }

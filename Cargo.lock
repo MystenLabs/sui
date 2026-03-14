@@ -14926,7 +14926,7 @@ dependencies = [
 
 [[package]]
 name = "sui-forking"
-version = "1.68.0"
+version = "1.69.0"
 dependencies = [
  "anyhow",
  "axum 0.8.3",
@@ -14951,7 +14951,6 @@ dependencies = [
  "mysten-network",
  "pin-project",
  "prometheus",
- "proptest",
  "prost 0.14.1",
  "prost-types 0.14.1",
  "rand 0.8.5",

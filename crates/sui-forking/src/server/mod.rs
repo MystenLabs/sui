@@ -35,6 +35,7 @@ use sui_types::{
     supported_protocol_versions::Chain,
 };
 
+use crate::api::endpoints;
 use crate::grpc::{
     RpcArgs as GrpcArgs, RpcService as GrpcRpcService, TlsArgs as GrpcTlsArgs,
     ledger_service::ForkingLedgerService, state_service::ForkingStateService,
@@ -138,12 +139,12 @@ pub(crate) async fn start_server(
     let state = Arc::new(AppState::new(context.clone()).await);
 
     let app = Router::new()
-        .route("/health", get(health))
-        .route("/status", get(get_status))
-        .route("/advance-checkpoint", post(advance_checkpoint))
-        .route("/advance-clock", post(advance_clock))
-        .route("/advance-epoch", post(advance_epoch))
-        .route("/faucet", post(faucet))
+        .route(endpoints::HEALTH.path, get(health))
+        .route(endpoints::STATUS.path, get(get_status))
+        .route(endpoints::ADVANCE_CHECKPOINT.path, post(advance_checkpoint))
+        .route(endpoints::ADVANCE_CLOCK.path, post(advance_clock))
+        .route(endpoints::ADVANCE_EPOCH.path, post(advance_epoch))
+        .route(endpoints::FAUCET.path, post(faucet))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

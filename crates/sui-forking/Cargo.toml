@@ -60,7 +60,6 @@ cynic-codegen.workspace = true
 [dev-dependencies]
 datatest-stable.workspace = true
 move-command-line-common.workspace = true
-proptest.workspace = true
 tempfile.workspace = true
 test-cluster.workspace = true
 

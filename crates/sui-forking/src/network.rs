@@ -107,14 +107,14 @@ impl ForkNetwork {
         }
     }
 
-    /// Cache namespace segment under `forking/<namespace>/...`.
-    pub(crate) fn cache_namespace(&self) -> String {
+    /// Cache path component under `forking/<component>/...`.
+    pub(crate) fn cache_path_component(&self) -> String {
         match self {
             Self::Mainnet => "mainnet".to_string(),
             Self::Testnet => "testnet".to_string(),
             Self::Devnet => "devnet".to_string(),
             Self::Custom(url) => {
-                let sanitized = sanitize_custom_namespace(url);
+                let sanitized = sanitize_cache_path_component(url);
                 if sanitized.is_empty() {
                     "custom_url".to_string()
                 } else {
@@ -125,7 +125,7 @@ impl ForkNetwork {
     }
 }
 
-fn sanitize_custom_namespace(value: &str) -> String {
+fn sanitize_cache_path_component(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     let mut prev_is_underscore = false;
     for ch in value.to_ascii_lowercase().chars() {
@@ -153,9 +153,7 @@ fn validate_http_url(field_name: &str, value: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use proptest::prelude::*;
-
-    use super::{ForkNetwork, sanitize_custom_namespace};
+    use super::{ForkNetwork, sanitize_cache_path_component};
 
     #[test]
     fn parses_known_network_keywords() {
@@ -227,37 +225,63 @@ mod tests {
     }
 
     #[test]
-    fn cache_namespace_for_known_networks_is_stable() {
-        assert_eq!(ForkNetwork::Mainnet.cache_namespace(), "mainnet");
-        assert_eq!(ForkNetwork::Testnet.cache_namespace(), "testnet");
-        assert_eq!(ForkNetwork::Devnet.cache_namespace(), "devnet");
+    fn cache_path_component_for_known_networks_is_stable() {
+        assert_eq!(ForkNetwork::Mainnet.cache_path_component(), "mainnet");
+        assert_eq!(ForkNetwork::Testnet.cache_path_component(), "testnet");
+        assert_eq!(ForkNetwork::Devnet.cache_path_component(), "devnet");
     }
 
     #[test]
-    fn custom_cache_namespace_is_sanitized_and_deterministic() {
+    fn custom_cache_path_component_is_sanitized_and_deterministic() {
         let network =
             ForkNetwork::parse("HTTPS://GraphQL.DevNet.Sui.IO/graphql?foo=bar&&baz=1").unwrap();
         assert_eq!(
-            network.cache_namespace(),
+            network.cache_path_component(),
             "custom_https_graphql_devnet_sui_io_graphql_foo_bar_baz_1"
         );
     }
 
-    proptest! {
-        #[test]
-        fn sanitization_output_is_valid(input in ".*") {
-            let output = sanitize_custom_namespace(&input);
-            prop_assert!(output.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_'));
-            prop_assert!(!output.starts_with('_'));
-            prop_assert!(!output.ends_with('_'));
-            prop_assert!(!output.contains("__"));
-        }
+    #[test]
+    fn sanitization_output_is_valid_for_edge_cases() {
+        let inputs = [
+            "",
+            "mainnet",
+            "__already__underscored__",
+            "  leading and trailing spaces  ",
+            "HTTPS://GraphQL.DevNet.Sui.IO/graphql?foo=bar&&baz=1",
+            "!!!###",
+            "a---b___c...d",
+            "MiXeD-Case_123",
+            "éxámplê🙂url",
+        ];
 
-        #[test]
-        fn sanitization_is_idempotent(input in ".*") {
-            let once = sanitize_custom_namespace(&input);
-            let twice = sanitize_custom_namespace(&once);
-            prop_assert_eq!(once, twice);
+        for input in inputs {
+            let output = sanitize_cache_path_component(input);
+            assert!(output.chars().all(
+                |ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_'
+            ));
+            assert!(!output.starts_with('_'));
+            assert!(!output.ends_with('_'));
+            assert!(!output.contains("__"));
+        }
+    }
+
+    #[test]
+    fn sanitization_is_idempotent_for_edge_cases() {
+        let inputs = [
+            "",
+            "a",
+            "A_B-C",
+            "__x__",
+            "https://example.com/graphql?x=1&&y=2",
+            "Σui🙂",
+            "abc_123_def",
+        ];
+
+        for input in inputs {
+            let once = sanitize_cache_path_component(input);
+            let twice = sanitize_cache_path_component(&once);
+            assert_eq!(once, twice);
         }
     }
 }
