@@ -2,6 +2,7 @@
 name = "sui-forking"
 edition = "2024"
 version.workspace = true
+publish = false
 
 [dependencies]
 anyhow.workspace = true

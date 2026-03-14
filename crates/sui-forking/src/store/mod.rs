@@ -327,6 +327,9 @@ impl ForkingStore {
     }
 
     /// Returns the current system state view derived from this store.
+    /// Importantly, if `validator_set_override` is set, it will be used in place of the on-chain
+    /// validator set for epoch state construction. This allows the forking store to keep the
+    /// system state up-to-date with the locally available validator set.
     pub fn get_system_state(&self) -> SuiSystemState {
         let system_state = get_sui_system_state(self).expect("system state should exist");
         let Some(validators) = &self.validator_set_override else {

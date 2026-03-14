@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn rejects_accounts_mode_when_old_even_if_resume() {
         StartupSeeds::validate_accounts_mode_age(100, OWNED_OBJECT_LOOKBACK_LIMIT_MS + 10_000)
-            .expect_err("old checkpoint should fail regardless of fresh/bootstrap state");
+            .expect_err("old checkpoint should fail regardless of fresh/setup state");
     }
 
     #[test]

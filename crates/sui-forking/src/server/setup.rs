@@ -28,8 +28,8 @@ use crate::graphql::GraphQLClient;
 use crate::seeds::StartupSeeds;
 use crate::store::ForkingStore;
 
-/// Bootstrapped runtime artifacts needed by server startup.
-pub(super) struct InitializedSimulacrum {
+/// Runtime artifacts prepared by the server setup path.
+pub(super) struct SimulacrumSetup {
     /// Local simulacrum initialized from the selected checkpoint.
     pub(super) simulacrum: Simulacrum<OsRng, ForkingStore>,
     /// Optional local account used by the faucet endpoint.
@@ -222,8 +222,8 @@ fn build_simulacrum(
     ))
 }
 
-/// Initializes simulacrum state and faucet owner for server startup.
-pub(super) async fn initialize_simulacrum(
+/// Prepares simulacrum state and faucet owner for server startup.
+pub(super) async fn setup_simulacrum(
     forked_at_checkpoint: u64,
     startup_checkpoint: u64,
     client: &GraphQLClient,
@@ -232,7 +232,7 @@ pub(super) async fn initialize_simulacrum(
     chain: Chain,
     fs_store: FileSystemStore,
     fs_gql_store: ReadThroughStore<FileSystemStore, DataStore>,
-) -> Result<InitializedSimulacrum, anyhow::Error> {
+) -> Result<SimulacrumSetup, anyhow::Error> {
     let mut rng = OsRng;
     let config = build_network_config(protocol_version, chain, &mut rng);
     let keystore = KeyStore::from_network_config(&config);
@@ -283,7 +283,7 @@ pub(super) async fn initialize_simulacrum(
         rng,
     )?;
 
-    Ok(InitializedSimulacrum {
+    Ok(SimulacrumSetup {
         simulacrum,
         faucet_owner,
     })
