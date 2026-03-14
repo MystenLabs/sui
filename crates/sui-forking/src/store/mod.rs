@@ -44,12 +44,13 @@ use sui_types::{
 };
 
 pub struct ForkingStore {
-    // Transaction data not available through fs transaction file blobs.
+    // Transaction events not available through fs transaction file blobs.
     // TODO: add events to FS transaction blobs and remove this in-memory cache.
     events: HashMap<TransactionDigest, TransactionEvents>,
 
     // Committee data
     epoch_to_committee: BTreeMap<EpochId, Committee>,
+
     /// FileSystemStore operates as a local cache for
     /// - checkpoints
     /// - transactions
