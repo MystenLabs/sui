@@ -66,9 +66,7 @@ pub(super) async fn get_status(State(state): State<Arc<AppState>>) -> impl IntoR
     })
 }
 
-pub(super) async fn advance_checkpoint(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+pub(super) async fn advance_checkpoint(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let checkpoint_sequence_number = {
         let mut sim = state.context.simulacrum.write().await;
 
