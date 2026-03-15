@@ -49,7 +49,13 @@ impl CoinReservationResolver {
                     None,
                     object_id,
                 )
-                .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?
+                .map_err(|e| {
+                    invalid_res_error!(
+                        "could not load coin reservation object id {}: {}",
+                        object_id,
+                        e
+                    )
+                })?
                 .ok_or_else(|| {
                     invalid_res_error!("coin reservation object id {} not found", object_id)
                 })?;
@@ -70,7 +76,11 @@ impl CoinReservationResolver {
                 // get the owner
                 let (key, _): (AccumulatorKey, AccumulatorValue) =
                     move_object.try_into().map_err(|e| {
-                        invalid_res_error!("could not load coin reservation object id {}", e)
+                        invalid_res_error!(
+                            "could not load coin reservation object id {}: {}",
+                            object_id,
+                            e
+                        )
                     })?;
                 Ok((key.owner, type_input))
             })
