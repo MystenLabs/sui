@@ -73,6 +73,7 @@ pub enum Constraint {
         constraints: AbilitySet,
     },
     NumericConstraint(Loc, &'static str, Type),
+    SignedNumericConstraint(Loc, &'static str, Type),
     BitsConstraint(Loc, &'static str, Type),
     OrderedConstraint(Loc, &'static str, Type),
     BaseTypeConstraint(Loc, String, Type),
@@ -1085,6 +1086,11 @@ impl<'env, 'outer> Context<'env, 'outer> {
             .push(Constraint::NumericConstraint(loc, op, t))
     }
 
+    pub fn add_signed_numeric_constraint(&mut self, loc: Loc, op: &'static str, t: Type) {
+        self.constraints
+            .push(Constraint::SignedNumericConstraint(loc, op, t))
+    }
+
     pub fn add_bits_constraint(&mut self, loc: Loc, op: &'static str, t: Type) {
         self.constraints
             .push(Constraint::BitsConstraint(loc, op, t))
@@ -1407,6 +1413,10 @@ impl Subst {
         }
     }
 
+    pub fn remove_constraint(&mut self, tvar: &TVar) {
+        self.tvar_constraints.remove(tvar);
+    }
+
     pub fn is_value_constrainted_var(&self, tvar: &TVar) -> bool {
         self.tvar_constraints
             .get(tvar)
@@ -1444,6 +1454,29 @@ impl Subst {
             .get(tvar)
             .map(|constraint| constraint.is_divergent())
             .unwrap_or(false)
+    }
+
+    /// If `tvar` (or its forwarded target) has a `Num` constraint, upgrades it to `SignedNum`.
+    /// This is used by negation to narrow a numeric literal's type to signed integers.
+    pub fn upgrade_num_to_signed(&mut self, tvar: TVar, loc: Loc) {
+        // Follow the tvar chain to find the final unbound tvar.
+        let mut cur = tvar;
+        loop {
+            match self.get(cur) {
+                Some(sp!(_, ty_)) => match ty_.inner() {
+                    TI::Var(next) => cur = *next,
+                    _ => return, // Bound to a concrete type; nothing to upgrade.
+                },
+                None => break,
+            }
+        }
+        match self.tvar_constraints.get(&cur) {
+            Some(c) if c.is_num_var() => {
+                self.tvar_constraints
+                    .insert(cur, VarConstraint::SignedNum(loc));
+            }
+            _ => (),
+        }
     }
 }
 
@@ -2436,6 +2469,9 @@ pub fn solve_constraints(context: &mut Context) {
             } => solve_ability_constraint(context, loc, msg, ty, constraints),
             Constraint::NumericConstraint(loc, op, t) => {
                 solve_builtin_type_constraint(context, BT::numeric(), loc, op, &t)
+            }
+            Constraint::SignedNumericConstraint(loc, op, t) => {
+                solve_builtin_type_constraint(context, BT::signed_numeric(), loc, op, &t)
             }
             Constraint::BitsConstraint(loc, op, t) => {
                 solve_builtin_type_constraint(context, BT::bits(), loc, op, &t)
