@@ -219,7 +219,7 @@ pub mod checked {
         }
 
         pub fn is_gasless(&self) -> bool {
-            self.gas_status.gas_price() == 0 && self.payment_method.is_address_balance()
+            self.gas_status.is_gasless()
         }
 
         pub fn move_gas_status(&self) -> &GasStatus {

@@ -4720,11 +4720,6 @@ impl ProtocolConfig {
                     // Disabled while debugging
                     cfg.feature_flags.defer_unpaid_amplification = false;
                     cfg.feature_flags.enable_display_registry = true;
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_gasless = true;
-                        cfg.gasless_max_computation_units = Some(50_000);
-                        cfg.gasless_allowed_token_types = Some(vec![]);
-                    }
                 }
                 117 => {}
                 118 => {
@@ -4735,6 +4730,12 @@ impl ProtocolConfig {
                     cfg.execution_version = Some(4);
                     cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = false;
                     cfg.feature_flags.merge_randomness_into_checkpoint = true;
+                    cfg.feature_flags.new_vm_enabled = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_gasless = true;
+                        cfg.gasless_max_computation_units = Some(50_000);
+                        cfg.gasless_allowed_token_types = Some(vec![]);
+                    }
                 }
                 // Use this template when making changes:
                 //

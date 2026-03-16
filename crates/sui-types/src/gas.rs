@@ -31,6 +31,7 @@ pub mod checked {
     #[enum_dispatch]
     pub trait SuiGasStatusAPI {
         fn is_unmetered(&self) -> bool;
+        fn is_gasless(&self) -> bool;
         fn move_gas_status(&self) -> &GasStatus;
         fn move_gas_status_mut(&mut self) -> &mut GasStatus;
         fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError>;

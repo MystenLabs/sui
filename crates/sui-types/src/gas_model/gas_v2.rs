@@ -266,6 +266,7 @@ mod checked {
             config: &ProtocolConfig,
         ) -> SuiGasStatus {
             let sui_cost_table = SuiCostTable::new(config, metering_price);
+            debug_assert!(metering_price > 0);
             let gas_rounding_mode = if config.gas_rounding_halve_digits() {
                 GasRoundingMode::KeepHalfDigits
             } else if let Some(step) = config.gas_rounding_step_as_option() {
@@ -299,6 +300,7 @@ mod checked {
         ) -> SuiGasStatus {
             let max_computation_budget = config.max_gas_computation_bucket() * gas_price;
             let computation_budget = gas_budget.min(max_computation_budget);
+            debug_assert!(computation_budget > 0);
             Self::new_metered(
                 gas_budget,
                 gas_price,
@@ -328,6 +330,7 @@ mod checked {
             config: &ProtocolConfig,
         ) -> SuiGasStatus {
             let metering_price = reference_gas_price.max(1);
+            debug_assert!(metering_price > 0);
             let max_computation_units = config.gasless_max_computation_units();
             let compute_cap = max_computation_units * metering_price;
             let mut status = Self::new_metered(
@@ -438,6 +441,10 @@ mod checked {
     impl SuiGasStatusAPI for SuiGasStatus {
         fn is_unmetered(&self) -> bool {
             !self.charge
+        }
+
+        fn is_gasless(&self) -> bool {
+            self.gas_price == 0 && self.charge
         }
 
         fn move_gas_status(&self) -> &GasStatus {

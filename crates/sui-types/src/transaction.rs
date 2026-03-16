@@ -974,20 +974,29 @@ impl ProgrammableTransaction {
     pub fn validate_gasless_commands(&self, config: &ProtocolConfig) -> UserInputResult {
         #[allow(unused_mut)]
         let mut allowed_token_types = parse_gasless_allowed_token_types(config);
-        fail_point_arg!("gasless_extra_token_types", |extra: HashSet<TypeInput>| {
+        fail_point_arg!("gasless_extra_token_types", |extra: Vec<TypeInput>| {
             allowed_token_types.extend(extra);
         });
         for command in &self.commands {
             match command {
-                Command::MoveCall(call) if call.package == SUI_FRAMEWORK_PACKAGE_ID => {
-                    let is_balance_call = call.module.as_str() == BALANCE_MODULE_NAME.as_str()
-                        && (call.function.as_str() == BALANCE_SEND_FUNDS_FUNCTION_NAME.as_str()
-                            || call.function.as_str()
-                                == BALANCE_REDEEM_FUNDS_FUNCTION_NAME.as_str());
-                    let is_withdrawal_split = call.module.as_str()
-                        == FUNDS_ACCUMULATOR_MODULE_NAME.as_str()
-                        && call.function.as_str()
-                            == FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME.as_str();
+                Command::MoveCall(call) => {
+                    let is_balance_call = is_move_call(
+                        call,
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        BALANCE_MODULE_NAME.as_str(),
+                        BALANCE_SEND_FUNDS_FUNCTION_NAME.as_str(),
+                    ) || is_move_call(
+                        call,
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        BALANCE_MODULE_NAME.as_str(),
+                        BALANCE_REDEEM_FUNDS_FUNCTION_NAME.as_str(),
+                    );
+                    let is_withdrawal_split = is_move_call(
+                        call,
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        FUNDS_ACCUMULATOR_MODULE_NAME.as_str(),
+                        FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME.as_str(),
+                    );
                     fp_ensure!(
                         is_balance_call || is_withdrawal_split,
                         UserInputError::Unsupported(
@@ -1029,7 +1038,16 @@ impl ProgrammableTransaction {
     }
 }
 
-fn parse_gasless_allowed_token_types(config: &ProtocolConfig) -> HashSet<TypeInput> {
+fn is_move_call(
+    call: &ProgrammableMoveCall,
+    package: ObjectID,
+    module: &str,
+    function: &str,
+) -> bool {
+    call.package == package && call.module.as_str() == module && call.function.as_str() == function
+}
+
+fn parse_gasless_allowed_token_types(config: &ProtocolConfig) -> Vec<TypeInput> {
     config
         .gasless_allowed_token_types()
         .iter()

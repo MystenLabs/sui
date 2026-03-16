@@ -424,11 +424,10 @@ mod checked {
             && result.is_ok()
             && temporary_store.has_non_accumulator_writes()
         {
-            // safety net - we only allow ptb commands that cannot write objects.
-            result = Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::InsufficientGas,
-                "Free tier transactions cannot write objects",
-            ));
+            debug_fatal!(
+                "gasless transaction produced non-accumulator writes — command validation should have prevented this"
+            );
+            result = Err(ExecutionErrorKind::InvariantViolation.into());
         }
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
