@@ -711,6 +711,10 @@ mod check_valid_constant {
                 exp(context, el);
                 return;
             }
+            E::WarningFilterScope(_, inner) => {
+                exp(context, inner);
+                return;
+            }
             E::Vector(_, _, _, eargs) => {
                 exp(context, eargs);
                 return;
@@ -4778,6 +4782,13 @@ fn expand_macro(
         assert!(context.env().has_errors());
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
+    // Two mechanisms suppress warnings for macro-generated code:
+    // 1. Push the macro's warning filter scope here during typing, so warnings generated
+    //    during type-checking (e.g., constraint solving) are suppressed.
+    // 2. Wrap the expanded AST in a WarningFilterScope node (below), so post-typing passes
+    //    (HLIR, dead code detection, linters) can push/pop the scope as they traverse.
+    let macro_warning_filter = context.function_info(&m, &f).warning_filter;
+    context.push_warning_filter_scope(macro_warning_filter);
     let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
     {
         None => {
@@ -4818,7 +4829,16 @@ fn expand_macro(
             let ty = body.ty.clone();
             seq.push_back(sp(body.exp.loc, TS::Seq(body)));
             let use_funs = N::UseFuns::new(context.current_call_color());
-            let block = TE::Block((use_funs, seq));
+            let block_exp_ = TE::Block((use_funs, seq));
+            // Wrap the macro expansion in a WarningFilterScope so that later passes
+            // (HLIR, dead code, linters, etc.) respect the macro's #[allow(...)] attrs.
+            let block = TE::WarningFilterScope(
+                macro_warning_filter,
+                Box::new(T::Exp {
+                    ty: ty.clone(),
+                    exp: sp(call_loc, block_exp_),
+                }),
+            );
             if context.env().ide_mode() {
                 let macro_call_info = MacroCallInfo {
                     module: m,
@@ -4833,6 +4853,7 @@ fn expand_macro(
             (ty, block)
         }
     };
+    context.pop_warning_filter_scope();
     if context.pop_macro_expansion(call_loc, &m, &f) {
         res
     } else {

@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/warning_suppression/macro_lambda_no_warn.move:40:45
+   │
+40 │     macro fun two_lambdas($f: |u64| -> u64, $g: |u64| -> u64): u64 {
+   │                                             ^^ Unused parameter '$g'. Consider removing or prefixing with an underscore: '_$g'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/warning_suppression/macro_lambda_no_warn.move:45:33
+   │
+45 │         two_lambdas!(|x| x + 1, |y| y * 2)
+   │                                 ^^^^^^^^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

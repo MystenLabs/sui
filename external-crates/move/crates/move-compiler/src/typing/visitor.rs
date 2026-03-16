@@ -559,6 +559,7 @@ pub trait TypingVisitorContext {
             | E::BorrowLocal(..)
             | E::ErrorConstant { .. }
             | E::UnresolvedError => (),
+            E::WarningFilterScope(_, e) => self.visit_exp(e),
         }
     }
 }
@@ -1161,6 +1162,7 @@ pub trait TypingMutVisitorContext {
             | E::BorrowLocal(..)
             | E::ErrorConstant { .. }
             | E::UnresolvedError => (),
+            E::WarningFilterScope(_, e) => self.visit_exp(e),
         }
     }
 }
@@ -1228,7 +1230,8 @@ where
         | E::Borrow(_, e, _)
         | E::TempBorrow(_, e)
         | E::Cast(e, _)
-        | E::Annotate(e, _) => exp_satisfies_(e, p),
+        | E::Annotate(e, _)
+        | E::WarningFilterScope(_, e) => exp_satisfies_(e, p),
         E::While(_, e1, e2) | E::Mutate(e1, e2) | E::BinopExp(e1, _, _, e2) => {
             exp_satisfies_(e1, p) || exp_satisfies_(e2, p)
         }

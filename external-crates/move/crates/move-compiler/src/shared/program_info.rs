@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, fmt::Display, sync::Arc, sync::OnceLock};
 use self::known_attributes::AttributePosition;
 use crate::{
     PreCompiledProgramInfo,
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, DatatypeTypeParameter, EnumDefinition, FunctionSignature,
@@ -28,6 +29,7 @@ pub struct FunctionInfo {
     pub doc: DocComment,
     pub index: usize,
     pub attributes: Attributes,
+    pub warning_filter: WarningFilters,
     pub defined_loc: Loc,
     pub full_loc: Loc,
     pub visibility: Visibility,
@@ -98,6 +100,7 @@ macro_rules! program_info {
                 doc: fdef.doc.clone(),
                 index: fdef.index,
                 attributes: fdef.attributes.clone(),
+                warning_filter: fdef.warning_filter,
                 defined_loc: fname.loc(),
                 full_loc: fdef.loc,
                 visibility: fdef.visibility.clone(),

@@ -599,6 +599,12 @@ fn value(context: &mut Context, e: &T::Exp) -> ControlFlow {
             let body_flow = value_block(context, seq);
             body_flow.remove_label(name)
         }
+        E::WarningFilterScope(filters, e) => {
+            context.push_warning_filter_scope(*filters);
+            let result = value(context, e);
+            context.pop_warning_filter_scope();
+            result
+        }
         E::Block((_, seq)) => value_block(context, seq),
 
         // -----------------------------------------------------------------------------------------
@@ -789,6 +795,12 @@ fn statement(context: &mut Context, e: &T::Exp) -> ControlFlow {
                 context, seq, /* stmt_pos */ true, /* skip_last */ false,
             );
             body_flow.remove_label(name)
+        }
+        E::WarningFilterScope(filters, e) => {
+            context.push_warning_filter_scope(*filters);
+            let result = statement(context, e);
+            context.pop_warning_filter_scope();
+            result
         }
         E::Block((_, seq)) => statement_block(
             context, seq, /* stmt_pos */ true, /* skip_last */ false,

@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09012]: unused 'mut' modifiers
+  ┌─ tests/move_2024/warning_suppression/macro_unused_let_mut.move:8:17
+  │
+8 │         let mut x = 5u64;
+  │             --- ^ The variable 'x' is never used mutably in this macro
+  │             │    
+  │             Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

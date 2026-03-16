@@ -188,7 +188,7 @@ mod last_usage {
         diag,
         hlir::{
             ast::*,
-            translate::{DisplayVar, display_var},
+            translate::{DisplayVar, display_var, is_from_macro_expansion},
         },
     };
     use std::collections::{BTreeSet, VecDeque};
@@ -282,7 +282,7 @@ mod last_usage {
                     match display_var(v.value()) {
                         DisplayVar::Tmp => (),
                         DisplayVar::Orig(vstr) | DisplayVar::MatchTmp(vstr) => {
-                            if !v.starts_with_underscore() {
+                            if !v.starts_with_underscore() && !is_from_macro_expansion(v.value()) {
                                 let msg = format!(
                                     "Unused assignment for variable '{vstr}'. Consider \
                                      removing, replacing with '_', or prefixing with '_' (e.g., \

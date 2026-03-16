@@ -71,6 +71,9 @@ fn tail(context: &mut Context, exp: &T::Exp) {
         T::UnannotatedExp_::Block((_, seq)) => {
             tail_block(context, seq);
         }
+        T::UnannotatedExp_::WarningFilterScope(_, inner) => {
+            tail(context, inner);
+        }
         T::UnannotatedExp_::Return(rhs) => {
             if returnable_value(context, rhs) {
                 report_unneeded_return(context, exp.exp.loc);
@@ -138,7 +141,8 @@ fn returnable_value(context: &mut Context, exp: &T::Exp) -> bool {
         | T::UnannotatedExp_::UnaryExp(_, exp)
         | T::UnannotatedExp_::TempBorrow(_, exp)
         | T::UnannotatedExp_::Cast(exp, _)
-        | T::UnannotatedExp_::Annotate(exp, _) => returnable_value(context, exp),
+        | T::UnannotatedExp_::Annotate(exp, _)
+        | T::UnannotatedExp_::WarningFilterScope(_, exp) => returnable_value(context, exp),
 
         T::UnannotatedExp_::Pack(_, _, _, _)
         | T::UnannotatedExp_::PackVariant(_, _, _, _, _)

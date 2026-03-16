@@ -100,6 +100,24 @@ pub enum DisplayVar {
     MatchTmp(String),
 }
 
+/// Returns true if the variable originated from a macro expansion (color > 0).
+/// Variable names are encoded as `name#id#color` by `translate_var`.
+///
+/// This is used to unconditionally suppress `unused_assignment` and `unused_let_mut` for
+/// macro-generated variables in CFGIR, where the `WarningFilterScope` AST node is no longer
+/// available. This is a blunt check — it suppresses regardless of whether the macro has
+/// `#[allow]` — but is the right UX: users should not be warned about variables they didn't
+/// write. In the future, a finer-grained approach could distinguish macro-internal bindings
+/// (which the macro author controls) from parameter-originated bindings (which the caller
+/// controls).
+pub fn is_from_macro_expansion(s: Symbol) -> bool {
+    // Parse the color suffix from the `name#id#color` format
+    s.as_str()
+        .rsplit_once(NEW_NAME_DELIM)
+        .and_then(|(_, color_str)| color_str.parse::<u16>().ok())
+        .is_some_and(|color| color > 0)
+}
+
 pub fn display_var(s: Symbol) -> DisplayVar {
     if is_temp_name(s) {
         DisplayVar::Tmp
@@ -998,6 +1016,12 @@ fn tail(
             context.exit_named_block(name);
             Some(result)
         }
+        E::WarningFilterScope(filters, e) => {
+            context.push_warning_filter_scope(filters);
+            let result = tail(context, block, expected_type, *e);
+            context.pop_warning_filter_scope();
+            result
+        }
         E::Block((_, seq)) => tail_block(context, block, expected_type, seq),
 
         // -----------------------------------------------------------------------------------------
@@ -1311,6 +1335,12 @@ fn value(
             ));
             context.exit_named_block(name);
             bound_exp
+        }
+        E::WarningFilterScope(filters, e) => {
+            context.push_warning_filter_scope(filters);
+            let result = value(context, block, expected_type, *e);
+            context.pop_warning_filter_scope();
+            result
         }
         E::Block((_, seq)) => value_block(context, block, Some(&out_type), eloc, seq),
 
@@ -1868,6 +1898,11 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 make_ignore_and_pop(block, bound_exp);
             }
             context.exit_named_block(name);
+        }
+        E::WarningFilterScope(filters, e) => {
+            context.push_warning_filter_scope(filters);
+            statement(context, block, *e);
+            context.pop_warning_filter_scope();
         }
         E::Block((_, seq)) => statement_block(context, block, seq),
         E::Return(rhs) => {

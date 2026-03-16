@@ -13,7 +13,7 @@ use crate::{
     expansion::ast::{AbilitySet, ModuleIdent, Mutability},
     hlir::{
         ast::*,
-        translate::{DisplayVar, display_var},
+        translate::{DisplayVar, display_var, is_from_macro_expansion},
     },
     naming::ast::{self as N, TParam},
     parser::ast::{Ability_, DatatypeName},
@@ -193,7 +193,7 @@ fn unused_let_muts<T>(
     unused_mut_locals: BTreeMap<Var, Loc>,
 ) {
     for (v, mut_loc) in unused_mut_locals {
-        if !v.starts_with_underscore() {
+        if !v.starts_with_underscore() && !is_from_macro_expansion(v.value()) {
             let vstr = match display_var(v.value()) {
                 DisplayVar::Tmp => panic!("ICE invalid unused mut tmp local {}", v.value()),
                 DisplayVar::MatchTmp(s) => s,

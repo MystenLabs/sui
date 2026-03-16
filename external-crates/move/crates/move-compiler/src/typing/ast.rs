@@ -217,6 +217,8 @@ pub enum UnannotatedExp_ {
     },
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
+    // Wraps an expression with a warning filter scope from a macro's #[allow(...)].
+    WarningFilterScope(WarningFilters, Box<Exp>),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
@@ -358,7 +360,7 @@ impl UnannotatedExp_ {
     pub fn is_unit(&self, diags: &DiagnosticReporter, loc: Loc) -> bool {
         match &self {
             Self::Unit { .. } => true,
-            Self::Annotate(inner, _) => inner.is_unit(diags),
+            Self::Annotate(inner, _) | Self::WarningFilterScope(_, inner) => inner.is_unit(diags),
             Self::Block((_, seq)) if seq.is_empty() => {
                 diags.add_diag(ice!((loc, "Unexpected empty block without a value")));
                 false
@@ -874,6 +876,10 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(": ");
                 ty.ast_debug(w);
                 w.write(")");
+            }
+            E::WarningFilterScope(_, e) => {
+                w.write("warning_filter_scope ");
+                e.ast_debug(w)
             }
             E::UnresolvedError => w.write("_|_"),
             E::ErrorConstant {

@@ -492,6 +492,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e);
             type_(context, ty)
         }
+        E::WarningFilterScope(_, e) => exp(context, e),
         E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }

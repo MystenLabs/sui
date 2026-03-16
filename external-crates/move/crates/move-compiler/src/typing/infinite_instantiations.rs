@@ -299,6 +299,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         E::ExpList(el) => exp_list(context, el),
 
         E::Cast(e, _) | E::Annotate(e, _) => exp(context, e),
+        E::WarningFilterScope(_, e) => exp(context, e),
     }
 }
 

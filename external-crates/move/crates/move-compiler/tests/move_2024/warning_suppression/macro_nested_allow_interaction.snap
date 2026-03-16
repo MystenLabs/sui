@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/warning_suppression/macro_nested_allow_interaction.move:10:13
+   │
+10 │         let unused_inner = 0u64;
+   │             ^^^^^^^^^^^^ Unused local variable 'unused_inner'. Consider removing or prefixing with an underscore: '_unused_inner'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/warning_suppression/macro_nested_allow_interaction.move:34:13
+   │
+34 │         let unused_outer = 0u64;
+   │             ^^^^^^^^^^^^ Unused local variable 'unused_outer'. Consider removing or prefixing with an underscore: '_unused_outer'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

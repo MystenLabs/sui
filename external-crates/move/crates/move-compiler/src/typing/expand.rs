@@ -346,6 +346,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             exp(context, el);
             type_(context, rhs_ty);
         }
+        E::WarningFilterScope(_, inner) => exp(context, inner),
     }
 }
 

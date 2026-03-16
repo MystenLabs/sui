@@ -86,7 +86,7 @@ fn check_mutate(context: &mut Context, loc: Loc, lhs: &T::Exp, rhs: &T::Exp) {
                 _ => None,
             },
 
-            E::Annotate(_, _) => unreachable!(),
+            E::Annotate(_, _) | E::WarningFilterScope(_, _) => unreachable!(),
         }
     }
 
@@ -125,7 +125,7 @@ fn inner_exp(mut e: &T::Exp) -> &T::Exp {
     use T::UnannotatedExp_ as E;
     loop {
         match &e.exp.value {
-            E::Annotate(inner, _) => e = inner,
+            E::Annotate(inner, _) | E::WarningFilterScope(_, inner) => e = inner,
             E::Block((_, seq)) | E::NamedBlock(_, (_, seq)) if seq.len() == 1 => {
                 match &seq[0].value {
                     T::SequenceItem_::Seq(inner) => e = inner,
