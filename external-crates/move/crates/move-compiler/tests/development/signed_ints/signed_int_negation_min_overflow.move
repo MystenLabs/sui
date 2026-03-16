@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Tests overflow behavior when negating MIN values.
-// Negating MIN of a signed type overflows since abs(MIN) > MAX.
+// These tests will overflow at runtime. Kept here to ensure that the compiler allows them to
+// compile, despite the fact that they will fail at runtime.
 module 0x42::m {
     fun negate_min_i8() {
         let x: i8 = -128i8;
