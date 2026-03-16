@@ -392,6 +392,9 @@ impl LedgerService for ForkingLedgerService {
         if read_mask.contains(Epoch::EPOCH_FIELD.name) {
             message.epoch = Some(epoch_start_state.epoch());
         }
+        // TODO: decide what to do in this case. The EpochStartSystemState does not have the data
+        // around first checkpoint and end timestamp. We probably need to have a more proper way to
+        // store epoch data via `sui-data-store`.
         // if read_mask.contains(Epoch::FIRST_CHECKPOINT_FIELD.name) {
         //     message.first_checkpoint = epoch_info.start_checkpoint;
         // }
