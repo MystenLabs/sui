@@ -3226,7 +3226,10 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                         .add_diag(diag!(TypeSafety::BuiltinOperation, (loc, msg)));
                     EE::UnresolvedError
                 } else {
-                    EE::UnaryExp(op, exp(context, Box::new(sp(vloc, PE::Value(sp(vloc, v_))))))
+                    EE::UnaryExp(
+                        op,
+                        exp(context, Box::new(sp(vloc, PE::Value(sp(vloc, v_))))),
+                    )
                 }
             }
             pe => EE::UnaryExp(op, exp(context, Box::new(pe))),
@@ -3768,7 +3771,10 @@ fn signed_num(loc: Loc, s: &str, negated: bool) -> Result<E::Value_, ValueError>
         ($num_str:expr, $parse_fn:ident, $ctor:ident, $ty:expr) => {{
             $parse_fn($num_str, negated)
                 .map(|(v, _)| EV::$ctor(v))
-                .map_err(|_| ValueError::NumTooBig { loc, type_description: $ty })
+                .map_err(|_| ValueError::NumTooBig {
+                    loc,
+                    type_description: $ty,
+                })
         }};
     }
     use crate::shared::builtin_types as BT;
@@ -3793,7 +3799,10 @@ fn unsigned_num(loc: Loc, s: &str) -> Result<E::Value_, ValueError> {
         ($num_str:expr, $parse_fn:ident, $ctor:ident, $ty:expr) => {{
             $parse_fn($num_str)
                 .map(|(v, _)| EV::$ctor(v))
-                .map_err(|_| ValueError::NumTooBig { loc, type_description: $ty })
+                .map_err(|_| ValueError::NumTooBig {
+                    loc,
+                    type_description: $ty,
+                })
         }};
     }
     use crate::shared::builtin_types as BT;

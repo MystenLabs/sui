@@ -386,10 +386,7 @@ fn inferred_numerical_value(
         BT::Address | BT::Signer | BT::Vector | BT::Bool => unreachable!(),
     };
     if value > max {
-        let msg = format!(
-            "This literal does not fit into the type '{}'.",
-            bt
-        );
+        let msg = format!("This literal does not fit into the type '{}'.", bt);
         let fix_bt = if bt.is_signed_numeric() {
             if value > i64_max {
                 BT::I128
