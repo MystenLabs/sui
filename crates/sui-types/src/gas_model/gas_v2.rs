@@ -517,11 +517,28 @@ mod checked {
             let sender_rebate = sender_rebate(storage_rebate, self.rebate_rate);
             assert!(sender_rebate <= storage_rebate);
             let non_refundable_storage_fee = storage_rebate - sender_rebate;
-            GasCostSummary {
-                computation_cost: self.computation_cost,
-                storage_cost: self.storage_cost(),
-                storage_rebate: sender_rebate,
-                non_refundable_storage_fee,
+
+            if self.is_free_tier() {
+                // Any storage rebate from a free tier transaction is absorbed
+                // as network fees, and must not be returned to the sender.
+                let storage_cost = self.storage_cost();
+                assert!(
+                    storage_cost == 0,
+                    "Free tier transaction must not incur storage cost, got {storage_cost}"
+                );
+                GasCostSummary {
+                    computation_cost: sender_rebate,
+                    storage_cost: 0,
+                    storage_rebate: sender_rebate,
+                    non_refundable_storage_fee,
+                }
+            } else {
+                GasCostSummary {
+                    computation_cost: self.computation_cost,
+                    storage_cost: self.storage_cost(),
+                    storage_rebate: sender_rebate,
+                    non_refundable_storage_fee,
+                }
             }
         }
 
@@ -762,6 +779,46 @@ mod checked {
             status.charge_storage_read(100).unwrap();
             status.bucketize_computation(None).unwrap();
             assert!(status.computation_cost > 0);
+        }
+
+        #[test]
+        fn test_free_tier_summary_no_coin_deletion() {
+            let mut status = free_tier_gas_status(1000, 50_000);
+            status.bucketize_computation(None).unwrap();
+            let summary = status.summary();
+            assert_eq!(summary.computation_cost, 0);
+            assert_eq!(summary.storage_cost, 0);
+            assert_eq!(summary.storage_rebate, 0);
+            assert_eq!(summary.non_refundable_storage_fee, 0);
+            assert_eq!(summary.net_gas_usage(), 0);
+        }
+
+        #[test]
+        fn test_free_tier_summary_with_coin_deletion() {
+            // Simulate deleting a coin that had a storage rebate of 1_000_000.
+            // track_storage_mutation with new_size=0 produces storage_cost=0.
+            let mut status = free_tier_gas_status(1000, 50_000);
+            status.track_storage_mutation(ObjectID::ZERO, 0, 1_000_000);
+            status.bucketize_computation(None).unwrap();
+            let summary = status.summary();
+            assert!(
+                summary.computation_cost > 0,
+                "rebate should be absorbed in computation cost"
+            );
+            assert_eq!(summary.storage_cost, 0);
+            assert_eq!(summary.storage_rebate, summary.computation_cost);
+            assert_eq!(summary.net_gas_usage(), 0, "sender must never be charged");
+        }
+
+        #[test]
+        fn test_free_tier_summary_with_multiple_coin_deletions() {
+            let mut status = free_tier_gas_status(1000, 50_000);
+            status.track_storage_mutation(ObjectID::random(), 0, 500_000);
+            status.track_storage_mutation(ObjectID::random(), 0, 300_000);
+            status.bucketize_computation(None).unwrap();
+            let summary = status.summary();
+            assert_eq!(summary.storage_cost, 0);
+            assert_eq!(summary.net_gas_usage(), 0, "sender must never be charged");
         }
     }
 }

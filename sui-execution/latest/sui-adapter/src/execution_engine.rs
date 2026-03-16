@@ -406,12 +406,11 @@ mod checked {
         };
         if gas_charger.is_free_tier()
             && result.is_ok()
-            && temporary_store.has_non_accumulator_writes()
+            && let Err(msg) = temporary_store.check_free_tier_execution_requirements()
         {
-            // safety net - we only allow ptb commands that cannot write objects.
             result = Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::InsufficientGas,
-                "Free tier transactions cannot write objects",
+                msg,
             ));
         }
 

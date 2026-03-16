@@ -10,6 +10,7 @@ mod checked {
     use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
     use sui_config::verifier_signing_config::VerifierSigningConfig;
+    use sui_macros::fail_point_arg;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
@@ -234,6 +235,10 @@ mod checked {
         )?;
         check_objects(transaction, input_objects)?;
         check_replay_protection(transaction, input_objects)?;
+
+        if protocol_config.enable_free_tier() && transaction.is_free_tier_transaction() {
+            check_free_tier_object_inputs(input_objects, protocol_config)?;
+        }
 
         Ok(gas_status)
     }
@@ -632,6 +637,50 @@ mod checked {
                 }
             }
         };
+        Ok(())
+    }
+
+    /// Verify that all Move object inputs in a free tier transaction are Coin<T>
+    /// where T is in the allowlist.
+    fn check_free_tier_object_inputs(
+        input_objects: &InputObjects,
+        protocol_config: &ProtocolConfig,
+    ) -> UserInputResult<()> {
+        use sui_types::transaction::parse_free_tier_allowed_token_types;
+        use sui_types::type_input::TypeInput;
+
+        #[allow(unused_mut)]
+        let mut allowed_token_types = parse_free_tier_allowed_token_types(protocol_config);
+        fail_point_arg!("free_tier_extra_token_types", |extra: HashSet<
+            TypeInput,
+        >| {
+            allowed_token_types.extend(extra);
+        });
+
+        for obj_read in input_objects.iter() {
+            let Some(object) = obj_read.as_object() else {
+                continue;
+            };
+            if object.is_package() {
+                continue;
+            }
+            // Every non-package Move object input must be Coin<T> with T allowlisted
+            let coin_type = object.coin_type_maybe().ok_or_else(|| {
+                UserInputError::Unsupported(
+                    "Free tier transactions can only use Coin<T> object inputs, \
+                     but found a non-Coin object"
+                        .to_string(),
+                )
+            })?;
+            let token_type_input = TypeInput::from(coin_type);
+            fp_ensure!(
+                allowed_token_types.contains(&token_type_input),
+                UserInputError::Unsupported(
+                    "Free tier transactions only support allowlisted types for Coin inputs"
+                        .to_string()
+                )
+            );
+        }
         Ok(())
     }
 

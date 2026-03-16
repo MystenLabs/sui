@@ -7,9 +7,10 @@ use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
     BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
-    BALANCE_STRUCT_NAME, Balance, FUNDS_ACCUMULATOR_MODULE_NAME,
+    BALANCE_SPLIT_FUNCTION_NAME, BALANCE_STRUCT_NAME, Balance, FUNDS_ACCUMULATOR_MODULE_NAME,
     FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME,
 };
+use crate::coin::{COIN_MODULE_NAME, INTO_BALANCE_FUNC_NAME, PUT_FUNC_NAME};
 use crate::coin_reservation::{
     CoinReservationResolverTrait, ParsedDigest, ParsedObjectRefWithdrawal,
 };
@@ -979,22 +980,30 @@ impl ProgrammableTransaction {
         >| {
             allowed_token_types.extend(extra);
         });
+
+        let allowlisted_functions_msg = "Free tier transactions can only call \
+            balance::send_funds, balance::redeem_funds, balance::split, \
+            funds_accumulator::withdrawal_split, coin::into_balance, and coin::put";
+
         for command in &self.commands {
             match command {
                 Command::MoveCall(call) if call.package == SUI_FRAMEWORK_PACKAGE_ID => {
                     let is_balance_call = call.module.as_str() == BALANCE_MODULE_NAME.as_str()
                         && (call.function.as_str() == BALANCE_SEND_FUNDS_FUNCTION_NAME.as_str()
                             || call.function.as_str()
-                                == BALANCE_REDEEM_FUNDS_FUNCTION_NAME.as_str());
+                                == BALANCE_REDEEM_FUNDS_FUNCTION_NAME.as_str()
+                            || call.function.as_str() == BALANCE_SPLIT_FUNCTION_NAME.as_str());
                     let is_withdrawal_split = call.module.as_str()
                         == FUNDS_ACCUMULATOR_MODULE_NAME.as_str()
                         && call.function.as_str()
                             == FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME.as_str();
+                    let is_coin_call = call.module.as_str() == COIN_MODULE_NAME.as_str()
+                        && (call.function.as_str() == INTO_BALANCE_FUNC_NAME.as_str()
+                            || call.function.as_str() == PUT_FUNC_NAME.as_str());
+
                     fp_ensure!(
-                        is_balance_call || is_withdrawal_split,
-                        UserInputError::Unsupported(
-                            "Free tier transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string()
-                        )
+                        is_balance_call || is_withdrawal_split || is_coin_call,
+                        UserInputError::Unsupported(allowlisted_functions_msg.to_string())
                     );
 
                     fp_ensure!(
@@ -1023,7 +1032,7 @@ impl ProgrammableTransaction {
                 }
                 _ => {
                     return Err(UserInputError::Unsupported(
-                        "Free tier transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string(),
+                        allowlisted_functions_msg.to_string(),
                     ));
                 }
             }
@@ -1032,7 +1041,7 @@ impl ProgrammableTransaction {
     }
 }
 
-fn parse_free_tier_allowed_token_types(config: &ProtocolConfig) -> HashSet<TypeInput> {
+pub fn parse_free_tier_allowed_token_types(config: &ProtocolConfig) -> HashSet<TypeInput> {
     config
         .free_tier_allowed_token_types()
         .iter()

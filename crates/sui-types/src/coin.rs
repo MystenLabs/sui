@@ -37,6 +37,8 @@ pub const PAY_SPLIT_N_FUNC_NAME: &IdentStr = ident_str!("divide_and_keep");
 pub const PAY_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
 pub const REDEEM_FUNDS_FUNC_NAME: &IdentStr = ident_str!("redeem_funds");
 pub const SEND_FUNDS_FUNC_NAME: &IdentStr = ident_str!("send_funds");
+pub const INTO_BALANCE_FUNC_NAME: &IdentStr = ident_str!("into_balance");
+pub const PUT_FUNC_NAME: &IdentStr = ident_str!("put");
 
 // Rust version of the Move sui::coin::Coin type
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
