@@ -1903,3 +1903,1001 @@ async fn test_consolidate_all_staked_sui_to_fungible() {
         fss_objects.len()
     );
 }
+
+/// Stake 3 times with the same validator, advance epoch, then consolidate.
+/// Verifies all StakedSui objects are converted and merged into a single FSS.
+#[tokio::test]
+async fn test_consolidate_multiple_staked_sui() {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    // Stake 3 times with the same validator
+    for _ in 0..3 {
+        let ops = serde_json::from_value(json!(
+            [{
+                "operation_identifier":{"index":0},
+                "type":"Stake",
+                "account": { "address" : sender.to_string() },
+                "amount" : { "value": "-1000000000" },
+                "metadata": { "Stake" : {"validator": validator.to_string()} }
+            }]
+        ))
+        .unwrap();
+        let response: TransactionIdentifierResponse = rosetta_client
+            .rosetta_flow(&ops, keystore, None)
+            .await
+            .submit
+            .unwrap()
+            .unwrap();
+        wait_for_transaction(
+            &mut client,
+            &response.transaction_identifier.hash.to_string(),
+        )
+        .await
+        .unwrap();
+    }
+
+    // Advance epoch so all 3 stakes become active
+    test_cluster.trigger_reconfiguration().await;
+
+    // Verify we have 3 StakedSui before consolidation
+    let staked_sui_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let staked_sui_before: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_sui_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        staked_sui_before.len(),
+        3,
+        "Expected 3 StakedSui before consolidation, found {}",
+        staked_sui_before.len()
+    );
+
+    // Consolidate
+    let consolidate_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "ConsolidateAllStakedSuiToFungible",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "ConsolidateAllStakedSuiToFungible": {
+                    "validator": validator.to_string()
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Verify: no StakedSui remaining
+    let staked_sui_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let staked_sui_after: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_sui_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert!(
+        staked_sui_after.is_empty(),
+        "Expected no StakedSui after consolidation, found {}",
+        staked_sui_after.len()
+    );
+
+    // Verify: exactly 1 FSS
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let fss_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        fss_objects.len(),
+        1,
+        "Expected exactly 1 FungibleStakedSui after consolidation, found {}",
+        fss_objects.len()
+    );
+}
+
+/// Stake once, advance epoch, manually convert to FSS, stake again, advance epoch,
+/// then consolidate. Verifies the pre-existing FSS is merged with the newly
+/// converted one into a single FSS.
+#[tokio::test]
+async fn test_consolidate_with_preexisting_fss() {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    // Stake 1 SUI
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-1000000000" },
+            "metadata": { "Stake" : {"validator": validator.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Advance epoch to activate the stake
+    test_cluster.trigger_reconfiguration().await;
+
+    // Manually convert the StakedSui to FSS via a direct PTB
+    let staked_sui_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+    let staked_objs: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_sui_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(staked_objs.len(), 1, "Expected 1 StakedSui to convert");
+
+    let staked_obj = &staked_objs[0];
+    let staked_ref = (
+        ObjectID::from_str(staked_obj.object_id()).unwrap(),
+        staked_obj.version().into(),
+        staked_obj.digest().parse().unwrap(),
+    );
+
+    let gas_price = client.get_reference_gas_price().await.unwrap();
+    let coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+    let gas_object = get_object_ref(&mut client.clone(), coins[0].id())
+        .await
+        .unwrap()
+        .as_object_ref();
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+    let staked_sui_arg = ptb
+        .obj(ObjectArg::ImmOrOwnedObject(staked_ref))
+        .unwrap();
+    let fss_result = ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+        vec![],
+        vec![system_state_arg, staked_sui_arg],
+    ));
+    let sender_arg = ptb.pure(sender).unwrap();
+    ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+
+    let tx_data = TransactionData::new_programmable(
+        sender,
+        vec![gas_object],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(tx_data, keystore.export(&sender).unwrap());
+    execute_transaction(&mut client.clone(), &tx).await.unwrap();
+
+    // Verify we now have 1 FSS and 0 StakedSui
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let fss_before: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(fss_before.len(), 1, "Expected 1 pre-existing FSS");
+
+    // Stake again
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-1000000000" },
+            "metadata": { "Stake" : {"validator": validator.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Advance epoch again
+    test_cluster.trigger_reconfiguration().await;
+
+    // Now consolidate: should merge the pre-existing FSS with the new converted StakedSui
+    let consolidate_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "ConsolidateAllStakedSuiToFungible",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "ConsolidateAllStakedSuiToFungible": {
+                    "validator": validator.to_string()
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Verify: no StakedSui remaining
+    let staked_sui_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let staked_sui_after: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_sui_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert!(
+        staked_sui_after.is_empty(),
+        "Expected no StakedSui after consolidation, found {}",
+        staked_sui_after.len()
+    );
+
+    // Verify: exactly 1 FSS (pre-existing merged with newly converted)
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let fss_after: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        fss_after.len(),
+        1,
+        "Expected exactly 1 FungibleStakedSui after consolidation, found {}",
+        fss_after.len()
+    );
+}
+
+/// Create 2 FSS objects by staking twice, advancing, and converting each
+/// separately. Then consolidate to merge them into a single FSS (no StakedSui
+/// conversion needed, only FSS merging).
+#[tokio::test]
+async fn test_consolidate_fss_only_merge() {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    // Stake twice
+    for _ in 0..2 {
+        let ops = serde_json::from_value(json!(
+            [{
+                "operation_identifier":{"index":0},
+                "type":"Stake",
+                "account": { "address" : sender.to_string() },
+                "amount" : { "value": "-1000000000" },
+                "metadata": { "Stake" : {"validator": validator.to_string()} }
+            }]
+        ))
+        .unwrap();
+        let response: TransactionIdentifierResponse = rosetta_client
+            .rosetta_flow(&ops, keystore, None)
+            .await
+            .submit
+            .unwrap()
+            .unwrap();
+        wait_for_transaction(
+            &mut client,
+            &response.transaction_identifier.hash.to_string(),
+        )
+        .await
+        .unwrap();
+    }
+
+    // Advance epoch
+    test_cluster.trigger_reconfiguration().await;
+
+    // Convert each StakedSui to FSS manually, one at a time
+    for _ in 0..2 {
+        let staked_sui_request = ListOwnedObjectsRequest::default()
+            .with_owner(sender.to_string())
+            .with_object_type("0x3::staking_pool::StakedSui".to_string())
+            .with_page_size(10u32)
+            .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+        let staked_objs: Vec<_> = client
+            .clone()
+            .list_owned_objects(staked_sui_request)
+            .try_collect()
+            .await
+            .unwrap();
+        if staked_objs.is_empty() {
+            break;
+        }
+
+        let staked_obj = &staked_objs[0];
+        let staked_ref = (
+            ObjectID::from_str(staked_obj.object_id()).unwrap(),
+            staked_obj.version().into(),
+            staked_obj.digest().parse().unwrap(),
+        );
+
+        let gas_price = client.get_reference_gas_price().await.unwrap();
+        let coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+        let gas_object = get_object_ref(&mut client.clone(), coins[0].id())
+            .await
+            .unwrap()
+            .as_object_ref();
+
+        let mut ptb = ProgrammableTransactionBuilder::new();
+        let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+        let staked_sui_arg = ptb
+            .obj(ObjectArg::ImmOrOwnedObject(staked_ref))
+            .unwrap();
+        let fss_result = ptb.command(Command::move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+            vec![],
+            vec![system_state_arg, staked_sui_arg],
+        ));
+        let sender_arg = ptb.pure(sender).unwrap();
+        ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+
+        let tx_data = TransactionData::new_programmable(
+            sender,
+            vec![gas_object],
+            ptb.finish(),
+            1_000_000_000,
+            gas_price,
+        );
+        let tx = to_sender_signed_transaction(tx_data, keystore.export(&sender).unwrap());
+        execute_transaction(&mut client.clone(), &tx).await.unwrap();
+    }
+
+    // Verify we have 2 FSS and 0 StakedSui
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let fss_before: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        fss_before.len(),
+        2,
+        "Expected 2 FSS before consolidation, found {}",
+        fss_before.len()
+    );
+
+    // Consolidate: should only merge FSS, no StakedSui to convert
+    let consolidate_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "ConsolidateAllStakedSuiToFungible",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "ConsolidateAllStakedSuiToFungible": {
+                    "validator": validator.to_string()
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Verify: exactly 1 FSS
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let fss_after: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        fss_after.len(),
+        1,
+        "Expected exactly 1 FungibleStakedSui after consolidation, found {}",
+        fss_after.len()
+    );
+}
+
+/// Stake with two different validators (A and B), advance epoch, then
+/// consolidate only for validator A. Verifies only A's StakedSui is converted,
+/// while B's StakedSui remains untouched.
+#[tokio::test]
+async fn test_consolidate_multi_validator_isolation() {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let active_validators = &system_state.validators.unwrap().active_validators;
+    assert!(
+        active_validators.len() >= 2,
+        "Need at least 2 validators for multi-validator test, found {}",
+        active_validators.len()
+    );
+    let validator_a = active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+    let validator_b = active_validators[1]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    // Stake with validator A
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-1000000000" },
+            "metadata": { "Stake" : {"validator": validator_a.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Stake with validator B
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-1000000000" },
+            "metadata": { "Stake" : {"validator": validator_b.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Advance epoch so both stakes become active
+    test_cluster.trigger_reconfiguration().await;
+
+    // Verify we have 2 StakedSui total (one per validator)
+    let staked_sui_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let staked_before: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_sui_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        staked_before.len(),
+        2,
+        "Expected 2 StakedSui (one per validator), found {}",
+        staked_before.len()
+    );
+
+    // Consolidate only for validator A
+    let consolidate_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "ConsolidateAllStakedSuiToFungible",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "ConsolidateAllStakedSuiToFungible": {
+                    "validator": validator_a.to_string()
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Verify: 1 StakedSui remains (validator B's), 1 FSS created (from validator A)
+    let staked_sui_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let staked_after: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_sui_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        staked_after.len(),
+        1,
+        "Expected 1 StakedSui remaining (validator B's), found {}",
+        staked_after.len()
+    );
+
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let fss_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        fss_objects.len(),
+        1,
+        "Expected exactly 1 FungibleStakedSui (from validator A), found {}",
+        fss_objects.len()
+    );
+}
+
+/// No staking at all, then attempt consolidation. The metadata step should
+/// return an error because there is nothing to consolidate.
+#[tokio::test]
+async fn test_consolidate_noop_no_stakes() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .clone()
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    // Attempt to consolidate with no stakes at all
+    let consolidate_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "ConsolidateAllStakedSuiToFungible",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "ConsolidateAllStakedSuiToFungible": {
+                    "validator": validator.to_string()
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let flow_result = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+
+    // The metadata step should return an error
+    assert!(
+        flow_result
+            .metadata
+            .as_ref()
+            .is_some_and(|r| r.is_err()),
+        "Expected metadata error when no stakes exist, got: {:?}",
+        flow_result.metadata
+    );
+}
+
+/// Convert 1 StakedSui to FSS, then attempt consolidation. With only a single
+/// FSS and no StakedSui, there is nothing to consolidate, so metadata should
+/// return an error.
+#[tokio::test]
+async fn test_consolidate_noop_single_fss() {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    // Stake 1 SUI
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-1000000000" },
+            "metadata": { "Stake" : {"validator": validator.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Advance epoch
+    test_cluster.trigger_reconfiguration().await;
+
+    // Convert to FSS manually
+    let staked_sui_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+    let staked_objs: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_sui_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(staked_objs.len(), 1);
+
+    let staked_obj = &staked_objs[0];
+    let staked_ref = (
+        ObjectID::from_str(staked_obj.object_id()).unwrap(),
+        staked_obj.version().into(),
+        staked_obj.digest().parse().unwrap(),
+    );
+
+    let gas_price = client.get_reference_gas_price().await.unwrap();
+    let coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+    let gas_object = get_object_ref(&mut client.clone(), coins[0].id())
+        .await
+        .unwrap()
+        .as_object_ref();
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+    let staked_sui_arg = ptb
+        .obj(ObjectArg::ImmOrOwnedObject(staked_ref))
+        .unwrap();
+    let fss_result = ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+        vec![],
+        vec![system_state_arg, staked_sui_arg],
+    ));
+    let sender_arg = ptb.pure(sender).unwrap();
+    ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+
+    let tx_data = TransactionData::new_programmable(
+        sender,
+        vec![gas_object],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(tx_data, keystore.export(&sender).unwrap());
+    execute_transaction(&mut client.clone(), &tx).await.unwrap();
+
+    // Verify we have exactly 1 FSS and 0 StakedSui
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let fss_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(fss_objects.len(), 1, "Expected exactly 1 FSS");
+
+    // Attempt to consolidate: single FSS + 0 StakedSui = nothing to do
+    let consolidate_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "ConsolidateAllStakedSuiToFungible",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "ConsolidateAllStakedSuiToFungible": {
+                    "validator": validator.to_string()
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let flow_result = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+
+    // The metadata step should return an error
+    assert!(
+        flow_result
+            .metadata
+            .as_ref()
+            .is_some_and(|r| r.is_err()),
+        "Expected metadata error when only 1 FSS exists, got: {:?}",
+        flow_result.metadata
+    );
+}
+
+/// Stake without advancing epoch (stakes remain pending/unactivated), then
+/// attempt consolidation. The metadata step should return an error because
+/// unactivated stakes cannot be converted to FSS.
+#[tokio::test]
+async fn test_consolidate_unactivated_stakes_only() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    // Stake 1 SUI but do NOT advance epoch
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-1000000000" },
+            "metadata": { "Stake" : {"validator": validator.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Attempt to consolidate without advancing epoch
+    let consolidate_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "ConsolidateAllStakedSuiToFungible",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "ConsolidateAllStakedSuiToFungible": {
+                    "validator": validator.to_string()
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let flow_result = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+
+    // The metadata step should return an error because unactivated stakes
+    // are filtered out, leaving nothing to consolidate
+    assert!(
+        flow_result
+            .metadata
+            .as_ref()
+            .is_some_and(|r| r.is_err()),
+        "Expected metadata error for unactivated stakes, got: {:?}",
+        flow_result.metadata
+    );
+}
