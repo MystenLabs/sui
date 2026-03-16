@@ -249,12 +249,19 @@ pub fn consolidate_to_fungible_pt(
 
     let system_state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
 
-    // Phase 1: Merge existing FSS into the first one
+    // Phase 1: Merge existing FSS into the first one using staking_pool::join_fungible_staked_sui
+    // MergeCoins only works on Coin<T>, not FungibleStakedSui
     let existing_fss = if !fss_refs.is_empty() {
         let first = builder.obj(ObjectArg::ImmOrOwnedObject(fss_refs[0]))?;
         for fss_ref in &fss_refs[1..] {
             let other = builder.obj(ObjectArg::ImmOrOwnedObject(*fss_ref))?;
-            builder.command(Command::MergeCoins(first, vec![other]));
+            builder.command(Command::move_call(
+                SUI_SYSTEM_PACKAGE_ID,
+                Identifier::new("staking_pool")?,
+                Identifier::new("join_fungible_staked_sui")?,
+                vec![],
+                vec![first, other],
+            ));
         }
         Some(first)
     } else {
@@ -275,17 +282,29 @@ pub fn consolidate_to_fungible_pt(
         new_fss_results.push(result);
     }
 
-    // Phase 3: Merge all new FSS together
+    // Phase 3: Merge all new FSS together using join_fungible_staked_sui
     if new_fss_results.len() > 1 {
         for i in 1..new_fss_results.len() {
-            builder.command(Command::MergeCoins(new_fss_results[0], vec![new_fss_results[i]]));
+            builder.command(Command::move_call(
+                SUI_SYSTEM_PACKAGE_ID,
+                Identifier::new("staking_pool")?,
+                Identifier::new("join_fungible_staked_sui")?,
+                vec![],
+                vec![new_fss_results[0], new_fss_results[i]],
+            ));
         }
     }
 
     // Phase 4: Merge into existing or transfer to sender
     if let Some(existing) = existing_fss {
         if !new_fss_results.is_empty() {
-            builder.command(Command::MergeCoins(existing, vec![new_fss_results[0]]));
+            builder.command(Command::move_call(
+                SUI_SYSTEM_PACKAGE_ID,
+                Identifier::new("staking_pool")?,
+                Identifier::new("join_fungible_staked_sui")?,
+                vec![],
+                vec![existing, new_fss_results[0]],
+            ));
         }
         // existing FSS is already owned by sender, no transfer needed
     } else if !new_fss_results.is_empty() {
