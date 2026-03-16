@@ -903,3 +903,50 @@ async fn test_gasless_coin_split_and_keep_change() {
 
     test_env.trigger_reconfiguration().await;
 }
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_gasless_rate_limit_rejects() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_gasless_for_testing();
+            cfg.set_gasless_max_tps_per_validator_for_testing(0);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
+
+    let tx_data = test_env.create_gasless_transaction(100, coin_type, sender, recipient, 0, 0);
+    let signed_tx = test_env.cluster.wallet.sign_transaction(&tx_data).await;
+
+    let orchestrator = test_env
+        .cluster
+        .fullnode_handle
+        .sui_node
+        .with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
+
+    let result = orchestrator
+        .transaction_driver()
+        .drive_transaction(
+            SubmitTxRequest::new_transaction(signed_tx),
+            SubmitTransactionOptions {
+                ..Default::default()
+            },
+            Some(Duration::from_secs(5)),
+        )
+        .await;
+
+    assert!(result.is_err(), "Should fail due to rate limiting");
+    let err = result.unwrap_err();
+    let err_str = err.to_string();
+    assert!(
+        err_str.contains("ValidatorOverloaded") || err_str.contains("retry"),
+        "Expected validator overloaded error, got: {err_str}"
+    );
+
+    test_env.trigger_reconfiguration().await;
+}

@@ -64,6 +64,7 @@ use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, info, instrument};
 
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
+use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -214,6 +215,7 @@ pub struct ValidatorServiceMetrics {
     forwarded_header_not_included: IntCounter,
     client_id_source_config_mismatch: IntCounter,
     x_forwarded_for_num_hops: Gauge,
+    pub gasless_rate_limited_count: IntCounter,
 }
 
 impl ValidatorServiceMetrics {
@@ -398,6 +400,12 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
+            gasless_rate_limited_count: register_int_counter_with_registry!(
+                "validator_service_gasless_rate_limited_count",
+                "Number of free tier transactions rejected by rate limiter",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -414,6 +422,7 @@ pub struct ValidatorService {
     metrics: Arc<ValidatorServiceMetrics>,
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
+    gasless_limiter: GaslessRateLimiter,
 }
 
 impl ValidatorService {
@@ -430,6 +439,7 @@ impl ValidatorService {
             metrics: validator_metrics,
             traffic_controller,
             client_id_source,
+            gasless_limiter: GaslessRateLimiter::new(),
         }
     }
 
@@ -444,6 +454,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: None,
             client_id_source: None,
+            gasless_limiter: GaslessRateLimiter::new(),
         }
     }
 
@@ -565,6 +576,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source,
+            gasless_limiter: _,
         } = self.clone();
 
         let submitter_client_addr = if let Some(client_id_source) = &client_id_source {
@@ -755,6 +767,24 @@ impl ValidatorService {
                     .with_label_values(&[error.as_ref()])
                     .inc();
                 results[idx] = Some(SubmitTxResult::Rejected { error });
+                continue;
+            }
+
+            if transaction
+                .data()
+                .transaction_data()
+                .is_gasless_transaction()
+                && !self
+                    .gasless_limiter
+                    .try_acquire(epoch_store.epoch(), epoch_store.protocol_config())
+            {
+                metrics.gasless_rate_limited_count.inc();
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: SuiErrorKind::ValidatorOverloadedRetryAfter {
+                        retry_after_secs: 0,
+                    }
+                    .into(),
+                });
                 continue;
             }
 
