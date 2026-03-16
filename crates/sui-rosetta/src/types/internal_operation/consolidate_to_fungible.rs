@@ -27,6 +27,9 @@ pub struct ConsolidateAllStakedSuiToFungible {
     pub validator: SuiAddress,
 }
 
+/// BCS layout for `0x3::staking_pool::StakedSui`.
+/// Field order must match the Move struct definition exactly (BCS is positional).
+/// See: crates/sui-framework/packages/sui-system/sources/staking_pool.move
 #[derive(Deserialize)]
 struct StakedSuiBcs {
     _id: Address,
@@ -35,6 +38,9 @@ struct StakedSuiBcs {
     _principal: u64,
 }
 
+/// BCS layout for `0x3::staking_pool::FungibleStakedSui`.
+/// Field order must match the Move struct definition exactly (BCS is positional).
+/// See: crates/sui-framework/packages/sui-system/sources/staking_pool.move
 #[derive(Deserialize)]
 struct FungibleStakedSuiBcs {
     _id: Address,
@@ -100,7 +106,10 @@ impl TryConstructTransaction for ConsolidateAllStakedSuiToFungible {
             party_objects: vec![],
             total_sui_balance,
             budget,
-            // Encode FSS count so try_into_data can split objects correctly
+            // OVERLOADED: address_balance_withdrawal is repurposed here to pass the
+            // FSS count to try_into_data (read in the ConsolidateAllStakedSuiToFungible
+            // match arm). objects[0..fss_count] are FSS, objects[fss_count..] are StakedSui.
+            // Original purpose (SUI withdrawal for gas) is unused by this operation.
             address_balance_withdrawal: fss_count as u64,
         })
     }
