@@ -1,0 +1,44 @@
+---
+draft: true
+title: Create Fungible Tokens
+description: Learn how to create currencies and mint coins and tokens on the Sui network.
+keywords: [ mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry ]
+---
+
+### Currency creation process
+
+The registry system supports two currency creation methods:
+
+1. **Standard creation:** Call `new_currency<T>()` when creating the coin outside of the `init` function of your package.
+1. **One-Time Witness creation:** Use `new_currency_with_otw<T>()` with a One-Time Witness for uniqueness proof.
+
+:::caution
+Proper creation and RPC support **requires** a second transaction to promote the currency to the registry.
+:::
+
+Both methods return a `CurrencyInitializer<T>` that allows configuration before finalization:
+
+<details>
+<summary>
+Regular currency creation
+</summary>
+<ImportContent source="examples/move/coin/sources/non_otw_currency.move" mode="code" />
+</details>
+
+<details>
+<summary>
+One-Time Witness currency creation
+</summary>
+<ImportContent source="examples/move/coin/sources/my_coin_new.move" mode="code" />
+</details>
+
+The initialization process allows for:
+
+- **Supply model selection:** Choose fixed, burn-only, or flexible supply.
+- **Regulatory configuration:** Add deny list capabilities if needed.
+
+:::caution Proper creation and RPC support **requires** a second transaction to promote the currency to the registry.
+
+After initialization of a currency using the One-Time Witness method, you **must** call [`coin_registry::finalize_registration`](/standards/currency.mdx#coin-finalization) to create the shared `Currency` object that the Coin Registry can track.
+
+:::
