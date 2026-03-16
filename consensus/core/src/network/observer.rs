@@ -42,6 +42,7 @@ pub(crate) struct StopBlockStream {}
 pub(crate) struct BlockStreamResponse {
     #[prost(bytes = "bytes", tag = "1")]
     pub(crate) block: Bytes,
+    // The highest commit index produced by this node. This is not guaranteed to be a finalized or stored commit.
     #[prost(uint64, tag = "2")]
     pub(crate) highest_commit_index: u64,
 }
