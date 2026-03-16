@@ -1784,3 +1784,122 @@ async fn test_block_transaction() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_consolidate_all_staked_sui_to_fungible() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    // Get validator address
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    // Stake 1 SUI
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-1000000000" },
+            "metadata": { "Stake" : {"validator": validator.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Advance epoch so stake becomes active
+    test_cluster.trigger_reconfiguration().await;
+
+    // Consolidate: convert StakedSui → FungibleStakedSui via Rosetta construction flow
+    let consolidate_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "ConsolidateAllStakedSuiToFungible",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "ConsolidateAllStakedSuiToFungible": {
+                    "validator": validator.to_string()
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Verify: StakedSui should be gone, FungibleStakedSui should exist
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let staked_sui_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let staked_sui: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_sui_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert!(
+        staked_sui.is_empty(),
+        "Expected no StakedSui objects after consolidation, found {}",
+        staked_sui.len()
+    );
+
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let fss_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        fss_objects.len(),
+        1,
+        "Expected exactly 1 FungibleStakedSui after consolidation, found {}",
+        fss_objects.len()
+    );
+}

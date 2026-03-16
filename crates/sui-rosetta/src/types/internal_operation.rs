@@ -39,7 +39,10 @@ pub use stake::Stake;
 use stake::{stake_pt_ab_gas, stake_pt_coin_gas};
 pub use withdraw_stake::WithdrawStake;
 use withdraw_stake::withdraw_stake_pt;
+pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
+use consolidate_to_fungible::consolidate_to_fungible_pt;
 
+mod consolidate_to_fungible;
 mod pay_coin;
 mod pay_sui;
 mod stake;
@@ -82,6 +85,7 @@ pub enum InternalOperation {
     PayCoin(PayCoin),
     Stake(Stake),
     WithdrawStake(WithdrawStake),
+    ConsolidateAllStakedSuiToFungible(ConsolidateAllStakedSuiToFungible),
 }
 
 impl InternalOperation {
@@ -90,7 +94,10 @@ impl InternalOperation {
             InternalOperation::PaySui(PaySui { sender, .. })
             | InternalOperation::PayCoin(PayCoin { sender, .. })
             | InternalOperation::Stake(Stake { sender, .. })
-            | InternalOperation::WithdrawStake(WithdrawStake { sender, .. }) => *sender,
+            | InternalOperation::WithdrawStake(WithdrawStake { sender, .. })
+            | InternalOperation::ConsolidateAllStakedSuiToFungible(
+                ConsolidateAllStakedSuiToFungible { sender, .. },
+            ) => *sender,
         }
     }
 
@@ -193,6 +200,16 @@ impl InternalOperation {
             InternalOperation::WithdrawStake(WithdrawStake { stake_ids, .. }) => {
                 let withdraw_all = stake_ids.is_empty();
                 withdraw_stake_pt(metadata.objects, withdraw_all)?
+            }
+            InternalOperation::ConsolidateAllStakedSuiToFungible(
+                ConsolidateAllStakedSuiToFungible { sender, .. },
+            ) => {
+                // address_balance_withdrawal encodes the FSS count for this operation:
+                // objects[0..fss_count] are FungibleStakedSui, objects[fss_count..] are StakedSui
+                let fss_count = metadata.address_balance_withdrawal as usize;
+                let (fss_refs, staked_sui_refs) =
+                    metadata.objects.split_at(fss_count.min(metadata.objects.len()));
+                consolidate_to_fungible_pt(sender, fss_refs.to_vec(), staked_sui_refs.to_vec())?
             }
         };
 
