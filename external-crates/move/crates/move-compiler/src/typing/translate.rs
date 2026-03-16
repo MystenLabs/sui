@@ -2011,8 +2011,15 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 }
                 Neg => {
                     let rloc = er.exp.loc;
-                    context.add_signed_numeric_constraint(rloc, "-", er.ty.clone());
-                    er.ty.clone()
+                    if !context
+                        .env()
+                        .supports_feature(context.current_package(), FeatureGate::SignedIntegers)
+                    {
+                        context.error_type(rloc)
+                    } else {
+                        context.add_signed_numeric_constraint(rloc, "-", er.ty.clone());
+                        er.ty.clone()
+                    }
                 }
             };
             (ty, TE::UnaryExp(uop, er))

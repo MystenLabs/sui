@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E04003]: built-in operation not supported
-  ┌─ tests/development/signed_ints/signed_int_neg_unsigned_literal.move:7:19
+  ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:7:19
   │
 7 │         let _x = -1u8;
   │                   ^^^
@@ -15,7 +15,7 @@ error[E04003]: built-in operation not supported
   │                   Found: 'u8'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/development/signed_ints/signed_int_neg_unsigned_literal.move:11:19
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:11:19
    │
 11 │         let _x = -1u16;
    │                   ^^^^
@@ -24,7 +24,7 @@ error[E04003]: built-in operation not supported
    │                   Found: 'u16'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/development/signed_ints/signed_int_neg_unsigned_literal.move:15:19
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:15:19
    │
 15 │         let _x = -1u32;
    │                   ^^^^
@@ -33,7 +33,7 @@ error[E04003]: built-in operation not supported
    │                   Found: 'u32'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/development/signed_ints/signed_int_neg_unsigned_literal.move:19:19
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:19:19
    │
 19 │         let _x = -1u64;
    │                   ^^^^
@@ -42,7 +42,7 @@ error[E04003]: built-in operation not supported
    │                   Found: 'u64'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/development/signed_ints/signed_int_neg_unsigned_literal.move:23:19
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:23:19
    │
 23 │         let _x = -1u128;
    │                   ^^^^^
@@ -51,7 +51,7 @@ error[E04003]: built-in operation not supported
    │                   Found: 'u128'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/development/signed_ints/signed_int_neg_unsigned_literal.move:27:19
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:27:19
    │
 27 │         let _x = -1u256;
    │                   ^^^^^
@@ -60,7 +60,7 @@ error[E04003]: built-in operation not supported
    │                   Found: 'u256'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/development/signed_ints/signed_int_neg_unsigned_literal.move:33:19
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:33:19
    │
 32 │         let x: u64 = 5;
    │                --- Found: 'u64'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'

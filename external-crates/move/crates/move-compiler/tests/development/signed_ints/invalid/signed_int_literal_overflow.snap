@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E01006]: invalid number literal
-  ┌─ tests/development/signed_ints/signed_int_literal_overflow.move:4:22
+  ┌─ tests/development/signed_ints/invalid/signed_int_literal_overflow.move:4:22
   │
 4 │         let _a: i8 = 128i8;
   │                      ^^^^^ Invalid number literal. This literal does not fit into the type 'i8'

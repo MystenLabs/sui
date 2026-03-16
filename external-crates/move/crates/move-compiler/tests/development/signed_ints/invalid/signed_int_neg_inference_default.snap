@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 warning[W04039]: unable to determine principal type for literal
-  ┌─ tests/development/signed_ints/signed_int_neg_inference_default.move:7:19
+  ┌─ tests/development/signed_ints/invalid/signed_int_neg_inference_default.move:7:19
   │
 7 │         let _x = -1;
   │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
@@ -15,7 +15,7 @@ warning[W04039]: unable to determine principal type for literal
   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W04039]: unable to determine principal type for literal
-   ┌─ tests/development/signed_ints/signed_int_neg_inference_default.move:12:20
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_inference_default.move:12:20
    │
 12 │         let _x = -(5);
    │                    ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
@@ -24,7 +24,7 @@ warning[W04039]: unable to determine principal type for literal
    = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W04039]: unable to determine principal type for literal
-   ┌─ tests/development/signed_ints/signed_int_neg_inference_default.move:22:19
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_inference_default.move:22:19
    │
 22 │         let _a = -1 + 2;
    │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'

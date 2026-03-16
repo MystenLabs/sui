@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E04007]: incompatible types
-   ┌─ tests/development/signed_ints/signed_int_return_types.move:30:9
+   ┌─ tests/development/signed_ints/invalid/signed_int_return_types.move:30:9
    │
 29 │     fun ret_wrong_signed(): i64 {
    │                             --- Expected: 'i64'
@@ -17,7 +17,7 @@ error[E04007]: incompatible types
    │         Given: 'i32'
 
 error[E04007]: incompatible types
-   ┌─ tests/development/signed_ints/signed_int_return_types.move:35:9
+   ┌─ tests/development/signed_ints/invalid/signed_int_return_types.move:35:9
    │
 34 │     fun ret_unsigned_for_signed(): i64 {
    │                                    --- Expected: 'i64'
@@ -28,7 +28,7 @@ error[E04007]: incompatible types
    │         Given: 'u64'
 
 error[E04007]: incompatible types
-   ┌─ tests/development/signed_ints/signed_int_return_types.move:40:9
+   ┌─ tests/development/signed_ints/invalid/signed_int_return_types.move:40:9
    │
 39 │     fun ret_signed_for_unsigned(): u64 {
    │                                    --- Expected: 'u64'

@@ -126,7 +126,10 @@ pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) ->
         panic!("Previous assert should have failed");
     };
     let mut diag = diag!(Editions::FeatureTooNew, (loc, message));
-    diag.add_note(UPGRADE_NOTE);
+    let valid_editions = valid_editions_for_feature(feature);
+    if !valid_editions.is_empty() {
+        diag.add_note(UPGRADE_NOTE);
+    }
     diag
 }
 
