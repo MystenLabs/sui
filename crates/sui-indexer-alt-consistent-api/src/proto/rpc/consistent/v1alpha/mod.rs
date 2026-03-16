@@ -19,12 +19,6 @@ pub const CHECKPOINT_HEIGHT_METADATA: &str = "x-sui-checkpoint-height";
 /// Mirrors fullnode gRPC header naming in `sui-rpc`.
 pub const LOWEST_AVAILABLE_CHECKPOINT_METADATA: &str = "x-sui-lowest-available-checkpoint";
 
-/// Legacy metadata name for input checkpoints.
-///
-/// TODO(2026-03-09): Remove support for this legacy input header one release after introducing
-/// `x-sui-checkpoint-height`.
-pub const LEGACY_CHECKPOINT_METADATA: &str = "x-sui-checkpoint";
-
 #[cfg(test)]
 mod tests {
     use super::FILE_DESCRIPTOR_SET;

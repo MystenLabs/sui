@@ -676,7 +676,7 @@ async fn test_edge_cases() {
 
     request
         .metadata_mut()
-        .insert("x-sui-checkpoint", "10".parse().unwrap());
+        .insert(CHECKPOINT_HEIGHT_METADATA, "10".parse().unwrap());
 
     let err = client.batch_get_balances(request).await.unwrap_err();
     assert_eq!(err.code(), tonic::Code::OutOfRange);
