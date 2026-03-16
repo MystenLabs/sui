@@ -97,12 +97,9 @@ impl Test {
         // }
 
         // cap `gas_limit` to the effective max gas budget.
-        if unit_test_config
+        unit_test_config.gas_limit = unit_test_config
             .gas_limit
-            .is_some_and(|gas_limit| gas_limit > max_computation_budget)
-        {
-            unit_test_config.gas_limit = Some(max_computation_budget);
-        }
+            .map(|lim| lim.min(max_computation_budget));
 
         // set the environment (this is a little janky: we get it from the manifest here, then pass
         // it as the optional argument in the build-config, which then looks it up again, but it
