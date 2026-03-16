@@ -271,10 +271,6 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &mut self,
         transaction_data: TransactionData,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        info!(
-            "Executing transaction impersonating sender: {:?}",
-            transaction_data.sender()
-        );
         // Create dummy signatures for each required signer
         let pk = SuiKeyPair::Ed25519(get_key_pair().1);
         let sig = pk.sign(transaction_data.sender().as_ref());
@@ -503,10 +499,6 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             epoch_commitments: vec![],
         };
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
-        println!(
-            "Creating checkpoint for end of epoch {} with committee {:?}",
-            next_epoch, committee.committee
-        );
         let (checkpoint, contents, _) = self.checkpoint_builder.build_end_of_epoch(
             &committee,
             self.store.get_clock().timestamp_ms(),
