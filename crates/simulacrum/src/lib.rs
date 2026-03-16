@@ -73,7 +73,6 @@ use sui_types::{
     },
     transaction_executor::SimulateTransactionResult,
 };
-use tracing::info;
 
 /// Configuration for advancing epochs in the Simulacrum.
 ///
