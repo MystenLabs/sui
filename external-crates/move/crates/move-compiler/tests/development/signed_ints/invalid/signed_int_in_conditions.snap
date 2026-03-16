@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E04007]: incompatible types
-  ┌─ tests/development/signed_ints/signed_int_in_conditions.move:7:13
+  ┌─ tests/development/signed_ints/invalid/signed_int_in_conditions.move:7:13
   │
 7 │         if (1i64) { };
   │             ^^^^
@@ -16,7 +16,7 @@ error[E04007]: incompatible types
   │             Given: 'i64'
 
 error[E04007]: incompatible types
-   ┌─ tests/development/signed_ints/signed_int_in_conditions.move:12:16
+   ┌─ tests/development/signed_ints/invalid/signed_int_in_conditions.move:12:16
    │
 12 │         while (1i32) { };
    │                ^^^^
@@ -26,7 +26,7 @@ error[E04007]: incompatible types
    │                Given: 'i32'
 
 error[E04007]: incompatible types
-   ┌─ tests/development/signed_ints/signed_int_in_conditions.move:17:9
+   ┌─ tests/development/signed_ints/invalid/signed_int_in_conditions.move:17:9
    │
 17 │         assert!(1i8);
    │         ^^^^^^^^^^^^

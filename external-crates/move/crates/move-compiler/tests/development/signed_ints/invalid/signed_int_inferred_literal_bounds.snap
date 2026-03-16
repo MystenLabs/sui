@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E04021]: invalid number after type inference
-  ┌─ tests/development/signed_ints/signed_int_inferred_literal_bounds.move:7:22
+  ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:7:22
   │
 7 │         let _x: i8 = 128;
   │                 --   ^^^
@@ -16,7 +16,7 @@ error[E04021]: invalid number after type inference
   │                 This literal does not fit into the type 'i8'.
 
 error[E04021]: invalid number after type inference
-   ┌─ tests/development/signed_ints/signed_int_inferred_literal_bounds.move:15:23
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:15:23
    │
 15 │         let _x: i16 = 32768;
    │                 ---   ^^^^^
@@ -26,7 +26,7 @@ error[E04021]: invalid number after type inference
    │                 This literal does not fit into the type 'i16'.
 
 error[E04021]: invalid number after type inference
-   ┌─ tests/development/signed_ints/signed_int_inferred_literal_bounds.move:23:23
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:23:23
    │
 23 │         let _x: i32 = 2147483648;
    │                 ---   ^^^^^^^^^^
@@ -36,7 +36,7 @@ error[E04021]: invalid number after type inference
    │                 This literal does not fit into the type 'i32'.
 
 error[E04021]: invalid number after type inference
-   ┌─ tests/development/signed_ints/signed_int_inferred_literal_bounds.move:31:23
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:31:23
    │
 31 │         let _x: i64 = 9223372036854775808;
    │                 ---   ^^^^^^^^^^^^^^^^^^^

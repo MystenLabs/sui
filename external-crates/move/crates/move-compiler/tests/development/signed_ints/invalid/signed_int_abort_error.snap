@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E04035]: invalid constant usage in error context
-  ┌─ tests/development/signed_ints/signed_int_abort_error.move:7:15
+  ┌─ tests/development/signed_ints/invalid/signed_int_abort_error.move:7:15
   │
 7 │         abort 1i64
   │               ^^^^
@@ -17,7 +17,7 @@ error[E04035]: invalid constant usage in error context
   = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
 
 error[E04035]: invalid constant usage in error context
-   ┌─ tests/development/signed_ints/signed_int_abort_error.move:12:15
+   ┌─ tests/development/signed_ints/invalid/signed_int_abort_error.move:12:15
    │
 12 │         abort code
    │               ^^^^
