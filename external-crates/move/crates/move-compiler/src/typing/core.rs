@@ -1087,6 +1087,20 @@ impl<'env, 'outer> Context<'env, 'outer> {
     }
 
     pub fn add_signed_numeric_constraint(&mut self, loc: Loc, op: &'static str, t: Type) {
+        // If the type is a numeric type variable (e.g., from an untyped literal as `1`), upgrade
+        // its VarConstraint from Num to SignedNum so it defaults to i64 instead of u64. For all
+        // other types the deferred constraint handles error reporting later to avoid 'default'
+        // errors for non-numerical values (e.g., `bool`).
+        if let TI::Var(v) = t.value.inner() {
+            let cur = forward_tvar(&self.subst, *v);
+            if let Some(c) = self.subst.tvar_constraints.get(&cur)
+                && c.is_num_var()
+            {
+                self.subst
+                    .tvar_constraints
+                    .insert(cur, VarConstraint::SignedNum(loc));
+            }
+        }
         self.constraints
             .push(Constraint::SignedNumericConstraint(loc, op, t))
     }
@@ -1411,10 +1425,6 @@ impl Subst {
         if let Some(constraint) = constraint_opt {
             assert!(self.tvar_constraints.insert(tvar, constraint).is_none());
         }
-    }
-
-    pub fn remove_constraint(&mut self, tvar: &TVar) {
-        self.tvar_constraints.remove(tvar);
     }
 
     pub fn is_value_constrainted_var(&self, tvar: &TVar) -> bool {

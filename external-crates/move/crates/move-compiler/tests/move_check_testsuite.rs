@@ -261,7 +261,11 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
 
     let dev_mode = path.components().any(|c| c.as_os_str() == DEV_DIR);
     if dev_mode {
-        let dev_id = (None, Category::Editions as u8, Editions::FeatureInDevelopment as u8);
+        let dev_id = (
+            None,
+            Category::Editions as u8,
+            Editions::FeatureInDevelopment as u8,
+        );
         diags.retain(|d| d.info().id() != dev_id);
     }
 

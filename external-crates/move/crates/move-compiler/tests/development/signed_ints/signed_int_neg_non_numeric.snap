@@ -11,25 +11,13 @@ error[E04003]: built-in operation not supported
 7 │         let _x = -true;
   │                  ^^^^^ Negation '-' is only valid for numeric types, but found 'bool'
 
-warning[W04039]: unable to determine principal type for literal
-   ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:12:19
-   │
-12 │         let _x = -b;
-   │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
-   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E04007]: incompatible types
+error[E04003]: built-in operation not supported
    ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:12:19
    │
 11 │         let b = false;
-   │                 ----- Given: 'bool'
+   │                 ----- Found: 'bool'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
 12 │         let _x = -b;
-   │                   ^
-   │                   │
-   │                   Invalid argument to '-'
-   │                   Expected: '_'
+   │                   ^ Invalid argument to '-'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:17:18
@@ -37,42 +25,18 @@ error[E04003]: built-in operation not supported
 17 │         let _x = -@0x42;
    │                  ^^^^^^ Negation '-' is only valid for numeric types, but found 'address'
 
-warning[W04039]: unable to determine principal type for literal
-   ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:23:19
-   │
-23 │         let _x = -v;
-   │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
-   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E04007]: incompatible types
+error[E04003]: built-in operation not supported
    ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:23:19
    │
 22 │         let v = vector[1i8];
-   │                 ----------- Given: 'vector<i8>'
+   │                 ----------- Found: 'vector<i8>'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
 23 │         let _x = -v;
-   │                   ^
-   │                   │
-   │                   Invalid argument to '-'
-   │                   Expected: '_'
+   │                   ^ Invalid argument to '-'
 
-warning[W04039]: unable to determine principal type for literal
-   ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:31:19
-   │
-31 │         let _x = -s;
-   │                   ^ Could not determine a concrete type for this signed numeric literal, so defaulting to 'i64'
-   │
-   = To avoid this warning, add an explicit type annotation, e.g., '<num>i64'
-   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E04007]: incompatible types
+error[E04003]: built-in operation not supported
    ┌─ tests/development/signed_ints/signed_int_neg_non_numeric.move:31:19
    │
 30 │         let s = S { val: 1i64 };
-   │                 --------------- Given: '0x42::m::S'
+   │                 --------------- Found: '0x42::m::S'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
 31 │         let _x = -s;
-   │                   ^
-   │                   │
-   │                   Invalid argument to '-'
-   │                   Expected: '_'
+   │                   ^ Invalid argument to '-'

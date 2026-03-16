@@ -2011,11 +2011,8 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 }
                 Neg => {
                     let rloc = er.exp.loc;
-                    let signed_ty = core::make_signed_num_tvar(context, rloc);
-                    match subtype_impl(context, rloc, msg, &er.ty, &signed_ty) {
-                        Ok(ty) => ty,
-                        Err(_) => context.error_type(rloc),
-                    }
+                    context.add_signed_numeric_constraint(rloc, "-", er.ty.clone());
+                    er.ty.clone()
                 }
             };
             (ty, TE::UnaryExp(uop, er))
