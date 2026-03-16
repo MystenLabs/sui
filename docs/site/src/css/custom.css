@@ -2601,3 +2601,29 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
   display: block;
   overflow: hidden;
 }
+
+/* Union-field note: span all 6 grid columns so it doesn't break key/val pairing */
+.protoUnionNote {
+  grid-column: 1 / -1;
+  padding: 14px 24px;
+  font-size: 14px;
+  line-height: 1.55;
+  border-bottom: 1px solid rgba(120, 120, 120, 0.14);
+  background: rgba(120, 120, 120, 0.04);
+}
+ 
+html[data-theme='dark'] .protoUnionNote {
+  background: rgba(120, 120, 120, 0.08);
+}
+ 
+/* Method signatures: allow long type names to wrap gracefully */
+.protoMethodSig {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+ 
+/* Arrow between request → response in service methods */
+.protoArrow {
+  margin: 0 4px;
+  opacity: 0.5;
+}

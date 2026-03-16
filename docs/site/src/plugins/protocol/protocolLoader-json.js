@@ -228,7 +228,7 @@ const protocolInject = async function (source) {
       // Oneof blocks
       for (const declaration of declarations) {
         content.push(
-          `<div class="protoUnionNote">Union field <b>${declaration}</b> can be only one of the following.</div>`,
+          `<div class="protoUnionNote" style={{gridColumn:"1/-1"}}>Union field <b>${declaration}</b> can be only one of the following.</div>`,
         );
 
         for (const f of oneofFields) {
