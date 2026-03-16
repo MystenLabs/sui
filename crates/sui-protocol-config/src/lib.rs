@@ -4670,8 +4670,8 @@ impl ProtocolConfig {
                     cfg.feature_flags.address_aliases = true;
                     cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
                     cfg.feature_flags.enable_display_registry = true;
-                    // Re-enable for testing
-                    cfg.feature_flags.defer_unpaid_amplification = true;
+                    // Disable for all networks
+                    cfg.feature_flags.defer_unpaid_amplification = false;
                 }
                 // Use this template when making changes:
                 //
