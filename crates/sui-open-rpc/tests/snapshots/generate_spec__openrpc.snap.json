@@ -1358,7 +1358,7 @@
                 "enable_coin_reservation_obj_refs": false,
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
-                "enable_free_tier": false,
+                "enable_gasless": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
@@ -1688,13 +1688,13 @@
                   "u64": "2"
                 },
                 "execution_version": null,
-                "free_tier_max_computation_units": null,
                 "gas_budget_based_txn_cost_absolute_cap_commit_count": null,
                 "gas_budget_based_txn_cost_cap_factor": null,
                 "gas_model_version": {
                   "u64": "5"
                 },
                 "gas_rounding_step": null,
+                "gasless_max_computation_units": null,
                 "groth16_prepare_verifying_key_bls12381_cost_base": {
                   "u64": "52"
                 },

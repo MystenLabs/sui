@@ -269,7 +269,7 @@ impl AdapterInitConfig {
             enable_address_balance_gas_payments,
             enable_coin_reservations,
             file_format_version,
-            enable_free_tier,
+            enable_gasless,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -314,8 +314,8 @@ impl AdapterInitConfig {
         if enable_coin_reservations {
             protocol_config.enable_coin_reservation_for_testing();
         }
-        if enable_free_tier {
-            protocol_config.enable_free_tier_for_testing();
+        if enable_gasless {
+            protocol_config.enable_gasless_for_testing();
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
         // ExecutionTimeEstimate mode which is the only supported mode.

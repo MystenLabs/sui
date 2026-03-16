@@ -971,12 +971,10 @@ impl ProgrammableTransaction {
             .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
     }
 
-    pub fn validate_free_tier_commands(&self, config: &ProtocolConfig) -> UserInputResult {
+    pub fn validate_gasless_commands(&self, config: &ProtocolConfig) -> UserInputResult {
         #[allow(unused_mut)]
-        let mut allowed_token_types = parse_free_tier_allowed_token_types(config);
-        fail_point_arg!("free_tier_extra_token_types", |extra: HashSet<
-            TypeInput,
-        >| {
+        let mut allowed_token_types = parse_gasless_allowed_token_types(config);
+        fail_point_arg!("gasless_extra_token_types", |extra: HashSet<TypeInput>| {
             allowed_token_types.extend(extra);
         });
         for command in &self.commands {
@@ -993,20 +991,20 @@ impl ProgrammableTransaction {
                     fp_ensure!(
                         is_balance_call || is_withdrawal_split,
                         UserInputError::Unsupported(
-                            "Free tier transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string()
+                            "Gasless transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string()
                         )
                     );
 
                     fp_ensure!(
                         call.type_arguments.len() == 1,
                         UserInputError::Unsupported(
-                            "Free tier MoveCall must have exactly one type argument".to_string()
+                            "Gasless MoveCall must have exactly one type argument".to_string()
                         )
                     );
                     let token_type = if is_withdrawal_split {
                         extract_balance_inner_type(&call.type_arguments[0]).ok_or_else(|| {
                             UserInputError::Unsupported(
-                                "Free tier withdrawal_split must use Balance<T> type argument"
+                                "Gasless withdrawal_split must use Balance<T> type argument"
                                     .to_string(),
                             )
                         })?
@@ -1016,14 +1014,13 @@ impl ProgrammableTransaction {
                     fp_ensure!(
                         allowed_token_types.contains(token_type),
                         UserInputError::Unsupported(
-                            "Free tier transactions only support whitelisted token types"
-                                .to_string()
+                            "Gasless transactions only support whitelisted token types".to_string()
                         )
                     );
                 }
                 _ => {
                     return Err(UserInputError::Unsupported(
-                        "Free tier transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string(),
+                        "Gasless transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string(),
                     ));
                 }
             }
@@ -1032,14 +1029,14 @@ impl ProgrammableTransaction {
     }
 }
 
-fn parse_free_tier_allowed_token_types(config: &ProtocolConfig) -> HashSet<TypeInput> {
+fn parse_gasless_allowed_token_types(config: &ProtocolConfig) -> HashSet<TypeInput> {
     config
-        .free_tier_allowed_token_types()
+        .gasless_allowed_token_types()
         .iter()
         .map(|s| {
             let tag: TypeTag = s
                 .parse()
-                .unwrap_or_else(|e| panic!("invalid free tier token type {s:?}: {e}"));
+                .unwrap_or_else(|e| panic!("invalid gasless token type {s:?}: {e}"));
             TypeInput::from(tag)
         })
         .collect()
@@ -2070,7 +2067,7 @@ pub fn is_gas_paid_from_address_balance(
         )
 }
 
-pub fn is_free_tier_transaction(gas_data: &GasData, transaction_kind: &TransactionKind) -> bool {
+pub fn is_gasless_transaction(gas_data: &GasData, transaction_kind: &TransactionKind) -> bool {
     is_gas_paid_from_address_balance(gas_data, transaction_kind) && gas_data.price == 0
 }
 
@@ -2684,7 +2681,7 @@ pub trait TransactionDataAPI {
 
     fn is_gas_paid_from_address_balance(&self) -> bool;
 
-    fn is_free_tier_transaction(&self) -> bool;
+    fn is_gasless_transaction(&self) -> bool;
 
     fn sender_mut_for_testing(&mut self) -> &mut SuiAddress;
 
@@ -3087,8 +3084,8 @@ impl TransactionDataAPI for TransactionDataV1 {
                 );
             }
 
-            let is_free_tier = config.enable_free_tier() && self.is_free_tier_transaction();
-            if config.address_balance_gas_check_rgp_at_signing() && !is_free_tier {
+            let is_gasless = config.enable_gasless() && self.is_gasless_transaction();
+            if config.address_balance_gas_check_rgp_at_signing() && !is_gasless {
                 fp_ensure!(
                     self.gas_data.price >= context.reference_gas_price,
                     UserInputError::GasPriceUnderRGP {
@@ -3203,12 +3200,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
                 .into()
             );
-            let is_free_tier = config.enable_free_tier() && self.is_free_tier_transaction();
-            if is_free_tier {
+            let is_gasless = config.enable_gasless() && self.is_gasless_transaction();
+            if is_gasless {
                 fp_ensure!(
                     self.gas_data.budget == 0,
                     UserInputError::Unsupported(
-                        "gas_budget must be 0 for free tier transactions".to_string()
+                        "gas_budget must be 0 for gasless transactions".to_string()
                     )
                     .into()
                 );
@@ -3234,10 +3231,10 @@ impl TransactionDataAPI for TransactionDataV1 {
         self.kind().validity_check(config)?;
 
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind
-            && config.enable_free_tier()
-            && self.is_free_tier_transaction()
+            && config.enable_gasless()
+            && self.is_gasless_transaction()
         {
-            pt.validate_free_tier_commands(config)?;
+            pt.validate_gasless_commands(config)?;
         }
 
         self.check_sponsorship()
@@ -3255,8 +3252,8 @@ impl TransactionDataAPI for TransactionDataV1 {
         is_gas_paid_from_address_balance(&self.gas_data, &self.kind)
     }
 
-    fn is_free_tier_transaction(&self) -> bool {
-        is_free_tier_transaction(&self.gas_data, &self.kind)
+    fn is_gasless_transaction(&self) -> bool {
+        is_gasless_transaction(&self.gas_data, &self.kind)
     }
 
     /// Check if the transaction is compliant with sponsorship.

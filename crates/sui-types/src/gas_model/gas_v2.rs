@@ -219,8 +219,8 @@ mod checked {
         unmetered_storage_rebate: u64,
         /// Rounding mode for gas charges.
         gas_rounding_mode: GasRoundingMode,
-        // Max computation units for free tier. Set only for free tier transactions.
-        free_tier_max_computation_units: Option<u64>,
+        // Max computation units for gasless. Set only for gasless transactions.
+        gasless_max_computation_units: Option<u64>,
     }
 
     impl SuiGasStatus {
@@ -253,7 +253,7 @@ mod checked {
                 unmetered_storage_rebate: 0,
                 gas_rounding_mode,
                 cost_table,
-                free_tier_max_computation_units: None,
+                gasless_max_computation_units: None,
             }
         }
 
@@ -323,12 +323,12 @@ mod checked {
             )
         }
 
-        pub(crate) fn new_free_tier(
+        pub(crate) fn new_gasless(
             reference_gas_price: u64,
             config: &ProtocolConfig,
         ) -> SuiGasStatus {
             let metering_price = reference_gas_price.max(1);
-            let max_computation_units = config.free_tier_max_computation_units();
+            let max_computation_units = config.gasless_max_computation_units();
             let compute_cap = max_computation_units * metering_price;
             let mut status = Self::new_metered(
                 0,
@@ -338,7 +338,7 @@ mod checked {
                 reference_gas_price,
                 config,
             );
-            status.free_tier_max_computation_units = Some(max_computation_units);
+            status.gasless_max_computation_units = Some(max_computation_units);
             status
         }
 
@@ -346,7 +346,7 @@ mod checked {
             self.reference_gas_price
         }
 
-        fn is_free_tier(&self) -> bool {
+        fn is_gasless(&self) -> bool {
             self.gas_price == 0 && self.charge
         }
 
@@ -450,9 +450,9 @@ mod checked {
 
         fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError> {
             let gas_used = self.gas_status.gas_used_pre_gas_price();
-            let is_free_tier = self.is_free_tier();
-            let effective_gas_price = if is_free_tier {
-                // Free tier: price computation at RGP
+            let is_gasless = self.is_gasless();
+            let effective_gas_price = if is_gasless {
+                // Gasless: price computation at RGP
                 self.reference_gas_price
             } else if self
                 .cost_table
@@ -491,11 +491,11 @@ mod checked {
                     bucket_cost * effective_gas_price
                 }
             };
-            if is_free_tier {
-                // Free tier: check against compute cap (rounding may push gas_used above
+            if is_gasless {
+                // Gasless: check against compute cap (rounding may push gas_used above
                 // the VM-enforced limit), then zero cost regardless of outcome.
                 let compute_budget =
-                    self.free_tier_max_computation_units.unwrap() * effective_gas_price;
+                    self.gasless_max_computation_units.unwrap() * effective_gas_price;
                 self.computation_cost = 0;
                 if compute_budget <= gas_used {
                     Err(ExecutionErrorKind::InsufficientGas.into())
@@ -701,17 +701,17 @@ mod checked {
     mod tests {
         use super::*;
 
-        fn free_tier_gas_status(rgp: u64, max_computation_units: u64) -> SuiGasStatus {
+        fn gasless_gas_status(rgp: u64, max_computation_units: u64) -> SuiGasStatus {
             let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-            config.enable_free_tier_for_testing();
-            config.set_free_tier_max_computation_units_for_testing(max_computation_units);
-            SuiGasStatus::new_free_tier(rgp, &config)
+            config.enable_gasless_for_testing();
+            config.set_gasless_max_computation_units_for_testing(max_computation_units);
+            SuiGasStatus::new_gasless(rgp, &config)
         }
 
         #[test]
-        fn test_free_tier_bucketize_within_cap() {
+        fn test_gasless_bucketize_within_cap() {
             let rgp = 1000;
-            let mut status = free_tier_gas_status(rgp, 50_000);
+            let mut status = gasless_gas_status(rgp, 50_000);
             // Burn some gas well within the cap
             status.charge_storage_read(10).unwrap();
             let result = status.bucketize_computation(None);
@@ -720,10 +720,10 @@ mod checked {
         }
 
         #[test]
-        fn test_free_tier_bucketize_exceeds_cap() {
+        fn test_gasless_bucketize_exceeds_cap() {
             let rgp = 1000;
             // Set cap very low so rounding pushes gas_used over
-            let mut status = free_tier_gas_status(rgp, 500);
+            let mut status = gasless_gas_status(rgp, 500);
             // Burn enough gas that after rounding it exceeds 500 * rgp
             status.charge_storage_read(500).unwrap();
             let result = status.bucketize_computation(None);
@@ -732,9 +732,9 @@ mod checked {
         }
 
         #[test]
-        fn test_free_tier_bucketize_zeroes_cost_on_success() {
+        fn test_gasless_bucketize_zeroes_cost_on_success() {
             let rgp = 1000;
-            let mut status = free_tier_gas_status(rgp, 50_000);
+            let mut status = gasless_gas_status(rgp, 50_000);
             status.charge_storage_read(100).unwrap();
             status.bucketize_computation(None).unwrap();
             assert_eq!(status.computation_cost, 0);
@@ -743,9 +743,9 @@ mod checked {
         }
 
         #[test]
-        fn test_free_tier_bucketize_zeroes_cost_on_oog() {
+        fn test_gasless_bucketize_zeroes_cost_on_oog() {
             let rgp = 1000;
-            let mut status = free_tier_gas_status(rgp, 1);
+            let mut status = gasless_gas_status(rgp, 1);
             status.charge_storage_read(10).unwrap();
             let result = status.bucketize_computation(None);
             assert!(result.is_err());
@@ -757,7 +757,7 @@ mod checked {
         #[test]
         fn test_normal_tx_bucketize_unchanged() {
             let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-            config.enable_free_tier_for_testing();
+            config.enable_gasless_for_testing();
             let rgp = 1000;
             let gas_price = 1000;
             let gas_budget = 50_000_000;

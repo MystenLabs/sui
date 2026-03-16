@@ -55,10 +55,10 @@ fn build_send_funds_ptb(
     TransactionKind::ProgrammableTransaction(builder.finish())
 }
 
-async fn setup_free_tier_env() -> TestEnv {
+async fn setup_gasless_env() -> TestEnv {
     TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_free_tier_for_testing();
+            cfg.enable_gasless_for_testing();
             cfg
         }))
         .build()
@@ -78,7 +78,7 @@ async fn setup_custom_coin(test_env: &mut TestEnv, funding: &[(u64, SuiAddress)]
         .build();
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok());
-    register_fail_point_arg("free_tier_extra_token_types", {
+    register_fail_point_arg("gasless_extra_token_types", {
         let coin_type = coin_type.clone();
         move || {
             let mut extra = HashSet::new();
@@ -98,8 +98,8 @@ fn assert_zero_gas(gas_summary: &GasCostSummary) {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_transfer_success() {
-    let mut test_env = setup_free_tier_env().await;
+async fn test_gasless_transfer_success() {
+    let mut test_env = setup_gasless_env().await;
     let sender = test_env.get_sender(1);
     let recipient = test_env.get_sender(2);
 
@@ -109,7 +109,7 @@ async fn test_free_tier_transfer_success() {
     let coin_type = setup_custom_coin(&mut test_env, &[(initial_funding, sender)]).await;
     assert_eq!(test_env.get_sui_balance(sender), 0);
 
-    let tx = test_env.create_free_tier_transaction(
+    let tx = test_env.create_gasless_transaction(
         transfer_amount,
         coin_type.clone(),
         sender,
@@ -121,7 +121,7 @@ async fn test_free_tier_transfer_success() {
 
     assert!(
         effects.status().is_ok(),
-        "Free tier transfer should succeed: {:?}",
+        "Gasless transfer should succeed: {:?}",
         effects.status()
     );
     assert_zero_gas(effects.gas_cost_summary());
@@ -137,8 +137,8 @@ async fn test_free_tier_transfer_success() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_multi_recipient() {
-    let mut test_env = setup_free_tier_env().await;
+async fn test_gasless_multi_recipient() {
+    let mut test_env = setup_gasless_env().await;
     let sender = test_env.get_sender(1);
     let recipient1 = test_env.get_sender(2);
     let recipient2 = test_env.get_sender(3);
@@ -199,12 +199,12 @@ async fn test_free_tier_multi_recipient() {
         vec![balance2, recipient2_arg],
     );
     let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
-    let tx = test_env.free_tier_transaction_data(tx_kind, sender, 0, 0);
+    let tx = test_env.gasless_transaction_data(tx_kind, sender, 0, 0);
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
 
     assert!(
         effects.status().is_ok(),
-        "Free tier multi-recipient transfer should succeed: {:?}",
+        "Gasless multi-recipient transfer should succeed: {:?}",
         effects.status()
     );
     assert_zero_gas(effects.gas_cost_summary());
@@ -221,11 +221,11 @@ async fn test_free_tier_multi_recipient() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_disabled_rejects_transaction() {
+async fn test_gasless_disabled_rejects_transaction() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_address_balance_gas_payments_for_testing();
-            cfg.disable_free_tier_for_testing();
+            cfg.disable_gasless_for_testing();
             cfg
         }))
         .build()
@@ -235,7 +235,7 @@ async fn test_free_tier_disabled_rejects_transaction() {
     let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
     assert_eq!(test_env.get_sui_balance(sender), 0);
 
-    let tx = test_env.create_free_tier_transaction(1000, coin_type, sender, sender, 0, 0);
+    let tx = test_env.create_gasless_transaction(1000, coin_type, sender, sender, 0, 0);
     let result = test_env.exec_tx_directly(tx).await;
 
     let err = result.unwrap_err();
@@ -249,8 +249,8 @@ async fn test_free_tier_disabled_rejects_transaction() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_paid_tx_still_works() {
-    let mut test_env = setup_free_tier_env().await;
+async fn test_gasless_paid_tx_still_works() {
+    let mut test_env = setup_gasless_env().await;
     let sender = test_env.get_sender(0);
     let recipient = test_env.get_sender(1);
 
@@ -286,7 +286,7 @@ async fn test_free_tier_paid_tx_still_works() {
     );
 
     let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
-    let free_tx = test_env.create_free_tier_transaction(1000, coin_type, sender, recipient, 1, 0);
+    let free_tx = test_env.create_gasless_transaction(1000, coin_type, sender, recipient, 1, 0);
     let (_, effects) = test_env.exec_tx_directly(free_tx).await.unwrap();
     assert!(effects.status().is_ok());
     assert_zero_gas(effects.gas_cost_summary());
@@ -296,8 +296,8 @@ async fn test_free_tier_paid_tx_still_works() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_rejects_transfer_objects() {
-    let mut test_env = setup_free_tier_env().await;
+async fn test_gasless_rejects_transfer_objects() {
+    let mut test_env = setup_gasless_env().await;
     let sender = test_env.get_sender(1);
     let recipient = test_env.get_sender(2);
 
@@ -323,7 +323,7 @@ async fn test_free_tier_rejects_transfer_objects() {
     builder.transfer_arg(recipient, coin);
     let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
 
-    let tx = test_env.free_tier_transaction_data(tx_kind, sender, 0, 0);
+    let tx = test_env.gasless_transaction_data(tx_kind, sender, 0, 0);
     let result = test_env.exec_tx_directly(tx).await;
 
     let err = result.unwrap_err();
@@ -339,11 +339,11 @@ async fn test_free_tier_rejects_transfer_objects() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_computation_cap() {
+async fn test_gasless_computation_cap() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_free_tier_for_testing();
-            cfg.set_free_tier_max_computation_units_for_testing(1);
+            cfg.enable_gasless_for_testing();
+            cfg.set_gasless_max_computation_units_for_testing(1);
             cfg
         }))
         .build()
@@ -354,12 +354,12 @@ async fn test_free_tier_computation_cap() {
     let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
     assert_eq!(test_env.get_sui_balance(sender), 0);
 
-    let tx = test_env.create_free_tier_transaction(100, coin_type, sender, recipient, 0, 0);
+    let tx = test_env.create_gasless_transaction(100, coin_type, sender, recipient, 0, 0);
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
 
     assert!(
         effects.status().is_err(),
-        "Free tier should fail when computation exceeds cap"
+        "Gasless should fail when computation exceeds cap"
     );
     assert_zero_gas(effects.gas_cost_summary());
 
@@ -367,19 +367,19 @@ async fn test_free_tier_computation_cap() {
 }
 
 // drive_transaction computes amplification_factor = gas_price / rgp, which would
-// reject free tier transactions (gas_price=0) with GasPriceUnderRGP. This test
+// reject gasless transactions (gas_price=0) with GasPriceUnderRGP. This test
 // verifies the bypass for that check works through the full orchestrator path.
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_drive_transaction() {
-    let mut test_env = setup_free_tier_env().await;
+async fn test_gasless_drive_transaction() {
+    let mut test_env = setup_gasless_env().await;
     let sender = test_env.get_sender(1);
     let recipient = test_env.get_sender(2);
 
     let coin_type = setup_custom_coin(&mut test_env, &[(5000, sender)]).await;
     assert_eq!(test_env.get_sui_balance(sender), 0);
 
-    let tx_data = test_env.create_free_tier_transaction(1000, coin_type, sender, recipient, 0, 0);
+    let tx_data = test_env.create_gasless_transaction(1000, coin_type, sender, recipient, 0, 0);
     let signed_tx = test_env.cluster.wallet.sign_transaction(&tx_data).await;
 
     let orchestrator = test_env
@@ -401,7 +401,7 @@ async fn test_free_tier_drive_transaction() {
 
     assert!(
         result.is_ok(),
-        "Free tier transaction should succeed via drive_transaction: {:?}",
+        "Gasless transaction should succeed via drive_transaction: {:?}",
         result.err()
     );
 
@@ -410,8 +410,8 @@ async fn test_free_tier_drive_transaction() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_rejects_non_whitelisted_token() {
-    let mut test_env = setup_free_tier_env().await;
+async fn test_gasless_rejects_non_whitelisted_token() {
+    let mut test_env = setup_gasless_env().await;
     let sender = test_env.get_sender(1);
     let recipient = test_env.get_sender(2);
 
@@ -424,7 +424,7 @@ async fn test_free_tier_rejects_non_whitelisted_token() {
         type_params: vec![],
     }));
 
-    let tx = test_env.create_free_tier_transaction(1000, fake_type, sender, recipient, 0, 0);
+    let tx = test_env.create_gasless_transaction(1000, fake_type, sender, recipient, 0, 0);
     let result = test_env.exec_tx_directly(tx).await;
 
     let err = result.unwrap_err();
@@ -439,8 +439,8 @@ async fn test_free_tier_rejects_non_whitelisted_token() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
-async fn test_free_tier_custom_coin_transfer() {
-    let mut test_env = setup_free_tier_env().await;
+async fn test_gasless_custom_coin_transfer() {
+    let mut test_env = setup_gasless_env().await;
     let sender = test_env.get_sender(1);
     let recipient = test_env.get_sender(2);
 
@@ -450,7 +450,7 @@ async fn test_free_tier_custom_coin_transfer() {
     let transfer_amount = 500u64;
     let sender_before = test_env.get_balance(sender, coin_type.clone());
     let recipient_before = test_env.get_balance(recipient, coin_type.clone());
-    let tx = test_env.create_free_tier_transaction(
+    let tx = test_env.create_gasless_transaction(
         transfer_amount,
         coin_type.clone(),
         sender,
@@ -462,7 +462,7 @@ async fn test_free_tier_custom_coin_transfer() {
 
     assert!(
         effects.status().is_ok(),
-        "Free tier custom coin transfer should succeed with 0 SUI: {:?}",
+        "Gasless custom coin transfer should succeed with 0 SUI: {:?}",
         effects.status()
     );
     assert_zero_gas(effects.gas_cost_summary());

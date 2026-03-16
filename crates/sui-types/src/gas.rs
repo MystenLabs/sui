@@ -100,8 +100,8 @@ pub mod checked {
             )))
         }
 
-        pub fn new_free_tier(reference_gas_price: u64, config: &ProtocolConfig) -> SuiResult<Self> {
-            Ok(Self::V2(SuiGasStatusV2::new_free_tier(
+        pub fn new_gasless(reference_gas_price: u64, config: &ProtocolConfig) -> SuiResult<Self> {
+            Ok(Self::V2(SuiGasStatusV2::new_gasless(
                 reference_gas_price,
                 config,
             )))

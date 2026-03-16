@@ -1039,7 +1039,7 @@ struct FeatureFlags {
     new_vm_enabled: bool,
 
     #[serde(skip_serializing_if = "is_false")]
-    enable_free_tier: bool,
+    enable_gasless: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1908,11 +1908,11 @@ pub struct ProtocolConfig {
     /// The maximum number of updates per settlement transaction.
     max_updates_per_settlement_txn: Option<u32>,
 
-    /// Maximum computation units allowed for a free tier transaction.
-    free_tier_max_computation_units: Option<u64>,
+    /// Maximum computation units allowed for a gasless transaction.
+    gasless_max_computation_units: Option<u64>,
 
-    /// Allowed token types for free tier transactions.
-    free_tier_allowed_token_types: Option<Vec<String>>,
+    /// Allowed token types for gasless transactions.
+    gasless_allowed_token_types: Option<Vec<String>>,
 }
 
 /// An aliased address.
@@ -2696,12 +2696,12 @@ impl ProtocolConfig {
         self.feature_flags.use_coin_party_owner
     }
 
-    pub fn enable_free_tier(&self) -> bool {
-        self.feature_flags.enable_free_tier
+    pub fn enable_gasless(&self) -> bool {
+        self.feature_flags.enable_gasless
     }
 
-    pub fn free_tier_allowed_token_types(&self) -> &[String] {
-        self.free_tier_allowed_token_types
+    pub fn gasless_allowed_token_types(&self) -> &[String] {
+        self.gasless_allowed_token_types
             .as_deref()
             .expect(Self::CONSTANT_ERR_MSG)
     }
@@ -3292,8 +3292,8 @@ impl ProtocolConfig {
 
             max_updates_per_settlement_txn: None,
 
-            free_tier_max_computation_units: None,
-            free_tier_allowed_token_types: None,
+            gasless_max_computation_units: None,
+            gasless_allowed_token_types: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4721,9 +4721,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.defer_unpaid_amplification = false;
                     cfg.feature_flags.enable_display_registry = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_free_tier = true;
-                        cfg.free_tier_max_computation_units = Some(50_000);
-                        cfg.free_tier_allowed_token_types = Some(vec![]);
+                        cfg.feature_flags.enable_gasless = true;
+                        cfg.gasless_max_computation_units = Some(50_000);
+                        cfg.gasless_allowed_token_types = Some(vec![]);
                     }
                 }
                 117 => {}
@@ -5081,19 +5081,19 @@ impl ProtocolConfig {
         self.feature_flags.enable_address_balance_gas_payments = false;
     }
 
-    pub fn enable_free_tier_for_testing(&mut self) {
+    pub fn enable_gasless_for_testing(&mut self) {
         self.enable_address_balance_gas_payments_for_testing();
-        self.feature_flags.enable_free_tier = true;
-        self.free_tier_max_computation_units = Some(50_000);
-        self.free_tier_allowed_token_types = Some(vec![]);
+        self.feature_flags.enable_gasless = true;
+        self.gasless_max_computation_units = Some(50_000);
+        self.gasless_allowed_token_types = Some(vec![]);
     }
 
-    pub fn disable_free_tier_for_testing(&mut self) {
-        self.feature_flags.enable_free_tier = false;
+    pub fn disable_gasless_for_testing(&mut self) {
+        self.feature_flags.enable_gasless = false;
     }
 
-    pub fn set_free_tier_allowed_token_types_for_testing(&mut self, types: Vec<String>) {
-        self.free_tier_allowed_token_types = Some(types);
+    pub fn set_gasless_allowed_token_types_for_testing(&mut self, types: Vec<String>) {
+        self.gasless_allowed_token_types = Some(types);
     }
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {

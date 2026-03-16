@@ -160,6 +160,8 @@ feature_flags:
   randomize_checkpoint_tx_limit_in_tests: true
   gasless_transaction_drop_safety: true
   use_coin_party_owner: true
+  new_vm_enabled: true
+  enable_gasless: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -481,3 +483,5 @@ translation_per_type_node_charge: 1
 translation_per_reference_node_charge: 1
 translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
+gasless_max_computation_units: 50000
+gasless_allowed_token_types: []

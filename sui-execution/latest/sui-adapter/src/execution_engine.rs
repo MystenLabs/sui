@@ -420,7 +420,7 @@ mod checked {
             Ok((r, t)) => (Ok(r), t),
             Err((e, t)) => (Err(e), t),
         };
-        if gas_charger.is_free_tier()
+        if gas_charger.is_gasless()
             && result.is_ok()
             && temporary_store.has_non_accumulator_writes()
         {

@@ -405,7 +405,7 @@ impl TestEnv {
         self.cluster.trigger_reconfiguration().await;
     }
 
-    pub fn create_free_tier_transaction(
+    pub fn create_gasless_transaction(
         &self,
         amount: u64,
         token_type: TypeTag,
@@ -433,10 +433,10 @@ impl TestEnv {
             vec![balance, recipient_arg],
         );
         let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
-        self.free_tier_transaction_data(tx_kind, sender, nonce, epoch)
+        self.gasless_transaction_data(tx_kind, sender, nonce, epoch)
     }
 
-    pub fn free_tier_transaction_data(
+    pub fn gasless_transaction_data(
         &self,
         tx_kind: TransactionKind,
         sender: SuiAddress,

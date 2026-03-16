@@ -218,7 +218,7 @@ pub mod checked {
             self.payment_method.is_address_balance()
         }
 
-        pub fn is_free_tier(&self) -> bool {
+        pub fn is_gasless(&self) -> bool {
             self.gas_status.gas_price() == 0 && self.payment_method.is_address_balance()
         }
 
