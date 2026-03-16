@@ -4813,10 +4813,7 @@ fn macro_mut_collect_seq(mut_vars: &mut BTreeMap<N::Var_, (Loc, Loc)>, seq: &N::
     }
 }
 
-fn macro_mut_collect_lvalues(
-    mut_vars: &mut BTreeMap<N::Var_, (Loc, Loc)>,
-    lvalues: &[N::LValue],
-) {
+fn macro_mut_collect_lvalues(mut_vars: &mut BTreeMap<N::Var_, (Loc, Loc)>, lvalues: &[N::LValue]) {
     for sp!(_, lv_) in lvalues {
         match lv_ {
             N::LValue_::Var {
