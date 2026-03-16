@@ -144,7 +144,7 @@ pub async fn run_move_unit_tests(
             report_stacktrace_on_abort: true,
             ..config
         },
-        SuiVMTestSetup::new(gas_price.unwrap_or(TEST_GAS_PRICE)),
+        SuiVMTestSetup::new(effective_gas_price),
         compute_coverage,
         save_disassembly,
         &mut std::io::stdout(),
