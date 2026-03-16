@@ -73,7 +73,13 @@ impl Test {
 
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
-        let unit_test_config = self.test.unit_test_config();
+
+        // If no gas limit is set, set it to the default max. This allows
+        // users to provide custom configs but not have to worry about setting a gas limit unless that
+        // is what they care about.
+        let unit_test_config = self
+            .test
+            .unit_test_config(Some(*MAX_UNIT_TEST_INSTRUCTIONS));
 
         // set the environment (this is a little janky: we get it from the manifest here, then pass
         // it as the optional argument in the build-config, which then looks it up again, but it

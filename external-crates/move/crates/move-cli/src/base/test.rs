@@ -95,7 +95,7 @@ impl Test {
         let result = run_move_unit_tests::<F, V, Stdout>(
             &rerooted_path,
             config,
-            self.unit_test_config(),
+            self.unit_test_config(None),
             vm_test_setup,
             compute_coverage,
             save_disassembly,
@@ -110,7 +110,7 @@ impl Test {
         Ok(())
     }
 
-    pub fn unit_test_config(self) -> UnitTestingConfig {
+    pub fn unit_test_config(self, default_execution_bound: Option<u64>) -> UnitTestingConfig {
         let Self {
             gas_limit,
             filter,
@@ -124,7 +124,7 @@ impl Test {
             trace,
         } = self;
         UnitTestingConfig {
-            gas_limit,
+            gas_limit: gas_limit.or(default_execution_bound),
             filter,
             list,
             num_threads,
@@ -133,7 +133,7 @@ impl Test {
             seed,
             rand_num_iters,
             trace,
-            ..UnitTestingConfig::default_with_bound(None)
+            ..UnitTestingConfig::default_with_bound(default_execution_bound)
         }
     }
 }
