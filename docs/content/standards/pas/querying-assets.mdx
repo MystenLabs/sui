@@ -12,7 +12,6 @@ A wallet address on Sui can hold two kinds of balances:
 - **Regular balances**:  Owned directly by the wallet address
 
 - **PAS balances**: Managed by PAS on behalf of the wallet address.
-```
 
 From your perspective, both belong to the same address. PAS balances are held in a derived Account object, but transfers always target the **wallet address**, not the `Account` address. The SDK resolves the underlying `Account` transparently.
 
