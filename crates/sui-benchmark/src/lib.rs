@@ -486,25 +486,17 @@ impl LocalValidatorAggregatorProxy {
         use sui_types::messages_grpc::SubmitTxRequest;
 
         // Submit to multiple validators in parallel
-        let validators: Vec<_> = self.clients.values().take(num_validators).collect();
+        let validators: Vec<_> = self.clients.values().cloned().take(num_validators).collect();
         let request = SubmitTxRequest::new_transaction(tx.clone());
 
-        let futures: Vec<_> = validators
-            .iter()
-            .map(|client| {
-                let req = request.clone();
-                async move { client.submit_transaction(req, None).await }
-            })
-            .collect();
-
-        // Fire off all submissions with a short timeout. We don't need the responses -
-        // we just need to ensure the submissions are sent to trigger amplification.
-        // The timeout prevents blocking for 30s if validators are slow to respond.
-        let _ = tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            futures::future::join_all(futures),
-        )
-        .await;
+        // Fire off all submissions as spawned tasks - don't wait for responses.
+        // We just need to ensure the submissions are sent to trigger amplification.
+        for client in validators {
+            let req = request.clone();
+            tokio::spawn(async move {
+                let _ = client.submit_transaction(req, None).await;
+            });
+        }
 
         // Use the normal path to get the final result
         self.submit_transaction_block(tx).await
@@ -1185,70 +1177,27 @@ pub fn convert_move_call_args(
 mod tests {
     use super::*;
 
-    /// Verifies that the timeout pattern used in submit_transaction_with_amplification
-    /// correctly limits blocking time when futures are slow.
+    /// Verifies that the fire-and-forget spawn pattern used in submit_transaction_with_amplification
+    /// does not block the caller, even when spawned tasks are slow.
     #[tokio::test]
-    async fn test_amplification_timeout_pattern() {
-        // Simulate slow validator responses (10 seconds each)
-        let slow_futures: Vec<_> = (0..5)
-            .map(|i| async move {
+    async fn test_amplification_spawn_does_not_block() {
+        let start = Instant::now();
+
+        // Spawn slow tasks (simulating slow validator responses)
+        for i in 0..5 {
+            tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_secs(10)).await;
                 i
-            })
-            .collect();
-
-        let start = Instant::now();
-
-        // This is the same pattern used in submit_transaction_with_amplification
-        let _ = tokio::time::timeout(
-            Duration::from_secs(2),
-            futures::future::join_all(slow_futures),
-        )
-        .await;
+            });
+        }
 
         let elapsed = start.elapsed();
 
-        // Should complete in ~2 seconds (the timeout), not 10 seconds
+        // Spawning should complete almost instantly, not wait for the tasks
         assert!(
-            elapsed < Duration::from_secs(3),
-            "Timeout should have triggered after 2s, but took {:?}",
+            elapsed < Duration::from_millis(100),
+            "Spawning should not block, but took {:?}",
             elapsed
         );
-        assert!(
-            elapsed >= Duration::from_secs(2),
-            "Should have waited for the full timeout duration, but only took {:?}",
-            elapsed
-        );
-    }
-
-    /// Verifies that fast responses complete before the timeout.
-    #[tokio::test]
-    async fn test_amplification_fast_responses() {
-        // Simulate fast validator responses (100ms each)
-        let fast_futures: Vec<_> = (0..5)
-            .map(|i| async move {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                i
-            })
-            .collect();
-
-        let start = Instant::now();
-
-        let result = tokio::time::timeout(
-            Duration::from_secs(2),
-            futures::future::join_all(fast_futures),
-        )
-        .await;
-
-        let elapsed = start.elapsed();
-
-        // Should complete quickly, not wait for the full 2 second timeout
-        assert!(
-            elapsed < Duration::from_millis(500),
-            "Fast responses should complete quickly, but took {:?}",
-            elapsed
-        );
-        // Result should be Ok (not a timeout)
-        assert!(result.is_ok(), "Fast responses should not timeout");
     }
 }
