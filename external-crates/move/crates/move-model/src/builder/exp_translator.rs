@@ -376,7 +376,8 @@ impl ExpTranslator<'_, '_, '_> {
             | EA::Value_::I16(_)
             | EA::Value_::I32(_)
             | EA::Value_::I64(_)
-            | EA::Value_::I128(_) => {
+            | EA::Value_::I128(_)
+            | EA::Value_::I256(_) => {
                 self.error(&loc, "signed integers are not supported");
                 None
             }
