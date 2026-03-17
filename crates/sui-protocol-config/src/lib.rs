@@ -302,10 +302,11 @@ const MAX_PROTOCOL_VERSION: u64 = 118;
 // Version 115: Gasless transaction drop safety.
 //              Enable address aliases on mainnet.
 //              Relax ValidDuring requirement for transactions with owned inputs.
-//              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
+//              Disable defer_unpaid_amplification (debugging).
 // Version 117: Update Sui System metadata handling.
 // Version 118: Enable the new VM.
+//              Re-enable defer_unpaid_amplification (devnet only).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4688,6 +4689,10 @@ impl ProtocolConfig {
                     // Enable new VM.
                     cfg.execution_version = Some(4);
                     cfg.feature_flags.new_vm_enabled = true;
+                    // Re-enable unpaid amplification deferral protection (devnet first)
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.defer_unpaid_amplification = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
