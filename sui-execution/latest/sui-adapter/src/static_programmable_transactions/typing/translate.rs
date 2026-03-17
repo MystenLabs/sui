@@ -5,7 +5,7 @@ use super::{ast as T, env::Env};
 use crate::{
     execution_mode::ExecutionMode,
     gas_charger::GasPayment,
-    programmable_transactions::context::EitherError,
+    static_programmable_transactions::execution::context::EitherError,
     static_programmable_transactions::{
         loading::ast::{self as L, Type},
         spanned::sp,
@@ -511,28 +511,15 @@ fn command<Mode: ExecutionMode>(
 }
 
 fn move_call_parameters<'a>(
-    env: &Env,
+    _env: &Env,
     function: &'a L::LoadedFunction,
 ) -> Vec<(&'a Type, TxContextKind)> {
-    if env.protocol_config.flexible_tx_context_positions() {
-        function
-            .signature
-            .parameters
-            .iter()
-            .map(|ty| (ty, ty.is_tx_context()))
-            .collect()
-    } else {
-        let mut kinds = function
-            .signature
-            .parameters
-            .iter()
-            .map(|ty| (ty, TxContextKind::None))
-            .collect::<Vec<_>>();
-        if let Some((ty, kind)) = kinds.last_mut() {
-            *kind = ty.is_tx_context();
-        }
-        kinds
-    }
+    function
+        .signature
+        .parameters
+        .iter()
+        .map(|ty| (ty, ty.is_tx_context()))
+        .collect()
 }
 
 fn move_call_arguments(
@@ -563,7 +550,7 @@ fn move_call_arguments(
                 "Expected {} argument{} calling function '{}::{}', but found {}",
                 num_parameters,
                 if num_parameters == 1 { "" } else { "s" },
-                function.storage_id,
+                function.version_mid,
                 function.name,
                 num_args,
             ),

@@ -34,6 +34,7 @@ use sui_indexer_alt_framework::store::Connection;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework::store::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::PrunerWatermark;
 use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_types::base_types::EpochId;
@@ -123,7 +124,6 @@ pub use migration::FileRangeEntry;
 pub use migration::FileRangeIndex;
 pub use migration::MigrationStore;
 pub use migration::WatermarkUpdateError;
-
 use uploader::PendingFileUpload;
 
 /// The operational mode of the analytics store.
@@ -628,27 +628,27 @@ impl Connection for AnalyticsConnection<'_> {
     /// Initialize watermark.
     ///
     /// In live mode: Watermarks are derived from file names, so just delegates to `committer_watermark`.
-    /// In migration mode: If no watermark exists and `default_next_checkpoint > 0`, initializes
-    /// the watermark to `default_next_checkpoint - 1` so migration starts from the configured
-    /// `first_checkpoint`.
+    /// In migration mode: Delegates to `MigrationStore::init_watermark`.
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
+        init_watermark: InitWatermark,
+    ) -> anyhow::Result<InitWatermark> {
         match &self.store.mode {
             StoreMode::Live(_) => {
                 // Live mode: derive from file names
-                Ok(self
+                let checkpoint_hi_inclusive = self
                     .committer_watermark(pipeline_task)
                     .await?
-                    .map(|w| w.checkpoint_hi_inclusive))
+                    .map(|w| w.checkpoint_hi_inclusive);
+                Ok(InitWatermark {
+                    checkpoint_hi_inclusive,
+                    ..init_watermark
+                })
             }
             StoreMode::Migration(store) => {
                 let output_prefix = self.pipeline_config(pipeline_task).output_prefix();
-                store
-                    .init_watermark(output_prefix, default_next_checkpoint)
-                    .await
+                store.init_watermark(output_prefix, init_watermark).await
             }
         }
     }

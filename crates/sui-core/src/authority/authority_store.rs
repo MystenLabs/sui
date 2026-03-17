@@ -16,7 +16,8 @@ use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
-use move_core_types::resolver::ModuleResolver;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
@@ -26,7 +27,7 @@ use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
 use sui_types::storage::{
     BackingPackageStore, FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore,
-    get_module,
+    get_module, get_package,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure};
@@ -1630,6 +1631,25 @@ impl ModuleResolver for ResolverWrapper {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.inc_cache_size_gauge();
         get_module(&*self.resolver, module_id)
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        let mut packages = [const { None }; N];
+        for (i, id) in ids.iter().enumerate() {
+            packages[i] = get_package(&*self.resolver, &ObjectID::from(*id))?;
+        }
+        Ok(packages)
+    }
+
+    fn get_packages<'a>(
+        &self,
+        ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.map(|id| get_package(&*self.resolver, &ObjectID::from(*id)))
+            .collect()
     }
 }
 

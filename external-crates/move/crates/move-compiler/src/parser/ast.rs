@@ -587,14 +587,8 @@ pub enum BinOp_ {
     Shl,
     // >>
     Shr,
-    // ..
-    Range, // spec only
 
     // Bool ops
-    // ==>
-    Implies, // spec only
-    // <==>
-    Iff,
     // &&
     And,
     // ||
@@ -1299,10 +1293,6 @@ impl BinOp_ {
     pub const GT: &'static str = ">";
     pub const LE: &'static str = "<=";
     pub const GE: &'static str = ">=";
-    pub const IMPLIES: &'static str = "==>";
-    pub const IFF: &'static str = "<==>";
-    pub const RANGE: &'static str = "..";
-
     pub fn symbol(&self) -> &'static str {
         use BinOp_ as B;
         match self {
@@ -1324,9 +1314,6 @@ impl BinOp_ {
             B::Gt => B::GT,
             B::Le => B::LE,
             B::Ge => B::GE,
-            B::Implies => B::IMPLIES,
-            B::Iff => B::IFF,
-            B::Range => B::RANGE,
         }
     }
 
@@ -1344,16 +1331,8 @@ impl BinOp_ {
             | B::Lt
             | B::Gt
             | B::Le
-            | B::Ge
-            | B::Range
-            | B::Implies
-            | B::Iff => true,
+            | B::Ge => true,
         }
-    }
-
-    pub fn is_spec_only(&self) -> bool {
-        use BinOp_ as B;
-        matches!(self, B::Range | B::Implies | B::Iff)
     }
 }
 

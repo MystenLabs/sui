@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    effects::Op,
     loaded_data::runtime_types::Type,
     views::{ValueView, ValueVisitor},
 };
@@ -13,7 +14,6 @@ use move_binary_format::{
 use move_core_types::annotated_value as A;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::Op,
     gas_algebra::AbstractMemorySize,
     runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,

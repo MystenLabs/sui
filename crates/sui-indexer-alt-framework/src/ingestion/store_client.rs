@@ -14,9 +14,9 @@ use tracing::debug;
 use tracing::error;
 
 use crate::ingestion::decode;
-use crate::ingestion::ingestion_client::FetchData;
-use crate::ingestion::ingestion_client::FetchError;
-use crate::ingestion::ingestion_client::FetchResult;
+use crate::ingestion::ingestion_client::CheckpointData;
+use crate::ingestion::ingestion_client::CheckpointError;
+use crate::ingestion::ingestion_client::CheckpointResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
 use crate::types::full_checkpoint_content::Checkpoint;
 
@@ -73,16 +73,16 @@ impl IngestionClientTrait for StoreIngestionClient {
     /// - rate limiting,
     /// - server errors (5xx),
     /// - issues getting a full response.
-    async fn fetch(&self, checkpoint: u64) -> FetchResult {
+    async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
         match self.checkpoint_bytes(checkpoint).await {
-            Ok(bytes) => Ok(FetchData::Raw(bytes)),
+            Ok(bytes) => Ok(CheckpointData::Raw(bytes)),
             Err(ObjectStoreError::NotFound { .. }) => {
                 debug!(checkpoint, "Checkpoint not found");
-                Err(FetchError::NotFound)
+                Err(CheckpointError::NotFound)
             }
             Err(error) => {
                 error!(checkpoint, "Failed to fetch checkpoint: {error}");
-                Err(FetchError::Transient {
+                Err(CheckpointError::Transient {
                     reason: "object_store",
                     error: error.into(),
                 })
@@ -143,7 +143,7 @@ pub(crate) mod tests {
         respond_with(&server, status(StatusCode::NOT_FOUND)).await;
 
         let client = remote_test_client(server.uri());
-        let error = client.fetch(42).await.unwrap_err();
+        let error = client.checkpoint(42).await.unwrap_err();
 
         assert!(matches!(error, Error::NotFound(42)));
     }
@@ -177,7 +177,7 @@ pub(crate) mod tests {
         .await;
 
         let client = remote_test_client(server.uri());
-        let checkpoint = client.fetch(42).await.unwrap();
+        let checkpoint = client.checkpoint(42).await.unwrap();
 
         assert_eq!(42, checkpoint.summary.sequence_number)
     }
@@ -202,7 +202,7 @@ pub(crate) mod tests {
         .await;
 
         let client = remote_test_client(server.uri());
-        let checkpoint = client.fetch(42).await.unwrap();
+        let checkpoint = client.checkpoint(42).await.unwrap();
 
         assert_eq!(42, checkpoint.summary.sequence_number)
     }
@@ -225,7 +225,7 @@ pub(crate) mod tests {
         .await;
 
         let client = remote_test_client(server.uri());
-        let checkpoint = client.fetch(42).await.unwrap();
+        let checkpoint = client.checkpoint(42).await.unwrap();
 
         assert_eq!(42, checkpoint.summary.sequence_number)
     }
@@ -267,7 +267,7 @@ pub(crate) mod tests {
             IngestionClient::with_store(store, test_ingestion_metrics()).unwrap();
 
         // This should timeout once, then succeed on retry
-        let checkpoint = ingestion_client.fetch(42).await.unwrap();
+        let checkpoint = ingestion_client.checkpoint(42).await.unwrap();
         assert_eq!(42, checkpoint.summary.sequence_number);
 
         // Verify that the server received exactly 2 requests (1 timeout + 1 successful retry)

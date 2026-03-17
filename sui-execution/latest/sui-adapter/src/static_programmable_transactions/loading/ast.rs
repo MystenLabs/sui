@@ -3,10 +3,14 @@
 
 use crate::{
     gas_charger::GasPayment,
-    static_programmable_transactions::linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
+    static_programmable_transactions::linkage::resolved_linkage::{
+        ExecutableLinkage, ResolvedLinkage,
+    },
 };
 use indexmap::IndexSet;
-use move_binary_format::file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex};
+use move_binary_format::file_format::{
+    AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility,
+};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
@@ -142,14 +146,17 @@ pub struct LoadedFunctionInstantiation {
 
 #[derive(Debug)]
 pub struct LoadedFunction {
-    pub storage_id: ModuleId,
-    pub runtime_id: ModuleId,
+    pub version_mid: ModuleId,
+    pub original_mid: ModuleId,
     pub name: Identifier,
     pub type_arguments: Vec<Type>,
     pub signature: LoadedFunctionInstantiation,
-    pub linkage: RootedLinkage,
+    pub linkage: ExecutableLinkage,
     pub instruction_length: CodeOffset,
     pub definition_index: FunctionDefinitionIndex,
+    pub visibility: Visibility,
+    pub is_entry: bool,
+    pub is_native: bool,
 }
 
 #[derive(Debug)]

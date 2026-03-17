@@ -8,24 +8,13 @@ task 1, lines 19-26:
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
-    location: 0x1::m,
-    indices: [],
-    offsets: [(FunctionDefinitionIndex(0), 1)],
-    message: "0x0000000000000000000000000000000000000000000000000000000000000001::m::foo at offset 1",
-}
-
-task 2, lines 28-35:
-//# run --type-args u64 --args false
-Error: Function execution failed with VMError: {
-    major_status: ABORTED,
-    sub_status: Some(0),
     location: 0x2::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
     message: "0x0000000000000000000000000000000000000000000000000000000000000002::m::foo at offset 1",
 }
 
-task 3, lines 37-44:
+task 2, lines 28-35:
 //# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
@@ -36,8 +25,8 @@ Error: Function execution failed with VMError: {
     message: "0x0000000000000000000000000000000000000000000000000000000000000003::m::foo at offset 1",
 }
 
-task 4, lines 46-53:
-//# run --type-args 0x1::M::K --args false
+task 3, lines 37-44:
+//# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
@@ -47,8 +36,8 @@ Error: Function execution failed with VMError: {
     message: "0x0000000000000000000000000000000000000000000000000000000000000004::m::foo at offset 1",
 }
 
-task 5, lines 55-62:
-//# run --type-args u64 --args false
+task 4, lines 46-53:
+//# run --type-args 0x1::M::K --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
@@ -58,7 +47,7 @@ Error: Function execution failed with VMError: {
     message: "0x0000000000000000000000000000000000000000000000000000000000000005::m::foo at offset 1",
 }
 
-task 6, lines 64-71:
+task 5, lines 55-62:
 //# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
@@ -69,7 +58,7 @@ Error: Function execution failed with VMError: {
     message: "0x0000000000000000000000000000000000000000000000000000000000000006::m::foo at offset 1",
 }
 
-task 7, lines 73-80:
+task 6, lines 64-71:
 //# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
@@ -80,7 +69,7 @@ Error: Function execution failed with VMError: {
     message: "0x0000000000000000000000000000000000000000000000000000000000000007::m::foo at offset 1",
 }
 
-task 8, lines 82-89:
+task 7, lines 73-80:
 //# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
@@ -89,4 +78,15 @@ Error: Function execution failed with VMError: {
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
     message: "0x0000000000000000000000000000000000000000000000000000000000000008::m::foo at offset 1",
+}
+
+task 8, lines 82-89:
+//# run --type-args u64 --args false
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(0),
+    location: 0x9::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0x0000000000000000000000000000000000000000000000000000000000000009::m::foo at offset 1",
 }

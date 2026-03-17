@@ -59,6 +59,25 @@ const config = {
   
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
+    function llmsTxtDirectivePlugin() {
+      return {
+        name: 'llms-txt-directive-plugin',
+        injectHtmlTags() {
+          return {
+            postBodyTags: [
+              {
+                tagName: 'a',
+                attributes: {
+                  href: '/llms.txt',
+                  hidden: 'hidden',
+                },
+                innerHTML: 'llms.txt',
+              },
+            ],
+          };
+        },
+      };
+    },
      function aliasPlugin() {
       return {
         name: 'custom-aliases',
@@ -222,6 +241,9 @@ const config = {
       "data-answer-copy-button-bg-color" : "#FFFFFF",
       "data-thread-clear-button-bg-color" : "#FFFFFF",
       "data-modal-image": "img/logo.svg",
+      "data-mcp-enabled": "true",
+      "data-mcp-server-url": "https://sui.mcp.kapa.ai",
+      "data-mcp-button-text": "Use Sui MCP Server",
       async: true,
     },
   ],

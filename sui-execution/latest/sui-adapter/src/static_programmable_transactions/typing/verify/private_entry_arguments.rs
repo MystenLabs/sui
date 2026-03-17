@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use crate::execution_mode::ExecutionMode;
 use crate::sp;
 use crate::static_programmable_transactions::{env::Env, typing::ast as T};
-use move_binary_format::{CompiledModule, file_format::Visibility};
+use move_binary_format::file_format::Visibility;
 use sui_types::error::SafeIndex;
 use sui_types::{
     error::{ExecutionError, command_argument_error},
@@ -471,7 +471,7 @@ fn argument(
 ///
 /// Returns true iff any return type is a hot potato
 fn move_call<Mode: ExecutionMode>(
-    env: &Env,
+    _env: &Env,
     context: &mut Context,
     call: &T::MoveCall,
     argument_cliques: &[(u16, CliqueID)],
@@ -480,24 +480,9 @@ fn move_call<Mode: ExecutionMode>(
         function,
         arguments: _,
     } = call;
-    let module = env.module_definition(&function.runtime_id, &function.linkage)?;
-    let module: &CompiledModule = module.as_ref();
-    let Some((_index, fdef)) = module.find_function_def_by_name(function.name.as_str()) else {
-        invariant_violation!(
-            "Could not resolve function '{}' in module {}. \
-            This should have been checked when linking",
-            &function.name,
-            module.self_id(),
-        );
-    };
-    let visibility = fdef.visibility;
-    let is_entry = fdef.is_entry;
-    // check rules around hot arguments and entry functions
-    let is_non_public = if env.protocol_config.restrict_hot_or_not_entry_functions() {
-        !matches!(visibility, Visibility::Public)
-    } else {
-        matches!(visibility, Visibility::Private)
-    };
+    let visibility = function.visibility;
+    let is_entry = function.is_entry;
+    let is_non_public = !matches!(visibility, Visibility::Public);
     if is_entry && is_non_public && !Mode::allow_arbitrary_values() {
         let mut hot_argument: Option<u16> = None;
         for (idx, clique) in argument_cliques {

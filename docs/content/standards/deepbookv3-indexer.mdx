@@ -1013,6 +1013,149 @@ produces a response similar to
 </details>
 
 <details>
+<summary>Get margin supply</summary>
+
+```http
+/margin_supply
+```
+
+Returns the total supply balance for each margin pool, queried on-chain via the margin pool contract.
+
+#### Response
+
+```json
+{
+    "0x2::sui::SUI": 1000000000000,
+    "0xdba3...::usdc::USDC": 5000000000000
+}
+```
+
+A map of asset type to total supply amount (in smallest units).
+
+</details>
+
+<details>
+<summary>Get pool creation events</summary>
+
+```http
+/pool_created
+```
+
+Returns events for when DeepBook pools are created.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "pool_id": "0x1234...",
+        "taker_fee": 1000000,
+        "maker_fee": 500000,
+        "tick_size": 10000,
+        "lot_size": 10000000,
+        "min_size": 100000000,
+        "whitelisted_pool": false,
+        "treasury_address": "0x5678..."
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get book parameters updated events</summary>
+
+```http
+/book_params_updated?pool_id=<ID>
+```
+
+Returns the most recent book parameter update event for a pool. The `pool_id` parameter is required.
+
+#### Response
+
+```json
+{
+    "event_digest": "0xabc123...",
+    "digest": "0xdef456...",
+    "sender": "0x1111...",
+    "checkpoint": 12345678,
+    "checkpoint_timestamp_ms": 1738000000000,
+    "package": "0x2222...",
+    "pool_id": "0x1234...",
+    "tick_size": 10000,
+    "lot_size": 10000000,
+    "min_size": 100000000,
+    "onchain_timestamp": 1738000000000
+}
+```
+
+</details>
+
+<details>
+<summary>Get user portfolio</summary>
+
+```http
+/portfolio/:wallet_address
+```
+
+Returns a comprehensive portfolio view for a wallet address, including margin positions, collateral balances, LP positions, and a summary of total equity.
+
+#### Response
+
+```json
+{
+    "margin_positions": [
+        {
+            "margin_manager_id": "0x1234...",
+            "pool": "SUI_USDC",
+            "base_asset_symbol": "SUI",
+            "quote_asset_symbol": "USDC",
+            "base_asset": 100.0,
+            "quote_asset": 500.0,
+            "base_debt": 50.0,
+            "quote_debt": 200.0,
+            "base_asset_usd": 350.0,
+            "quote_asset_usd": 500.0,
+            "base_debt_usd": 175.0,
+            "quote_debt_usd": 200.0,
+            "total_debt_usd": 375.0,
+            "net_value_usd": 475.0,
+            "risk_ratio": 2.27
+        }
+    ],
+    "collateral_balances": [
+        {
+            "asset": "SUI",
+            "balance": 100.0,
+            "balance_usd": 350.0
+        }
+    ],
+    "lp_positions": [
+        {
+            "margin_pool_id": "0x5678...",
+            "asset": "USDC",
+            "supplied": 1000.0,
+            "shares": 1000000000,
+            "supplied_usd": 1000.0
+        }
+    ],
+    "summary": {
+        "total_equity_usd": 1850.0,
+        "total_debt_usd": 375.0,
+        "net_value_usd": 1475.0
+    }
+}
+```
+
+</details>
+
+<details>
 <summary>Get referral fee events</summary>
 
 ```http

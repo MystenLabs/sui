@@ -1,0 +1,33 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 3-6:
+//# publish-and-call --call 0x42::n::make
+return values: 0
+
+
+task 2, lines 8-11:
+//# publish-and-call --location 0x2 --linkage 0x42=>0x2 -- --call 0x42::n::make
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(0),
+    location: 0x42::n,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0x0000000000000000000000000000000000000000000000000000000000000042::n::make at offset 1",
+}
+
+task 3, lines 13-16:
+//# publish-and-call --location 0x3 --linkage 0x42=>0x3 -- --call 0x42::n::make
+return values: 1
+
+
+task 4, line 18:
+//# run 0x42::n::make
+return values: 0
+
+task 5, line 20:
+//# run 0x42::n::make --linkage 0x42=>0x3
+return values: 1

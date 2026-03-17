@@ -26,6 +26,7 @@ use sui_types::{
     effects::{InputConsensusObject, TransactionEffectsAPI},
     gas::GasCostSummary,
     gas_coin::GAS,
+    object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
@@ -3692,7 +3693,7 @@ async fn test_two_large_reservations_overflow() {
 #[sim_test]
 async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
     use sui_json_rpc_api::{ReadApiClient, WriteApiClient};
-    use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+    use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions};
     use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 
     let mut test_env = TestEnvBuilder::new()
@@ -3731,14 +3732,18 @@ async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
     let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
     let tx_digest = *signed_tx.digest();
 
-    // Execute via JSON-RPC with show_balance_changes: true
+    // Execute via JSON-RPC with show_balance_changes and show_effects
     #[allow(deprecated)]
     let rpc_client = test_env.cluster.rpc_client();
     let execute_response = rpc_client
         .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionBlockResponseOptions::new().with_balance_changes()),
+            Some(
+                SuiTransactionBlockResponseOptions::new()
+                    .with_balance_changes()
+                    .with_effects(),
+            ),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -3748,73 +3753,119 @@ async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
     let get_response = rpc_client
         .get_transaction_block(
             tx_digest,
-            Some(SuiTransactionBlockResponseOptions::new().with_balance_changes()),
+            Some(
+                SuiTransactionBlockResponseOptions::new()
+                    .with_balance_changes()
+                    .with_effects(),
+            ),
         )
         .await
         .expect("Get transaction should succeed");
 
+    // Get gas used from effects to verify exact amounts
+    let effects = execute_response
+        .effects
+        .as_ref()
+        .expect("effects should be present");
+    let gas_used = effects.gas_cost_summary();
+    let net_gas_cost = gas_used.computation_cost + gas_used.storage_cost - gas_used.storage_rebate;
+
+    let execute_balance_changes = execute_response
+        .balance_changes
+        .as_ref()
+        .expect("execute_transaction_block should return balance_changes");
+
     let get_balance_changes = get_response
         .balance_changes
         .as_ref()
-        .expect("balance_changes should be present in get_transaction_block response");
+        .expect("get_transaction_block should return balance_changes");
 
-    // Verify that get_transaction_block returns balance changes
+    // Verify transaction succeeded
     assert!(
-        !get_balance_changes.is_empty(),
-        "get_transaction_block should return non-empty balance_changes, got: {:?}",
-        get_balance_changes
+        effects.status().is_ok(),
+        "Transaction should succeed, got: {:?}",
+        effects.status()
     );
 
-    // Verify the receiver's balance change matches the withdrawal amount
-    let receiver_change = get_balance_changes
+    // There should be exactly 2 balance changes: sender (negative) and receiver (positive)
+    assert_eq!(
+        execute_balance_changes.len(),
+        2,
+        "Expected 2 balance changes (sender and receiver), got: {:?}",
+        execute_balance_changes
+    );
+
+    // Find sender's and receiver's balance changes from execute_transaction_block
+    let sender_change = execute_balance_changes
         .iter()
-        .find(|c| c.owner == sui_types::object::Owner::AddressOwner(receiver))
+        .find(|bc| bc.owner == Owner::AddressOwner(sender))
+        .expect("Should have balance change for sender");
+    let receiver_change = execute_balance_changes
+        .iter()
+        .find(|bc| bc.owner == Owner::AddressOwner(receiver))
         .expect("Should have balance change for receiver");
+
+    // Verify coin type is SUI for both
+    assert_eq!(
+        sender_change.coin_type,
+        GAS::type_tag(),
+        "Sender balance change should be SUI"
+    );
+    assert_eq!(
+        receiver_change.coin_type,
+        GAS::type_tag(),
+        "Receiver balance change should be SUI"
+    );
+
+    // Verify receiver gets exactly the withdraw amount
     assert_eq!(
         receiver_change.amount, withdraw_amount as i128,
-        "Receiver should receive exactly the withdrawal amount"
+        "Receiver should receive exactly the withdraw amount"
     );
 
-    // Verify the sender has a negative balance change (withdrawal + gas)
-    let sender_change = get_balance_changes
-        .iter()
-        .find(|c| c.owner == sui_types::object::Owner::AddressOwner(sender))
-        .expect("Should have balance change for sender");
-    assert!(
-        sender_change.amount < 0,
-        "Sender balance change should be negative, got: {}",
-        sender_change.amount
-    );
-    assert!(
-        sender_change.amount.unsigned_abs() >= withdraw_amount as u128,
-        "Sender should lose at least the withdrawal amount, got: {}",
-        sender_change.amount
-    );
-
-    // The bug: execute_transaction_block returns None or empty balance_changes
-    // while get_transaction_block returns the correct balance changes
-    let execute_balance_changes = execute_response.balance_changes.as_ref();
-
-    // This assertion demonstrates the bug - execute_transaction_block should return
-    // the same balance changes as get_transaction_block
-    assert!(
-        execute_balance_changes.is_some() && !execute_balance_changes.unwrap().is_empty(),
-        "BUG: execute_transaction_block should return non-empty balance_changes. \
-         Got {:?} while get_transaction_block returned: {:?}",
-        execute_balance_changes,
-        get_balance_changes
-    );
-
-    // Verify execute_transaction_block returns the same balance changes
-    let execute_balance_changes = execute_balance_changes.unwrap();
-    let exec_receiver_change = execute_balance_changes
-        .iter()
-        .find(|c| c.owner == sui_types::object::Owner::AddressOwner(receiver))
-        .expect("execute_transaction_block should have balance change for receiver");
+    // Verify sender's exact balance change: -(withdraw_amount + net_gas_cost)
+    let expected_sender_change = -((withdraw_amount as i128) + (net_gas_cost as i128));
     assert_eq!(
-        exec_receiver_change.amount, withdraw_amount as i128,
-        "execute_transaction_block: Receiver should receive exactly the withdrawal amount"
+        sender_change.amount, expected_sender_change,
+        "Sender should spend exactly withdraw_amount ({}) + net_gas_cost ({})",
+        withdraw_amount, net_gas_cost
     );
+
+    // Verify the total balance change equals exactly the negative net gas cost
+    // (receiver gains withdraw_amount, sender loses withdraw_amount + gas, net = -gas)
+    let total_change: i128 = execute_balance_changes.iter().map(|bc| bc.amount).sum();
+    assert_eq!(
+        total_change,
+        -(net_gas_cost as i128),
+        "Total balance change should equal negative net gas cost"
+    );
+
+    // Verify get_transaction_block returns identical balance changes
+    assert_eq!(
+        execute_balance_changes.len(),
+        get_balance_changes.len(),
+        "execute_transaction_block and get_transaction_block should return same number of balance changes"
+    );
+    let get_sender_change = get_balance_changes
+        .iter()
+        .find(|bc| bc.owner == Owner::AddressOwner(sender))
+        .expect("get_transaction_block should have balance change for sender");
+    let get_receiver_change = get_balance_changes
+        .iter()
+        .find(|bc| bc.owner == Owner::AddressOwner(receiver))
+        .expect("get_transaction_block should have balance change for receiver");
+    assert_eq!(
+        sender_change.amount, get_sender_change.amount,
+        "Sender balance change should match between execute and get"
+    );
+    assert_eq!(
+        receiver_change.amount, get_receiver_change.amount,
+        "Receiver balance change should match between execute and get"
+    );
+
+    // Verify sender's address balance was correctly decremented
+    let expected_remaining_balance = deposit_amount - withdraw_amount - net_gas_cost;
+    test_env.verify_accumulator_exists(sender, expected_remaining_balance);
 }
 
 fn create_redeem_and_transfer_transaction(

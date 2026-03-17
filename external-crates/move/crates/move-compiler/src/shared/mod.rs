@@ -7,7 +7,7 @@ use crate::{
         ast as G,
         visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor, CFGIRVisitorObj},
     },
-    command_line as cli,
+    command_line as cli, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics, DiagnosticsFormat,
         codes::{DiagnosticsID, Severity},
@@ -73,6 +73,24 @@ pub use move_core_types::parsing::parser::{
     NumberFormat, parse_address_number as parse_address, parse_u8, parse_u16, parse_u32, parse_u64,
     parse_u128, parse_u256,
 };
+
+//**************************************************************************************************
+// Spec Deprecation
+//**************************************************************************************************
+
+pub fn spec_deprecated_diag(loc: Loc, is_error: bool) -> Diagnostic {
+    diag!(
+        if is_error {
+            Uncategorized::DeprecatedSpecItem
+        } else {
+            Uncategorized::DeprecatedWillBeRemoved
+        },
+        (
+            loc,
+            "Specification blocks are deprecated and are no longer used"
+        )
+    )
+}
 
 //**************************************************************************************************
 // Address

@@ -26,6 +26,7 @@ use sui_indexer_alt_schema::objects::StoredCoinBalanceBucketDeletionReference;
 use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
 use sui_indexer_alt_schema::schema::coin_balance_buckets;
 use sui_indexer_alt_schema::schema::coin_balance_buckets_deletion_reference;
+use sui_sql_macro::query;
 
 use crate::handlers::checkpoint_input_objects;
 
@@ -202,7 +203,6 @@ impl Handler for CoinBalanceBuckets {
         Ok(count + deleted_refs)
     }
 
-    // TODO: Add tests for this function.
     async fn prune<'a>(
         &self,
         from: u64,
@@ -222,15 +222,14 @@ impl Handler for CoinBalanceBuckets {
         // coin_balance_buckets_deletion_reference, and consequently no records to delete from the
         // main table. Pruning is thus idempotent after the initial run.
         //
-        // TODO: use sui_sql_macro's query!
-        let query = format!(
-            "
+        let q = query!(
+            r#"
             -- Delete reference records and return immediate predecessor refs to the main table.
             WITH deletion_refs AS (
                 DELETE FROM
                     coin_balance_buckets_deletion_reference dr
                 WHERE
-                    {} <= cp_sequence_number AND cp_sequence_number < {}
+                    {BigInt} <= cp_sequence_number AND cp_sequence_number < {BigInt}
                 RETURNING
                     object_id, (
                     SELECT
@@ -260,8 +259,9 @@ impl Handler for CoinBalanceBuckets {
             SELECT
                 (SELECT COUNT(*) FROM deleted_coins) AS deleted_coins,
                 (SELECT COUNT(*) FROM deletion_refs) AS deleted_refs
-            ",
-            from, to_exclusive
+            "#,
+            from as i64,
+            to_exclusive as i64,
         );
 
         #[derive(QueryableByName)]
@@ -275,9 +275,7 @@ impl Handler for CoinBalanceBuckets {
         let CountResult {
             deleted_coins,
             deleted_refs,
-        } = diesel::sql_query(query)
-            .get_result::<CountResult>(conn)
-            .await?;
+        } = q.get_result::<CountResult>(conn).await?;
 
         ensure!(
             deleted_coins == deleted_refs,

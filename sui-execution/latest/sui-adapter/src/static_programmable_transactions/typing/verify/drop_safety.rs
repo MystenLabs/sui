@@ -230,7 +230,7 @@ mod verify {
     }
 
     impl Context {
-        fn new(env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
+        fn new(_env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
             let objects = ast.objects.iter().map(|_| Some(Value)).collect::<Vec<_>>();
             let withdrawals = ast
                 .withdrawals
@@ -243,12 +243,11 @@ mod verify {
                 .iter()
                 .map(|_| Some(Value))
                 .collect::<Vec<_>>();
-            let has_gas_coin = if env.protocol_config.gasless_transaction_drop_safety() {
-                ast.gas_payment.is_some()
+            let gas_coin = if ast.gas_payment.is_none() {
+                None
             } else {
-                true
+                Some(Value)
             };
-            let gas_coin = if !has_gas_coin { None } else { Some(Value) };
             Ok(Self {
                 tx_context: Some(Value),
                 gas_coin,

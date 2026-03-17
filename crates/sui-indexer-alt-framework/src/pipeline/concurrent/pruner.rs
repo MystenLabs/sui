@@ -153,7 +153,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
                     Ok(None) => {
                         guard.stop_and_record();
-                        warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
+                        info!(pipeline = H::NAME, "No watermark for pipeline, skipping");
                         continue;
                     }
 
@@ -535,7 +535,7 @@ mod tests {
 
         let watermark = MockWatermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: 3,
+            checkpoint_hi_inclusive: Some(3),
             tx_hi: 9,
             timestamp_ms_hi_inclusive: timestamp,
             reader_lo: 3,
@@ -614,7 +614,7 @@ mod tests {
 
         let watermark = MockWatermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: 3,
+            checkpoint_hi_inclusive: Some(3),
             tx_hi: 9,
             timestamp_ms_hi_inclusive: timestamp,
             reader_lo: 3,
@@ -680,7 +680,7 @@ mod tests {
 
         let watermark = MockWatermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: 4,
+            checkpoint_hi_inclusive: Some(4),
             tx_hi: 8,
             timestamp_ms_hi_inclusive: timestamp,
             reader_lo: 4,        // Allow pruning up to checkpoint 4 (exclusive)

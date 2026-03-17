@@ -535,7 +535,7 @@ mod tests {
         // Verify watermark was updated
         {
             let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+            assert_eq!(watermark.checkpoint_hi_inclusive, Some(2));
             assert_eq!(watermark.tx_hi, 2);
         }
 
@@ -581,7 +581,7 @@ mod tests {
         // Verify watermark was updated
         {
             let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 7);
+            assert_eq!(watermark.checkpoint_hi_inclusive, Some(7));
             assert_eq!(watermark.tx_hi, 7);
         }
     }
@@ -609,7 +609,7 @@ mod tests {
         // Verify watermark was updated
         {
             let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+            assert_eq!(watermark.checkpoint_hi_inclusive, Some(2));
             assert_eq!(watermark.tx_hi, 2);
         }
 

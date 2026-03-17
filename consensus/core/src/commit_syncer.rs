@@ -59,7 +59,7 @@ use crate::{
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::NetworkClient,
+    network::ValidatorNetworkClient,
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
@@ -83,7 +83,7 @@ impl CommitSyncerHandle {
     }
 }
 
-pub(crate) struct CommitSyncer<C: NetworkClient> {
+pub(crate) struct CommitSyncer<C: ValidatorNetworkClient> {
     // States shared by scheduler and fetch tasks.
 
     // Shared components wrapper.
@@ -108,7 +108,7 @@ pub(crate) struct CommitSyncer<C: NetworkClient> {
     synced_commit_index: CommitIndex,
 }
 
-impl<C: NetworkClient> CommitSyncer<C> {
+impl<C: ValidatorNetworkClient> CommitSyncer<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
@@ -759,7 +759,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
     }
 }
 
-struct Inner<C: NetworkClient> {
+struct Inner<C: ValidatorNetworkClient> {
     context: Arc<Context>,
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
@@ -771,7 +771,7 @@ struct Inner<C: NetworkClient> {
     dag_state: Arc<RwLock<DagState>>,
 }
 
-impl<C: NetworkClient> Inner<C> {
+impl<C: ValidatorNetworkClient> Inner<C> {
     /// Verifies the commits and also certifies them using the provided vote blocks for the last commit. The
     /// method returns the trusted commits and the votes as verified blocks.
     fn verify_commits(
@@ -882,7 +882,7 @@ mod tests {
         core_thread::MockCoreThreadDispatcher,
         dag_state::DagState,
         error::ConsensusResult,
-        network::{BlockStream, NetworkClient},
+        network::{BlockStream, ValidatorNetworkClient},
         round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         transaction_certifier::TransactionCertifier,
@@ -892,16 +892,7 @@ mod tests {
     struct FakeNetworkClient {}
 
     #[async_trait::async_trait]
-    impl NetworkClient for FakeNetworkClient {
-        async fn send_block(
-            &self,
-            _peer: AuthorityIndex,
-            _serialized_block: &VerifiedBlock,
-            _timeout: Duration,
-        ) -> ConsensusResult<()> {
-            unimplemented!("Unimplemented")
-        }
-
+    impl ValidatorNetworkClient for FakeNetworkClient {
         async fn subscribe_blocks(
             &self,
             _peer: AuthorityIndex,
@@ -945,6 +936,16 @@ mod tests {
             _peer: AuthorityIndex,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+            unimplemented!("Unimplemented")
+        }
+
+        #[cfg(test)]
+        async fn send_block(
+            &self,
+            _peer: AuthorityIndex,
+            _block: &VerifiedBlock,
+            _timeout: Duration,
+        ) -> ConsensusResult<()> {
             unimplemented!("Unimplemented")
         }
     }

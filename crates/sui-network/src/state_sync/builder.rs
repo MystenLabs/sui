@@ -6,6 +6,7 @@ use super::{
     metrics::Metrics,
     server::{CheckpointContentsDownloadLimitLayer, Server, SizeLimitLayer},
 };
+use crate::discovery;
 use anemo::codegen::InboundRequestLayer;
 use anemo_tower::{inflight_limit, rate_limit};
 use std::{
@@ -27,6 +28,7 @@ pub struct Builder<S> {
     config: Option<StateSyncConfig>,
     metrics: Option<Metrics>,
     archive_config: Option<ArchiveReaderConfig>,
+    discovery_sender: Option<discovery::Sender>,
 }
 
 impl Builder<()> {
@@ -37,6 +39,7 @@ impl Builder<()> {
             config: None,
             metrics: None,
             archive_config: None,
+            discovery_sender: None,
         }
     }
 }
@@ -48,7 +51,13 @@ impl<S> Builder<S> {
             config: self.config,
             metrics: self.metrics,
             archive_config: self.archive_config,
+            discovery_sender: self.discovery_sender,
         }
+    }
+
+    pub fn discovery_sender(mut self, sender: discovery::Sender) -> Self {
+        self.discovery_sender = Some(sender);
+        self
     }
 
     pub fn config(mut self, config: StateSyncConfig) -> Self {
@@ -132,6 +141,7 @@ where
             config,
             metrics,
             archive_config,
+            discovery_sender,
         } = self;
         let store = store.unwrap();
         let config = config.unwrap_or_default();
@@ -144,6 +154,7 @@ where
         let handle = Handle {
             sender,
             checkpoint_event_sender: checkpoint_event_sender.clone(),
+            metrics: metrics.clone(),
         };
         let peer_heights = PeerHeights {
             peers: HashMap::new(),
@@ -179,6 +190,7 @@ where
                 checkpoint_event_sender,
                 metrics,
                 archive_config,
+                discovery_sender,
             },
             server,
         )
@@ -195,6 +207,7 @@ pub struct UnstartedStateSync<S> {
     pub(super) checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     pub(super) metrics: Metrics,
     pub(super) archive_config: Option<ArchiveReaderConfig>,
+    pub(super) discovery_sender: Option<discovery::Sender>,
 }
 
 impl<S> UnstartedStateSync<S>
@@ -212,6 +225,7 @@ where
             checkpoint_event_sender,
             metrics,
             archive_config,
+            discovery_sender,
         } = self;
 
         (
@@ -230,6 +244,7 @@ where
                 metrics,
                 sync_checkpoint_from_archive_task: None,
                 archive_config,
+                discovery_sender,
             },
             handle,
         )

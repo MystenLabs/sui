@@ -75,6 +75,19 @@ const guides = [
           'guides/developer/objects/transfers/transfer-to-object',
         ],
       },
+      {
+        type: 'category',
+        label: 'Object Display',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/objects/display/index',
+        },
+        items: [
+          'guides/developer/objects/display/display-overview',
+          'guides/developer/objects/display/using-display',
+          'guides/developer/objects/display/display-preview'
+        ],
+      },
       'guides/developer/objects/derived-objects',
       {
         type: 'category',
@@ -140,7 +153,6 @@ const guides = [
           'guides/developer/transactions/transaction-auth/intent-signing',
           'guides/developer/transactions/transaction-auth/multisig',
           'guides/developer/transactions/transaction-auth/offline-signing',
-		  'guides/developer/transactions/transaction-auth/address-aliases',
         ],
       },
       'guides/developer/transactions/sponsor-txn',
@@ -170,6 +182,71 @@ const guides = [
           'guides/developer/accessing-data/custom-indexer/build',
           'guides/developer/accessing-data/custom-indexer/indexer-walrus',
           'guides/developer/accessing-data/custom-indexer/bring-your-own-store',
+        ],
+      },
+    ],
+  },
+  {
+    type: 'category',
+    label: 'Digital Assets',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/digital-assets/index',
+    },
+    items: [
+      'guides/developer/digital-assets/types-of-tokens',
+      {
+        type: 'category',
+        label: 'Fungible Tokens',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/digital-assets/fungible-tokens/index',
+        },
+        items: [
+          'guides/developer/digital-assets/fungible-tokens/create-a-fungible-token',
+          'guides/developer/digital-assets/fungible-tokens/regulated-tokens',
+          'guides/developer/digital-assets/fungible-tokens/token-vesting-strategies',
+          'guides/developer/digital-assets/fungible-tokens/integrating-with-stablecoins',
+        ],
+      },
+      {
+        type: 'category',
+        label: 'Non-Fungible Tokens',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/digital-assets/non-fungible-tokens/index',
+        },
+        items: [
+          'guides/developer/digital-assets/non-fungible-tokens/create-nft',
+          'guides/developer/digital-assets/non-fungible-tokens/asset-tokenization',
+          'guides/developer/digital-assets/non-fungible-tokens/deploy-tokenized-asset',
+        ],
+      },
+      'guides/developer/digital-assets/permissioned-assets',
+      'guides/developer/digital-assets/gasless-transactions',
+      {
+        type: 'category',
+        label: 'Address Management',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/digital-assets/address-management/index',
+        },
+        items: [
+          'guides/developer/digital-assets/address-management/migrate-address-balances',
+        ],
+      },
+      {
+        type: 'category',
+        label: 'Examples and Patterns',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/digital-assets/examples-patterns/index',
+        },
+        items: [
+          'guides/developer/digital-assets/examples-patterns/in-game-currency',
+          'guides/developer/digital-assets/examples-patterns/loyalty-tokens',
+          'guides/developer/digital-assets/examples-patterns/nft-rental',
+          'guides/developer/digital-assets/examples-patterns/soulbound-tokens',
         ],
       },
     ],

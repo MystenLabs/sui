@@ -423,7 +423,7 @@ mod tests {
 
         // Verify watermark progression
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 3);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(3));
     }
 
     #[tokio::test]
@@ -444,7 +444,7 @@ mod tests {
 
         // Verify watermark hasn't progressed past 2
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(2));
 
         // Send checkpoint 3 to fill the gap
         setup
@@ -458,7 +458,7 @@ mod tests {
 
         // Verify watermark has progressed to 4
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 4);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(4));
     }
 
     #[tokio::test]
@@ -486,7 +486,7 @@ mod tests {
 
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(1));
     }
 
     #[tokio::test]
@@ -519,7 +519,7 @@ mod tests {
 
         // Verify watermark has progressed after retry
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 10);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(10));
     }
 
     #[tokio::test]
@@ -560,7 +560,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1_200)).await;
 
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 11);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(11));
     }
 
     #[tokio::test]
@@ -601,7 +601,7 @@ mod tests {
 
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(1));
     }
 
     #[tokio::test]
@@ -635,6 +635,6 @@ mod tests {
 
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(1));
     }
 }

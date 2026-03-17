@@ -1414,8 +1414,6 @@ fn binary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
 
             O::Le => B::Le,
             O::Ge => B::Ge,
-
-            O::Range | O::Implies | O::Iff => panic!("specification operator unexpected"),
         },
     ));
 }

@@ -62,7 +62,8 @@ Use `executeConditionalOrders` to execute conditional orders that have been trig
 
 **Parameters**
 
-- `marginManagerKey`: String that identifies the margin manager.
+- `managerAddress`: String representing the address of the margin manager whose orders to execute.
+- `poolKey`: String that identifies the DeepBook pool.
 - `maxOrdersToExecute`: Number representing the maximum number of orders to execute in this call.
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="executeConditionalOrders" signatureOnly />
@@ -132,21 +133,9 @@ Query a specific conditional order by ID.
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="conditionalOrder" signatureOnly />
 
-### `triggerBelowOrders`, `triggerAboveOrders`
-
-Query the lists of conditional orders sorted by trigger price.
-
-<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="triggerBelowOrders,triggerAboveOrders" signatureOnly />
-
-### `numConditionalOrders`
-
-Query the total number of conditional orders for a margin manager.
-
-<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="numConditionalOrders" signatureOnly />
-
 ### `lowestTriggerAbovePrice`, `highestTriggerBelowPrice`
 
-Query trigger prices for conditional orders.
+Query trigger prices for conditional orders. `lowestTriggerAbovePrice` returns the lowest trigger price among trigger-above orders (or `max_u64` if none exist). `highestTriggerBelowPrice` returns the highest trigger price among trigger-below orders (or `0` if none exist).
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="lowestTriggerAbovePrice,highestTriggerBelowPrice" signatureOnly />
 
@@ -200,8 +189,8 @@ const setTakeProfit = (tx: Transaction) => {
 ```tsx
 // Example: Execute conditional orders as a keeper
 const executeOrders = (tx: Transaction) => {
-	const managerKey = 'MARGIN_MANAGER_1';
+	const managerAddress = '0x...'; // Address of margin manager
 	// Execute up to 10 triggered orders
-	traderClient.marginTPSL.executeConditionalOrders(managerKey, 10)(tx);
+	traderClient.marginTPSL.executeConditionalOrders(managerAddress, 'SUI_USDC', 10)(tx);
 };
 ```

@@ -32,7 +32,10 @@ use crate::{
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{BlockStream, ExtendedSerializedBlock, NetworkService},
+    network::{
+        BlockStream, ExtendedSerializedBlock, NodeId, ObserverNetworkService,
+        ValidatorNetworkService,
+    },
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
@@ -152,7 +155,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
 }
 
 #[async_trait]
-impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
+impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     async fn handle_send_block(
         &self,
         peer: AuthorityIndex,
@@ -643,6 +646,32 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     }
 }
 
+#[async_trait]
+impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
+    async fn handle_fetch_blocks(
+        &self,
+        _peer: NodeId,
+        _block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        // TODO: implement observer fetch blocks, similar to validator fetch_blocks but
+        // without highest_accepted_rounds.
+        Err(ConsensusError::NetworkRequest(
+            "Observer fetch blocks not yet implemented".to_string(),
+        ))
+    }
+
+    async fn handle_fetch_commits(
+        &self,
+        _peer: NodeId,
+        _commit_range: CommitRange,
+    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+        // TODO: implement observer fetch commits, similar to validator fetch_commits.
+        Err(ConsensusError::NetworkRequest(
+            "Observer fetch commits not yet implemented".to_string(),
+        ))
+    }
+}
+
 struct Counter {
     count: usize,
     subscriptions_by_authority: Vec<usize>,
@@ -831,7 +860,9 @@ mod tests {
         core_thread::{CoreError, CoreThreadDispatcher},
         dag_state::DagState,
         error::ConsensusResult,
-        network::{BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkService},
+        network::{
+            BlockStream, ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService,
+        },
         round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
@@ -900,7 +931,7 @@ mod tests {
     struct FakeNetworkClient {}
 
     #[async_trait]
-    impl NetworkClient for FakeNetworkClient {
+    impl ValidatorNetworkClient for FakeNetworkClient {
         async fn send_block(
             &self,
             _peer: AuthorityIndex,

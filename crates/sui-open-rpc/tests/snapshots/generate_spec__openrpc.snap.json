@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.68.0"
+    "version": "1.69.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "116",
+              "maxSupportedProtocolVersion": "118",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1400,7 +1400,9 @@
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
                 "native_charging_v2": false,
+                "new_vm_enabled": false,
                 "no_extraneous_module_bytes": false,
+                "normalize_depth_formula": false,
                 "normalize_ptb_arguments": false,
                 "object_runtime_charge_cache_load_gas": false,
                 "package_digest_hash_module": false,

@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 116;
+const MAX_PROTOCOL_VERSION: u64 = 118;
 
 // Record history of protocol version allocations here:
 //
@@ -304,6 +304,8 @@ const MAX_PROTOCOL_VERSION: u64 = 116;
 //              Relax ValidDuring requirement for transactions with owned inputs.
 //              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
+// Version 117: Update Sui System metadata handling.
+// Version 118: Enable the new VM.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -951,6 +953,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops: bool,
 
+    // If true, normalize depth formula to not be empty for zero depth.
+    #[serde(skip_serializing_if = "is_false")]
+    normalize_depth_formula: bool,
+
     // If true, skip GC'ed accept votes in CommitFinalizer.
     #[serde(skip_serializing_if = "is_false")]
     consensus_skip_gced_accept_votes: bool,
@@ -1019,6 +1025,10 @@ struct FeatureFlags {
     // If true, mark the gas coin as uninitialized in drop safety when there is no gas coin.
     #[serde(skip_serializing_if = "is_false")]
     gasless_transaction_drop_safety: bool,
+
+    // Set to true if new VM (bella ciao) is enabled in this protocol version.
+    #[serde(skip_serializing_if = "is_false")]
+    new_vm_enabled: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2574,6 +2584,10 @@ impl ProtocolConfig {
         self.feature_flags.deprecate_global_storage_ops
     }
 
+    pub fn normalize_depth_formula(&self) -> bool {
+        self.feature_flags.normalize_depth_formula
+    }
+
     pub fn consensus_skip_gced_accept_votes(&self) -> bool {
         self.feature_flags.consensus_skip_gced_accept_votes
     }
@@ -2651,6 +2665,10 @@ impl ProtocolConfig {
 
     pub fn gasless_transaction_drop_safety(&self) -> bool {
         self.feature_flags.gasless_transaction_drop_safety
+    }
+
+    pub fn new_vm_enabled(&self) -> bool {
+        self.feature_flags.new_vm_enabled
     }
 }
 
@@ -4655,14 +4673,21 @@ impl ProtocolConfig {
                     }
                 }
                 115 => {
+                    cfg.feature_flags.normalize_depth_formula = true;
+                }
+                116 => {
                     cfg.feature_flags.gasless_transaction_drop_safety = true;
                     cfg.feature_flags.address_aliases = true;
                     cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
                     // Disabled while debugging
                     cfg.feature_flags.defer_unpaid_amplification = false;
-                }
-                116 => {
                     cfg.feature_flags.enable_display_registry = true;
+                }
+                117 => {}
+                118 => {
+                    // Enable new VM.
+                    cfg.execution_version = Some(4);
+                    cfg.feature_flags.new_vm_enabled = true;
                 }
                 // Use this template when making changes:
                 //

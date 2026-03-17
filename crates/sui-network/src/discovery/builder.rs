@@ -13,6 +13,7 @@ use anemo_tower::rate_limit;
 use fastcrypto::traits::KeyPair;
 use std::{
     collections::HashMap,
+    path::PathBuf,
     sync::{Arc, OnceLock, RwLock},
 };
 use sui_config::p2p::P2pConfig;
@@ -98,6 +99,7 @@ impl Builder {
         } = self;
         let config = config.unwrap();
         let discovery_config = config.discovery.clone().unwrap_or_default();
+        let store_path = discovery_config.peer_addr_store_path.clone();
         let metrics = metrics.unwrap_or_else(Metrics::disabled);
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (mailbox_tx, mailbox_rx) = mpsc::channel(discovery_config.mailbox_capacity());
@@ -117,7 +119,7 @@ impl Builder {
             connected_peers: HashMap::default(),
             known_peers: HashMap::default(),
             known_peers_v2: HashMap::default(),
-            peer_address_overrides: HashMap::default(),
+            peer_addresses: HashMap::default(),
         }
         .pipe(RwLock::new)
         .pipe(Arc::new);
@@ -137,10 +139,12 @@ impl Builder {
                 shutdown_handle: shutdown_rx,
                 state,
                 mailbox: mailbox_rx,
+                mailbox_tx: mailbox_tx.clone(),
                 metrics,
                 configured_peers,
                 consensus_external_address,
                 endpoint_manager: endpoint_manager.clone(),
+                store_path,
             },
             server,
             endpoint_manager,
@@ -155,13 +159,19 @@ pub struct UnstartedDiscovery {
     pub(super) shutdown_handle: oneshot::Receiver<()>,
     pub(super) state: Arc<RwLock<State>>,
     pub(super) mailbox: mpsc::Receiver<DiscoveryMessage>,
+    pub(super) mailbox_tx: mpsc::Sender<DiscoveryMessage>,
     pub(super) metrics: Metrics,
     pub(super) configured_peers: Arc<OnceLock<HashMap<PeerId, PeerInfo>>>,
     pub(super) consensus_external_address: Option<Multiaddr>,
     pub(super) endpoint_manager: EndpointManager,
+    pub(super) store_path: Option<PathBuf>,
 }
 
 impl UnstartedDiscovery {
+    pub fn sender(&self) -> super::Sender {
+        self.handle.sender()
+    }
+
     pub(super) fn build(
         self,
         network: anemo::Network,
@@ -173,10 +183,12 @@ impl UnstartedDiscovery {
             shutdown_handle,
             state,
             mailbox,
+            mailbox_tx,
             metrics,
             configured_peers,
             consensus_external_address,
             endpoint_manager,
+            store_path,
         } = self;
 
         let discovery_config = config.discovery.clone().unwrap_or_default();
@@ -202,9 +214,12 @@ impl UnstartedDiscovery {
                 shutdown_handle,
                 state,
                 mailbox,
+                mailbox_tx,
                 metrics,
                 consensus_external_address,
                 endpoint_manager,
+                store_path,
+                peer_cooldowns: HashMap::new(),
             },
             handle,
         )

@@ -68,13 +68,8 @@ impl Value {
 }
 
 impl Context {
-    fn new(env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
-        let has_gas_coin = if env.protocol_config.gasless_transaction_drop_safety() {
-            ast.gas_payment.is_some()
-        } else {
-            true
-        };
-        let gas_coin = if !has_gas_coin {
+    fn new(_env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
+        let gas_coin = if ast.gas_payment.is_none() {
             None
         } else {
             Some(Value::NonRef)

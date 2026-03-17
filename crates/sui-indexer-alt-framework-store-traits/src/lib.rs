@@ -13,13 +13,14 @@ use scoped_futures::ScopedBoxFuture;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// If no existing watermark record exists, initializes it with `default_next_checkpoint`.
-    /// Returns the committer watermark `checkpoint_hi_inclusive`.
+    /// Returns the `InitWatermark` based on the existing watermark if it exists.
+    /// Otherwise, initializes a new watermark record with `InitWatermark` and returns
+    /// the value passed in.
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>>;
+        init_watermark: InitWatermark,
+    ) -> anyhow::Result<InitWatermark>;
 
     /// Given a `pipeline_task` representing either a pipeline name or a pipeline with an associated
     /// task (formatted as `{pipeline}{Store::DELIMITER}{task}`), return the committer watermark
@@ -114,6 +115,13 @@ pub trait TransactionalStore: Store {
         F: for<'r> FnOnce(
             &'r mut Self::Connection<'_>,
         ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>;
+}
+
+/// Used during watermark initialization to set and return state.
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct InitWatermark {
+    pub checkpoint_hi_inclusive: Option<u64>,
+    pub reader_lo: u64,
 }
 
 /// Represents the highest checkpoint for some pipeline that has been processed by the indexer

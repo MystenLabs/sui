@@ -63,6 +63,8 @@ public struct TokenAllocation {
 const ENotCalledAtGenesis: u64 = 0;
 /// The `create` function was called with duplicate validators.
 const EDuplicateValidator: u64 = 1;
+/// The validator address is not in the validator set.
+const ENotAValidator: u64 = 2;
 
 #[allow(unused_function)]
 /// This function will be explicitly called once at genesis.
@@ -185,9 +187,11 @@ fun allocate_tokens(
             let allocation_balance = sui_supply.split(amount_mist);
             if (staked_with_validator.is_some()) {
                 let validator_address = staked_with_validator.destroy_some();
-                let validator = validator_set::get_validator_mut(validators, validator_address);
+                let validator_idx = validators
+                    .find_index!(|v| v.sui_address() == validator_address)
+                    .destroy_or!(abort ENotAValidator);
 
-                validator.request_add_stake_at_genesis(
+                validators[validator_idx].request_add_stake_at_genesis(
                     allocation_balance,
                     recipient_address,
                     ctx,

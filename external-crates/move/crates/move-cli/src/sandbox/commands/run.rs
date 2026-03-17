@@ -8,11 +8,17 @@ use crate::sandbox::utils::{
 use anyhow::{Result, anyhow, bail};
 use move_binary_format::file_format::CompiledModule;
 use move_command_line_common::files::try_exists;
-use move_core_types::{identifier::IdentStr, language_storage::TypeTag, runtime_value::MoveValue};
+use move_core_types::{
+    identifier::IdentStr,
+    language_storage::TypeTag,
+    runtime_value::{MoveValue, serialize_values},
+};
 use move_package_alt_compilation::compiled_package::CompiledPackage;
 use move_trace_format::format::{MoveTraceBuilder, TRACE_FILE_EXTENSION};
 use move_unit_test::{TRACE_DIR, vm_test_setup::VMTestSetup};
-use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::{
+    dev_utils::vm_arguments::ValueFrame, natives::functions::NativeFunctions, runtime::MoveRuntime,
+};
 use sha3::{Digest, Sha3_256};
 use std::{fs, path::Path};
 
@@ -21,7 +27,7 @@ pub fn run<V: VMTestSetup>(
     state: &OnDiskStateView,
     _package: &CompiledPackage,
     module_file: &Path,
-    function_name: &str,
+    function: &str,
     txn_args: &[MoveValue],
     vm_type_tags: Vec<TypeTag>,
     gas_budget: Option<u64>,
@@ -42,36 +48,28 @@ pub fn run<V: VMTestSetup>(
     };
     assert!(
         is_bytecode_file(module_file)
-            && (state.is_module_path(module_file) || !contains_module(module_file)),
+            && (state.is_package_path(module_file) || !contains_module(module_file)),
         "Attempting to run module {:?} outside of the `storage/` directory.
         move run` must be applied to a module inside `storage/`",
         module_file
     );
     let bytecode = fs::read(module_file)?;
 
-    let vm_args: Vec<Vec<u8>> = txn_args
-        .iter()
-        .map(|arg| {
-            arg.simple_serialize()
-                .expect("Transaction arguments must serialize")
-        })
-        .collect();
+    let natives = NativeFunctions::new(vm_test_setup.native_function_table())?;
+    let runtime = MoveRuntime::new_with_default_config(natives);
 
-    let vm = MoveVM::new(vm_test_setup.native_function_table()).unwrap();
     let mut gas_status = vm_test_setup.new_meter(gas_budget);
-    let mut session = vm.new_session(state);
 
     let script_type_parameters = vec![];
     let script_parameters = vec![];
-
-    let script_type_arguments = vm_type_tags
-        .iter()
-        .map(|tag| session.load_type(tag))
-        .collect::<Result<Vec<_>, _>>()?;
+    let module = CompiledModule::deserialize_with_defaults(&bytecode)
+        .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
+    let module_id = module.self_id();
+    let serialized_args = serialize_values(txn_args.iter());
 
     let args_hash = {
         let mut hasher = Sha3_256::new();
-        for arg in &vm_args {
+        for arg in &serialized_args {
             hasher.update(arg);
         }
         for tag in &vm_type_tags {
@@ -85,25 +83,37 @@ pub fn run<V: VMTestSetup>(
     };
     let mut move_tracer = MoveTraceBuilder::new();
     let tracer = if trace { Some(&mut move_tracer) } else { None };
-    let module = CompiledModule::deserialize_with_defaults(&bytecode)
-        .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
-    let module_id = module.self_id();
 
-    let res = session.execute_function_bypass_visibility(
-        &module_id,
-        IdentStr::new(function_name)?,
-        script_type_arguments,
-        vm_args,
-        &mut gas_status,
-        tracer,
-    );
+    let res = {
+        // script fun. parse module, extract script ID to pass to VM
+        let mut linkage = state.generate_linkage_context(module.address())?;
+        linkage.add_type_arg_addresses_reflexive(&vm_type_tags);
+
+        let mut vm_instance = runtime.make_vm(state, linkage)?;
+        let type_args = vm_type_tags
+            .iter()
+            .map(|tag| vm_instance.load_type(tag))
+            .collect::<Result<Vec<_>, _>>()?;
+        let function = IdentStr::new(function)?;
+
+        ValueFrame::serialized_call(
+            &mut vm_instance,
+            &module.self_id(),
+            function,
+            type_args,
+            serialized_args,
+            &mut gas_status,
+            tracer,
+            true, /*  bypass_declared_entry_check */
+        )
+    };
 
     if trace {
         let trace_file_name = format!(
             "{}__{}__{}_{}.{}",
             module_id.address().short_str_lossless(),
             module_id.name(),
-            function_name,
+            function,
             args_hash,
             TRACE_FILE_EXTENSION
         );
@@ -124,7 +134,6 @@ pub fn run<V: VMTestSetup>(
             txn_args,
         )
     } else {
-        let _changeset = session.finish().0?;
         Ok(())
     }
 }

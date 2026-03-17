@@ -446,6 +446,8 @@ async fn watermarks_from_pg(
         .await
         .context("Failed to connect to database")?;
 
+    // Filter out pipelines that have been initialized, but do not yet have indexed checkpoints with
+    // `reader_lo <= checkpoint_hi_inclusive`.
     let rows: Vec<WatermarkRow> = conn
         .results(query!(
             r#"
@@ -464,7 +466,8 @@ async fn watermarks_from_pg(
                 cp_sequence_numbers c
             ON (w.reader_lo = c.cp_sequence_number)
             WHERE
-                pipeline = ANY({Array<Text>})
+                w.pipeline = ANY({Array<Text>})
+            AND w.reader_lo <= w.checkpoint_hi_inclusive
             "#,
             pg_pipelines,
         ))

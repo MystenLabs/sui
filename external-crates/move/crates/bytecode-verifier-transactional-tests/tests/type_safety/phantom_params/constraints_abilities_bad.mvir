@@ -5,7 +5,7 @@ module 0x1.M1 {
 }
 
 //# publish
-module 0x1.M2 {
+module 0x2.M2 {
     import 0x1.M1;
 
     struct S1<T: drop + copy + store + key> { a: bool }
@@ -15,7 +15,7 @@ module 0x1.M2 {
 }
 
 //# publish
-module 0x1.M3 {
+module 0x3.M3 {
     import 0x1.M1;
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
@@ -34,7 +34,7 @@ module 0x1.M3 {
 }
 
 //# publish
-module 0x1.M4 {
+module 0x4.M4 {
     import 0x1.M1;
 
     f1<T: drop + copy + store + key>() { label b0: return; }
@@ -47,7 +47,7 @@ module 0x1.M4 {
 
 
 //# publish
-module 0x1.M3Valid {
+module 0x5.M3Valid {
     import 0x1.M1;
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
@@ -58,9 +58,9 @@ module 0x1.M3Valid {
 }
 
 //# publish
-module 0x1.M5 {
+module 0x6.M5 {
     import 0x1.M1;
-    import 0x1.M3Valid;
+    import 0x5.M3Valid;
 
     f1<T1: drop, T2: copy, T3: store, T4: key>() { label b0: return; }
     f2() {
@@ -75,14 +75,14 @@ module 0x1.M5 {
 }
 
 //# publish
-module 0x2.M1 {
+module 0x7.M1 {
     enum NoAbilities { V{ a: bool } }
     enum HasAbilities<phantom T1, T2> has drop, copy, store, key { V{ a: bool } }
 }
 
 //# publish
-module 0x2.M2 {
-    import 0x2.M1;
+module 0x8.M2 {
+    import 0x7.M1;
 
     enum S1<T: drop + copy + store + key> { V{ a: bool }}
     enum S2 {
@@ -91,8 +91,8 @@ module 0x2.M2 {
 }
 
 //# publish
-module 0x2.M3 {
-    import 0x2.M1;
+module 0x9.M3 {
+    import 0x7.M1;
 
     enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
     enum HasCopy<phantom T1, T2> has copy { V{ a: bool }}
@@ -112,8 +112,8 @@ module 0x2.M3 {
 }
 
 //# publish
-module 0x2.M4 {
-    import 0x2.M1;
+module 0x10.M4 {
+    import 0x7.M1;
 
     f1<T: drop + copy + store + key>() { label b0: return; }
     f2() {
@@ -125,8 +125,8 @@ module 0x2.M4 {
 
 
 //# publish
-module 0x2.M3Valid {
-    import 0x2.M1;
+module 0x11.M3Valid {
+    import 0x7.M1;
 
     enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
     enum HasCopy<phantom T1, T2> has copy { V{ a: bool }}
@@ -136,9 +136,9 @@ module 0x2.M3Valid {
 }
 
 //# publish
-module 0x2.M5 {
-    import 0x2.M1;
-    import 0x2.M3Valid;
+module 0x12.M5 {
+    import 0x7.M1;
+    import 0x5.M3Valid;
 
     f1<T1: drop, T2: copy, T3: store, T4: key>() { label b0: return; }
     f2() {

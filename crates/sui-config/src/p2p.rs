@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, num::NonZeroU32, time::Duration};
+use std::{net::SocketAddr, num::NonZeroU32, path::PathBuf, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use sui_types::{
@@ -255,6 +255,14 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `0.3` (30%).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_failure_rate: Option<f64>,
+
+    /// Duration in milliseconds that a peer must be continuously failing before it is
+    /// reported to discovery for disconnection. Set to 0 to disable automatic reporting
+    /// of failing peers.
+    ///
+    /// If unspecified, this will default to `30,000` (30 seconds).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_disconnect_threshold_ms: Option<u64>,
 }
 
 impl StateSyncConfig {
@@ -379,12 +387,27 @@ impl StateSyncConfig {
 
     pub fn exploration_probability(&self) -> f64 {
         const DEFAULT: f64 = 0.1;
-        self.exploration_probability.unwrap_or(DEFAULT)
+        let value = self.exploration_probability.unwrap_or(DEFAULT);
+        assert!(
+            (0.0..=1.0).contains(&value),
+            "exploration_probability must be in [0, 1], got {value}"
+        );
+        value
     }
 
     pub fn peer_failure_rate(&self) -> f64 {
         const DEFAULT: f64 = 0.3;
-        self.peer_failure_rate.unwrap_or(DEFAULT)
+        let value = self.peer_failure_rate.unwrap_or(DEFAULT);
+        assert!(
+            (0.0..=1.0).contains(&value),
+            "peer_failure_rate must be in [0, 1], got {value}"
+        );
+        value
+    }
+
+    pub fn peer_disconnect_threshold(&self) -> Duration {
+        const DEFAULT_MS: u64 = 30_000; // 30 seconds
+        Duration::from_millis(self.peer_disconnect_threshold_ms.unwrap_or(DEFAULT_MS))
     }
 
     pub fn randomized_for_testing() -> Self {
@@ -490,6 +513,26 @@ pub struct DiscoveryConfig {
     /// If unspecified, this will default to `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_get_known_peers_v3: Option<bool>,
+
+    /// Path to store discovered peer addresses across restarts.
+    ///
+    /// If unspecified, defaults to `<db_path>/discovery_peer_cache.yaml` when
+    /// started via `SuiNode`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_addr_store_path: Option<PathBuf>,
+
+    /// Duration in milliseconds to cooldown a peer after a failure report from state-sync.
+    /// During cooldown, the peer is deprioritized for new connections.
+    ///
+    /// If unspecified, this will default to `3,600,000` (1 hour).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_failure_cooldown_ms: Option<u64>,
+
+    /// Minimum number of connected peers below which no failing-peer disconnect will occur.
+    ///
+    /// If unspecified, this will default to `2`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_peers_for_disconnect: Option<usize>,
 }
 
 impl DiscoveryConfig {
@@ -525,6 +568,16 @@ impl DiscoveryConfig {
 
     pub fn use_get_known_peers_v3(&self) -> bool {
         self.use_get_known_peers_v3.unwrap_or(false)
+    }
+
+    pub fn peer_failure_cooldown(&self) -> Duration {
+        const DEFAULT_MS: u64 = 3_600_000; // 1 hour
+        Duration::from_millis(self.peer_failure_cooldown_ms.unwrap_or(DEFAULT_MS))
+    }
+
+    pub fn min_peers_for_disconnect(&self) -> usize {
+        const DEFAULT: usize = 2;
+        self.min_peers_for_disconnect.unwrap_or(DEFAULT)
     }
 }
 

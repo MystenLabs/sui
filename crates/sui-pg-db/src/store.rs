@@ -4,10 +4,8 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::DateTime;
 use chrono::Utc;
 use diesel::ExpressionMethods;
-use diesel::OptionalExtension;
 use diesel::prelude::*;
 use diesel::sql_types::BigInt;
 use diesel_async::AsyncConnection;
@@ -28,66 +26,73 @@ impl store::Connection for Connection<'_> {
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>> {
-        let Some(checkpoint_hi_inclusive) = default_next_checkpoint.checked_sub(1) else {
-            // Do not create a watermark record with checkpoint_hi_inclusive = -1.
-            return Ok(self
-                .committer_watermark(pipeline_task)
-                .await?
-                .map(|w| w.checkpoint_hi_inclusive));
-        };
-
+        store::InitWatermark {
+            checkpoint_hi_inclusive,
+            reader_lo,
+        }: store::InitWatermark,
+    ) -> anyhow::Result<store::InitWatermark> {
         let stored_watermark = StoredWatermark {
             pipeline: pipeline_task.to_string(),
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
+            // Initially, `checkpoint_hi_inclusive` is less than `reader_lo` meaning that no
+            // checkpoints have been indexed yet.
+            checkpoint_hi_inclusive: checkpoint_hi_inclusive.map_or(-1, |c| c as i64),
             tx_hi: 0,
             timestamp_ms_hi_inclusive: 0,
-            reader_lo: default_next_checkpoint as i64,
+            reader_lo: reader_lo as i64,
             pruner_timestamp: Utc::now().naive_utc(),
-            pruner_hi: default_next_checkpoint as i64,
+            pruner_hi: reader_lo as i64,
         };
 
         use diesel::pg::upsert::excluded;
-        let checkpoint_hi_inclusive: i64 = diesel::insert_into(watermarks::table)
-            .values(&stored_watermark)
-            // There is an existing entry, so only write the new `hi` values
-            .on_conflict(watermarks::pipeline)
-            // Use `do_update` instead of `do_nothing` to return the existing row with `returning`.
-            .do_update()
-            // When using `do_update`, at least one change needs to be set, so set the pipeline to itself (nothing changes).
-            // `excluded` is a virtual table containing the existing row that there was a conflict with.
-            .set(watermarks::pipeline.eq(excluded(watermarks::pipeline)))
-            .returning(watermarks::checkpoint_hi_inclusive)
-            .get_result(self)
-            .await?;
+        let (checkpoint_hi_inclusive, reader_lo): (i64, i64) =
+            diesel::insert_into(watermarks::table)
+                .values(&stored_watermark)
+                // There is an existing entry, so only write the new `hi` values
+                .on_conflict(watermarks::pipeline)
+                // Use `do_update` instead of `do_nothing` to return the existing row with `returning`.
+                .do_update()
+                // When using `do_update`, at least one change needs to be set, so set the pipeline to itself (nothing changes).
+                // `excluded` is a virtual table containing the existing row that there was a conflict with.
+                .set(watermarks::pipeline.eq(excluded(watermarks::pipeline)))
+                .returning((watermarks::checkpoint_hi_inclusive, watermarks::reader_lo))
+                .get_result(self)
+                .await?;
 
-        Ok(Some(checkpoint_hi_inclusive as u64))
+        Ok(store::InitWatermark {
+            checkpoint_hi_inclusive: u64::try_from(checkpoint_hi_inclusive).ok(),
+            reader_lo: reader_lo as u64,
+        })
     }
 
     async fn committer_watermark(
         &mut self,
         pipeline_task: &str,
     ) -> anyhow::Result<Option<store::CommitterWatermark>> {
-        let watermark: Option<(i64, i64, i64, i64)> = watermarks::table
+        let (
+            epoch_hi_inclusive,
+            checkpoint_hi_inclusive,
+            tx_hi,
+            timestamp_ms_hi_inclusive,
+            reader_lo,
+        ): (i64, i64, i64, i64, i64) = watermarks::table
             .select((
                 watermarks::epoch_hi_inclusive,
                 watermarks::checkpoint_hi_inclusive,
                 watermarks::tx_hi,
                 watermarks::timestamp_ms_hi_inclusive,
+                watermarks::reader_lo,
             ))
             .filter(watermarks::pipeline.eq(pipeline_task))
             .first(self)
-            .await
-            .optional()?;
+            .await?;
 
-        if let Some(watermark) = watermark {
+        if reader_lo <= checkpoint_hi_inclusive {
             Ok(Some(store::CommitterWatermark {
-                epoch_hi_inclusive: watermark.0 as u64,
-                checkpoint_hi_inclusive: watermark.1 as u64,
-                tx_hi: watermark.2 as u64,
-                timestamp_ms_hi_inclusive: watermark.3 as u64,
+                epoch_hi_inclusive: epoch_hi_inclusive as u64,
+                checkpoint_hi_inclusive: checkpoint_hi_inclusive as u64,
+                tx_hi: tx_hi as u64,
+                timestamp_ms_hi_inclusive: timestamp_ms_hi_inclusive as u64,
             }))
         } else {
             Ok(None)
@@ -98,17 +103,16 @@ impl store::Connection for Connection<'_> {
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<store::ReaderWatermark>> {
-        let watermark: Option<(i64, i64)> = watermarks::table
+        let (checkpoint_hi_inclusive, reader_lo): (i64, i64) = watermarks::table
             .select((watermarks::checkpoint_hi_inclusive, watermarks::reader_lo))
             .filter(watermarks::pipeline.eq(pipeline))
             .first(self)
-            .await
-            .optional()?;
+            .await?;
 
-        if let Some(watermark) = watermark {
+        if reader_lo <= checkpoint_hi_inclusive {
             Ok(Some(store::ReaderWatermark {
-                checkpoint_hi_inclusive: watermark.0 as u64,
-                reader_lo: watermark.1 as u64,
+                checkpoint_hi_inclusive: checkpoint_hi_inclusive as u64,
+                reader_lo: reader_lo as u64,
             }))
         } else {
             Ok(None)
@@ -130,18 +134,23 @@ impl store::Connection for Connection<'_> {
             delay.as_millis() as i64,
         );
 
-        let watermark: Option<(i64, i64, i64)> = watermarks::table
-            .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
-            .filter(watermarks::pipeline.eq(pipeline))
-            .first(self)
-            .await
-            .optional()?;
+        let (wait_for_ms, pruner_hi, reader_lo, checkpoint_hi_inclusive): (i64, i64, i64, i64) =
+            watermarks::table
+                .select((
+                    wait_for,
+                    watermarks::pruner_hi,
+                    watermarks::reader_lo,
+                    watermarks::checkpoint_hi_inclusive,
+                ))
+                .filter(watermarks::pipeline.eq(pipeline))
+                .first(self)
+                .await?;
 
-        if let Some(watermark) = watermark {
+        if reader_lo <= checkpoint_hi_inclusive {
             Ok(Some(store::PrunerWatermark {
-                wait_for_ms: watermark.0,
-                pruner_hi: watermark.1 as u64,
-                reader_lo: watermark.2 as u64,
+                wait_for_ms,
+                pruner_hi: pruner_hi as u64,
+                reader_lo: reader_lo as u64,
             }))
         } else {
             Ok(None)
@@ -153,33 +162,17 @@ impl store::Connection for Connection<'_> {
         pipeline_task: &str,
         watermark: store::CommitterWatermark,
     ) -> anyhow::Result<bool> {
-        // Create a StoredWatermark directly from CommitterWatermark
-        let stored_watermark = StoredWatermark {
-            pipeline: pipeline_task.to_string(),
-            epoch_hi_inclusive: watermark.epoch_hi_inclusive as i64,
-            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as i64,
-            tx_hi: watermark.tx_hi as i64,
-            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive as i64,
-            reader_lo: 0,
-            pruner_timestamp: DateTime::UNIX_EPOCH.naive_utc(),
-            pruner_hi: 0,
-        };
-
-        use diesel::query_dsl::methods::FilterDsl;
-        Ok(diesel::insert_into(watermarks::table)
-            .values(&stored_watermark)
-            // There is an existing entry, so only write the new `hi` values
-            .on_conflict(watermarks::pipeline)
-            .do_update()
+        Ok(diesel::update(watermarks::table)
             .set((
-                watermarks::epoch_hi_inclusive.eq(stored_watermark.epoch_hi_inclusive),
-                watermarks::checkpoint_hi_inclusive.eq(stored_watermark.checkpoint_hi_inclusive),
-                watermarks::tx_hi.eq(stored_watermark.tx_hi),
+                watermarks::epoch_hi_inclusive.eq(watermark.epoch_hi_inclusive as i64),
+                watermarks::checkpoint_hi_inclusive.eq(watermark.checkpoint_hi_inclusive as i64),
+                watermarks::tx_hi.eq(watermark.tx_hi as i64),
                 watermarks::timestamp_ms_hi_inclusive
-                    .eq(stored_watermark.timestamp_ms_hi_inclusive),
+                    .eq(watermark.timestamp_ms_hi_inclusive as i64),
             ))
+            .filter(watermarks::pipeline.eq(pipeline_task))
             .filter(
-                watermarks::checkpoint_hi_inclusive.lt(stored_watermark.checkpoint_hi_inclusive),
+                watermarks::checkpoint_hi_inclusive.lt(watermark.checkpoint_hi_inclusive as i64),
             )
             .execute(self)
             .await?

@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use mysten_network::metrics::MetricsCallbackProvider;
 use prometheus::{
     HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
-
-use std::time::Duration;
+use sui_network::api::KNOWN_VALIDATOR_GRPC_PATHS;
 use sui_network::tonic::Code;
 
 pub struct SuiNodeMetrics {
@@ -124,29 +125,43 @@ impl GrpcMetrics {
     }
 }
 
+const UNKNOWN_PATH: &str = "UNKNOWN";
+
+fn sanitize_path(path: &str) -> &str {
+    if KNOWN_VALIDATOR_GRPC_PATHS.contains(path) {
+        path
+    } else {
+        UNKNOWN_PATH
+    }
+}
+
 impl MetricsCallbackProvider for GrpcMetrics {
     fn on_request(&self, _path: String) {}
 
     fn on_response(&self, path: String, latency: Duration, _status: u16, grpc_status_code: Code) {
+        let path = sanitize_path(&path);
         self.grpc_requests
-            .with_label_values(&[path.as_str(), format!("{grpc_status_code:?}").as_str()])
+            .with_label_values(&[path, format!("{grpc_status_code:?}").as_str()])
             .inc();
         self.grpc_request_latency
-            .with_label_values(&[path.as_str()])
+            .with_label_values(&[path])
             .observe(latency.as_secs_f64());
     }
 
     fn on_start(&self, path: &str) {
+        let path = sanitize_path(path);
         self.inflight_grpc.with_label_values(&[path]).inc();
     }
 
     fn on_drop(&self, path: &str) {
+        let path = sanitize_path(path);
         self.inflight_grpc.with_label_values(&[path]).dec();
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use mysten_metrics::start_prometheus_server;
     use prometheus::{IntCounter, Registry};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -220,5 +235,29 @@ sui_counter_2 1"
             .await
             .unwrap();
         response.text().await.unwrap()
+    }
+
+    #[test]
+    fn test_grpc_metrics_unknown_path() {
+        let registry = Registry::new();
+        let metrics = GrpcMetrics::new(&registry);
+
+        for i in 0..1000 {
+            let path = format!("/nonexistent.Service/Method{i}");
+            metrics.on_start(&path);
+            metrics.on_response(path.clone(), Duration::from_millis(1), 200, Code::Ok);
+            metrics.on_drop(&path);
+        }
+
+        let metric_families = registry.gather();
+        let inflight = metric_families
+            .iter()
+            .find(|mf| mf.name() == "inflight_grpc")
+            .unwrap();
+        assert_eq!(
+            inflight.get_metric().len(),
+            1,
+            "all unknown paths should collapse into a single time series"
+        );
     }
 }
