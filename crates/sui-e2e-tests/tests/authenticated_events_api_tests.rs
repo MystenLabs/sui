@@ -385,7 +385,8 @@ async fn verify_events_with_stream_head(
         .collect();
 
     let sdk_first_head = to_sdk_event_stream_head(&first_stream_head.value);
-    let calculated_stream_head = apply_stream_updates(&sdk_first_head, events_by_accum_version).unwrap();
+    let calculated_stream_head =
+        apply_stream_updates(&sdk_first_head, events_by_accum_version).unwrap();
     let sdk_last_head = to_sdk_event_stream_head(&last_stream_head.value);
 
     assert_eq!(
@@ -683,9 +684,9 @@ async fn verify_ocs_inclusion_proof(
     let proof = Proof {
         targets: ProofTarget::ObjectCheckpointState(target),
         checkpoint_summary: sdk_checkpoint_summary,
-        proof_contents: ProofContents::ObjectCheckpointStateProof(OCSProof::Inclusion(
+        proof_contents: ProofContents::ObjectCheckpointStateProof(Box::new(OCSProof::Inclusion(
             ocs_inclusion_proof,
-        )),
+        ))),
     };
 
     let committee = epoch_cache.get_committee_for_checkpoint(checkpoint_seq)?;
