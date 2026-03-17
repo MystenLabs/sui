@@ -76,11 +76,15 @@ impl FullnodeClient {
     }
 
     /// Execute a transaction on the Sui network via gRPC.
-    #[instrument(skip(self, transaction_data, signatures), level = "debug")]
+    ///
+    /// If `read_mask` is `None`, a default read mask is used that includes effects, transaction,
+    /// events, balance changes, and objects.
+    #[instrument(skip(self, transaction_data, signatures, read_mask), level = "debug")]
     pub async fn execute_transaction(
         &self,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
+        read_mask: Option<FieldMask>,
     ) -> Result<proto::ExecuteTransactionResponse, Error> {
         let transaction = Transaction::from_generic_sig_data(transaction_data, signatures);
 
@@ -95,6 +99,16 @@ impl FullnodeClient {
             })
             .collect();
 
+        let read_mask = read_mask.unwrap_or_else(|| {
+            FieldMask::from_paths([
+                "effects",
+                "transaction",
+                "events.bcs",
+                "balance_changes",
+                "objects.objects.bcs",
+            ])
+        });
+
         let request = proto::ExecuteTransactionRequest::new({
             let mut tx = proto::Transaction::default();
             tx.bcs = Some(
@@ -104,13 +118,7 @@ impl FullnodeClient {
             tx
         })
         .with_signatures(signatures)
-        .with_read_mask(FieldMask::from_paths([
-            "effects",
-            "transaction",
-            "events.bcs",
-            "balance_changes",
-            "objects.objects.bcs",
-        ]));
+        .with_read_mask(read_mask);
 
         self.request(
             "execute_transaction",
@@ -125,12 +133,14 @@ impl FullnodeClient {
     ///
     /// - `checks_enabled`: If true, enables transaction validation checks during simulation. Defaults to true.
     /// - `do_gas_selection`: If true, enables automatic gas coin selection and budget estimation. Defaults to false.
-    #[instrument(skip(self, transaction), level = "debug")]
+    /// - `read_mask`: If `None`, a default read mask is used.
+    #[instrument(skip(self, transaction, read_mask), level = "debug")]
     pub async fn simulate_transaction(
         &self,
         transaction: proto::Transaction,
         checks_enabled: bool,
         do_gas_selection: bool,
+        read_mask: Option<FieldMask>,
     ) -> Result<proto::SimulateTransactionResponse, Error> {
         use proto::simulate_transaction_request::TransactionChecks;
 
@@ -140,8 +150,8 @@ impl FullnodeClient {
             TransactionChecks::Disabled
         };
 
-        let request = proto::SimulateTransactionRequest::new(transaction)
-            .with_read_mask(FieldMask::from_paths([
+        let read_mask = read_mask.unwrap_or_else(|| {
+            FieldMask::from_paths([
                 "transaction.effects",
                 "transaction.transaction",
                 "transaction.events.bcs",
@@ -149,7 +159,11 @@ impl FullnodeClient {
                 "transaction.objects.objects.bcs",
                 "transaction.transaction.bcs",
                 "command_outputs",
-            ]))
+            ])
+        });
+
+        let request = proto::SimulateTransactionRequest::new(transaction)
+            .with_read_mask(read_mask)
             .with_checks(checks)
             .with_do_gas_selection(do_gas_selection);
 

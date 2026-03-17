@@ -767,6 +767,7 @@ impl Query {
                 proto_tx,
                 checks_enabled.unwrap_or(true),
                 do_gas_selection.unwrap_or(false),
+                None,
             )
             .await
         {

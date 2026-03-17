@@ -55,8 +55,8 @@ impl FnDelegationTestCluster {
             .build()
             .await;
 
-        // Unwrap since we know the URL should be valid.
         let fullnode_rpc_url = Url::parse(onchain_cluster.rpc_url())?;
+        let fullnode_grpc_url = onchain_cluster.rpc_url().to_string();
 
         let rpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
@@ -80,6 +80,7 @@ impl FnDelegationTestCluster {
             rpc_args,
             NodeArgs {
                 fullnode_rpc_url: Some(fullnode_rpc_url),
+                fullnode_grpc_url: Some(fullnode_grpc_url),
             },
             SystemPackageTaskArgs::default(),
             RpcConfig::default(),

@@ -81,7 +81,7 @@ impl Mutation {
 
         // Execute transaction via gRPC
         match fullnode_client
-            .execute_transaction(tx_data.clone(), parsed_signatures.clone())
+            .execute_transaction(tx_data.clone(), parsed_signatures.clone(), None)
             .await
         {
             Ok(response) => {
