@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/extensions/invalid_index_syntax_redefine_in_extension.move:16:14
+   │
+12 │     fun borrow(s: &S, i: u64): &u64 {
+   │         ------ This syntax method was previously defined here.
+   ·
+16 │     #[syntax(index)]
+   │              ^^^^^ Redefined 'index' 'syntax' method for 'a::m::S'
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/extensions/invalid_index_syntax_redefine_in_extension.move:26:14
+   │
+22 │     fun borrow_mut(s: &mut S, i: u64): &mut u64 {
+   │         ---------- This syntax method was previously defined here.
+   ·
+26 │     #[syntax(index)]
+   │              ^^^^^ Redefined mutable 'index' 'syntax' method for 'a::m::S'
