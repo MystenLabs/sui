@@ -153,18 +153,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
         ..Default::default()
     };
 
-    let indexer_config = IndexerConfig::for_test()
-        .merge(IndexerConfig {
-            pipeline: PipelineLayer {
-                coin_balance_buckets: Some(ConcurrentLayer {
-                    pruner: Some(pruner.clone()),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-        .expect("Failed to create indexer config");
+    let indexer_config = IndexerConfig::for_test();
 
     Arc::new(
         OffchainCluster::new(

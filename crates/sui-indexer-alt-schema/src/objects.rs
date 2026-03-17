@@ -10,8 +10,6 @@ use diesel::serialize;
 use diesel::sql_types::SmallInt;
 use sui_field_count::FieldCount;
 
-use crate::schema::coin_balance_buckets;
-use crate::schema::coin_balance_buckets_deletion_reference;
 use crate::schema::kv_objects;
 use crate::schema::obj_versions;
 
@@ -51,25 +49,6 @@ pub enum StoredOwnerKind {
 pub enum StoredCoinOwnerKind {
     Fastpath = 0,
     Consensus = 1,
-}
-
-#[derive(Insertable, Queryable, Debug, Clone, FieldCount, Eq, PartialEq)]
-#[diesel(table_name = coin_balance_buckets, primary_key(object_id, cp_sequence_number))]
-#[diesel(treat_none_as_default_value = false)]
-pub struct StoredCoinBalanceBucket {
-    pub object_id: Vec<u8>,
-    pub cp_sequence_number: i64,
-    pub owner_kind: Option<StoredCoinOwnerKind>,
-    pub owner_id: Option<Vec<u8>>,
-    pub coin_type: Option<Vec<u8>>,
-    pub coin_balance_bucket: Option<i16>,
-}
-
-#[derive(Insertable, Queryable, Debug, Clone, FieldCount, Eq, PartialEq)]
-#[diesel(table_name = coin_balance_buckets_deletion_reference, primary_key(cp_sequence_number, object_id))]
-pub struct StoredCoinBalanceBucketDeletionReference {
-    pub object_id: Vec<u8>,
-    pub cp_sequence_number: i64,
 }
 
 impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind

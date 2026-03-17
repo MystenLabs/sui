@@ -14,7 +14,6 @@ use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::object::Object;
 use sui_indexer_alt_framework::types::object::Owner;
 
-pub(crate) mod coin_balance_buckets;
 pub(crate) mod cp_bloom_blocks;
 pub(crate) mod cp_blooms;
 pub(crate) mod cp_sequence_numbers;
