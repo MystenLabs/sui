@@ -106,11 +106,8 @@ impl TryConstructTransaction for ConsolidateAllStakedSuiToFungible {
             party_objects: vec![],
             total_sui_balance,
             budget,
-            // OVERLOADED: address_balance_withdrawal is repurposed here to pass the
-            // FSS count to try_into_data (read in the ConsolidateAllStakedSuiToFungible
-            // match arm). objects[0..fss_count] are FSS, objects[fss_count..] are StakedSui.
-            // Original purpose (SUI withdrawal for gas) is unused by this operation.
-            address_balance_withdrawal: fss_count as u64,
+            address_balance_withdrawal: 0,
+            operation_context: Some(fss_count as u64),
         })
     }
 }
