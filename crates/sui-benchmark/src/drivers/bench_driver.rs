@@ -1136,7 +1136,7 @@ async fn run_bench_worker(
                         // Occasionally submit to multiple validators to test unpaid amplification deferral.
                         // With 0.5% probability, submit to 3 to N/2 validators to trigger deferral logic.
                         // Keep rate low to avoid overwhelming consensus with duplicates.
-                        let use_amplification = rand::thread_rng().gen_bool(0.05);
+                        let use_amplification = true; // rand::thread_rng().gen_bool(1.0);
                         let committee_size = committee.num_members();
                         let proxy = worker.execution_proxy.clone_new();
                         let res = async move {
