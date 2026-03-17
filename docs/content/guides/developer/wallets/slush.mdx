@@ -1,3 +1,96 @@
 ---
-draft: true
+title: Slush
+description: Learn about Slush Wallet, its features, and how to integrate it into your wallet or app using the Slush Wallet SDK and Sui dApp Kit.
+keywords: [ slush, slush wallet, wallet, zkLogin, wallet integration, dapp kit, deep linking, registerSlushWallet ]
 ---
+
+Slush is the official Sui wallet built by Mysten Labs. It supports social login through zkLogin (zero-knowledge login), self-custodial key management with a recovery passphrase, and Slush Links, which let users send tokens and NFTs through a shareable link or QR code. Slush Wallet is available as a Chrome browser extension, an iOS app, an Android app, and a web app at [slush.app](https://slush.app).
+
+## Slush basics
+
+Slush Wallet gives users two ways to create and access an account:
+
+- **Social login** uses [zkLogin](/guides/developer/cryptography/zklogin-integration/zklogin) to derive a Sui address from an OAuth credential (Google, Apple, Facebook, or Twitch). No recovery passphrase is required. This is the recommended login method for users who are new to wallets, because key management is fully abstracted.
+
+- **Recovery passphrase** creates a standard self-custodial account. The user holds the private key locally and is responsible for backing up the recovery passphrase. This is the recommended path for users who want full, independent control of their keys.
+
+Both account types are supported simultaneously. A single Slush Wallet can hold both social-login and passphrase-based accounts.
+
+Additional features available in Slush Wallet include:
+
+- [**Slush Links**](https://slush.app/guides/use-slush-links): Send a bundle of tokens or NFTs to anyone through a shareable link or QR code, with no recipient address required.
+- [**Staking**](/concepts/tokenomics/staking-unstaking): Delegate SUI to a validator and earn staking rewards directly from the wallet.
+- **Swaps**: Exchange tokens in-app without leaving the wallet.
+- **App browser**: Browse and connect to Sui apps from inside the mobile app.
+
+## Slush Wallet SDK
+
+The [`@mysten/slush-wallet` SDK](https://sdk.mystenlabs.com/slush-wallet) lets you add Slush Wallet support to your own wallet interface or app. The Slush browser extension and native mobile app work automatically through the [Wallet Standard](/standards/wallet-standard.mdx) and do not require this SDK. The SDK is only required if you want to support the Slush web app as a connection option.
+
+### Install
+```bash
+pnpm install @mysten/slush-wallet
+```
+
+### Register the Slush web wallet
+
+Call `registerSlushWallet` once, as early as possible in your application's lifecycle. This registers the Slush web wallet with the Wallet Standard so it appears in your existing wallet connection UI.
+
+`registerSlushWallet` accepts two arguments:
+
+- `name`: The name of your app. Slush displays this name to the user when they are asked to approve the connection.
+- `options` (optional): An object with the following properties:
+  - `network`: The network to connect to. Defaults to `mainnet`. Supports `mainnet` and `testnet`.
+  - `origin`: The origin of the Slush website. Defaults to `https://slush.app`.
+
+```typescript
+import { registerSlushWallet } from '@mysten/slush-wallet';
+
+registerSlushWallet('Your App Name');
+```
+
+### Supported features
+
+The Slush wallet supports the following Wallet Standard features:
+
+- `signTransaction`
+- `signAndExecuteTransaction`
+- `signPersonalMessage`
+
+### Detect the Slush wallet
+
+To check whether the connected wallet is Slush Wallet, compare the wallet name against the `SLUSH_WALLET_NAME` constant.
+
+```typescript
+import { useCurrentWallet } from '@mysten/dapp-kit';
+import { SLUSH_WALLET_NAME } from '@mysten/slush-wallet';
+
+function SlushOnly() {
+  const { currentWallet } = useCurrentWallet();
+  const walletIsSlushWallet = currentWallet?.name === SLUSH_WALLET_NAME;
+
+  // rest of component logic...
+}
+```
+
+## Sui dApp Kit integration
+
+[Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) provides built-in opt-in support for Slush Wallet. To enable it, pass the `slushWallet` prop to `WalletProvider`. The `name` field is required and contains the name of your app shown to the user during the connection flow.
+
+```typescript
+import { WalletProvider } from '@mysten/dapp-kit';
+
+function App({ children }) {
+  return (
+    <WalletProvider
+      slushWallet={{
+        name: 'Your App Name',
+      }}
+    >
+      {children}
+    </WalletProvider>
+  );
+}
+```
+
+Users who have the Slush Wallet browser extension installed see only the extension in the connection modal. Users without the extension connect through the Slush web app instead.
