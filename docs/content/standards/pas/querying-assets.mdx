@@ -61,7 +61,7 @@ const { balance } = await client.core.getBalance({
 
 ### Checking if a wallet has a PAS Account
 
-If `getObject` returns `null` for the derived address, the wallet has no PAS `Account` yet and therefore no PAS balances:
+If `getObject` returns `null` for the derived address, the wallet has no PAS `Account` yet:
 
 ```tsx
 const { object } = await client.core.getObject({ objectId: accountAddress });
