@@ -322,11 +322,15 @@ impl Operations {
                 let amount_str = amount.ok_or_else(|| {
                     Error::MissingInput("amount required for AtLeast/AtMost mode".to_string())
                 })?;
-                Some(
-                    amount_str
-                        .parse::<u64>()
-                        .map_err(|e| Error::InvalidInput(format!("Invalid amount: {}", e)))?,
-                )
+                let parsed = amount_str
+                    .parse::<u64>()
+                    .map_err(|e| Error::InvalidInput(format!("Invalid amount: {}", e)))?;
+                if parsed < 1 {
+                    return Err(Error::InvalidInput(
+                        "amount must be at least 1 MIST".to_string(),
+                    ));
+                }
+                Some(parsed)
             }
         };
         Ok(InternalOperation::MergeAndRedeemFungibleStakedSui(

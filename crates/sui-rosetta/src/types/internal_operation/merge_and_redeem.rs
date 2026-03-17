@@ -115,13 +115,14 @@ impl TryConstructTransaction for MergeAndRedeemFungibleStakedSui {
                     Error::InvalidInput("amount required for AtLeast mode".to_string())
                 })?;
                 // ceil(amount * pool_token_balance / sui_balance)
-                let tokens = if sui_balance > 0 {
-                    let numerator =
-                        amount as u128 * pool_token_balance as u128 + sui_balance as u128 - 1;
-                    (numerator / sui_balance as u128) as u64
-                } else {
-                    amount
-                };
+                if sui_balance == 0 {
+                    return Err(Error::DataError(
+                        "Pool has zero SUI balance, cannot compute exchange rate".to_string(),
+                    ));
+                }
+                let numerator =
+                    amount as u128 * pool_token_balance as u128 + sui_balance as u128 - 1;
+                let tokens = (numerator / sui_balance as u128) as u64;
                 tokens.min(total_tokens)
             }
             RedeemMode::AtMost => {
@@ -129,11 +130,13 @@ impl TryConstructTransaction for MergeAndRedeemFungibleStakedSui {
                     Error::InvalidInput("amount required for AtMost mode".to_string())
                 })?;
                 // floor(amount * pool_token_balance / sui_balance)
-                let tokens = if sui_balance > 0 {
-                    (amount as u128 * pool_token_balance as u128 / sui_balance as u128) as u64
-                } else {
-                    amount
-                };
+                if sui_balance == 0 {
+                    return Err(Error::DataError(
+                        "Pool has zero SUI balance, cannot compute exchange rate".to_string(),
+                    ));
+                }
+                let tokens =
+                    (amount as u128 * pool_token_balance as u128 / sui_balance as u128) as u64;
                 if tokens == 0 {
                     return Err(Error::InvalidInput(
                         "AtMost amount too small: rounds to 0 pool tokens".to_string(),
@@ -144,7 +147,12 @@ impl TryConstructTransaction for MergeAndRedeemFungibleStakedSui {
         };
 
         let is_redeem_all = token_amount == total_tokens;
-        let pt = merge_and_redeem_fss_pt(sender, fss_refs.clone(), token_amount)?;
+        let pt_token_amount = if is_redeem_all {
+            None
+        } else {
+            Some(token_amount)
+        };
+        let pt = merge_and_redeem_fss_pt(sender, fss_refs.clone(), pt_token_amount)?;
         let (budget, gas_coin_objs) =
             simulate_transaction(client, pt, sender, vec![], gas_price, budget).await?;
 
@@ -174,14 +182,14 @@ impl TryConstructTransaction for MergeAndRedeemFungibleStakedSui {
 /// Build PTB for merging all FSS and redeeming.
 ///
 /// Phase 1: Merge all FSS into one
-/// Phase 2: Split token amount (unless redeeming all — token_amount=0)
+/// Phase 2: Split token amount (None = redeem all, Some(n) = split n tokens)
 /// Phase 3: redeem_fungible_staked_sui → Balance<SUI>
 /// Phase 4: coin::from_balance<SUI> → Coin<SUI>
 /// Phase 5: TransferObjects → sender
 pub fn merge_and_redeem_fss_pt(
     sender: SuiAddress,
     fss_refs: Vec<ObjectRef>,
-    token_amount: u64,
+    token_amount: Option<u64>,
 ) -> anyhow::Result<ProgrammableTransaction> {
     let mut builder = ProgrammableTransactionBuilder::new();
 
@@ -207,8 +215,8 @@ pub fn merge_and_redeem_fss_pt(
 
     // Phase 2: Split or use whole FSS
     // FSS is not a Coin, so we must use staking_pool::split_fungible_staked_sui instead of SplitCoins
-    let redeem_target = if token_amount > 0 {
-        let split_amount = builder.pure(token_amount)?;
+    let redeem_target = if let Some(amount) = token_amount {
+        let split_amount = builder.pure(amount)?;
         builder.command(Command::move_call(
             SUI_SYSTEM_PACKAGE_ID,
             Identifier::new("staking_pool")?,

@@ -227,10 +227,7 @@ impl InternalOperation {
             }
             InternalOperation::MergeAndRedeemFungibleStakedSui(
                 MergeAndRedeemFungibleStakedSui { sender, .. },
-            ) => {
-                let token_amount = metadata.redeem_token_amount.unwrap_or(0);
-                merge_and_redeem_fss_pt(sender, metadata.objects, token_amount)?
-            }
+            ) => merge_and_redeem_fss_pt(sender, metadata.objects, metadata.redeem_token_amount)?,
         };
 
         if metadata.gas_coins.is_empty() {
