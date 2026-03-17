@@ -234,11 +234,15 @@ impl Amount {
         epoch_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
     ) -> Self {
-        if let Some(ref mut metadata) = self.metadata {
-            metadata.latest_epoch = Some(epoch);
-            metadata.latest_epoch_start_timestamp_ms = Some(epoch_start_timestamp_ms);
-            metadata.latest_epoch_duration_ms = Some(epoch_duration_ms);
-        }
+        let metadata = self.metadata.get_or_insert_with(|| AmountMetadata {
+            sub_balances: vec![],
+            latest_epoch: None,
+            latest_epoch_start_timestamp_ms: None,
+            latest_epoch_duration_ms: None,
+        });
+        metadata.latest_epoch = Some(epoch);
+        metadata.latest_epoch_start_timestamp_ms = Some(epoch_start_timestamp_ms);
+        metadata.latest_epoch_duration_ms = Some(epoch_duration_ms);
         self
     }
 }

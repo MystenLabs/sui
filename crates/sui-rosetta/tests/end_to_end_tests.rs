@@ -2924,21 +2924,23 @@ async fn test_fungible_staked_sui_value() -> Result<()> {
         "Expected 0 FSS value for address with no FSS"
     );
 
-    // Verify epoch timing metadata is present in sub-account response
-    if let Some(metadata) = &response.balances[0].metadata {
-        assert!(
-            metadata.latest_epoch.is_some(),
-            "Expected latest_epoch in sub-account metadata"
-        );
-        assert!(
-            metadata.latest_epoch_start_timestamp_ms.is_some(),
-            "Expected latest_epoch_start_timestamp_ms in sub-account metadata"
-        );
-        assert!(
-            metadata.latest_epoch_duration_ms.is_some(),
-            "Expected latest_epoch_duration_ms in sub-account metadata"
-        );
-    }
+    // Verify epoch timing metadata is present in sub-account response (even with zero balance)
+    let metadata = response.balances[0]
+        .metadata
+        .as_ref()
+        .expect("Expected metadata with epoch timing on zero-balance sub-account");
+    assert!(
+        metadata.latest_epoch.is_some(),
+        "Expected latest_epoch in sub-account metadata"
+    );
+    assert!(
+        metadata.latest_epoch_start_timestamp_ms.is_some(),
+        "Expected latest_epoch_start_timestamp_ms in sub-account metadata"
+    );
+    assert!(
+        metadata.latest_epoch_duration_ms.is_some(),
+        "Expected latest_epoch_duration_ms in sub-account metadata"
+    );
 
     // Verify epoch timing NOT in main balance
     let main_response: AccountBalanceResponse = rosetta_client
@@ -3033,13 +3035,14 @@ async fn test_fungible_staked_sui_value() -> Result<()> {
         .await
         .map_err(|e| anyhow!("Rosetta client error: {e:?}"))?;
     assert_eq!(pending_response.balances[0].value, 1_000_000_000);
-    if let Some(metadata) = &pending_response.balances[0].metadata {
-        let sub_balance = &metadata.sub_balances[0];
-        assert!(
-            sub_balance.activation_epoch.is_some(),
-            "Expected activation_epoch in PendingStake sub-balance"
-        );
-    }
+    let metadata = pending_response.balances[0]
+        .metadata
+        .as_ref()
+        .expect("Expected metadata on PendingStake sub-account");
+    assert!(
+        metadata.sub_balances[0].activation_epoch.is_some(),
+        "Expected activation_epoch in PendingStake sub-balance"
+    );
 
     // Advance epoch so stake becomes active
     test_cluster.trigger_reconfiguration().await;
@@ -3063,13 +3066,14 @@ async fn test_fungible_staked_sui_value() -> Result<()> {
         .await
         .map_err(|e| anyhow!("Rosetta client error: {e:?}"))?;
     assert_eq!(stake_response.balances[0].value, 1_000_000_000);
-    if let Some(metadata) = &stake_response.balances[0].metadata {
-        let sub_balance = &metadata.sub_balances[0];
-        assert!(
-            sub_balance.activation_epoch.is_some(),
-            "Expected activation_epoch in Stake sub-balance"
-        );
-    }
+    let metadata = stake_response.balances[0]
+        .metadata
+        .as_ref()
+        .expect("Expected metadata on Stake sub-account");
+    assert!(
+        metadata.sub_balances[0].activation_epoch.is_some(),
+        "Expected activation_epoch in Stake sub-balance"
+    );
 
     // Convert StakedSui to FungibleStakedSui
     // First, find the StakedSui object
@@ -3167,11 +3171,13 @@ async fn test_fungible_staked_sui_value() -> Result<()> {
     );
 
     // Verify epoch timing is also present
-    if let Some(metadata) = &fss_response.balances[0].metadata {
-        assert!(metadata.latest_epoch.is_some());
-        assert!(metadata.latest_epoch_start_timestamp_ms.is_some());
-        assert!(metadata.latest_epoch_duration_ms.is_some());
-    }
+    let metadata = fss_response.balances[0]
+        .metadata
+        .as_ref()
+        .expect("Expected metadata on FungibleStakedSuiValue sub-account");
+    assert!(metadata.latest_epoch.is_some());
+    assert!(metadata.latest_epoch_start_timestamp_ms.is_some());
+    assert!(metadata.latest_epoch_duration_ms.is_some());
 
     // Verify existing Stake sub-account now has 0 (all converted)
     let stake_after_response: AccountBalanceResponse = rosetta_client
