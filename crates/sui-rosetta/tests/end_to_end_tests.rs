@@ -2886,3 +2886,315 @@ async fn test_consolidate_unactivated_stakes_only() {
         flow_result.metadata
     );
 }
+
+#[tokio::test]
+async fn test_fungible_staked_sui_value() -> Result<()> {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let address = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url())?;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let network_identifier = NetworkIdentifier {
+        blockchain: "sui".to_string(),
+        network: SuiEnv::LocalNet,
+    };
+
+    // Query FungibleStakedSuiValue with no FSS — should return 0
+    let response: AccountBalanceResponse = rosetta_client
+        .call(
+            RosettaEndpoint::Balance,
+            &AccountBalanceRequest {
+                network_identifier: network_identifier.clone(),
+                account_identifier: AccountIdentifier {
+                    address,
+                    sub_account: Some(SubAccount {
+                        account_type: SubAccountType::FungibleStakedSuiValue,
+                    }),
+                },
+                block_identifier: Default::default(),
+                currencies: Currencies(vec![Currency::default()]),
+            },
+        )
+        .await
+        .map_err(|e| anyhow!("Rosetta client error: {e:?}"))?;
+    assert_eq!(
+        response.balances[0].value, 0,
+        "Expected 0 FSS value for address with no FSS"
+    );
+
+    // Verify epoch timing metadata is present in sub-account response
+    if let Some(metadata) = &response.balances[0].metadata {
+        assert!(
+            metadata.latest_epoch.is_some(),
+            "Expected latest_epoch in sub-account metadata"
+        );
+        assert!(
+            metadata.latest_epoch_start_timestamp_ms.is_some(),
+            "Expected latest_epoch_start_timestamp_ms in sub-account metadata"
+        );
+        assert!(
+            metadata.latest_epoch_duration_ms.is_some(),
+            "Expected latest_epoch_duration_ms in sub-account metadata"
+        );
+    }
+
+    // Verify epoch timing NOT in main balance
+    let main_response: AccountBalanceResponse = rosetta_client
+        .call(
+            RosettaEndpoint::Balance,
+            &AccountBalanceRequest {
+                network_identifier: network_identifier.clone(),
+                account_identifier: AccountIdentifier {
+                    address,
+                    sub_account: None,
+                },
+                block_identifier: Default::default(),
+                currencies: Currencies(vec![Currency::default()]),
+            },
+        )
+        .await
+        .map_err(|e| anyhow!("Rosetta client error: {e:?}"))?;
+    assert!(
+        main_response.balances[0].metadata.is_none(),
+        "Expected no metadata in main balance response"
+    );
+
+    // Stake SUI
+    let epoch_request =
+        GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let epoch_response = client
+        .ledger_client()
+        .get_epoch(epoch_request)
+        .await?
+        .into_inner();
+    let system_state = epoch_response
+        .epoch
+        .and_then(|epoch| epoch.system_state)
+        .ok_or_else(|| anyhow!("Failed to get system state"))?;
+    let validator = system_state
+        .validators
+        .ok_or_else(|| anyhow!("No validators in system state"))?
+        .active_validators[0]
+        .address()
+        .parse::<SuiAddress>()?;
+
+    let coins = get_all_coins(&mut client.clone(), address).await?;
+    let gas_price = client.get_reference_gas_price().await?;
+
+    let staking_coin_ref = get_object_ref(&mut client.clone(), coins[0].id()).await?;
+    let gas_object = get_object_ref(&mut client.clone(), coins[1].id())
+        .await?
+        .as_object_ref();
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let arguments = vec![
+        ptb.input(CallArg::SUI_SYSTEM_MUT)?,
+        ptb.make_obj_vec(vec![ObjectArg::ImmOrOwnedObject(
+            staking_coin_ref.as_object_ref(),
+        )])?,
+        ptb.pure(Some(1_000_000_000u64))?,
+        ptb.pure(validator)?,
+    ];
+    ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        ADD_STAKE_MUL_COIN_FUN_NAME.to_owned(),
+        vec![],
+        arguments,
+    ));
+    let delegation_tx = TransactionData::new_programmable(
+        address,
+        vec![gas_object],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(delegation_tx, keystore.export(&address)?);
+    execute_transaction(&mut client.clone(), &tx).await?;
+
+    // Verify activation_epoch is present in PendingStake sub-account
+    let pending_response: AccountBalanceResponse = rosetta_client
+        .call(
+            RosettaEndpoint::Balance,
+            &AccountBalanceRequest {
+                network_identifier: network_identifier.clone(),
+                account_identifier: AccountIdentifier {
+                    address,
+                    sub_account: Some(SubAccount {
+                        account_type: SubAccountType::PendingStake,
+                    }),
+                },
+                block_identifier: Default::default(),
+                currencies: Currencies(vec![Currency::default()]),
+            },
+        )
+        .await
+        .map_err(|e| anyhow!("Rosetta client error: {e:?}"))?;
+    assert_eq!(pending_response.balances[0].value, 1_000_000_000);
+    if let Some(metadata) = &pending_response.balances[0].metadata {
+        let sub_balance = &metadata.sub_balances[0];
+        assert!(
+            sub_balance.activation_epoch.is_some(),
+            "Expected activation_epoch in PendingStake sub-balance"
+        );
+    }
+
+    // Advance epoch so stake becomes active
+    test_cluster.trigger_reconfiguration().await;
+
+    // Verify activation_epoch is present in Stake sub-account
+    let stake_response: AccountBalanceResponse = rosetta_client
+        .call(
+            RosettaEndpoint::Balance,
+            &AccountBalanceRequest {
+                network_identifier: network_identifier.clone(),
+                account_identifier: AccountIdentifier {
+                    address,
+                    sub_account: Some(SubAccount {
+                        account_type: SubAccountType::Stake,
+                    }),
+                },
+                block_identifier: Default::default(),
+                currencies: Currencies(vec![Currency::default()]),
+            },
+        )
+        .await
+        .map_err(|e| anyhow!("Rosetta client error: {e:?}"))?;
+    assert_eq!(stake_response.balances[0].value, 1_000_000_000);
+    if let Some(metadata) = &stake_response.balances[0].metadata {
+        let sub_balance = &metadata.sub_balances[0];
+        assert!(
+            sub_balance.activation_epoch.is_some(),
+            "Expected activation_epoch in Stake sub-balance"
+        );
+    }
+
+    // Convert StakedSui to FungibleStakedSui
+    // First, find the StakedSui object
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let list_request = ListOwnedObjectsRequest::default()
+        .with_owner(address.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+
+    let staked_sui_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(list_request)
+        .map_err(|e| anyhow!("List error: {e}"))
+        .try_collect()
+        .await?;
+    assert!(
+        !staked_sui_objects.is_empty(),
+        "Expected at least one StakedSui object"
+    );
+
+    let staked_obj = &staked_sui_objects[0];
+    let staked_ref = (
+        ObjectID::from_str(staked_obj.object_id())?,
+        staked_obj.version().into(),
+        staked_obj.digest().parse()?,
+    );
+
+    // Build PTB to convert to FSS
+    let gas_coins = get_all_coins(&mut client.clone(), address).await?;
+    let gas_ref = get_object_ref(&mut client.clone(), gas_coins[0].id())
+        .await?
+        .as_object_ref();
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT)?;
+    let staked_sui_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref))?;
+    let fss_result = ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        Identifier::new("convert_to_fungible_staked_sui")?,
+        vec![],
+        vec![system_state_arg, staked_sui_arg],
+    ));
+    let sender_arg = ptb.pure(address)?;
+    ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+
+    let convert_tx = TransactionData::new_programmable(
+        address,
+        vec![gas_ref],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(convert_tx, keystore.export(&address)?);
+    let response = execute_transaction(&mut client.clone(), &tx).await?;
+    assert!(
+        response.effects().status().success(),
+        "Convert to FSS failed: {:?}",
+        response.effects().status().error()
+    );
+
+    // Now query FungibleStakedSuiValue — should be > 0
+    let fss_response: AccountBalanceResponse = rosetta_client
+        .call(
+            RosettaEndpoint::Balance,
+            &AccountBalanceRequest {
+                network_identifier: network_identifier.clone(),
+                account_identifier: AccountIdentifier {
+                    address,
+                    sub_account: Some(SubAccount {
+                        account_type: SubAccountType::FungibleStakedSuiValue,
+                    }),
+                },
+                block_identifier: Default::default(),
+                currencies: Currencies(vec![Currency::default()]),
+            },
+        )
+        .await
+        .map_err(|e| anyhow!("Rosetta client error: {e:?}"))?;
+
+    assert!(
+        fss_response.balances[0].value > 0,
+        "Expected positive FungibleStakedSuiValue, got {}",
+        fss_response.balances[0].value
+    );
+    // The value should be approximately 1 SUI (1_000_000_000 MIST) since this is a fresh pool with rate ~1.0
+    assert!(
+        fss_response.balances[0].value >= 999_000_000
+            && fss_response.balances[0].value <= 1_100_000_000,
+        "Expected FSS value close to 1 SUI, got {}",
+        fss_response.balances[0].value
+    );
+
+    // Verify epoch timing is also present
+    if let Some(metadata) = &fss_response.balances[0].metadata {
+        assert!(metadata.latest_epoch.is_some());
+        assert!(metadata.latest_epoch_start_timestamp_ms.is_some());
+        assert!(metadata.latest_epoch_duration_ms.is_some());
+    }
+
+    // Verify existing Stake sub-account now has 0 (all converted)
+    let stake_after_response: AccountBalanceResponse = rosetta_client
+        .call(
+            RosettaEndpoint::Balance,
+            &AccountBalanceRequest {
+                network_identifier: network_identifier.clone(),
+                account_identifier: AccountIdentifier {
+                    address,
+                    sub_account: Some(SubAccount {
+                        account_type: SubAccountType::Stake,
+                    }),
+                },
+                block_identifier: Default::default(),
+                currencies: Currencies(vec![Currency::default()]),
+            },
+        )
+        .await
+        .map_err(|e| anyhow!("Rosetta client error: {e:?}"))?;
+    assert_eq!(
+        stake_after_response.balances[0].value, 0,
+        "Expected 0 Stake balance after converting all to FSS"
+    );
+
+    Ok(())
+}

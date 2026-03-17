@@ -7,10 +7,11 @@ use axum_extra::extract::WithRejection;
 use futures::{TryStreamExt, future::join_all};
 
 use prost_types::FieldMask;
+use std::str::FromStr;
 use sui_rpc::client::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{
-    GetBalanceRequest, GetCheckpointRequest, ListOwnedObjectsRequest,
+    GetBalanceRequest, GetCheckpointRequest, GetEpochRequest, ListOwnedObjectsRequest,
 };
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::SuiAddress;
@@ -23,6 +24,16 @@ use crate::types::{
 use crate::{OnlineServerContext, SuiEnv};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+/// BCS layout for `0x3::staking_pool::FungibleStakedSui`.
+/// Field order must match the Move struct definition exactly (BCS is positional).
+/// See: crates/sui-framework/packages/sui-system/sources/staking_pool.move
+#[derive(serde::Deserialize)]
+struct FungibleStakedSuiBcs {
+    _id: Address,
+    pool_id: Address,
+    value: u64,
+}
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
 /// at which the balance lookup was performed.
@@ -112,13 +123,85 @@ async fn get_account_balances(
     Ok(response.into_inner().balance().balance() as i128)
 }
 
+struct EpochTimingInfo {
+    epoch: u64,
+    epoch_start_timestamp_ms: u64,
+    epoch_duration_ms: u64,
+}
+
+async fn get_epoch_timing(client: &mut Client) -> Result<EpochTimingInfo, Error> {
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths([
+        "epoch",
+        "system_state.epoch_start_timestamp_ms",
+        "system_state.parameters.epoch_duration_ms",
+    ]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await?
+        .into_inner();
+    let epoch_info = response.epoch();
+    let system_state = epoch_info.system_state();
+    Ok(EpochTimingInfo {
+        epoch: epoch_info.epoch(),
+        epoch_start_timestamp_ms: system_state.epoch_start_timestamp_ms(),
+        epoch_duration_ms: system_state.parameters().epoch_duration_ms(),
+    })
+}
+
+/// Exchange rate info for a staking pool.
+pub(crate) struct PoolRateInfo {
+    pub sui_balance: u64,
+    pub pool_token_balance: u64,
+    pub validator_address: Address,
+}
+
+/// Reads exchange rates for all active validator staking pools.
+pub(crate) async fn get_pool_exchange_rates(
+    client: &mut Client,
+) -> Result<std::collections::HashMap<String, PoolRateInfo>, Error> {
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths([
+        "system_state.validators.active_validators",
+    ]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await?
+        .into_inner();
+    let system_state = response.epoch().system_state();
+    let validators = system_state.validators().active_validators();
+
+    let mut rates = std::collections::HashMap::new();
+    for validator in validators {
+        let pool = validator.staking_pool();
+        let pool_id = pool.id().to_string();
+        let validator_address = Address::from_str(validator.address())
+            .map_err(|e| Error::DataError(format!("Invalid validator address: {}", e)))?;
+        rates.insert(
+            pool_id,
+            PoolRateInfo {
+                sui_balance: pool.sui_balance(),
+                pool_token_balance: pool.pool_token_balance(),
+                validator_address,
+            },
+        );
+    }
+    Ok(rates)
+}
+
 async fn get_sub_account_balances(
     account_type: SubAccountType,
     client: &mut Client,
     address: SuiAddress,
 ) -> Result<Vec<Amount>, Error> {
-    let current_epoch = crate::get_current_epoch(client).await?;
+    let epoch_timing = get_epoch_timing(client).await?;
+    let current_epoch = epoch_timing.epoch;
     let address = Address::from(address);
+
+    if matches!(account_type, SubAccountType::FungibleStakedSuiValue) {
+        return get_fungible_staked_sui_value(client, address, &epoch_timing).await;
+    }
+
     let delegated_stakes = client.list_delegated_stake(&address).await?;
 
     let amounts: Vec<SubBalance> = match account_type {
@@ -129,6 +212,7 @@ async fn get_sub_account_balances(
                 stake_id: stake.staked_sui_id,
                 validator: stake.validator_address,
                 value: stake.principal as i128,
+                activation_epoch: Some(stake.activation_epoch),
             })
             .collect(),
         SubAccountType::PendingStake => delegated_stakes
@@ -138,9 +222,9 @@ async fn get_sub_account_balances(
                 stake_id: stake.staked_sui_id,
                 validator: stake.validator_address,
                 value: stake.principal as i128,
+                activation_epoch: Some(stake.activation_epoch),
             })
             .collect(),
-
         SubAccountType::EstimatedReward => delegated_stakes
             .into_iter()
             .filter(|stake| current_epoch >= stake.activation_epoch)
@@ -148,15 +232,95 @@ async fn get_sub_account_balances(
                 stake_id: stake.staked_sui_id,
                 validator: stake.validator_address,
                 value: stake.rewards as i128,
+                activation_epoch: None,
             })
             .collect(),
+        SubAccountType::FungibleStakedSuiValue => unreachable!(),
     };
 
-    Ok(if amounts.is_empty() {
-        vec![Amount::new(0, None)]
+    let amount = if amounts.is_empty() {
+        Amount::new(0, None)
     } else {
-        vec![Amount::new_from_sub_balances(amounts)]
-    })
+        Amount::new_from_sub_balances(amounts)
+    };
+
+    Ok(vec![amount.with_epoch_timing(
+        epoch_timing.epoch,
+        epoch_timing.epoch_start_timestamp_ms,
+        epoch_timing.epoch_duration_ms,
+    )])
+}
+
+async fn get_fungible_staked_sui_value(
+    client: &mut Client,
+    address: Address,
+    epoch_timing: &EpochTimingInfo,
+) -> Result<Vec<Amount>, Error> {
+    use futures::TryStreamExt;
+
+    let list_request = ListOwnedObjectsRequest::default()
+        .with_owner(address.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(1000u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "contents"]));
+
+    let fss_objects: Vec<_> = client
+        .list_owned_objects(list_request)
+        .map_err(Error::from)
+        .try_collect()
+        .await?;
+
+    if fss_objects.is_empty() {
+        return Ok(vec![Amount::new(0, None).with_epoch_timing(
+            epoch_timing.epoch,
+            epoch_timing.epoch_start_timestamp_ms,
+            epoch_timing.epoch_duration_ms,
+        )]);
+    }
+
+    let pool_rates = get_pool_exchange_rates(client).await?;
+
+    let mut sub_balances = Vec::new();
+    for obj in &fss_objects {
+        let contents = obj
+            .contents
+            .as_ref()
+            .ok_or_else(|| Error::DataError("FungibleStakedSui missing contents".to_string()))?;
+        let fss: FungibleStakedSuiBcs = contents.deserialize().map_err(|e| {
+            Error::DataError(format!("Failed to deserialize FungibleStakedSui: {}", e))
+        })?;
+
+        let pool_id_str = fss.pool_id.to_string();
+        let rate = pool_rates.get(&pool_id_str).ok_or_else(|| {
+            Error::DataError(format!("No exchange rate found for pool {}", pool_id_str))
+        })?;
+
+        let sui_equivalent = if rate.pool_token_balance > 0 {
+            (fss.value as u128 * rate.sui_balance as u128 / rate.pool_token_balance as u128) as u64
+        } else {
+            fss.value
+        };
+
+        sub_balances.push(SubBalance {
+            stake_id: Address::from_str(obj.object_id())
+                .map_err(|e| Error::DataError(format!("Invalid FSS object_id: {}", e)))?,
+            validator: rate.validator_address,
+            value: sui_equivalent as i128,
+            activation_epoch: None,
+        });
+    }
+
+    let amount = if sub_balances.is_empty() {
+        Amount::new(0, None)
+    } else {
+        Amount::new_from_sub_balances(sub_balances)
+    };
+
+    Ok(vec![amount.with_epoch_timing(
+        epoch_timing.epoch,
+        epoch_timing.epoch_start_timestamp_ms,
+        epoch_timing.epoch_duration_ms,
+    )])
 }
 
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .

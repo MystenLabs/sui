@@ -85,6 +85,7 @@ pub enum SubAccountType {
     Stake,
     PendingStake,
     EstimatedReward,
+    FungibleStakedSuiValue,
 }
 
 impl From<SuiAddress> for AccountIdentifier {
@@ -186,6 +187,12 @@ pub struct Amount {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct AmountMetadata {
     pub sub_balances: Vec<SubBalance>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_epoch_start_timestamp_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_epoch_duration_ms: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -194,6 +201,8 @@ pub struct SubBalance {
     pub validator: Address,
     #[serde(with = "str_format")]
     pub value: i128,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_epoch: Option<u64>,
 }
 
 impl Amount {
@@ -210,8 +219,27 @@ impl Amount {
         Self {
             value,
             currency: Currency::default(),
-            metadata: Some(AmountMetadata { sub_balances }),
+            metadata: Some(AmountMetadata {
+                sub_balances,
+                latest_epoch: None,
+                latest_epoch_start_timestamp_ms: None,
+                latest_epoch_duration_ms: None,
+            }),
         }
+    }
+
+    pub fn with_epoch_timing(
+        mut self,
+        epoch: u64,
+        epoch_start_timestamp_ms: u64,
+        epoch_duration_ms: u64,
+    ) -> Self {
+        if let Some(ref mut metadata) = self.metadata {
+            metadata.latest_epoch = Some(epoch);
+            metadata.latest_epoch_start_timestamp_ms = Some(epoch_start_timestamp_ms);
+            metadata.latest_epoch_duration_ms = Some(epoch_duration_ms);
+        }
+        self
     }
 }
 
@@ -1041,5 +1069,79 @@ mod tests {
 
         assert_eq!("65000004233578500", js_test_total_coin_value);
         assert_eq!("65000004233578496", js_prod_total_coin_value);
+    }
+
+    #[test]
+    fn test_amount_metadata_epoch_fields_omitted_when_none() {
+        let amount = Amount::new_from_sub_balances(vec![SubBalance {
+            stake_id: Address::ZERO,
+            validator: Address::ZERO,
+            value: 100,
+            activation_epoch: None,
+        }]);
+        let json = serde_json::to_value(&amount).unwrap();
+        let metadata = json.get("metadata").unwrap();
+        assert!(metadata.get("latest_epoch").is_none());
+        assert!(metadata.get("latest_epoch_start_timestamp_ms").is_none());
+        assert!(metadata.get("latest_epoch_duration_ms").is_none());
+    }
+
+    #[test]
+    fn test_amount_metadata_epoch_fields_present_when_set() {
+        let amount = Amount::new_from_sub_balances(vec![SubBalance {
+            stake_id: Address::ZERO,
+            validator: Address::ZERO,
+            value: 100,
+            activation_epoch: None,
+        }])
+        .with_epoch_timing(542, 1710460800000, 86400000);
+
+        let json = serde_json::to_value(&amount).unwrap();
+        let metadata = json.get("metadata").unwrap();
+        assert_eq!(metadata.get("latest_epoch").unwrap(), 542);
+        assert_eq!(
+            metadata.get("latest_epoch_start_timestamp_ms").unwrap(),
+            1710460800000u64
+        );
+        assert_eq!(
+            metadata.get("latest_epoch_duration_ms").unwrap(),
+            86400000u64
+        );
+    }
+
+    #[test]
+    fn test_sub_balance_activation_epoch_omitted_when_none() {
+        let sb = SubBalance {
+            stake_id: Address::ZERO,
+            validator: Address::ZERO,
+            value: 100,
+            activation_epoch: None,
+        };
+        let json = serde_json::to_value(&sb).unwrap();
+        assert!(json.get("activation_epoch").is_none());
+    }
+
+    #[test]
+    fn test_sub_balance_activation_epoch_present_when_set() {
+        let sb = SubBalance {
+            stake_id: Address::ZERO,
+            validator: Address::ZERO,
+            value: 100,
+            activation_epoch: Some(543),
+        };
+        let json = serde_json::to_value(&sb).unwrap();
+        assert_eq!(json.get("activation_epoch").unwrap(), 543);
+    }
+
+    #[test]
+    fn test_fungible_staked_sui_value_sub_account_type_serde() {
+        let sub_account: SubAccount = serde_json::from_value(json!({
+            "address": "FungibleStakedSuiValue"
+        }))
+        .unwrap();
+        assert_eq!(
+            sub_account.account_type,
+            SubAccountType::FungibleStakedSuiValue
+        );
     }
 }
