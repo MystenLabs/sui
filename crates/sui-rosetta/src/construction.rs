@@ -291,7 +291,7 @@ pub async fn metadata(
         total_sui_balance,
         budget,
         address_balance_withdrawal,
-        operation_context,
+        fss_object_count,
     } = option
         .internal_operation
         .try_fetch_needed_objects(&mut context.client.clone(), Some(gas_price), budget)
@@ -331,7 +331,7 @@ pub async fn metadata(
             address_balance_withdrawal,
             epoch,
             chain_id,
-            operation_context,
+            fss_object_count,
         },
         suggested_fee: vec![Amount::new(budget as i128, None)],
     })

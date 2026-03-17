@@ -665,9 +665,10 @@ pub struct ConstructionMetadata {
     /// Genesis checkpoint digest (base58), identifies the chain for address-balance gas
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chain_id: Option<String>,
-    /// Operation-specific context passed from metadata to payloads step
+    /// Number of FungibleStakedSui objects in the `objects` array (the rest are StakedSui).
+    /// Used by ConsolidateAllStakedSuiToFungible.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub operation_context: Option<u64>,
+    pub fss_object_count: Option<u64>,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
@@ -1020,7 +1021,7 @@ mod tests {
             address_balance_withdrawal: 0,
             epoch: None,
             chain_id: None,
-            operation_context: None,
+            fss_object_count: None,
         };
         let prod_metadata_json = serde_json::to_string(&prod_metadata).unwrap();
 

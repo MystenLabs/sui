@@ -1382,7 +1382,7 @@ mod tests {
             address_balance_withdrawal: 0,
             epoch: None,
             chain_id: None,
-            operation_context: None,
+            fss_object_count: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
@@ -1443,7 +1443,7 @@ mod tests {
             address_balance_withdrawal: 0,
             epoch: None,
             chain_id: None,
-            operation_context: None,
+            fss_object_count: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);

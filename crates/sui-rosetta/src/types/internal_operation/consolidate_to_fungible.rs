@@ -107,7 +107,7 @@ impl TryConstructTransaction for ConsolidateAllStakedSuiToFungible {
             total_sui_balance,
             budget,
             address_balance_withdrawal: 0,
-            operation_context: Some(fss_count as u64),
+            fss_object_count: Some(fss_count as u64),
         })
     }
 }

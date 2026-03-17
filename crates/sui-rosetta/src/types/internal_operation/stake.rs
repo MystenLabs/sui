@@ -149,7 +149,7 @@ impl TryConstructTransaction for Stake {
                     total_sui_balance,
                     budget,
                     address_balance_withdrawal: actual_deficit,
-                    operation_context: None,
+                    fss_object_count: None,
                 })
             }
             _ => {
@@ -187,7 +187,7 @@ impl TryConstructTransaction for Stake {
                     total_sui_balance,
                     budget,
                     address_balance_withdrawal,
-                    operation_context: None,
+                    fss_object_count: None,
                 })
             }
         }

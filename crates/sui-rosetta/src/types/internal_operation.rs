@@ -65,10 +65,9 @@ pub struct TransactionObjectData {
     pub budget: u64,
     /// Amount to withdraw from address balance for payment
     pub address_balance_withdrawal: u64,
-    /// Operation-specific context passed from metadata to payloads step.
-    /// Used by ConsolidateAllStakedSuiToFungible (FSS count) and
-    /// MergeAndRedeemFungibleStakedSui (pool token amount).
-    pub operation_context: Option<u64>,
+    /// Number of FungibleStakedSui objects in the `objects` array (the rest are StakedSui).
+    /// Used by ConsolidateAllStakedSuiToFungible to split objects for PTB construction.
+    pub fss_object_count: Option<u64>,
 }
 
 #[async_trait]
@@ -209,7 +208,7 @@ impl InternalOperation {
                 ConsolidateAllStakedSuiToFungible { sender, .. },
             ) => {
                 // objects[0..fss_count] are FungibleStakedSui, objects[fss_count..] are StakedSui
-                let fss_count = metadata.operation_context.unwrap_or(0) as usize;
+                let fss_count = metadata.fss_object_count.unwrap_or(0) as usize;
                 let (fss_refs, staked_sui_refs) =
                     metadata.objects.split_at(fss_count.min(metadata.objects.len()));
                 consolidate_to_fungible_pt(sender, fss_refs.to_vec(), staked_sui_refs.to_vec())?
