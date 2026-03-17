@@ -497,8 +497,14 @@ impl LocalValidatorAggregatorProxy {
             })
             .collect();
 
-        // Fire off all submissions but don't wait for responses
-        let _ = futures::future::join_all(futures).await;
+        // Fire off all submissions with a short timeout. We don't need the responses -
+        // we just need to ensure the submissions are sent to trigger amplification.
+        // The timeout prevents blocking for 30s if validators are slow to respond.
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            futures::future::join_all(futures),
+        )
+        .await;
 
         // Use the normal path to get the final result
         self.submit_transaction_block(tx).await
@@ -1173,4 +1179,76 @@ pub fn convert_move_call_args(
                 .unwrap(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verifies that the timeout pattern used in submit_transaction_with_amplification
+    /// correctly limits blocking time when futures are slow.
+    #[tokio::test]
+    async fn test_amplification_timeout_pattern() {
+        // Simulate slow validator responses (10 seconds each)
+        let slow_futures: Vec<_> = (0..5)
+            .map(|i| async move {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                i
+            })
+            .collect();
+
+        let start = Instant::now();
+
+        // This is the same pattern used in submit_transaction_with_amplification
+        let _ = tokio::time::timeout(
+            Duration::from_secs(2),
+            futures::future::join_all(slow_futures),
+        )
+        .await;
+
+        let elapsed = start.elapsed();
+
+        // Should complete in ~2 seconds (the timeout), not 10 seconds
+        assert!(
+            elapsed < Duration::from_secs(3),
+            "Timeout should have triggered after 2s, but took {:?}",
+            elapsed
+        );
+        assert!(
+            elapsed >= Duration::from_secs(2),
+            "Should have waited for the full timeout duration, but only took {:?}",
+            elapsed
+        );
+    }
+
+    /// Verifies that fast responses complete before the timeout.
+    #[tokio::test]
+    async fn test_amplification_fast_responses() {
+        // Simulate fast validator responses (100ms each)
+        let fast_futures: Vec<_> = (0..5)
+            .map(|i| async move {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                i
+            })
+            .collect();
+
+        let start = Instant::now();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            futures::future::join_all(fast_futures),
+        )
+        .await;
+
+        let elapsed = start.elapsed();
+
+        // Should complete quickly, not wait for the full 2 second timeout
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "Fast responses should complete quickly, but took {:?}",
+            elapsed
+        );
+        // Result should be Ok (not a timeout)
+        assert!(result.is_ok(), "Fast responses should not timeout");
+    }
 }
