@@ -2767,7 +2767,7 @@ pub struct ObjectOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub storage_rebate: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<SuiParsedData>,
+    pub content: Option<Value>,
 }
 
 impl From<&SuiObjectData> for ObjectOutput {
@@ -2776,6 +2776,10 @@ impl From<&SuiObjectData> for ObjectOutput {
             Some(x) => x.to_string(),
             None => "unknown".to_string(),
         };
+        let content = obj.content.as_ref().map(|c| match c {
+            SuiParsedData::MoveObject(o) => o.fields.clone().to_json_value(),
+            SuiParsedData::Package(p) => json!(p),
+        });
         Self {
             object_id: obj.object_id,
             version: obj.version,
@@ -2784,7 +2788,7 @@ impl From<&SuiObjectData> for ObjectOutput {
             owner: obj.owner.clone(),
             prev_tx: obj.previous_transaction,
             storage_rebate: obj.storage_rebate,
-            content: obj.content.clone(),
+            content,
         }
     }
 }
