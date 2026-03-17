@@ -181,6 +181,7 @@ pub struct CtxValue(Value);
 
 #[derive(Clone, Debug)]
 pub struct InputObjectMetadata {
+    pub newly_created: bool,
     pub id: ObjectID,
     pub mutability: ObjectMutability,
     pub owner: Owner,
@@ -351,6 +352,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                         new_gas_coin_id = Some(id);
 
                         let metadata = InputObjectMetadata {
+                            newly_created: true,
                             id,
                             mutability: ObjectMutability::Mutable,
                             owner: Owner::AddressOwner(sui_address),
@@ -440,6 +442,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         let object_input_metadata = std::mem::take(&mut self.locations.input_object_metadata);
         let mut object_inputs =
             std::mem::replace(&mut self.locations.object_inputs, Locals::new_invalid(0)?);
+        let mut created_input_object_ids = BTreeSet::new();
         let mut loaded_runtime_objects = BTreeMap::new();
         let mut by_value_shared_objects = BTreeSet::new();
         let mut consensus_owner_objects = BTreeMap::new();
@@ -461,6 +464,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         for (metadata, value_opt) in object_inputs.into_iter().chain(gas) {
             let InputObjectMetadata {
+                newly_created,
                 id,
                 mutability,
                 owner,
@@ -474,13 +478,18 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 // have been mutated, and abort the tx if they have.
                 ObjectMutability::NonExclusiveWrite | ObjectMutability::Mutable => (),
             }
-            loaded_runtime_objects.insert(
-                id,
-                LoadedRuntimeObject {
-                    version,
-                    is_modified: true,
-                },
-            );
+
+            if newly_created {
+                created_input_object_ids.insert(id);
+            } else {
+                loaded_runtime_objects.insert(
+                    id,
+                    LoadedRuntimeObject {
+                        version,
+                        is_modified: true,
+                    },
+                );
+            }
             if let Some(object) = value_opt {
                 self.transfer_object_(
                     owner,
@@ -525,16 +534,32 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             settlement_output_sui,
         } = object_runtime.finish()?;
         assert_invariant!(
+            created_input_object_ids
+                .iter()
+                .all(|id| created_object_ids.contains(id)),
+            "All created input objects should be tracked in the created objects set"
+        );
+        assert_invariant!(
+            loaded_runtime_objects
+                .keys()
+                .all(|id| !created_object_ids.contains(id)),
+            "Loaded input objects should not be in the created objects set"
+        );
+
+        assert_invariant!(
             remaining_events.is_empty(),
             "Events should be taken after every Move call"
         );
         // Refund unused gas to the coin, real or ephemeral
         if let Some(gas_id) = gas_id_opt {
+            assert_invariant!(
+                !deleted_object_ids.contains(&gas_id),
+                "Gas coin should not be deleted"
+            );
             refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
             finish_ephemeral_gas_coin(
                 gas_charger,
                 &mut writes,
-                &mut loaded_runtime_objects,
                 &mut created_object_ids,
                 &mut accumulator_events,
                 gas_id,
@@ -1509,6 +1534,7 @@ fn load_object_arg_impl(
     let owner = obj.owner.clone();
     let version = obj.version();
     let object_metadata = InputObjectMetadata {
+        newly_created: false,
         id,
         mutability,
         owner: owner.clone(),
@@ -1626,7 +1652,6 @@ fn refund_max_gas_budget<OType>(
 fn finish_ephemeral_gas_coin<OType>(
     gas_charger: &mut GasCharger,
     writes: &mut IndexMap<ObjectID, (Owner, OType, VMValue)>,
-    loaded_runtime_objects: &mut BTreeMap<ObjectID, LoadedRuntimeObject>,
     created_object_ids: &mut IndexSet<ObjectID>,
     accumulator_events: &mut Vec<MoveAccumulatorEvent>,
     gas_id: ObjectID,
@@ -1640,9 +1665,6 @@ fn finish_ephemeral_gas_coin<OType>(
         PaymentLocation::Coin(_) => return Ok(()),
         PaymentLocation::AddressBalance(address) => address,
     };
-
-    // Always remove the ephemeral coin from loaded runtime objects
-    loaded_runtime_objects.remove(&gas_id);
 
     // See if the gas coin was transferred or remains with the original owner
     let Some((owner, _ty, _value)) = writes.get(&gas_id) else {
