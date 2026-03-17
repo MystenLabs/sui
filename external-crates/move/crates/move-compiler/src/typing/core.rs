@@ -1484,13 +1484,10 @@ impl Subst {
     pub fn upgrade_num_to_signed(&mut self, tvar: TVar, loc: Loc) {
         // Follow the tvar chain to find the final unbound tvar.
         let mut cur = tvar;
-        loop {
-            match self.get(cur) {
-                Some(sp!(_, ty_)) => match ty_.inner() {
-                    TI::Var(next) => cur = *next,
-                    _ => return, // Bound to a concrete type; nothing to upgrade.
-                },
-                None => break,
+        while let Some(sp!(_, ty_)) = self.get(cur) {
+            match ty_.inner() {
+                TI::Var(next) => cur = *next,
+                _ => return, // Bound to a concrete type; nothing to upgrade.
             }
         }
         match self.tvar_constraints.get(&cur) {
@@ -1777,9 +1774,9 @@ pub fn make_divergent_tvar(context: &mut Context, loc: Loc) -> Type {
 pub fn is_type_divergent(subst: &Subst, ty: &Type) -> bool {
     match ty.value.inner() {
         TI::Anything | TI::Void => true,
-        TI::Var(tvar) => {
-            let last_tvar = forward_tvar(subst, *tvar);
-            subst.get(last_tvar).is_none() && subst.is_divergent_var(&last_tvar)
+        TI::Var(id) => {
+            let last_id = forward_tvar(subst, *id);
+            subst.get(last_id).is_none() && subst.is_divergent_var(&last_id)
         }
         TI::UnresolvedError
         | TI::Unit
