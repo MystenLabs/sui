@@ -302,8 +302,8 @@ const MAX_PROTOCOL_VERSION: u64 = 116;
 // Version 115: Gasless transaction drop safety.
 //              Enable address aliases on mainnet.
 //              Relax ValidDuring requirement for transactions with owned inputs.
-//              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
+//              Re-enable defer_unpaid_amplification.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4670,8 +4670,8 @@ impl ProtocolConfig {
                     cfg.feature_flags.address_aliases = true;
                     cfg.feature_flags.relax_valid_during_for_owned_inputs = true;
                     cfg.feature_flags.enable_display_registry = true;
-                    // Disable for all networks
-                    cfg.feature_flags.defer_unpaid_amplification = false;
+                    // Re-enable unpaid amplification deferral protection
+                    cfg.feature_flags.defer_unpaid_amplification = true;
                 }
                 // Use this template when making changes:
                 //
