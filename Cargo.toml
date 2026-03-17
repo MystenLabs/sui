@@ -137,7 +137,6 @@ members = [
     "crates/sui-indexer-alt-metrics",
     "crates/sui-indexer-alt-object-store",
     "crates/sui-indexer-alt-reader",
-    "crates/sui-indexer-alt-restorer",
     "crates/sui-indexer-alt-schema",
     "crates/sui-json",
     "crates/sui-json-rpc",
