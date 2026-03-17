@@ -274,7 +274,8 @@ fn to_command_output(
         .ok()
         .flatten()
         .and_then(|layout| {
-            sui_types::proto_value::ProtoVisitor::new(service.config.max_json_move_value_size())
+            let bound = service.config.max_json_move_value_size();
+            sui_types::object::rpc_visitor::proto::ProtoVisitor::new(bound)
                 .deserialize_value(&bcs, &layout)
                 .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
                 .ok()
