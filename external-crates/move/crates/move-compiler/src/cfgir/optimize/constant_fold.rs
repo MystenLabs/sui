@@ -428,8 +428,6 @@ fn fold_binary_op(
 
         B::Eq => Some(V::Bool(v1 == v2)),
         B::Neq => Some(V::Bool(v1 != v2)),
-
-        B::Range | B::Implies | B::Iff => None,
     }?;
     Some(evalue_(loc, v))
 }
