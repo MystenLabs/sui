@@ -135,21 +135,51 @@ impl Client {
         object_id: ObjectID,
         version: Option<u64>,
     ) -> Result<Object> {
+        let (object, _) = self
+            .get_object_with_content(object_id, version, false)
+            .await?;
+        Ok(object)
+    }
+
+    pub async fn get_object_with_json(
+        &mut self,
+        object_id: ObjectID,
+    ) -> Result<(Object, Option<serde_json::Value>)> {
+        self.get_object_with_content(object_id, None, true).await
+    }
+
+    async fn get_object_with_content(
+        &mut self,
+        object_id: ObjectID,
+        version: Option<u64>,
+        include_json: bool,
+    ) -> Result<(Object, Option<serde_json::Value>)> {
+        let paths: Vec<&str> = if include_json {
+            vec!["bcs", "json"]
+        } else {
+            vec!["bcs"]
+        };
         let mut request = proto::GetObjectRequest::new(&object_id.into())
-            .with_read_mask(FieldMask::from_paths(["bcs"]));
+            .with_read_mask(FieldMask::from_paths(paths));
         request.version = version;
 
-        let (metadata, object, _extentions) = self
+        let (metadata, response, _extentions) = self
             .0
             .ledger_client()
             .get_object(request)
             .await?
             .into_parts();
 
-        let object = object
+        let proto_object = response
             .object
             .ok_or_else(|| tonic::Status::not_found("no object returned"))?;
-        object_try_from_proto(&object).map_err(|e| status_from_error_with_metadata(e, metadata))
+        let json_content = proto_object
+            .json
+            .as_ref()
+            .map(|v| proto_value_to_json_value(v));
+        let object = object_try_from_proto(&proto_object)
+            .map_err(|e| status_from_error_with_metadata(e, metadata))?;
+        Ok((object, json_content))
     }
 
     pub async fn batch_get_objects(&self, ids: &[ObjectID]) -> Result<Vec<Object>> {

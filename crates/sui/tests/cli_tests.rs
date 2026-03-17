@@ -2259,7 +2259,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj1 = if let SuiClientCommandResult::Object(object) = dbg!(resp) {
+    let mut_obj1 = if let SuiClientCommandResult::Object(object, _) = dbg!(resp) {
         object
     } else {
         panic!();
@@ -2271,7 +2271,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj2 = if let SuiClientCommandResult::Object(object) = resp2 {
+    let mut_obj2 = if let SuiClientCommandResult::Object(object, _) = resp2 {
         object
     } else {
         panic!();
