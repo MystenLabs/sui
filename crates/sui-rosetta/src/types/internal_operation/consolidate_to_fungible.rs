@@ -145,9 +145,7 @@ async fn discover_staked_sui(
             .deserialize()
             .map_err(|e| Error::DataError(format!("Failed to deserialize StakedSui: {}", e)))?;
 
-        if staked.pool_id.to_string() == pool_id
-            && current_epoch >= staked.stake_activation_epoch
-        {
+        if staked.pool_id.to_string() == pool_id && current_epoch >= staked.stake_activation_epoch {
             refs.push((
                 ObjectID::from_str(obj.object_id())
                     .map_err(|e| Error::DataError(format!("Invalid object_id: {}", e)))?,
@@ -189,11 +187,9 @@ async fn discover_fss(
             .contents
             .as_ref()
             .ok_or_else(|| Error::DataError("FungibleStakedSui missing contents".to_string()))?;
-        let fss: FungibleStakedSuiBcs = contents
-            .deserialize()
-            .map_err(|e| {
-                Error::DataError(format!("Failed to deserialize FungibleStakedSui: {}", e))
-            })?;
+        let fss: FungibleStakedSuiBcs = contents.deserialize().map_err(|e| {
+            Error::DataError(format!("Failed to deserialize FungibleStakedSui: {}", e))
+        })?;
 
         if fss.pool_id.to_string() == pool_id {
             refs.push((
@@ -216,7 +212,11 @@ async fn get_validator_pool_id(
     let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths([
         "system_state.validators.active_validators",
     ]));
-    let response = client.ledger_client().get_epoch(request).await?.into_inner();
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await?
+        .into_inner();
     let validators = response
         .epoch()
         .system_state()

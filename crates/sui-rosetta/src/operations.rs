@@ -270,9 +270,9 @@ impl Operations {
             .account
             .ok_or_else(|| Error::MissingInput("Sender address".to_string()))?
             .address;
-        let metadata = op
-            .metadata
-            .ok_or_else(|| Error::MissingInput("ConsolidateAllStakedSuiToFungible metadata".to_string()))?;
+        let metadata = op.metadata.ok_or_else(|| {
+            Error::MissingInput("ConsolidateAllStakedSuiToFungible metadata".to_string())
+        })?;
         let OperationMetadata::ConsolidateAllStakedSuiToFungible { validator } = metadata else {
             return Err(Error::InvalidInput(
                 "Cannot find validator from ConsolidateAllStakedSuiToFungible metadata.".into(),

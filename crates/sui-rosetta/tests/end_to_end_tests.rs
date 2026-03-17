@@ -2130,9 +2130,7 @@ async fn test_consolidate_with_preexisting_fss() {
 
     let mut ptb = ProgrammableTransactionBuilder::new();
     let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
-    let staked_sui_arg = ptb
-        .obj(ObjectArg::ImmOrOwnedObject(staked_ref))
-        .unwrap();
+    let staked_sui_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
     let fss_result = ptb.command(Command::move_call(
         SUI_SYSTEM_PACKAGE_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
@@ -2350,9 +2348,7 @@ async fn test_consolidate_fss_only_merge() {
 
         let mut ptb = ProgrammableTransactionBuilder::new();
         let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
-        let staked_sui_arg = ptb
-            .obj(ObjectArg::ImmOrOwnedObject(staked_ref))
-            .unwrap();
+        let staked_sui_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
         let fss_result = ptb.command(Command::move_call(
             SUI_SYSTEM_PACKAGE_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
@@ -2661,10 +2657,7 @@ async fn test_consolidate_noop_no_stakes() {
 
     // The metadata step should return an error
     assert!(
-        flow_result
-            .metadata
-            .as_ref()
-            .is_some_and(|r| r.is_err()),
+        flow_result.metadata.as_ref().is_some_and(|r| r.is_err()),
         "Expected metadata error when no stakes exist, got: {:?}",
         flow_result.metadata
     );
@@ -2755,9 +2748,7 @@ async fn test_consolidate_noop_single_fss() {
 
     let mut ptb = ProgrammableTransactionBuilder::new();
     let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
-    let staked_sui_arg = ptb
-        .obj(ObjectArg::ImmOrOwnedObject(staked_ref))
-        .unwrap();
+    let staked_sui_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
     let fss_result = ptb.command(Command::move_call(
         SUI_SYSTEM_PACKAGE_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
@@ -2813,10 +2804,7 @@ async fn test_consolidate_noop_single_fss() {
 
     // The metadata step should return an error
     assert!(
-        flow_result
-            .metadata
-            .as_ref()
-            .is_some_and(|r| r.is_err()),
+        flow_result.metadata.as_ref().is_some_and(|r| r.is_err()),
         "Expected metadata error when only 1 FSS exists, got: {:?}",
         flow_result.metadata
     );
@@ -2893,10 +2881,7 @@ async fn test_consolidate_unactivated_stakes_only() {
     // The metadata step should return an error because unactivated stakes
     // are filtered out, leaving nothing to consolidate
     assert!(
-        flow_result
-            .metadata
-            .as_ref()
-            .is_some_and(|r| r.is_err()),
+        flow_result.metadata.as_ref().is_some_and(|r| r.is_err()),
         "Expected metadata error for unactivated stakes, got: {:?}",
         flow_result.metadata
     );

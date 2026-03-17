@@ -31,6 +31,8 @@ use sui_types::transaction::{
 
 use crate::errors::Error;
 use crate::types::ConstructionMetadata;
+pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
+use consolidate_to_fungible::consolidate_to_fungible_pt;
 pub use pay_coin::PayCoin;
 pub(crate) use pay_coin::pay_coin_pt;
 pub use pay_sui::PaySui;
@@ -39,8 +41,6 @@ pub use stake::Stake;
 use stake::{stake_pt_ab_gas, stake_pt_coin_gas};
 pub use withdraw_stake::WithdrawStake;
 use withdraw_stake::withdraw_stake_pt;
-pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
-use consolidate_to_fungible::consolidate_to_fungible_pt;
 
 mod consolidate_to_fungible;
 mod pay_coin;
@@ -209,8 +209,9 @@ impl InternalOperation {
             ) => {
                 // objects[0..fss_count] are FungibleStakedSui, objects[fss_count..] are StakedSui
                 let fss_count = metadata.fss_object_count.unwrap_or(0) as usize;
-                let (fss_refs, staked_sui_refs) =
-                    metadata.objects.split_at(fss_count.min(metadata.objects.len()));
+                let (fss_refs, staked_sui_refs) = metadata
+                    .objects
+                    .split_at(fss_count.min(metadata.objects.len()));
                 consolidate_to_fungible_pt(sender, fss_refs.to_vec(), staked_sui_refs.to_vec())?
             }
         };
