@@ -96,8 +96,9 @@ pub struct Limits {
     pub max_output_nodes: u32,
 
     /// Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an
-    /// `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature`
-    /// parameters of a `verifyZkLoginSignature` field.
+    /// `executeTransaction` or `simulateTransaction` field, the `message` and `signature`
+    /// parameters of a `verifySignature` field, or the `bytes` and `signature` parameters of a
+    /// `verifyZkLoginSignature` field.
     ///
     /// This is cumulative across all matching fields in a single GraphQL request.
     pub max_tx_payload_size: u32,
@@ -319,6 +320,8 @@ impl Limits {
                 ("Mutation", "executeTransaction", "transactionDataBcs"),
                 ("Mutation", "executeTransaction", "signatures"),
                 ("Query", "simulateTransaction", "transaction"),
+                ("Query", "verifySignature", "message"),
+                ("Query", "verifySignature", "signature"),
                 ("Query", "verifyZkLoginSignature", "bytes"),
                 ("Query", "verifyZkLoginSignature", "signature"),
             ]),

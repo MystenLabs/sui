@@ -56,6 +56,9 @@ use crate::api::types::object_filter::ObjectFilter;
 use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::protocol_configs::ProtocolConfigs;
 use crate::api::types::service_config::ServiceConfig;
+use crate::api::types::signature_verify;
+use crate::api::types::signature_verify::IntentScope;
+use crate::api::types::signature_verify::SignatureVerifyResult;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
@@ -809,6 +812,43 @@ impl Query {
         }
     }
 
+    /// Verify a signature is from the given `author`.
+    ///
+    /// Supports all signature types: Ed25519, Secp256k1, Secp256r1, MultiSig, ZkLogin, and
+    /// Passkey.
+    ///
+    /// Returns successfully if the signature is valid. If the signature is invalid, returns an
+    /// error with the reason for the failure.
+    ///
+    /// - `message` is either a serialized personal message or `TransactionData`, Base64-encoded.
+    /// - `signature` is a serialized signature, also Base64-encoded.
+    /// - `intentScope` indicates whether `message` is to be parsed as a personal message or
+    ///   `TransactionData`.
+    /// - `author` is the signer's address.
+    async fn verify_signature(
+        &self,
+        ctx: &Context<'_>,
+        message: Base64,
+        signature: Base64,
+        intent_scope: IntentScope,
+        author: SuiAddress,
+    ) -> Option<Result<SignatureVerifyResult, RpcError<signature_verify::Error>>> {
+        Some(
+            async {
+                signature_verify::verify_signature(
+                    ctx,
+                    self.scope(ctx)?,
+                    message,
+                    signature,
+                    intent_scope,
+                    author,
+                )
+                .await
+            }
+            .await,
+        )
+    }
+
     /// Verify a zkLogin signature is from the given `author`.
     ///
     /// Returns successfully if the signature is valid. If the signature is invalid, returns an error with the reason for the failure.
@@ -817,6 +857,7 @@ impl Query {
     /// - `signature` is a serialized zkLogin signature, also Base64-encoded.
     /// - `intentScope` indicates whether `bytes` are to be parsed as a personal message or `TransactionData`.
     /// - `author` is the signer's address.
+    #[graphql(deprecation = "Use `verifySignature` instead, which supports all signature types.")]
     async fn verify_zk_login_signature(
         &self,
         ctx: &Context<'_>,

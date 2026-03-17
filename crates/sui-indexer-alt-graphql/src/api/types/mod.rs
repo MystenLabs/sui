@@ -35,6 +35,7 @@ pub(crate) mod open_move_type;
 pub(crate) mod owner;
 pub(crate) mod protocol_configs;
 pub(crate) mod service_config;
+pub(crate) mod signature_verify;
 pub(crate) mod simulation_result;
 pub(crate) mod transaction;
 pub(crate) mod transaction_effects;
