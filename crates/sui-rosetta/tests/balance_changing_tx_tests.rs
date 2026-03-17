@@ -630,6 +630,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         budget: rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
         currency: None,
         address_balance_withdrawal: 0,
+        fss_object_count: None,
         epoch: None,
         chain_id: None,
     };
