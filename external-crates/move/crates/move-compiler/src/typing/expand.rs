@@ -349,6 +349,75 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
     }
 }
 
+/// Returns the smallest unsigned type whose max value is >= `value`.
+fn find_fit_unsigned(value: U256) -> BuiltinTypeName_ {
+    use BuiltinTypeName_ as BT;
+    let u8_max = max_value_for(BT::U8);
+    let u16_max = max_value_for(BT::U16);
+    let u32_max = max_value_for(BT::U32);
+    let u64_max = max_value_for(BT::U64);
+    let u128_max = max_value_for(BT::U128);
+    if value > u128_max {
+        BT::U256
+    } else if value > u64_max {
+        BT::U128
+    } else if value > u32_max {
+        BT::U64
+    } else if value > u16_max {
+        BT::U32
+    } else if value > u8_max {
+        BT::U16
+    } else {
+        BT::U8
+    }
+}
+
+/// Returns the smallest signed type whose max value is >= `value`. Note that we do not need to
+/// check the minimum value of each signed type, since inferred numeric literals are always
+/// non-negative (represented as U256). If they had a negative value, that would have been pushed
+/// in and checked during expansion.
+fn find_fit_signed(value: U256) -> BuiltinTypeName_ {
+    use BuiltinTypeName_ as BT;
+    let i8_max = max_value_for(BT::I8);
+    let i16_max = max_value_for(BT::I16);
+    let i32_max = max_value_for(BT::I32);
+    let i64_max = max_value_for(BT::I64);
+    let i128_max = max_value_for(BT::I128);
+    if value > i128_max {
+        BT::I256
+    } else if value > i64_max {
+        BT::I128
+    } else if value > i32_max {
+        BT::I64
+    } else if value > i16_max {
+        BT::I32
+    } else if value > i8_max {
+        BT::I16
+    } else {
+        BT::I8
+    }
+}
+
+/// Returns the maximum non-negative value representable by `bt`.
+fn max_value_for(bt: BuiltinTypeName_) -> U256 {
+    use BuiltinTypeName_ as BT;
+    match bt {
+        BT::U8 => U256::from(u8::MAX),
+        BT::U16 => U256::from(u16::MAX),
+        BT::U32 => U256::from(u32::MAX),
+        BT::U64 => U256::from(u64::MAX),
+        BT::U128 => U256::from(u128::MAX),
+        BT::U256 => U256::max_value(),
+        BT::I8 => U256::from(i8::MAX as u64),
+        BT::I16 => U256::from(i16::MAX as u64),
+        BT::I32 => U256::from(i32::MAX as u64),
+        BT::I64 => U256::from(i64::MAX as u64),
+        BT::I128 => U256::from(i128::MAX as u128),
+        BT::I256 => move_core_types::i256::I256::max_value().to_u256_bits(),
+        BT::Address | BT::Signer | BT::Vector | BT::Bool => unreachable!(),
+    }
+}
+
 fn inferred_numerical_value(
     context: &mut Context,
     eloc: Loc,
@@ -360,62 +429,14 @@ fn inferred_numerical_value(
         Some(sp!(_, bt)) if bt.is_numeric() => bt,
         _ => panic!("ICE inferred num failed {:?}", &ty.value),
     };
-    let u8_max = U256::from(u8::MAX);
-    let u16_max = U256::from(u16::MAX);
-    let u32_max = U256::from(u32::MAX);
-    let u64_max = U256::from(u64::MAX);
-    let u128_max = U256::from(u128::MAX);
-    let u256_max = U256::max_value();
-    let i8_max = U256::from(i8::MAX as u64);
-    let i16_max = U256::from(i16::MAX as u64);
-    let i32_max = U256::from(i32::MAX as u64);
-    let i64_max = U256::from(i64::MAX as u64);
-    let i128_max = U256::from(i128::MAX as u128);
-    let i256_max = move_core_types::i256::I256::max_value().to_u256_bits();
-    let max = match bt {
-        BT::U8 => u8_max,
-        BT::U16 => u16_max,
-        BT::U32 => u32_max,
-        BT::U64 => u64_max,
-        BT::U128 => u128_max,
-        BT::U256 => u256_max,
-        BT::I8 => i8_max,
-        BT::I16 => i16_max,
-        BT::I32 => i32_max,
-        BT::I64 => i64_max,
-        BT::I128 => i128_max,
-        BT::I256 => i256_max,
-        BT::Address | BT::Signer | BT::Vector | BT::Bool => unreachable!(),
-    };
+    let max = max_value_for(*bt);
     if value > max {
         let msg = format!("This literal does not fit into the type '{}'.", bt);
         let fix_bt = if bt.is_signed_numeric() {
-            if value > i128_max {
-                BT::I256
-            } else if value > i64_max {
-                BT::I128
-            } else if value > i32_max {
-                BT::I64
-            } else if value > i16_max {
-                BT::I32
-            } else if value > i8_max {
-                BT::I16
-            } else {
-                BT::I8
-            }
-        } else if value > u128_max {
-            BT::U256
-        } else if value > u64_max {
-            BT::U128
-        } else if value > u32_max {
-            BT::U64
-        } else if value > u16_max {
-            BT::U32
+            find_fit_signed(value)
         } else {
-            assert!(value > u8_max);
-            BT::U16
+            find_fit_unsigned(value)
         };
-
         let fix = format!(
             "Annotating the literal might help inference: '{value}{type}'",
             type=fix_bt,
