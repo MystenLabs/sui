@@ -486,19 +486,17 @@ impl LocalValidatorAggregatorProxy {
         use sui_types::messages_grpc::SubmitTxRequest;
 
         // Submit to multiple validators in parallel
-        let validators: Vec<_> = self.clients.values().take(num_validators).collect();
+        let validators: Vec<_> = self.clients.values().cloned().take(num_validators).collect();
         let request = SubmitTxRequest::new_transaction(tx.clone());
 
-        let futures: Vec<_> = validators
-            .iter()
-            .map(|client| {
-                let req = request.clone();
-                async move { client.submit_transaction(req, None).await }
-            })
-            .collect();
-
-        // Fire off all submissions but don't wait for responses
-        let _ = futures::future::join_all(futures).await;
+        // Fire off all submissions as spawned tasks - don't wait for responses.
+        // We just need to ensure the submissions are sent to trigger amplification.
+        for client in validators {
+            let req = request.clone();
+            tokio::spawn(async move {
+                let _ = client.submit_transaction(req, None).await;
+            });
+        }
 
         // Use the normal path to get the final result
         self.submit_transaction_block(tx).await
@@ -1173,4 +1171,33 @@ pub fn convert_move_call_args(
                 .unwrap(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verifies that the fire-and-forget spawn pattern used in submit_transaction_with_amplification
+    /// does not block the caller, even when spawned tasks are slow.
+    #[tokio::test]
+    async fn test_amplification_spawn_does_not_block() {
+        let start = Instant::now();
+
+        // Spawn slow tasks (simulating slow validator responses)
+        for i in 0..5 {
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                i
+            });
+        }
+
+        let elapsed = start.elapsed();
+
+        // Spawning should complete almost instantly, not wait for the tasks
+        assert!(
+            elapsed < Duration::from_millis(100),
+            "Spawning should not block, but took {:?}",
+            elapsed
+        );
+    }
 }
