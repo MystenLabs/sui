@@ -44,7 +44,7 @@ Transfer balance of permissioned assets from one Account to another. Requires th
 let auth = account::new_auth(ctx);
 
 // 2. Create the transfer request (withdraws Balance from sender account)
-let mut request = from_account.send_balance<MyCoin>(
+let mut request = from_account.send_balance<MY_COIN>(
     &auth,
     &to_account,
     amount,
@@ -52,11 +52,13 @@ let mut request = from_account.send_balance<MyCoin>(
 );
 
 // 3. Approve with your witness
-request.approve(MyApproval());
+request.approve(MyTransferApproval());
 
 // 4. Resolve — sends Balance to recipient account
 send_funds::resolve_balance(request, &policy);
 ```
+
+See the [KYC example `kyc_registry`](https://github.com/MystenLabs/pas/blob/main/packages/examples/kyc/sources/kyc_registry.move) for a registry-gated transfer implementation.
 
 ## Clawback a balance
 
@@ -74,17 +76,19 @@ Unlike `send_funds`, the caller receives the funds and decides what to do with t
 
 ```move
 // 1. Create clawback request (no Auth needed)
-let mut request = from_account.clawback_balance<MyCoin>(amount, ctx);
+let mut request = from_account.clawback_balance<MY_COIN>(amount, ctx);
 
 // 2. Approve
-request.approve(MyApproval());
+request.approve(MyClawbackApproval());
 
 // 3. Resolve — returns the Balance to the caller
-let balance: Balance<MyCoin> = clawback_funds::resolve(request, &policy);
+let balance: Balance<MY_COIN> = clawback_funds::resolve(request, &policy);
 
 // 4. Do something with the balance (deposit elsewhere, burn, and so on)
 to_account.deposit_balance(balance);
 ```
+
+See the [KYC example `treasury::burn`](https://github.com/MystenLabs/pas/blob/main/packages/examples/kyc/sources/treasury.move) for a clawback-to-burn implementation.
 
 ## Unlock a balance
 
@@ -109,12 +113,14 @@ The unrestricted path is `Balance<C>`-specific. It exists for assets like SUI th
 
 ```move
 let auth = account::new_auth(ctx);
-let mut request = account.unlock_balance<MyCoin>(&auth, amount, ctx);
+let mut request = account.unlock_balance<MY_COIN>(&auth, amount, ctx);
 
-request.approve(MyApproval());
-let balance: Balance<MyCoin> = unlock_funds::resolve(request, &policy);
+request.approve(MyUnlockApproval());
+let balance: Balance<MY_COIN> = unlock_funds::resolve(request, &policy);
 // Balance is now outside the system
 ```
+
+See the [Loyalty example `treasury::redeem`](https://github.com/MystenLabs/pas/blob/main/packages/examples/loyalty/sources/treasury.move) for a registry-gated unlock (redemption) implementation.
 
 ### Unmanaged assets (no policy)
 
@@ -154,7 +160,7 @@ public fun burn(
     ctx: &mut TxContext,
 ) {
     // Approve inside your contract
-    request.approve(ClawbackApproval());
+    request.approve(MyClawbackApproval());
 
     // Resolve — balance returned to this function
     let balance = clawback_funds::resolve(request, policy);
@@ -164,7 +170,7 @@ public fun burn(
 }
 ```
 
-**Use case:** Burn, seize, or any operation where your contract needs the balance.
+**Use case:** Burn, seize, or any operation where your contract needs the balance. See [`treasury::burn`](https://github.com/MystenLabs/pas/blob/main/packages/examples/kyc/sources/treasury.move) (KYC) and [`treasury::redeem`](https://github.com/MystenLabs/pas/blob/main/packages/examples/loyalty/sources/treasury.move) (Loyalty).
 
 ## Resolving actions in a PTB (client-side)
 
@@ -185,3 +191,10 @@ PTB:
 Steps 3 and 4 **must** be in the same PTB. The request is a hot potato. If the transaction ends without resolution, it aborts.
 
 :::
+
+## Example packages
+
+| **Example** | **Actions** | **Approval pattern** |
+|---|---|---|
+| [Loyalty](https://github.com/MystenLabs/pas/tree/main/packages/examples/loyalty) | `send_funds` (permissionless), `unlock_funds` (per-address registry) | Transfers are open, points stay in the system. Redemptions are gated by a `RedeemRegistry` and resolved in Move. Once unlocked, funds leave the managed system entirely. |
+| [KYC](https://github.com/MystenLabs/pas/tree/main/packages/examples/kyc) | `send_funds` (KYC registry), `clawback_funds` (issuer) | Every transfer checks the recipient against a `KYCRegistry`. Clawbacks are approved unconditionally, allowing the issuer to burn tokens from any account. |

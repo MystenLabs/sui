@@ -16,11 +16,9 @@ A wallet address on Sui can hold two kinds of balances:
 
 From your perspective, both belong to the same address. PAS balances are held in a derived Account object, but transfers always target the **wallet address**, not the `Account` address. The SDK resolves the underlying `Account` transparently.
 
-To read a wallet's PAS balances, you derive the internal `Account` address from the wallet address, then query it with standard RPC. The derivation is deterministic and requires no on-chain lookups.
-
 ## Querying PAS balances
 
-The PAS SDK derives the internal `Account` address from a wallet address. This is a pure computation with no RPC calls:
+To read a wallet's PAS balances, derive the internal `Account` address from the wallet address using the PAS SDK (the derivation is deterministic), then query it with core SDK balance methods:
 
 ```
 Wallet Address (for example, 0xAlice)

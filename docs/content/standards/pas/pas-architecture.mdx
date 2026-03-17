@@ -140,7 +140,7 @@ PAS uses Sui's [address balances](https://docs.sui.io/guides/developer/address-b
 ```
 Account (shared object)
   └── UID
-       └── Balance<MyCoin> stored via balance::send_funds(balance, account_object_address)
+       └── Balance<MY_COIN> stored via balance::send_funds(balance, account_object_address)
 ```
 
 Balances are **not** stored as fields on the Account struct. They are stored as object balance on the Account's `UID`, using `balance::send_funds` to send funds to the Account's object address and `balance::withdraw_funds_from_object` (through `UID.withdraw_funds_from_object`) to pull them out.
@@ -176,7 +176,7 @@ All PAS objects (Accounts, policies) use deterministic derived addresses. You ca
 let account_addr: address = namespace.account_address(@0xAlice);
 
 // Get the policy address for a type
-let policy_addr: address = namespace.policy_address<Balance<MyCoin>>();
+let policy_addr: address = namespace.policy_address<Balance<MY_COIN>>();
 ```
 
 ## Security model
