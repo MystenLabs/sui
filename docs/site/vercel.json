@@ -3366,9 +3366,8 @@
     { "source": "/references/framework/sui_sui_system.md", "destination": "/references/framework/sui_sui_system/index.md" },
     { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" },
     { "source": "/standards/display", "destination": "/guides/developer/objects/display/display-overview" },
-    { "source": "/standards/display-v2-migration", "destination": "/guides/developer/objects/display" },
+    { "source": "/standards/display-v2-migration", "destination": "/guides/developer/objects/display" }
   ],
-{
   "rewrites": [
     {
       "source": "/(.+)\\.md",
@@ -3403,5 +3402,4 @@
       ]
     }
   ]
-}
 }
