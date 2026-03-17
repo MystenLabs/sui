@@ -315,7 +315,7 @@ pub async fn start_rpc(
 
     if node_args.fullnode_grpc_url.is_some() {
         let fullnode_client = FullnodeClient::new(
-            Some("jsonrpc"),
+            Some("jsonrpc_alt_fullnode"),
             FullnodeArgs {
                 fullnode_rpc_url: node_args.fullnode_grpc_url,
             },
