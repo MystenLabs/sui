@@ -3204,3 +3204,813 @@ async fn test_fungible_staked_sui_value() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_merge_and_redeem_fungible_staked_sui() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    // Get validator
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    // Stake 2 SUI
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-2000000000" },
+            "metadata": { "Stake" : {"validator": validator.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Advance epoch
+    test_cluster.trigger_reconfiguration().await;
+
+    // Convert StakedSui -> FSS
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let list_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+    let staked_sui_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(list_request)
+        .map_err(|e| panic!("List error: {e}"))
+        .try_collect()
+        .await
+        .unwrap();
+    assert!(!staked_sui_objects.is_empty());
+
+    let staked_obj = &staked_sui_objects[0];
+    let staked_ref = (
+        ObjectID::from_str(staked_obj.object_id()).unwrap(),
+        staked_obj.version().into(),
+        staked_obj.digest().parse().unwrap(),
+    );
+
+    let gas_coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+    let gas_ref = get_object_ref(&mut client.clone(), gas_coins[0].id())
+        .await
+        .unwrap()
+        .as_object_ref();
+    let gas_price = client.get_reference_gas_price().await.unwrap();
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+    let staked_sui_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
+    let fss_result = ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+        vec![],
+        vec![system_state_arg, staked_sui_arg],
+    ));
+    let sender_arg = ptb.pure(sender).unwrap();
+    ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+
+    let convert_tx = TransactionData::new_programmable(
+        sender,
+        vec![gas_ref],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = sui_types::utils::to_sender_signed_transaction(
+        convert_tx,
+        keystore.export(&sender).unwrap(),
+    );
+    let convert_response = execute_transaction(&mut client.clone(), &tx).await.unwrap();
+    assert!(
+        convert_response.effects().status().success(),
+        "Convert to FSS failed"
+    );
+
+    // Redeem all FSS via Rosetta
+    let redeem_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "MergeAndRedeemFungibleStakedSui",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "MergeAndRedeemFungibleStakedSui": {
+                    "validator": validator.to_string(),
+                    "redeem_mode": "All"
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let flow_result = rosetta_client
+        .rosetta_flow(&redeem_ops, keystore, None)
+        .await;
+    if let Some(Err(e)) = &flow_result.preprocess {
+        panic!("Redeem preprocess step failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow_result.metadata {
+        panic!("Redeem metadata step failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow_result.payloads {
+        panic!("Redeem payloads step failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow_result.combine {
+        panic!("Redeem combine step failed: {:?}", e);
+    }
+    let response: TransactionIdentifierResponse = flow_result
+        .submit
+        .unwrap_or_else(|| {
+            panic!(
+                "Submit was None. preprocess: {:?}, metadata: {:?}, payloads: {:?}, combine: {:?}",
+                flow_result.preprocess,
+                flow_result.metadata,
+                flow_result.payloads,
+                flow_result.combine
+            )
+        })
+        .expect("Submit should succeed");
+
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Verify: no FSS remaining
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id"]));
+    let fss_remaining: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .try_collect()
+        .await
+        .unwrap();
+    assert!(
+        fss_remaining.is_empty(),
+        "Expected no FSS after full redeem, found {}",
+        fss_remaining.len()
+    );
+}
+
+async fn setup_fss_for_validator(
+    stake_amount: u64,
+) -> (
+    test_cluster::TestCluster,
+    GrpcClient,
+    rosetta_client::RosettaClient,
+    SuiAddress,
+    SuiAddress,
+    Vec<tokio::task::JoinHandle<()>>,
+) {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, handles) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": format!("-{}", stake_amount) },
+            "metadata": { "Stake" : {"validator": validator.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let response: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    test_cluster.trigger_reconfiguration().await;
+
+    let list_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+    let staked_sui_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(list_request)
+        .map_err(|e| panic!("List error: {e}"))
+        .try_collect()
+        .await
+        .unwrap();
+    assert!(!staked_sui_objects.is_empty());
+
+    let staked_obj = &staked_sui_objects[0];
+    let staked_ref = (
+        ObjectID::from_str(staked_obj.object_id()).unwrap(),
+        staked_obj.version().into(),
+        staked_obj.digest().parse().unwrap(),
+    );
+
+    let gas_coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+    let gas_ref = get_object_ref(&mut client.clone(), gas_coins[0].id())
+        .await
+        .unwrap()
+        .as_object_ref();
+    let gas_price = client.get_reference_gas_price().await.unwrap();
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+    let staked_sui_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
+    let fss_result = ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+        vec![],
+        vec![system_state_arg, staked_sui_arg],
+    ));
+    let sender_arg = ptb.pure(sender).unwrap();
+    ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+
+    let convert_tx = TransactionData::new_programmable(
+        sender,
+        vec![gas_ref],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(convert_tx, keystore.export(&sender).unwrap());
+    let convert_response = execute_transaction(&mut client.clone(), &tx).await.unwrap();
+    assert!(
+        convert_response.effects().status().success(),
+        "Convert to FSS failed"
+    );
+
+    (
+        test_cluster,
+        client,
+        rosetta_client,
+        sender,
+        validator,
+        handles,
+    )
+}
+
+async fn run_redeem_flow(
+    client: &mut GrpcClient,
+    rosetta_client: &rosetta_client::RosettaClient,
+    keystore: &sui_keys::keystore::Keystore,
+    sender: SuiAddress,
+    validator: SuiAddress,
+    redeem_mode: &str,
+    amount: Option<u64>,
+) -> TransactionIdentifierResponse {
+    let metadata = if let Some(amt) = amount {
+        json!({
+            "MergeAndRedeemFungibleStakedSui": {
+                "validator": validator.to_string(),
+                "amount": amt.to_string(),
+                "redeem_mode": redeem_mode
+            }
+        })
+    } else {
+        json!({
+            "MergeAndRedeemFungibleStakedSui": {
+                "validator": validator.to_string(),
+                "redeem_mode": redeem_mode
+            }
+        })
+    };
+
+    let redeem_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "MergeAndRedeemFungibleStakedSui",
+            "account": {"address": sender.to_string()},
+            "metadata": metadata
+        }]
+    ))
+    .unwrap();
+
+    let flow_result = rosetta_client
+        .rosetta_flow(&redeem_ops, keystore, None)
+        .await;
+    if let Some(Err(e)) = &flow_result.preprocess {
+        panic!("Redeem preprocess failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow_result.metadata {
+        panic!("Redeem metadata failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow_result.payloads {
+        panic!("Redeem payloads failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow_result.combine {
+        panic!("Redeem combine failed: {:?}", e);
+    }
+    let response: TransactionIdentifierResponse = flow_result
+        .submit
+        .unwrap_or_else(|| {
+            panic!(
+                "Submit was None. preprocess: {:?}, metadata: {:?}, payloads: {:?}, combine: {:?}",
+                flow_result.preprocess,
+                flow_result.metadata,
+                flow_result.payloads,
+                flow_result.combine
+            )
+        })
+        .expect("Submit should succeed");
+
+    wait_for_transaction(client, &response.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+
+    response
+}
+
+async fn count_fss_objects(client: &mut GrpcClient, owner: SuiAddress) -> (usize, u64) {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(owner.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(100u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "contents"]));
+    let objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .map_err(|e| panic!("List FSS error: {e}"))
+        .try_collect()
+        .await
+        .unwrap();
+
+    let mut total_value: u64 = 0;
+    for obj in &objects {
+        if let Some(contents) = &obj.contents {
+            #[derive(serde::Deserialize)]
+            struct FssBcs {
+                _id: sui_sdk_types::Address,
+                _pool_id: sui_sdk_types::Address,
+                value: u64,
+            }
+            if let Ok(fss) = contents.deserialize::<FssBcs>() {
+                total_value += fss.value;
+            }
+        }
+    }
+    (objects.len(), total_value)
+}
+
+async fn get_sui_balance(client: &mut GrpcClient, address: SuiAddress) -> u64 {
+    use sui_rpc::proto::sui::rpc::v2::GetBalanceRequest;
+
+    let request = GetBalanceRequest::default()
+        .with_owner(address.to_string())
+        .with_coin_type(
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                .to_string(),
+        );
+    client
+        .state_client()
+        .get_balance(request)
+        .await
+        .unwrap()
+        .into_inner()
+        .balance
+        .and_then(|b| b.balance)
+        .unwrap_or(0)
+}
+
+#[tokio::test]
+async fn test_redeem_at_least_mode() {
+    let (test_cluster, mut client, rosetta_client, sender, validator, _handles) =
+        setup_fss_for_validator(2_000_000_000).await;
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let balance_before = get_sui_balance(&mut client, sender).await;
+
+    run_redeem_flow(
+        &mut client,
+        &rosetta_client,
+        keystore,
+        sender,
+        validator,
+        "AtLeast",
+        Some(1_000_000_000),
+    )
+    .await;
+
+    let balance_after = get_sui_balance(&mut client, sender).await;
+    assert!(
+        balance_after > balance_before,
+        "Balance should have increased after AtLeast redeem: before={}, after={}",
+        balance_before,
+        balance_after
+    );
+
+    let (fss_count, fss_value) = count_fss_objects(&mut client, sender).await;
+    assert!(fss_count > 0, "FSS should still exist after partial redeem");
+    assert!(fss_value > 0, "Remaining FSS should have non-zero value");
+}
+
+#[tokio::test]
+async fn test_redeem_at_most_mode() {
+    let (test_cluster, mut client, rosetta_client, sender, validator, _handles) =
+        setup_fss_for_validator(2_000_000_000).await;
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let balance_before = get_sui_balance(&mut client, sender).await;
+
+    run_redeem_flow(
+        &mut client,
+        &rosetta_client,
+        keystore,
+        sender,
+        validator,
+        "AtMost",
+        Some(1_000_000_000),
+    )
+    .await;
+
+    let balance_after = get_sui_balance(&mut client, sender).await;
+    assert!(
+        balance_after > balance_before,
+        "Balance should have increased after AtMost redeem: before={}, after={}",
+        balance_before,
+        balance_after
+    );
+
+    let (fss_count, _fss_value) = count_fss_objects(&mut client, sender).await;
+    assert!(
+        fss_count > 0,
+        "FSS should still exist after partial AtMost redeem"
+    );
+}
+
+#[tokio::test]
+async fn test_redeem_single_fss_partial() {
+    let (test_cluster, mut client, rosetta_client, sender, validator, _handles) =
+        setup_fss_for_validator(2_000_000_000).await;
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let (fss_count_before, fss_value_before) = count_fss_objects(&mut client, sender).await;
+    assert_eq!(
+        fss_count_before, 1,
+        "Should start with exactly 1 FSS object"
+    );
+    assert!(fss_value_before > 0, "FSS should have non-zero value");
+
+    run_redeem_flow(
+        &mut client,
+        &rosetta_client,
+        keystore,
+        sender,
+        validator,
+        "AtLeast",
+        Some(1_000_000_000),
+    )
+    .await;
+
+    let (fss_count_after, fss_value_after) = count_fss_objects(&mut client, sender).await;
+    assert!(
+        fss_count_after > 0,
+        "FSS should still exist after partial redeem of single FSS"
+    );
+    assert!(
+        fss_value_after > 0 && fss_value_after < fss_value_before,
+        "Remaining FSS value ({}) should be between 0 and original value ({})",
+        fss_value_after,
+        fss_value_before
+    );
+}
+
+#[tokio::test]
+async fn test_redeem_multi_validator_isolation() {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let active_validators = &system_state.validators.unwrap().active_validators;
+    assert!(
+        active_validators.len() >= 2,
+        "Need at least 2 validators for this test, found {}",
+        active_validators.len()
+    );
+    let validator_a = active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+    let validator_b = active_validators[1]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    let ops_a = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-2000000000" },
+            "metadata": { "Stake" : {"validator": validator_a.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let resp_a: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops_a, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(&mut client, &resp_a.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+
+    let ops_b = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-2000000000" },
+            "metadata": { "Stake" : {"validator": validator_b.to_string()} }
+        }]
+    ))
+    .unwrap();
+    let resp_b: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops_b, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(&mut client, &resp_b.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+
+    test_cluster.trigger_reconfiguration().await;
+
+    let list_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+    let staked_sui_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(list_request)
+        .map_err(|e| panic!("List error: {e}"))
+        .try_collect()
+        .await
+        .unwrap();
+    assert!(staked_sui_objects.len() >= 2);
+
+    let gas_price = client.get_reference_gas_price().await.unwrap();
+
+    for staked_obj in &staked_sui_objects {
+        let staked_ref = (
+            ObjectID::from_str(staked_obj.object_id()).unwrap(),
+            staked_obj.version().into(),
+            staked_obj.digest().parse().unwrap(),
+        );
+        let gas_coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+        let gas_ref = get_object_ref(&mut client.clone(), gas_coins[0].id())
+            .await
+            .unwrap()
+            .as_object_ref();
+
+        let mut ptb = ProgrammableTransactionBuilder::new();
+        let system_state_arg = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+        let staked_sui_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
+        let fss_result = ptb.command(Command::move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+            vec![],
+            vec![system_state_arg, staked_sui_arg],
+        ));
+        let sender_arg = ptb.pure(sender).unwrap();
+        ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+
+        let convert_tx = TransactionData::new_programmable(
+            sender,
+            vec![gas_ref],
+            ptb.finish(),
+            1_000_000_000,
+            gas_price,
+        );
+        let tx = to_sender_signed_transaction(convert_tx, keystore.export(&sender).unwrap());
+        let convert_response = execute_transaction(&mut client.clone(), &tx).await.unwrap();
+        assert!(convert_response.effects().status().success());
+    }
+
+    let (fss_count_before, _) = count_fss_objects(&mut client, sender).await;
+    assert!(fss_count_before >= 2);
+
+    run_redeem_flow(
+        &mut client,
+        &rosetta_client,
+        keystore,
+        sender,
+        validator_a,
+        "All",
+        None,
+    )
+    .await;
+
+    let fss_request = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::FungibleStakedSui".to_string())
+        .with_page_size(100u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "contents"]));
+    let remaining_fss: Vec<_> = client
+        .clone()
+        .list_owned_objects(fss_request)
+        .map_err(|e| panic!("List FSS error: {e}"))
+        .try_collect()
+        .await
+        .unwrap();
+    assert!(
+        !remaining_fss.is_empty(),
+        "Validator B's FSS should still exist"
+    );
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let active_validators = &system_state.validators.unwrap().active_validators;
+    let pool_b_id = active_validators
+        .iter()
+        .find(|v| v.address().parse::<SuiAddress>().ok() == Some(validator_b))
+        .unwrap()
+        .staking_pool()
+        .id()
+        .to_string();
+
+    for obj in &remaining_fss {
+        if let Some(contents) = &obj.contents {
+            #[derive(serde::Deserialize)]
+            struct FssBcs {
+                _id: sui_sdk_types::Address,
+                pool_id: sui_sdk_types::Address,
+                _value: u64,
+            }
+            let fss: FssBcs = contents.deserialize().unwrap();
+            assert_eq!(
+                fss.pool_id.to_string(),
+                pool_b_id,
+                "Remaining FSS should belong to validator B's pool"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_redeem_no_fss_error() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
+    let validator = system_state.validators.unwrap().active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    let redeem_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "MergeAndRedeemFungibleStakedSui",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "MergeAndRedeemFungibleStakedSui": {
+                    "validator": validator.to_string(),
+                    "redeem_mode": "All"
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let flow_result = rosetta_client
+        .rosetta_flow(&redeem_ops, keystore, None)
+        .await;
+    assert!(
+        flow_result.metadata.as_ref().is_some_and(|r| r.is_err()),
+        "Expected metadata error when no FSS exists, got: {:?}",
+        flow_result.metadata
+    );
+}
+
+#[tokio::test]
+async fn test_redeem_invalid_validator() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+
+    let fake_validator =
+        SuiAddress::from_str("0x0000000000000000000000000000000000000000000000000000000000000099")
+            .unwrap();
+
+    let redeem_ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier": {"index": 0},
+            "type": "MergeAndRedeemFungibleStakedSui",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "MergeAndRedeemFungibleStakedSui": {
+                    "validator": fake_validator.to_string(),
+                    "redeem_mode": "All"
+                }
+            }
+        }]
+    ))
+    .unwrap();
+
+    let flow_result = rosetta_client
+        .rosetta_flow(&redeem_ops, keystore, None)
+        .await;
+    assert!(
+        flow_result.metadata.as_ref().is_some_and(|r| r.is_err()),
+        "Expected metadata error for invalid validator, got: {:?}",
+        flow_result.metadata
+    );
+}
