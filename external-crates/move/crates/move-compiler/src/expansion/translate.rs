@@ -3208,29 +3208,35 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                     }
                 }
             }
+            sp!(vloc, PE::Value(sp!(_, v_ @ P::Value_::Num(_)))) => EE::UnaryExp(
+                op,
+                exp(context, Box::new(sp(vloc, PE::Value(sp(vloc, v_))))),
+            ),
+            // We could just allow these through because the type error will be caught later, but
+            // we are already looking at the literal here, so we might as well catch the error and
+            // provide a better error message to the user.
             sp!(vloc, PE::Value(sp!(_, v_))) => {
-                let error_kind = match &v_ {
-                    P::Value_::Bool(_) => Some("'bool'"),
-                    P::Value_::Address(_) => Some("'address'"),
-                    P::Value_::HexString(_) => Some("a hex string"),
-                    P::Value_::ByteString(_) => Some("a byte string"),
-                    P::Value_::String(_) => Some("a string"),
-                    P::Value_::Num(_) => None,
+                let error_kind: &str = match &v_ {
+                    P::Value_::Bool(_) => "'bool'",
+                    P::Value_::Address(_) => "'address'",
+                    P::Value_::HexString(_) => "a hex string",
+                    P::Value_::ByteString(_) => "a byte string",
+                    P::Value_::String(_) => "a string",
+                    P::Value_::Num(_) => {
+                        // This should be unreachable.
+                        context.add_diag(ice!((
+                            vloc,
+                            "ICE: unexpected numeric literal without a signed suffix in negation"
+                        )));
+                        "a number"
+                    }
                 };
-                if let Some(error_kind) = error_kind {
-                    let msg = format!(
-                        "Negation '-' is only valid for numeric types, but found {error_kind}"
-                    );
-                    context
-                        .defn_context
-                        .add_diag(diag!(TypeSafety::BuiltinOperation, (loc, msg)));
-                    EE::UnresolvedError
-                } else {
-                    EE::UnaryExp(
-                        op,
-                        exp(context, Box::new(sp(vloc, PE::Value(sp(vloc, v_))))),
-                    )
-                }
+                let msg =
+                    format!("Negation '-' is only valid for numeric types, but found {error_kind}");
+                context
+                    .defn_context
+                    .add_diag(diag!(TypeSafety::BuiltinOperation, (loc, msg)));
+                EE::UnresolvedError
             }
             pe => EE::UnaryExp(op, exp(context, Box::new(pe))),
         },

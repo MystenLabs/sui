@@ -299,7 +299,7 @@ impl Flavor {
 }
 
 impl FeatureGate {
-    pub fn error_prefix(&self) -> &'static str {
+    pub(crate) fn error_prefix(&self) -> &'static str {
         match self {
             FeatureGate::NestedUse => "Nested 'use' forms are",
             FeatureGate::PublicPackage => "'public(package)' is",
