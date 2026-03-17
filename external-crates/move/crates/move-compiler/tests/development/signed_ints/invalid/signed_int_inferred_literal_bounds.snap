@@ -54,3 +54,25 @@ error[E04021]: invalid number after type inference
    │                 │      Invalid numerical literal
    │                 │      Annotating the literal might help inference: '57896044618658097711785492504343953926634992332820282019728792003956564819968i256'
    │                 This literal does not fit into the type 'i256'.
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:48:24
+   │
+48 │         let _x: i256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
+   │                 ----   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                 │      │
+   │                 │      Invalid numerical literal
+   │                 │      Annotating the literal might help inference: '115792089237316195423570985008687907853269984665640564039457584007913129639935i256'
+   │                 This literal does not fit into the type 'i256'.
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:53:25
+   │
+53 │         let _x: i256 = -115792089237316195423570985008687907853269984665640564039457584007913129639935i256;
+   │                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i256'
+
+error[E01006]: invalid number literal
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:58:24
+   │
+58 │         let _x: i256 = 57896044618658097711785492504343953926634992332820282019728792003956564819968i256;
+   │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. This literal does not fit into the type 'i256'
