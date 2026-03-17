@@ -433,13 +433,14 @@ impl ValidatorService {
         client_id_source: Option<ClientIdSource>,
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
+        let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
         Self {
             state,
             consensus_adapter,
             metrics: validator_metrics,
             traffic_controller,
             client_id_source,
-            gasless_limiter: GaslessRateLimiter::new(),
+            gasless_limiter,
         }
     }
 
@@ -448,13 +449,14 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Self {
+        let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
         Self {
             state,
             consensus_adapter,
             metrics,
             traffic_controller: None,
             client_id_source: None,
-            gasless_limiter: GaslessRateLimiter::new(),
+            gasless_limiter,
         }
     }
 
@@ -776,7 +778,7 @@ impl ValidatorService {
                 .is_gasless_transaction()
                 && !self
                     .gasless_limiter
-                    .try_acquire(epoch_store.epoch(), epoch_store.protocol_config())
+                    .try_acquire(epoch_store.protocol_config())
             {
                 metrics.gasless_rate_limited_count.inc();
                 results[idx] = Some(SubmitTxResult::Rejected {

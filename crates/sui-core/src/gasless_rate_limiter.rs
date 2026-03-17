@@ -2,75 +2,59 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use parking_lot::Mutex;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::committee::EpochId;
 
-struct FixedWindowInner {
-    max_tps: Option<u64>,
-    count: u64,
-    window_start: Instant,
-    epoch: EpochId,
+pub struct ConsensusGaslessCounter {
+    window_second: AtomicU64,
+    count: AtomicU64,
 }
 
-impl FixedWindowInner {
-    fn try_acquire(&mut self, epoch: EpochId, config: &ProtocolConfig) -> bool {
-        if epoch != self.epoch {
-            self.reinit(epoch, config);
+impl Default for ConsensusGaslessCounter {
+    fn default() -> Self {
+        Self {
+            window_second: AtomicU64::new(0),
+            count: AtomicU64::new(0),
         }
-        let Some(max_tps) = self.max_tps else {
-            return true;
-        };
+    }
+}
 
-        let now = Instant::now();
-        if now.duration_since(self.window_start).as_secs() >= 1 {
-            self.count = 0;
-            self.window_start = now;
-        }
-
-        if self.count < max_tps {
-            self.count += 1;
-            true
-        } else {
-            false
+impl ConsensusGaslessCounter {
+    pub fn record_commit(&self, commit_timestamp_ms: u64, gasless_count: u64) {
+        let second = commit_timestamp_ms / 1000;
+        let current = self.window_second.load(Ordering::Relaxed);
+        if second > current {
+            self.window_second.store(second, Ordering::Relaxed);
+            self.count.store(gasless_count, Ordering::Relaxed);
+        } else if second == current {
+            self.count.fetch_add(gasless_count, Ordering::Relaxed);
         }
     }
 
-    fn reinit(&mut self, epoch: EpochId, config: &ProtocolConfig) {
-        self.max_tps = config.gasless_max_tps_per_validator_as_option();
-        self.count = 0;
-        self.window_start = Instant::now();
-        self.epoch = epoch;
+    pub fn current_count(&self) -> (u64, u64) {
+        let window = self.window_second.load(Ordering::Relaxed);
+        let count = self.count.load(Ordering::Relaxed);
+        (window, count)
     }
 }
 
 #[derive(Clone)]
 pub struct GaslessRateLimiter {
-    inner: Arc<Mutex<FixedWindowInner>>,
-}
-
-impl Default for GaslessRateLimiter {
-    fn default() -> Self {
-        Self::new()
-    }
+    counter: Arc<ConsensusGaslessCounter>,
 }
 
 impl GaslessRateLimiter {
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(FixedWindowInner {
-                max_tps: None,
-                count: 0,
-                window_start: Instant::now(),
-                epoch: u64::MAX,
-            })),
-        }
+    pub fn new(counter: Arc<ConsensusGaslessCounter>) -> Self {
+        Self { counter }
     }
 
-    pub fn try_acquire(&self, epoch: EpochId, config: &ProtocolConfig) -> bool {
-        self.inner.lock().try_acquire(epoch, config)
+    pub fn try_acquire(&self, config: &ProtocolConfig) -> bool {
+        let Some(max_tps) = config.gasless_max_tps_as_option() else {
+            return false;
+        };
+        let (_, count) = self.counter.current_count();
+        count < max_tps
     }
 }
 
@@ -85,72 +69,74 @@ mod tests {
             sui_protocol_config::Chain::Unknown,
         );
         config.enable_gasless_for_testing();
-        config.set_gasless_max_tps_per_validator_for_testing(max_tps);
+        config.set_gasless_max_tps_for_testing(max_tps);
         config
     }
 
     #[test]
-    fn test_disabled_always_allows() {
-        let limiter = GaslessRateLimiter::new();
+    fn test_unset_always_rejects() {
+        let counter = Arc::new(ConsensusGaslessCounter::default());
+        let limiter = GaslessRateLimiter::new(counter);
         let config = ProtocolConfig::get_for_version(
             ProtocolVersion::new(117),
             sui_protocol_config::Chain::Unknown,
         );
-        for _ in 0..100 {
-            assert!(limiter.try_acquire(1, &config));
-        }
+        assert!(!limiter.try_acquire(&config));
     }
 
     #[test]
-    fn test_cap_then_reject() {
-        let limiter = GaslessRateLimiter::new();
-        let config = make_config(5);
-        for _ in 0..5 {
-            assert!(limiter.try_acquire(1, &config));
-        }
-        assert!(!limiter.try_acquire(1, &config));
+    fn test_record_commit_new_window_resets() {
+        let counter = ConsensusGaslessCounter::default();
+        counter.record_commit(1000, 10);
+        assert_eq!(counter.current_count(), (1, 10));
+
+        counter.record_commit(2000, 5);
+        assert_eq!(counter.current_count(), (2, 5));
     }
 
     #[test]
-    fn test_no_burst_accumulation() {
-        let limiter = GaslessRateLimiter::new();
-        let config = make_config(5);
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        for _ in 0..5 {
-            assert!(limiter.try_acquire(1, &config));
-        }
-        assert!(
-            !limiter.try_acquire(1, &config),
-            "Should not allow burst beyond max_tps"
-        );
+    fn test_record_commit_same_window_accumulates() {
+        let counter = ConsensusGaslessCounter::default();
+        counter.record_commit(1000, 10);
+        counter.record_commit(1500, 7);
+        assert_eq!(counter.current_count(), (1, 17));
     }
 
     #[test]
-    fn test_window_reset() {
-        let limiter = GaslessRateLimiter::new();
-        let config = make_config(5);
-        for _ in 0..5 {
-            assert!(limiter.try_acquire(1, &config));
-        }
-        assert!(!limiter.try_acquire(1, &config));
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        for _ in 0..5 {
-            assert!(limiter.try_acquire(1, &config));
-        }
-        assert!(!limiter.try_acquire(1, &config));
+    fn test_record_commit_past_window_ignored() {
+        let counter = ConsensusGaslessCounter::default();
+        counter.record_commit(2000, 10);
+        counter.record_commit(1000, 99);
+        assert_eq!(counter.current_count(), (2, 10));
     }
 
     #[test]
-    fn test_epoch_change_reinits() {
-        let limiter = GaslessRateLimiter::new();
+    fn test_try_acquire_rejects_at_capacity() {
+        let counter = Arc::new(ConsensusGaslessCounter::default());
+        counter.record_commit(1000, 5);
+        let limiter = GaslessRateLimiter::new(counter);
         let config = make_config(5);
-        for _ in 0..5 {
-            assert!(limiter.try_acquire(1, &config));
-        }
-        assert!(!limiter.try_acquire(1, &config));
-        for _ in 0..5 {
-            assert!(limiter.try_acquire(2, &config));
-        }
-        assert!(!limiter.try_acquire(2, &config));
+        assert!(!limiter.try_acquire(&config));
+    }
+
+    #[test]
+    fn test_try_acquire_allows_under_capacity() {
+        let counter = Arc::new(ConsensusGaslessCounter::default());
+        counter.record_commit(1000, 4);
+        let limiter = GaslessRateLimiter::new(counter);
+        let config = make_config(5);
+        assert!(limiter.try_acquire(&config));
+    }
+
+    #[test]
+    fn test_window_resets_after_non_gasless_commit() {
+        let counter = Arc::new(ConsensusGaslessCounter::default());
+        counter.record_commit(1000, 5);
+        let limiter = GaslessRateLimiter::new(counter.clone());
+        let config = make_config(5);
+        assert!(!limiter.try_acquire(&config));
+
+        counter.record_commit(2000, 0);
+        assert!(limiter.try_acquire(&config));
     }
 }

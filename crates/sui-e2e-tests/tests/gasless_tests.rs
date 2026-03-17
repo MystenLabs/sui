@@ -910,7 +910,7 @@ async fn test_gasless_rate_limit_rejects() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_gasless_for_testing();
-            cfg.set_gasless_max_tps_per_validator_for_testing(0);
+            cfg.set_gasless_max_tps_for_testing(0);
             cfg
         }))
         .build()

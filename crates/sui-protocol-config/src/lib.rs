@@ -5182,7 +5182,7 @@ impl ProtocolConfig {
         self.feature_flags.enable_gasless = true;
         self.gasless_max_computation_units = Some(50_000);
         self.gasless_allowed_token_types = Some(vec![]);
-        self.gasless_max_tps_per_validator = Some(50);
+        self.gasless_max_tps = Some(1000);
     }
 
     pub fn disable_gasless_for_testing(&mut self) {

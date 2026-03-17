@@ -17,6 +17,7 @@ use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
+use crate::gasless_rate_limiter::ConsensusGaslessCounter;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
@@ -933,6 +934,9 @@ pub struct AuthorityState {
     chain_identifier: ChainIdentifier,
 
     pub(crate) congestion_tracker: Arc<CongestionTracker>,
+
+    /// Consumed by gasless tx rate limiter.
+    pub(crate) consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
@@ -3844,6 +3848,7 @@ impl AuthorityState {
             overload_info: AuthorityOverloadInfo::default(),
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
+            consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
