@@ -66,7 +66,7 @@ If `getObject` returns `null` for the derived address, the wallet has no PAS `Ac
 ```tsx
 const { object } = await client.core.getObject({ objectId: accountAddress });
 if (!object) {
-    // No PAS account — wallet has no managed balances
+    // No PAS account
 }
 ```
 
