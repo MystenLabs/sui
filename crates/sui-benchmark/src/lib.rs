@@ -486,7 +486,12 @@ impl LocalValidatorAggregatorProxy {
         use sui_types::messages_grpc::SubmitTxRequest;
 
         // Submit to multiple validators in parallel
-        let validators: Vec<_> = self.clients.values().cloned().take(num_validators).collect();
+        let validators: Vec<_> = self
+            .clients
+            .values()
+            .cloned()
+            .take(num_validators)
+            .collect();
         let request = SubmitTxRequest::new_transaction(tx.clone());
 
         // Fire off all submissions as spawned tasks - don't wait for responses.
