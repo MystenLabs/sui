@@ -5083,6 +5083,10 @@ impl ProtocolConfig {
     pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
         self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
+
+    pub fn set_defer_unpaid_amplification_for_testing(&mut self, val: bool) {
+        self.feature_flags.defer_unpaid_amplification = val;
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
