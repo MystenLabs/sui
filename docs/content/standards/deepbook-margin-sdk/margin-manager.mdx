@@ -54,6 +54,20 @@ Use `shareMarginManager` to share a margin manager created with `newMarginManage
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="shareMarginManager" signatureOnly />
 
+### `depositDuringInitialization`
+
+Use `depositDuringInitialization` to deposit funds into a margin manager during its creation, before it is shared. This must be called in the same transaction as `newMarginManagerWithInitializer` and before `shareMarginManager`. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `manager`: `TransactionArgument` representing the margin manager returned by `newMarginManagerWithInitializer`.
+- `poolKey`: String that identifies the DeepBook pool.
+- `coinType`: String identifying the coin type to deposit (for example, `'SUI'`, `'DBUSDC'`, `'DEEP'`).
+- `amount`: Number representing the amount to deposit (provide either `amount` or `coin`, not both).
+- `coin`: `TransactionArgument` representing a coin object to deposit (provide either `amount` or `coin`, not both).
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="depositDuringInitialization" signatureOnly />
+
 ### `depositBase`, `depositQuote`, `depositDeep`
 
 Use these functions to deposit assets into a margin manager. The call returns a function that takes a `Transaction` object.
@@ -137,17 +151,23 @@ Use `unsetMarginManagerReferral` to remove the referral association from a margi
 
 The following functions query margin manager state without modifying it.
 
-### `riskRatio`
+### `managerState`
 
-Query the risk ratio of the margin manager, which represents the ratio of assets to debt. Higher ratios indicate healthier positions.
+Query comprehensive state information for a margin manager, including risk ratio, assets, debts, and Pyth price data.
 
-<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="riskRatio" signatureOnly />
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="managerState" signatureOnly />
 
 ### `owner`, `deepbookPool`, `marginPoolId`
 
 Query basic margin manager information.
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="ownerByPoolKey,deepbookPool,marginPoolId" signatureOnly />
+
+### `baseBalance`, `quoteBalance`, `deepBalance`
+
+Query individual asset balances held in the margin manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="baseBalance,quoteBalance,deepBalance" signatureOnly />
 
 ### `borrowedShares`, `borrowedBaseShares`, `borrowedQuoteShares`, `hasBaseDebt`
 
