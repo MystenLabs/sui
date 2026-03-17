@@ -305,11 +305,12 @@ const TESTNET_USDC: &str =
 // Version 115: Gasless transaction drop safety.
 //              Enable address aliases on mainnet.
 //              Relax ValidDuring requirement for transactions with owned inputs.
-//              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
+//              Disable defer_unpaid_amplification (debugging).
 // Version 117: Update Sui System metadata handling.
 // Version 118: Adds `transfer_migration_cap` to display registry
 // Version 119: Enable the new VM.
+//              Re-enable defer_unpaid_amplification (devnet only).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4767,6 +4768,10 @@ impl ProtocolConfig {
                     }
                     cfg.transfer_receive_object_cost_per_byte = Some(1);
                     cfg.transfer_receive_object_type_cost_per_byte = Some(2);
+                    // Re-enable unpaid amplification deferral protection (testnet + devnet)
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.defer_unpaid_amplification = true;
+                    }
                 }
                 120 => {}
                 // Use this template when making changes:
