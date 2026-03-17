@@ -1,17 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::collections::HashSet;
-use std::collections::btree_map::Entry;
-
-use anyhow::Context;
-use sui_indexer_alt_framework::types::base_types::ObjectID;
 use sui_indexer_alt_framework::types::base_types::SuiAddress;
 use sui_indexer_alt_framework::types::effects::TransactionEffects;
-use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
-use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
-use sui_indexer_alt_framework::types::object::Object;
 use sui_indexer_alt_framework::types::object::Owner;
 
 pub(crate) mod cp_bloom_blocks;
