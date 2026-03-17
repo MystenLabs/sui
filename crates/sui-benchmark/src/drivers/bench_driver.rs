@@ -2,32 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use futures::FutureExt;
-use futures::future::BoxFuture;
 use futures::future::try_join_all;
-use futures::{StreamExt, stream::FuturesUnordered};
+use futures::future::BoxFuture;
+use futures::FutureExt;
+use futures::{stream::FuturesUnordered, StreamExt};
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
+use prometheus::register_histogram_vec_with_registry;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
-use prometheus::register_histogram_vec_with_registry;
-use prometheus::{CounterVec, register_int_counter_vec_with_registry};
+use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_registry};
+use prometheus::{register_int_counter_vec_with_registry, CounterVec};
 use prometheus::{
-    GaugeVec, register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, GaugeVec,
 };
 use prometheus::{HistogramVec, IntGauge, IntGaugeVec};
-use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_registry};
-use rand::Rng;
 use rand::seq::SliceRandom;
+use rand::Rng;
 use sui_types::digests::TransactionDigest;
+use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::OnceCell;
-use tokio::sync::mpsc::{Sender, channel};
 use tokio_util::sync::CancellationToken;
 
-use crate::drivers::HistogramWrapper;
 use crate::drivers::driver::Driver;
+use crate::drivers::HistogramWrapper;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::{
     BatchExecutionResults, BatchedTransactionResult, BatchedTransactionStatus, Payload,
@@ -40,8 +40,8 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::Committee;
 use sui_types::effects::TransactionEffectsAPI;
@@ -1134,11 +1134,8 @@ async fn run_bench_worker(
                         let committee = worker.execution_proxy.clone_committee();
 
                         // Occasionally submit to multiple validators to test unpaid amplification deferral.
-                        // With 5% probability, submit to a random number of validators (3 to committee_size - 1)
-                        // to trigger the deferral logic. Randomizing increases chances of testing longer deferrals.
-                        // let use_amplification = rand::thread_rng().gen_bool(0.05);
-                        // TODO: temporarily disable amplification.
-                        let use_amplification = false;
+                        // With 5% probability, submit to 3 to N validators to trigger deferral logic.
+                        let use_amplification = rand::thread_rng().gen_bool(0.05);
                         let committee_size = committee.num_members();
                         let proxy = worker.execution_proxy.clone_new();
                         let res = async move {
