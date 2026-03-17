@@ -14,7 +14,6 @@ use reqwest::header::HeaderName;
 use serde_json::Value;
 use serde_json::json;
 use sui_indexer_alt::config::IndexerConfig;
-use sui_indexer_alt::config::PrunerLayer;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_transactional_test_runner::create_adapter;
