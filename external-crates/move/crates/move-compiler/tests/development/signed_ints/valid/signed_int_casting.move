@@ -6,5 +6,6 @@ module a::m {
         let _c: i32 = a as i32;
         let _d: i64 = a as i64;
         let _e: i128 = a as i128;
+        let _f: i256 = a as i256;
     }
 }

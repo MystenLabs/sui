@@ -39,7 +39,15 @@ module a::m {
         let _x = 1i64;
     }
 
+    fun gated_i256() {
+        let _x: i256 = 0;
+    }
+
     fun gated_suffix_i128() {
         let _x = 1i128;
+    }
+
+    fun gated_suffix_i256() {
+        let _x = 1i256;
     }
 }

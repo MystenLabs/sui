@@ -984,7 +984,8 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
         | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I16))), _)
         | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I32))), _)
         | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I64))), _)
-        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I128))), _) => {
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I128))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I256))), _) => {
             context
                 .env
                 .diagnostic_reporter_at_top_level()
@@ -1200,7 +1201,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 V::U64(u) => B::LdU64(u),
                 V::U128(u) => B::LdU128(u),
                 V::U256(u) => B::LdU256(u),
-                V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) => {
+                V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
                     context
                         .env
                         .diagnostic_reporter_at_top_level()
@@ -1381,7 +1382,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 BT::U64 => B::CastU64,
                 BT::U128 => B::CastU128,
                 BT::U256 => B::CastU256,
-                BT::I8 | BT::I16 | BT::I32 | BT::I64 | BT::I128 => {
+                BT::I8 | BT::I16 | BT::I32 | BT::I64 | BT::I128 | BT::I256 => {
                     context
                         .env
                         .diagnostic_reporter_at_top_level()

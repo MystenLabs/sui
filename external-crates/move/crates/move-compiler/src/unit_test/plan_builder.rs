@@ -387,7 +387,8 @@ fn convert_builtin_type_to_typetag(s_type: &HA::SingleType_) -> Option<TypeTag> 
                     | NA::BuiltinTypeName_::I16
                     | NA::BuiltinTypeName_::I32
                     | NA::BuiltinTypeName_::I64
-                    | NA::BuiltinTypeName_::I128 => return None,
+                    | NA::BuiltinTypeName_::I128
+                    | NA::BuiltinTypeName_::I256 => return None,
                 };
                 Some(tag)
             }

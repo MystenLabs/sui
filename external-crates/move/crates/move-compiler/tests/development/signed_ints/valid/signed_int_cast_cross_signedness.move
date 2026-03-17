@@ -75,4 +75,24 @@ module 0x42::m {
         let x: u256 = 1;
         let _y = (x as i8);
     }
+
+    fun u256_to_i256() {
+        let x: u256 = 1;
+        let _y = (x as i256);
+    }
+
+    fun i256_to_u256() {
+        let x: i256 = 1i256;
+        let _y = (x as u256);
+    }
+
+    fun i256_to_u8() {
+        let x: i256 = 1i256;
+        let _y = (x as u8);
+    }
+
+    fun u8_to_i256() {
+        let x: u8 = 1;
+        let _y = (x as i256);
+    }
 }

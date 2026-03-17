@@ -369,6 +369,8 @@ pub enum Value_ {
     I64(i64),
     // <num>i128
     I128(i128),
+    // <num>i256
+    I256(move_core_types::i256::I256),
     // true
     // false
     Bool(bool),
@@ -469,6 +471,7 @@ impl Value_ {
             Self::I32(v) => *v == 0,
             Self::I64(v) => *v == 0,
             Self::I128(v) => *v == 0,
+            Self::I256(v) => *v == move_core_types::i256::I256::zero(),
             Self::U256(v) => *v == move_core_types::u256::U256::zero(),
             Self::Address(_) | Self::Bool(_) | Self::Vector(_, _) => false,
         }
@@ -649,9 +652,8 @@ impl BaseType_ {
         use BuiltinTypeName_::*;
 
         let kind = match b_ {
-            U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | Bool | Address => {
-                AbilitySet::primitives(loc)
-            }
+            U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256 | Bool
+            | Address => AbilitySet::primitives(loc),
             Signer => AbilitySet::signer(loc),
             Vector => {
                 let declared_abilities = AbilitySet::collection(loc);
@@ -730,6 +732,10 @@ impl BaseType_ {
 
     pub fn i128(loc: Loc) -> BaseType {
         Self::builtin(loc, BuiltinTypeName_::I128, vec![])
+    }
+
+    pub fn i256(loc: Loc) -> BaseType {
+        Self::builtin(loc, BuiltinTypeName_::I256, vec![])
     }
 
     pub fn type_name(&self) -> Option<&TypeName> {
@@ -1503,6 +1509,7 @@ impl AstDebug for Value_ {
             V::I32(u) => w.write(format!("{}i32", u)),
             V::I64(u) => w.write(format!("{}i64", u)),
             V::I128(u) => w.write(format!("{}i128", u)),
+            V::I256(u) => w.write(format!("{}i256", u)),
             V::Bool(b) => w.write(format!("{}", b)),
             V::Vector(ty, elems) => {
                 w.write("vector#value");

@@ -410,6 +410,7 @@ impl ToDoc for Type {
             Type::I32 => D::text("i32"),
             Type::I64 => D::text("i64"),
             Type::I128 => D::text("i128"),
+            Type::I256 => D::text("i256"),
             Type::Address => D::text("address"),
             Type::Signer => D::text("signer"),
             Type::Any => D::text("_"),

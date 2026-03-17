@@ -90,6 +90,7 @@ fn is_zero(exp: &H::Exp) -> Option<Loc> {
         | Value_::I64(0)
         | Value_::I128(0) => Some(*loc),
         Value_::U256(u) if u == &U256::zero() => Some(*loc),
+        Value_::I256(v) if v == &move_core_types::i256::I256::zero() => Some(*loc),
         Value_::U8(_)
         | Value_::U16(_)
         | Value_::U32(_)
@@ -101,6 +102,7 @@ fn is_zero(exp: &H::Exp) -> Option<Loc> {
         | Value_::I32(_)
         | Value_::I64(_)
         | Value_::I128(_)
+        | Value_::I256(_)
         | Value_::Address(_)
         | Value_::Bool(_)
         | Value_::Vector(_, _) => None,
@@ -123,6 +125,7 @@ fn is_one(exp: &H::Exp) -> Option<Loc> {
         | Value_::I64(1)
         | Value_::I128(1) => Some(*loc),
         Value_::U256(u) if u == &U256::one() => Some(*loc),
+        Value_::I256(v) if v == &move_core_types::i256::I256::one() => Some(*loc),
         Value_::U8(_)
         | Value_::U16(_)
         | Value_::U32(_)
@@ -134,6 +137,7 @@ fn is_one(exp: &H::Exp) -> Option<Loc> {
         | Value_::I32(_)
         | Value_::I64(_)
         | Value_::I128(_)
+        | Value_::I256(_)
         | Value_::Address(_)
         | Value_::Bool(_)
         | Value_::Vector(_, _) => None,

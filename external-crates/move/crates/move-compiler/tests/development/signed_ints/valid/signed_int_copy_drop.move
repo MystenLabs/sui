@@ -23,10 +23,11 @@ module 0x42::m {
         c: i32,
         d: i64,
         e: i128,
+        f: i256,
     }
 
     fun copy_struct_with_signed() {
-        let s = S { a: 1i8, b: 2i16, c: 3i32, d: 4i64, e: 5i128 };
+        let s = S { a: 1i8, b: 2i16, c: 3i32, d: 4i64, e: 5i128, f: 6i256 };
         let _s2 = copy s;
         let _s3 = s;
     }

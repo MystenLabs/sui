@@ -22,6 +22,10 @@ module 0x42::m {
         let _v = vector[1i128, 2i128, 3i128];
     }
 
+    fun vector_i256() {
+        let _v = vector[1i256, 2i256, 3i256];
+    }
+
     // Vector with negated elements
     fun vector_neg() {
         let _x = 5i64;

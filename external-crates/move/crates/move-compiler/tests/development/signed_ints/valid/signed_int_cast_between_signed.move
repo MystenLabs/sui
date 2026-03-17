@@ -48,9 +48,34 @@ module 0x42::m {
         let _y = (x as i8);
     }
 
+    fun i8_to_i256() {
+        let x: i8 = 1i8;
+        let _y = (x as i256);
+    }
+
+    fun i128_to_i256() {
+        let x: i128 = 1i128;
+        let _y = (x as i256);
+    }
+
+    fun i256_to_i64() {
+        let x: i256 = 1i256;
+        let _y = (x as i64);
+    }
+
+    fun i256_to_i8() {
+        let x: i256 = 1i256;
+        let _y = (x as i8);
+    }
+
     // Same-type cast (no-op)
     fun i64_to_i64() {
         let x: i64 = 1i64;
         let _y = (x as i64);
+    }
+
+    fun i256_to_i256() {
+        let x: i256 = 1i256;
+        let _y = (x as i256);
     }
 }

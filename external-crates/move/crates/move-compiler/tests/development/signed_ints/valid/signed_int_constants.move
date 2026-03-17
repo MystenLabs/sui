@@ -7,6 +7,7 @@ module 0x42::m {
     const C_I32: i32 = 100000i32;
     const C_I64: i64 = 1000000i64;
     const C_I128: i128 = 1000000000000i128;
+    const C_I256: i256 = 1000000000000i256;
 
     // Constant with zero
     const ZERO_I64: i64 = 0i64;

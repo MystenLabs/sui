@@ -42,4 +42,12 @@ module 0x42::m {
     fun shr_i128() {
         let _x = 4294967296i128 >> 32u8;
     }
+
+    fun shl_i256() {
+        let _x = 1i256 << 32u8;
+    }
+
+    fun shr_i256() {
+        let _x = 4294967296i256 >> 32u8;
+    }
 }

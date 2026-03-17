@@ -306,6 +306,8 @@ pub enum BuiltinTypeName_ {
     I64,
     // i128
     I128,
+    // i256
+    I256,
     // Vector
     Vector,
     // bool
@@ -655,6 +657,7 @@ static BUILTIN_TYPE_ALL_NAMES: LazyLock<BTreeSet<Symbol>> = LazyLock::new(|| {
         BT::I_32,
         BT::I_64,
         BT::I_128,
+        BT::I_256,
         BT::BOOL,
         BT::VECTOR,
     ]
@@ -676,6 +679,7 @@ static BUILTIN_TYPE_NUMERIC: LazyLock<BTreeSet<BuiltinTypeName_>> = LazyLock::ne
         BuiltinTypeName_::I32,
         BuiltinTypeName_::I64,
         BuiltinTypeName_::I128,
+        BuiltinTypeName_::I256,
     ]
     .into_iter()
     .collect()
@@ -688,6 +692,7 @@ static BUILTIN_TYPE_SIGNED_NUMERIC: LazyLock<BTreeSet<BuiltinTypeName_>> = LazyL
         BuiltinTypeName_::I32,
         BuiltinTypeName_::I64,
         BuiltinTypeName_::I128,
+        BuiltinTypeName_::I256,
     ]
     .into_iter()
     .collect()
@@ -744,6 +749,7 @@ impl BuiltinTypeName_ {
             BTN::I_32 => Some(Self::I32),
             BTN::I_64 => Some(Self::I64),
             BTN::I_128 => Some(Self::I128),
+            BTN::I_256 => Some(Self::I256),
             BTN::BOOL => Some(Self::Bool),
             BTN::VECTOR => Some(Self::Vector),
             _ => None,
@@ -766,6 +772,7 @@ impl BuiltinTypeName_ {
             | B::I32
             | B::I64
             | B::I128
+            | B::I256
             | B::Bool => AbilitySet::primitives(loc),
             B::Signer => AbilitySet::signer(loc),
             B::Vector => AbilitySet::collection(loc),
@@ -789,6 +796,7 @@ impl BuiltinTypeName_ {
             | B::I32
             | B::I64
             | B::I128
+            | B::I256
             | B::Bool => vec![],
             B::Vector => vec![AbilitySet::empty()],
         }
@@ -899,6 +907,7 @@ impl Type_ {
             | B::I32
             | B::I64
             | B::I128
+            | B::I256
             | B::Bool => Some(AbilitySet::primitives(b.loc)),
             B::Signer => Some(AbilitySet::signer(b.loc)),
             B::Vector => None,
@@ -965,6 +974,10 @@ impl Type_ {
 
     pub fn i128(loc: Loc) -> Type {
         Self::builtin(loc, sp(loc, BuiltinTypeName_::I128), vec![])
+    }
+
+    pub fn i256(loc: Loc) -> Type {
+        Self::builtin(loc, sp(loc, BuiltinTypeName_::I256), vec![])
     }
 
     pub fn vector(loc: Loc, elem: Type) -> Type {
@@ -1151,6 +1164,7 @@ impl Value_ {
             I32(_) => Type_::i32(loc),
             I64(_) => Type_::i64(loc),
             I128(_) => Type_::i128(loc),
+            I256(_) => Type_::i256(loc),
             Bool(_) => Type_::bool(loc),
             Bytearray(_) => Type_::vector(loc, Type_::u8(loc)),
         })
@@ -1202,6 +1216,7 @@ impl fmt::Display for BuiltinTypeName_ {
                 Self::I32 => BTN::I_32,
                 Self::I64 => BTN::I_64,
                 Self::I128 => BTN::I_128,
+                Self::I256 => BTN::I_256,
                 Self::Bool => BTN::BOOL,
                 Self::Vector => BTN::VECTOR,
             }

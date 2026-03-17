@@ -36,4 +36,20 @@ module 0x42::m {
     // Constant folding with cast between signed types
     const CAST_UP: i64 = (1i8 as i64);
     const CAST_DOWN: i8 = (42i64 as i8);
+
+    // i256 constant folding
+    const ADD_I256: i256 = 10i256 + 20i256;
+    const SUB_I256: i256 = 50i256 - 30i256;
+    const MUL_I256: i256 = 6i256 * 7i256;
+    const DIV_I256: i256 = 100i256 / 10i256;
+    const MOD_I256: i256 = 10i256 % 3i256;
+    const NEG_I256: i256 = -(42i256);
+    const CMP_I256: bool = 10i256 > 5i256;
+    const BAND_I256: i256 = 0x0Fi256 & 0x03i256;
+    const BOR_I256: i256 = 0x0Fi256 | 0x30i256;
+    const BXOR_I256: i256 = 0x0Fi256 ^ 0x03i256;
+    const SHL_I256: i256 = 1i256 << 8u8;
+    const SHR_I256: i256 = 256i256 >> 4u8;
+    const CAST_I256: i256 = (1i8 as i256);
+    const CAST_FROM_I256: i8 = (42i256 as i8);
 }

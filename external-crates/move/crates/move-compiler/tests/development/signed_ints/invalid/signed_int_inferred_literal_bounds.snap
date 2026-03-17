@@ -44,3 +44,13 @@ error[E04021]: invalid number after type inference
    │                 │     Invalid numerical literal
    │                 │     Annotating the literal might help inference: '9223372036854775808i128'
    │                 This literal does not fit into the type 'i64'.
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:39:24
+   │
+39 │         let _x: i256 = 57896044618658097711785492504343953926634992332820282019728792003956564819968;
+   │                 ----   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                 │      │
+   │                 │      Invalid numerical literal
+   │                 │      Annotating the literal might help inference: '57896044618658097711785492504343953926634992332820282019728792003956564819968i256'
+   │                 This literal does not fit into the type 'i256'.

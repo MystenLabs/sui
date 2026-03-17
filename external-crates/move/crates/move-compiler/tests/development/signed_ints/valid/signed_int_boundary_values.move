@@ -47,6 +47,15 @@ module 0x42::m {
         let _x: i128 = 170141183460469231731687303715884105727i128;
     }
 
+    // i256 boundaries: 0 to 57896044618658097711785492504343953926634992332820282019728792003956564819967
+    fun i256_zero() {
+        let _x: i256 = 0i256;
+    }
+
+    fun i256_max() {
+        let _x: i256 = 57896044618658097711785492504343953926634992332820282019728792003956564819967i256;
+    }
+
     // Negation of zero for all types
     fun neg_zero_i8() {
         let _x: i8 = -0i8;
@@ -66,6 +75,10 @@ module 0x42::m {
 
     fun neg_zero_i128() {
         let _x: i128 = -0i128;
+    }
+
+    fun neg_zero_i256() {
+        let _x: i256 = -0i256;
     }
 
     // Negation of one for all types
@@ -89,6 +102,10 @@ module 0x42::m {
         let _x: i128 = -1i128;
     }
 
+    fun neg_one_i256() {
+        let _x: i256 = -1i256;
+    }
+
     // Negation of max (produces min + 1) for all types
     fun neg_max_i8() {
         let _x: i8 = -127i8;
@@ -108,5 +125,9 @@ module 0x42::m {
 
     fun neg_max_i128() {
         let _x: i128 = -170141183460469231731687303715884105727i128;
+    }
+
+    fun neg_max_i256() {
+        let _x: i256 = -57896044618658097711785492504343953926634992332820282019728792003956564819967i256;
     }
 }

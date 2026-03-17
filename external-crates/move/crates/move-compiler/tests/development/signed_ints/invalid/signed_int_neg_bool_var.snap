@@ -9,6 +9,6 @@ error[E04003]: built-in operation not supported
   ┌─ tests/development/signed_ints/invalid/signed_int_neg_bool_var.move:8:19
   │
 7 │         let _b = true;
-  │                  ---- Found: 'bool'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128'
+  │                  ---- Found: 'bool'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
 8 │         let _x = -_b;
   │                   ^^ Invalid argument to '-'

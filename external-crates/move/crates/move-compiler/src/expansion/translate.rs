@@ -3676,7 +3676,9 @@ fn signed_num(loc: Loc, s: &str, negated: bool) -> Result<E::Value_, ValueError>
         }};
     }
     use crate::shared::builtin_types as BT;
-    if let Some(num) = s.strip_suffix(BT::I_128) {
+    if let Some(num) = s.strip_suffix(BT::I_256) {
+        parse_signed!(num, parse_i256, I256, "'i256'")
+    } else if let Some(num) = s.strip_suffix(BT::I_128) {
         parse_signed!(num, parse_i128, I128, "'i128'")
     } else if let Some(num) = s.strip_suffix(BT::I_64) {
         parse_signed!(num, parse_i64, I64, "'i64'")

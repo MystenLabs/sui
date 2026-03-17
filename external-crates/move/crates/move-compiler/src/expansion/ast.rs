@@ -372,6 +372,8 @@ pub enum Value_ {
     I64(i64),
     // <num>i128
     I128(i128),
+    // <num>i256
+    I256(move_core_types::i256::I256),
     // true
     // false
     Bool(bool),
@@ -939,6 +941,7 @@ impl std::fmt::Display for Value_ {
             V::I32(u) => write!(f, "{}", u),
             V::I64(u) => write!(f, "{}", u),
             V::I128(u) => write!(f, "{}", u),
+            V::I256(u) => write!(f, "{}", u),
             V::Bool(b) => write!(f, "{}", b),
             // TODO preserve the user's original string
             V::Bytearray(v) => {
@@ -1476,6 +1479,7 @@ impl AstDebug for Value_ {
             V::I32(u) => w.write(format!("{}i32", u)),
             V::I64(u) => w.write(format!("{}i64", u)),
             V::I128(u) => w.write(format!("{}i128", u)),
+            V::I256(u) => w.write(format!("{}i256", u)),
             V::Bool(b) => w.write(format!("{}", b)),
             V::Bytearray(v) => w.write(format!("{:?}", v)),
             V::InferredString(v) => w.write(format!("string<{:?}>", v)),

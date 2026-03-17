@@ -11,6 +11,7 @@ module 0x42::m {
         let _c = identity(3i32);
         let _d = identity(4i64);
         let _e = identity(5i128);
+        let _f = identity(6i256);
     }
 
     // Generic struct holding signed int
@@ -22,6 +23,7 @@ module 0x42::m {
         let _a = Box<i8> { val: 1i8 };
         let _b = Box<i64> { val: 42i64 };
         let _c = Box<i128> { val: 0i128 };
+        let _d = Box<i256> { val: 0i256 };
     }
 
     // Nested generic with signed

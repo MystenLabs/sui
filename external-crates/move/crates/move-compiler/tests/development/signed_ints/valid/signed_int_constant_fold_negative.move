@@ -37,6 +37,24 @@ module 0x42::m {
         let _x: i128 = (-1i32 as i128);
     }
 
+    fun widen_neg_i128_to_i256() {
+        let _x: i256 = (-1i128 as i256);
+    }
+
+    // i256 arithmetic with negative results
+    fun sub_to_negative_i256() {
+        let _x: i256 = 5i256 - 10i256; // = -5
+    }
+
+    fun shr_neg_i256() {
+        let _x: i256 = -1024i256 >> 3u8; // -1024 >> 3 = -128
+    }
+
+    fun cmp_neg_i256() {
+        let _a: bool = -1i256 < 0i256;
+        let _b: bool = -5i256 > -10i256;
+    }
+
     // Narrowing casts: signed range check
     fun narrow_to_i8() {
         let _x: i8 = (42i64 as i8); // 42 fits in i8

@@ -18,33 +18,39 @@ error[E13001]: feature is not supported in specified edition
   │            ^^^ Signed integer types are under development and should not be used right now.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:12:20
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:10:12
    │
-12 │     fun params(_a: i8, _b: i128): i64 {
+10 │         z: i256,
+   │            ^^^^ Signed integer types are under development and should not be used right now.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:13:20
+   │
+13 │     fun params(_a: i8, _b: i128): i64 {
    │                    ^^ Signed integer types are under development and should not be used right now.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:12:28
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:13:28
    │
-12 │     fun params(_a: i8, _b: i128): i64 {
+13 │     fun params(_a: i8, _b: i128): i64 {
    │                            ^^^^ Signed integer types are under development and should not be used right now.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:12:35
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:13:35
    │
-12 │     fun params(_a: i8, _b: i128): i64 {
+13 │     fun params(_a: i8, _b: i128): i64 {
    │                                   ^^^ Signed integer types are under development and should not be used right now.
 
 error[E13001]: feature is not supported in specified edition
-   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:16:21
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:17:21
    │
-16 │     const MY_CONST: i32 = 0;
+17 │     const MY_CONST: i32 = 0;
    │                     ^^^ Signed integer types are under development and should not be used right now.
 
 error[E04012]: invalid type for constant
-   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:16:21
+   ┌─ tests/move_2024/typing/signed_int_feature_gated_signatures.move:17:21
    │
-16 │     const MY_CONST: i32 = 0;
+17 │     const MY_CONST: i32 = 0;
    │                     ^^^
    │                     │
    │                     Unpermitted constant type

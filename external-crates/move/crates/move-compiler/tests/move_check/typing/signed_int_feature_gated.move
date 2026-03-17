@@ -9,6 +9,7 @@ module a::m {
         let _c: i32 = 0;
         let _d: i64 = 0;
         let _e: i128 = 0;
+        let _f: i256 = 0;
     }
 
     fun literal_suffixes() {
@@ -17,5 +18,6 @@ module a::m {
         let _c = 1i32;
         let _d = 1i64;
         let _e = 1i128;
+        let _f = 1i256;
     }
 }
