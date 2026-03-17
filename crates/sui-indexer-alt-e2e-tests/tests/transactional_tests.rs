@@ -13,10 +13,7 @@ use reqwest::Client;
 use reqwest::header::HeaderName;
 use serde_json::Value;
 use serde_json::json;
-use sui_indexer_alt::config::ConcurrentLayer;
 use sui_indexer_alt::config::IndexerConfig;
-use sui_indexer_alt::config::Merge;
-use sui_indexer_alt::config::PipelineLayer;
 use sui_indexer_alt::config::PrunerLayer;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
@@ -143,13 +140,6 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
             local_ingestion_path: Some(config.data_ingestion_path.clone()),
             ..Default::default()
         },
-        ..Default::default()
-    };
-
-    // The test config includes every pipeline, we configure its consistent range using the
-    // off-chain config that was passed in.
-    let pruner = PrunerLayer {
-        retention: Some(config.consistent_range as u64),
         ..Default::default()
     };
 
