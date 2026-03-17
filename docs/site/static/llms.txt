@@ -2,6 +2,12 @@
 
 > Sui is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move
 
+## General
+
+- [Concepts](https://docs.sui.io/concepts.md)
+    Description: Learn about the fundamental concepts and architecture that make Sui unique among
+        blockchains.
+
 ## Concepts
 
 - [Coin Management](https://docs.sui.io/concepts/coin-mgt.md)
@@ -51,11 +57,10 @@
     Description: The `sui-indexer-alt-framework` provides two distinct pipeline architectures.
         Understand the differences between the sequential and concurrent pipelines that the
         `sui-indexer-alt-framework` provides to decide which best suits your project needs.
-
-## General
-
-- [Guides](https://docs.sui.io/guides.md)
-    Description: Start developing on Sui through example projects and developer guides.
+- [Gaming on Sui](https://docs.sui.io/concepts/gaming.md)
+    Description: Sui offers features like dynamic NFTs, Kiosk, soulbound assets, and on-chain
+        randomness to provide builders with the tools to create immersive, transparent, and fair
+        gaming experiences.
 
 ## Guides
 
@@ -86,6 +91,8 @@
 - [Using gRPC](https://docs.sui.io/guides/developer/accessing-data/grpc-overview.md)
     Description: Learn how to use gRPC clients for the Sui network with grpcurl, Buf CLI, and
         popular programming languages.
+- [Accessing Data](https://docs.sui.io/guides/developer/accessing-data.md)
+    Description: placeholder
 - [Using GraphQL RPC](https://docs.sui.io/guides/developer/accessing-data/query-with-graphql.md)
     Description: Practical guide to making queries of the Sui RPC using the GraphQL service, with
         examples for common tasks.
@@ -201,6 +208,61 @@
         address using an OAuth credential without publicly linking the two.
 - [Sui Developer Cheat Sheet](https://docs.sui.io/guides/developer/dev-cheat-sheet.md)
     Description: A quick reference document regarding best practices for Sui developers.
+-
+    [Deployment](https://docs.sui.io/guides/developer/digital-assets/examples-patterns/advanced-patterns/kiosk.md)
+    Description: As with all smart contracts on Sui, Move provides the logic that powers asset
+        tokenization. :::info This reference implementation uses the Kiosk standard to ensure that
+        tokenized assets operate within their defined policy.
+- [In-Game
+    Currency](https://docs.sui.io/guides/developer/digital-assets/examples-patterns/in-game-currency.md)
+    Description: Use the Sui Closed-Loop Token standard to create tokens that you can use as
+        currency within a game application.
+- [Index](https://docs.sui.io/guides/developer/digital-assets/examples-patterns.md)
+- [Loyalty
+    Tokens](https://docs.sui.io/guides/developer/digital-assets/examples-patterns/loyalty-tokens.md)
+    Description: Use the Sui Closed-Loop Token standard to create tokens that are only valid within
+        specific workflows and services. One example of Closed-Loop Tokens is a loyalty token.
+- [NFT Rental
+    Example](https://docs.sui.io/guides/developer/digital-assets/examples-patterns/nft-rental.md)
+    Description: An example using the Kiosk Apps standard that provides the ability for users to
+        rent NFTs according to the rules of a provided policy instead of outright owning them. This
+        approach closely aligns with the ERC-4907 renting standard, making it a suitable choice for
+        Solidity-based use cases intended for implementation on Sui.
+- [Soulbound NFT
+    Example](https://docs.sui.io/guides/developer/digital-assets/examples-patterns/soulbound-tokens.md)
+    Description: An example using Sui Move struct abilities and the Sui Framework's `transfer`
+        module to make a NFT soulbound (non-transferable).
+- [Create Fungible
+    Tokens](https://docs.sui.io/guides/developer/digital-assets/fungible-tokens/create-a-fungible-token.md)
+    Description: Learn how to create currencies and mint coins and tokens on the Sui network.
+- [Fungible Tokens](https://docs.sui.io/guides/developer/digital-assets/fungible-tokens.md)
+    Description: Learn how to fungible tokens on the Sui network using the Coin Registry system.
+- [Stablecoins on
+    Sui](https://docs.sui.io/guides/developer/digital-assets/fungible-tokens/integrating-with-stablecoins.md)
+    Description: Stablecoins are a type of cryptocurrency that are designed to maintain a stable
+        value relative to a fiat currency or a basket of assets.
+- [Regulated Currency and Deny
+    List](https://docs.sui.io/guides/developer/digital-assets/fungible-tokens/regulated-tokens.md)
+    Description: You can create regulated currencies on Sui using the Coin Registry system. These
+        coins include the ability to control access using a deny list.
+- [Token Vesting
+    Strategies](https://docs.sui.io/guides/developer/digital-assets/fungible-tokens/token-vesting-strategies.md)
+    Description: If you plan to launch a token on Sui, then you might consider implementing a
+        vesting strategy to strengthen the long-term outlook of your token.
+- [Digital Assets on Sui](https://docs.sui.io/guides/developer/digital-assets.md)
+    Description: Learn about the types of digital assets you can create and interact with on Sui.
+- [Asset
+    Tokenization](https://docs.sui.io/guides/developer/digital-assets/non-fungible-tokens/asset-tokenization.md)
+    Description: Learn how to tokenize assets on the Sui blockchain. Asset tokenization refers to
+        the process of representing real-world assets, such as real estate, art, commodities,
+        stocks, or other valuable assets, as digital tokens on the blockchain network.
+- [Create a Non-Fungible
+    Token](https://docs.sui.io/guides/developer/digital-assets/non-fungible-tokens/create-nft.md)
+    Description: On Sui, everything is an object. Moreover, everything is a non-fungible token
+        (NFT) as its objects are unique, non-fungible, and owned.
+- [Types of Tokens](https://docs.sui.io/guides/developer/digital-assets/types-of-tokens.md)
+    Description: Sui provides a variety of token standards with different features for multiple
+        usage patterns.
 - [Connect a Frontend to a Move
     Package](https://docs.sui.io/guides/developer/getting-started/app-frontends.md)
     Description: Connect a React interface to a basic Move package to create a full stack
@@ -248,19 +310,6 @@
     Marlin](https://docs.sui.io/guides/developer/nautilus/marlin.md)
     Description: Marlin Oyster integrates with the Nautilus framework to remove the operational
         overhead of managing enclave infrastructure.
-- [Nautilus Design](https://docs.sui.io/guides/developer/nautilus/nautilus-design.md)
-    Description: Overview of the design aspects of Nautilus, including its trust model.
-- [What is Nautilus?](https://docs.sui.io/guides/developer/nautilus/nautilus-overview.md)
-    Description: Nautilus is a verifiable off-chain compute layer on Sui.
-- [Encrypt Enclave Secrets with Seal](https://docs.sui.io/guides/developer/nautilus/seal.md)
-    Description: The Seal-Nautilus pattern provides secure secret management for enclave
-        applications.
-- [Using Nautilus](https://docs.sui.io/guides/developer/nautilus/using-nautilus.md)
-    Description: Details on how to use Nautilus with the reproducible build template.
-- [Asset Tokenization](https://docs.sui.io/guides/developer/nft/asset-tokenization.md)
-    Description: Learn how to tokenize assets on the Sui blockchain. Asset tokenization refers to
-        the process of representing real-world assets, such as real estate, art, commodities,
-        stocks, or other valuable assets, as digital tokens on the blockchain network.
 
 ## References
 
@@ -336,8 +385,8 @@
         CommitteeMemberRegistration Constants Function verifysignatures Function create Function
         register Function trycreatenextcommittee Function
 - [Module bridge::crypto](https://docs.sui.io/references/framework/sui_bridge/crypto.md)
-    Description: Function ecdsapubkeytoethaddress use ; use ; Function public(package) fun
-        (compressedpubkey: &vector): vector
+    Description: Function ecdsapubkeytoethaddress use ; use ; Function ecdsapubkeytoethaddress
+        public(package) fun (compressedpubkey: &vector): vector
 - [sui:bridge](https://docs.sui.io/references/framework/sui_bridge.md)
     Description: Documentation for the modules in the sui/crates/sui-framework/packages/bridge
         crate. Select a module from the list to see its details.
@@ -356,7 +405,7 @@
     Description: Constants Function token Function committeeblocklist Function emergencyop Function
         updatebridgelimit Function updateassetprice Function addtokensonsui Constants const : u8 =
         0; const : u8 = 1; const : u8 = 2; const : u8 = 3; const : u8 = 4; const : u8 = 6; Function
-        public fun (): u8 Function public
+        token public fun (): u8 Function
 - [Module bridge::treasury](https://docs.sui.io/references/framework/sui_bridge/treasury.md)
     Description: Struct BridgeTreasury Struct BridgeTokenMetadata Struct ForeignTokenRegistration
         Struct UpdateTokenPriceEvent Struct NewTokenEvent Struct TokenRegistrationEvent Constants
@@ -364,8 +413,8 @@
         registerforeigntoken Function addnewtoken Function
 - [Module std::address](https://docs.sui.io/references/framework/sui_std/address.md)
     Description: Provides a way to get address length since it's a platform-specific parameter.
-        Function length Function Should be converted to a native function. Current implementation
-        only works for Sui.
+        Function length Function length Should be converted to a native function. Current
+        implementation only works for Sui.
 - [Module std::ascii](https://docs.sui.io/references/framework/sui_std/ascii.md)
     Description: The ASCII module defines basic string and char newtypes in Move that verify that
         characters are valid ASCII, and that strings consist of only valid ASCII characters.
@@ -377,8 +426,8 @@
 - [Module std::bit_vector](https://docs.sui.io/references/framework/sui_std/bit_vector.md)
     Description: Struct BitVector Constants Function new Function set Function unset Function
         shiftleft Function isindexset Function length Function longestsetsequencestartingat Struct
-        public struct has copy, drop, store Fields Constants The provided index is out of bounds
-        const : = 131072; An invalid length of
+        BitVector public struct has copy, drop, store Fields : bitfield: <> Constants The provided
+        index is out of bounds const : = 131072;
 - [Module std::debug](https://docs.sui.io/references/framework/sui_std/debug.md)
     Description: Module providing debug functionality.
 - [Module std::fixed_point32](https://docs.sui.io/references/framework/sui_std/fixed_point32.md)
@@ -393,8 +442,8 @@
 - [Module std::internal](https://docs.sui.io/references/framework/sui_std/internal.md)
     Description: Defines the type, which can be used to constrain the logic of a generic function
         to be authorized only by the module that defines the type parameter. To write a function
-        that is guarded by a , require it as an argument. Struct Permit Function permit Struct A
-        privileged witness of the T type.
+        that is guarded by a , require it as an argument. Struct Permit Function permit Struct
+        Permit A privileged witness of the T type.
 - [Module std::macros](https://docs.sui.io/references/framework/sui_std/macros.md)
     Description: This module holds shared implementation of macros used in std Macro function
         nummax Macro function nummin Macro function numdiff Macro function numdivideandroundup
@@ -458,7 +507,7 @@
     Description: Struct OwnerKey Struct Owner Struct MetadataKey Struct Metadata Struct
         AccumulatorObjectCountKey Constants Function recordaccumulatorobjectchanges Function
         getaccumulatorobjectcount use ; use ; use ; use ; use ; use ; use ; use ; use ; use ; use ;
-        use ; use ; use ; use ; Struct === Accumulator
+        use ; use ; use ; use ; Struct OwnerKey ===
 - [Module
     sui::accumulator_settlement](https://docs.sui.io/references/framework/sui_sui/accumulator_settlement.md)
     Description: Struct EventStreamHead Constants Function settlementprologue Function settleu128
@@ -473,8 +522,8 @@
 - [Module sui::address_alias](https://docs.sui.io/references/framework/sui_sui/address_alias.md)
     Description: Struct AddressAliasState Struct AddressAliases Struct AliasKey Constants Function
         create Function enable Function add Function replaceall Function remove use ; use ; use ;
-        use ; use ; use ; use ; use ; use ; use ; use ; use ; use ; use ; use ; Struct Singleton
-        shared object which manages creation
+        use ; use ; use ; use ; use ; use ; use ; use ; use ; use ; use ; use ; Struct
+        AddressAliasState Singleton shared object which
 - [Module
     sui::authenticator_state](https://docs.sui.io/references/framework/sui_sui/authenticator_state.md)
     Description: Struct AuthenticatorState Struct AuthenticatorStateInner Struct JWK Struct JwkId
@@ -550,12 +599,13 @@
         secp256k1verify.
 - [Module sui::ecvrf](https://docs.sui.io/references/framework/sui_sui/ecvrf.md)
     Description: Constants Function ecvrfverify Constants const : u64 = 1; const : u64 = 2; const :
-        u64 = 3; Function @param hash: The hash/output from a ECVRF to be verified. @param
-        alphastring: Input/seed to the ECVRF used to generate the output.
+        u64 = 3; Function ecvrfverify @param hash: The hash/output from a ECVRF to be verified.
+        @param alphastring: Input/seed to the ECVRF used to generate the output.
 - [Module sui::ed25519](https://docs.sui.io/references/framework/sui_sui/ed25519.md)
-    Description: Function ed25519verify Function @param signature: 32-byte signature that is a
-        point on the Ed25519 elliptic curve. @param publickey: 32-byte signature that is a point on
-        the Ed25519 elliptic curve. @param msg: The message that we test the signature against.
+    Description: Function ed25519verify Function ed25519verify @param signature: 32-byte signature
+        that is a point on the Ed25519 elliptic curve. @param publickey: 32-byte signature that is
+        a point on the Ed25519 elliptic curve. @param msg: The message that we test the signature
+        against.
 - [Module sui::event](https://docs.sui.io/references/framework/sui_sui/event.md)
     Description: Events module. Defines the function which creates and sends a custom MoveEvent as
         a part of the effects certificate of the transaction.
@@ -572,13 +622,14 @@
 - [Module sui::hash](https://docs.sui.io/references/framework/sui_sui/hash.md)
     Description: Module which defines hash functions. Note that Sha-256 and Sha3-256 is available
         in the std::hash module in the standard library. Function blake2b256 Function keccak256
-        Function @param data: Arbitrary binary data to hash. Hash the input bytes using Blake2b-256
-        and returns 32 bytes.
+        Function blake2b256 @param data: Arbitrary binary data to hash. Hash the input bytes using
+        Blake2b-256 and returns 32 bytes.
 - [Module sui::hex](https://docs.sui.io/references/framework/sui_sui/hex.md)
     Description: HEX (Base16) encoding utility.
 - [Module sui::hmac](https://docs.sui.io/references/framework/sui_sui/hmac.md)
-    Description: Function hmacsha3256 Function @param key: HMAC key, arbitrary bytes. @param msg:
-        message to sign, arbitrary bytes. Returns the 32 bytes digest of HMAC-SHA3-256(key, msg).
+    Description: Function hmacsha3256 Function hmacsha3256 @param key: HMAC key, arbitrary bytes.
+        @param msg: message to sign, arbitrary bytes. Returns the 32 bytes digest of
+        HMAC-SHA3-256(key, msg).
 - [sui:sui](https://docs.sui.io/references/framework/sui_sui.md)
     Description: Documentation for the modules in the sui/crates/sui-framework/packages/sui crate.
         Select a module from the list to see its details.
@@ -626,8 +677,8 @@
 - [Module sui::party](https://docs.sui.io/references/framework/sui_sui/party.md)
     Description: Struct Party Struct Permissions Constants Function singleowner Macro function
         transfer Macro function publictransfer Function empty Function setpermissions Function
-        issingleowner Function intonative use ; use ; use ; Struct The permissions that apply to a
-        party object.
+        issingleowner Function intonative use ; use ; use ; Struct Party The permissions that apply
+        to a party object.
 - [Module sui::pay](https://docs.sui.io/references/framework/sui_sui/pay.md)
     Description: This module provides handy functionality for wallets and sui::Coin management.
 - [Module sui::poseidon](https://docs.sui.io/references/framework/sui_sui/poseidon.md)
@@ -675,18 +726,18 @@
         Function sponsor Function freshobjectaddress Function freshid Function referencegasprice
         Function nativergp Function gasprice Function
 - [Module sui::types](https://docs.sui.io/references/framework/sui_sui/types.md)
-    Description: Sui types helpers and utilities Function isonetimewitness Function Tests if the
-        argument type is a one-time witness, that is a type with only one instantiation across the
-        entire code base.
+    Description: Sui types helpers and utilities Function isonetimewitness Function
+        isonetimewitness Tests if the argument type is a one-time witness, that is a type with only
+        one instantiation across the entire code base.
 - [Module sui::url](https://docs.sui.io/references/framework/sui_sui/url.md)
     Description: URL: standard Uniform Resource Locator string Struct Url Function newunsafe
-        Function newunsafefrombytes Function innerurl Function update use ; use ; use ; Struct
+        Function newunsafefrombytes Function innerurl Function update use ; use ; use ; Struct Url
         Standard Uniform Resource Locator (URL) string.
 - [Module sui::vdf](https://docs.sui.io/references/framework/sui_sui/vdf.md)
     Description: Constants Function hashtoinput Function hashtoinputinternal Function vdfverify
-        Function vdfverifyinternal Constants const : u64 = 0; Function Hash an arbitrary binary
-        message to a class group element to be used as input for . This function is currently only
-        enabled on Devnet.
+        Function vdfverifyinternal Constants const : u64 = 0; Function hashtoinput Hash an
+        arbitrary binary message to a class group element to be used as input for . This function
+        is currently only enabled on Devnet.
 - [Module sui::vec_map](https://docs.sui.io/references/framework/sui_sui/vec_map.md)
     Description: Struct VecMap Struct Entry Constants Function empty Function insert Function
         remove Function pop Function getmut Function get Function tryget Function contains Function
@@ -695,25 +746,25 @@
 - [Module sui::vec_set](https://docs.sui.io/references/framework/sui_sui/vec_set.md)
     Description: Struct VecSet Constants Function empty Function singleton Function insert Function
         remove Function contains Function length Function isempty Function intokeys Function
-        fromkeys Function keys Function size use ; use ; Struct A set data structure backed by a
-        vector.
+        fromkeys Function keys Function size use ; use ; Struct VecSet A set data structure backed
+        by a vector.
 - [Module sui::versioned](https://docs.sui.io/references/framework/sui_sui/versioned.md)
     Description: Struct Versioned Struct VersionChangeCap Constants Function create Function
         version Function loadvalue Function loadvaluemut Function removevalueforupgrade Function
         upgrade Function destroy use ; use ; use ; use ; use ; use ; use ; use ; use ; use ; Struct
-        A wrapper type that supports versioning of
+        Versioned A wrapper type that supports
 - [Module
     sui::zklogin_verified_id](https://docs.sui.io/references/framework/sui_sui/zklogin_verified_id.md)
     Description: Struct VerifiedID Constants Function owner Function keyclaimname Function
         keyclaimvalue Function issuer Function audience Function delete Function verifyzkloginid
         Function checkzkloginid Function checkzkloginidinternal use ; use ; use ; use ; use ; use ;
-        use ; use ; use ; Struct Possession of a
+        use ; use ; use ; Struct VerifiedID
 - [Module
     sui::zklogin_verified_issuer](https://docs.sui.io/references/framework/sui_sui/zklogin_verified_issuer.md)
     Description: Struct VerifiedIssuer Constants Function owner Function issuer Function delete
         Function verifyzkloginissuer Function checkzkloginissuer Function
         checkzkloginissuerinternal use ; use ; use ; use ; use ; use ; use ; use ; use ; use ; use
-        ; use ; Struct Possession of a VerifiedIssuer proves that the
+        ; use ; Struct VerifiedIssuer Possession of a VerifiedIssuer
 - [Module sui_system::genesis](https://docs.sui.io/references/framework/sui_sui_system/genesis.md)
     Description: Struct GenesisValidatorMetadata Struct GenesisChainParameters Struct
         TokenDistributionSchedule Struct TokenAllocation Constants Function create Function
@@ -801,11 +852,9 @@
 - [PTB Commands](https://docs.sui.io/references/ptb-commands.md)
     Description: This topic describes each PTB command and their format, return type, and signature.
 - [Release Notes](https://docs.sui.io/references/release-notes.md)
-    Description: --- 🔶 Testnet | Source: GitHub Release #25364: test only changes, no user impact
-        #25556: Enables the address aliases feature on mainnet. #25585: Add a new protocol version
-        to support some refactoring in execution. #25261: Error field is no longer available in
-        simulateResult and ExecutionResult.
-- [Rust SDK](https://docs.sui.io/references/rust-sdk.md)
+    Description: --- 🔶 Testnet | Source: GitHub Release #25827: metadata hardening in Sui System
+        #25674: Enables address aliases feature on mainnet.
+- [Legacy Rust SDK](https://docs.sui.io/references/rust-sdk.md)
     Description: The Sui Rust SDK provides Rust wrappers around the Sui API. Using the SDK, you can
         interact with Sui networks using the Rust programming language.
 - [Sui RPC](https://docs.sui.io/references/sui-api.md)
@@ -815,292 +864,289 @@
     Description: Consider RPC best practices when configuring your RPC settings.
 -
     [include](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/directives/include.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [skip](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/directives/skip.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [executeTransaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/mutations/execute-transaction.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Execute a transaction, committing its effects on chain.
 -
     [address](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/address.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Look-up an account by its SuiAddress.
 -
     [chainIdentifier](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/chain-identifier.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; The network's genesis checkpoint digest (uniquely identifies the
+        network), Base58-encoded.
 -
     [checkpoint](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/checkpoint.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch a checkpoint by its sequence number, or the latest
+        checkpoint if no sequence number is provided.
 -
     [checkpoints](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/checkpoints.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [coinMetadata](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/coin-metadata.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch the CoinMetadata for a given coin type.
 -
     [epoch](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/epoch.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch an epoch by its ID, or fetch the latest epoch if no ID is
+        provided.
 -
     [epochs](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/epochs.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [events](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/events.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [multiGetAddresses](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-addresses.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch addresses by their keys. Returns a list of addresses that is
+        guaranteed to be the same length as .
 -
     [multiGetCheckpoints](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-checkpoints.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch checkpoints by their sequence numbers.
 -
     [multiGetEpochs](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-epochs.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch epochs by their IDs. Returns a list of epochs that is
+        guaranteed to be the same length as .
 -
     [multiGetObjects](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-objects.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch objects by their keys. Returns a list of objects that is
+        guaranteed to be the same length as .
 -
     [multiGetPackages](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-packages.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch packages by their keys. Returns a list of packages that is
+        guaranteed to be the same length as .
 -
     [multiGetTransactionEffects](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-transaction-effects.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch transaction effects by their transactions' digests.
 -
     [multiGetTransactions](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-transactions.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch transactions by their digests.
 -
     [multiGetTypes](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-types.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch types by their string representations.
 -
     [nameRecord](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/name-record.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Look-up a Name Service NameRecord by its domain name. Returns if
+        the record does not exist or has expired.
 -
     [node](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/node.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch a by its globally unique .
 -
     [objectVersions](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/object-versions.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [object](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/object.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch an object by its address. If is specified, the object will
+        be fetched at that exact version.
 -
     [objects](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/objects.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Paginate objects in the live object set, optionally filtered by
+        owner and/or type.
 -
     [packageVersions](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/package-versions.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [package](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/package.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch a package by its address.
 -
     [packages](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/packages.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [protocolConfigs](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/protocol-configs.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [serviceConfig](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/service-config.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [simulateTransaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/simulate-transaction.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Simulate a transaction to preview its effects without executing it
+        on chain.
 -
     [transactionEffects](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/transaction-effects.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch transaction effects by its transaction's digest.
 -
     [transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/transaction.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch a transaction by its digest.
 -
     [transactions](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/transactions.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [type](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/type.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Fetch a structured representation of a concrete type, including
+        its layout information.
 -
     [verifyZkLoginSignature](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/operations/queries/verify-zk-login-signature.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Verify a zkLogin signature is from the given . Returns
+        successfully if the signature is valid.
 -
     [deprecated](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/directives/deprecated.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Marks an element of a GraphQL schema as no longer supported.
 -
     [oneOf](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/directives/one-of.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ?
 -
     [specifiedBy](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/directives/specified-by.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Exposes a URL that specifies the behavior of this scalar.
 -
     [AddressTransactionRelationship](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/address-transaction-relationship.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; The possible relationship types for a transaction: sent or
+        affected. Transactions this address has sent.
 -
     [ConsensusObjectCancellationReason](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/consensus-object-cancellation-reason.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Reason why a transaction that attempted to access a
+        consensus-managed object was cancelled.
 -
     [ExecutionStatus](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/execution-status.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; The execution status of this transaction: success or failure. The
+        transaction was successfully executed.
 -
     [MoveAbility](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/move-ability.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Abilities are keywords in Sui Move that define how types behave at
+        the compiler level.
 -
     [MoveVisibility](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/move-visibility.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; The visibility modifier describes which modules can access this
+        module member.
 -
     [MultisigMemberSignatureScheme](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; The signature scheme of a multisig member's signature.
 -
     [OwnerKind](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/owner-kind.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Filter on who owns an object. Object is owned by an address.
+        Object is a child of another object (e.g.
 -
     [RegulatedState](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/regulated-state.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Whether the currency is regulated or not. A or a exists for this
+        currency.
 -
     [SupplyState](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/supply-state.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Future behavior of a currency's supply. The supply can only
+        decrease.
 -
     [TransactionKindInput](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/transaction-kind-input.md)
-    Description: export const Bullet = () => <> export const SpecifiedBy = (props) =>
-        <>Specification⎘ export const Badge = (props) => <>{props.text} export const Details = ({
-        dataOpen, dataClose, children, startOpen = false }) => { const [open, setOpen] =
-        useState(startOpen); return ( { e.preventDefault();
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; An input filter selecting for either system or programmable
+        transactions.
+-
+    [WithdrawFrom](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/withdraw-from.md)
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; The account to withdraw funds from. The funds are withdrawn from
+        the transaction sender's account.
+-
+    [ZkLoginIntentScope](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/zk-login-intent-scope.md)
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; An enum that specifies the intent scope to be used to parse the
+        bytes for signature verification.
+-
+    [AddressKey](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/address-key.md)
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Identifies a specific version of an address. Exactly one of or
+        must be specified.
+-
+    [CheckpointFilter](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/checkpoint-filter.md)
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Limit query results to checkpoints that occured strictly after the
+        given checkpoint.
+-
+    [DynamicFieldName](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/dynamic-field-name.md)
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; A description of a dynamic field's name.
+-
+    [EventFilter](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/event-filter.md)
+    Description: const [open, setOpen] = useState(startOpen); return ( { e.preventDefault();
+        setOpen((open) => !open); }} style={{ listStyle:'none' }} > {open ? dataOpen : dataClose}
+        {open && children} ); }; Limit to events that occured strictly after the given checkpoint.
+        Limit to events in the given checkpoint.
 
 ## Standards
 
@@ -1175,3 +1221,6 @@
     Referral](https://docs.sui.io/standards/deepbook-margin/contract-information/supply-referral.md)
     Description: Learn how supply referrals work in DeepBook Margin and how to earn fees by
         referring liquidity suppliers.
+- [Take Profit Stop
+    Loss](https://docs.sui.io/standards/deepbook-margin/contract-information/tpsl.md)
+    Description: Learn about conditional orders for automated trading strategies on DeepBook Margin.
