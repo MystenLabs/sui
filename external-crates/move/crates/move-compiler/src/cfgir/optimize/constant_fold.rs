@@ -252,6 +252,7 @@ fn is_valid_const_builtin_type(sp!(_, bt_): &BuiltinTypeName) -> bool {
         | N::I32
         | N::I64
         | N::I128
+        | N::I256
         | N::Vector
         | N::Bool => true,
         N::Signer => false,
@@ -272,6 +273,7 @@ fn fold_unary_op(loc: Loc, sp!(_, op_): &UnaryOp, v: Value_) -> Option<Unannotat
         (U::Neg, V::I32(v)) => V::I32(v.checked_neg()?),
         (U::Neg, V::I64(v)) => V::I64(v.checked_neg()?),
         (U::Neg, V::I128(v)) => V::I128(v.checked_neg()?),
+        (U::Neg, V::I256(v)) => V::I256(v.checked_neg()?),
         (op, v) => panic!("ICE unexpected unary op while folding: {op:?} {v:?}"),
     };
     Some(evalue_(loc, folded))
@@ -292,6 +294,7 @@ macro_rules! checked_int_binop {
             (V::I32(a), V::I32(b)) => a.$method(b).map(V::I32),
             (V::I64(a), V::I64(b)) => a.$method(b).map(V::I64),
             (V::I128(a), V::I128(b)) => a.$method(b).map(V::I128),
+            (V::I256(a), V::I256(b)) => a.$method(b).map(V::I256),
             _ => None,
         }
     }};
@@ -312,6 +315,7 @@ macro_rules! bitwise_int_binop {
             (V::I32(a), V::I32(b)) => Some(V::I32(a $op b)),
             (V::I64(a), V::I64(b)) => Some(V::I64(a $op b)),
             (V::I128(a), V::I128(b)) => Some(V::I128(a $op b)),
+            (V::I256(a), V::I256(b)) => Some(V::I256(a $op b)),
             _ => None,
         }
     }};
@@ -332,6 +336,7 @@ macro_rules! comparison_int_binop {
             (V::I32(a), V::I32(b)) => Some(V::Bool(a $op b)),
             (V::I64(a), V::I64(b)) => Some(V::Bool(a $op b)),
             (V::I128(a), V::I128(b)) => Some(V::Bool(a $op b)),
+            (V::I256(a), V::I256(b)) => Some(V::Bool(a $op b)),
             _ => None,
         }
     }};
@@ -355,6 +360,10 @@ fn fold_shl(v1: Value_, v2: Value_) -> Option<Value_> {
         V::I32(a) => a.checked_shl(rhs).filter(|r| r >> rhs == a).map(V::I32),
         V::I64(a) => a.checked_shl(rhs).filter(|r| r >> rhs == a).map(V::I64),
         V::I128(a) => a.checked_shl(rhs).filter(|r| r >> rhs == a).map(V::I128),
+        V::I256(a) => a
+            .checked_shl(rhs)
+            .filter(|r| r.checked_shr(rhs) == Some(a))
+            .map(V::I256),
         _ => None,
     }
 }
@@ -376,6 +385,7 @@ fn fold_shr(v1: Value_, v2: Value_) -> Option<Value_> {
         V::I32(a) => a.checked_shr(rhs).map(V::I32),
         V::I64(a) => a.checked_shr(rhs).map(V::I64),
         V::I128(a) => a.checked_shr(rhs).map(V::I128),
+        V::I256(a) => a.checked_shr(rhs).map(V::I256),
         _ => None,
     }
 }
@@ -446,6 +456,7 @@ macro_rules! cast_i {
             V::I32(v) => V::$target_v(<$target_ty>::try_from(v).ok()?),
             V::I64(v) => V::$target_v(<$target_ty>::try_from(v).ok()?),
             V::I128(v) => V::$target_v(<$target_ty>::try_from(v).ok()?),
+            V::I256(v) => V::$target_v(<$target_ty>::try_from(v).ok()?),
             _ => return None,
         }
     };
@@ -474,6 +485,18 @@ fn fold_cast(loc: Loc, sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<Unann
         BT::I32 => cast_i!(v, I32, i32),
         BT::I64 => cast_i!(v, I64, i64),
         BT::I128 => cast_i!(v, I128, i128),
+        BT::I256 => {
+            use move_core_types::i256::I256;
+            match v {
+                V::I8(v) => V::I256(I256::from(v)),
+                V::I16(v) => V::I256(I256::from(v)),
+                V::I32(v) => V::I256(I256::from(v)),
+                V::I64(v) => V::I256(I256::from(v)),
+                V::I128(v) => V::I256(I256::from(v)),
+                V::I256(v) => V::I256(v),
+                _ => return None,
+            }
+        }
         _ => panic!("ICE unexpected cast target while folding: {:?}", bt_),
     };
     Some(evalue_(loc, cast))

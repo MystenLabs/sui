@@ -69,7 +69,7 @@ pub use ast_debug::AstDebug;
 pub use builtin_types::{
     NumberFormat, SIGNED_INT_SUFFIXES, UNSIGNED_INT_SUFFIXES, has_signed_suffix,
     has_unsigned_suffix, parse_address, parse_i8, parse_i16, parse_i32, parse_i64, parse_i128,
-    parse_u8, parse_u16, parse_u32, parse_u64, parse_u128, parse_u256,
+    parse_i256, parse_u8, parse_u16, parse_u32, parse_u64, parse_u128, parse_u256,
 };
 
 //**************************************************************************************************

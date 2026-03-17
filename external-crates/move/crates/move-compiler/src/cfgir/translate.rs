@@ -638,7 +638,7 @@ pub(crate) fn move_value_from_value(
                 .collect();
             MV::Vector(mvs?)
         }
-        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) => {
+        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
             env.diagnostic_reporter_at_top_level()
                 .add_diag(dev_feature!(FeatureGate::SignedIntegers, vloc));
             return None;

@@ -8,6 +8,7 @@ module 0x42::m {
     fun ret_i32(): i32 { 1i32 }
     fun ret_i64(): i64 { 1i64 }
     fun ret_i128(): i128 { 1i128 }
+    fun ret_i256(): i256 { 1i256 }
 
     // Return negated value
     fun ret_neg(): i64 {

@@ -14,11 +14,12 @@ pub const I_16: &str = "i16";
 pub const I_32: &str = "i32";
 pub const I_64: &str = "i64";
 pub const I_128: &str = "i128";
+pub const I_256: &str = "i256";
 pub const BOOL: &str = "bool";
 pub const VECTOR: &str = "vector";
 
 pub const UNSIGNED_INT_SUFFIXES: &[&str] = &[U_8, U_16, U_32, U_64, U_128, U_256];
-pub const SIGNED_INT_SUFFIXES: &[&str] = &[I_8, I_16, I_32, I_64, I_128];
+pub const SIGNED_INT_SUFFIXES: &[&str] = &[I_8, I_16, I_32, I_64, I_128, I_256];
 
 pub const PRIMITIVE_TYPES: &[&str] = &[U_8, U_16, U_32, U_64, U_128, U_256, BOOL, VECTOR];
 
@@ -80,3 +81,26 @@ define_parse_signed_int!(parse_i16, parse_u16, u16, i16);
 define_parse_signed_int!(parse_i32, parse_u32, u32, i32);
 define_parse_signed_int!(parse_i64, parse_u64, u64, i64);
 define_parse_signed_int!(parse_i128, parse_u128, u128, i128);
+
+pub fn parse_i256(
+    s: &str,
+    negated: bool,
+) -> Result<(move_core_types::i256::I256, NumberFormat), ParseIntError> {
+    use move_core_types::i256::I256;
+    let (magnitude, fmt) = parse_u256(s).map_err(|_| signed_overflow_parse_error())?;
+    let max_pos = I256::max_value().to_u256_bits();
+    // abs(MIN) as unsigned: the two's complement representation of MIN
+    let max_neg = I256::min_value().to_u256_bits();
+    let value = if negated {
+        if magnitude > max_neg {
+            return Err(signed_overflow_parse_error());
+        }
+        I256::from_u256_bits(magnitude).wrapping_neg()
+    } else {
+        if magnitude > max_pos {
+            return Err(signed_overflow_parse_error());
+        }
+        I256::from_u256_bits(magnitude)
+    };
+    Ok((value, fmt))
+}

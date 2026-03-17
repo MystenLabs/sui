@@ -23,6 +23,10 @@ module 0x42::m {
         let _x = (1i128 == 1i128);
     }
 
+    fun eq_i256() {
+        let _x = (1i256 == 1i256);
+    }
+
     // Inequality
     fun neq_i64() {
         let _x = (1i64 != 2i64);

@@ -26,6 +26,11 @@ module 0x42::m {
         let _a: i128 = -(-x);
     }
 
+    fun double_neg_i256() {
+        let x: i256 = 1i256;
+        let _a: i256 = -(-x);
+    }
+
     fun neg_parenthesized_expr() {
         let a: i32 = 10i32;
         let b: i32 = 3i32;

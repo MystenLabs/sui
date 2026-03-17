@@ -3,9 +3,10 @@ module a::m {
     public struct S has drop {
         x: i64,
         y: i8,
+        z: i256,
     }
 
     fun create(): S {
-        S { x: 42i64, y: 1i8 }
+        S { x: 42i64, y: 1i8, z: 0i256 }
     }
 }

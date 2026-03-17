@@ -7,6 +7,7 @@ module a::m {
     public struct S has drop {
         x: i32,
         y: i64,
+        z: i256,
     }
 
     fun params(_a: i8, _b: i128): i64 {

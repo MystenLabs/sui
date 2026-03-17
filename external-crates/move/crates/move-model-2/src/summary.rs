@@ -219,6 +219,8 @@ pub enum Type {
     I64,
     #[serde(rename = "i128")]
     I128,
+    #[serde(rename = "i256")]
+    I256,
     #[serde(rename = "address")]
     Address,
     #[serde(rename = "signer")]
@@ -912,6 +914,7 @@ impl Type {
                     N::BuiltinTypeName_::I32 => Self::I32,
                     N::BuiltinTypeName_::I64 => Self::I64,
                     N::BuiltinTypeName_::I128 => Self::I128,
+                    N::BuiltinTypeName_::I256 => Self::I256,
                     N::BuiltinTypeName_::Address => Self::Address,
                     N::BuiltinTypeName_::Signer => Self::Signer,
                     N::BuiltinTypeName_::Vector => {

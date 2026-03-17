@@ -371,6 +371,7 @@ fn inferred_numerical_value(
     let i32_max = U256::from(i32::MAX as u64);
     let i64_max = U256::from(i64::MAX as u64);
     let i128_max = U256::from(i128::MAX as u128);
+    let i256_max = move_core_types::i256::I256::max_value().to_u256_bits();
     let max = match bt {
         BT::U8 => u8_max,
         BT::U16 => u16_max,
@@ -383,12 +384,15 @@ fn inferred_numerical_value(
         BT::I32 => i32_max,
         BT::I64 => i64_max,
         BT::I128 => i128_max,
+        BT::I256 => i256_max,
         BT::Address | BT::Signer | BT::Vector | BT::Bool => unreachable!(),
     };
     if value > max {
         let msg = format!("This literal does not fit into the type '{}'.", bt);
         let fix_bt = if bt.is_signed_numeric() {
-            if value > i64_max {
+            if value > i128_max {
+                BT::I256
+            } else if value > i64_max {
                 BT::I128
             } else if value > i32_max {
                 BT::I64
@@ -436,6 +440,7 @@ fn inferred_numerical_value(
             BT::I32 => Value_::I32(value.down_cast_lossy()),
             BT::I64 => Value_::I64(value.down_cast_lossy()),
             BT::I128 => Value_::I128(value.down_cast_lossy()),
+            BT::I256 => Value_::I256(move_core_types::i256::I256::from_u256_bits(value)),
             BT::Address | BT::Signer | BT::Vector | BT::Bool => unreachable!(),
         };
         Some(value_)

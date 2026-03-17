@@ -6,5 +6,6 @@ module a::m {
         let _z: i32 = 0i32;
         let _w: i64 = 0i64;
         let _v: i128 = 0i128;
+        let _w: i256 = 0i256;
     }
 }

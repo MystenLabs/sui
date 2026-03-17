@@ -27,6 +27,10 @@ module 0x42::m {
         let _x: i128 = 0xABCDi128;
     }
 
+    fun hex_i256() {
+        let _x: i256 = 0xABCDi256;
+    }
+
     // Zero in hex
     fun hex_zero() {
         let _x: i64 = 0x0i64;

@@ -9,4 +9,14 @@ module a::m {
         let _shl = a << 2u8;
         let _shr = a >> 2u8;
     }
+
+    fun bitwise_i256() {
+        let a: i256 = 10i256;
+        let b: i256 = 5i256;
+        let _and = a & b;
+        let _or = a | b;
+        let _xor = a ^ b;
+        let _shl = a << 2u8;
+        let _shr = a >> 2u8;
+    }
 }

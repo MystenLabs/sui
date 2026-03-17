@@ -23,6 +23,10 @@ module 0x42::m {
         let _x: i128 = 1000000000000;
     }
 
+    fun infer_from_annotation_i256() {
+        let _x: i256 = 1000000000000;
+    }
+
     // Inferred from function return type
     fun returns_i64(): i64 {
         42
