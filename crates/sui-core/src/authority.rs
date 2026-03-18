@@ -109,7 +109,7 @@ use crate::jsonrpc_index::IndexStore;
 use crate::jsonrpc_index::{
     CoinInfo, IndexStoreCacheUpdates, IndexStoreCacheUpdatesWithLocks, ObjectIndexChanges,
 };
-use mysten_common::debug_fatal;
+use mysten_common::{debug_fatal, debug_fatal_no_invariant};
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
@@ -6500,7 +6500,7 @@ impl RandomnessRoundReceiver {
                 Ok(result) => result,
                 Err(_) => {
                     // Crash on randomness update execution timeout in debug builds.
-                    debug_fatal!(
+                    debug_fatal_no_invariant!(
                         "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
                     );
                     // Continue waiting as long as necessary in non-debug builds.

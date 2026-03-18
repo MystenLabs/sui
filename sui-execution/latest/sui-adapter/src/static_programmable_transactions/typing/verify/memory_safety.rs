@@ -68,13 +68,12 @@ impl Value {
 }
 
 impl Context {
-    fn new(env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
-        let gas_coin =
-            if ast.gas_coin.is_none() && env.protocol_config.gasless_transaction_drop_safety() {
-                None
-            } else {
-                Some(Value::NonRef)
-            };
+    fn new(_env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
+        let gas_coin = if ast.gas_coin.is_none() {
+            None
+        } else {
+            Some(Value::NonRef)
+        };
         let objects = ast.objects.iter().map(|_| Some(Value::NonRef)).collect();
         let withdrawals = ast
             .withdrawals

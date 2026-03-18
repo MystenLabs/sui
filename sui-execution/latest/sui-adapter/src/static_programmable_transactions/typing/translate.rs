@@ -510,28 +510,15 @@ fn command<Mode: ExecutionMode>(
 }
 
 fn move_call_parameters<'a>(
-    env: &Env,
+    _env: &Env,
     function: &'a L::LoadedFunction,
 ) -> Vec<(&'a Type, TxContextKind)> {
-    if env.protocol_config.flexible_tx_context_positions() {
-        function
-            .signature
-            .parameters
-            .iter()
-            .map(|ty| (ty, ty.is_tx_context()))
-            .collect()
-    } else {
-        let mut kinds = function
-            .signature
-            .parameters
-            .iter()
-            .map(|ty| (ty, TxContextKind::None))
-            .collect::<Vec<_>>();
-        if let Some((ty, kind)) = kinds.last_mut() {
-            *kind = ty.is_tx_context();
-        }
-        kinds
-    }
+    function
+        .signature
+        .parameters
+        .iter()
+        .map(|ty| (ty, ty.is_tx_context()))
+        .collect()
 }
 
 fn move_call_arguments(

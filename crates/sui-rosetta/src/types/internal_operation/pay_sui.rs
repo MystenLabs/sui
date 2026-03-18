@@ -125,6 +125,7 @@ impl TryConstructTransaction for PaySui {
                     total_sui_balance,
                     budget,
                     address_balance_withdrawal: address_balance_withdrawl,
+                    fss_object_count: None,
                 })
             }
             _ => {
@@ -164,6 +165,7 @@ impl TryConstructTransaction for PaySui {
                     total_sui_balance,
                     budget,
                     address_balance_withdrawal,
+                    fss_object_count: None,
                 })
             }
         }

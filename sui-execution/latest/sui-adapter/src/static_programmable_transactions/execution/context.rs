@@ -1895,43 +1895,33 @@ pub fn finish(
         // of `Shared`.
         if let Some(obj) = written_objects.get(id) {
             if !obj.is_shared() {
-                if protocol_config.per_command_shared_object_transfer_rules() {
-                    invariant_violation!(
-                        "There should be no shared objects unaccounted for when \
-                            per_command_shared_object_transfer_rules is enabled"
-                    )
-                } else {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                        Some(
-                            format!(
-                                "Shared object operation on {} not allowed: \
-                                     cannot be frozen, transferred, or wrapped",
-                                id
-                            )
-                            .into(),
-                        ),
-                    ));
-                }
+                return Err(ExecutionError::new(
+                    ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                    Some(
+                        format!(
+                            "Shared object operation on {} not allowed: \
+                                 cannot be frozen, transferred, or wrapped",
+                            id
+                        )
+                        .into(),
+                    ),
+                ));
             }
         } else {
             // If it's not in the written objects, the object must have been deleted. Otherwise
             // it's an error.
             if !deleted_object_ids.contains(id) {
-                if protocol_config.per_command_shared_object_transfer_rules() {
-                    invariant_violation!(
-                        "There should be no shared objects unaccounted for when \
-                            per_command_shared_object_transfer_rules is enabled"
-                    )
-                } else {
-                    return Err(ExecutionError::new(
-                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                            Some(
-                                format!("Shared object operation on {} not allowed: \
-                                         shared objects used by value must be re-shared if not deleted", id).into(),
-                            ),
-                        ));
-                }
+                return Err(ExecutionError::new(
+                    ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                    Some(
+                        format!(
+                            "Shared object operation on {} not allowed: \
+                             shared objects used by value must be re-shared if not deleted",
+                            id
+                        )
+                        .into(),
+                    ),
+                ));
             }
         }
     }
@@ -1949,21 +1939,17 @@ pub fn finish(
             debug_fatal!(
                 "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
             );
-            if protocol_config.per_command_shared_object_transfer_rules() {
-                invariant_violation!(
-                    "Shared object operation on {} not allowed: \
-                        transaction with singly owned input object must be sent by the owner",
-                    id,
-                );
-            } else {
-                return Err(ExecutionError::new(
-                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                                Some(
-                                    format!("Shared object operation on {} not allowed: \
-                                             transaction with singly owned input object must be sent by the owner", id).into(),
-                                ),
-                            ));
-            }
+            return Err(ExecutionError::new(
+                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                Some(
+                    format!(
+                        "Shared object operation on {} not allowed: \
+                         transaction with singly owned input object must be sent by the owner",
+                        id
+                    )
+                    .into(),
+                ),
+            ));
         }
         // If an Owner type is implemented with support for more fine-grained authorization,
         // checks should be performed here. For example, transfers and wraps can be detected
@@ -2027,24 +2013,23 @@ pub fn finish(
         })
         .collect::<Result<Vec<_>, ExecutionError>>()?;
 
-    if protocol_config.enable_coin_deny_list_v2() {
-        for object in written_objects.values() {
-            let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
-            let owner = object.owner.get_address_owner_address();
-            if let (Some(ty), Ok(owner)) = (coin_type, owner) {
-                receiving_funds_type_and_owners
-                    .entry(ty)
-                    .or_insert_with(BTreeSet::new)
-                    .insert(owner);
-            }
+    // Deny-list v2 checks
+    for object in written_objects.values() {
+        let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
+        let owner = object.owner.get_address_owner_address();
+        if let (Some(ty), Ok(owner)) = (coin_type, owner) {
+            receiving_funds_type_and_owners
+                .entry(ty)
+                .or_insert_with(BTreeSet::new)
+                .insert(owner);
         }
-        let DenyListResult {
-            result,
-            num_non_gas_coin_owners,
-        } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
-        gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-        result?;
     }
+    let DenyListResult {
+        result,
+        num_non_gas_coin_owners,
+    } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
+    gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+    result?;
 
     Ok(ExecutionResults::V2(ExecutionResultsV2 {
         written_objects,

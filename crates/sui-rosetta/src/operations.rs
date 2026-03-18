@@ -32,7 +32,9 @@ use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
-use crate::types::internal_operation::{PayCoin, PaySui, Stake, WithdrawStake};
+use crate::types::internal_operation::{
+    ConsolidateAllStakedSuiToFungible, PayCoin, PaySui, Stake, WithdrawStake,
+};
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
     InternalOperation, OperationIdentifier, OperationStatus, OperationType,
@@ -104,6 +106,9 @@ impl Operations {
             OperationType::PayCoin => self.pay_coin_ops_to_internal(),
             OperationType::Stake => self.stake_ops_to_internal(),
             OperationType::WithdrawStake => self.withdraw_stake_ops_to_internal(),
+            OperationType::ConsolidateAllStakedSuiToFungible => {
+                self.consolidate_to_fungible_ops_to_internal()
+            }
             op => Err(Error::UnsupportedOperation(op)),
         }
     }
@@ -247,6 +252,35 @@ impl Operations {
             sender,
             stake_ids,
         }))
+    }
+
+    fn consolidate_to_fungible_ops_to_internal(self) -> Result<InternalOperation, Error> {
+        let mut ops = self
+            .0
+            .into_iter()
+            .filter(|op| op.type_ == OperationType::ConsolidateAllStakedSuiToFungible)
+            .collect::<Vec<_>>();
+        if ops.len() != 1 {
+            return Err(Error::MalformedOperationError(
+                "ConsolidateAllStakedSuiToFungible should only have one operation.".into(),
+            ));
+        }
+        let op = ops.pop().unwrap();
+        let sender = op
+            .account
+            .ok_or_else(|| Error::MissingInput("Sender address".to_string()))?
+            .address;
+        let metadata = op.metadata.ok_or_else(|| {
+            Error::MissingInput("ConsolidateAllStakedSuiToFungible metadata".to_string())
+        })?;
+        let OperationMetadata::ConsolidateAllStakedSuiToFungible { validator } = metadata else {
+            return Err(Error::InvalidInput(
+                "Cannot find validator from ConsolidateAllStakedSuiToFungible metadata.".into(),
+            ));
+        };
+        Ok(InternalOperation::ConsolidateAllStakedSuiToFungible(
+            ConsolidateAllStakedSuiToFungible { sender, validator },
+        ))
     }
 
     pub fn from_transaction(
@@ -1168,6 +1202,7 @@ pub enum OperationMetadata {
     GenericTransaction(TransactionKind),
     Stake { validator: SuiAddress },
     WithdrawStake { stake_ids: Vec<ObjectID> },
+    ConsolidateAllStakedSuiToFungible { validator: SuiAddress },
 }
 
 impl Operation {
@@ -1347,6 +1382,7 @@ mod tests {
             address_balance_withdrawal: 0,
             epoch: None,
             chain_id: None,
+            fss_object_count: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
@@ -1407,10 +1443,38 @@ mod tests {
             address_balance_withdrawal: 0,
             epoch: None,
             chain_id: None,
+            fss_object_count: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_consolidate_all_staked_sui_to_fungible() {
+        let sender = SuiAddress::random_for_testing_only();
+        let validator = SuiAddress::random_for_testing_only();
+
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "ConsolidateAllStakedSuiToFungible",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "ConsolidateAllStakedSuiToFungible": {
+                    "validator": validator.to_string()
+                }
+            }
+        }]))
+        .unwrap();
+
+        let internal = ops.into_internal().unwrap();
+        match internal {
+            InternalOperation::ConsolidateAllStakedSuiToFungible(op) => {
+                assert_eq!(op.sender, sender);
+                assert_eq!(op.validator, validator);
+            }
+            _ => panic!("Expected ConsolidateAllStakedSuiToFungible"),
+        }
     }
 }

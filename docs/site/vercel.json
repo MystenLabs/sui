@@ -3376,7 +3376,7 @@
   ],
   "headers": [
     {
-      "source": "/markdown/(.*).md",
+      "source": "/markdown/(.*)\\.md",
       "headers": [
         {
           "key": "Content-Type",
@@ -3389,6 +3389,15 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=3600, s-maxage=3600"
+        }
+      ]
+    },
+    {
+      "source": "/llms.txt",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
         }
       ]
     }
