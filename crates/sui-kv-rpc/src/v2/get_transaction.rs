@@ -20,6 +20,18 @@ use sui_types::base_types::TransactionDigest;
 pub const MAX_BATCH_REQUESTS: usize = 200;
 pub const READ_MASK_DEFAULT: &str = "digest";
 
+fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
+    let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
+    read_mask
+        .validate::<ExecutedTransaction>()
+        .map_err(|path| {
+            FieldViolation::new("read_mask")
+                .with_description(format!("invalid read_mask path: {path}"))
+                .with_reason(ErrorReason::FieldInvalid)
+        })?;
+    Ok(FieldMaskTree::from(read_mask))
+}
+
 pub async fn get_transaction(
     mut client: BigTableClient,
     request: GetTransactionRequest,
@@ -38,19 +50,7 @@ pub async fn get_transaction(
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
 
-    let read_mask = {
-        let read_mask = request
-            .read_mask
-            .unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
-        read_mask
-            .validate::<ExecutedTransaction>()
-            .map_err(|path| {
-                FieldViolation::new("read_mask")
-                    .with_description(format!("invalid read_mask path: {path}"))
-                    .with_reason(ErrorReason::FieldInvalid)
-            })?;
-        FieldMaskTree::from(read_mask)
-    };
+    let read_mask = validate_read_mask(request.read_mask)?;
 
     let mut response = client.get_transactions(&[transaction_digest]).await?;
     let transaction = response
@@ -68,17 +68,7 @@ pub async fn batch_get_transactions(
         digests, read_mask, ..
     }: BatchGetTransactionsRequest,
 ) -> Result<BatchGetTransactionsResponse, RpcError> {
-    let read_mask = {
-        let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
-        read_mask
-            .validate::<ExecutedTransaction>()
-            .map_err(|path| {
-                FieldViolation::new("read_mask")
-                    .with_description(format!("invalid read_mask path: {path}"))
-                    .with_reason(ErrorReason::FieldInvalid)
-            })?;
-        FieldMaskTree::from(read_mask)
-    };
+    let read_mask = validate_read_mask(read_mask)?;
 
     if digests.len() > MAX_BATCH_REQUESTS {
         return Err(RpcError::new(
