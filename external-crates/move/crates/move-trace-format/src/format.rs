@@ -3,7 +3,8 @@
 
 // IDEA: Post trace analysis -- report when values are dropped.
 
-use crate::interface::{NopTracer, Tracer, Writer};
+use crate::interface::{Tracer, Writer};
+use crate::tracers::nop::NopTracer;
 use crate::value::SerializableMoveValue;
 use move_binary_format::{
     file_format::FunctionDefinitionIndex as BinaryFunctionDefinitionIndex,

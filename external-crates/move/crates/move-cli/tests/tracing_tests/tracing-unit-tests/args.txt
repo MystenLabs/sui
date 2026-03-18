@@ -1,3 +1,9 @@
+test -t 1 --trace instruction-only
+> diff -qr traces saved_instruction_only_traces
+
+test -t 1 --trace function-only
+> diff -qr traces saved_function_only_traces
+
 test -t 1 --trace
 > diff -qr traces saved_traces
 

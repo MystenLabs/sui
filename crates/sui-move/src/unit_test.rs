@@ -65,7 +65,7 @@ impl Test {
             ));
         }
         // save disassembly if trace execution is enabled
-        let save_disassembly = self.test.trace;
+        let save_disassembly = self.test.trace.is_some();
         // set the default flavor to Sui if not already set by the user
         if build_config.default_flavor.is_none() {
             build_config.default_flavor = Some(move_compiler::editions::Flavor::Sui);
