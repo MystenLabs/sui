@@ -631,6 +631,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         currency: None,
         address_balance_withdrawal: 0,
         fss_object_count: None,
+        redeem_token_amount: None,
         epoch: None,
         chain_id: None,
     };

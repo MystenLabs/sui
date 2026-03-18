@@ -16,6 +16,8 @@
 
 //# create-checkpoint
 
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+
 //# view-object 0,1
 
 // Use address balance as gas
@@ -23,12 +25,16 @@
 
 //# create-checkpoint
 
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+
 // Now have B send address balance to C using address balance as gas
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) @C --gas-budget 1000000000 --address-balance-gas
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
 
 //# create-checkpoint
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
 
 //# run-graphql
 { # Test balance_changes field on address balance transfer
@@ -51,7 +57,7 @@
 
 //# run-graphql
 { # Test balance_changes field on transaction paid by address balance
-  addressBalanceGasTransaction: transactionEffects(digest: "@{digest_4}") {
+  addressBalanceGasTransaction: transactionEffects(digest: "@{digest_5}") {
     balanceChanges {
       pageInfo {
         hasNextPage
@@ -70,7 +76,7 @@
 
 //# run-graphql
 { # Test balance_changes field on ab transfer transaction paid by address balance
-  addressBalanceGasTransaction: transactionEffects(digest: "@{digest_6}") {
+  addressBalanceGasTransaction: transactionEffects(digest: "@{digest_8}") {
     balanceChanges {
       pageInfo {
         hasNextPage

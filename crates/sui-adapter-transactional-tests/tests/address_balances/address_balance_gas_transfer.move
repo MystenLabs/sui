@@ -17,6 +17,10 @@
 
 //# create-checkpoint
 
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+
 //# programmable --sender A --inputs @0x0 object(0,0) --address-balance-gas
 // Transfer gas coin to 0x0 via TransferObjects while paying with address balance
 //> TransferObjects([Gas], Input(0))
@@ -24,3 +28,9 @@
 //# programmable --sender B --inputs @B object(0,1) --address-balance-gas
 // Transfer gas coin to the sender to show no object was created
 //> TransferObjects([Gas], Input(0))
+
+//# create-checkpoint
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> B

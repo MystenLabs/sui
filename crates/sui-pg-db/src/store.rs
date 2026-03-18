@@ -87,16 +87,14 @@ impl store::Connection for Connection<'_> {
             .first(self)
             .await?;
 
-        if reader_lo <= checkpoint_hi_inclusive {
-            Ok(Some(store::CommitterWatermark {
+        Ok(
+            (reader_lo <= checkpoint_hi_inclusive).then_some(store::CommitterWatermark {
                 epoch_hi_inclusive: epoch_hi_inclusive as u64,
                 checkpoint_hi_inclusive: checkpoint_hi_inclusive as u64,
                 tx_hi: tx_hi as u64,
                 timestamp_ms_hi_inclusive: timestamp_ms_hi_inclusive as u64,
-            }))
-        } else {
-            Ok(None)
-        }
+            }),
+        )
     }
 
     async fn reader_watermark(
@@ -109,14 +107,12 @@ impl store::Connection for Connection<'_> {
             .first(self)
             .await?;
 
-        if reader_lo <= checkpoint_hi_inclusive {
-            Ok(Some(store::ReaderWatermark {
+        Ok(
+            (reader_lo <= checkpoint_hi_inclusive).then_some(store::ReaderWatermark {
                 checkpoint_hi_inclusive: checkpoint_hi_inclusive as u64,
                 reader_lo: reader_lo as u64,
-            }))
-        } else {
-            Ok(None)
-        }
+            }),
+        )
     }
 
     async fn pruner_watermark(
@@ -134,27 +130,17 @@ impl store::Connection for Connection<'_> {
             delay.as_millis() as i64,
         );
 
-        let (wait_for_ms, pruner_hi, reader_lo, checkpoint_hi_inclusive): (i64, i64, i64, i64) =
-            watermarks::table
-                .select((
-                    wait_for,
-                    watermarks::pruner_hi,
-                    watermarks::reader_lo,
-                    watermarks::checkpoint_hi_inclusive,
-                ))
-                .filter(watermarks::pipeline.eq(pipeline))
-                .first(self)
-                .await?;
+        let (wait_for_ms, pruner_hi, reader_lo): (i64, i64, i64) = watermarks::table
+            .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
+            .await?;
 
-        if reader_lo <= checkpoint_hi_inclusive {
-            Ok(Some(store::PrunerWatermark {
-                wait_for_ms,
-                pruner_hi: pruner_hi as u64,
-                reader_lo: reader_lo as u64,
-            }))
-        } else {
-            Ok(None)
-        }
+        Ok(Some(store::PrunerWatermark {
+            wait_for_ms,
+            pruner_hi: pruner_hi as u64,
+            reader_lo: reader_lo as u64,
+        }))
     }
 
     async fn set_committer_watermark(

@@ -13,14 +13,30 @@
 
 //# create-checkpoint
 
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+
 // B withdraws 500 and send to A
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @A
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
 
+
 //# create-checkpoint
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
 
 // B withdraws 500 and send to self
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @B
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
+
+
+//# create-checkpoint
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> B

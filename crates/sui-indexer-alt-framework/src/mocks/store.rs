@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use anyhow::bail;
 use anyhow::ensure;
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -93,7 +94,7 @@ impl MockConnection<'_> {
         pipeline: &str,
     ) -> anyhow::Result<Option<(Ref<'_, String, MockWatermark>, u64)>> {
         let Some(watermark) = self.0.watermarks.get(pipeline) else {
-            return Err(anyhow::anyhow!("Pipeline {} not found", pipeline));
+            bail!("Pipeline {pipeline} not found");
         };
 
         Ok(watermark.checkpoint_hi_inclusive.map(|cp| (watermark, cp)))
