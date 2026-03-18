@@ -4,58 +4,40 @@ description: Learn how zkLogin wallets work on Sui, explore examples like Enoki 
 keywords: [ zkLogin, zero-knowledge login, wallet, enoki, playtron, suiplay0x1, sponsored transactions, oauth, jwt, ephemeral key pair, dapp kit ]
 ---
 
-zkLogin wallets derive a Sui address from an OAuth credential rather than a traditional private key or recovery passphrase (mnemonic). The user signs in with a provider they already use (Google, Apple, Twitch, and others), and the wallet generates a Sui address tied to that credential. No seed phrase is created, and no persistent private key is stored by the OAuth provider. zkLogin is a primitive native to Sui, designed to remove the key management burden for users who are new to on-chain applications.
-
-For a full explanation of how zkLogin works cryptographically, see [What Is zkLogin?](../../../concepts/cryptography/zklogin.mdx).
+zkLogin wallets derive a Sui address from an OAuth credential rather than a traditional private key or recovery passphrase. The user signs in with a provider they already use (Google, Apple, Twitch, and others), and the wallet generates a Sui address tied to that credential. No seed phrase is created, and no persistent private key is stored by the OAuth provider. [zkLogin is a primitive native to Sui](/guides/developer/cryptography/zklogin-integration/zklogin), designed to remove the key management burden for users who are new to on-chain applications.
 
 ## How zkLogin wallets work
 
 At a high level, a zkLogin wallet works as follows:
 
 1. The app generates an ephemeral key pair, valid for a limited number of epochs.
-2. The user authenticates with an OAuth provider (for example, Google). The provider returns a JSON Web Token (JWT) that contains a nonce derived from the ephemeral public key.
+2. The user authenticates with an OAuth provider. The provider returns a JSON Web Token (JWT) that contains a nonce derived from the ephemeral public key.
 3. The app or a proving service uses the JWT to generate a zero-knowledge proof (ZKP). The proof confirms the user holds a valid OAuth credential without revealing the credential on-chain.
 4. The app uses the JWT, a per-user salt, and the issuer URL to derive a stable Sui address for the user. The same credential always produces the same address for a given app and salt.
 5. Transactions are signed with the ephemeral private key and submitted alongside the ZKP. Validators verify the proof and execute the transaction.
 
 Because zkLogin is a two-factor scheme, an attacker who compromises an OAuth account cannot sign transactions unless they also compromise the per-user salt.
 
-The currently supported OAuth providers include Google, Apple, Facebook, Twitch, Microsoft, Slack, and Kakao. See [What Is zkLogin?](../../../concepts/cryptography/zklogin.mdx) for the full list and current network availability.
-
 ## zkLogin wallets on Sui
 
 ### Enoki
 
-Enoki is a software-as-a-service platform built by Mysten Labs that wraps zkLogin and sponsored transactions behind a simple API. Rather than managing proof generation, salt storage, and OAuth configuration yourself, you register your app on the Enoki Developer Portal, configure your OAuth providers, and use the `@mysten/enoki` SDK to handle the rest.
+[Enoki](https://enoki.mystenlabs.com/) is a Mysten Labs platform that wraps zkLogin and sponsored transactions behind a simple API. Rather than managing proof generation, salt storage, and OAuth configuration yourself, you register your app on the Enoki Developer Portal, configure your OAuth providers, and use the [`@mysten/enoki` SDK](https://docs.enoki.mystenlabs.com/) to handle the rest.
 
-Key Enoki features:
-
-- **zkLogin wallets** — Users sign in with Google, Apple, Facebook, Twitch, or other configured providers and receive a self-custodial Sui address. The same credential always resolves to the same address within your app.
-- **Sponsored transactions** — Enoki lets you pay gas on behalf of your users. Users do not need to hold SUI or understand gas at all.
-- **Enoki Connect** — A portable wallet feature that lets a zkLogin wallet created in one app appear as a connectable wallet in other apps that register for it, using `@mysten/enoki-connect`.
-- **SuiNS subnames** — Enoki can provision human-readable subnames (for example, `username@yourapp`) for each user through Sui Name Service.
-
-Enoki wallets implement the Wallet Standard and integrate with Sui dApp Kit through `registerEnokiWallets`. Once registered, they appear in the standard connection UI alongside any other installed wallets.
-
-See the [Enoki documentation](https://docs.enoki.mystenlabs.com) for setup instructions, API key configuration, and the full SDK reference.
+Enoki implements the [Wallet Standard](/standards/wallet-standard) and integrate with [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) through `registerEnokiWallets`. Once registered, they appear in the standard connection UI alongside any other installed wallets.
 
 ### Playtron wallet
 
-The Playtron wallet is the default zkLogin wallet on the SuiPlay0X1, a handheld gaming device developed in partnership between Mysten Labs and Playtron. Every SuiPlay0X1 user has a Playtron account, and every Playtron account has an associated zkLogin wallet derived from those credentials.
+The [Playtron](https://www.playtron.one/) wallet is the default zkLogin wallet on the [SuiPlay0X1](/guides/developer/suiplay0x1/wallet-integration). Every SuiPlay0X1 user has a Playtron account, and every Playtron account has an associated zkLogin wallet derived from those credentials.
 
-The Playtron wallet has a few characteristics that distinguish it from a general-purpose zkLogin wallet:
+Games running on the SuiPlay0X1 must support the Playtron wallet as the default option. Off-device versions of those games should use Sui dApp Kit to allow users to connect their Playtron wallet through a web interface.
 
-- It is integrated at the operating system level of the SuiPlay0X1 device. Users can sign transactions on-device without switching to a separate wallet app.
-- It ships with Enoki Connect support, so it can appear as a connectable wallet in third-party apps that register for it.
-- A companion web app at [wallet.playtron.one](https://wallet.playtron.one) lets users link their Playtron wallet to self-custody wallets using SuiLink, enabling read-access to linked wallet assets from the device.
+## zkLogin SDK
 
-Games running on the SuiPlay0X1 must support the Playtron wallet as the default option. Off-device versions of those games should use Sui dApp Kit to allow users to connect their Playtron wallet through a web interface. See [Wallet Integration Options](../../suiplay0x1/wallet-integration.mdx) for guidance on SuiPlay0X1 wallet strategy.
-
-## zkLogin SDK (Sui TypeScript SDK 2.0)
-
-The `@mysten/sui/zklogin` module in the Sui TypeScript SDK 2.0 provides utilities for building zkLogin wallets and apps directly, without using a managed service like Enoki. Use this path when you need full control over proof generation, salt management, and address derivation.
+The [`@mysten/sui/zklogin` module in the Sui TypeScript SDK](https://sdk.mystenlabs.com/sui/zklogin) provides utilities for building zkLogin wallets and apps directly, without using a managed service like Enoki. Use this SDK when you need full control over proof generation, salt management, and address derivation.
 
 Install the Sui TypeScript SDK:
+
 ```bash
 npm i @mysten/sui
 ```
@@ -65,6 +47,7 @@ npm i @mysten/sui
 All zkLogin utilities are exported from `@mysten/sui/zklogin`.
 
 **Derive a Sui address from a JWT:**
+
 ```typescript
 import { jwtToAddress } from '@mysten/sui/zklogin';
 
@@ -74,6 +57,7 @@ const address = jwtToAddress(jwtAsString, salt);
 ```
 
 **Derive an address from a parsed JWT:**
+
 ```typescript
 import { computeZkLoginAddress } from '@mysten/sui/zklogin';
 
@@ -87,6 +71,7 @@ const address = computeZkLoginAddress({
 ```
 
 **Derive an address from an address seed:**
+
 ```typescript
 import { computeZkLoginAddressFromSeed } from '@mysten/sui/zklogin';
 
@@ -94,6 +79,7 @@ const address = computeZkLoginAddressFromSeed(addressSeed, 'https://accounts.goo
 ```
 
 **Serialize a zkLogin signature for transaction submission:**
+
 ```typescript
 import { getZkLoginSignature } from '@mysten/sui/zklogin';
 
@@ -108,6 +94,7 @@ const serializedSignature = await getZkLoginSignature({
 ```
 
 **Parse an existing serialized zkLogin signature:**
+
 ```typescript
 import { parseZkLoginSignature } from '@mysten/sui/zklogin';
 
@@ -116,27 +103,7 @@ const parsedSignature = await parseZkLoginSignature('BQNNMTY4NjAxMzAyO....');
 
 ### Proof generation
 
-The Sui TypeScript SDK handles address derivation and signature serialization, but it does not generate ZKPs. Proof generation requires a prover service. You have two options:
+The Sui TypeScript SDK handles address derivation and signature serialization, but it does not generate ZKPs. Proof generation requires a prover service:
 
-- **Mysten Labs prover** — A publicly accessible proving service maintained by Mysten Labs. Suitable for Testnet and Devnet development. See [zkLogin integration guide](../../cryptography/zklogin-integration.mdx) for the endpoint and request format.
-- **Self-hosted prover** — You run your own prover for production environments where you need full control over the proving infrastructure.
-
-Enoki abstracts both options: it handles nonce generation, proof generation, and salt management through its API, so you do not need to call the prover directly.
-
-### Legacy addresses
-
-When zkLogin was first introduced, there was an inconsistency in how the address seed was computed. For backwards compatibility, there are 2 valid addresses for a given set of inputs. If your app was built before this was corrected, pass `legacyAddress: true` to the address derivation functions:
-```typescript
-import { jwtToAddress } from '@mysten/sui/zklogin';
-
-const address = jwtToAddress(jwtAsString, salt, true);
-```
-
-The same `legacyAddress` flag is available on `computeZkLoginAddress`, `computeZkLoginAddressFromSeed`, and `toZkLoginPublicIdentifier`.
-
-### Further reading
-
-- [What Is zkLogin?](../../../concepts/cryptography/zklogin.mdx) — Full cryptographic explanation and supported providers
-- [zkLogin integration guide](../../cryptography/zklogin-integration.mdx) — Step-by-step implementation guide including nonce construction and the prover flow
-- [Enoki documentation](https://docs.enoki.mystenlabs.com) — Managed zkLogin and sponsored transaction service
-- [Wallet Integration Options](../../suiplay0x1/wallet-integration.mdx) — Guidance on Playtron wallet and SuiPlay0X1 game wallet strategy
+- **Mysten Labs prover:** A publicly accessible proving service maintained by Mysten Labs. Suitable for Testnet and Devnet development. See [zkLogin integration guide](/guides/developer/cryptography/zklogin-integration) for the endpoint and request format.
+- **Self-hosted prover:** You run your own prover for production environments where you need full control over the proving infrastructure.

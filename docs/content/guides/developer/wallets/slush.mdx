@@ -94,3 +94,119 @@ function App({ children }) {
 ```
 
 Users who have the Slush Wallet browser extension installed see only the extension in the connection modal. Users without the extension connect through the Slush web app instead.
+
+## Deep linking
+
+Deep linking lets external apps, websites, and services open Slush Wallet directly to a specific screen or trigger a specific action, such as a token swap, a payment, or an app browser session.
+
+### Link formats
+
+Slush Wallet supports two link formats:
+
+- **Universal links** use the `my.slush.app` domain and are the recommended format for most integrations. They work on iOS, Android, and desktop, opening the native app when it is installed or falling back to the Slush web app when it is not.
+
+- **Custom URL scheme** links use the `slush://` scheme and only open the native mobile app. If the app is not installed, these links fail. Use this format only when you need to detect whether the native app is installed.
+
+:::
+
+Deep linking is not supported for the Slush browser extension.
+
+:::
+
+Always URL-encode parameter values. Token type addresses contain colons (`:`) and other special characters that must be encoded before use in a URL.
+
+```typescript
+const coinType = '0x2::sui::SUI';
+const encodedCoinType = encodeURIComponent(coinType);
+const url = `slush://swap?fromCoinType=${encodedCoinType}`;
+```
+
+### Supported routes
+
+The following routes are available through both `my.slush.app` HTTPS links and the `slush://` custom scheme unless otherwise noted.
+
+#### App browser
+
+Opens the in-app browser to a specific URL.
+
+| Parameter | Required | Description |
+|---|---|---|
+| `url` | Yes | Full URL to load in the browser |
+
+```
+https://my.slush.app/browse/https://app.example.com
+slush://browse/https://app.example.com
+```
+
+#### Token swap
+
+Opens the token swap screen with optional pre-filled values.
+
+| Parameter | Required | Description |
+|---|---|---|
+| `fromCoinType` | No | Source token type address. Defaults to SUI |
+| `toCoinType` | No | Destination token type address |
+| `presetAmount` | No | Pre-filled amount to swap |
+
+```
+slush://swap
+slush://swap?fromCoinType=0x2%3A%3Asui%3A%3ASUI&presetAmount=100
+```
+
+#### Claim assets
+
+Opens the claim screen to receive stashed or gifted tokens.
+
+| Parameter | Required | Description |
+|---|---|---|
+| `claimUrl` | Yes | Full claim URL from zkSend or Getstashed |
+
+```
+slush://claim?claimUrl=https://zksend.com/claim/abc123xyz
+https://my.slush.app/claim?claimUrl=https://getstashed.com/claim/def456
+```
+
+#### Receive and QR code
+
+Opens the receive screen or QR scanner.
+
+| Parameter | Required | Description |
+|---|---|---|
+| `action` | Yes | `RECEIVE` to show the wallet address QR code, or `SCAN_QR_CODE` to open the scanner |
+
+```
+slush://suime?action=RECEIVE
+slush://suime?action=SCAN_QR_CODE
+```
+
+#### Staking
+
+Opens the staking screen or a specific staking flow.
+
+```
+slush://staking
+slush://staking/native-stake
+slush://staking/native-unstake
+slush://staking/liquid-stake
+slush://staking/liquid-unstake
+```
+
+#### Payment Kit
+
+Opens the payment flow using a `sui:pay` URI. Slush also accepts `slush:pay`.
+
+| Parameter | Required | Description |
+|---|---|---|
+| `receiver` | Yes | Recipient Sui address |
+| `amount` | Yes | Payment amount in the smallest unit (MIST for SUI) |
+| `coinType` | Yes | Coin type (for example, `0x2::sui::SUI`) |
+| `nonce` | Yes | Unique payment identifier, 36 characters maximum |
+| `registry` | No | Registry name or object ID for registry-based payments |
+| `label` | No | Human-readable label for the payment |
+| `message` | No | Message or memo for the payment |
+
+```
+https://my.slush.app/pay?receiver=0x1234...abcd&amount=1000000000&coinType=0x2%3A%3Asui%3A%3ASUI&nonce=abc-123-xyz
+```
+
+Use the [`@mysten/payment-kit` SDK](https://sdk.mystenlabs.com/payment-kit) to generate properly formatted payment URIs.
