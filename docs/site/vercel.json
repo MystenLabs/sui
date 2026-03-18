@@ -3366,7 +3366,27 @@
     { "source": "/references/framework/sui_sui_system.md", "destination": "/references/framework/sui_sui_system/index.md" },
     { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" },
     { "source": "/standards/display", "destination": "/guides/developer/objects/display/display-overview" },
-    { "source": "/standards/display-v2-migration", "destination": "/guides/developer/objects/display" }
+    { "source": "/standards/display-v2-migration", "destination": "/guides/developer/objects/display" },
+    { "source": "/concepts/sui-architecture.md", "destination": "/concepts/sui-architecture", "permanent": true },
+    { "source": "/concepts/tokenomics.md", "destination": "/concepts/tokenomics", "permanent": true },
+    { "source": "/guides/developer/accessing-data.md", "destination": "/guides/developer/accessing-data", "permanent": true },
+    { "source": "/guides/developer/digital-assets.md", "destination": "/guides/developer/digital-assets", "permanent": true },
+    { "source": "/guides/developer/digital-assets/examples-patterns.md", "destination": "/guides/developer/digital-assets/examples-patterns", "permanent": true },
+    { "source": "/guides/developer/digital-assets/fungible-tokens.md", "destination": "/guides/developer/digital-assets/fungible-tokens", "permanent": true },
+    { "source": "/guides/developer/nft.md", "destination": "/guides/developer/nft", "permanent": true },
+    { "source": "/guides/developer/objects.md", "destination": "/guides/developer/objects", "permanent": true },
+    { "source": "/guides/developer/objects/display.md", "destination": "/guides/developer/objects/display", "permanent": true },
+    { "source": "/guides/developer/objects/object-ownership.md", "destination": "/guides/developer/objects/object-ownership", "permanent": true },
+    { "source": "/guides/developer/objects/transfers.md", "destination": "/guides/developer/objects/transfers", "permanent": true },
+    { "source": "/guides/developer/on-chain-primitives.md", "destination": "/guides/developer/on-chain-primitives", "permanent": true },
+    { "source": "/guides/developer/packages.md", "destination": "/guides/developer/packages", "permanent": true },
+    { "source": "/guides/developer/transactions.md", "destination": "/guides/developer/transactions", "permanent": true },
+    { "source": "/guides/developer/transactions/ptbs.md", "destination": "/guides/developer/transactions/ptbs", "permanent": true },
+    { "source": "/guides/developer/transactions/transaction-auth.md", "destination": "/guides/developer/transactions/transaction-auth", "permanent": true },
+    { "source": "/guides/developer/wallets.md", "destination": "/guides/developer/wallets", "permanent": true },
+    { "source": "/guides/operator.md", "destination": "/guides/operator", "permanent": true },
+    { "source": "/guides/suiplay0x1.md", "destination": "/guides/suiplay0x1", "permanent": true },
+    { "source": "/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature.md", "destination": "/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature", "permanent": true }
   ],
   "rewrites": [
     {
