@@ -30,8 +30,9 @@ use tonic::transport::ClientTlsConfig;
 
 use crate::EpochData;
 use auth_channel::AuthChannel;
+pub use channel_pool::PoolConfig;
 pub(crate) use channel_pool::PoolMetrics;
-use channel_pool::{ChannelPool, ChannelPrimer, PoolConfig};
+use channel_pool::{ChannelPool, ChannelPrimer};
 
 use crate::CheckpointData;
 use crate::KeyValueStoreReader;
@@ -158,7 +159,7 @@ impl BigTableClient {
         client_name: String,
         registry: Option<&Registry>,
         app_profile_id: Option<String>,
-        channel_pool_size: Option<usize>,
+        pool_config: PoolConfig,
     ) -> Result<Self> {
         Self::new_remote_with_credentials(
             instance_id,
@@ -169,7 +170,7 @@ impl BigTableClient {
             client_name,
             registry,
             app_profile_id,
-            channel_pool_size,
+            pool_config,
             None,
         )
         .await
@@ -184,13 +185,10 @@ impl BigTableClient {
         client_name: String,
         registry: Option<&Registry>,
         app_profile_id: Option<String>,
-        channel_pool_size: Option<usize>,
+        pool_config: PoolConfig,
         credentials_path: Option<String>,
     ) -> Result<Self> {
-        let mut config = PoolConfig::default();
-        if let Some(size) = channel_pool_size {
-            config.initial_pool_size = size.max(1);
-        }
+        let config = pool_config;
         let policy = if is_read_only {
             "https://www.googleapis.com/auth/bigtable.data.readonly"
         } else {

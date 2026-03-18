@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 const MAX_REPLACEMENTS_PER_CYCLE: usize = 2;
 
-pub(crate) struct PoolConfig {
+pub struct PoolConfig {
     pub initial_pool_size: usize,
     pub min_pool_size: usize,
     pub max_pool_size: usize,

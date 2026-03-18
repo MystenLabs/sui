@@ -9,7 +9,7 @@ use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_kv_rpc::KvRpcServer;
+use sui_kv_rpc::{KvRpcServer, PoolConfig};
 use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler, ServerVersion};
 use telemetry_subscribers::TelemetryConfig;
 use tonic::transport::{Identity, Server, ServerTlsConfig};
@@ -43,6 +43,15 @@ struct App {
     /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000)
     #[clap(long = "bigtable-channel-timeout-ms")]
     bigtable_channel_timeout_ms: Option<u64>,
+    /// Number of gRPC channels to create at startup (default: 10)
+    #[clap(long = "bigtable-initial-pool-size")]
+    bigtable_initial_pool_size: Option<usize>,
+    /// Minimum number of channels the pool will maintain (default: 1)
+    #[clap(long = "bigtable-min-pool-size")]
+    bigtable_min_pool_size: Option<usize>,
+    /// Maximum number of channels the pool can scale to (default: 200)
+    #[clap(long = "bigtable-max-pool-size")]
+    bigtable_max_pool_size: Option<usize>,
 }
 
 async fn health_check() -> &'static str {
@@ -63,6 +72,17 @@ async fn main() -> Result<()> {
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
     let channel_timeout = app.bigtable_channel_timeout_ms.map(Duration::from_millis);
+    let mut pool_config = PoolConfig::default();
+    if let Some(v) = app.bigtable_initial_pool_size {
+        pool_config.initial_pool_size = v;
+    }
+    if let Some(v) = app.bigtable_min_pool_size {
+        pool_config.min_pool_size = v;
+    }
+    if let Some(v) = app.bigtable_max_pool_size {
+        pool_config.max_pool_size = v;
+    }
+
     let server = KvRpcServer::new(
         app.instance_id,
         app.bigtable_project,
@@ -72,6 +92,7 @@ async fn main() -> Result<()> {
         server_version,
         &registry,
         app.credentials,
+        pool_config,
     )
     .await?;
     let addr = app.address.parse()?;

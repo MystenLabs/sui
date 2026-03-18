@@ -223,8 +223,28 @@ The indexer accepts an optional TOML configuration file via `--config`. For tip-
 |--------|---------|-------------|
 | `total-max-rows-per-second` | unlimited | Global rate limit shared across all pipelines (rows/sec). Set this during backfill to avoid overwhelming Bigtable. |
 | `max-rows-per-second` | unlimited | Default per-pipeline rate limit (rows/sec). Both this and `total-max-rows-per-second` are enforced, so you can use per-pipeline limits to prevent one pipeline from starving others. In practice this is not been needed and you can omit it. |
-| `bigtable-connection-pool-size` | 10 | Number of gRPC channels in the Bigtable connection pool. Rule of thumb: 2x your Bigtable node count. |
+| `bigtable-connection-pool-size` | — | **Deprecated.** Use `[bigtable-pool]` section instead. If set, overrides `bigtable-pool.initial-pool-size`. |
 | `bigtable-channel-timeout-ms` | 60000 | Channel-level timeout for Bigtable gRPC calls (ms). |
+
+#### Connection pool settings (`[bigtable-pool]`)
+
+The indexer manages a dynamic pool of gRPC channels to Bigtable that automatically scales based on load. The pool starts at `initial-pool-size` channels and scales between `min-pool-size` and `max-pool-size` based on in-flight RPCs per channel. Channels are periodically refreshed before GFE disconnects them (~60 min).
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `initial-pool-size` | 10 | Number of gRPC channels to create at startup. |
+| `min-pool-size` | 1 | Minimum channels the pool will maintain. |
+| `max-pool-size` | 200 | Maximum channels the pool can scale to. |
+| `min-rpcs-per-channel` | 5 | Average load per channel below which the pool considers scaling down. |
+| `max-rpcs-per-channel` | 50 | Average load per channel above which the pool scales up. |
+| `max-resize-delta` | 2 | Maximum channels to remove in a single scale-down. Scale-up is uncapped. |
+| `downscale-threshold` | 3 | Consecutive low-load observations required before scaling down. |
+| `maintenance-interval-ms` | 60000 | Milliseconds between maintenance cycles (resize + channel refresh). |
+| `refresh-age-ms` | 2700000 | Channel age in milliseconds before it is eligible for refresh (45 min). |
+| `refresh-jitter-ms` | 300000 | Random jitter added to refresh age to stagger replacements (5 min). |
+
+In general, the defaults work well, and no configuration is required.
+```
 
 #### Committer settings (`[committer]`)
 
@@ -312,7 +332,6 @@ Set `total-max-rows-per-second` in your TOML config accordingly. Save the follow
 # Assumes a 15-node cluster targeting 90% CPU utilization (write-only).
 # Scale linearly for smaller clusters, e.g. 50000 for 5 nodes, 100000 for 10.
 total-max-rows-per-second = 150000
-bigtable-connection-pool-size = 30
 
 [pipeline.objects.committer]
 write-concurrency = 40
@@ -386,6 +405,9 @@ sui-kv-rpc \
 | `--app-profile-id` | No | Bigtable app profile ID. |
 | `--checkpoint-bucket` | No | GCS bucket for full checkpoint data (enables richer checkpoint responses). |
 | `--bigtable-channel-timeout-ms` | No | Channel-level timeout for Bigtable gRPC calls in milliseconds. Default: 60000. |
+| `--bigtable-initial-pool-size` | No | Number of gRPC channels to create at startup. Default: 10. |
+| `--bigtable-min-pool-size` | No | Minimum channels the pool will maintain. Default: 1. |
+| `--bigtable-max-pool-size` | No | Maximum channels the pool can scale to. Default: 200. |
 
 #### Example
 
@@ -457,6 +479,9 @@ The archival service exports the following metrics:
 | `kv_bt_chunk_latency_ms` | histogram | Bigtable internal processing time per response chunk, labeled by `table`. |
 | `kv_get_success` | counter | Successful Bigtable reads, labeled by `table`. |
 | `kv_scan_success` | counter | Successful Bigtable scans, labeled by `table`. |
+| `bt_pool_pool_size` | gauge | Current number of channels in the connection pool. |
+| `bt_pool_channels_replaced` | counter | Total channels replaced due to age refresh. |
+| `bt_pool_rpcs_completed` | counter | Total RPCs completed through the pool. |
 | `thread_stall_duration_sec` | histogram | Tokio thread stall duration. |
 
 ### Recommended log levels
