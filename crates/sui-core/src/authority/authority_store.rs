@@ -662,7 +662,7 @@ impl AuthorityStore {
                             &perpetual_db.live_owned_object_markers,
                             &mut batch,
                             &[object.compute_object_reference()],
-                            false, // is_force_reset
+                            true, // is_force_reset
                         )?;
                     }
                 }
