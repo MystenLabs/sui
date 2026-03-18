@@ -67,8 +67,8 @@ pub mod checked {
         /// provides the initial location of the `gas_charge_location` before any overrides.
         smash_target: PaymentMethod,
         /// The original payment methods to be smashed into the `smash_target`. It does not include
-        /// the `smash_target` itself.
-        smashed_payments: Vec<PaymentMethod>,
+        /// the `smash_target` itself. Keyed by location to guarantee uniqueness.
+        smashed_payments: IndexMap<PaymentLocation, PaymentMethod>,
     }
 
     /// Public wrapper that describes how gas will be paid before smashing occurs.
@@ -82,9 +82,9 @@ pub mod checked {
     #[derive(Debug)]
     enum PaymentKind_ {
         Unmetered,
-        /// A non-empty vector of gas coins or address balance withdrawals. The payments are
-        /// "smashed" into the first location in the vector.
-        Smash(Vec<PaymentMethod>),
+        /// A non-empty map of gas coins or address balance withdrawals, keyed by location.
+        /// The first entry is the smash target; all others are smashed into it.
+        Smash(IndexMap<PaymentLocation, PaymentMethod>),
     }
 
     /// A single source of SUI used to pay for gas: either an coin object or a withdrawal
@@ -128,7 +128,7 @@ pub mod checked {
             let payment = match payment_kind.0 {
                 PaymentKind_::Unmetered => PaymentMetadata::Unmetered,
                 PaymentKind_::Smash(mut payment_methods) => {
-                    let smash_target = payment_methods.remove(0);
+                    let (_, smash_target) = payment_methods.shift_remove_index(0).unwrap();
                     let mut metadata = SmashMetadata {
                         // dummy value set below in smash_gas
                         total_smashed: 0,
@@ -500,7 +500,7 @@ pub mod checked {
     impl SmashMetadata {
         /// Iterates over all payment methods: the smash target followed by the smashed payments.
         fn payment_methods(&self) -> impl Iterator<Item = &'_ PaymentMethod> {
-            std::iter::once(&self.smash_target).chain(self.smashed_payments.iter())
+            std::iter::once(&self.smash_target).chain(self.smashed_payments.values())
         }
 
         fn smash_gas(
@@ -546,7 +546,7 @@ pub mod checked {
 
             let smash_location = self.smash_target.location();
             // delete all gas objects except the smash target
-            for payment_method in &self.smashed_payments {
+            for payment_method in self.smashed_payments.values() {
                 let location = payment_method.location();
                 assert_ne!(location, smash_location, "Payment methods must be unique");
                 match payment_method {
@@ -664,10 +664,6 @@ pub mod checked {
                     }
                 }
             }
-            let unique_methods = unique_methods
-                .into_iter()
-                .map(|(_, method)| method)
-                .collect::<Vec<_>>();
             Some(Self(PaymentKind_::Smash(unique_methods)))
         }
     }
