@@ -713,6 +713,35 @@ function ensureFrontmatterDescription(md) {
 
 /* -------------------------------------------------------------------- */
 
+// ── CHANGED: Extract plain-text summary from module content ──────────────
+// Used to build a description for the frontmatter of generated pages.
+// Extracts the first meaningful paragraph after the Module heading,
+// stripping HTML/markdown formatting to produce clean text.
+function extractModuleDescription(md) {
+  // Find content after Module heading
+  const headingRe = /(?:<h[1-6][^>]*>\s*Module\s*(?:<code>[^<]+<\/code>|<span[^>]*>[^<]+<\/span>)\s*<\/h[1-6]>|^\s*#{1,6}\s*Module\s+`[^`]+`.*$)/m;
+  const match = md.match(headingRe);
+  if (!match) return "";
+
+  const afterHeading = md.slice(md.indexOf(match[0]) + match[0].length);
+
+  // Skip blank lines, then grab text up to the next heading or HTML block
+  const trimmed = afterHeading.replace(/^\s*\n/, "");
+  const endOfParagraph = trimmed.search(/\n\s*(?:\n|<h[2-6]|#{2,6}\s|<!-- )/);
+  const paragraph = endOfParagraph > 0 ? trimmed.slice(0, endOfParagraph) : trimmed.slice(0, 300);
+
+  // Strip HTML tags and markdown formatting to get plain text
+  return paragraph
+    .replace(/<[^>]+>/g, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_]/g, "")
+    .replace(/<br\s*\/?>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
+}
+
 const frameworkPlugin = (_context, _options) => {
   return {
     name: "sui-framework-plugin",

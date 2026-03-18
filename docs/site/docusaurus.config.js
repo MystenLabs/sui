@@ -66,12 +66,13 @@ const config = {
           return {
             preBodyTags: [
               {
-                tagName: 'a',
+                tagName: 'link',
                 attributes: {
+                  rel: 'alternate',
+                  type: 'text/plain',
                   href: '/llms.txt',
-                  hidden: 'hidden',
+                  title: 'LLMs.txt',
                 },
-                innerHTML: 'llms.txt',
               },
             ],
           };

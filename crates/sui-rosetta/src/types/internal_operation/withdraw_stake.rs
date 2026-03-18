@@ -124,6 +124,7 @@ impl TryConstructTransaction for WithdrawStake {
             budget,
             address_balance_withdrawal: 0,
             fss_object_count: None,
+            redeem_token_amount: None,
         })
     }
 }

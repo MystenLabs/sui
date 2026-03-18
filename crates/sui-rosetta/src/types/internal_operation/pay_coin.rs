@@ -124,6 +124,7 @@ impl TryConstructTransaction for PayCoin {
                 budget,
                 address_balance_withdrawal: deficit,
                 fss_object_count: None,
+                redeem_token_amount: None,
             })
         } else {
             let total_sui_balance = gas_coin_objs.iter().map(|c| c.balance()).sum::<u64>() as i128;
@@ -140,6 +141,7 @@ impl TryConstructTransaction for PayCoin {
                 budget,
                 address_balance_withdrawal: deficit,
                 fss_object_count: None,
+                redeem_token_amount: None,
             })
         }
     }

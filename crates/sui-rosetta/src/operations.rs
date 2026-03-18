@@ -33,11 +33,12 @@ use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::internal_operation::{
-    ConsolidateAllStakedSuiToFungible, PayCoin, PaySui, Stake, WithdrawStake,
+    ConsolidateAllStakedSuiToFungible, MergeAndRedeemFungibleStakedSui, PayCoin, PaySui, Stake,
+    WithdrawStake,
 };
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
-    InternalOperation, OperationIdentifier, OperationStatus, OperationType,
+    InternalOperation, OperationIdentifier, OperationStatus, OperationType, RedeemMode,
 };
 use crate::{CoinMetadataCache, Error, SUI};
 
@@ -108,6 +109,9 @@ impl Operations {
             OperationType::WithdrawStake => self.withdraw_stake_ops_to_internal(),
             OperationType::ConsolidateAllStakedSuiToFungible => {
                 self.consolidate_to_fungible_ops_to_internal()
+            }
+            OperationType::MergeAndRedeemFungibleStakedSui => {
+                self.merge_and_redeem_fss_ops_to_internal()
             }
             op => Err(Error::UnsupportedOperation(op)),
         }
@@ -280,6 +284,62 @@ impl Operations {
         };
         Ok(InternalOperation::ConsolidateAllStakedSuiToFungible(
             ConsolidateAllStakedSuiToFungible { sender, validator },
+        ))
+    }
+
+    fn merge_and_redeem_fss_ops_to_internal(self) -> Result<InternalOperation, Error> {
+        let mut ops = self
+            .0
+            .into_iter()
+            .filter(|op| op.type_ == OperationType::MergeAndRedeemFungibleStakedSui)
+            .collect::<Vec<_>>();
+        if ops.len() != 1 {
+            return Err(Error::MalformedOperationError(
+                "MergeAndRedeemFungibleStakedSui should only have one operation.".into(),
+            ));
+        }
+        let op = ops.pop().unwrap();
+        let sender = op
+            .account
+            .ok_or_else(|| Error::MissingInput("Sender address".to_string()))?
+            .address;
+        let metadata = op.metadata.ok_or_else(|| {
+            Error::MissingInput("MergeAndRedeemFungibleStakedSui metadata".to_string())
+        })?;
+        let OperationMetadata::MergeAndRedeemFungibleStakedSui {
+            validator,
+            amount,
+            redeem_mode,
+        } = metadata
+        else {
+            return Err(Error::InvalidInput(
+                "Cannot find MergeAndRedeemFungibleStakedSui info from metadata.".into(),
+            ));
+        };
+        let amount = match &redeem_mode {
+            RedeemMode::All => None,
+            _ => {
+                let amount_str = amount.ok_or_else(|| {
+                    Error::MissingInput("amount required for AtLeast/AtMost mode".to_string())
+                })?;
+                let parsed = amount_str
+                    .parse::<u64>()
+                    .map_err(|e| Error::InvalidInput(format!("Invalid amount: {}", e)))?;
+                if parsed == 0 {
+                    return Err(Error::InvalidInput(
+                        "amount must be at least 1 MIST".to_string(),
+                    ));
+                }
+                Some(parsed)
+            }
+        };
+        Ok(InternalOperation::MergeAndRedeemFungibleStakedSui(
+            MergeAndRedeemFungibleStakedSui {
+                sender,
+                validator,
+                amount,
+                redeem_mode,
+            },
         ))
     }
 
@@ -1200,9 +1260,21 @@ impl PartialEq for Operation {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub enum OperationMetadata {
     GenericTransaction(TransactionKind),
-    Stake { validator: SuiAddress },
-    WithdrawStake { stake_ids: Vec<ObjectID> },
-    ConsolidateAllStakedSuiToFungible { validator: SuiAddress },
+    Stake {
+        validator: SuiAddress,
+    },
+    WithdrawStake {
+        stake_ids: Vec<ObjectID>,
+    },
+    ConsolidateAllStakedSuiToFungible {
+        validator: SuiAddress,
+    },
+    MergeAndRedeemFungibleStakedSui {
+        validator: SuiAddress,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        amount: Option<String>,
+        redeem_mode: RedeemMode,
+    },
 }
 
 impl Operation {
@@ -1383,6 +1455,7 @@ mod tests {
             epoch: None,
             chain_id: None,
             fss_object_count: None,
+            redeem_token_amount: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
@@ -1444,6 +1517,7 @@ mod tests {
             epoch: None,
             chain_id: None,
             fss_object_count: None,
+            redeem_token_amount: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
@@ -1475,6 +1549,65 @@ mod tests {
                 assert_eq!(op.validator, validator);
             }
             _ => panic!("Expected ConsolidateAllStakedSuiToFungible"),
+        }
+    }
+
+    #[test]
+    fn test_parse_merge_and_redeem_fungible_staked_sui() {
+        let sender = SuiAddress::random_for_testing_only();
+        let validator = SuiAddress::random_for_testing_only();
+
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "MergeAndRedeemFungibleStakedSui",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "MergeAndRedeemFungibleStakedSui": {
+                    "validator": validator.to_string(),
+                    "amount": "500000000000",
+                    "redeem_mode": "AtLeast"
+                }
+            }
+        }]))
+        .unwrap();
+
+        let internal = ops.into_internal().unwrap();
+        match internal {
+            InternalOperation::MergeAndRedeemFungibleStakedSui(op) => {
+                assert_eq!(op.sender, sender);
+                assert_eq!(op.validator, validator);
+                assert_eq!(op.amount, Some(500000000000));
+                assert_eq!(op.redeem_mode, RedeemMode::AtLeast);
+            }
+            _ => panic!("Expected MergeAndRedeemFungibleStakedSui"),
+        }
+    }
+
+    #[test]
+    fn test_parse_merge_and_redeem_all_mode() {
+        let sender = SuiAddress::random_for_testing_only();
+        let validator = SuiAddress::random_for_testing_only();
+
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "MergeAndRedeemFungibleStakedSui",
+            "account": {"address": sender.to_string()},
+            "metadata": {
+                "MergeAndRedeemFungibleStakedSui": {
+                    "validator": validator.to_string(),
+                    "redeem_mode": "All"
+                }
+            }
+        }]))
+        .unwrap();
+
+        let internal = ops.into_internal().unwrap();
+        match internal {
+            InternalOperation::MergeAndRedeemFungibleStakedSui(op) => {
+                assert_eq!(op.amount, None);
+                assert_eq!(op.redeem_mode, RedeemMode::All);
+            }
+            _ => panic!("Expected MergeAndRedeemFungibleStakedSui"),
         }
     }
 }
