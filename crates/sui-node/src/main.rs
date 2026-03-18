@@ -195,7 +195,6 @@ fn main() {
         .unwrap()
         .block_on(wait_termination(runtime_shutdown_rx));
 
-    error!("Shutting down sui runtimes");
     // Drop and wait all runtimes on main thread
     drop(runtimes);
 }
@@ -219,14 +218,8 @@ async fn wait_termination(mut shutdown_rx: tokio::sync::broadcast::Receiver<()>)
     let shutdown_recv = shutdown_rx.recv().boxed();
 
     tokio::select! {
-        _ = sigint => {
-            error!("SIGINT received");
-        },
-        _ = sigterm_recv => {
-            error!("SIGTERM received");
-        },
-        _ = shutdown_recv => {
-            error!("Shutdown channel received");
-        },
+        _ = sigint => {},
+        _ = sigterm_recv => {},
+        _ = shutdown_recv => {},
     }
 }
