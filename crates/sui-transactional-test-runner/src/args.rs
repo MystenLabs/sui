@@ -111,7 +111,7 @@ pub struct ViewObjectCommand {
 
 #[derive(Debug, clap::Parser)]
 pub struct ViewFundsCommand {
-    #[clap(value_parser = parse_parsed_type)]
+    #[clap(value_parser = ParsedType::parse)]
     pub funds_type: ParsedType,
     pub address: String,
 }
@@ -864,12 +864,6 @@ impl ParsableValue for SuiExtraValueArgs {
             }
         }
     }
-}
-
-fn parse_parsed_type(s: &str) -> anyhow::Result<ParsedType> {
-    let type_tokens: Vec<_> = TypeToken::tokenize(s)?.into_iter().collect();
-    let mut type_parser = move_core_types::parsing::parser::Parser::new(type_tokens);
-    Ok(type_parser.parse_type()?)
 }
 
 fn parse_fake_id(s: &str) -> anyhow::Result<FakeID> {
