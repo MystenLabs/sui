@@ -1504,12 +1504,12 @@ impl AstDebug for Value_ {
             V::U64(u) => w.write(format!("{}u64", u)),
             V::U128(u) => w.write(format!("{}u128", u)),
             V::U256(u) => w.write(format!("{}u256", u)),
-            V::I8(u) => w.write(format!("{}i8", u)),
-            V::I16(u) => w.write(format!("{}i16", u)),
-            V::I32(u) => w.write(format!("{}i32", u)),
-            V::I64(u) => w.write(format!("{}i64", u)),
-            V::I128(u) => w.write(format!("{}i128", u)),
-            V::I256(u) => w.write(format!("{}i256", u)),
+            V::I8(i) => w.write(format!("{}i8", i)),
+            V::I16(i) => w.write(format!("{}i16", i)),
+            V::I32(i) => w.write(format!("{}i32", i)),
+            V::I64(i) => w.write(format!("{}i64", i)),
+            V::I128(i) => w.write(format!("{}i128", i)),
+            V::I256(i) => w.write(format!("{}i256", i)),
             V::Bool(b) => w.write(format!("{}", b)),
             V::Vector(ty, elems) => {
                 w.write("vector#value");

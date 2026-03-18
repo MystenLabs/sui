@@ -1466,25 +1466,6 @@ impl Subst {
             .unwrap_or(false)
     }
 
-    /// If `tvar` (or its forwarded target) has a `Num` constraint, upgrades it to `SignedNum`.
-    /// This is used by negation to narrow a numeric literal's type to signed integers.
-    pub fn upgrade_num_to_signed(&mut self, tvar: TVar, loc: Loc) {
-        // Follow the tvar chain to find the final unbound tvar.
-        let mut cur = tvar;
-        while let Some(sp!(_, ty_)) = self.get(cur) {
-            match ty_.inner() {
-                TI::Var(next) => cur = *next,
-                _ => return, // Bound to a concrete type; nothing to upgrade.
-            }
-        }
-        match self.tvar_constraints.get(&cur) {
-            Some(c) if c.is_num_var() => {
-                self.tvar_constraints
-                    .insert(cur, VarConstraint::SignedNum(loc));
-            }
-            _ => (),
-        }
-    }
 }
 
 impl VarConstraint {

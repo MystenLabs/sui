@@ -320,7 +320,7 @@ impl FeatureGate {
             FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
             FeatureGate::ModuleExtension => "module extensions are",
             FeatureGate::StringLiterals => "string literals (without a leading 'b' or 'x') are",
-            FeatureGate::SignedIntegers => "Signed integer types are",
+            FeatureGate::SignedIntegers => "signed integer types are",
         }
     }
 }

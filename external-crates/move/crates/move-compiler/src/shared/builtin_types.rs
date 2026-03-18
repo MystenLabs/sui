@@ -18,15 +18,23 @@ pub const I_256: &str = "i256";
 pub const BOOL: &str = "bool";
 pub const VECTOR: &str = "vector";
 
-pub const UNSIGNED_INT_SUFFIXES: &[&str] = &[U_8, U_16, U_32, U_64, U_128, U_256];
-pub const SIGNED_INT_SUFFIXES: &[&str] = &[I_8, I_16, I_32, I_64, I_128, I_256];
+// Sorted longest-first so that `starts_with`-based matching in the lexer cannot misparse a
+// shorter suffix as a prefix of a longer one (e.g., matching "u1" before "u128").
+pub const UNSIGNED_INT_SUFFIXES: &[&str] = &[U_256, U_128, U_64, U_32, U_16, U_8];
+pub const SIGNED_INT_SUFFIXES: &[&str] = &[I_256, I_128, I_64, I_32, I_16, I_8];
 
-pub const PRIMITIVE_TYPES: &[&str] = &[U_8, U_16, U_32, U_64, U_128, U_256, BOOL, VECTOR];
+/// All primitive type names recognized by the parser. This list is not feature-gated; all types
+/// are included regardless of edition so that the parser can always recognize them as keywords.
+pub const PRIMITIVE_TYPES: &[&str] = &[
+    U_8, U_16, U_32, U_64, U_128, U_256, I_8, I_16, I_32, I_64, I_128, I_256, BOOL, VECTOR,
+];
 
 //**************************************************************************************************
 // Suffix helpers
 //**************************************************************************************************
 
+/// Checks whether a numeric literal token string (e.g., `"123i64"`) ends with a signed integer
+/// type suffix. Intended to be called on lexer token content, not on arbitrary strings.
 pub fn has_signed_suffix(s: &str) -> bool {
     SIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
 }
@@ -89,7 +97,7 @@ pub fn parse_i256(
     use move_core_types::i256::I256;
     let (magnitude, fmt) = parse_u256(s).map_err(|_| signed_overflow_parse_error())?;
     let max_pos = I256::max_value().to_u256_bits();
-    // abs(MIN) as unsigned: the two's complement representation of MIN
+    // Two's complement bit pattern of MIN, which equals 2^255 (same as abs(MIN)).
     let max_neg = I256::min_value().to_u256_bits();
     let value = if negated {
         if magnitude > max_neg {
