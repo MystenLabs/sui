@@ -84,7 +84,7 @@ mod tests;
 mod worker;
 
 use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
-use crate::state_sync::worker::StateSyncWorker;
+use crate::state_sync::worker::{build_object_store, fetch_checkpoint, process_archive_checkpoint};
 pub use builder::{Builder, UnstartedStateSync};
 pub use generated::{
     state_sync_client::StateSyncClient,
@@ -93,7 +93,6 @@ pub use generated::{
 pub use server::GetCheckpointAvailabilityResponse;
 pub use server::GetCheckpointSummaryRequest;
 use sui_config::node::ArchiveReaderConfig;
-use sui_data_ingestion_core::{ReaderOptions, setup_single_workflow_with_options};
 use sui_storage::verify_checkpoint;
 
 /// A handle to the StateSync subsystem.
@@ -1576,29 +1575,27 @@ async fn sync_checkpoint_contents_from_archive_iteration<S>(
             warn!("{} can't be used as an archival fallback", ingestion_url);
             return;
         }
-        let reader_options = ReaderOptions {
-            batch_size: archive_config.download_concurrency.into(),
-            upper_limit: Some(end),
-            ..Default::default()
-        };
-        let Ok((executor, _exit_sender)) = setup_single_workflow_with_options(
-            StateSyncWorker(store, metrics),
-            ingestion_url.clone(),
-            archive_config.remote_store_options.clone(),
-            start,
-            1,
-            Some(reader_options),
-        )
-        .await
-        else {
-            return;
-        };
-        match executor.await {
-            Ok(_) => info!(
-                "State sync from archive is complete. Checkpoints downloaded = {:?}",
-                end - start
-            ),
-            Err(err) => warn!("State sync from archive failed with error: {:?}", err),
+        let obj_store =
+            build_object_store(ingestion_url, archive_config.remote_store_options.clone());
+        let mut checkpoint_stream = futures::stream::iter(start..=end)
+            .map(|seq| {
+                let obj_store = obj_store.clone();
+                async move { (seq, fetch_checkpoint(&obj_store, seq).await) }
+            })
+            .buffered(archive_config.download_concurrency.get());
+
+        while let Some((seq, result)) = checkpoint_stream.next().await {
+            let checkpoint = match result {
+                Ok(checkpoint) => checkpoint,
+                Err(err) => {
+                    warn!("State sync from archive failed fetching checkpoint {seq}: {err}");
+                    return;
+                }
+            };
+            if let Err(err) = process_archive_checkpoint(&store, &checkpoint, &metrics) {
+                warn!("State sync from archive failed processing checkpoint {seq}: {err}");
+                return;
+            }
         }
     }
 }
