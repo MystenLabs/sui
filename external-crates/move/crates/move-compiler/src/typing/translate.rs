@@ -678,6 +678,7 @@ mod check_valid_constant {
                 Type_::i32(loc),
                 Type_::i64(loc),
                 Type_::i128(loc),
+                Type_::i256(loc),
             ]);
         }
         acceptable_types.extend([Type_::bool(loc), Type_::address(loc)]);
@@ -2055,6 +2056,9 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                         .env()
                         .supports_feature(context.current_package(), FeatureGate::SignedIntegers)
                     {
+                        // The parser already emits a feature-gate diagnostic for `-` when
+                        // signed integers are unsupported, so we just produce an error type
+                        // here without an additional diagnostic.
                         context.error_type(rloc)
                     } else {
                         context.add_signed_numeric_constraint(rloc, "-", er.ty.clone());

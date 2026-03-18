@@ -2198,7 +2198,7 @@ fn make_assignments(
         let error_ty = error_single_type(a.loc);
         let a_ty = rvalue.ty.value.type_at_index(idx).unwrap_or_else(|| {
             // we can only get here if the rvalue was malformed and somewhere has an unresolved
-            // erro
+            // error
             ice_assert!(
                 context,
                 context.env.has_errors(),
@@ -2612,12 +2612,12 @@ fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
         EV::U64(u) => HV::U64(u),
         EV::U128(u) => HV::U128(u),
         EV::U256(u) => HV::U256(u),
-        EV::I8(u) => HV::I8(u),
-        EV::I16(u) => HV::I16(u),
-        EV::I32(u) => HV::I32(u),
-        EV::I64(u) => HV::I64(u),
-        EV::I128(u) => HV::I128(u),
-        EV::I256(u) => HV::I256(u),
+        EV::I8(i) => HV::I8(i),
+        EV::I16(i) => HV::I16(i),
+        EV::I32(i) => HV::I32(i),
+        EV::I64(i) => HV::I64(i),
+        EV::I128(i) => HV::I128(i),
+        EV::I256(i) => HV::I256(i),
         EV::Bool(u) => HV::Bool(u),
         EV::Bytearray(bytes) => HV::Vector(
             Box::new(H::BaseType_::u8(loc)),

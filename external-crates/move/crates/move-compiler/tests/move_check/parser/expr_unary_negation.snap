@@ -9,7 +9,7 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:19
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                   ^ Signed integer types are under development and should not be used right now.
+  │                   ^ signed integer types are under development and should not be used right now.
 
 warning[W04039]: unable to determine principal type for literal
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:20
@@ -24,13 +24,13 @@ error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:36
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                                    ^ Signed integer types are under development and should not be used right now.
+  │                                    ^ signed integer types are under development and should not be used right now.
 
 warning[W04039]: unable to determine principal type for literal
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:42
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:38
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
-  │                                          ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │                                      ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
   │
   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
