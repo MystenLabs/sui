@@ -15,6 +15,7 @@ use sui_indexer_alt_framework::service::Service;
 use sui_indexer_alt_framework::store::CommitterWatermark;
 use sui_indexer_alt_framework::store::InitWatermark;
 use sui_indexer_alt_framework::store::Store as _;
+use sui_indexer_alt_framework::store::init_with_committer_watermark;
 use sui_indexer_alt_framework::store::{self};
 
 use crate::db::Db;
@@ -171,14 +172,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
         pipeline_task: &str,
         init_watermark: InitWatermark,
     ) -> anyhow::Result<InitWatermark> {
-        let checkpoint_hi_inclusive = self
-            .committer_watermark(pipeline_task)
-            .await?
-            .map(|w| w.checkpoint_hi_inclusive);
-        Ok(InitWatermark {
-            checkpoint_hi_inclusive,
-            ..init_watermark
-        })
+        init_with_committer_watermark(self, pipeline_task, init_watermark).await
     }
 
     async fn committer_watermark(
