@@ -116,6 +116,37 @@ macro_rules! debug_fatal {
 }
 
 #[macro_export]
+macro_rules! debug_fatal_no_invariant {
+    ($msg:literal $(, $arg:expr)*) => {{
+        loop {
+            #[cfg(msim)]
+            {
+                if let Some(cb) = $crate::logging::intercept_debug_fatal::get_callback() {
+                    tracing::error!($msg $(, $arg)*);
+                    let msg = format!($msg $(, $arg)*);
+                    if msg.contains(&cb.pattern) {
+                        (cb.callback)();
+                    }
+                    break;
+                }
+            }
+
+            if !$crate::in_antithesis() && $crate::logging::crash_on_debug() {
+                $crate::fatal!($msg $(, $arg)*);
+            } else {
+                tracing::error!($msg $(, $arg)*);
+                if $crate::in_antithesis() {
+                    let full_msg = format!($msg $(, $arg)*);
+                    let json = $crate::logging::json!({ "message": full_msg });
+                    $crate::logging::assert_unreachable_antithesis!($msg, &json);
+                }
+            }
+            break;
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! assert_reachable {
     () => {
         $crate::logging::assert_reachable!("");
