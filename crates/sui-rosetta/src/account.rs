@@ -29,10 +29,10 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 /// Field order must match the Move struct definition exactly (BCS is positional).
 /// See: crates/sui-framework/packages/sui-system/sources/staking_pool.move
 #[derive(serde::Deserialize)]
-struct FungibleStakedSuiBcs {
-    _id: Address,
-    pool_id: Address,
-    value: u64,
+pub(crate) struct FungibleStakedSuiBcs {
+    pub _id: Address,
+    pub pool_id: Address,
+    pub value: u64,
 }
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier

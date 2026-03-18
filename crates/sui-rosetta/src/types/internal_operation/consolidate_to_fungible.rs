@@ -108,6 +108,7 @@ impl TryConstructTransaction for ConsolidateAllStakedSuiToFungible {
             budget,
             address_balance_withdrawal: 0,
             fss_object_count: Some(fss_count as u64),
+            redeem_token_amount: None,
         })
     }
 }
@@ -205,7 +206,7 @@ async fn discover_fss(
     Ok(refs)
 }
 
-async fn get_validator_pool_id(
+pub(crate) async fn get_validator_pool_id(
     client: &mut Client,
     validator: SuiAddress,
 ) -> Result<String, Error> {

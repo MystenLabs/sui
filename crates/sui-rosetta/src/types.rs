@@ -472,6 +472,7 @@ pub enum OperationType {
     Stake,
     WithdrawStake,
     ConsolidateAllStakedSuiToFungible,
+    MergeAndRedeemFungibleStakedSui,
     // All other Sui transaction types, readonly
     EpochChange,
     Genesis,
@@ -482,6 +483,13 @@ pub enum OperationType {
     EndOfEpochTransaction,
     ProgrammableSystemTransaction,
     Unknown,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum RedeemMode {
+    AtLeast,
+    AtMost,
+    All,
 }
 
 impl From<&TransactionKind> for OperationType {
@@ -701,6 +709,10 @@ pub struct ConstructionMetadata {
     /// Used by ConsolidateAllStakedSuiToFungible.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fss_object_count: Option<u64>,
+    /// Pool tokens to redeem. None = redeem all.
+    /// Used by MergeAndRedeemFungibleStakedSui.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redeem_token_amount: Option<u64>,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
@@ -1054,6 +1066,7 @@ mod tests {
             epoch: None,
             chain_id: None,
             fss_object_count: None,
+            redeem_token_amount: None,
         };
         let prod_metadata_json = serde_json::to_string(&prod_metadata).unwrap();
 
