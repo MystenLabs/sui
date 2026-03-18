@@ -95,7 +95,7 @@ mod checked {
                 gas_data.owner,
                 gas_data.budget,
             )])
-            .unwrap()
+            .expect("unable to create a payment kind with a single address balance")
         } else {
             let payment_methods = gas_data
                 .payment
@@ -108,7 +108,10 @@ mod checked {
                     }
                 })
                 .collect();
-            PaymentKind::smash(payment_methods).unwrap()
+            PaymentKind::smash(payment_methods).expect(
+                "unable to create a payment kind from payment methods. \
+                 Should not be possible wit ha non-empty vector",
+            )
         }
     }
 

@@ -28,14 +28,10 @@ pub mod checked {
     };
     use tracing::trace;
 
-    /// Tracks all gas operations for a single transaction.
-    /// This is the main entry point for gas accounting.
-    /// All the information about gas is stored in this object.
-    /// The objective here is two-fold:
-    /// 1- Isolate al version info into a single entry point. This file and the other gas
-    ///    related files are the only one that check for gas version.
-    /// 2- Isolate all gas accounting into a single implementation. Gas objects are not
-    ///    passed around, and they are retrieved from this instance.
+    /// Encapsulates the gas metering state (`SuiGasStatus`) and the payment source metadata,
+    /// whether it is from a smashed list (coin objects or address-balance withdrawals) or
+    /// un-metered. In other words, this serves the point of interaction between the on-chain data
+    /// (coins and address balances) and the gas meter.
     #[derive(Debug)]
     pub struct GasCharger {
         tx_digest: TransactionDigest,
@@ -44,22 +40,41 @@ pub mod checked {
         gas_status: SuiGasStatus,
     }
 
+    /// Internal representation of how a transaction's gas is being paid.
+    /// `Unmetered` for for no payment (dev inspect and system transactions).
+    /// `Smash` when one or more user-provided payment methods have been combined into a single
+    /// source.
     #[derive(Debug)]
     enum PaymentMetadata {
         Unmetered,
+        /// Contains the list of payments (coins and address balances) and additional metadata
         Smash(SmashMetadata),
     }
 
+    /// State produced by smashing multiple gas payment sources into one.
+    /// Tracks the combined balance (`total_smashed`), the target location where the
+    /// smashed value lives, and the original payment methods for bookkeeping.
+    /// Note that the target location (`gas_charge_location`) may differ from the first payment
+    /// method in the list if it has ben overridden during execution.
     #[derive(Debug)]
     struct SmashMetadata {
+        /// The location to charge gas from at the end of execution. Starts with the primary
+        /// payment method but may be overridden.
         gas_charge_location: PaymentLocation,
+        /// The total balance of all smashed payment methods.
         total_smashed: u64,
+        /// The original payment methods.
         methods: Vec<PaymentMethod>,
     }
 
+    /// Public wrapper that describes how gas will be paid before smashing occurs.
+    /// Constructed via `PaymentKind::unmetered()` or `PaymentKind::smash(methods)` and
+    /// consumed by `GasCharger::new`.
     #[derive(Debug)]
     pub struct PaymentKind(PaymentKind_);
 
+    /// Inner representation for `PaymentKind`. Kept private so construction is forced through
+    /// the validation in `PaymentKind::smash`.
     #[derive(Debug)]
     enum PaymentKind_ {
         Unmetered,
@@ -68,18 +83,26 @@ pub mod checked {
         Smash(Vec<PaymentMethod>),
     }
 
+    /// A single source of SUI used to pay for gas: either an coin object or a withdrawal
+    /// reservation from an address balance.
     #[derive(Debug)]
     pub enum PaymentMethod {
         Coin(ObjectRef),
         AddressBalance(SuiAddress, /* withdrawal reservation */ u64),
     }
 
+    /// Identifies where a gas payment lives, independent of its value (`ObjectRef` or reservation).
+    /// Used often as a key, e.g. during smashing and during gas final charging.
     #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
     pub enum PaymentLocation {
         Coin(ObjectID),
         AddressBalance(SuiAddress),
     }
 
+    /// A resolved gas payment: the location that will receive the final charge or refund,
+    /// paired with the total SUI available after smashing. Produced by
+    /// `GasCharger::gas_payment_amount` and consumed by PTB execution to set up the
+    /// runtime gas coin.
     #[derive(Debug, Clone, Copy)]
     pub struct GasPayment {
         /// The location of the gas payment (coin or address balance), which also serves as the
