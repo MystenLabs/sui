@@ -63,8 +63,12 @@ pub mod checked {
         gas_charge_location: PaymentLocation,
         /// The total balance of all smashed payment methods.
         total_smashed: u64,
-        /// The original payment methods.
-        methods: Vec<PaymentMethod>,
+        /// The "primary" payment method that serves as the recipient of the `total_smashed`. Also,
+        /// provides the initial location of the `gas_charge_location` before any overrides.
+        smash_target: PaymentMethod,
+        /// The original payment methods to be smashed into the `smash_target`. It does not include
+        /// the `smash_target` itself.
+        smashed_payments: Vec<PaymentMethod>,
     }
 
     /// Public wrapper that describes how gas will be paid before smashing occurs.
@@ -123,12 +127,14 @@ pub mod checked {
             let gas_model_version = protocol_config.gas_model_version();
             let payment = match payment_kind.0 {
                 PaymentKind_::Unmetered => PaymentMetadata::Unmetered,
-                PaymentKind_::Smash(payment_methods) => {
+                PaymentKind_::Smash(mut payment_methods) => {
+                    let smash_target = payment_methods.remove(0);
                     let mut metadata = SmashMetadata {
                         // dummy value set below in smash_gas
                         total_smashed: 0,
-                        gas_charge_location: payment_methods[0].location(),
-                        methods: payment_methods,
+                        gas_charge_location: smash_target.location(),
+                        smash_target,
+                        smashed_payments: payment_methods,
                     };
                     metadata.smash_gas(&tx_digest, temporary_store);
                     PaymentMetadata::Smash(metadata)
@@ -183,7 +189,7 @@ pub mod checked {
             match &self.payment {
                 PaymentMetadata::Unmetered => None,
                 PaymentMetadata::Smash(metadata) => Some(GasPayment {
-                    location: metadata.smash_target().location(),
+                    location: metadata.smash_target.location(),
                     amount: metadata.total_smashed,
                 }),
             }
@@ -492,18 +498,22 @@ pub mod checked {
     }
 
     impl SmashMetadata {
+        /// Iterates over all payment methods: the smash target followed by the smashed payments.
+        fn payment_methods(&self) -> impl Iterator<Item = &'_ PaymentMethod> {
+            std::iter::once(&self.smash_target).chain(self.smashed_payments.iter())
+        }
+
         fn smash_gas(
             &mut self,
             tx_digest: &TransactionDigest,
             temporary_store: &mut TemporaryStore<'_>,
         ) {
             // set gas charge location
-            self.gas_charge_location = self.smash_target().location();
+            self.gas_charge_location = self.smash_target.location();
 
             // sum the value of all gas coins
             let total_smashed = self
-                .methods
-                .iter()
+                .payment_methods()
                 .map(|payment| match payment {
                     PaymentMethod::AddressBalance(_, reservation) => Ok(*reservation),
                     PaymentMethod::Coin(obj_ref) => {
@@ -534,10 +544,9 @@ pub mod checked {
                 .sum();
             self.total_smashed = total_smashed;
 
-            let smash_target = self.smash_target();
-            let smash_location = smash_target.location();
-            // delete all gas objects except the primary_gas_object
-            for payment_method in &self.methods[1..] {
+            let smash_location = self.smash_target.location();
+            // delete all gas objects except the smash target
+            for payment_method in &self.smashed_payments {
                 let location = payment_method.location();
                 assert_ne!(location, smash_location, "Payment methods must be unique");
                 match payment_method {
@@ -558,7 +567,7 @@ pub mod checked {
                     }
                 }
             }
-            match smash_target {
+            match &self.smash_target {
                 PaymentMethod::AddressBalance(sui_address, reservation) => {
                     // The reservation here is only a maximal withdrawal from this address balance
                     // We do not need to withdraw here unless necessary, which will be done during
@@ -605,12 +614,8 @@ pub mod checked {
             }
         }
 
-        fn smash_target(&self) -> &PaymentMethod {
-            &self.methods[0]
-        }
-
         fn used_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
-            self.methods.iter().filter_map(|method| match method {
+            self.payment_methods().filter_map(|method| match method {
                 PaymentMethod::Coin(obj_ref) => Some(obj_ref),
                 PaymentMethod::AddressBalance(_, _) => None,
             })
