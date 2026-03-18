@@ -132,14 +132,16 @@ impl Handler for ObjVersions {
           .await?;
 
 
-        // Computes the latest version of each object in [from, to_exclusive] using GROUP BY
-        // rather than a window function to avoid materializing every row in the range — an
-        // object can be modified many times within a single checkpoint. Subsequent phases use
-        // LATERAL joins against this compact set for targeted per-object index lookups.
+        // Computes the latest version and modification count of each object in
+        // [from, to_exclusive] using GROUP BY. The count is used to skip phase 1
+        // lookups for single-version objects (cnt = 1), which have no intermediates
+        // to delete — avoiding costly random index probes on cold pages.
         //
         // Phase 1: Remove intermediate versions in [from, to_exclusive).
+        // Only objects with cnt > 1 are probed, since single-version objects
+        // are guaranteed to have no intermediates.
         //
-        // local_latest: The subset of latest_at_to_exclusive whose latest version falls
+        // local_latest: The subset of all_in_range whose latest version falls
         // strictly within [from, to_exclusive). Objects whose latest is at to_exclusive are
         // excluded: phase 1 already pruned all their intermediate versions, and the entry at
         // to_exclusive itself must never be deleted (it may be the true latest at reader_lo).
@@ -161,8 +163,8 @@ impl Handler for ObjVersions {
         let rows_deleted = query!(
             r#"
             WITH
-            latest_at_to_exclusive AS (
-                SELECT object_id, MAX(cp_sequence_number) AS latest_cp
+            all_in_range AS (
+                SELECT object_id, MAX(cp_sequence_number) AS latest_cp, COUNT(*) AS cnt
                 FROM obj_versions
                 WHERE cp_sequence_number >= {BigInt}
                   AND cp_sequence_number <= {BigInt}
@@ -170,17 +172,17 @@ impl Handler for ObjVersions {
             ),
             phase1 AS (
                 DELETE FROM obj_versions o
-                USING latest_at_to_exclusive l
-                WHERE o.object_id = l.object_id
+                USING all_in_range a
+                WHERE a.cnt > 1
+                  AND o.object_id = a.object_id
                   AND o.cp_sequence_number >= {BigInt}
-                  -- Redundant constant upper bound so the planner can have a tight constant range
                   AND o.cp_sequence_number < {BigInt}
-                  AND o.cp_sequence_number < l.latest_cp
+                  AND o.cp_sequence_number < a.latest_cp
                 RETURNING 1
             ),
             local_latest AS (
                 SELECT object_id, latest_cp AS head_cp
-                FROM latest_at_to_exclusive
+                FROM all_in_range
                 WHERE latest_cp >= {BigInt}
                   AND latest_cp < {BigInt}
             ),
@@ -237,8 +239,8 @@ impl Handler for ObjVersions {
             UNION ALL SELECT 1 FROM phase3
             UNION ALL SELECT 1 FROM phase4
             "#,
-            from,         // latest_at_to_exclusive: >= from
-            to_exclusive, // latest_at_to_exclusive: <= to_exclusive
+            from,         // all_in_range: >= from
+            to_exclusive, // all_in_range: <= to_exclusive
             from,         // phase1: >= from
             to_exclusive, // phase1: < to_exclusive (redundant bound for planner)
             from,         // local_latest: >= from
