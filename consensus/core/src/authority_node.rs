@@ -52,15 +52,25 @@ pub enum ConsensusAuthority {
     WithTonic(AuthorityNode<TonicManager>),
 }
 
+// The node type. When this is a validator, then an authority index must be provided and should be
+// part of the committee. Also a ProtocolKey pair should also be provided as this should be an authority
+// that can sign and participate on the protocol.
+// Otherwise this is an Observer node and it does not propose blocks, but only streams blocks
+// by connecting to a dictated peer.
+#[derive(Clone)]
+pub enum NodeType {
+    Validator(AuthorityIndex, ProtocolKeyPair),
+    Observer,
+}
+
 impl ConsensusAuthority {
     pub async fn start(
         network_type: NetworkType,
         epoch_start_timestamp_ms: u64,
-        own_index: AuthorityIndex,
+        node_type: NodeType,
         committee: Committee,
         parameters: Parameters,
         protocol_config: ProtocolConfig,
-        protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
@@ -75,11 +85,10 @@ impl ConsensusAuthority {
             NetworkType::Tonic => {
                 let authority = AuthorityNode::start(
                     epoch_start_timestamp_ms,
-                    own_index,
+                    node_type,
                     committee,
                     parameters,
                     protocol_config,
-                    protocol_keypair,
                     network_keypair,
                     clock,
                     transaction_verifier,
@@ -153,11 +162,10 @@ where
     // See comments above ConsensusAuthority::start() for details on the input.
     pub(crate) async fn start(
         epoch_start_timestamp_ms: u64,
-        own_index: AuthorityIndex,
+        node_type: NodeType,
         committee: Committee,
         parameters: Parameters,
         protocol_config: ProtocolConfig,
-        protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
@@ -165,22 +173,45 @@ where
         registry: Registry,
         boot_counter: u64,
     ) -> Self {
-        assert!(
-            committee.is_valid_index(own_index),
-            "Invalid own index {}",
-            own_index
-        );
-        let own_hostname = committee.authority(own_index).hostname.clone();
-        info!(
-            "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
-            own_index,
-            own_hostname,
-            protocol_config.version,
-            epoch_start_timestamp_ms,
-            boot_counter,
-            commit_consumer.replay_after_commit_index,
-            commit_consumer.consumer_last_processed_commit_index
-        );
+        let metrics = initialise_metrics(registry);
+        match node_type {
+            NodeType::Validator(own_index, protocol_keypair) => {
+                assert!(
+                    committee.is_valid_index(own_index),
+                    "Invalid own index {}",
+                    own_index
+                );
+
+                let own_hostname = committee.authority(own_index).hostname.clone();
+                info!(
+                    "Starting consensus validator authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
+                    own_index,
+                    own_hostname,
+                    protocol_config.version,
+                    epoch_start_timestamp_ms,
+                    boot_counter,
+                    commit_consumer.replay_after_commit_index,
+                    commit_consumer.consumer_last_processed_commit_index
+                );
+
+                metrics
+                    .node_metrics
+                    .authority_index
+                    .with_label_values(&[&own_hostname])
+                    .set(own_index.value() as i64);
+            }
+            NodeType::Observer => {
+                info!(
+                    "Starting consensus observer authority, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
+                    protocol_config.version,
+                    epoch_start_timestamp_ms,
+                    boot_counter,
+                    commit_consumer.replay_after_commit_index,
+                    commit_consumer.consumer_last_processed_commit_index
+                );
+            }
+        };
+
         info!(
             "Consensus authorities: {}",
             committee
@@ -192,21 +223,15 @@ where
         info!("Consensus committee: {:?}", committee);
         let context = Arc::new(Context::new(
             epoch_start_timestamp_ms,
-            own_index,
+            node_type,
             committee,
             parameters,
             protocol_config,
-            initialise_metrics(registry),
+            metrics,
             clock,
         ));
         let start_time = Instant::now();
 
-        context
-            .metrics
-            .node_metrics
-            .authority_index
-            .with_label_values(&[&own_hostname])
-            .set(context.own_index.value() as i64);
         context
             .metrics
             .node_metrics
@@ -305,7 +330,7 @@ where
 
         // To avoid accidentally leaking the private key, the protocol key pair should only be
         // kept in Core.
-        let core = Core::new(
+        let core = Core::new_validator(
             context.clone(),
             leader_schedule,
             tx_consumer,
@@ -313,7 +338,7 @@ where
             block_manager,
             commit_observer,
             core_signals,
-            protocol_keypair,
+            node_type,
             dag_state.clone(),
             sync_last_known_own_block,
             round_tracker.clone(),

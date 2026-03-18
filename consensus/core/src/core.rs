@@ -32,6 +32,7 @@ use crate::{
 };
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
+    authority_node::NodeType,
     block::{
         Block, BlockAPI, BlockV1, BlockV2, ExtendedBlock, GENESIS_ROUND, SignedBlock, Slot,
         VerifiedBlock,
@@ -46,6 +47,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     leader_schedule::LeaderSchedule,
+    proposer::{ObserverProposer, Proposer, ValidatorProposer},
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction::TransactionConsumer,
@@ -61,28 +63,15 @@ const MAX_COMMIT_VOTES_PER_BLOCK: usize = 100;
 
 pub(crate) struct Core {
     context: Arc<Context>,
-    /// The consumer to use in order to pull transactions to be included for the next proposals
-    transaction_consumer: TransactionConsumer,
     /// This contains the reject votes on transactions which proposed blocks should include.
     transaction_certifier: TransactionCertifier,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
-    /// Estimated delay by round for propagating blocks to a quorum.
-    /// Because of the nature of TCP and block streaming, propagation delay is expected to be
-    /// 0 in most cases, even when the actual latency of broadcasting blocks is high.
-    /// When this value is higher than the `propagation_delay_stop_proposal_threshold`,
-    /// most likely this validator cannot broadcast  blocks to the network at all.
-    /// Core stops proposing new blocks in this case.
-    propagation_delay: Round,
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
     /// The last new round for which core has sent out a signal.
     last_signaled_round: Round,
-    /// The blocks of the last included ancestors per authority. This vector is basically used as a
-    /// watermark in order to include in the next block proposal only ancestors of higher rounds.
-    /// By default, is initialised with `None` values.
-    last_included_ancestors: Vec<Option<BlockRef>>,
     /// The last decided leader returned from the universal committer. Important to note
     /// that this does not signify that the leader has been persisted yet as it still has
     /// to go through CommitObserver and persist the commit in store. On recovery/restart
@@ -96,28 +85,16 @@ pub(crate) struct Core {
     commit_observer: CommitObserver,
     /// Sender of outgoing signals from Core.
     signals: CoreSignals,
-    /// The keypair to be used for block signing
-    block_signer: ProtocolKeyPair,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
     dag_state: Arc<RwLock<DagState>>,
-    /// The last known round for which the node has proposed. Any proposal should be for a round > of this.
-    /// This is currently being used to avoid equivocations during a node recovering from amnesia. When value is None it means that
-    /// the last block sync mechanism is enabled, but it hasn't been initialised yet.
-    last_known_proposed_round: Option<Round>,
-    // The ancestor state manager will keep track of the quality of the authorities
-    // based on the distribution of their blocks to the network. It will use this
-    // information to decide whether to include that authority block in the next
-    // proposal or not.
-    ancestor_state_manager: AncestorStateManager,
-    // The round tracker will keep track of the highest received and accepted rounds
-    // from all authorities. It will use this information to then calculate the
-    // quorum rounds periodically which is used across other components to make
-    // decisions about block proposals.
-    round_tracker: Arc<RwLock<RoundTracker>>,
+    /// Block proposal engine that differs between Validator and Observer nodes.
+    /// Validators propose blocks while Observers do not.
+    proposer: Box<dyn Proposer>,
 }
 
 impl Core {
-    pub(crate) fn new(
+    /// Creates a new Core instance for a validator node that participates in consensus.
+    pub(crate) fn new_validator(
         context: Arc<Context>,
         leader_schedule: Arc<LeaderSchedule>,
         transaction_consumer: TransactionConsumer,
@@ -125,7 +102,7 @@ impl Core {
         block_manager: BlockManager,
         commit_observer: CommitObserver,
         signals: CoreSignals,
-        block_signer: ProtocolKeyPair,
+        node_type: NodeType,
         dag_state: Arc<RwLock<DagState>>,
         sync_last_known_own_block: bool,
         round_tracker: Arc<RwLock<RoundTracker>>,
@@ -145,23 +122,15 @@ impl Core {
         .build();
 
         let last_proposed_block = dag_state.read().get_last_proposed_block();
-
         let last_signaled_round = last_proposed_block.round();
 
-        // Recover the last included ancestor rounds based on the last proposed block. That will allow
-        // to perform the next block proposal by using ancestor blocks of higher rounds and avoid
-        // re-including blocks that have been already included in the last (or earlier) block proposal.
-        // This is only strongly guaranteed for a quorum of ancestors. It is still possible to re-include
-        // a block from an authority which hadn't been added as part of the last proposal hence its
-        // latest included ancestor is not accurately captured here. This is considered a small deficiency,
-        // and it mostly matters just for this next proposal without any actual penalties in performance
-        // or block proposal.
+        // Recover the last included ancestor rounds based on the last proposed block
         let mut last_included_ancestors = vec![None; context.committee.size()];
         for ancestor in last_proposed_block.ancestors() {
             last_included_ancestors[ancestor.author] = Some(*ancestor);
         }
 
-        let min_propose_round = if sync_last_known_own_block {
+        let last_known_proposed_round = if sync_last_known_own_block {
             None
         } else {
             // if the sync is disabled then we practically don't want to impose any restriction.
@@ -177,24 +146,83 @@ impl Core {
             AncestorStateManager::new(context.clone(), dag_state.clone());
         ancestor_state_manager.set_propagation_scores(propagation_scores);
 
+        // Extract the block signer from the node type
+        let block_signer = match node_type {
+            NodeType::Validator(_index, protocol_keypair) => protocol_keypair,
+            NodeType::Observer => panic!("new_validator called with Observer node type"),
+        };
+
+        // Create the ValidatorProposer
+        let proposer = Box::new(ValidatorProposer::new(
+            dag_state.clone(),
+            context.clone(),
+            transaction_consumer,
+            transaction_certifier.clone(),
+            block_signer,
+            last_known_proposed_round,
+            ancestor_state_manager,
+            round_tracker.clone(),
+            leader_schedule.clone(),
+        ));
+
         Self {
             context,
             last_signaled_round,
-            last_included_ancestors,
             last_decided_leader,
             leader_schedule,
-            transaction_consumer,
             transaction_certifier,
             block_manager,
-            propagation_delay: 0,
             committer,
             commit_observer,
             signals,
-            block_signer,
             dag_state,
-            last_known_proposed_round: min_propose_round,
-            ancestor_state_manager,
-            round_tracker,
+            proposer,
+        }
+        .recover()
+    }
+
+    /// Creates a new Core instance for an observer node that only processes blocks.
+    pub(crate) fn new_observer(
+        context: Arc<Context>,
+        leader_schedule: Arc<LeaderSchedule>,
+        transaction_certifier: TransactionCertifier,
+        block_manager: BlockManager,
+        commit_observer: CommitObserver,
+        signals: CoreSignals,
+        dag_state: Arc<RwLock<DagState>>,
+    ) -> Self {
+        let last_decided_leader = dag_state.read().last_commit_leader();
+        let number_of_leaders = context
+            .protocol_config
+            .mysticeti_num_leaders_per_round()
+            .unwrap_or(1);
+        let committer = UniversalCommitterBuilder::new(
+            context.clone(),
+            leader_schedule.clone(),
+            dag_state.clone(),
+        )
+        .with_number_of_leaders(number_of_leaders)
+        .with_pipeline(true)
+        .build();
+
+        let last_proposed_block = dag_state.read().get_last_proposed_block();
+        let last_signaled_round = last_proposed_block.round();
+
+        // Create the ObserverProposer (no-op implementation)
+        let proposer = Box::new(ObserverProposer::new());
+
+        Self {
+            context,
+            last_signaled_round,
+            last_decided_leader,
+            leader_schedule,
+            transaction_certifier,
+            block_manager,
+            committer,
+            commit_observer,
+            signals,
+            dag_state,
+            proposer,
         }
         .recover()
     }
@@ -215,9 +243,11 @@ impl Core {
         {
             last_proposed_block
         } else {
-            let last_proposed_block = self.dag_state.read().get_last_proposed_block();
+            let last_proposed_block = self.proposer.last_proposed_block().unwrap_or_else(|| {
+                self.dag_state.read().get_last_proposed_block()
+            });
 
-            if self.should_propose() {
+            if self.proposer.should_propose() {
                 assert!(
                     last_proposed_block.round() > GENESIS_ROUND,
                     "At minimum a block of round higher than genesis should have been produced during recovery"
