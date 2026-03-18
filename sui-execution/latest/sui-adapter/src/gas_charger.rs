@@ -549,7 +549,7 @@ pub mod checked {
             // If it is non-zero, then we are re-smashing after a reset (due to some sort of
             // failure in charging for gas), and the total should not change.
             debug_assert!(
-                total_smashed == 0 || self.total_smashed == total_smashed,
+                self.total_smashed == 0 || self.total_smashed == total_smashed,
                 "Gas smashing should not change after a reset"
             );
             self.total_smashed = total_smashed;
