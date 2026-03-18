@@ -21,8 +21,11 @@ for (let i = 0; i < args.length; i++) {
 const scriptDir = path.dirname(new URL(import.meta.url).pathname);
 const markdownDir = path.resolve(positional[0] ?? path.join(scriptDir, "../../static/markdown"));
 const baseUrl      = flags["base-url"]    ?? "";
-const outputFile = flags["output"] ?? path.join(scriptDir, "../../static/llms.txt");
+const outputFile   = flags["output"]      ?? path.join(scriptDir, "../../static/llms.txt");
 const siteDesc     = flags["description"] ?? "";
+// --sitemap: local file path (recommended) or URL to sitemap.xml
+// For Docusaurus: point at build/sitemap.xml after `npm run build`
+const sitemapSource = flags["sitemap"]    ?? "";
 
 // ── Auto-detect docusaurus config ────────────────────────────────────────────
 let resolvedName = flags["name"] ?? null;
@@ -56,7 +59,6 @@ if (configText) {
 resolvedName ??= "Documentation";
 
 // ── Resolve site description for blockquote ──────────────────────────────────
-// Priority: --description flag > Docusaurus tagline
 let siteDescription = siteDesc;
 if (!siteDescription && configText) {
   const m = configText.match(/\btagline:\s*['"](.+?)['"]/);
@@ -78,12 +80,27 @@ function walk(dir, results = []) {
   return results;
 }
 
+/**
+ * Parse YAML frontmatter from markdown content.
+ * Returns an object with any key-value pairs found.
+ */
+function parseFrontmatter(content) {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) return {};
+  const fm = {};
+  for (const line of match[1].split("\n")) {
+    const kv = line.match(/^(\w[\w-]*):\s*['"]?(.*?)['"]?\s*$/);
+    if (kv) fm[kv[1]] = kv[2];
+  }
+  return fm;
+}
+
 function parseMarkdown(filePath, content) {
   let title = "";
   let description = "";
 
   // Check for metadata sidecar written by export script
-  const metaPath = filePath.replace(/\.md$/, ".meta.json");
+  const metaPath = filePath.replace(/\.mdx?$/, ".meta.json");
   if (fs.existsSync(metaPath)) {
     try {
       const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
@@ -92,8 +109,14 @@ function parseMarkdown(filePath, content) {
     } catch {}
   }
 
+  // Parse frontmatter for title/description/slug
+  const fm = parseFrontmatter(content);
+  if (!title && fm.title) title = fm.title;
+  if (!description && fm.description) description = fm.description;
+
   // Strip unwanted HTML before any processing
   let body = content
+    .replace(/^---[\s\S]*?---\n?/, "")           // strip frontmatter
     .replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, "")
     .replace(/<span\s+class="code-inline"[^>]*>[\s\S]*?<\/span>/gi, "")
     .replace(/&nbsp;●&nbsp;/g, "")
@@ -101,11 +124,8 @@ function parseMarkdown(filePath, content) {
     .replace(/&gt;/g, ">")
     .replace(/&lt;/g, "<")
     .replace(/&amp;/g, "&")
-    // Strip linear.app issue links: [text](https://linear.app/...) → just text
     .replace(/\[([^\]]*)\]\(https?:\/\/linear\.app\/[^)]*\)/gi, "$1")
-    // Strip bare linear.app URLs
     .replace(/https?:\/\/linear\.app\/\S+/gi, "")
-    // Strip linear issue references and {/ /} markers
     .replace(/\{[^}]*linear\.app[^}]*\}/gi, "")
     .replace(/\{\/\s*/g, "")
     .replace(/\s*\/\}/g, "");
@@ -116,41 +136,37 @@ function parseMarkdown(filePath, content) {
     if (h1) title = h1[1].trim();
   }
 
-  // Fallback description: clean entire body, take first 100 chars of real text
+  // Fallback description
   if (!description) {
     const clean = body
-      .replace(/^#+\s+.+$/gm, "")              // remove headings
-      .replace(/```[\s\S]*?```/g, "")           // remove code blocks
-      .replace(/`[^`]+`/g, "")                 // remove inline code
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links → text
-      .replace(/[*_]/g, "")                    // remove emphasis
-      .replace(/<[^>]+>/g, "")                 // strip remaining HTML
-      .replace(/^\s*\d+\.\s+/gm, "")           // remove ordered list markers
-      .replace(/^\s*[-*]\s+/gm, "")            // remove unordered list markers
-      .replace(/\n+/g, " ")                    // collapse newlines
-      .replace(/\s+/g, " ")                    // collapse whitespace
+      .replace(/^#+\s+.+$/gm, "")
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/`[^`]+`/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/[*_]/g, "")
+      .replace(/<[^>]+>/g, "")
+      .replace(/^\s*\d+\.\s+/gm, "")
+      .replace(/^\s*[-*]\s+/gm, "")
+      .replace(/\n+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
 
     if (clean.length > 0) {
       const chunk = clean.slice(0, 300);
-      // Find the last sentence-ending punctuation within the chunk
       const lastEnd = Math.max(chunk.lastIndexOf(". "), chunk.lastIndexOf("! "), chunk.lastIndexOf("? "));
       if (lastEnd > 0) {
         description = chunk.slice(0, lastEnd + 1).trim();
       } else if (clean.length <= 300) {
-        // Entire text fits, use it as-is
         description = clean.trim();
       } else {
-        // No sentence boundary found, truncate at last word boundary
         description = chunk.replace(/\s+\S*$/, "").trim();
       }
     }
   }
 
-  // Discard redirect-page descriptions
   if (/redirecting/i.test(description)) description = "";
 
-  return { title, description };
+  return { title, description, slug: fm.slug || "" };
 }
 
 function fileToUrlPath(filePath, rootDir) {
@@ -175,7 +191,71 @@ function isLinearUrl(url) {
   return /linear\.app/i.test(url);
 }
 
-// ── Collect pages ─────────────────────────────────────────────────────────────
+// Normalise URL for dedup: strip trailing slashes
+const norm = (u) => u.replace(/\/+$/, "");
+
+// ── Sitemap loading ──────────────────────────────────────────────────────────
+
+async function loadSitemapUrls(source) {
+  if (!source) return [];
+
+  let xml;
+  if (source.startsWith("http://") || source.startsWith("https://")) {
+    try {
+      const resp = await fetch(source);
+      if (!resp.ok) {
+        console.error(`✗ ERROR: Could not fetch sitemap from ${source}: ${resp.status} ${resp.statusText}`);
+        console.error(`  Hint: Use a local file path instead (e.g., --sitemap build/sitemap.xml)`);
+        process.exit(1);
+      }
+      xml = await resp.text();
+    } catch (err) {
+      console.error(`✗ ERROR: Failed to fetch sitemap from ${source}: ${err.message}`);
+      console.error(`  Hint: Node < 18 does not have global fetch(). Use a local file path instead.`);
+      process.exit(1);
+    }
+  } else {
+    const resolved = path.resolve(source);
+    if (!fs.existsSync(resolved)) {
+      console.error(`✗ ERROR: Sitemap file not found: ${resolved}`);
+      process.exit(1);
+    }
+    xml = fs.readFileSync(resolved, "utf8");
+    console.log(`  Loaded sitemap from ${resolved} (${xml.length.toLocaleString()} bytes)`);
+  }
+
+  // Handle sitemap index
+  const sitemapRefs = [...xml.matchAll(/<sitemap>\s*<loc>\s*(.*?)\s*<\/loc>/gi)].map(m => m[1]);
+  if (sitemapRefs.length > 0) {
+    console.log(`  Sitemap index with ${sitemapRefs.length} child sitemaps`);
+    const nested = [];
+    for (const ref of sitemapRefs) {
+      let childSource = ref;
+      if (!source.startsWith("http") && !ref.startsWith("http")) {
+        childSource = path.resolve(path.dirname(source), ref);
+      }
+      const urls = await loadSitemapUrls(childSource);
+      nested.push(...urls);
+    }
+    return nested;
+  }
+
+  const urls = [...xml.matchAll(/<url>\s*<loc>\s*(.*?)\s*<\/loc>/gi)].map(m => m[1]);
+  if (urls.length === 0) {
+    // Fallback: try simpler regex in case of different formatting
+    const simpleLocs = [...xml.matchAll(/<loc>\s*(.*?)\s*<\/loc>/gi)].map(m => m[1]);
+    if (simpleLocs.length > 0) {
+      console.log(`  Parsed ${simpleLocs.length} URLs from sitemap (simple loc extraction)`);
+      return simpleLocs;
+    }
+    console.error(`✗ WARNING: Sitemap loaded but no <loc> URLs found. Check the file format.`);
+  } else {
+    console.log(`  Parsed ${urls.length} URLs from sitemap`);
+  }
+  return urls;
+}
+
+// ── Collect pages from markdown ──────────────────────────────────────────────
 
 if (!fs.existsSync(markdownDir)) {
   console.error(`Directory not found: ${markdownDir}`);
@@ -195,36 +275,107 @@ if (!files.length) {
 }
 
 const pages = [];
+const seenUrls = new Set();
 
 for (const file of files) {
   const content = fs.readFileSync(file, "utf8");
-  if (!content.trim()) continue; // Skip empty files (e.g., drafts)
-  const { title, description } = parseMarkdown(file, content);
+  if (!content.trim()) continue;
+  const { title, description, slug } = parseMarkdown(file, content);
   const urlPath = fileToUrlPath(file, markdownDir);
 
   // Skip /design and /dev-guide sections
   if (/^\/?(design|dev-guide)(\/)/.test(urlPath) || urlPath === "/design" || urlPath === "/dev-guide") continue;
 
-  const url = joinUrl(resolvedBaseUrl, urlPath) + ".md";
+  // Build the canonical URL:
+  // 1) Use frontmatter slug if present (handles Docusaurus slug overrides)
+  // 2) Otherwise derive from filesystem path
+  // No .md suffix — matches sitemap clean URLs
+  let url;
+  if (slug) {
+    if (slug.startsWith("/")) {
+      url = resolvedBaseUrl ? resolvedBaseUrl.replace(/\/$/, "") + slug : slug;
+    } else {
+      const parent = urlPath.replace(/\/[^/]*$/, "");
+      url = joinUrl(resolvedBaseUrl, parent ? parent + "/" + slug : slug);
+    }
+  } else {
+    url = joinUrl(resolvedBaseUrl, urlPath);
+  }
 
-  // Skip linear.app URLs
   if (isLinearUrl(url)) continue;
 
-  // Derive title from filename if no heading found
   const filename = path.basename(file, path.extname(file));
   const derivedTitle = title || filename
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const segments = urlPath.replace(/^\//, "").split("/");
+  // Derive section from the resolved URL path
+  const resolvedPath = slug?.startsWith("/") ? slug : "/" + urlPath;
+  const segments = resolvedPath.replace(/^\//, "").split("/");
   const section = segments.length > 1
     ? toSectionTitle(segments[0])
     : "General";
 
-  pages.push({ title: derivedTitle, url, description, section });
+  seenUrls.add(norm(url));
+  // Append .md so LLMs fetch raw markdown instead of rendered HTML
+  const displayUrl = url.endsWith("/") || url === resolvedBaseUrl ? url : url + ".md";
+  pages.push({ title: derivedTitle, url: displayUrl, description, section, source: "markdown" });
 }
 
-// Wrap a line to max 100 chars, continuing indented lines at the same indent level
+console.log(`  Found ${pages.length} pages from markdown files`);
+
+// ── Fill gaps from sitemap ───────────────────────────────────────────────────
+
+const sitemapUrls = await loadSitemapUrls(sitemapSource);
+let sitemapAdded = 0;
+let sitemapSkippedSeen = 0;
+let sitemapSkippedFilter = 0;
+
+if (sitemapUrls.length > 0) {
+  // Non-content pages to skip
+  const skipPatterns = [/\/search$/, /\/sui-api-ref$/];
+  const baseNorm = norm(resolvedBaseUrl || "");
+
+  for (const rawUrl of sitemapUrls) {
+    const url = norm(rawUrl);
+
+    if (seenUrls.has(url)) {
+      sitemapSkippedSeen++;
+      continue;
+    }
+
+    if (skipPatterns.some((re) => re.test(url))) {
+      sitemapSkippedFilter++;
+      continue;
+    }
+
+    // Must be under our base URL
+    if (baseNorm && !url.startsWith(baseNorm)) continue;
+
+    const rel = url.replace(baseNorm, "").replace(/^\//, "");
+    const segments = rel.split("/").filter(Boolean);
+    const section = segments.length > 1
+      ? toSectionTitle(segments[0])
+      : "General";
+
+    const lastSeg = segments[segments.length - 1] || "index";
+    const derivedTitle = lastSeg
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+    seenUrls.add(url);
+    const displayUrl = url.endsWith("/") ? url : url + ".md";
+    pages.push({ title: derivedTitle, url: displayUrl, description: "", section, source: "sitemap" });
+    sitemapAdded++;
+  }
+
+  console.log(`  Sitemap backfill: +${sitemapAdded} pages, ${sitemapSkippedSeen} already covered, ${sitemapSkippedFilter} filtered`);
+} else if (sitemapSource) {
+  console.error(`✗ WARNING: --sitemap was provided but yielded 0 URLs`);
+}
+
+// ── Build llms.txt ────────────────────────────────────────────────────────────
+
 function wrapLine(line, indentSpaces = 0) {
   if (line.length <= 100) return [line];
   const indent = " ".repeat(indentSpaces);
@@ -243,8 +394,6 @@ function wrapLine(line, indentSpaces = 0) {
   return lines;
 }
 
-// ── Build llms.txt ────────────────────────────────────────────────────────────
-
 const TARGET_CHARS = 100_000;
 
 const sectionOrder = [];
@@ -257,29 +406,27 @@ for (const page of pages) {
   grouped[page.section].push(page);
 }
 
-// First pass: description as link label
+// First pass: with descriptions
 const allLines = [`# ${resolvedName}`, ""];
 if (siteDescription) allLines.push(`> ${siteDescription}`, "");
 for (const section of sectionOrder) {
   allLines.push(`## ${section}`, "");
   for (const { title, url, description } of grouped[section]) {
-    const descLine = description ? `    Description: ${description}` : null;
     allLines.push(...wrapLine(`- [${title}](${url})`, 0));
-    if (descLine) allLines.push(...wrapLine(descLine, 4));
+    if (description) allLines.push(...wrapLine(`    Description: ${description}`, 4));
   }
   allLines.push("");
 }
 let output = allLines.join("\n");
 
-// Second pass: fall back to title only
+// Second pass: drop descriptions if over limit
 if (output.length > TARGET_CHARS) {
   const trimmedLines = [`# ${resolvedName}`, ""];
   if (siteDescription) trimmedLines.push(`> ${siteDescription}`, "");
   for (const section of sectionOrder) {
     trimmedLines.push(`## ${section}`, "");
-    for (const { title, url, description } of grouped[section]) {
+    for (const { title, url } of grouped[section]) {
       trimmedLines.push(...wrapLine(`- [${title}](${url})`, 0));
-      if (description) trimmedLines.push(...wrapLine(`    Description: ${description}`, 4));
     }
     trimmedLines.push("");
   }
@@ -304,12 +451,11 @@ if (output.length > TARGET_CHARS) {
   output = finalLines.join("\n");
 }
 
-// Hard cap: truncate at last complete entry if still over limit
+// Hard cap
 if (output.length > TARGET_CHARS) {
   const truncated = output.slice(0, TARGET_CHARS);
   const lastNewline = truncated.lastIndexOf("\n- ");
   if (lastNewline > 0) {
-    // Find the end of the line before this entry
     const cutPoint = truncated.lastIndexOf("\n", lastNewline - 1);
     output = (cutPoint > 0 ? truncated.slice(0, cutPoint) : truncated.slice(0, lastNewline)) + "\n";
   } else {
@@ -317,9 +463,14 @@ if (output.length > TARGET_CHARS) {
   }
 }
 
-// Ensure output directory exists
 const outDir = path.dirname(path.resolve(outputFile));
 fs.mkdirSync(outDir, { recursive: true });
 
 fs.writeFileSync(outputFile, output, "utf8");
-console.log(`✓ Generated ${outputFile} with ${pages.length} pages across ${sectionOrder.length} sections (${output.length.toLocaleString()} chars)`);
+
+const mdCount = pages.filter(p => p.source === "markdown").length;
+const smCount = pages.filter(p => p.source === "sitemap").length;
+const parts = [`${pages.length} total pages (${mdCount} markdown + ${smCount} sitemap)`];
+parts.push(`${sectionOrder.length} sections`);
+parts.push(`${output.length.toLocaleString()} chars`);
+console.log(`✓ Generated ${outputFile}: ${parts.join(", ")}`);
