@@ -325,7 +325,7 @@ impl Operations {
                 let parsed = amount_str
                     .parse::<u64>()
                     .map_err(|e| Error::InvalidInput(format!("Invalid amount: {}", e)))?;
-                if parsed < 1 {
+                if parsed == 0 {
                     return Err(Error::InvalidInput(
                         "amount must be at least 1 MIST".to_string(),
                     ));

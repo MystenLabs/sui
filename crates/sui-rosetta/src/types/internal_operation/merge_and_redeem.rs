@@ -123,7 +123,13 @@ impl TryConstructTransaction for MergeAndRedeemFungibleStakedSui {
                 let numerator =
                     amount as u128 * pool_token_balance as u128 + sui_balance as u128 - 1;
                 let tokens = (numerator / sui_balance as u128) as u64;
-                tokens.min(total_tokens)
+                if tokens > total_tokens {
+                    return Err(Error::InvalidInput(format!(
+                        "Insufficient FSS balance: AtLeast {} SUI requires {} tokens but only {} available",
+                        amount, tokens, total_tokens,
+                    )));
+                }
+                tokens
             }
             RedeemMode::AtMost => {
                 let amount = amount.ok_or_else(|| {
