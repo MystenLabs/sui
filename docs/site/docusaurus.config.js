@@ -59,6 +59,26 @@ const config = {
   
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
+    function llmsTxtDirectivePlugin() {
+      return {
+        name: 'llms-txt-directive-plugin',
+        injectHtmlTags() {
+          return {
+            headTags: [
+              {
+                tagName: 'link',
+                attributes: {
+                  rel: 'alternate',
+                  type: 'text/plain',
+                  href: '/llms.txt',
+                  title: 'LLMs.txt',
+                },
+              },
+            ],
+          };
+        },
+      };
+    },
      function aliasPlugin() {
       return {
         name: 'custom-aliases',
