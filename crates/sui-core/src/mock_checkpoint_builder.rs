@@ -33,13 +33,13 @@ pub struct MockCheckpointBuilder {
     transactions: Vec<VerifiedExecutionData>,
     epoch_rolling_gas_cost_summary: GasCostSummary,
     epoch: u64,
-    object_start_version: SequenceNumber,
+    accumulator_root_obj_initial_shared_version: SequenceNumber,
 }
 
 impl MockCheckpointBuilder {
     pub fn new(
         previous_checkpoint: VerifiedCheckpoint,
-        object_start_version: Option<SequenceNumber>,
+        accumulator_root_obj_initial_shared_version: Option<SequenceNumber>,
     ) -> Self {
         let epoch_rolling_gas_cost_summary =
             previous_checkpoint.epoch_rolling_gas_cost_summary.clone();
@@ -50,7 +50,8 @@ impl MockCheckpointBuilder {
             transactions: Vec::new(),
             epoch_rolling_gas_cost_summary,
             epoch,
-            object_start_version: object_start_version.unwrap_or(OBJECT_START_VERSION),
+            accumulator_root_obj_initial_shared_version:
+                accumulator_root_obj_initial_shared_version.unwrap_or(OBJECT_START_VERSION),
         }
     }
 
@@ -147,7 +148,7 @@ impl MockCheckpointBuilder {
         let settlement_txns = builder.build_tx(
             protocol_config,
             self.epoch,
-            self.object_start_version,
+            self.accumulator_root_obj_initial_shared_version,
             checkpoint_height,
             checkpoint_seq,
         );
@@ -168,7 +169,7 @@ impl MockCheckpointBuilder {
     ) -> Transaction {
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
             self.epoch,
-            self.object_start_version,
+            self.accumulator_root_obj_initial_shared_version,
             checkpoint_height,
             settlement_effects,
         );
