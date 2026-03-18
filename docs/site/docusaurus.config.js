@@ -64,15 +64,14 @@ const config = {
         name: 'llms-txt-directive-plugin',
         injectHtmlTags() {
           return {
-            headTags: [
+            preBodyTags: [
               {
-                tagName: 'link',
+                tagName: 'a',
                 attributes: {
-                  rel: 'alternate',
-                  type: 'text/plain',
                   href: '/llms.txt',
-                  title: 'LLMs.txt',
+                  hidden: 'hidden',
                 },
+                innerHTML: 'llms.txt',
               },
             ],
           };

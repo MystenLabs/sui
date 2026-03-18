@@ -26,6 +26,10 @@ const siteDesc     = flags["description"] ?? "";
 // --sitemap: local file path (recommended) or URL to sitemap.xml
 // For Docusaurus: point at build/sitemap.xml after `npm run build`
 const sitemapSource = flags["sitemap"]    ?? "";
+// --build-dir: path to the Docusaurus build output directory.
+// Used to detect redirect stub pages that should be excluded from llms.txt.
+// If not provided, sitemap URLs are included without redirect checking.
+const buildDir      = flags["build-dir"]  ?? "";
 
 // ── Auto-detect docusaurus config ────────────────────────────────────────────
 let resolvedName = flags["name"] ?? null;
@@ -255,6 +259,52 @@ async function loadSitemapUrls(source) {
   return urls;
 }
 
+// ── Redirect detection ───────────────────────────────────────────────────────
+// Docusaurus plugin-client-redirects generates HTML stub files that contain
+// <meta http-equiv="refresh"> and a JS redirect. These are NOT real content
+// pages and should be excluded from llms.txt.
+//
+// Given a clean URL path like "/guides/developer/objects", check if the
+// corresponding HTML file in the build directory is a redirect stub.
+
+function isRedirectPage(urlPath, dir) {
+  if (!dir) return false;
+
+  // Map URL path to build directory file path
+  // /guides/developer/objects → build/guides/developer/objects/index.html
+  const rel = urlPath.replace(/^\//, "");
+  const candidates = [
+    path.join(dir, rel, "index.html"),
+    path.join(dir, rel + ".html"),
+  ];
+
+  for (const htmlPath of candidates) {
+    if (!fs.existsSync(htmlPath)) continue;
+    try {
+      // Read just the first 2KB — redirect stubs are small and the meta tag
+      // is always near the top
+      const fd = fs.openSync(htmlPath, "r");
+      const buf = Buffer.alloc(2048);
+      const bytesRead = fs.readSync(fd, buf, 0, 2048, 0);
+      fs.closeSync(fd);
+      const head = buf.toString("utf8", 0, bytesRead);
+
+      // Docusaurus redirect pages contain this meta tag
+      if (/meta\s[^>]*http-equiv\s*=\s*["']?refresh/i.test(head)) {
+        return true;
+      }
+      // Also check for the Docusaurus redirect page marker
+      if (/window\.location\.replace/i.test(head)) {
+        return true;
+      }
+    } catch {
+      // Can't read file — assume not a redirect
+    }
+  }
+
+  return false;
+}
+
 // ── Collect pages from markdown ──────────────────────────────────────────────
 
 if (!fs.existsSync(markdownDir)) {
@@ -317,8 +367,10 @@ for (const file of files) {
     : "General";
 
   seenUrls.add(norm(url));
-  // Append .md so LLMs fetch raw markdown instead of rendered HTML
-  const displayUrl = url.endsWith("/") || url === resolvedBaseUrl ? url : url + ".md";
+  // Append .md so LLMs fetch raw markdown instead of rendered HTML.
+  // Don't append to the site root or URLs ending in /
+  const isRoot = norm(url) === norm(resolvedBaseUrl || "");
+  const displayUrl = (isRoot || url.endsWith("/")) ? url : url + ".md";
   pages.push({ title: derivedTitle, url: displayUrl, description, section, source: "markdown" });
 }
 
@@ -330,6 +382,19 @@ const sitemapUrls = await loadSitemapUrls(sitemapSource);
 let sitemapAdded = 0;
 let sitemapSkippedSeen = 0;
 let sitemapSkippedFilter = 0;
+let sitemapSkippedRedirect = 0;
+
+// Auto-detect build directory if not explicitly provided.
+// If --sitemap points to build/sitemap.xml, the build dir is its parent.
+let resolvedBuildDir = buildDir;
+if (!resolvedBuildDir && sitemapSource && !sitemapSource.startsWith("http")) {
+  const sitemapParent = path.dirname(path.resolve(sitemapSource));
+  // Heuristic: if the sitemap's parent dir contains an index.html, it's the build dir
+  if (fs.existsSync(path.join(sitemapParent, "index.html"))) {
+    resolvedBuildDir = sitemapParent;
+    console.log(`  Auto-detected build dir: ${resolvedBuildDir}`);
+  }
+}
 
 if (sitemapUrls.length > 0) {
   // Non-content pages to skip
@@ -352,7 +417,21 @@ if (sitemapUrls.length > 0) {
     // Must be under our base URL
     if (baseNorm && !url.startsWith(baseNorm)) continue;
 
+    // Skip the bare root URL (would produce "https://docs.sui.io.md")
+    if (url === baseNorm) {
+      sitemapSkippedFilter++;
+      continue;
+    }
+
     const rel = url.replace(baseNorm, "").replace(/^\//, "");
+
+    // Skip redirect stub pages — detected by scanning the build directory
+    // for <meta http-equiv="refresh"> in the HTML file.
+    if (resolvedBuildDir && isRedirectPage("/" + rel, resolvedBuildDir)) {
+      sitemapSkippedRedirect++;
+      continue;
+    }
+
     const segments = rel.split("/").filter(Boolean);
     const section = segments.length > 1
       ? toSectionTitle(segments[0])
@@ -364,12 +443,31 @@ if (sitemapUrls.length > 0) {
       .replace(/\b\w/g, (c) => c.toUpperCase());
 
     seenUrls.add(url);
-    const displayUrl = url.endsWith("/") ? url : url + ".md";
+
+    // Only append .md if we can confirm the .md URL will actually work.
+    // Check if there's a corresponding .md file in the build output.
+    // If we can't confirm, use the clean URL (which always works as HTML).
+    let displayUrl = url;
+    if (resolvedBuildDir) {
+      // Look for the .md file in the build directory
+      const mdInBuild = path.join(resolvedBuildDir, rel + ".md");
+      const mdInBuildIndex = path.join(resolvedBuildDir, rel, "index.md");
+      if (fs.existsSync(mdInBuild) || fs.existsSync(mdInBuildIndex)) {
+        displayUrl = url + ".md";
+      }
+      // else: no .md file in build → use clean URL (HTML page)
+    } else {
+      // No build dir available — append .md optimistically
+      displayUrl = url.endsWith("/") ? url : url + ".md";
+    }
+
     pages.push({ title: derivedTitle, url: displayUrl, description: "", section, source: "sitemap" });
     sitemapAdded++;
   }
 
-  console.log(`  Sitemap backfill: +${sitemapAdded} pages, ${sitemapSkippedSeen} already covered, ${sitemapSkippedFilter} filtered`);
+  const stats = [`+${sitemapAdded} pages`, `${sitemapSkippedSeen} already covered`, `${sitemapSkippedFilter} filtered`];
+  if (sitemapSkippedRedirect > 0) stats.push(`${sitemapSkippedRedirect} redirects excluded`);
+  console.log(`  Sitemap backfill: ${stats.join(", ")}`);
 } else if (sitemapSource) {
   console.error(`✗ WARNING: --sitemap was provided but yielded 0 URLs`);
 }

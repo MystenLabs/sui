@@ -2,6 +2,21 @@
 
 > Sui is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move
 
+## General
+
+- [Concepts](https://docs.sui.io/concepts.md)
+- [Guides](https://docs.sui.io/guides.md)
+- [References Overview](https://docs.sui.io/references.md)
+- [Sui Standards Overview](https://docs.sui.io/standards.md)
+- [Code Of Conduct](https://docs.sui.io/code-of-conduct)
+- [Contribute To Sui Repos](https://docs.sui.io/contribute-to-sui-repos)
+- [Exchange Integration Guide](https://docs.sui.io/exchange-integration-guide)
+- [Localize Sui Docs](https://docs.sui.io/localize-sui-docs)
+- [Style Guide](https://docs.sui.io/style-guide)
+- [Sui Compared](https://docs.sui.io/sui-compared)
+- [Sui Framework Reference](https://docs.sui.io/sui-framework-reference)
+- [Sui Glossary](https://docs.sui.io/sui-glossary)
+
 ## Concepts
 
 - [Coin Management](https://docs.sui.io/concepts/coin-mgt.md)
@@ -41,24 +56,8 @@
 - [Staking and Unstaking](https://docs.sui.io/concepts/tokenomics/staking-unstaking.md)
 - [Bridging Tokens](https://docs.sui.io/concepts/tokenomics/sui-bridging.md)
 - [Tokenomics on Sui](https://docs.sui.io/concepts/tokenomics/tokenomics-overview.md)
-- [Architecture](https://docs.sui.io/concepts/architecture.md)
-- [Index](https://docs.sui.io/concepts/architecture/index.md)
-
-## General
-
-- [Guides](https://docs.sui.io/guides.md)
-- [References Overview](https://docs.sui.io/references.md)
-- [Sui Standards Overview](https://docs.sui.io/standards.md)
-- [Index](https://docs.sui.io.md)
-- [Code Of Conduct](https://docs.sui.io/code-of-conduct.md)
-- [Concepts](https://docs.sui.io/concepts.md)
-- [Contribute To Sui Repos](https://docs.sui.io/contribute-to-sui-repos.md)
-- [Exchange Integration Guide](https://docs.sui.io/exchange-integration-guide.md)
-- [Localize Sui Docs](https://docs.sui.io/localize-sui-docs.md)
-- [Style Guide](https://docs.sui.io/style-guide.md)
-- [Sui Compared](https://docs.sui.io/sui-compared.md)
-- [Sui Framework Reference](https://docs.sui.io/sui-framework-reference.md)
-- [Sui Glossary](https://docs.sui.io/sui-glossary.md)
+- [Architecture](https://docs.sui.io/concepts/architecture)
+- [Index](https://docs.sui.io/concepts/architecture/index)
 
 ## Guides
 
@@ -74,6 +73,7 @@
 - [Custom Indexer and
     Walrus](https://docs.sui.io/guides/developer/accessing-data/custom-indexer/indexer-walrus.md)
 - [Using gRPC](https://docs.sui.io/guides/developer/accessing-data/grpc-overview.md)
+- [Accessing Data](https://docs.sui.io/guides/developer/accessing-data.md)
 - [Using GraphQL RPC](https://docs.sui.io/guides/developer/accessing-data/query-with-graphql.md)
 - [Using Events](https://docs.sui.io/guides/developer/accessing-data/using-events.md)
 - [Address Balances Migration
@@ -125,6 +125,7 @@
     [Deployment](https://docs.sui.io/guides/developer/digital-assets/examples-patterns/advanced-patterns/kiosk.md)
 - [In-Game
     Currency](https://docs.sui.io/guides/developer/digital-assets/examples-patterns/in-game-currency.md)
+- [Index](https://docs.sui.io/guides/developer/digital-assets/examples-patterns.md)
 - [Loyalty
     Tokens](https://docs.sui.io/guides/developer/digital-assets/examples-patterns/loyalty-tokens.md)
 - [NFT Rental
@@ -133,6 +134,7 @@
     Example](https://docs.sui.io/guides/developer/digital-assets/examples-patterns/soulbound-tokens.md)
 - [Create Fungible
     Tokens](https://docs.sui.io/guides/developer/digital-assets/fungible-tokens/create-a-fungible-token.md)
+- [Fungible Tokens](https://docs.sui.io/guides/developer/digital-assets/fungible-tokens.md)
 - [Stablecoins on
     Sui](https://docs.sui.io/guides/developer/digital-assets/fungible-tokens/integrating-with-stablecoins.md)
 - [Regulated Currency and Deny
@@ -258,6 +260,7 @@
 - [Database Snapshots](https://docs.sui.io/guides/operator/snapshots.md)
 - [Sui Full Node Configuration](https://docs.sui.io/guides/operator/sui-full-node.md)
 - [Updating a Full Node](https://docs.sui.io/guides/operator/updates.md)
+- [Sui Validators](https://docs.sui.io/guides/operator/validator-index.md)
 - [Validator Node Tools](https://docs.sui.io/guides/operator/validator/node-tools.md)
 - [Validator Deployment and
     Configuration](https://docs.sui.io/guides/operator/validator/validator-config.md)
@@ -268,22 +271,20 @@
 - [SDK Integrations](https://docs.sui.io/guides/suiplay0x1/integration.md)
 - [Broader Sui Ecosystem Support](https://docs.sui.io/guides/suiplay0x1/migration-strategies.md)
 - [Wallet Integration Options](https://docs.sui.io/guides/suiplay0x1/wallet-integration.md)
-- [Accessing Data](https://docs.sui.io/guides/developer/accessing-data.md)
 - [Custom Indexing
-    Framework](https://docs.sui.io/guides/developer/accessing-data/custom-indexing-framework.md)
-- [Coin Index](https://docs.sui.io/guides/developer/coin-index.md)
-- [Index](https://docs.sui.io/guides/developer/cryptography/zklogin-integration/index.md)
-- [Currency](https://docs.sui.io/guides/developer/currency.md)
-- [Index](https://docs.sui.io/guides/developer/nautilus/index.md)
-- [Nft Index](https://docs.sui.io/guides/developer/nft-index.md)
-- [Nft Rental](https://docs.sui.io/guides/developer/nft-rental.md)
-- [Nft Soulbound](https://docs.sui.io/guides/developer/nft-soulbound.md)
-- [Index](https://docs.sui.io/guides/developer/object-ownership/index.md)
-- [Operator](https://docs.sui.io/guides/developer/operator.md)
-- [Index](https://docs.sui.io/guides/developer/packages/index.md)
-- [Suiplay0x1](https://docs.sui.io/guides/developer/suiplay0x1.md)
-- [Index](https://docs.sui.io/guides/developer/transactions/index.md)
-- [Validator Index](https://docs.sui.io/guides/operator/validator-index.md)
+    Framework](https://docs.sui.io/guides/developer/accessing-data/custom-indexing-framework)
+- [Coin Index](https://docs.sui.io/guides/developer/coin-index)
+- [Index](https://docs.sui.io/guides/developer/cryptography/zklogin-integration/index)
+- [Currency](https://docs.sui.io/guides/developer/currency)
+- [Index](https://docs.sui.io/guides/developer/nautilus/index)
+- [Nft Index](https://docs.sui.io/guides/developer/nft-index)
+- [Nft Rental](https://docs.sui.io/guides/developer/nft-rental)
+- [Nft Soulbound](https://docs.sui.io/guides/developer/nft-soulbound)
+- [Index](https://docs.sui.io/guides/developer/object-ownership/index)
+- [Operator](https://docs.sui.io/guides/developer/operator)
+- [Index](https://docs.sui.io/guides/developer/packages/index)
+- [Suiplay0x1](https://docs.sui.io/guides/developer/suiplay0x1)
+- [Index](https://docs.sui.io/guides/developer/transactions/index)
 
 ## References
 
@@ -951,9 +952,9 @@
 - [Move References](https://docs.sui.io/references/sui-move.md)
 - [Sui and Community SDKs](https://docs.sui.io/references/sui-sdks.md)
 - [Ts Asset Tokenization](https://docs.sui.io/references/ts-asset-tokenization.md)
-- [Bool](https://docs.sui.io/references/framework/sui_std/bool.md)
-- [Prover](https://docs.sui.io/references/framework/sui_sui/prover.md)
-- [Reference](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference.md)
+- [Bool](https://docs.sui.io/references/framework/sui_std/bool)
+- [Prover](https://docs.sui.io/references/framework/sui_sui/prover)
+- [Reference](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference)
 
 ## Standards
 
@@ -1020,4 +1021,4 @@
 
 ## Developer
 
-- [Getting Started](https://docs.sui.io/developer/guides/getting-started.md)
+- [Getting Started](https://docs.sui.io/developer/guides/getting-started)

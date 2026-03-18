@@ -688,7 +688,6 @@ const frameworkPlugin = (_context, _options) => {
           reMarkdown = cleanEmptySections(reMarkdown);
           reMarkdown = removeEmptyCodeBlocks(reMarkdown);
           reMarkdown = ensureHeadingIdsHtml(reMarkdown);
-          reMarkdown = injectToc(reMarkdown);
           reMarkdown = normalizeHtmlWhitespace(reMarkdown);
           reMarkdown = fixMdxEscaping(reMarkdown);
           reMarkdown = rejoinOrphanedInlineElements(reMarkdown);
