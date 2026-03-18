@@ -12,7 +12,7 @@ use tokio::sync::broadcast;
 
 use crate::{
     authority_service::{BroadcastStream, SubscriptionCounter},
-    block::{BlockAPI as _, VerifiedBlock},
+    block::{BlockAPI as _, SignedBlock, VerifiedBlock},
     commit::{CommitIndex, CommitRange, TrustedCommit},
     context::Context,
     dag_state::DagState,
@@ -52,11 +52,28 @@ impl ObserverNetworkService for ObserverService {
     async fn handle_block(
         &self,
         _peer: PeerId,
-        _item: ObserverBlockStreamItem,
+        item: ObserverBlockStreamItem,
     ) -> ConsensusResult<()> {
         // TODO: implement block processing for observers.
         // This should validate and add blocks to DagState, similar to how validators
         // handle blocks in AuthorityService::handle_send_block.
+        let signed_block: SignedBlock =
+            bcs::from_bytes(&item.block).map_err(ConsensusError::MalformedBlock)?;
+
+        tracing::info!(
+            "Observer received round {}, author {} at timestamp: {}",
+            signed_block.round(),
+            signed_block.author(),
+            signed_block.timestamp_ms()
+        );
+
+        // TODO: we do a dummy increment here to allow us confirm that end to end flow in tests.
+        self.context
+            .metrics
+            .node_metrics
+            .verified_blocks
+            .with_label_values(&["observer"])
+            .inc();
         Ok(())
     }
 
