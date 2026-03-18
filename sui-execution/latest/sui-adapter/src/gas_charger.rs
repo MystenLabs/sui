@@ -517,8 +517,11 @@ pub mod checked {
                 .map(|payment| match payment {
                     PaymentMethod::AddressBalance(_, reservation) => Ok(*reservation),
                     PaymentMethod::Coin(obj_ref) => {
-                        let obj = temporary_store.objects().get(&obj_ref.0).unwrap();
-                        let Data::Move(move_obj) = &obj.data else {
+                        let obj_data = temporary_store
+                            .objects()
+                            .get(&obj_ref.0)
+                            .map(|obj| &obj.data);
+                        let Some(Data::Move(move_obj)) = obj_data else {
                             return Err(ExecutionError::invariant_violation(
                                 "Provided non-gas coin object as input for gas!",
                             ));
@@ -542,6 +545,13 @@ pub mod checked {
                 })
                 .iter()
                 .sum();
+            // If it is 0, then we are smashing for the first time (at the beginning of execution).
+            // If it is non-zero, then we are re-smashing after a reset (due to some sort of
+            // failure in charging for gas), and the total should not change.
+            debug_assert!(
+                total_smashed == 0 || self.total_smashed == total_smashed,
+                "Gas smashing should not change after a reset"
+            );
             self.total_smashed = total_smashed;
 
             let smash_location = self.smash_target.location();
