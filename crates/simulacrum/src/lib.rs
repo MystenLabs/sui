@@ -525,8 +525,8 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         self.store.get_system_state()
     }
 
-    pub fn protocol_config(&self) -> ProtocolConfig {
-        self.epoch_state.protocol_config().clone()
+    pub fn protocol_config(&self) -> &ProtocolConfig {
+        self.epoch_state.protocol_config()
     }
 
     /// Return a handle to the internally held RNG.
