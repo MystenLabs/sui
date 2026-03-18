@@ -248,7 +248,10 @@ impl SymbolicatorRunner {
             let current_path = current_path_opt.unwrap();
             let manifest_path = current_path.join(MANIFEST_FILE_NAME);
             if manifest_path.is_file() {
-                return Some(current_path.to_path_buf());
+                return Some(
+                    dunce::canonicalize(current_path)
+                        .unwrap_or_else(|_| current_path.to_path_buf()),
+                );
             }
             current_path_opt = current_path.parent();
         }

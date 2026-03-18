@@ -7,6 +7,7 @@ use crate::{
         Symbols, def_info::DefInfo, ide_strings::type_to_ide_string, mod_defs::ModuleParsingInfo,
         requests::on_hover_markup, runner::SymbolicatorRunner,
     },
+    utils::canonical_path_from_uri,
 };
 use lsp_server::{Message, Request, Response};
 use lsp_types::{
@@ -22,7 +23,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<InlayHintParams>(request.params.clone())
         .expect("could not deserialize inlay hints request");
 
-    let fpath = parameters.text_document.uri.to_file_path().unwrap();
+    let fpath = canonical_path_from_uri(&parameters.text_document.uri).unwrap();
     eprintln!(
         "inlay_hints_request (types: {}, params: {}): {:?}",
         context.inlay_type_hints, context.inlay_param_hints, fpath

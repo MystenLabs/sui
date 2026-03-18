@@ -410,7 +410,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     ]));
 
     let manifest_file = overlay_fs_root
-        .join(pkg_path.to_string_lossy())
+        .join(pkg_path.to_string_lossy().replace('\\', "/"))
         .and_then(|p| p.join(MANIFEST_FILE_NAME))
         .and_then(|p| p.open_file());
 
@@ -1003,7 +1003,7 @@ fn compute_mapped_files<F: MoveFlavor>(
             // there is a fair number of unwraps here but if we can't read the files
             // that by all accounts should be in the file system, then there is not much
             // we can do so it's better to fail so that we can investigate
-            let vfs_file_path = overlay_fs.join(fname.as_str()).unwrap();
+            let vfs_file_path = overlay_fs.join(fname.replace('\\', "/")).unwrap();
             let mut vfs_file = vfs_file_path.open_file().unwrap();
             let _ = vfs_file.read_to_string(&mut contents);
             let fhash = FileHash::new(&contents);
