@@ -1,13 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::FromSqlRow;
-use diesel::backend::Backend;
-use diesel::deserialize;
-use diesel::expression::AsExpression;
 use diesel::prelude::*;
-use diesel::serialize;
-use diesel::sql_types::SmallInt;
 use sui_field_count::FieldCount;
 
 use crate::schema::kv_objects;
@@ -31,76 +25,4 @@ pub struct StoredObjVersion {
     pub object_version: i64,
     pub object_digest: Option<Vec<u8>>,
     pub cp_sequence_number: i64,
-}
-
-#[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[diesel(sql_type = SmallInt)]
-#[repr(i16)]
-pub enum StoredOwnerKind {
-    Immutable = 0,
-    Address = 1,
-    Object = 2,
-    Shared = 3,
-}
-
-#[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[diesel(sql_type = SmallInt)]
-#[repr(i16)]
-pub enum StoredCoinOwnerKind {
-    Fastpath = 0,
-    Consensus = 1,
-}
-
-impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredOwnerKind
-where
-    i16: serialize::ToSql<SmallInt, DB>,
-{
-    fn to_sql<'b>(&'b self, out: &mut serialize::Output<'b, '_, DB>) -> serialize::Result {
-        match self {
-            StoredOwnerKind::Immutable => 0.to_sql(out),
-            StoredOwnerKind::Address => 1.to_sql(out),
-            StoredOwnerKind::Object => 2.to_sql(out),
-            StoredOwnerKind::Shared => 3.to_sql(out),
-        }
-    }
-}
-
-impl<DB: Backend> deserialize::FromSql<SmallInt, DB> for StoredOwnerKind
-where
-    i16: deserialize::FromSql<SmallInt, DB>,
-{
-    fn from_sql(raw: DB::RawValue<'_>) -> deserialize::Result<Self> {
-        Ok(match i16::from_sql(raw)? {
-            0 => StoredOwnerKind::Immutable,
-            1 => StoredOwnerKind::Address,
-            2 => StoredOwnerKind::Object,
-            3 => StoredOwnerKind::Shared,
-            o => return Err(format!("Unexpected StoredOwnerKind: {o}").into()),
-        })
-    }
-}
-
-impl<DB: Backend> serialize::ToSql<SmallInt, DB> for StoredCoinOwnerKind
-where
-    i16: serialize::ToSql<SmallInt, DB>,
-{
-    fn to_sql<'b>(&'b self, out: &mut serialize::Output<'b, '_, DB>) -> serialize::Result {
-        match self {
-            StoredCoinOwnerKind::Fastpath => 0.to_sql(out),
-            StoredCoinOwnerKind::Consensus => 1.to_sql(out),
-        }
-    }
-}
-
-impl<DB: Backend> deserialize::FromSql<SmallInt, DB> for StoredCoinOwnerKind
-where
-    i16: deserialize::FromSql<SmallInt, DB>,
-{
-    fn from_sql(raw: DB::RawValue<'_>) -> deserialize::Result<Self> {
-        Ok(match i16::from_sql(raw)? {
-            0 => StoredCoinOwnerKind::Fastpath,
-            1 => StoredCoinOwnerKind::Consensus,
-            o => return Err(format!("Unexpected StoredCoinOwnerKind: {o}").into()),
-        })
-    }
 }
