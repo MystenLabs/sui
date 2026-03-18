@@ -327,6 +327,70 @@ if (!files.length) {
 const pages = [];
 const seenUrls = new Set();
 
+// ── Auto-detect build directory ──────────────────────────────────────────────
+// Used to detect redirect stub pages in both markdown and sitemap sources.
+let resolvedBuildDir = buildDir;
+if (!resolvedBuildDir && sitemapSource && !sitemapSource.startsWith("http")) {
+  const sitemapParent = path.dirname(path.resolve(sitemapSource));
+  if (fs.existsSync(path.join(sitemapParent, "index.html"))) {
+    resolvedBuildDir = sitemapParent;
+    console.log(`  Auto-detected build dir: ${resolvedBuildDir}`);
+  }
+}
+
+// ── Pages to exclude from llms.txt ───────────────────────────────────────────
+// These are placeholder pages ("Content coming soon"), near-empty stubs,
+// category landing pages with no prose, or pages that only exist as redirects.
+// Matched against the clean URL path (without base URL or .md suffix).
+const excludedPaths = new Set([
+  // "Content coming soon" placeholder pages
+  "/concepts/cryptography/system/intents-for-validation",
+  "/concepts/cryptography/system/validator-signatures",
+  "/guides/developer/app-examples/auction",
+  "/guides/developer/app-examples/meta-pricing-oracle",
+  "/guides/developer/app-examples/turnip-town",
+  // Near-empty framework stubs (1-2 chars of content)
+  "/references/framework/sui_std/bool",
+  "/references/framework/sui_sui/prover",
+  // Category landing pages with no real content
+  "/concepts",
+  "/guides/operator/validator-index",
+  "/references/sui-framework-reference",
+  // Root index (would produce malformed "https://docs.sui.io.md")
+  "/",
+  "",
+  // Removed/redirected pages whose .md URLs 404 (rewrite catches .md before redirect)
+  "/guides/developer/digital-assets/examples-patterns",
+  "/guides/developer/digital-assets/fungible-tokens",
+  "/guides/developer/digital-assets",
+  "/guides/developer/nft",
+  "/guides/suiplay0x1",
+  // Removed pages with redirects that 404 in practice
+  "/guides/developer/accessing-data/custom-indexing-framework",
+  "/guides/developer/coin-index",
+  "/guides/developer/currency",
+  "/guides/developer/nft-index",
+  // Removed page with redirect stub
+  "/guides/developer/app-examples/recaptcha",
+]);
+
+// Also skip by pattern: pages whose content is just a redirect or placeholder
+function isExcludedPage(urlPath, content) {
+  // Check explicit path list
+  if (excludedPaths.has(urlPath)) return true;
+
+  // Skip pages whose entire body (after frontmatter) is tiny or just "Content coming soon"
+  if (content) {
+    const body = content.replace(/^---[\s\S]*?---\s*/, "").trim();
+    // Less than 50 chars of real content after stripping frontmatter
+    if (body.length < 50) return true;
+    // Only content is a "coming soon" placeholder
+    if (/^#+\s*.+\n+\s*Content coming soon\.?\s*$/i.test(body)) return true;
+  }
+
+  return false;
+}
+
 for (const file of files) {
   const content = fs.readFileSync(file, "utf8");
   if (!content.trim()) continue;
@@ -353,6 +417,13 @@ for (const file of files) {
   }
 
   if (isLinearUrl(url)) continue;
+
+  // Skip placeholder/near-empty pages
+  const urlPathForExclusion = norm(url).replace(norm(resolvedBaseUrl || ""), "") || "/";
+  if (isExcludedPage(urlPathForExclusion, content)) continue;
+
+  // Skip redirect stub pages (markdown files whose built HTML is a JS redirect)
+  if (resolvedBuildDir && isRedirectPage(urlPathForExclusion, resolvedBuildDir)) continue;
 
   const filename = path.basename(file, path.extname(file));
   const derivedTitle = title || filename
@@ -384,18 +455,6 @@ let sitemapSkippedSeen = 0;
 let sitemapSkippedFilter = 0;
 let sitemapSkippedRedirect = 0;
 
-// Auto-detect build directory if not explicitly provided.
-// If --sitemap points to build/sitemap.xml, the build dir is its parent.
-let resolvedBuildDir = buildDir;
-if (!resolvedBuildDir && sitemapSource && !sitemapSource.startsWith("http")) {
-  const sitemapParent = path.dirname(path.resolve(sitemapSource));
-  // Heuristic: if the sitemap's parent dir contains an index.html, it's the build dir
-  if (fs.existsSync(path.join(sitemapParent, "index.html"))) {
-    resolvedBuildDir = sitemapParent;
-    console.log(`  Auto-detected build dir: ${resolvedBuildDir}`);
-  }
-}
-
 if (sitemapUrls.length > 0) {
   // Non-content pages to skip
   const skipPatterns = [/\/search$/, /\/sui-api-ref$/];
@@ -424,6 +483,12 @@ if (sitemapUrls.length > 0) {
     }
 
     const rel = url.replace(baseNorm, "").replace(/^\//, "");
+
+    // Skip excluded/placeholder pages
+    if (isExcludedPage("/" + rel, null)) {
+      sitemapSkippedFilter++;
+      continue;
+    }
 
     // Skip redirect stub pages — detected by scanning the build directory
     // for <meta http-equiv="refresh"> in the HTML file.
