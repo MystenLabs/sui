@@ -170,19 +170,12 @@ impl Handler for ObjVersions {
             ),
             phase1 AS (
                 DELETE FROM obj_versions o
-                USING (
-                    SELECT l.object_id, v.cp_sequence_number
-                    FROM latest_at_to_exclusive l
-                    CROSS JOIN LATERAL (
-                        SELECT cp_sequence_number
-                        FROM obj_versions
-                        WHERE object_id = l.object_id
-                          AND cp_sequence_number >= {BigInt}
-                          AND cp_sequence_number < l.latest_cp
-                    ) v
-                ) d
-                WHERE o.object_id = d.object_id
-                  AND o.cp_sequence_number = d.cp_sequence_number
+                USING latest_at_to_exclusive l
+                WHERE o.object_id = l.object_id
+                  AND o.cp_sequence_number >= {BigInt}
+                  -- Redundant constant upper bound so the planner can have a tight constant range
+                  AND o.cp_sequence_number < {BigInt}
+                  AND o.cp_sequence_number < l.latest_cp
                 RETURNING 1
             ),
             local_latest AS (
@@ -246,7 +239,8 @@ impl Handler for ObjVersions {
             "#,
             from,         // latest_at_to_exclusive: >= from
             to_exclusive, // latest_at_to_exclusive: <= to_exclusive
-            from,         // phase1 LATERAL: >= from
+            from,         // phase1: >= from
+            to_exclusive, // phase1: < to_exclusive (redundant bound for planner)
             from,         // local_latest: >= from
             to_exclusive, // local_latest: < to_exclusive
             to_exclusive, // phase2 LATERAL: >= to_exclusive
