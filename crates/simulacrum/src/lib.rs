@@ -266,9 +266,9 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         // Create sender signed data with dummy signatures
         let sender_signed_data = SenderSignedData::new(transaction_data, vec![sig.into()]);
 
-        // Create transaction and mark it as verified without checking signatures
-        let transaction = Transaction::new(sender_signed_data);
-        let verified_transaction = VerifiedTransaction::new_unchecked(transaction);
+        // Create transaction and verify signatures
+        let verified_transaction = Transaction::new(sender_signed_data)
+            .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
 
         self.execute_transaction_impl(verified_transaction)
     }
@@ -501,11 +501,11 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         self.epoch_state = new_epoch_state;
     }
 
-    pub fn store(&self) -> &dyn SimulatorStore {
+    pub fn store_dyn(&self) -> &dyn SimulatorStore {
         &self.store
     }
 
-    pub fn store_typed(&self) -> &S {
+    pub fn store(&self) -> &S {
         &self.store
     }
 
@@ -600,7 +600,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         // explicitly cordon off the faucet account from the rest of the accounts though.
         let (sender, key) = self.keystore().accounts().next().unwrap();
         let object = self
-            .store()
+            .store_dyn()
             .owned_objects(*sender)
             .find(|object| {
                 object.is_gas_coin() && object.get_coin_value_unsafe() > amount + MIST_PER_SUI
@@ -747,7 +747,7 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
     }
 
     fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
-        Ok(self.store().get_highest_checkpint().unwrap())
+        Ok(self.store_dyn().get_highest_checkpint().unwrap())
     }
 
     fn get_latest_epoch_id(&self) -> sui_types::storage::error::Result<EpochId> {
@@ -779,14 +779,14 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         &self,
         digest: &sui_types::messages_checkpoint::CheckpointDigest,
     ) -> Option<VerifiedCheckpoint> {
-        self.store().get_checkpoint_by_digest(digest)
+        self.store_dyn().get_checkpoint_by_digest(digest)
     }
 
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        self.store()
+        self.store_dyn()
             .get_checkpoint_by_sequence_number(sequence_number)
     }
 
@@ -794,7 +794,7 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         &self,
         digest: &sui_types::messages_checkpoint::CheckpointContentsDigest,
     ) -> Option<sui_types::messages_checkpoint::CheckpointContents> {
-        self.store().get_checkpoint_contents(digest)
+        self.store_dyn().get_checkpoint_contents(digest)
     }
 
     fn get_checkpoint_contents_by_sequence_number(
@@ -808,21 +808,21 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         &self,
         tx_digest: &sui_types::digests::TransactionDigest,
     ) -> Option<Arc<VerifiedTransaction>> {
-        self.store().get_transaction(tx_digest).map(Arc::new)
+        self.store_dyn().get_transaction(tx_digest).map(Arc::new)
     }
 
     fn get_transaction_effects(
         &self,
         tx_digest: &sui_types::digests::TransactionDigest,
     ) -> Option<TransactionEffects> {
-        self.store().get_transaction_effects(tx_digest)
+        self.store_dyn().get_transaction_effects(tx_digest)
     }
 
     fn get_events(
         &self,
         event_digest: &sui_types::digests::TransactionDigest,
     ) -> Option<sui_types::effects::TransactionEvents> {
-        self.store().get_transaction_events(event_digest)
+        self.store_dyn().get_transaction_events(event_digest)
     }
 
     fn get_full_checkpoint_contents(
@@ -859,7 +859,7 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for 
         &self,
     ) -> sui_types::storage::error::Result<sui_types::digests::ChainIdentifier> {
         Ok(self
-            .store()
+            .store_dyn()
             .get_checkpoint_by_sequence_number(0)
             .unwrap()
             .digest()
@@ -890,7 +890,7 @@ impl Simulacrum {
         let sender = *sender;
 
         let object = self
-            .store()
+            .store_dyn()
             .owned_objects(sender)
             .find(|object| object.is_gas_coin())
             .unwrap();
@@ -933,7 +933,7 @@ mod tests {
         let rng = StdRng::from_seed([9; 32]);
         let chain1 = Simulacrum::new_with_rng(rng);
         let genesis_checkpoint_digest1 = *chain1
-            .store()
+            .store_dyn()
             .get_checkpoint_by_sequence_number(0)
             .unwrap()
             .digest();
@@ -941,7 +941,7 @@ mod tests {
         let rng = StdRng::from_seed([9; 32]);
         let chain2 = Simulacrum::new_with_rng(rng);
         let genesis_checkpoint_digest2 = *chain2
-            .store()
+            .store_dyn()
             .get_checkpoint_by_sequence_number(0)
             .unwrap()
             .digest();
@@ -953,8 +953,8 @@ mod tests {
         let chain3 = Simulacrum::new_with_rng(rng);
 
         assert_ne!(
-            chain1.store().get_committee_by_epoch(0),
-            chain3.store().get_committee_by_epoch(0),
+            chain1.store_dyn().get_committee_by_epoch(0),
+            chain3.store_dyn().get_committee_by_epoch(0),
         );
     }
 
@@ -963,18 +963,18 @@ mod tests {
         let steps = 10;
         let mut chain = Simulacrum::new();
 
-        let clock = chain.store().get_clock();
+        let clock = chain.store_dyn().get_clock();
         let start_time_ms = clock.timestamp_ms();
         println!("clock: {:#?}", clock);
         for _ in 0..steps {
             chain.advance_clock(Duration::from_millis(1));
             chain.create_checkpoint();
-            let clock = chain.store().get_clock();
+            let clock = chain.store_dyn().get_clock();
             println!("clock: {:#?}", clock);
         }
-        let end_time_ms = chain.store().get_clock().timestamp_ms();
+        let end_time_ms = chain.store_dyn().get_clock().timestamp_ms();
         assert_eq!(end_time_ms - start_time_ms, steps);
-        dbg!(chain.store().get_highest_checkpint());
+        dbg!(chain.store_dyn().get_highest_checkpint());
     }
 
     #[test]
@@ -991,7 +991,7 @@ mod tests {
         }
         let end_epoch = chain.store.get_highest_checkpint().unwrap().epoch;
         assert_eq!(end_epoch - start_epoch, steps);
-        dbg!(chain.store().get_highest_checkpint());
+        dbg!(chain.store_dyn().get_highest_checkpint());
     }
 
     #[test]
@@ -1007,7 +1007,7 @@ mod tests {
 
         assert_eq!(
             (transfer_amount as i64 - gas_paid) as u64,
-            store::SimulatorStore::get_object(sim.store(), &gas_id)
+            store::SimulatorStore::get_object(sim.store_dyn(), &gas_id)
                 .and_then(|object| GasCoin::try_from(&object).ok())
                 .unwrap()
                 .value()
@@ -1015,7 +1015,7 @@ mod tests {
 
         assert_eq!(
             transfer_amount,
-            sim.store()
+            sim.store_dyn()
                 .owned_objects(recipient)
                 .next()
                 .and_then(|object| GasCoin::try_from(&object).ok())
