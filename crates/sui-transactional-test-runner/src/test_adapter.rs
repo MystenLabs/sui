@@ -109,12 +109,14 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
 use sui_types::{SUI_SYSTEM_PACKAGE_ID, utils::to_sender_signed_transaction};
+use sui_types::{balance::Balance, gas_coin::GAS};
+use sui_types::{
+    coin_reservation::ParsedObjectRefWithdrawal, gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING,
+};
 use sui_types::{
     execution_status::{ExecutionFailure, ExecutionStatus},
     transaction::TransactionKind,
 };
-use sui_types::{accumulator_root::AccumulatorValue, balance::Balance, gas_coin::GAS};
-use sui_types::{coin_reservation::ParsedObjectRefWithdrawal, gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
 use sui_types::{
     move_package::MovePackage,
     transaction::{Argument, CallArg, TransactionDataAPI, TransactionExpiration},
@@ -1109,8 +1111,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         None => TransactionExpiration::None,
                     };
                     let sender_acc = self.get_sender(sender.clone());
-                    let sponsor_acc =
-                        sponsor.clone().map_or(sender_acc, |a| self.get_sender(Some(a)));
+                    let sponsor_acc = sponsor
+                        .clone()
+                        .map_or(sender_acc, |a| self.get_sender(Some(a)));
                     let payment_refs = self.resolve_gas_payments(sponsor_acc, gas_payment)?;
                     let transaction = self.sign_sponsor_txn_with_refs(
                         sender,
@@ -1841,7 +1844,10 @@ impl SuiTestAdapter {
                     let obj_id = self
                         .fake_to_real_object_id(fake_id)
                         .expect("Could not find specified payment object");
-                    Ok(self.get_object(&obj_id, None).unwrap().compute_object_reference())
+                    Ok(self
+                        .get_object(&obj_id, None)
+                        .unwrap()
+                        .compute_object_reference())
                 }
                 SuiValue::Withdraw(amount, type_tag) => {
                     let expected_type = Balance::type_tag(GAS::type_tag());
@@ -1851,16 +1857,18 @@ impl SuiTestAdapter {
                         expected_type,
                         type_tag
                     );
-                    let accumulator_obj_id = *AccumulatorValue::get_field_id(
-                        sponsor.address,
-                        &expected_type,
+                    let accumulator_obj_id =
+                        *AccumulatorValue::get_field_id(sponsor.address, &expected_type)
+                            .expect("Failed to compute accumulator object ID")
+                            .inner();
+                    Ok(
+                        ParsedObjectRefWithdrawal::new(accumulator_obj_id, current_epoch, amount)
+                            .encode(SequenceNumber::new(), chain_id),
                     )
-                    .expect("Failed to compute accumulator object ID")
-                    .inner();
-                    Ok(ParsedObjectRefWithdrawal::new(accumulator_obj_id, current_epoch, amount)
-                        .encode(SequenceNumber::new(), chain_id))
                 }
-                _ => bail!("Invalid gas payment: only object(...) and withdraw<...>(...) are allowed"),
+                _ => bail!(
+                    "Invalid gas payment: only object(...) and withdraw<...>(...) are allowed"
+                ),
             })
             .collect()
     }
