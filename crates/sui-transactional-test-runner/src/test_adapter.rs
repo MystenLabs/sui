@@ -956,7 +956,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             }
             SuiSubcommand::ViewFunds(ViewFundsCommand {
                 funds_type,
-                address,
+                address: address_str,
             }) => {
                 let type_tag = funds_type.into_type_tag(&|s| {
                     Some(
@@ -966,18 +966,15 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             .into_inner(),
                     )
                 })?;
-                let address = match self.accounts.get(&address) {
+                let address = match self.accounts.get(&address_str) {
                     Some(test_account) => test_account.address,
-                    None => panic!("Unbound account {}", address),
+                    None => panic!("Unbound account {}", address_str),
                 };
                 let acc_obj_id = AccumulatorValue::get_field_id(address, &type_tag)?;
                 let obj = match ObjectStore::get_object(&*self.executor, acc_obj_id.inner()) {
                     Some(obj) => obj,
                     None => {
-                        return Ok(Some(format!(
-                            "No funds accumulator object found for {} with type {}",
-                            address, type_tag
-                        )));
+                        return Ok(Some("No funds accumulator object found".to_owned()));
                     }
                 };
                 let move_obj = obj.data.try_as_move().unwrap();

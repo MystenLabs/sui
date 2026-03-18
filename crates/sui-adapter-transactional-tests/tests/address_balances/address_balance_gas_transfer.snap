@@ -1,8 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 833
 ---
-processed 4 tasks
+processed 7 tasks
 
 init:
 A: object(0,0)
@@ -16,11 +15,23 @@ mutated: object(0,0)
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 14-16:
+task 2, line 14:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 17-18:
+task 3, lines 16-18:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+10000000000
+
+task 4, lines 19-20:
 //# programmable --sender A --inputs @0x0 object(0,0) --address-balance-gas
 //> TransferObjects([Gas], Input(0))
 Error: Error checking transaction input objects: Feature is not supported: Argument::GasCoin is not supported with address balance gas payments
+
+task 5, line 22:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, line 24:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+10000000000
