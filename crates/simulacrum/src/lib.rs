@@ -57,21 +57,14 @@ pub use self::epoch_state::EpochState;
 pub use self::store::SimulatorStore;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
-use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::sui_system_state::SuiSystemState;
 pub use sui_types::transaction_executor::TransactionChecks;
 use sui_types::{
-    error::{SuiError, SuiErrorKind},
-    full_checkpoint_content::ObjectSet,
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{GasData, TransactionData, TransactionKind},
-    transaction_driver_types::{
-        ExecuteTransactionRequestV3, ExecuteTransactionResponseV3, TransactionSubmissionError,
-    },
-    transaction_executor::SimulateTransactionResult,
 };
 
 /// Configuration for advancing epochs in the Simulacrum.
@@ -126,7 +119,6 @@ pub struct Simulacrum<R = OsRng, Store: SimulatorStore = InMemoryStore> {
     deny_config: TransactionDenyConfig,
     data_ingestion_path: Option<PathBuf>,
     verifier_signing_config: VerifierSigningConfig,
-    certificate_deny_config: CertificateDenyConfig,
 }
 
 impl Simulacrum {
@@ -214,7 +206,6 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             epoch_state,
             deny_config: TransactionDenyConfig::default(),
             verifier_signing_config: VerifierSigningConfig::default(),
-            certificate_deny_config: CertificateDenyConfig::default(),
             data_ingestion_path: None,
         }
     }
@@ -250,7 +241,6 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             epoch_state,
             deny_config: TransactionDenyConfig::default(),
             verifier_signing_config: VerifierSigningConfig::default(),
-            certificate_deny_config: CertificateDenyConfig::default(),
             data_ingestion_path: None,
         }
     }
@@ -923,49 +913,6 @@ impl Simulacrum {
         let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
         let tx = Transaction::from_data_and_signer(tx_data, vec![key]);
         (tx, transfer_amount)
-    }
-}
-
-#[async_trait::async_trait]
-impl<R: Send + Sync, S: SimulatorStore + Send + Sync>
-    sui_types::transaction_executor::TransactionExecutor for Simulacrum<R, S>
-{
-    async fn execute_transaction(
-        &self,
-        _request: ExecuteTransactionRequestV3,
-        _client_addr: Option<std::net::SocketAddr>,
-    ) -> Result<ExecuteTransactionResponseV3, TransactionSubmissionError> {
-        unimplemented!("Simulacrum does not support execute_transaction via TransactionExecutor")
-    }
-
-    fn simulate_transaction(
-        &self,
-        transaction: TransactionData,
-        checks: TransactionChecks,
-        allow_mock_gas_coin: bool,
-    ) -> Result<SimulateTransactionResult, SuiError> {
-        let (_inner_temp_store, effects, events, execution_result, mock_gas_id) = self
-            .epoch_state
-            .simulate_transaction_impl(
-                &self.store,
-                &self.deny_config,
-                &self.certificate_deny_config,
-                &self.verifier_signing_config,
-                transaction,
-                checks,
-                allow_mock_gas_coin,
-            )
-            .map_err(|e| SuiErrorKind::Unknown(e.to_string()))?;
-
-        Ok(SimulateTransactionResult {
-            effects,
-            events: Some(events),
-            objects: ObjectSet::default(),
-            execution_result,
-            mock_gas_id,
-            unchanged_loaded_runtime_objects: vec![],
-            suggested_gas_price: None,
-        })
     }
 }
 
