@@ -1,0 +1,269 @@
+Command `build`:
+INCLUDING DEPENDENCY Middle
+INCLUDING DEPENDENCY Shared
+BUILDING Diamond
+Command `docgen --output-directory doc`:
+INCLUDING DEPENDENCY Middle
+INCLUDING DEPENDENCY Shared
+BUILDING Diamond
+Generated "doc/shared/token.md"
+Generated "doc/middle/wallet.md"
+Generated "doc/diamond/exchange.md"
+
+Documentation generation successful!
+External Command `find doc -type f | sort`:
+doc/diamond/exchange.md
+doc/middle/wallet.md
+doc/shared/token.md
+External Command `cat doc/diamond/exchange.md`:
+<a name="diamond_exchange"></a>
+
+# Module `diamond::exchange`
+
+
+<a name="@Exchange_0"></a>
+
+## Exchange
+
+
+Uses <code><a href="../shared/token.md#shared_token">shared::token</a></code> directly AND <code><a href="../middle/wallet.md#middle_wallet">middle::wallet</a></code> which also depends on <code><a href="../shared/token.md#shared_token">shared::token</a></code>.
+This creates a diamond dependency: Diamond → Shared, Diamond → Middle → Shared.
+
+
+-  [Exchange](#@Exchange_0)
+-  [Function `round_trip`](#diamond_exchange_round_trip)
+
+
+<pre><code><b>use</b> <a href="../middle/wallet.md#middle_wallet">middle::wallet</a>;
+<b>use</b> <a href="../shared/token.md#shared_token">shared::token</a>;
+</code></pre>
+
+
+
+<a name="diamond_exchange_round_trip"></a>
+
+## Function `round_trip`
+
+Mint a token and put it in a wallet, then read both values.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../diamond/exchange.md#diamond_exchange_round_trip">round_trip</a>(amount: u64): (u64, u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../diamond/exchange.md#diamond_exchange_round_trip">round_trip</a>(amount: u64): (u64, u64) {
+    <b>let</b> t: Token = token::mint(amount);
+    <b>let</b> w: Wallet = wallet::new(amount);
+    (token::value(&t), wallet::balance(&w))
+}
+</code></pre>
+
+
+
+</details>
+External Command `cat doc/shared/token.md`:
+<a name="shared_token"></a>
+
+# Module `shared::token`
+
+
+<a name="@Token_0"></a>
+
+## Token
+
+
+A shared token type used by multiple packages.
+
+
+-  [Token](#@Token_0)
+-  [Struct `Token`](#shared_token_Token)
+-  [Function `mint`](#shared_token_mint)
+-  [Function `value`](#shared_token_value)
+
+
+<pre><code></code></pre>
+
+
+
+<a name="shared_token_Token"></a>
+
+## Struct `Token`
+
+A token with a value.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../shared/token.md#shared_token_Token">Token</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code><a href="../shared/token.md#shared_token_value">value</a>: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="shared_token_mint"></a>
+
+## Function `mint`
+
+Create a new token.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../shared/token.md#shared_token_mint">mint</a>(<a href="../shared/token.md#shared_token_value">value</a>: u64): <a href="../shared/token.md#shared_token_Token">shared::token::Token</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../shared/token.md#shared_token_mint">mint</a>(<a href="../shared/token.md#shared_token_value">value</a>: u64): <a href="../shared/token.md#shared_token_Token">Token</a> {
+    <a href="../shared/token.md#shared_token_Token">Token</a> { <a href="../shared/token.md#shared_token_value">value</a> }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="shared_token_value"></a>
+
+## Function `value`
+
+Get the token value.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../shared/token.md#shared_token_value">value</a>(t: &<a href="../shared/token.md#shared_token_Token">shared::token::Token</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../shared/token.md#shared_token_value">value</a>(t: &<a href="../shared/token.md#shared_token_Token">Token</a>): u64 {
+    t.<a href="../shared/token.md#shared_token_value">value</a>
+}
+</code></pre>
+
+
+
+</details>
+External Command `cat doc/middle/wallet.md`:
+<a name="middle_wallet"></a>
+
+# Module `middle::wallet`
+
+
+<a name="@Wallet_0"></a>
+
+## Wallet
+
+
+A wallet holding a <code><a href="../shared/token.md#shared_token_Token">shared::token::Token</a></code>.
+
+
+-  [Wallet](#@Wallet_0)
+-  [Struct `Wallet`](#middle_wallet_Wallet)
+-  [Function `new`](#middle_wallet_new)
+-  [Function `balance`](#middle_wallet_balance)
+
+
+<pre><code><b>use</b> <a href="../shared/token.md#shared_token">shared::token</a>;
+</code></pre>
+
+
+
+<a name="middle_wallet_Wallet"></a>
+
+## Struct `Wallet`
+
+A wallet with a single token.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../middle/wallet.md#middle_wallet_Wallet">Wallet</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>held: <a href="../shared/token.md#shared_token_Token">shared::token::Token</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="middle_wallet_new"></a>
+
+## Function `new`
+
+Create a wallet with a freshly minted token.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../middle/wallet.md#middle_wallet_new">new</a>(amount: u64): <a href="../middle/wallet.md#middle_wallet_Wallet">middle::wallet::Wallet</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../middle/wallet.md#middle_wallet_new">new</a>(amount: u64): <a href="../middle/wallet.md#middle_wallet_Wallet">Wallet</a> {
+    <a href="../middle/wallet.md#middle_wallet_Wallet">Wallet</a> { held: token::mint(amount) }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="middle_wallet_balance"></a>
+
+## Function `balance`
+
+Get the balance.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../middle/wallet.md#middle_wallet_balance">balance</a>(w: &<a href="../middle/wallet.md#middle_wallet_Wallet">middle::wallet::Wallet</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../middle/wallet.md#middle_wallet_balance">balance</a>(w: &<a href="../middle/wallet.md#middle_wallet_Wallet">Wallet</a>): u64 {
+    token::value(&w.held)
+}
+</code></pre>
+
+
+
+</details>

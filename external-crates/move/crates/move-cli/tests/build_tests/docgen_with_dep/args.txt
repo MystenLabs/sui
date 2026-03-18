@@ -1,0 +1,8 @@
+build
+docgen --output-directory doc
+# Show the generated directory structure (root package + dependency docs)
+> find doc -type f | sort
+# Root package module
+> cat doc/app/tracker.md
+# Dependency module (flat, no dependencies/ prefix)
+> cat doc/helper/utils.md

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_command_line_common::testing::insta_assert;
+use move_compiler::parser::ast::TargetKind;
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_package_alt::{RootPackage, Vanilla};
 use move_package_alt_compilation::build_config::BuildConfig;
@@ -65,9 +66,31 @@ fn test_impl(toml_path: &Path, flags: DocgenFlags, test_case: &str) -> datatest_
     let options = options(root_doc_template, flags);
     let docgen = Docgen::new(&model, &options);
     let file_contents = docgen.generate(&model)?;
+    // Determine root package directory prefix to filter out dependency docs.
+    // Template output files sit at top level (no `/` prefix) and should also be included.
+    let root_pkg_dir = model
+        .modules()
+        .find(|m| {
+            matches!(
+                m.info().target_kind,
+                TargetKind::Source {
+                    is_root_package: true
+                }
+            )
+        })
+        .map(|m| {
+            m.package()
+                .name()
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| m.id().address.to_string())
+        })
+        .expect("must have at least one root package module");
+    let root_prefix = format!("{}/", root_pkg_dir);
     let [(path, contents)] = file_contents
         .iter()
-        .filter(|(path, _contents)| !path.contains("dependencies"))
+        .filter(|(path, _contents)| {
+            path.starts_with(&root_prefix) || !path.contains('/')
+        })
         .collect::<Vec<_>>()
         .try_into()
         .expect("Test infra supports only one output file currently");

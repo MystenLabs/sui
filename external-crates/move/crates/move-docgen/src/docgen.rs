@@ -472,11 +472,7 @@ impl<'env> Docgen<'env> {
                     })
                 })
                 .unwrap_or_else(|| {
-                    format!(
-                        "dependencies/{}/{}",
-                        package_name,
-                        file_name.to_string_lossy(),
-                    )
+                    format!("{}/{}", package_name, file_name.to_string_lossy())
                 })
         } else {
             // We will generate this file in the provided output directory.
@@ -1542,26 +1538,7 @@ impl<'env> Docgen<'env> {
         let Some(info) = self.infos.get(&module_env.id()) else {
             return String::new();
         };
-        let extension = if !self
-            .current_module
-            .as_ref()
-            .map(|id| module_env.model().module(id))
-            .map(|x| {
-                matches!(
-                    x.info().target_kind,
-                    TargetKind::Source {
-                        is_root_package: true
-                    }
-                )
-            })
-            .unwrap_or(true)
-        {
-            "../../"
-        } else if !info.is_included {
-            "../"
-        } else {
-            ""
-        };
+        let extension = if !info.is_included { "../" } else { "" };
         format!("{}{}#{}", extension, info.target_file, info.label)
     }
 

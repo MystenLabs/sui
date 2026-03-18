@@ -1,0 +1,9 @@
+[package]
+name = "Mid"
+edition = "2024"
+
+[dependencies]
+Leaf = { local = "../dep_leaf" }
+
+[addresses]
+mid = "0x20"

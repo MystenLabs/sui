@@ -1,0 +1,9 @@
+[package]
+name = "Middle"
+edition = "2024"
+
+[dependencies]
+Shared = { local = "../dep_shared" }
+
+[addresses]
+middle = "0x20"

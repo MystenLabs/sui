@@ -1,0 +1,11 @@
+build
+docgen --output-directory doc
+# Diamond dependency: Root depends on Shared directly AND through Middle
+# Shared should appear only once
+> find doc -type f | sort
+# Root package
+> cat doc/diamond/exchange.md
+# Direct + transitive dep (Shared appears via both paths)
+> cat doc/shared/token.md
+# Middle dep (also depends on Shared)
+> cat doc/middle/wallet.md

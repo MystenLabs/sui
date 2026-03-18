@@ -1,0 +1,9 @@
+[package]
+name = "RootPkg"
+edition = "2024"
+
+[dependencies]
+DepPkg = { local = "dep" }
+
+[addresses]
+root_addr = "0x42"

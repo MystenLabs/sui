@@ -1,0 +1,9 @@
+[package]
+name = "Root"
+edition = "2024"
+
+[dependencies]
+Mid = { local = "dep_mid" }
+
+[addresses]
+root = "0x42"

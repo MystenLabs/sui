@@ -1,0 +1,6 @@
+[package]
+name = "Shared"
+edition = "2024"
+
+[addresses]
+shared = "0x10"

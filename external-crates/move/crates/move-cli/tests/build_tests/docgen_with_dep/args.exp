@@ -1,0 +1,281 @@
+Command `build`:
+INCLUDING DEPENDENCY Helper
+BUILDING App
+Command `docgen --output-directory doc`:
+INCLUDING DEPENDENCY Helper
+BUILDING App
+Generated "doc/app/tracker.md"
+Generated "doc/helper/utils.md"
+
+Documentation generation successful!
+External Command `find doc -type f | sort`:
+doc/app/tracker.md
+doc/helper/utils.md
+External Command `cat doc/app/tracker.md`:
+<a name="app_tracker"></a>
+
+# Module `app::tracker`
+
+
+<a name="@Tracker_0"></a>
+
+## Tracker
+
+
+Uses <code><a href="../helper/utils.md#helper_utils_Counter">helper::utils::Counter</a></code> from a dependency package.
+
+Nested list in module doc:
+
+- Top level
+  - Nested item
+    - Deeply nested
+- Another top level
+
+
+-  [Tracker](#@Tracker_0)
+-  [Struct `Tracker`](#app_tracker_Tracker)
+-  [Function `new`](#app_tracker_new)
+-  [Function `record`](#app_tracker_record)
+-  [Function `count`](#app_tracker_count)
+
+
+<pre><code><b>use</b> <a href="../helper/utils.md#helper_utils">helper::utils</a>;
+</code></pre>
+
+
+
+<a name="app_tracker_Tracker"></a>
+
+## Struct `Tracker`
+
+A named tracker wrapping a counter.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../app/tracker.md#app_tracker_Tracker">Tracker</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>name: u64</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>counter: <a href="../helper/utils.md#helper_utils_Counter">helper::utils::Counter</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="app_tracker_new"></a>
+
+## Function `new`
+
+Create a new tracker.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../app/tracker.md#app_tracker_new">new</a>(name: u64): <a href="../app/tracker.md#app_tracker_Tracker">app::tracker::Tracker</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../app/tracker.md#app_tracker_new">new</a>(name: u64): <a href="../app/tracker.md#app_tracker_Tracker">Tracker</a> {
+    <a href="../app/tracker.md#app_tracker_Tracker">Tracker</a> {
+        name,
+        counter: utils::new(),
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="app_tracker_record"></a>
+
+## Function `record`
+
+Record an event.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../app/tracker.md#app_tracker_record">record</a>(t: &<b>mut</b> <a href="../app/tracker.md#app_tracker_Tracker">app::tracker::Tracker</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../app/tracker.md#app_tracker_record">record</a>(t: &<b>mut</b> <a href="../app/tracker.md#app_tracker_Tracker">Tracker</a>) {
+    utils::increment(&<b>mut</b> t.counter);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="app_tracker_count"></a>
+
+## Function `count`
+
+Get event count.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../app/tracker.md#app_tracker_count">count</a>(t: &<a href="../app/tracker.md#app_tracker_Tracker">app::tracker::Tracker</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../app/tracker.md#app_tracker_count">count</a>(t: &<a href="../app/tracker.md#app_tracker_Tracker">Tracker</a>): u64 {
+    utils::value(&t.counter)
+}
+</code></pre>
+
+
+
+</details>
+External Command `cat doc/helper/utils.md`:
+<a name="helper_utils"></a>
+
+# Module `helper::utils`
+
+
+<a name="@Utilities_0"></a>
+
+## Utilities
+
+
+Shared utility types.
+
+
+-  [Utilities](#@Utilities_0)
+-  [Struct `Counter`](#helper_utils_Counter)
+-  [Function `new`](#helper_utils_new)
+-  [Function `increment`](#helper_utils_increment)
+-  [Function `value`](#helper_utils_value)
+
+
+<pre><code></code></pre>
+
+
+
+<a name="helper_utils_Counter"></a>
+
+## Struct `Counter`
+
+A simple counter.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../helper/utils.md#helper_utils_Counter">Counter</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code><a href="../helper/utils.md#helper_utils_value">value</a>: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="helper_utils_new"></a>
+
+## Function `new`
+
+Create a new counter starting at zero.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../helper/utils.md#helper_utils_new">new</a>(): <a href="../helper/utils.md#helper_utils_Counter">helper::utils::Counter</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../helper/utils.md#helper_utils_new">new</a>(): <a href="../helper/utils.md#helper_utils_Counter">Counter</a> {
+    <a href="../helper/utils.md#helper_utils_Counter">Counter</a> { <a href="../helper/utils.md#helper_utils_value">value</a>: 0 }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="helper_utils_increment"></a>
+
+## Function `increment`
+
+Increment by one.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../helper/utils.md#helper_utils_increment">increment</a>(c: &<b>mut</b> <a href="../helper/utils.md#helper_utils_Counter">helper::utils::Counter</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../helper/utils.md#helper_utils_increment">increment</a>(c: &<b>mut</b> <a href="../helper/utils.md#helper_utils_Counter">Counter</a>) {
+    c.<a href="../helper/utils.md#helper_utils_value">value</a> = c.<a href="../helper/utils.md#helper_utils_value">value</a> + 1;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="helper_utils_value"></a>
+
+## Function `value`
+
+Get the current value.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../helper/utils.md#helper_utils_value">value</a>(c: &<a href="../helper/utils.md#helper_utils_Counter">helper::utils::Counter</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../helper/utils.md#helper_utils_value">value</a>(c: &<a href="../helper/utils.md#helper_utils_Counter">Counter</a>): u64 {
+    c.<a href="../helper/utils.md#helper_utils_value">value</a>
+}
+</code></pre>
+
+
+
+</details>

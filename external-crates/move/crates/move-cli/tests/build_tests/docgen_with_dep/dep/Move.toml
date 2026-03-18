@@ -1,0 +1,6 @@
+[package]
+name = "Helper"
+edition = "2024"
+
+[addresses]
+helper = "0x99"

@@ -1,0 +1,9 @@
+[package]
+name = "App"
+edition = "2024"
+
+[dependencies]
+Helper = { local = "dep" }
+
+[addresses]
+app = "0x42"

@@ -1,0 +1,6 @@
+[package]
+name = "DepPkg"
+edition = "2024"
+
+[addresses]
+dep_addr = "0x10"

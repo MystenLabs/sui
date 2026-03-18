@@ -1,0 +1,8 @@
+build
+docgen --output-directory doc
+# Both packages have a module named "utils" — check they get separate files
+> find doc -type f | sort
+# Root package's utils
+> cat doc/root_addr/utils.md
+# Dependency's utils (same source file name, different package)
+> cat doc/dep_addr/utils.md
