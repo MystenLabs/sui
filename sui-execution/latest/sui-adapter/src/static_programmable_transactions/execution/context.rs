@@ -447,10 +447,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         let mut by_value_shared_objects = BTreeSet::new();
         let mut consensus_owner_objects = BTreeMap::new();
         let mut gas_payment_location = None;
+        let mut gas_coin_moved = None;
         let gas = gas
             .map(|(payment_location, m, mut g)| {
                 gas_payment_location = Some(payment_location);
-                Result::<_, ExecutionError>::Ok((m, g.local(0)?.move_if_valid()?))
+                let value_opt = g.local(0)?.move_if_valid()?;
+                gas_coin_moved = Some(value_opt.is_none());
+                Result::<_, ExecutionError>::Ok((m, value_opt))
             })
             .transpose()?;
         let gas_id_opt = gas.as_ref().map(|(m, _)| m.id);
@@ -556,6 +559,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 !deleted_object_ids.contains(&gas_id),
                 "Gas coin should not be deleted"
             );
+            let Some(gas_payment_location) = gas_payment_location else {
+                invariant_violation!("Gas payment should be specified if gas ID is present");
+            };
+            let Some(gas_coin_moved) = gas_coin_moved else {
+                invariant_violation!("Gas value status should be specified if gas ID is present");
+            };
             refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
             finish_ephemeral_gas_coin(
                 gas_charger,
@@ -564,6 +573,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 &mut accumulator_events,
                 gas_id,
                 gas_payment_location,
+                gas_coin_moved,
             )?;
         }
 
@@ -1655,11 +1665,9 @@ fn finish_ephemeral_gas_coin<OType>(
     created_object_ids: &mut IndexSet<ObjectID>,
     accumulator_events: &mut Vec<MoveAccumulatorEvent>,
     gas_id: ObjectID,
-    gas_payment: Option<GasPayment>,
+    gas_payment: GasPayment,
+    gas_coin_moved: bool,
 ) -> Result<(), ExecutionError> {
-    let Some(gas_payment) = gas_payment else {
-        invariant_violation!("Gas payment should always be present at this point");
-    };
     let address = match gas_payment.location {
         // The gas payment was a coin, so it is not ephemeral
         PaymentLocation::Coin(_) => return Ok(()),
@@ -1667,21 +1675,21 @@ fn finish_ephemeral_gas_coin<OType>(
     };
 
     // See if the gas coin was transferred or remains with the original owner
-    let Some((owner, _ty, _value)) = writes.get(&gas_id) else {
+    let Some((_owner, _ty, _value)) = writes.get(&gas_id) else {
         invariant_violation!("Ephemeral gas coin must be in writes")
     };
-    let owner_changed =
-        matches!(owner, Owner::AddressOwner(owner_address) if *owner_address != address);
-    let net_balance_change = if owner_changed {
+    let net_balance_change = if gas_coin_moved {
         // double check that the gas coin has enough balance
         let coin_value = {
             let Some((_, _, value_ref)) = writes.get_mut(&gas_id) else {
                 invariant_violation!("Ephemeral gas coin must be in writes")
             };
+            // replace with dummy value
             let value = std::mem::replace(value_ref, VMValue::u8(0));
             let mut locals = Locals::new([Some(value.into())])?;
             let mut local = locals.local(0)?;
             let coin_value = local.borrow()?.coin_ref_value()?;
+            // put the coin back
             *value_ref = local.move_()?.into();
             coin_value
         };
@@ -1689,10 +1697,11 @@ fn finish_ephemeral_gas_coin<OType>(
             coin_value >= gas_charger.gas_budget(),
             "Gas coin balance should be at least the max gas budget"
         );
-        // put the value back
 
-        // if the owner changed, then the gas coin has a new location, so we fully withdraw
-        // the gas amount
+        // If the gas coin was moved, it was transferred.
+        // In such a case, the gas coin has a new location, so we fully withdraw the gas amount
+        // and keep it in the coin object. The coin is now the source of payment instead of
+        // the address balance.
         gas_charger.override_gas_charge_location(PaymentLocation::Coin(gas_id))?;
         let Some(net_balance_change) = gas_payment
             .amount
@@ -1704,8 +1713,9 @@ fn finish_ephemeral_gas_coin<OType>(
         };
         net_balance_change
     } else {
-        // We are in the case where the coin is with the original owner, so we need to destroy it and
-        // create an accumulator event for the net balance change
+        // In this case the gas coin was not moved, so we want to return the remaining balance to
+        // the address balance. To do so we need to destroy it and create an accumulator event for
+        // the net balance change
         let was_created = created_object_ids.shift_remove(&gas_id);
         assert_invariant!(was_created, "ephemeral coin should be newly created");
         let Some((_owner, _ty, value)) = writes.shift_remove(&gas_id) else {

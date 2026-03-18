@@ -1,10 +1,10 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 11 tasks
+processed 18 tasks
 
 init:
-A: object(0,0), B: object(0,1)
+A: object(0,0), B: object(0,1), C: object(0,2)
 
 task 1, lines 8-11:
 //# programmable --sender A --inputs 10000000000 @A
@@ -24,43 +24,116 @@ mutated: object(0,1)
 accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 18:
+task 3, lines 18-21:
+//# programmable --sender C --inputs 10000000000 @C
+// First send funds to C's address balance so we can pay for gas from it
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,2)
+accumulators_written: (object(3,0), C, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 23:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, line 20:
+task 5, line 25:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 10000000000
 
-task 5, line 22:
+task 6, line 27:
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 10000000000
 
-task 6, lines 24-26:
+task 7, line 29:
+//# view-funds sui::balance::Balance<sui::sui::SUI> C
+10000000000
+
+task 8, lines 31-33:
 //# programmable --sender A --inputs @0x0 object(0,0) --address-balance-gas
 // Transfer gas coin to 0x0 via TransferObjects while paying with address balance
 //> TransferObjects([Gas], Input(0))
-created: object(6,0)
+created: object(8,0)
 mutated: object(0,0)
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, lines 28-30:
+task 9, line 35:
+//# view-object 8,0
+Owner: Account Address ( test )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 4998002120u64,
+    },
+}
+
+task 10, lines 37-39:
 //# programmable --sender B --inputs @B object(0,1) --address-balance-gas
 // Transfer gas coin to the sender to show no object was created
 //> TransferObjects([Gas], Input(0))
+created: object(10,0)
 mutated: object(0,1)
 accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Split)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8, line 32:
+task 11, line 41:
+//# view-object 10,0
+Owner: Account Address ( B )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 4998002120u64,
+    },
+}
+
+task 12, lines 43-46:
+//# programmable --sender C --inputs @C 0 object(0,2) --address-balance-gas
+// Split off from the gas coin and transfer that to self
+//> 0: SplitCoins(Gas, [Input(1)]);
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(12,0)
+mutated: object(0,2)
+accumulators_written: (object(3,0), C, sui::balance::Balance<sui::sui::SUI>, Split)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 48:
+//# view-object 12,0
+Owner: Account Address ( C )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
+
+task 14, line 50:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 9, line 34:
+task 15, line 52:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 5000000000
 
-task 10, line 36:
+task 16, line 54:
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
-9998990120
+5000000000
+
+task 17, line 56:
+//# view-funds sui::balance::Balance<sui::sui::SUI> C
+9998002120
