@@ -1465,7 +1465,6 @@ impl Subst {
             .map(|constraint| constraint.is_divergent())
             .unwrap_or(false)
     }
-
 }
 
 impl VarConstraint {
