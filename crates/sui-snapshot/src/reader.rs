@@ -8,10 +8,14 @@ use crate::{
 use anyhow::{Context, Result, anyhow};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::{Buf, Bytes};
+use prometheus::{
+    IntCounter, IntGauge, Registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry,
+};
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use futures::future::{AbortRegistration, Abortable};
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use integer_encoding::VarIntReader;
 use object_store::path::Path;
@@ -42,6 +46,53 @@ use tracing::{debug, error, info};
 pub type SnapshotChecksums = (DigestByBucketAndPartition, GlobalStateHash);
 pub type DigestByBucketAndPartition = BTreeMap<u32, BTreeMap<u32, [u8; 32]>>;
 pub type Sha3DigestType = Arc<Mutex<BTreeMap<u32, BTreeMap<u32, [u8; 32]>>>>;
+
+/// Number of parallel DB insert tasks spawned within a single object file.
+const INSERT_CONCURRENCY: usize = 8;
+
+pub struct StateSnapshotRestoreMetrics {
+    /// Bytes currently held in memory across all in-progress object-file slots.
+    /// The primary signal for memory pressure during restore.
+    pub bytes_in_flight: IntGauge,
+    /// Number of object files currently being downloaded or inserted.
+    pub files_in_flight: IntGauge,
+    /// Cumulative bytes across all fully-completed object files.
+    pub downloaded_bytes_total: IntCounter,
+    /// Cumulative number of fully-completed object files.
+    pub completed_files_total: IntCounter,
+}
+
+impl StateSnapshotRestoreMetrics {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
+            bytes_in_flight: register_int_gauge_with_registry!(
+                "snapshot_restore_bytes_in_flight",
+                "Bytes currently held in memory across all in-progress object-file slots",
+                registry
+            )
+            .unwrap(),
+            files_in_flight: register_int_gauge_with_registry!(
+                "snapshot_restore_files_in_flight",
+                "Number of object files currently being downloaded or inserted",
+                registry
+            )
+            .unwrap(),
+            downloaded_bytes_total: register_int_counter_with_registry!(
+                "snapshot_restore_downloaded_bytes_total",
+                "Total bytes downloaded and inserted across all completed object files",
+                registry
+            )
+            .unwrap(),
+            completed_files_total: register_int_counter_with_registry!(
+                "snapshot_restore_completed_files_total",
+                "Total number of object files fully downloaded and inserted",
+                registry
+            )
+            .unwrap(),
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct StateSnapshotReaderV1 {
     epoch: u64,
@@ -54,6 +105,7 @@ pub struct StateSnapshotReaderV1 {
     concurrency: usize,
     max_retries: usize,
     remote_epoch_prefix: Path,
+    metrics: Arc<StateSnapshotRestoreMetrics>,
 }
 
 impl StateSnapshotReaderV1 {
@@ -128,6 +180,7 @@ impl StateSnapshotReaderV1 {
         m: MultiProgress,
         skip_reset_local_store: bool,
         max_retries: usize,
+        registry: &Registry,
     ) -> Result<Self> {
         let remote_object_store = if remote_store_config.no_sign_request {
             remote_store_config.make_http()?
@@ -289,12 +342,13 @@ impl StateSnapshotReaderV1 {
             concurrency: download_concurrency.get(),
             max_retries,
             remote_epoch_prefix,
+            metrics: StateSnapshotRestoreMetrics::new(registry),
         })
     }
 
     pub async fn read(
         &mut self,
-        perpetual_db: &AuthorityPerpetualTables,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
         abort_registration: AbortRegistration,
         sender: Option<tokio::sync::mpsc::Sender<(GlobalStateHash, u64)>>,
     ) -> Result<()> {
@@ -479,21 +533,20 @@ impl StateSnapshotReaderV1 {
 
     async fn sync_live_objects(
         &self,
-        perpetual_db: &AuthorityPerpetualTables,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
         abort_registration: AbortRegistration,
         sha3_digests: Arc<Mutex<DigestByBucketAndPartition>>,
     ) -> Result<(), anyhow::Error> {
         let epoch_dir = self.remote_epoch_prefix.clone();
-        let concurrency = self.concurrency;
         let remote_object_store = self.remote_object_store.clone();
-        let input_files: Vec<_> = self
+        // Store owned u32 keys so we can move items into async closures without lifetime issues.
+        let input_files: Vec<(u32, u32, FileMetadata)> = self
             .object_files
             .iter()
             .flat_map(|(bucket, parts)| {
                 parts
-                    .clone()
-                    .into_iter()
-                    .map(|entry| (bucket, entry))
+                    .iter()
+                    .map(|(part, metadata)| (*bucket, *part, metadata.clone()))
                     .collect::<Vec<_>>()
             })
             .collect();
@@ -507,58 +560,76 @@ impl StateSnapshotReaderV1 {
         );
         let obj_progress_bar_clone = obj_progress_bar.clone();
         let instant = Instant::now();
-        let downloaded_bytes = AtomicUsize::new(0);
+        let metrics = self.metrics.clone();
+        let downloaded_bytes = Arc::new(AtomicUsize::new(0));
 
         let ret = Abortable::new(
             async move {
-                futures::stream::iter(input_files.iter())
-                    .map(|(bucket, (part_num, file_metadata))| {
-                        let epoch_dir_clone = epoch_dir.clone();
-                        let remote_object_store_clone = remote_object_store.clone();
-                        let sha3_digests_clone = sha3_digests.clone();
-                        async move {
-                            // Download object file with retries
-                            let (bytes, sha3_digest) = download_bytes(
-                                remote_object_store_clone,
-                                file_metadata,
-                                epoch_dir_clone,
-                                sha3_digests_clone,
-                                bucket,
-                                part_num,
-                                None,
-                            )
-                            .await;
-                            Ok::<(Bytes, FileMetadata, [u8; 32]), anyhow::Error>((
-                                bytes,
-                                (*file_metadata).clone(),
-                                sha3_digest,
-                            ))
-                        }
-                    })
-                    .boxed()
-                    .buffer_unordered(concurrency)
-                    .try_for_each(|(bytes, file_metadata, sha3_digest)| {
-                        let bytes_len = bytes.len();
-                        let result: Result<(), anyhow::Error> =
-                            LiveObjectIter::new(&file_metadata, bytes).map(|obj_iter| {
-                                AuthorityStore::bulk_insert_live_objects(
-                                    perpetual_db,
-                                    obj_iter,
-                                    &sha3_digest,
-                                )
-                                .expect("Failed to insert live objects");
-                            });
-                        downloaded_bytes.fetch_add(bytes_len, Ordering::Relaxed);
-                        obj_progress_bar_clone.inc(1);
-                        obj_progress_bar_clone.set_message(format!(
-                            "Download speed: {} MiB/s",
-                            downloaded_bytes.load(Ordering::Relaxed) as f64
-                                / (1024 * 1024) as f64
-                                / instant.elapsed().as_secs_f64(),
+                for (bucket, part_num, file_metadata) in input_files {
+                    let (bytes, sha3_digest) = download_bytes(
+                        remote_object_store.clone(),
+                        &file_metadata,
+                        epoch_dir.clone(),
+                        sha3_digests.clone(),
+                        &&bucket,
+                        &part_num,
+                        None,
+                    )
+                    .await;
+                    let bytes_len = bytes.len();
+                    metrics.bytes_in_flight.add(bytes_len as i64);
+
+                    // Collect objects and validate checksum against the pre-computed
+                    // digest from the reference file.
+                    let mut hasher = Sha3_256::default();
+                    let mut objects: Vec<LiveObject> = Vec::new();
+                    for obj in LiveObjectIter::new(&file_metadata, bytes)? {
+                        hasher.update(obj.object_reference().2.inner());
+                        objects.push(obj);
+                    }
+                    let computed_digest = hasher.finalize().digest;
+                    if computed_digest != sha3_digest {
+                        return Err(anyhow!(
+                            "Checksum mismatch for bucket {} part {}",
+                            bucket,
+                            part_num
                         ));
-                        futures::future::ready(result)
-                    })
-                    .await
+                    }
+
+                    // Split objects across INSERT_CONCURRENCY tasks and insert in parallel.
+                    if !objects.is_empty() {
+                        let chunk_size =
+                            (objects.len() + INSERT_CONCURRENCY - 1) / INSERT_CONCURRENCY;
+                        let handles: Vec<_> = objects
+                            .chunks(chunk_size)
+                            .map(|chunk| {
+                                let perpetual_db = perpetual_db.clone();
+                                let chunk = chunk.to_vec();
+                                tokio::task::spawn_blocking(move || {
+                                    AuthorityStore::insert_live_objects_batch(
+                                        &perpetual_db,
+                                        chunk.into_iter(),
+                                    )
+                                })
+                            })
+                            .collect();
+                        for handle in handles {
+                            handle.await.expect("Insert task panicked")?;
+                        }
+                    }
+
+                    metrics.bytes_in_flight.sub(bytes_len as i64);
+                    metrics.downloaded_bytes_total.inc_by(bytes_len as u64);
+                    metrics.completed_files_total.inc();
+                    let total =
+                        downloaded_bytes.fetch_add(bytes_len, Ordering::Relaxed) + bytes_len;
+                    obj_progress_bar_clone.inc(1);
+                    obj_progress_bar_clone.set_message(format!(
+                        "Download speed: {} MiB/s",
+                        total as f64 / (1024 * 1024) as f64 / instant.elapsed().as_secs_f64(),
+                    ));
+                }
+                Ok(())
             },
             abort_registration,
         )

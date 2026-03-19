@@ -20,18 +20,23 @@ pub(crate) async fn read_summaries_for_list_no_verify<S>(
 where
     S: WriteStore + Clone,
 {
-    let client = create_remote_store_client(ingestion_url, vec![], 60)?;
+    let client = Arc::new(create_remote_store_client(ingestion_url, vec![], 60)?);
     futures::stream::iter(checkpoints)
-        .map(|sq| CheckpointReader::fetch_from_object_store(&client, sq))
-        .buffer_unordered(concurrency)
-        .try_for_each(|checkpoint| {
-            let result = store
-                .insert_checkpoint(&VerifiedCheckpoint::new_unchecked(
-                    checkpoint.0.checkpoint_summary.clone(),
-                ))
-                .map_err(|e| anyhow!("Failed to insert checkpoint: {e}"));
-            checkpoint_counter.fetch_add(1, Ordering::Relaxed);
-            futures::future::ready(result)
+        .map(Ok::<_, anyhow::Error>)
+        .try_for_each_concurrent(concurrency, |sq| {
+            let client = client.clone();
+            let store = store.clone();
+            let checkpoint_counter = checkpoint_counter.clone();
+            async move {
+                let checkpoint = CheckpointReader::fetch_from_object_store(&*client, sq).await?;
+                store
+                    .insert_checkpoint(&VerifiedCheckpoint::new_unchecked(
+                        checkpoint.0.checkpoint_summary.clone(),
+                    ))
+                    .map_err(|e| anyhow!("Failed to insert checkpoint: {e}"))?;
+                checkpoint_counter.fetch_add(1, Ordering::Relaxed);
+                Ok(())
+            }
         })
         .await
 }

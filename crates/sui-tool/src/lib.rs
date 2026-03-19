@@ -921,11 +921,12 @@ pub async fn download_formal_snapshot(
             m_clone,
             false, // skip_reset_local_store
             max_retries,
+            &prometheus_registry,
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
         reader
-            .read(&perpetual_db_clone, abort_registration, Some(sender))
+            .read(perpetual_db_clone.clone(), abort_registration, Some(sender))
             .await
             .unwrap_or_else(|err| panic!("Failed during read: {}", err));
         info!("Snapshot download complete");
@@ -1139,19 +1140,17 @@ async fn backfill_epoch_transaction_digests(
     });
 
     futures::stream::iter(checkpoints_to_fetch)
-        .map(|sq| {
+        .map(Ok::<_, anyhow::Error>)
+        .try_for_each_concurrent(concurrency, |sq| {
             let client = client.clone();
-            async move { fetch_checkpoint_with_retry(&**client, sq, max_retries).await }
-        })
-        .buffer_unordered(concurrency)
-        .try_for_each(|checkpoint| {
             let perpetual_db = perpetual_db.clone();
             let tx_counter = tx_counter.clone();
             let checkpoint_counter = checkpoint_counter.clone();
-            let checkpoint_data = checkpoint.0;
 
             async move {
-                let tx_digests: Vec<_> = checkpoint_data
+                let checkpoint = fetch_checkpoint_with_retry(&**client, sq, max_retries).await?;
+                let tx_digests: Vec<_> = checkpoint
+                    .0
                     .transactions
                     .iter()
                     .map(|tx_data| *tx_data.transaction.digest())

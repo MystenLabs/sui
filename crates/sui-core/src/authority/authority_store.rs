@@ -695,6 +695,55 @@ impl AuthorityStore {
         Ok(())
     }
 
+    /// Insert a batch of live objects without checksum validation. Used to parallelize intra-file
+    /// inserts after the checksum has already been verified against the full object set.
+    pub fn insert_live_objects_batch(
+        perpetual_db: &AuthorityPerpetualTables,
+        live_objects: impl Iterator<Item = LiveObject>,
+    ) -> SuiResult<()> {
+        let mut batch = perpetual_db.objects.batch();
+        let mut written = 0usize;
+        for object in live_objects {
+            match object {
+                LiveObject::Normal(object) => {
+                    let store_object_wrapper = get_store_object(object.clone());
+                    batch.insert_batch(
+                        &perpetual_db.objects,
+                        std::iter::once((
+                            ObjectKey::from(object.compute_object_reference()),
+                            store_object_wrapper,
+                        )),
+                    )?;
+                    if !object.is_child_object() {
+                        Self::initialize_live_object_markers(
+                            &perpetual_db.live_owned_object_markers,
+                            &mut batch,
+                            &[object.compute_object_reference()],
+                            true,
+                        )?;
+                    }
+                }
+                LiveObject::Wrapped(object_key) => {
+                    batch.insert_batch(
+                        &perpetual_db.objects,
+                        std::iter::once::<(ObjectKey, StoreObjectWrapper)>((
+                            object_key,
+                            StoreObject::Wrapped.into(),
+                        )),
+                    )?;
+                }
+            }
+            written += 1;
+            if written > 100_000 {
+                batch.write()?;
+                batch = perpetual_db.objects.batch();
+                written = 0;
+            }
+        }
+        batch.write()?;
+        Ok(())
+    }
+
     pub fn set_epoch_start_configuration(
         &self,
         epoch_start_configuration: &EpochStartConfiguration,
