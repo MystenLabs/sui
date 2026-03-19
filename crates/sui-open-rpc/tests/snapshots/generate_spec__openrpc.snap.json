@@ -1400,7 +1400,6 @@
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
                 "native_charging_v2": false,
-                "new_vm_enabled": false,
                 "no_extraneous_module_bytes": false,
                 "normalize_depth_formula": false,
                 "normalize_ptb_arguments": false,
