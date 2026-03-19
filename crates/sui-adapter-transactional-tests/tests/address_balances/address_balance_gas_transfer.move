@@ -35,13 +35,13 @@
 //# view-object 8,0
 
 //# programmable --sender B --inputs @B object(0,1) --address-balance-gas
-// Transfer gas coin to the sender to show no object was created
+// Transfer gas coin to the sender to show an object was created, even at the same address
 //> TransferObjects([Gas], Input(0))
 
 //# view-object 10,0
 
 //# programmable --sender C --inputs @C 0 object(0,2) --address-balance-gas
-// Split off from the gas coin and transfer that to self
+// Split off from the gas coin and transfer that to self. Only one coin in total should be created
 //> 0: SplitCoins(Gas, [Input(1)]);
 //> 1: TransferObjects([Result(0)], Input(0))
 
