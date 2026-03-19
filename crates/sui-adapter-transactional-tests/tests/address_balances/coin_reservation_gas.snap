@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
 ---
 processed 18 tasks
 
@@ -40,7 +41,10 @@ task 4, lines 19-22:
 // split from gas with object first then withdrawal
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+created: object(4,0)
+mutated: object(0,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 24-27:
 //# programmable --sender A --inputs 1000000000 @A
@@ -57,7 +61,10 @@ task 6, lines 29-33:
 // note: this will DELETE the coin being merged into the withdrawal
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+created: object(6,0)
+deleted: object(5,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, lines 35-38:
 //# programmable --sender A --inputs 200000 @A
@@ -72,12 +79,15 @@ task 8, lines 40-42:
 //# programmable --sender A --gas-payment object(0,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --inputs object(7,0)
 // merge coin into gas when using withdrawal
 //> MergeCoins(Gas, [Input(0)])
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+mutated: object(0,0)
+deleted: object(7,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
 task 9, line 44:
 //# view-object 0,0
 Owner: Account Address ( A )
-Version: 4
+Version: 6
 Contents: sui::coin::Coin<sui::sui::SUI> {
     id: sui::object::UID {
         id: sui::object::ID {
@@ -85,7 +95,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
         },
     },
     balance: sui::balance::Balance<sui::sui::SUI> {
-        value: 299898993816240u64,
+        value: 299899991886600u64,
     },
 }
 
@@ -93,26 +103,48 @@ task 10, lines 46-48:
 //# programmable --sender A --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(6000000000) --inputs @B
 // transfer gas coin to B while paying with withdrawal only
 //> TransferObjects([Gas], Input(0))
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+created: object(10,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 11, line 50:
 //# view-object 10,0
-Error: task 11, lines 50-50
-//# view-object 10,0
-. Unbound fake id 10,0
+Owner: Account Address ( B )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 5998012000u64,
+    },
+}
 
 task 12, lines 52-55:
 //# programmable --sender A --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(3000000000) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(3000000000) --inputs 1000 @B
 // use multiple withdrawals
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+created: object(12,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 13, line 57:
 //# view-object 12,0
-Error: task 13, lines 57-57
-//# view-object 12,0
-. Unbound fake id 12,0
+Owner: Account Address ( B )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1000u64,
+    },
+}
 
 task 14, lines 59-62:
 //# programmable --sender A --inputs 200000 @A
@@ -136,7 +168,9 @@ task 16, lines 69-71:
 //# programmable --sender A --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000000) --inputs object(14,0)
 // merge coin into gas when paying with pure withdrawal
 //> MergeCoins(Gas, [Input(0)])
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+deleted: object(14,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 17, lines 73-75:
 //# programmable --sender A --address-balance-gas --inputs object(15,0)
