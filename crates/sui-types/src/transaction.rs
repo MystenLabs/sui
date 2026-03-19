@@ -1348,6 +1348,18 @@ impl ProgrammableTransaction {
         Ok(())
     }
 
+    /// Return all coin reservation object references used by the transaction inputs.
+    pub fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+        self.inputs.iter().filter_map(|arg| match arg {
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))
+                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) =>
+            {
+                Some(*obj_ref)
+            }
+            _ => None,
+        })
+    }
+
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         self.inputs.iter().filter_map(|arg| match arg {
             CallArg::Pure(_)
@@ -1759,17 +1771,7 @@ impl TransactionKind {
         let TransactionKind::ProgrammableTransaction(pt) = &self else {
             return Either::Left(iter::empty());
         };
-        Either::Right(pt.inputs.iter().filter_map(|input| {
-            if let CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)) = input {
-                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) {
-                    Some(*obj_ref)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }))
+        Either::Right(pt.coin_reservation_obj_refs())
     }
 
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
@@ -2649,6 +2651,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             inputs.extend(
                 self.gas()
                     .iter()
+                    .filter(|obj_ref| !ParsedDigest::is_coin_reservation_digest(&obj_ref.2))
                     .map(|obj_ref| InputObjectKind::ImmOrOwnedMoveObject(*obj_ref)),
             );
         }
@@ -3025,16 +3028,45 @@ impl TransactionDataAPI for TransactionDataV1 {
             .into()
         );
 
-        for (_, _, gas_digest) in self.gas().iter().copied() {
-            fp_ensure!(
-                ParsedDigest::try_from(gas_digest).is_err(),
-                // This is not the most appropriate error, but we can't introduce a new one
-                // since the point here is to achieve backward compatibility.
-                UserInputError::GasObjectNotOwnedObject {
-                    owner: Owner::AddressOwner(self.sender)
+        if !config.enable_coin_reservation_obj_refs() {
+            for (_, _, gas_digest) in self.gas() {
+                fp_ensure!(
+                    !ParsedDigest::is_coin_reservation_digest(gas_digest),
+                    UserInputError::GasObjectNotOwnedObject {
+                        owner: Owner::AddressOwner(self.sender)
+                    }
+                    .into()
+                );
+            }
+        } else {
+            // When coin reservations are enabled, validate that gas coin reservations are for SUI,
+            // and that they are owned by the sender. (Sponsorship via coin reservations is not supported.)
+            let sui_accumulator_id =
+                *AccumulatorValue::get_field_id(self.sender, &Balance::type_tag(GAS::type_tag()))?
+                    .inner();
+
+            for gas_ref in self.gas() {
+                if let Some(parsed) =
+                    ParsedObjectRefWithdrawal::parse(gas_ref, context.chain_identifier)
+                {
+                    // Coin reservations draw from the sender's address balance, so they cannot
+                    // be used in sponsored transactions where gas is paid by someone else.
+                    fp_ensure!(
+                        self.gas_owner() == self.sender,
+                        UserInputError::GasObjectNotOwnedObject {
+                            owner: Owner::AddressOwner(self.sender)
+                        }
+                        .into()
+                    );
+                    fp_ensure!(
+                        parsed.unmasked_object_id == sui_accumulator_id,
+                        UserInputError::GasObjectNotOwnedObject {
+                            owner: Owner::AddressOwner(self.sender)
+                        }
+                        .into()
+                    );
                 }
-                .into()
-            );
+            }
         }
 
         if !self.is_system_tx() {
@@ -3082,6 +3114,9 @@ impl TransactionDataAPI for TransactionDataV1 {
         self.gas_owner() != self.sender
     }
 
+    // Note: it is possible to pay gas from a coin reservation, which ultimately draws from
+    // the address balance. This function still returns false in that case. In other words,
+    // it indicates use of the first-class API for address balance gas payments, not the legacy API.
     fn is_gas_paid_from_address_balance(&self) -> bool {
         is_gas_paid_from_address_balance(&self.gas_data, &self.kind)
     }
@@ -3157,8 +3192,15 @@ impl TransactionDataV1 {
     }
 
     fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> {
-        // TODO(address-balances): add gas coin obj refs
-        self.kind.get_coin_reservation_obj_refs()
+        self.kind
+            .get_coin_reservation_obj_refs()
+            .chain(self.gas().iter().filter_map(|gas_ref| {
+                if ParsedDigest::is_coin_reservation_digest(&gas_ref.2) {
+                    Some(*gas_ref)
+                } else {
+                    None
+                }
+            }))
     }
 
     fn parsed_coin_reservations(

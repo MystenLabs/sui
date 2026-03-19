@@ -27,6 +27,7 @@ mod checked {
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
+        coin_reservation::ParsedDigest,
         error::SuiError,
         fp_bail, fp_ensure,
         gas::SuiGasStatus,
@@ -400,26 +401,37 @@ mod checked {
             SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
 
         // check balance and coins consistency
-        // load all gas coins
+        // load all gas coins (skip coin reservations - they're not loaded as input objects)
         let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
-        let mut gas_objects = vec![];
-        for obj_ref in gas {
-            let obj = objects.get(&obj_ref.0);
-            let obj = *obj.ok_or(UserInputError::ObjectNotFound {
-                object_id: obj_ref.0,
-                version: Some(obj_ref.1),
-            })?;
-            gas_objects.push(obj);
-        }
 
-        // Skip gas balance check for address balance payments
-        // We reserve gas budget in advance
-        if !gas_paid_from_address_balance {
-            if gas_ownership_checks {
-                gas_status.check_gas_objects(&gas_objects)?;
+        let (gas_objects, available_address_balance_gas) = if gas_paid_from_address_balance {
+            // When paying from address balance via gas_data.payment = [], the budget is reserved by the scheduler
+            // and guaranteed to be available.
+            (vec![], gas_budget)
+        } else {
+            // when paying
+            let mut available_address_balance_gas: u64 = 0;
+            let mut gas_objects = vec![];
+            for obj_ref in gas {
+                if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
+                    available_address_balance_gas =
+                        available_address_balance_gas.saturating_add(parsed.reservation_amount());
+                } else {
+                    let obj = objects.get(&obj_ref.0);
+                    let obj = *obj.ok_or(UserInputError::ObjectNotFound {
+                        object_id: obj_ref.0,
+                        version: Some(obj_ref.1),
+                    })?;
+                    gas_objects.push(obj);
+                }
             }
-            gas_status.check_gas_data(&gas_objects, gas_budget)?;
+            (gas_objects, available_address_balance_gas)
+        };
+
+        if gas_ownership_checks {
+            gas_status.check_gas_objects(&gas_objects)?;
         }
+        gas_status.check_gas_balance(&gas_objects, gas_budget, available_address_balance_gas)?;
         Ok(gas_status)
     }
 
@@ -440,7 +452,17 @@ mod checked {
             }
         }
 
-        if !transaction.is_genesis_tx() && objects.is_empty() {
+        // Allow empty objects if gas is paid from address balance or entirely from coin reservations
+        let gas_paid_from_coin_reservations = !transaction.gas().is_empty()
+            && transaction
+                .gas()
+                .iter()
+                .all(|obj_ref| ParsedDigest::is_coin_reservation_digest(&obj_ref.2));
+        if !transaction.is_genesis_tx()
+            && objects.is_empty()
+            && !transaction.is_gas_paid_from_address_balance()
+            && !gas_paid_from_coin_reservations
+        {
             return Err(UserInputError::ObjectInputArityViolation);
         }
 
