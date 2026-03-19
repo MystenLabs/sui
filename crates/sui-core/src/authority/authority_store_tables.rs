@@ -200,6 +200,7 @@ impl AuthorityPerpetualTables {
             default_cells_per_mutex, default_mutex_count, default_value_cache_size,
         };
         let mutexes = default_mutex_count() * 2;
+        let transaction_mutexes = mutexes * 4;
         let value_cache_size = default_value_cache_size();
         // effectively disables pruning if not set
         let pruner_watermark = pruner_watermark.unwrap_or(Arc::new(AtomicU64::new(0)));
@@ -264,7 +265,7 @@ impl AuthorityPerpetualTables {
                 "transactions".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    mutexes,
+                    transaction_mutexes,
                     uniform_key,
                     KeySpaceConfig::new()
                         .with_value_cache_size(value_cache_size)
@@ -276,7 +277,7 @@ impl AuthorityPerpetualTables {
                 "effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    mutexes,
+                    transaction_mutexes,
                     uniform_key,
                     apply_relocation_filter(
                         bloom_config.clone().with_value_cache_size(value_cache_size),
@@ -291,7 +292,7 @@ impl AuthorityPerpetualTables {
                 "executed_effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    mutexes,
+                    transaction_mutexes,
                     uniform_key,
                     bloom_config
                         .clone()
@@ -398,7 +399,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config_indexing(
                     // EpochId + (TransactionDigest)
                     KeyIndexing::fixed(8 + (32 + 8)),
-                    mutexes,
+                    transaction_mutexes,
                     epoch_tx_digest_prefix_key,
                     apply_relocation_filter(
                         bloom_config.clone(),

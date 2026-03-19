@@ -741,7 +741,7 @@ impl AuthorityEpochTables {
                 "consensus_message_processed".to_string(),
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::Hash,
-                    mutexes * 2,
+                    mutexes * 8,
                     uniform_key,
                     bloom_config.clone(),
                 ),
