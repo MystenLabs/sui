@@ -249,6 +249,7 @@ mod tests {
     use wiremock::Request;
 
     use crate::ingestion::store_client::tests::respond_with;
+    use crate::ingestion::store_client::tests::respond_with_chain_id;
     use crate::ingestion::store_client::tests::status;
     use crate::ingestion::test_utils::test_checkpoint_data;
 
@@ -324,6 +325,7 @@ mod tests {
             status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42)),
         )
         .await;
+        respond_with_chain_id(&server).await;
 
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
@@ -345,6 +347,7 @@ mod tests {
             status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42)),
         )
         .await;
+        respond_with_chain_id(&server).await;
 
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
@@ -372,15 +375,16 @@ mod tests {
             }
         })
         .await;
+        respond_with_chain_id(&server).await;
 
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
         let (rx, _) = ingestion_service.subscribe();
-        let subscriber = test_subscriber(5, rx).await;
+        let subscriber = test_subscriber(6, rx).await;
         let _svc = ingestion_service.run(0.., None).await.unwrap();
 
         let seqs = subscriber.await.unwrap();
-        assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
+        assert_eq!(seqs, vec![0, 1, 2, 3, 6, 7]);
     }
 
     /// Similar to the previous test, but now it's a transient error that causes the retry.
@@ -398,15 +402,16 @@ mod tests {
             }
         })
         .await;
+        respond_with_chain_id(&server).await;
 
         let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
         let (rx, _) = ingestion_service.subscribe();
-        let subscriber = test_subscriber(5, rx).await;
+        let subscriber = test_subscriber(6, rx).await;
         let _svc = ingestion_service.run(0.., None).await.unwrap();
 
         let seqs = subscriber.await.unwrap();
-        assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
+        assert_eq!(seqs, vec![0, 1, 2, 3, 6, 7]);
     }
 
     /// One subscriber is going to stop processing checkpoints, so even though the service can keep
@@ -422,6 +427,7 @@ mod tests {
             status(StatusCode::OK).set_body_bytes(test_checkpoint_data(*times))
         })
         .await;
+        respond_with_chain_id(&server).await;
 
         let mut ingestion_service = test_ingestion(server.uri(), 3, 1).await;
 
@@ -433,17 +439,18 @@ mod tests {
         }
 
         let (rx, _) = ingestion_service.subscribe();
-        let subscriber = test_subscriber(5, rx).await;
+        let subscriber = test_subscriber(6, rx).await;
         let _svc = ingestion_service.run(0.., None).await.unwrap();
 
         // At this point, the service will have been able to pass 3 checkpoints to the non-lagging
         // subscriber, while the laggard's buffer fills up. Now the laggard will pull two
         // checkpoints, which will allow the rest of the pipeline to progress enough for the live
-        // subscriber to receive its quota.
+        // subscriber to receive its quota. Checkpoint 0 is served by the chain_id mock.
+        assert_eq!(unblock(&mut laggard).await, 0);
         assert_eq!(unblock(&mut laggard).await, 1);
         assert_eq!(unblock(&mut laggard).await, 2);
 
         let seqs = subscriber.await.unwrap();
-        assert_eq!(seqs, vec![1, 2, 3, 4, 5]);
+        assert_eq!(seqs, vec![0, 1, 2, 3, 4, 5]);
     }
 }

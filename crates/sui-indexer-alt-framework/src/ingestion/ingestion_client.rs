@@ -21,6 +21,8 @@ use object_store::local::LocalFileSystem;
 use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
+use sui_types::digests::ChainIdentifier;
+use tokio::sync::OnceCell;
 use tracing::debug;
 use tracing::error;
 use tracing::warn;
@@ -30,6 +32,7 @@ use crate::ingestion::Error as IngestionError;
 use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::Result as IngestionResult;
 use crate::ingestion::decode;
+use crate::ingestion::error::Error::FetchError;
 use crate::ingestion::store_client::StoreIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IngestionMetrics;
@@ -47,6 +50,8 @@ const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
 #[async_trait]
 pub(crate) trait IngestionClientTrait: Send + Sync {
+    async fn chain_id(&self) -> anyhow::Result<ChainIdentifier>;
+
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult;
 }
 
@@ -168,6 +173,13 @@ pub struct IngestionClient {
     /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
     metrics: Arc<IngestionMetrics>,
     checkpoint_lag_reporter: Arc<CheckpointLagMetricReporter>,
+    chain_id: OnceCell<ChainIdentifier>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CheckpointEnvelope {
+    pub checkpoint: Arc<Checkpoint>,
+    pub chain_id: ChainIdentifier,
 }
 
 impl IngestionClient {
@@ -270,6 +282,7 @@ impl IngestionClient {
             client,
             metrics,
             checkpoint_lag_reporter,
+            chain_id: OnceCell::new(),
         }
     }
 
@@ -282,7 +295,7 @@ impl IngestionClient {
         &self,
         checkpoint: u64,
         retry_interval: Duration,
-    ) -> IngestionResult<Arc<Checkpoint>> {
+    ) -> IngestionResult<CheckpointEnvelope> {
         let backoff = Constant::new(retry_interval);
         let fetch = || async move {
             use backoff::Error as BE;
@@ -307,12 +320,12 @@ impl IngestionClient {
     /// this function if we fail to deserialize the result as [Checkpoint].
     ///
     /// The function will immediately return if the checkpoint is not found.
-    pub async fn checkpoint(&self, checkpoint: u64) -> IngestionResult<Arc<Checkpoint>> {
-        let client = self.client.clone();
+    pub async fn checkpoint(&self, checkpoint: u64) -> IngestionResult<CheckpointEnvelope> {
+        let checkpoint_client = self.client.clone();
         let request = move || {
-            let client = client.clone();
+            let client = checkpoint_client.clone();
             async move {
-                let fetch_data = with_slow_future_monitor(
+                let checkpoint_data = with_slow_future_monitor(
                     client.checkpoint(checkpoint),
                     SLOW_OPERATION_WARNING_THRESHOLD,
                     /* on_threshold_exceeded =*/
@@ -320,7 +333,7 @@ impl IngestionClient {
                         warn!(
                             checkpoint,
                             threshold_ms = SLOW_OPERATION_WARNING_THRESHOLD.as_millis(),
-                            "Slow checkpoint fetch operation detected"
+                            "Slow checkpoint operation detected"
                         );
                     },
                 )
@@ -335,7 +348,7 @@ impl IngestionClient {
                         IngestionError::FetchError(checkpoint, error),
                     ),
                     CheckpointError::Permanent { reason, error } => {
-                        error!(checkpoint, reason, "Permanent fetch error: {error}");
+                        error!(checkpoint, reason, "Permanent checkpoint error: {error}");
                         self.metrics
                             .total_ingested_permanent_errors
                             .with_label_values(&[reason])
@@ -344,7 +357,7 @@ impl IngestionClient {
                     }
                 })?;
 
-                Ok::<Checkpoint, backoff::Error<IngestionError>>(match fetch_data {
+                Ok::<Checkpoint, backoff::Error<IngestionError>>(match checkpoint_data {
                     CheckpointData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
 
@@ -402,7 +415,56 @@ impl IngestionClient {
             .total_ingested_objects
             .inc_by(data.object_set.len() as u64);
 
-        Ok(Arc::new(data))
+        let chain_id = *self.get_or_init_chain_id(checkpoint).await?;
+
+        Ok(CheckpointEnvelope {
+            checkpoint: Arc::new(data),
+            chain_id,
+        })
+    }
+
+    async fn get_or_init_chain_id(&self, checkpoint: u64) -> IngestionResult<&ChainIdentifier> {
+        let chain_id_client = self.client.clone();
+        let chain_id = self
+            .chain_id
+            .get_or_try_init(|| {
+                let request = move || {
+                    let client = chain_id_client.clone();
+                    async move {
+                        let chain_id = with_slow_future_monitor(
+                            client.chain_id(),
+                            SLOW_OPERATION_WARNING_THRESHOLD,
+                            /* on_threshold_exceeded =*/
+                            || {
+                                warn!(
+                                    checkpoint,
+                                    threshold_ms = SLOW_OPERATION_WARNING_THRESHOLD.as_millis(),
+                                    "Slow chain_id operation detected"
+                                );
+                            },
+                        )
+                        .await
+                        .map_err(|err| {
+                            let reason = "chain_id";
+                            warn!(reason, "Retrying due to error: {err}");
+                            backoff::Error::transient(FetchError(checkpoint, err))
+                        })?;
+
+                        Ok::<ChainIdentifier, backoff::Error<IngestionError>>(chain_id)
+                    }
+                };
+
+                // Keep backing off until we are waiting for the max interval, but don't give up.
+                let backoff = ExponentialBackoff {
+                    max_interval: MAX_TRANSIENT_RETRY_INTERVAL,
+                    max_elapsed_time: None,
+                    ..Default::default()
+                };
+
+                backoff::future::retry(backoff, request)
+            })
+            .await?;
+        Ok(chain_id)
     }
 }
 
@@ -414,6 +476,7 @@ mod tests {
     use prometheus::Registry;
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_types::digests::CheckpointDigest;
     use tokio::time::timeout;
 
     use crate::ingestion::test_utils::test_checkpoint_data;
@@ -435,8 +498,18 @@ mod tests {
         permanent_failures: DashMap<u64, usize>,
     }
 
+    impl MockIngestionClient {
+        fn mock_chain_id() -> ChainIdentifier {
+            CheckpointDigest::new([1; 32]).into()
+        }
+    }
+
     #[async_trait]
     impl IngestionClientTrait for MockIngestionClient {
+        async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+            Ok(Self::mock_chain_id())
+        }
+
         async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
             // Check for not found failures
             if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint)
@@ -545,7 +618,8 @@ mod tests {
 
         // Fetch and verify
         let result = client.checkpoint(1).await.unwrap();
-        assert_eq!(result.summary.sequence_number(), &1);
+        assert_eq!(result.checkpoint.summary.sequence_number(), &1);
+        assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
     }
 
     #[tokio::test]
@@ -558,7 +632,8 @@ mod tests {
 
         // Fetch and verify
         let result = client.checkpoint(1).await.unwrap();
-        assert_eq!(result.summary.sequence_number(), &1);
+        assert_eq!(result.checkpoint.summary.sequence_number(), &1);
+        assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
     }
 
     #[tokio::test]
@@ -583,7 +658,8 @@ mod tests {
 
         // Fetch and verify it succeeds after retries
         let result = client.checkpoint(1).await.unwrap();
-        assert_eq!(*result.summary.sequence_number(), 1);
+        assert_eq!(*result.checkpoint.summary.sequence_number(), 1);
+        assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
 
         // Verify that exactly 2 retries were recorded
         let retries = client
@@ -607,7 +683,8 @@ mod tests {
 
         // Wait for checkpoint with short retry interval
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
-        assert_eq!(result.summary.sequence_number(), &1);
+        assert_eq!(result.checkpoint.summary.sequence_number(), &1);
+        assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
 
         // Verify that exactly 1 retry was recorded
         let retries = client.metrics.total_ingested_not_found_retries.get();
@@ -626,7 +703,8 @@ mod tests {
 
         // Wait for checkpoint with short retry interval
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
-        assert_eq!(result.summary.sequence_number(), &1);
+        assert_eq!(result.checkpoint.summary.sequence_number(), &1);
+        assert_eq!(result.chain_id, MockIngestionClient::mock_chain_id());
     }
 
     #[tokio::test]

@@ -235,9 +235,9 @@ fn ingest_and_broadcast_range(
                     let client = client.clone();
                     async move {
                         // Fetch the checkpoint or stop if cancelled.
-                        let checkpoint = client.wait_for(cp, retry_interval).await?;
+                        let checkpoint_envelope = client.wait_for(cp, retry_interval).await?;
                         debug!(checkpoint = cp, "Fetched checkpoint");
-                        Ok(checkpoint)
+                        Ok(checkpoint_envelope.checkpoint)
                     }
                 },
                 Arc::unwrap_or_clone(subscribers),
@@ -441,6 +441,8 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
+    use sui_types::digests::ChainIdentifier;
+    use sui_types::messages_checkpoint::CheckpointDigest;
     use tokio::time::error::Elapsed;
     use tokio::time::timeout;
 
@@ -460,6 +462,10 @@ mod tests {
 
         #[async_trait]
         impl IngestionClientTrait for MockClient {
+            async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+                Ok(CheckpointDigest::new([1; 32]).into())
+            }
+
             async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
                 // Return mock checkpoint data for any checkpoint number
                 let bytes = test_checkpoint_data(checkpoint);

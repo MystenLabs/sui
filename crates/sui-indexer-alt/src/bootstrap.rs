@@ -71,17 +71,17 @@ pub async fn bootstrap(
         // - Get the Genesis system transaction from the genesis checkpoint.
         // - Get the system state object that was written out by the system transaction.
         None => {
-            let genesis_checkpoint = indexer
+            let genesis_checkpoint_envelope = indexer
                 .ingestion_client()
                 .wait_for(0, retry_interval)
                 .await
                 .context("Failed to fetch genesis checkpoint")?;
 
             let Checkpoint {
-                summary: checkpoint_summary,
                 transactions,
+                object_set,
                 ..
-            } = genesis_checkpoint.as_ref();
+            } = genesis_checkpoint_envelope.checkpoint.as_ref();
 
             let Some(genesis_transaction) = transactions
                 .iter()
@@ -91,7 +91,7 @@ pub async fn bootstrap(
             };
 
             let output_objects: Vec<_> = genesis_transaction
-                .output_objects(&genesis_checkpoint.object_set)
+                .output_objects(object_set)
                 .cloned()
                 .collect();
 
@@ -99,7 +99,7 @@ pub async fn bootstrap(
                 .context("Failed to get Genesis SystemState")?;
 
             let stored_genesis = StoredGenesis {
-                genesis_digest: checkpoint_summary.digest().inner().to_vec(),
+                genesis_digest: genesis_checkpoint_envelope.chain_id.as_bytes().to_vec(),
                 initial_protocol_version: sui_system_state.protocol_version() as i64,
             };
             let stored_epoch_start = StoredEpochStart {

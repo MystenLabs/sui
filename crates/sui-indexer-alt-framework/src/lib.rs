@@ -1232,8 +1232,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 5,
-            num_checkpoints: 25,
+            starting_checkpoint: 0,
+            num_checkpoints: 30,
             checkpoint_size: 1,
         })
         .await;
@@ -1374,8 +1374,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 5,
-            num_checkpoints: 25,
+            starting_checkpoint: 0,
+            num_checkpoints: 30,
             checkpoint_size: 1,
         })
         .await;
@@ -1639,8 +1639,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 5,
-            num_checkpoints: 25,
+            starting_checkpoint: 0,
+            num_checkpoints: 30,
             checkpoint_size: 1,
         })
         .await;
@@ -2009,8 +2009,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 9,
-            num_checkpoints: 17,
+            starting_checkpoint: 0,
+            num_checkpoints: 26,
             checkpoint_size: 2,
         })
         .await;

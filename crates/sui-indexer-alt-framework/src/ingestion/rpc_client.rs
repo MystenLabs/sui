@@ -4,9 +4,13 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use prost_types::FieldMask;
+use std::str::FromStr;
 use sui_rpc::Client as RpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
+use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
+use sui_types::digests::ChainIdentifier;
+use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::Checkpoint;
 use tonic::Code;
 
@@ -17,6 +21,17 @@ use crate::ingestion::ingestion_client::IngestionClientTrait;
 
 #[async_trait]
 impl IngestionClientTrait for RpcClient {
+    async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+        let request = GetServiceInfoRequest::const_default();
+        let response = self
+            .clone()
+            .ledger_client()
+            .get_service_info(request)
+            .await?
+            .into_inner();
+        Ok(CheckpointDigest::from_str(response.chain_id())?.into())
+    }
+
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
         let request: GetCheckpointRequest = GetCheckpointRequest::by_sequence_number(checkpoint)
             .with_read_mask(FieldMask::from_paths([

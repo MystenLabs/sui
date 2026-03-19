@@ -10,6 +10,7 @@ use object_store::ObjectStoreExt;
 use object_store::RetryConfig;
 use object_store::path::Path as ObjectPath;
 use serde::de::DeserializeOwned;
+use sui_types::digests::ChainIdentifier;
 use tracing::debug;
 use tracing::error;
 
@@ -64,6 +65,11 @@ impl StoreIngestionClient {
 
 #[async_trait::async_trait]
 impl IngestionClientTrait for StoreIngestionClient {
+    async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+        let checkpoint = self.checkpoint(0).await?;
+        Ok((*checkpoint.summary.digest()).into())
+    }
+
     /// Fetch a checkpoint from the remote store.
     ///
     /// Transient errors include:
@@ -106,6 +112,7 @@ pub(crate) mod tests {
     use wiremock::Respond;
     use wiremock::ResponseTemplate;
     use wiremock::matchers::method;
+    use wiremock::matchers::path;
     use wiremock::matchers::path_regex;
 
     use crate::ingestion::error::Error;
@@ -121,6 +128,24 @@ pub(crate) mod tests {
             .respond_with(response)
             .mount(server)
             .await;
+    }
+
+    /// Mount a high-priority mock for checkpoint 0 used by `StoreIngestionClient::chain_id()`.
+    pub(crate) async fn respond_with_chain_id(server: &MockServer) {
+        Mock::given(method("GET"))
+            .and(path("/0.binpb.zst"))
+            .respond_with(status(StatusCode::OK).set_body_bytes(test_checkpoint_data(0)))
+            .with_priority(1)
+            .mount(server)
+            .await;
+    }
+
+    /// Returns the expected chain_id produced by `StoreIngestionClient::chain_id()` when
+    /// `respond_with_chain_id` is mounted.
+    pub(crate) fn expected_chain_id() -> ChainIdentifier {
+        let bytes = test_checkpoint_data(0);
+        let checkpoint = crate::ingestion::decode::checkpoint(&bytes).unwrap();
+        (*checkpoint.summary.digest()).into()
     }
 
     pub(crate) fn status(code: StatusCode) -> ResponseTemplate {
@@ -159,14 +184,13 @@ pub(crate) mod tests {
             let mut times = times.lock().unwrap();
             *times += 1;
             match (*times, r.url.path()) {
-                // The first request will trigger a redirect to 0.binpb.zst no matter what the
-                // original request was for -- triggering a request error.
-                (1, _) => {
-                    status(StatusCode::MOVED_PERMANENTLY).append_header("Location", "/0.binpb.zst")
-                }
+                // The first request will trigger a redirect to 999999.binpb.zst no matter what
+                // the original request was for -- triggering a request error.
+                (1, _) => status(StatusCode::MOVED_PERMANENTLY)
+                    .append_header("Location", "/999999.binpb.zst"),
 
-                // Set-up checkpoint 0 as an infinite redirect loop.
-                (_, "/0.binpb.zst") => {
+                // Set-up checkpoint 999999 as an infinite redirect loop.
+                (_, "/999999.binpb.zst") => {
                     status(StatusCode::MOVED_PERMANENTLY).append_header("Location", r.url.as_str())
                 }
 
@@ -175,11 +199,13 @@ pub(crate) mod tests {
             }
         })
         .await;
+        respond_with_chain_id(&server).await;
 
         let client = remote_test_client(server.uri());
-        let checkpoint = client.checkpoint(42).await.unwrap();
+        let envelope = client.checkpoint(42).await.unwrap();
 
-        assert_eq!(42, checkpoint.summary.sequence_number)
+        assert_eq!(42, envelope.checkpoint.summary.sequence_number);
+        assert_eq!(envelope.chain_id, expected_chain_id());
     }
 
     /// Assume that certain errors will recover by themselves, and keep retrying with an
@@ -200,11 +226,13 @@ pub(crate) mod tests {
             }
         })
         .await;
+        respond_with_chain_id(&server).await;
 
         let client = remote_test_client(server.uri());
-        let checkpoint = client.checkpoint(42).await.unwrap();
+        let envelope = client.checkpoint(42).await.unwrap();
 
-        assert_eq!(42, checkpoint.summary.sequence_number)
+        assert_eq!(42, envelope.checkpoint.summary.sequence_number);
+        assert_eq!(envelope.chain_id, expected_chain_id());
     }
 
     /// Treat deserialization failure as another kind of transient error -- all checkpoint data
@@ -223,11 +251,13 @@ pub(crate) mod tests {
             }
         })
         .await;
+        respond_with_chain_id(&server).await;
 
         let client = remote_test_client(server.uri());
-        let checkpoint = client.checkpoint(42).await.unwrap();
+        let envelope = client.checkpoint(42).await.unwrap();
 
-        assert_eq!(42, checkpoint.summary.sequence_number)
+        assert_eq!(42, envelope.checkpoint.summary.sequence_number);
+        assert_eq!(envelope.chain_id, expected_chain_id());
     }
 
     /// Test that timeout errors are retried as transient errors.
@@ -253,6 +283,7 @@ pub(crate) mod tests {
             }
         })
         .await;
+        respond_with_chain_id(&server).await;
 
         let options = ClientOptions::default()
             .with_allow_http(true)
@@ -267,10 +298,12 @@ pub(crate) mod tests {
             IngestionClient::with_store(store, test_ingestion_metrics()).unwrap();
 
         // This should timeout once, then succeed on retry
-        let checkpoint = ingestion_client.checkpoint(42).await.unwrap();
-        assert_eq!(42, checkpoint.summary.sequence_number);
+        let envelope = ingestion_client.checkpoint(42).await.unwrap();
+        assert_eq!(42, envelope.checkpoint.summary.sequence_number);
+        assert_eq!(envelope.chain_id, expected_chain_id());
 
         // Verify that the server received exactly 2 requests (1 timeout + 1 successful retry)
+        // The chain_id request for checkpoint 0 is handled by a separate mock.
         let final_count = times.load(Ordering::Relaxed);
         assert_eq!(final_count, 2);
     }
