@@ -567,7 +567,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 builder.publish_immutable(modules_bytes, dependencies);
             };
             let pt = builder.finish();
-            let payments = self.get_payments(sender_acc, vec![]);
+            let payments = vec![
+                self.get_object(&sender_acc.gas, None)
+                    .unwrap()
+                    .compute_object_reference(),
+            ];
 
             let transaction = TransactionData::new_programmable(
                 sender_acc.address,
@@ -1115,7 +1119,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         .clone()
                         .map_or(sender_acc, |a| self.get_sender(Some(a)));
                     let payment_refs = self.resolve_gas_payments(sponsor_acc, gas_payment)?;
-                    let transaction = self.sign_sponsor_txn_with_refs(
+                    let transaction = self.sign_sponsor_txn(
                         sender,
                         sponsor,
                         payment_refs,
@@ -1793,32 +1797,14 @@ impl SuiTestAdapter {
             /* gas */ Vec<ObjectRef>,
         ) -> TransactionData,
     ) -> Transaction {
-        self.sign_sponsor_txn(sender, None, vec![], move |sender, _, gas| {
+        let sender_acc = self.get_sender(sender.clone());
+        let gas_ref = self
+            .get_object(&sender_acc.gas, None)
+            .unwrap()
+            .compute_object_reference();
+        self.sign_sponsor_txn(sender, None, vec![gas_ref], move |sender, _, gas| {
             txn_data(sender, gas)
         })
-    }
-
-    fn get_payments(&self, sponsor: &TestAccount, payments: Vec<FakeID>) -> Vec<ObjectRef> {
-        let payments = if payments.is_empty() {
-            vec![sponsor.gas]
-        } else {
-            payments
-                .into_iter()
-                .map(|payment| {
-                    self.fake_to_real_object_id(payment)
-                        .expect("Could not find specified payment object")
-                })
-                .collect::<Vec<ObjectID>>()
-        };
-
-        payments
-            .into_iter()
-            .map(|payment| {
-                self.get_object(&payment, None)
-                    .unwrap()
-                    .compute_object_reference()
-            })
-            .collect()
     }
 
     fn resolve_gas_payments(
@@ -1874,34 +1860,6 @@ impl SuiTestAdapter {
     }
 
     fn sign_sponsor_txn(
-        &self,
-        sender: Option<String>,
-        sponsor: Option<String>,
-        payment: Vec<FakeID>,
-        txn_data: impl FnOnce(
-            /* sender */ SuiAddress,
-            /* sponsor */ SuiAddress,
-            /* gas */ Vec<ObjectRef>,
-        ) -> TransactionData,
-    ) -> Transaction {
-        let sender = self.get_sender(sender);
-        let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
-
-        let payment_refs = self.get_payments(sponsor, payment);
-
-        let data = txn_data(sender.address, sponsor.address, payment_refs);
-
-        if sender.address == sponsor.address {
-            to_sender_signed_transaction(data, &sender.key_pair)
-        } else {
-            to_sender_signed_transaction_with_multi_signers(
-                data,
-                vec![&sender.key_pair, &sponsor.key_pair],
-            )
-        }
-    }
-
-    fn sign_sponsor_txn_with_refs(
         &self,
         sender: Option<String>,
         sponsor: Option<String>,
