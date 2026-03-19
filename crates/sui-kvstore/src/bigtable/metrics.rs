@@ -4,16 +4,10 @@
 use std::sync::Arc;
 
 use prometheus::HistogramVec;
-use prometheus::IntCounter;
 use prometheus::IntCounterVec;
-use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::register_histogram_vec_with_registry;
 use prometheus::register_int_counter_vec_with_registry;
-use prometheus::register_int_counter_with_registry;
-use prometheus::register_int_gauge_with_registry;
-
-use super::client::PoolMetrics;
 
 pub(crate) struct KvMetrics {
     pub kv_get_success: IntCounterVec,
@@ -141,48 +135,5 @@ impl KvMetrics {
             )
             .unwrap(),
         })
-    }
-}
-
-pub(crate) struct PoolPrometheusMetrics {
-    pool_size: IntGauge,
-    channels_replaced: IntCounter,
-    rpcs_completed: IntCounter,
-}
-
-impl PoolPrometheusMetrics {
-    pub(crate) fn new(registry: &Registry) -> Self {
-        Self {
-            pool_size: register_int_gauge_with_registry!(
-                "bt_pool_pool_size",
-                "Current number of channels in the BigTable connection pool",
-                registry,
-            )
-            .unwrap(),
-            channels_replaced: register_int_counter_with_registry!(
-                "bt_pool_channels_replaced",
-                "Total channels replaced due to age refresh",
-                registry,
-            )
-            .unwrap(),
-            rpcs_completed: register_int_counter_with_registry!(
-                "bt_pool_rpcs_completed",
-                "Total RPCs completed through the pool",
-                registry,
-            )
-            .unwrap(),
-        }
-    }
-}
-
-impl PoolMetrics for PoolPrometheusMetrics {
-    fn set_pool_size(&self, size: usize) {
-        self.pool_size.set(size as i64);
-    }
-    fn channels_replaced(&self, count: usize) {
-        self.channels_replaced.inc_by(count as u64);
-    }
-    fn rpc_completed(&self) {
-        self.rpcs_completed.inc();
     }
 }

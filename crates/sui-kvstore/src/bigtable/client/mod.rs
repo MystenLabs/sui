@@ -4,6 +4,8 @@
 mod auth_channel;
 mod channel_pool;
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -14,8 +16,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use gcp_auth::TokenProvider;
 use prometheus::Registry;
-use std::future::Future;
-use std::pin::Pin;
 use sui_types::base_types::EpochId;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
@@ -23,18 +23,17 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
-
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 
-use crate::EpochData;
 use auth_channel::AuthChannel;
+use channel_pool::ChannelPool;
+use channel_pool::ChannelPrimer;
 pub use channel_pool::PoolConfig;
-pub(crate) use channel_pool::PoolMetrics;
-use channel_pool::{ChannelPool, ChannelPrimer};
 
 use crate::CheckpointData;
+use crate::EpochData;
 use crate::KeyValueStoreReader;
 use crate::PackageData;
 use crate::ProtocolConfigData;
@@ -42,7 +41,6 @@ use crate::TransactionData;
 use crate::TransactionEventsData;
 use crate::Watermark;
 use crate::bigtable::metrics::KvMetrics;
-use crate::bigtable::metrics::PoolPrometheusMetrics;
 use crate::bigtable::proto::bigtable::v2::MutateRowsRequest;
 use crate::bigtable::proto::bigtable::v2::PingAndWarmRequest;
 use crate::bigtable::proto::bigtable::v2::ReadRowsRequest;
@@ -129,13 +127,8 @@ impl BigTableClient {
         client_name: &str,
     ) -> Result<Self> {
         let endpoint = Channel::from_shared(format!("http://{host}"))?;
-        let config = PoolConfig {
-            initial_pool_size: 1,
-            min_pool_size: 1,
-            max_pool_size: 1,
-            ..PoolConfig::default()
-        };
-        let pool = ChannelPool::new_connected(endpoint, config, None, None).await?;
+        let pool =
+            ChannelPool::new_connected(endpoint, PoolConfig::singleton(), None, None).await?;
         let auth_channel = AuthChannel::new(
             pool,
             "https://www.googleapis.com/auth/bigtable.data".to_string(),
@@ -211,19 +204,15 @@ impl BigTableClient {
             Some(p) => p,
             None => token_provider.project_id().await?.to_string(),
         };
-        let table_prefix = format!("projects/{}/instances/{}/tables/", project_id, instance_id);
-        // Instance name for PingAndWarm: strip trailing "tables/"
-        let instance_name = table_prefix.trim_end_matches("tables/").to_string();
+        let instance_name = format!("projects/{}/instances/{}/", project_id, instance_id);
+        let table_prefix = format!("{}tables/", instance_name);
         let primer = BigtablePrimer {
             instance_name,
             policy: policy.to_string(),
             token_provider: Some(token_provider.clone()),
         };
-        let pool_metrics: Option<Arc<dyn PoolMetrics>> =
-            registry.map(|r| Arc::new(PoolPrometheusMetrics::new(r)) as Arc<dyn PoolMetrics>);
         let pool =
-            ChannelPool::new_connected(endpoint, config, Some(Box::new(primer)), pool_metrics)
-                .await?;
+            ChannelPool::new_connected(endpoint, config, Some(Box::new(primer)), registry).await?;
         let auth_channel = AuthChannel::new(pool, policy.to_string(), Some(token_provider));
         let client = BigtableInternalClient::new(auth_channel).max_decoding_message_size(
             max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE),

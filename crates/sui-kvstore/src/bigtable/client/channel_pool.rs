@@ -11,6 +11,11 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use arc_swap::ArcSwap;
 use http::{Request, Response};
+use prometheus::IntCounter;
+use prometheus::IntGauge;
+use prometheus::Registry;
+use prometheus::register_int_counter_with_registry;
+use prometheus::register_int_gauge_with_registry;
 use rand::Rng;
 use tonic::body::Body;
 use tonic::codegen::Service;
@@ -32,6 +37,37 @@ pub struct PoolConfig {
     pub refresh_jitter: Duration,
 }
 
+impl Default for PoolConfig {
+    fn default() -> Self {
+        Self {
+            initial_pool_size: 10,
+            min_pool_size: 1,
+            max_pool_size: 200,
+            min_rpcs_per_channel: 5,
+            max_rpcs_per_channel: 50,
+            max_resize_delta: 2,
+            downscale_threshold: 3,
+            maintenance_interval: Duration::from_secs(60),
+            // GFE forcibly disconnects channels after ~60 minutes for load balancing.
+            // Refresh at 45m + up to 5m jitter to replace channels before reaping.
+            refresh_age: Duration::from_secs(45 * 60),
+            refresh_jitter: Duration::from_secs(5 * 60),
+        }
+    }
+}
+
+impl PoolConfig {
+    /// A single-channel pool with no scaling, for testing or local use.
+    pub fn singleton() -> Self {
+        Self {
+            initial_pool_size: 1,
+            min_pool_size: 1,
+            max_pool_size: 1,
+            ..Self::default()
+        }
+    }
+}
+
 pub(crate) struct ChannelPool {
     inner: Arc<ChannelPoolInner>,
     // Stores the entry and a *clone* of its channel after poll_ready. We need the clone
@@ -46,7 +82,7 @@ pub(crate) struct ChannelPoolInner {
     endpoint: Endpoint,
     config: PoolConfig,
     primer: Option<Box<dyn ChannelPrimer>>,
-    metrics: Option<Arc<dyn PoolMetrics>>,
+    metrics: Option<Arc<Metrics>>,
 }
 
 // Entries are wrapped in Arc and held by both the pool's entry list and any in-flight
@@ -70,27 +106,33 @@ pub(crate) trait ChannelPrimer: Send + Sync + 'static {
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
 }
 
-pub trait PoolMetrics: Send + Sync + 'static {
-    fn set_pool_size(&self, size: usize);
-    fn channels_replaced(&self, count: usize);
-    fn rpc_completed(&self);
+pub(crate) struct Metrics {
+    pub(crate) pool_size: IntGauge,
+    pub(crate) channels_replaced: IntCounter,
+    pub(crate) rpcs_completed: IntCounter,
 }
 
-impl Default for PoolConfig {
-    fn default() -> Self {
+impl Metrics {
+    fn new(registry: &Registry) -> Self {
         Self {
-            initial_pool_size: 10,
-            min_pool_size: 1,
-            max_pool_size: 200,
-            min_rpcs_per_channel: 5,
-            max_rpcs_per_channel: 50,
-            max_resize_delta: 2,
-            downscale_threshold: 3,
-            maintenance_interval: Duration::from_secs(60),
-            // GFE forcibly disconnects channels after ~60 minutes for load balancing.
-            // Refresh at 45m + up to 5m jitter to replace channels before reaping.
-            refresh_age: Duration::from_secs(45 * 60),
-            refresh_jitter: Duration::from_secs(5 * 60),
+            pool_size: register_int_gauge_with_registry!(
+                "bt_pool_pool_size",
+                "Current number of channels in the BigTable connection pool",
+                registry,
+            )
+            .unwrap(),
+            channels_replaced: register_int_counter_with_registry!(
+                "bt_pool_channels_replaced",
+                "Total channels replaced due to age refresh",
+                registry,
+            )
+            .unwrap(),
+            rpcs_completed: register_int_counter_with_registry!(
+                "bt_pool_rpcs_completed",
+                "Total RPCs completed through the pool",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -101,7 +143,7 @@ impl ChannelPool {
         endpoint: Endpoint,
         config: PoolConfig,
         primer: Option<Box<dyn ChannelPrimer>>,
-        metrics: Option<Arc<dyn PoolMetrics>>,
+        registry: Option<&Registry>,
     ) -> Self {
         Self {
             inner: Arc::new(ChannelPoolInner {
@@ -111,72 +153,62 @@ impl ChannelPool {
                 endpoint,
                 config,
                 primer,
-                metrics,
+                metrics: registry.map(|r| Arc::new(Metrics::new(r))),
             }),
             reserved: None,
         }
+    }
+
+    /// Create, connect, and spawn background maintenance tasks.
+    pub(crate) async fn new_connected(
+        endpoint: Endpoint,
+        config: PoolConfig,
+        primer: Option<Box<dyn ChannelPrimer>>,
+        registry: Option<&Registry>,
+    ) -> Result<Self> {
+        let pool = Self::new(endpoint, config, primer, registry);
+        pool.connect().await?;
+        pool.spawn_background_tasks();
+        Ok(pool)
     }
 
     /// Connect `initial_pool_size` channels, priming each one.
     pub(crate) async fn connect(&self) -> Result<()> {
         let mut entries = Vec::with_capacity(self.inner.config.initial_pool_size);
         for _ in 0..self.inner.config.initial_pool_size {
-            entries.push(Arc::new(
-                create_primed_entry(
-                    &self.inner.endpoint,
-                    self.inner.primer.as_deref(),
-                    self.inner.config.refresh_age,
-                    self.inner.config.refresh_jitter,
-                )
-                .await?,
-            ));
+            entries.push(Arc::new(self.inner.create_primed_entry().await?));
         }
         if let Some(m) = &self.inner.metrics {
-            m.set_pool_size(entries.len());
+            m.pool_size.set(entries.len() as i64);
         }
         self.inner.entries.store(Arc::new(entries));
         Ok(())
     }
 
-    /// Spawn the background maintenance loop.
-    pub(crate) fn spawn_background_tasks(&self) {
-        self.spawn_maintenance();
-    }
-
-    /// Convenience: create, connect, and spawn background tasks.
-    pub(crate) async fn new_connected(
-        endpoint: Endpoint,
-        config: PoolConfig,
-        primer: Option<Box<dyn ChannelPrimer>>,
-        metrics: Option<Arc<dyn PoolMetrics>>,
-    ) -> Result<Self> {
-        let pool = Self::new(endpoint, config, primer, metrics);
-        pool.connect().await?;
-        pool.spawn_background_tasks();
-        Ok(pool)
-    }
-
-    fn spawn_maintenance(&self) {
+    /// Spawn the background maintenance loop that periodically refreshes aged-out
+    /// channels and resizes the pool based on load.
+    fn spawn_background_tasks(&self) {
         let weak = Arc::downgrade(&self.inner);
-        let interval = self.inner.config.maintenance_interval;
+        let period = self.inner.config.maintenance_interval;
         tokio::spawn(async move {
+            let mut interval = tokio::time::interval(period);
+            interval.tick().await; // first tick completes immediately
             loop {
-                tokio::time::sleep(interval).await;
+                interval.tick().await;
                 let Some(inner) = weak.upgrade() else {
                     return;
                 };
-                inner.run_maintenance().await;
+                inner.refresh().await;
+                inner.resize().await;
             }
         });
     }
 }
 
 impl ChannelPoolInner {
-    async fn run_maintenance(&self) {
-        self.refresh().await;
-        self.resize().await;
-    }
-
+    /// Replace channels that have exceeded their refresh age. Limits replacements
+    /// per cycle to `MAX_REPLACEMENTS_PER_CYCLE` to avoid reconnection storms.
+    /// Also resets and logs per-channel error/success counters.
     async fn refresh(&self) {
         let snapshot = self.entries.load();
         let mut new_vec: Vec<Arc<PoolEntry>> = (**snapshot).clone();
@@ -216,11 +248,14 @@ impl ChannelPoolInner {
         if replacements > 0 {
             self.entries.store(Arc::new(new_vec));
             if let Some(m) = &self.metrics {
-                m.channels_replaced(replacements);
+                m.channels_replaced.inc_by(replacements as u64);
             }
         }
     }
 
+    /// Scale the pool up or down based on current per-channel load. Uses a
+    /// point-in-time sampling approach inherited from the official Google Cloud
+    /// Go client's channel pool implementation.
     async fn resize(&self) {
         let entries = self.entries.load();
         let current_size = entries.len();
@@ -271,7 +306,7 @@ impl ChannelPoolInner {
             self.entries.store(Arc::new(current));
             self.consecutive_low_load.store(0, Ordering::Relaxed);
             if let Some(m) = &self.metrics {
-                m.set_pool_size(new_size);
+                m.pool_size.set(new_size as i64);
             }
         } else {
             // Load is above the low threshold — reset the downscale streak.
@@ -302,20 +337,26 @@ impl ChannelPoolInner {
                 info!(old_size, new_size, total_in_flight, "pool resize: expanded");
                 self.entries.store(Arc::new(current));
                 if let Some(m) = &self.metrics {
-                    m.set_pool_size(new_size);
+                    m.pool_size.set(new_size as i64);
                 }
             }
         }
     }
 
     async fn create_primed_entry(&self) -> Result<PoolEntry> {
-        create_primed_entry(
-            &self.endpoint,
-            self.primer.as_deref(),
-            self.config.refresh_age,
-            self.config.refresh_jitter,
-        )
-        .await
+        let channel = self.endpoint.connect().await?;
+        if let Some(primer) = self.primer.as_deref()
+            && let Err(e) = primer.prime(&channel).await
+        {
+            warn!(error = %e, "channel priming failed (non-fatal)");
+        }
+        Ok(PoolEntry {
+            channel,
+            refresh_at: compute_refresh_at(self.config.refresh_age, self.config.refresh_jitter),
+            in_flight: AtomicUsize::new(0),
+            success_count: AtomicUsize::new(0),
+            error_count: AtomicUsize::new(0),
+        })
     }
 }
 
@@ -376,7 +417,7 @@ impl Service<Request<Body>> for ChannelPool {
             let result = channel.call(request).await;
             entry.in_flight.fetch_sub(1, Ordering::Relaxed);
             if let Some(m) = &metrics {
-                m.rpc_completed();
+                m.rpcs_completed.inc();
             }
             match &result {
                 Ok(_) => {
@@ -400,60 +441,16 @@ fn compute_refresh_at(refresh_age: Duration, refresh_jitter: Duration) -> Instan
     Instant::now() + refresh_age + jitter
 }
 
-async fn create_primed_entry(
-    endpoint: &Endpoint,
-    primer: Option<&dyn ChannelPrimer>,
-    refresh_age: Duration,
-    refresh_jitter: Duration,
-) -> Result<PoolEntry> {
-    let channel = endpoint.connect().await?;
-    if let Some(primer) = primer
-        && let Err(e) = primer.prime(&channel).await
-    {
-        warn!(error = %e, "channel priming failed (non-fatal)");
-    }
-    Ok(PoolEntry {
-        channel,
-        refresh_at: compute_refresh_at(refresh_age, refresh_jitter),
-        in_flight: AtomicUsize::new(0),
-        success_count: AtomicUsize::new(0),
-        error_count: AtomicUsize::new(0),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::bigtable::mock_server::MockBigtableServer;
     use crate::bigtable::proto::bigtable::v2::PingAndWarmRequest;
     use crate::bigtable::proto::bigtable::v2::bigtable_client::BigtableClient as BigtableInternalClient;
+    use prometheus::Registry;
 
-    struct TestPoolMetrics {
-        pool_size: AtomicUsize,
-        channels_replaced: AtomicUsize,
-        rpcs_completed: AtomicUsize,
-    }
-
-    impl TestPoolMetrics {
-        fn new() -> Arc<Self> {
-            Arc::new(Self {
-                pool_size: AtomicUsize::new(0),
-                channels_replaced: AtomicUsize::new(0),
-                rpcs_completed: AtomicUsize::new(0),
-            })
-        }
-    }
-
-    impl PoolMetrics for TestPoolMetrics {
-        fn set_pool_size(&self, size: usize) {
-            self.pool_size.store(size, Ordering::Relaxed);
-        }
-        fn channels_replaced(&self, count: usize) {
-            self.channels_replaced.fetch_add(count, Ordering::Relaxed);
-        }
-        fn rpc_completed(&self) {
-            self.rpcs_completed.fetch_add(1, Ordering::Relaxed);
-        }
+    fn metrics(pool: &ChannelPool) -> &Metrics {
+        pool.inner.metrics.as_ref().expect("metrics not configured")
     }
 
     struct TestPrimer;
@@ -486,7 +483,7 @@ mod tests {
     #[tokio::test]
     async fn test_pool_creation() {
         let (_mock, endpoint, _handle) = start_mock_server().await;
-        let metrics = TestPoolMetrics::new();
+        let registry = Registry::new();
 
         let config = PoolConfig {
             initial_pool_size: 4,
@@ -494,16 +491,16 @@ mod tests {
             max_pool_size: 10,
             ..PoolConfig::default()
         };
-        let pool = ChannelPool::new(endpoint, config, None, Some(metrics.clone()));
+        let pool = ChannelPool::new(endpoint, config, None, Some(&registry));
         pool.connect().await.unwrap();
 
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 4);
+        assert_eq!(metrics(&pool).pool_size.get(), 4);
     }
 
     #[tokio::test]
     async fn test_pool_creation_with_primer() {
         let (_mock, endpoint, _handle) = start_mock_server().await;
-        let metrics = TestPoolMetrics::new();
+        let registry = Registry::new();
 
         let config = PoolConfig {
             initial_pool_size: 3,
@@ -515,17 +512,17 @@ mod tests {
             endpoint,
             config,
             Some(Box::new(TestPrimer)),
-            Some(metrics.clone()),
+            Some(&registry),
         );
         pool.connect().await.unwrap();
 
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 3);
+        assert_eq!(metrics(&pool).pool_size.get(), 3);
     }
 
     #[tokio::test]
     async fn test_round_robin_rpcs() {
         let (mock, endpoint, _handle) = start_mock_server().await;
-        let metrics = TestPoolMetrics::new();
+        let registry = Registry::new();
 
         let config = PoolConfig {
             initial_pool_size: 2,
@@ -537,12 +534,12 @@ mod tests {
             endpoint,
             config,
             Some(Box::new(TestPrimer)),
-            Some(metrics.clone()),
+            Some(&registry),
         );
         pool.connect().await.unwrap();
 
         // Send RPCs through the pool via PingAndWarm.
-        let n = 6;
+        let n = 6usize;
         for _ in 0..n {
             let mut client = BigtableInternalClient::new(pool.clone());
             client
@@ -554,7 +551,7 @@ mod tests {
                 .unwrap();
         }
 
-        assert_eq!(metrics.rpcs_completed.load(Ordering::Relaxed), n);
+        assert_eq!(metrics(&pool).rpcs_completed.get(), n as u64);
         // Mock counts primer pings (2 from connect) + our 6 RPCs.
         assert_eq!(mock.request_count.load(Ordering::Relaxed), 2 + n);
 
@@ -567,7 +564,7 @@ mod tests {
     #[tokio::test]
     async fn test_dynamic_resize() {
         let (_mock, endpoint, _handle) = start_mock_server().await;
-        let metrics = TestPoolMetrics::new();
+        let registry = Registry::new();
 
         // target_load = (5 + 50) / 2 = 27
         let config = PoolConfig {
@@ -577,9 +574,9 @@ mod tests {
             max_resize_delta: 2,
             ..PoolConfig::default()
         };
-        let pool = ChannelPool::new(endpoint, config, None, Some(metrics.clone()));
+        let pool = ChannelPool::new(endpoint, config, None, Some(&registry));
         pool.connect().await.unwrap();
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics(&pool).pool_size.get(), 1);
 
         let set_total_in_flight = |n: usize| {
             let entries = pool.inner.entries.load();
@@ -594,13 +591,13 @@ mod tests {
         // target = ceil(100/27) = 4, delta = 3 (uncapped). Pool: 1 → 4.
         set_total_in_flight(100);
         pool.inner.resize().await;
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 4);
+        assert_eq!(metrics(&pool).pool_size.get(), 4);
 
         // Scale up again: load=200/4=50 ≥ 50.
         // target = ceil(200/27) = 8, delta = 4. Pool: 4 → 8.
         set_total_in_flight(200);
         pool.inner.resize().await;
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 8);
+        assert_eq!(metrics(&pool).pool_size.get(), 8);
 
         // Remove load. Scale down requires downscale_threshold (default 3) consecutive
         // low-load observations before actually shrinking, then is capped by max_resize_delta=2.
@@ -608,45 +605,45 @@ mod tests {
 
         // First two low-load observations: no shrink yet (threshold not met).
         pool.inner.resize().await;
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 8);
+        assert_eq!(metrics(&pool).pool_size.get(), 8);
         pool.inner.resize().await;
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 8);
+        assert_eq!(metrics(&pool).pool_size.get(), 8);
 
         // Third consecutive low-load observation crosses the threshold.
         // load=0 ≤ 5 → target=max(ceil(0/27),1)=1, delta=min(8-1,2)=2. Pool: 8 → 6.
         pool.inner.resize().await;
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 6);
+        assert_eq!(metrics(&pool).pool_size.get(), 6);
 
         // Counter was reset after scaling. Need 3 more consecutive observations.
         // 6 → 4
         pool.inner.resize().await;
         pool.inner.resize().await;
         pool.inner.resize().await;
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 4);
+        assert_eq!(metrics(&pool).pool_size.get(), 4);
 
         // 4 → 2
         pool.inner.resize().await;
         pool.inner.resize().await;
         pool.inner.resize().await;
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 2);
+        assert_eq!(metrics(&pool).pool_size.get(), 2);
 
         // 2 → 1 (min_pool_size)
         pool.inner.resize().await;
         pool.inner.resize().await;
         pool.inner.resize().await;
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics(&pool).pool_size.get(), 1);
 
         // Already at min — no change even after threshold.
         pool.inner.resize().await;
         pool.inner.resize().await;
         pool.inner.resize().await;
-        assert_eq!(metrics.pool_size.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics(&pool).pool_size.get(), 1);
     }
 
     #[tokio::test]
     async fn test_age_refresh_replaces_old_channels() {
         let (_mock, endpoint, _handle) = start_mock_server().await;
-        let metrics = TestPoolMetrics::new();
+        let registry = Registry::new();
 
         let config = PoolConfig {
             initial_pool_size: 2,
@@ -656,19 +653,19 @@ mod tests {
             refresh_jitter: Duration::ZERO,
             ..PoolConfig::default()
         };
-        let pool = ChannelPool::new(endpoint, config, None, Some(metrics.clone()));
+        let pool = ChannelPool::new(endpoint, config, None, Some(&registry));
         pool.connect().await.unwrap();
 
         pool.inner.refresh().await;
 
         // Both entries expired, both replaced (within MAX_REPLACEMENTS_PER_CYCLE=2).
-        assert_eq!(metrics.channels_replaced.load(Ordering::Relaxed), 2);
+        assert_eq!(metrics(&pool).channels_replaced.get(), 2);
     }
 
     #[tokio::test]
     async fn test_age_refresh_caps_replacements_per_cycle() {
         let (_mock, endpoint, _handle) = start_mock_server().await;
-        let metrics = TestPoolMetrics::new();
+        let registry = Registry::new();
 
         let config = PoolConfig {
             initial_pool_size: 4,
@@ -678,15 +675,15 @@ mod tests {
             refresh_jitter: Duration::ZERO,
             ..PoolConfig::default()
         };
-        let pool = ChannelPool::new(endpoint, config, None, Some(metrics.clone()));
+        let pool = ChannelPool::new(endpoint, config, None, Some(&registry));
         pool.connect().await.unwrap();
 
         // All 4 entries are expired, but only MAX_REPLACEMENTS_PER_CYCLE=2 replaced per cycle.
         pool.inner.refresh().await;
-        assert_eq!(metrics.channels_replaced.load(Ordering::Relaxed), 2);
+        assert_eq!(metrics(&pool).channels_replaced.get(), 2);
 
         // Second cycle replaces the remaining 2.
         pool.inner.refresh().await;
-        assert_eq!(metrics.channels_replaced.load(Ordering::Relaxed), 4);
+        assert_eq!(metrics(&pool).channels_replaced.get(), 4);
     }
 }
