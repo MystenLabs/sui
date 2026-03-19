@@ -37,37 +37,6 @@ pub struct PoolConfig {
     pub refresh_jitter: Duration,
 }
 
-impl Default for PoolConfig {
-    fn default() -> Self {
-        Self {
-            initial_pool_size: 10,
-            min_pool_size: 1,
-            max_pool_size: 200,
-            min_rpcs_per_channel: 5,
-            max_rpcs_per_channel: 50,
-            max_resize_delta: 2,
-            downscale_threshold: 3,
-            maintenance_interval: Duration::from_secs(60),
-            // GFE forcibly disconnects channels after ~60 minutes for load balancing.
-            // Refresh at 45m + up to 5m jitter to replace channels before reaping.
-            refresh_age: Duration::from_secs(45 * 60),
-            refresh_jitter: Duration::from_secs(5 * 60),
-        }
-    }
-}
-
-impl PoolConfig {
-    /// A single-channel pool with no scaling, for testing or local use.
-    pub fn singleton() -> Self {
-        Self {
-            initial_pool_size: 1,
-            min_pool_size: 1,
-            max_pool_size: 1,
-            ..Self::default()
-        }
-    }
-}
-
 pub(crate) struct ChannelPool {
     inner: Arc<ChannelPoolInner>,
     // Stores the entry and a *clone* of its channel after poll_ready. We need the clone
@@ -85,6 +54,12 @@ pub(crate) struct ChannelPoolInner {
     metrics: Option<Arc<Metrics>>,
 }
 
+pub(crate) struct Metrics {
+    pub(crate) pool_size: IntGauge,
+    pub(crate) channels_replaced: IntCounter,
+    pub(crate) rpcs_completed: IntCounter,
+}
+
 // Entries are wrapped in Arc and held by both the pool's entry list and any in-flight
 // RPCs (via Service::call). When an entry is replaced or removed from the pool, in-flight
 // RPCs keep their Arc<PoolEntry> alive until the response completes — no explicit drain needed.
@@ -99,6 +74,12 @@ struct PoolEntry {
     error_count: AtomicUsize,
 }
 
+/// Decrements `in_flight` when dropped, ensuring the count stays accurate even
+/// if the RPC future is cancelled (e.g. client disconnect).
+struct InFlightGuard {
+    entry: Arc<PoolEntry>,
+}
+
 pub(crate) trait ChannelPrimer: Send + Sync + 'static {
     fn prime<'a>(
         &'a self,
@@ -106,33 +87,14 @@ pub(crate) trait ChannelPrimer: Send + Sync + 'static {
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
 }
 
-pub(crate) struct Metrics {
-    pub(crate) pool_size: IntGauge,
-    pub(crate) channels_replaced: IntCounter,
-    pub(crate) rpcs_completed: IntCounter,
-}
-
-impl Metrics {
-    fn new(registry: &Registry) -> Self {
+impl PoolConfig {
+    /// A single-channel pool with no scaling, for testing or local use.
+    pub fn singleton() -> Self {
         Self {
-            pool_size: register_int_gauge_with_registry!(
-                "bt_pool_pool_size",
-                "Current number of channels in the BigTable connection pool",
-                registry,
-            )
-            .unwrap(),
-            channels_replaced: register_int_counter_with_registry!(
-                "bt_pool_channels_replaced",
-                "Total channels replaced due to age refresh",
-                registry,
-            )
-            .unwrap(),
-            rpcs_completed: register_int_counter_with_registry!(
-                "bt_pool_rpcs_completed",
-                "Total RPCs completed through the pool",
-                registry,
-            )
-            .unwrap(),
+            initial_pool_size: 1,
+            min_pool_size: 1,
+            max_pool_size: 1,
+            ..Self::default()
         }
     }
 }
@@ -360,6 +322,50 @@ impl ChannelPoolInner {
     }
 }
 
+impl Metrics {
+    fn new(registry: &Registry) -> Self {
+        Self {
+            pool_size: register_int_gauge_with_registry!(
+                "bt_pool_pool_size",
+                "Current number of channels in the BigTable connection pool",
+                registry,
+            )
+            .unwrap(),
+            channels_replaced: register_int_counter_with_registry!(
+                "bt_pool_channels_replaced",
+                "Total channels replaced due to age refresh",
+                registry,
+            )
+            .unwrap(),
+            rpcs_completed: register_int_counter_with_registry!(
+                "bt_pool_rpcs_completed",
+                "Total RPCs completed through the pool",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        Self {
+            initial_pool_size: 10,
+            min_pool_size: 1,
+            max_pool_size: 200,
+            min_rpcs_per_channel: 5,
+            max_rpcs_per_channel: 50,
+            max_resize_delta: 2,
+            downscale_threshold: 3,
+            maintenance_interval: Duration::from_secs(60),
+            // GFE forcibly disconnects channels after ~60 minutes for load balancing.
+            // Refresh at 45m + up to 5m jitter to replace channels before reaping.
+            refresh_age: Duration::from_secs(45 * 60),
+            refresh_jitter: Duration::from_secs(5 * 60),
+        }
+    }
+}
+
 impl Clone for ChannelPool {
     fn clone(&self) -> Self {
         Self {
@@ -432,12 +438,6 @@ impl Service<Request<Body>> for ChannelPool {
             Ok(result?)
         })
     }
-}
-
-/// Decrements `in_flight` when dropped, ensuring the count stays accurate even
-/// if the RPC future is cancelled (e.g. client disconnect).
-struct InFlightGuard {
-    entry: Arc<PoolEntry>,
 }
 
 impl Drop for InFlightGuard {
