@@ -15,6 +15,7 @@ use sui_core::accumulators::balances::get_all_balances_for_owner;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_simulator::has_mainnet_protocol_config_override;
 use sui_test_transaction_builder::FundSource;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -540,6 +541,9 @@ async fn test_withdraw_insufficient_balance() {
 
 #[sim_test]
 async fn test_address_balance_gas() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_address_balance_gas_payments_for_testing();
