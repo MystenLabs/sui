@@ -756,7 +756,7 @@
     },
     {
       "source": "/concepts/custom-indexing-framework",
-      "destination": "/guides/developer/accessing-data/custom-indexing-framework"
+      "destination": "/guides/developer/accessing-data/custom-indexer"
     },
     {
       "source": "/concepts/custom-indexer/pipeline-architecture",
@@ -932,7 +932,7 @@
     },
     {
       "source": "/concepts/data-access/custom-indexing-framework",
-      "destination": "/guides/developer/accessing-data/custom-indexing-framework"
+      "destination": "/guides/developer/accessing-data/custom-indexer"
     },
     {
       "source": "/concepts/data-access/grpc-overview",

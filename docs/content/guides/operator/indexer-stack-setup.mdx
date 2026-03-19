@@ -83,7 +83,7 @@ For prunable pipelines, calculate the `first-checkpoint` based on your retention
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `<CONFIG_FILE>`      | Path to indexer configuration file.                                                                                                  |
 | `<DATABASE_URL>`     | Postgres database connection string.                                                                                                 |
-| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/guides/developer/accessing-data/custom-indexing-framework#data-sources). |
+| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/guides/developer/accessing-data/custom-indexer#data-sources). |
 | `<CHECKPOINT_NUMBER>`| (Optional) For prunable pipelines only - the checkpoint to start indexing from based on retention requirements.                        |
 
 #### Examples
@@ -298,7 +298,7 @@ $ sui-indexer-alt-consistent-store restore \
 | `<HTTP_ENDPOINT>` \*        | URL of formal snapshot API.                                                                                                               |
 | `<OBJECT_FILE_CONCURRENCY>` | Path to indexer configuration file.                                                                                                       |
 | `<PIPELINE_NAME>`           | Name of pipeline to restore. Can be set multiple times; once per pipeline.                                                                |
-| `<REMOTE_STORE_URL>`        | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/guides/developer/accessing-data/custom-indexing-framework#data-sources).      |
+| `<REMOTE_STORE_URL>`        | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/guides/developer/accessing-data/custom-indexer#data-sources).      |
 | `<S3_BUCKET>` \*            | Name or URL of AWS S3 bucket containing [managed snapshots](https://docs.sui.io/guides/operator/snapshots#mysten-labs-managed-snapshots). |
 
 \* Must specify one of `<AZURE_BUCKET>`, `<GCS_ACCOUNT>`, `<HTTP_ENDPOINT>`, or `<S3_BUCKET>`.
@@ -331,7 +331,7 @@ $ sui-indexer-alt-consistent-store run \
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `<CONFIG_FILE>`      | Path to consistent store configuration file.                                                                                         |
 | `<DATABASE_PATH>`    | Path to RocksDB database.                                                                                                            |
-| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/guides/developer/accessing-data/custom-indexing-framework#data-sources). |
+| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/guides/developer/accessing-data/custom-indexer#data-sources). |
 
 Example:
 
