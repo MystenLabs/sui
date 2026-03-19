@@ -3,11 +3,17 @@
 
 use std::time::Duration;
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use test_cluster::TestClusterBuilder;
 use tracing::info;
 
 #[sim_test]
 async fn test_checkpoint_rate() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.disable_randomize_checkpoint_tx_limit_for_testing();
+        config
+    });
+
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(60000)
         .build()
