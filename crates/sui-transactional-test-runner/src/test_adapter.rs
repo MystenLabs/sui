@@ -255,6 +255,7 @@ impl AdapterInitConfig {
             allow_references_in_ptbs,
             enable_non_exclusive_writes,
             enable_address_balance_gas_payments,
+            enable_coin_reservations,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -295,6 +296,9 @@ impl AdapterInitConfig {
         }
         if enable_address_balance_gas_payments {
             protocol_config.enable_address_balance_gas_payments_for_testing();
+        }
+        if enable_coin_reservations {
+            protocol_config.enable_coin_reservation_for_testing();
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
         // ExecutionTimeEstimate mode which is the only supported mode.

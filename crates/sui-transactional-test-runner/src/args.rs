@@ -99,6 +99,9 @@ pub struct SuiInitArgs {
     /// Enable using address balance as gas payments feature for testing
     #[clap(long = "enable-address-balance-gas-payments")]
     pub enable_address_balance_gas_payments: bool,
+    /// Enable coin reservations for gas payment
+    #[clap(long = "enable-coin-reservations")]
+    pub enable_coin_reservations: bool,
 }
 
 #[derive(Debug, clap::Parser)]
