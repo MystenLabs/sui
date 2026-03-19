@@ -29,6 +29,7 @@ const standards = [
 		},
 	items: [
 		'standards/pas/pas-workflows',
+		'standards/pas/querying-assets',
 		'standards/pas/integrating-pas',
 	],
 	},
