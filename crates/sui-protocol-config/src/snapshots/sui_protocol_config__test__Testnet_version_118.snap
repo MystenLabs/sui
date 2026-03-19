@@ -155,6 +155,7 @@ feature_flags:
   validator_metadata_verify_v2: true
   randomize_checkpoint_tx_limit_in_tests: true
   gasless_transaction_drop_safety: true
+  merge_randomness_into_checkpoint: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

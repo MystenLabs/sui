@@ -1025,6 +1025,10 @@ struct FeatureFlags {
     // If true, mark the gas coin as uninitialized in drop safety when there is no gas coin.
     #[serde(skip_serializing_if = "is_false")]
     gasless_transaction_drop_safety: bool,
+
+    // When split-checkpoints enabled, merge randomness and non-randomness schedulables together.
+    #[serde(skip_serializing_if = "is_false")]
+    merge_randomness_into_checkpoint: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2665,6 +2669,10 @@ impl ProtocolConfig {
 
     pub fn new_vm_enabled(&self) -> bool {
         self.execution_version.is_some_and(|v| v >= 4)
+    }
+
+    pub fn merge_randomness_into_checkpoint(&self) -> bool {
+        self.feature_flags.merge_randomness_into_checkpoint
     }
 }
 
@@ -4684,6 +4692,7 @@ impl ProtocolConfig {
                     // Enable new VM.
                     cfg.execution_version = Some(4);
                     cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = false;
+                    cfg.feature_flags.merge_randomness_into_checkpoint = true;
                 }
                 // Use this template when making changes:
                 //
@@ -5095,6 +5104,10 @@ impl ProtocolConfig {
 
     pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
         self.feature_flags.split_checkpoints_in_consensus_handler = val;
+    }
+
+    pub fn set_merge_randomness_into_checkpoint_for_testing(&mut self, val: bool) {
+        self.feature_flags.merge_randomness_into_checkpoint = val;
     }
 }
 

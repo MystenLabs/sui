@@ -1808,8 +1808,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let max_transactions_per_checkpoint =
             protocol_config.max_transactions_per_checkpoint() as usize;
 
-        let should_write_random_checkpoint = state.randomness_round.is_some()
-            || (state.dkg_failed && !randomness_schedulables.is_empty());
+        let (schedulables, randomness_schedulables) =
+            if protocol_config.merge_randomness_into_checkpoint() {
+                let mut combined = schedulables;
+                combined.extend(randomness_schedulables);
+                (combined, vec![])
+            } else {
+                (schedulables, randomness_schedulables)
+            };
+
+        let should_write_random_checkpoint = !protocol_config.merge_randomness_into_checkpoint()
+            && (state.randomness_round.is_some()
+                || (state.dkg_failed && !randomness_schedulables.is_empty()));
 
         let mut checkpoint_queue = self.checkpoint_queue.lock().unwrap();
 
