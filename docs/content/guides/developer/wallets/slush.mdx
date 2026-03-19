@@ -4,13 +4,13 @@ description: Learn about Slush Wallet, its features, and how to integrate it int
 keywords: [ slush, slush wallet, wallet, zkLogin, wallet integration, dapp kit, deep linking, registerSlushWallet ]
 ---
 
-Slush is the official Sui wallet built by Mysten Labs. It supports social login through zkLogin (zero-knowledge login), self-custodial key management with a recovery passphrase, and Slush Links, which let users send tokens and NFTs through a shareable link or QR code. Slush Wallet is available as a Chrome browser extension, an iOS app, an Android app, and a web app at [slush.app](https://slush.app).
+Slush is the official Sui wallet built by Mysten Labs, available as a Chrome browser extension, an iOS app, an Android app, and a web app at [slush.app](https://slush.app).
 
 ## Slush basics
 
 Slush Wallet gives users two ways to create and access an account:
 
-- **Social login** uses [zkLogin](/guides/developer/cryptography/zklogin-integration/zklogin) to derive a Sui address from an OAuth credential (Google, Apple, Facebook, or Twitch). No recovery passphrase is required. This is the recommended login method for users who are new to wallets, because key management is fully abstracted.
+- **Social login** uses [zero-knowledge login (zkLogin)](/guides/developer/cryptography/zklogin-integration/zklogin) to derive a Sui address from an OAuth credential (Google, Apple, Facebook, or Twitch). No recovery passphrase is required. This is the recommended login method for users who are new to wallets, because key management is fully abstracted.
 
 - **Recovery passphrase** creates a standard self-custodial account. The user holds the private key locally and is responsible for backing up the recovery passphrase. This is the recommended path for users who want full, independent control of their keys.
 
@@ -18,14 +18,14 @@ Both account types are supported simultaneously. A single Slush Wallet can hold 
 
 Additional features available in Slush Wallet include:
 
-- [**Slush Links**](https://slush.app/guides/use-slush-links): Send a bundle of tokens or NFTs to anyone through a shareable link or QR code, with no recipient address required.
+- [**Slush Links**](https://slush.app/guides/use-slush-links): Send tokens or NFTs to anyone through a shareable link or QR code, with no recipient address required.
 - [**Staking**](/concepts/tokenomics/staking-unstaking): Delegate SUI to a validator and earn staking rewards directly from the wallet.
 - **Swaps**: Exchange tokens in-app without leaving the wallet.
 - **App browser**: Browse and connect to Sui apps from inside the mobile app.
 
 ## Slush Wallet SDK
 
-The [`@mysten/slush-wallet` SDK](https://sdk.mystenlabs.com/slush-wallet) lets you add Slush Wallet support to your own wallet interface or app. The Slush browser extension and native mobile app work automatically through the [Wallet Standard](/standards/wallet-standard.mdx) and do not require this SDK. The SDK is only required if you want to support the Slush web app as a connection option.
+The [`@mysten/slush-wallet` SDK](https://sdk.mystenlabs.com/slush-wallet) lets you add Slush Wallet support to your own wallet interface or app. The Slush browser extension and native mobile app work automatically through the [Wallet Standard](/standards/wallet-standard) and do not require this SDK. The SDK is only required if you want to support the Slush web app as a connection option.
 
 ### Install
 ```bash
@@ -36,18 +36,14 @@ pnpm install @mysten/slush-wallet
 
 Call `registerSlushWallet` once, as early as possible in your application's lifecycle. This registers the Slush web wallet with the Wallet Standard so it appears in your existing wallet connection UI.
 
-`registerSlushWallet` accepts two arguments:
-
-- `name`: The name of your app. Slush displays this name to the user when they are asked to approve the connection.
-- `options` (optional): An object with the following properties:
-  - `network`: The network to connect to. Defaults to `mainnet`. Supports `mainnet` and `testnet`.
-  - `origin`: The origin of the Slush website. Defaults to `https://slush.app`.
-
-```typescript
-import { registerSlushWallet } from '@mysten/slush-wallet';
-
-registerSlushWallet('Your App Name');
-```
+<ImportContent
+  source="/packages/slush-wallet/src/wallet/index.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="registerSlushWallet"
+  noComments
+/>
 
 ### Supported features
 
@@ -61,152 +57,31 @@ The Slush wallet supports the following Wallet Standard features:
 
 To check whether the connected wallet is Slush Wallet, compare the wallet name against the `SLUSH_WALLET_NAME` constant.
 
-```typescript
-import { useCurrentWallet } from '@mysten/dapp-kit';
-import { SLUSH_WALLET_NAME } from '@mysten/slush-wallet';
-
-function SlushOnly() {
-  const { currentWallet } = useCurrentWallet();
-  const walletIsSlushWallet = currentWallet?.name === SLUSH_WALLET_NAME;
-
-  // rest of component logic...
-}
-```
+<ImportContent
+  source="/packages/slush-wallet/src/wallet/index.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  variable="SLUSH_WALLET_NAME"
+/>
 
 ## Sui dApp Kit integration
 
-[Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) provides built-in opt-in support for Slush Wallet. To enable it, pass the `slushWallet` prop to `WalletProvider`. The `name` field is required and contains the name of your app shown to the user during the connection flow.
+The [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) provides built-in opt-in support for Slush Wallet. Pass `slushWalletConfig` to `createDAppKit` to enable it. The `name` field is required and is shown to the user during the connection flow.
 
-```typescript
-import { WalletProvider } from '@mysten/dapp-kit';
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/components/DAppKitProvider.tsx"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="DAppKitProvider"
+  noComments
+/>
 
-function App({ children }) {
-  return (
-    <WalletProvider
-      slushWallet={{
-        name: 'Your App Name',
-      }}
-    >
-      {children}
-    </WalletProvider>
-  );
-}
-```
-
-Users who have the Slush Wallet browser extension installed see only the extension in the connection modal. Users without the extension connect through the Slush web app instead.
+Users who have the Slush browser extension installed see only the extension in the connection modal. Users without the extension connect through the Slush web app instead.
 
 ## Deep linking
 
-Deep linking lets external apps, websites, and services open Slush Wallet directly to a specific screen or trigger a specific action, such as a token swap, a payment, or an app browser session.
+Deep linking lets external apps, websites, and services open Slush Wallet directly to a specific screen or trigger a specific action, such as a token swap, a payment, or an app browser session. Slush supports universal links via the `my.slush.app` domain and custom URL scheme links via `slush://`. Deep linking is not supported for the Slush browser extension.
 
-### Link formats
-
-Slush Wallet supports two link formats:
-
-- **Universal links** use the `my.slush.app` domain and are the recommended format for most integrations. They work on iOS, Android, and desktop, opening the native app when it is installed or falling back to the Slush web app when it is not.
-
-- **Custom URL scheme** links use the `slush://` scheme and only open the native mobile app. If the app is not installed, these links fail. Use this format only when you need to detect whether the native app is installed.
-
-:::
-
-Deep linking is not supported for the Slush browser extension.
-
-:::
-
-Always URL-encode parameter values. Token type addresses contain colons (`:`) and other special characters that must be encoded before use in a URL.
-
-```typescript
-const coinType = '0x2::sui::SUI';
-const encodedCoinType = encodeURIComponent(coinType);
-const url = `slush://swap?fromCoinType=${encodedCoinType}`;
-```
-
-### Supported routes
-
-The following routes are available through both `my.slush.app` HTTPS links and the `slush://` custom scheme unless otherwise noted.
-
-#### App browser
-
-Opens the in-app browser to a specific URL.
-
-| Parameter | Required | Description |
-|---|---|---|
-| `url` | Yes | Full URL to load in the browser |
-
-```
-https://my.slush.app/browse/https://app.example.com
-slush://browse/https://app.example.com
-```
-
-#### Token swap
-
-Opens the token swap screen with optional pre-filled values.
-
-| Parameter | Required | Description |
-|---|---|---|
-| `fromCoinType` | No | Source token type address. Defaults to SUI |
-| `toCoinType` | No | Destination token type address |
-| `presetAmount` | No | Pre-filled amount to swap |
-
-```
-slush://swap
-slush://swap?fromCoinType=0x2%3A%3Asui%3A%3ASUI&presetAmount=100
-```
-
-#### Claim assets
-
-Opens the claim screen to receive stashed or gifted tokens.
-
-| Parameter | Required | Description |
-|---|---|---|
-| `claimUrl` | Yes | Full claim URL from zkSend or Getstashed |
-
-```
-slush://claim?claimUrl=https://zksend.com/claim/abc123xyz
-https://my.slush.app/claim?claimUrl=https://getstashed.com/claim/def456
-```
-
-#### Receive and QR code
-
-Opens the receive screen or QR scanner.
-
-| Parameter | Required | Description |
-|---|---|---|
-| `action` | Yes | `RECEIVE` to show the wallet address QR code, or `SCAN_QR_CODE` to open the scanner |
-
-```
-slush://suime?action=RECEIVE
-slush://suime?action=SCAN_QR_CODE
-```
-
-#### Staking
-
-Opens the staking screen or a specific staking flow.
-
-```
-slush://staking
-slush://staking/native-stake
-slush://staking/native-unstake
-slush://staking/liquid-stake
-slush://staking/liquid-unstake
-```
-
-#### Payment Kit
-
-Opens the payment flow using a `sui:pay` URI. Slush also accepts `slush:pay`.
-
-| Parameter | Required | Description |
-|---|---|---|
-| `receiver` | Yes | Recipient Sui address |
-| `amount` | Yes | Payment amount in the smallest unit (MIST for SUI) |
-| `coinType` | Yes | Coin type (for example, `0x2::sui::SUI`) |
-| `nonce` | Yes | Unique payment identifier, 36 characters maximum |
-| `registry` | No | Registry name or object ID for registry-based payments |
-| `label` | No | Human-readable label for the payment |
-| `message` | No | Message or memo for the payment |
-
-```
-https://my.slush.app/pay?receiver=0x1234...abcd&amount=1000000000&coinType=0x2%3A%3Asui%3A%3ASUI&nonce=abc-123-xyz
-```
-
-Use the [`@mysten/payment-kit` SDK](https://sdk.mystenlabs.com/payment-kit) to generate properly formatted payment URIs.
+For the full route reference, parameter tables, platform-specific implementation examples, and troubleshooting guidance, refer to the [Slush Wallet SDK docs on deep linking](https://sdk.mystenlabs.com/slush-wallet/deep-linking).

@@ -38,8 +38,8 @@ The [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) is the official SDK for 
 
 Sui dApp Kit 2.0 consists of two packages:
 
-- **`@mysten/dapp-kit-core`:** Framework-agnostic core that works with vanilla JavaScript, React, Vue, or any other framework.
-- **`@mysten/dapp-kit-react`:** React bindings built on top of the core package, including hooks and pre-built components.
+- `@mysten/dapp-kit-core`: Framework-agnostic core that works with vanilla JavaScript, React, Vue, or any other framework.
+- `@mysten/dapp-kit-react`: React bindings built on top of the core package, including hooks and pre-built components.
 
 ### Install
 
@@ -59,30 +59,15 @@ npm i @mysten/dapp-kit-core @mysten/sui
 
 Create a configuration file to initialize your dApp Kit instance. The `createDAppKit` function manages wallet connections, network configuration, and Sui client access.
 
-```typescript
-// dapp-kit.ts
-import { createDAppKit } from '@mysten/dapp-kit-react';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-const GRPC_URLS = {
-  mainnet: 'https://fullnode.mainnet.sui.io:443',
-  testnet: 'https://fullnode.testnet.sui.io:443',
-};
-
-export const dAppKit = createDAppKit({
-  networks: ['mainnet', 'testnet'],
-  defaultNetwork: 'mainnet',
-  createClient: (network) =>
-    new SuiGrpcClient({ network, baseUrl: GRPC_URLS[network] }),
-});
-
-// Register types for hook type inference
-declare module '@mysten/dapp-kit-react' {
-  interface Register {
-    dAppKit: typeof dAppKit;
-  }
-}
-```
+`<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-core/src/core/index.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="createDAppKit"
+  signatureOnly
+  noComments
+/>
 
 | Parameter | Required | Description |
 |---|---|---|
@@ -98,23 +83,16 @@ declare module '@mysten/dapp-kit-react' {
 
 Wrap your application with `DAppKitProvider` to make all hooks available throughout the component tree:
 
-```typescript
-// App.tsx
-import { DAppKitProvider } from '@mysten/dapp-kit-react';
-import { ConnectButton } from '@mysten/dapp-kit-react/ui';
-import { dAppKit } from './dapp-kit';
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/components/DAppKitProvider.tsx"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="DAppKitProvider"
+  noComments
+/>
 
-export default function App() {
-  return (
-    <DAppKitProvider dAppKit={dAppKit}>
-      <ConnectButton />
-      <YourApp />
-    </DAppKitProvider>
-  );
-}
-```
-
-`ConnectButton` renders a complete wallet connection UI that lists all detected Wallet Standard wallets automatically. Users can connect any installed extension wallet without any additional configuration.
+`ConnectButton` renders a complete wallet connection UI. It automatically lists any browser extension wallets the user has installed that implement the Wallet Standard with no additional configuration required.
 
 ### Read wallet state
 
@@ -128,101 +106,61 @@ Use hooks to access information about the connected wallet and account:
 | `useCurrentAccount` | Returns the currently selected account |
 | `useDAppKit` | Returns the dApp Kit instance and its actions |
 
-```typescript
-import {
-  useCurrentAccount,
-  useCurrentWallet,
-  useWalletConnection,
-} from '@mysten/dapp-kit-react';
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useWalletConnection.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useWalletConnection"
+  noComments
+/>
 
-function WalletStatus() {
-  const account = useCurrentAccount();
-  const wallet = useCurrentWallet();
-  const connection = useWalletConnection();
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useCurrentWallet.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useCurrentWallet"
+  noComments
+/>
 
-  if (connection.status === 'disconnected') {
-    return <p>Connect a wallet to get started</p>;
-  }
-
-  if (connection.status === 'connecting') {
-    return <p>Connecting...</p>;
-  }
-
-  return (
-    <div>
-      <p>Wallet: {wallet?.name}</p>
-      <p>Address: {account?.address}</p>
-    </div>
-  );
-}
-```
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useCurrentAccount.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useCurrentAccount"
+  noComments
+/>
 
 ### List available wallets
 
-Use `useWallets` to display all wallets the user has installed:
-
-```typescript
-import { useWallets } from '@mysten/dapp-kit-react';
-
-function WalletList() {
-  const wallets = useWallets();
-
-  return (
-    <ul>
-      {wallets.map((wallet) => (
-        <li key={wallet.name}>
-          <img src={wallet.icon} alt={wallet.name} />
-          <span>{wallet.name}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useWallets.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useWallets"
+  noComments
+/>
 
 ### Sign and execute a transaction
 
-Use `useDAppKit` to access the `signAndExecuteTransaction` action:
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useDAppKit.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useDAppKit"
+  noComments
+/>
 
-```typescript
-import { useDAppKit, useCurrentAccount } from '@mysten/dapp-kit-react';
-import { Transaction, coinWithBalance } from '@mysten/sui/transactions';
-
-function TransferButton() {
-  const dAppKit = useDAppKit();
-  const account = useCurrentAccount();
-
-  async function handleTransfer() {
-    const tx = new Transaction();
-    tx.transferObjects(
-      [coinWithBalance({ balance: 1_000_000 })],
-      'RECIPIENT_ADDRESS',
-    );
-
-    const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
-
-    if (result.FailedTransaction) {
-      throw new Error(
-        `Transaction failed: ${result.FailedTransaction.status.error?.message}`,
-      );
-    }
-
-    console.log('Transaction digest:', result.Transaction.digest);
-  }
-
-  return (
-    <button onClick={handleTransfer} disabled={!account}>
-      Send Transaction
-    </button>
-  );
-}
-```
-
-When the user is connected through a hardware wallet such as Ledger, `signAndExecuteTransaction` routes the signing request to the device. The user must approve the transaction on the hardware device before the SDK continues.
+When the user is connected through a hardware wallet such as Ledger, `signAndExecuteTransaction` routes the signing request to the device. Once the user approves on the hardware device, the host wallet submits the signed transaction to the Sui network and returns the digest and effects to your app.
 
 ### Preferred wallets
 
 Use `preferredWallets` in `createDAppKit` to sort specific wallets to the top of the connection UI. Wallets are matched by name:
+
 ```typescript
 export const dAppKit = createDAppKit({
   networks: ['mainnet'],

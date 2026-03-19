@@ -10,25 +10,32 @@ zkLogin wallets derive a Sui address from an OAuth credential rather than a trad
 
 At a high level, a zkLogin wallet works as follows:
 
-1. The app generates an ephemeral key pair, valid for a limited number of epochs.
-2. The user authenticates with an OAuth provider. The provider returns a JSON Web Token (JWT) that contains a nonce derived from the ephemeral public key.
+1. The app generates an [ephemeral key pair](/guides/developer/cryptography/zklogin-integration/zklogin#how-zklogin-works), valid for a limited number of epochs.
+2. The user authenticates with an OAuth provider. The provider returns a [JSON Web Token (JWT)](/guides/developer/cryptography/zklogin-integration/zklogin#json-web-token-jwt) that contains a nonce derived from the ephemeral public key.
 3. The app or a proving service uses the JWT to generate a zero-knowledge proof (ZKP). The proof confirms the user holds a valid OAuth credential without revealing the credential on-chain.
-4. The app uses the JWT, a per-user salt, and the issuer URL to derive a stable Sui address for the user. The same credential always produces the same address for a given app and salt.
-5. Transactions are signed with the ephemeral private key and submitted alongside the ZKP. Validators verify the proof and execute the transaction.
+4. The app uses the JWT, a [per-user salt](/guides/developer/cryptography/zklogin-integration/zklogin#user-salt), and the issuer URL to [derive a stable Sui address](/guides/developer/cryptography/zklogin-integration/zklogin#address-definition) for the user. The same credential always produces the same address for a given app and salt.
+5. Transactions are signed with the [ephemeral private key](/guides/developer/cryptography/zklogin-integration/zklogin#ephemeral-private-key) and submitted alongside the ZKP. Validators verify the proof and execute the transaction.
 
 Because zkLogin is a two-factor scheme, an attacker who compromises an OAuth account cannot sign transactions unless they also compromise the per-user salt.
 
-## zkLogin wallets on Sui
-
-### Enoki
+## Enoki
 
 [Enoki](https://enoki.mystenlabs.com/) is a Mysten Labs platform that wraps zkLogin and sponsored transactions behind a simple API. Rather than managing proof generation, salt storage, and OAuth configuration yourself, you register your app on the Enoki Developer Portal, configure your OAuth providers, and use the [`@mysten/enoki` SDK](https://docs.enoki.mystenlabs.com/) to handle the rest.
 
 Enoki implements the [Wallet Standard](/standards/wallet-standard) and integrate with [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) through `registerEnokiWallets`. Once registered, they appear in the standard connection UI alongside any other installed wallets.
 
-### Playtron wallet
+<ImportContent
+  source="/packages/enoki/src/wallet/register.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="registerEnokiWallets"
+  noComments
+/>
 
-The [Playtron](https://www.playtron.one/) wallet is the default zkLogin wallet on the [SuiPlay0X1](/guides/developer/suiplay0x1/wallet-integration). Every SuiPlay0X1 user has a Playtron account, and every Playtron account has an associated zkLogin wallet derived from those credentials.
+## Playtron wallet
+
+The [Playtron](https://www.playtron.one/) wallet is the default zkLogin wallet on the [SuiPlay0X1](/guides/suiplay0x1/wallet-integration). Every SuiPlay0X1 user has a Playtron account, and every Playtron account has an associated zkLogin wallet derived from those credentials.
 
 Games running on the SuiPlay0X1 must support the Playtron wallet as the default option. Off-device versions of those games should use Sui dApp Kit to allow users to connect their Playtron wallet through a web interface.
 
@@ -48,58 +55,58 @@ All zkLogin utilities are exported from `@mysten/sui/zklogin`.
 
 **Derive a Sui address from a JWT:**
 
-```typescript
-import { jwtToAddress } from '@mysten/sui/zklogin';
-
-// jwtAsString is the encoded JWT returned by the OAuth provider
-// salt is a per-user, per-app secret value you generate and store
-const address = jwtToAddress(jwtAsString, salt);
-```
+<ImportContent
+  source="/packages/sui/src/zklogin/address.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="jwtToAddress"
+  noComments
+/>
 
 **Derive an address from a parsed JWT:**
 
-```typescript
-import { computeZkLoginAddress } from '@mysten/sui/zklogin';
-
-const address = computeZkLoginAddress({
-  claimName,   // typically 'sub'
-  claimValue,  // the subject identifier from the JWT
-  iss,         // the issuer URL, e.g. 'https://accounts.google.com'
-  aud,         // the OAuth client ID
-  userSalt: BigInt(salt),
-});
-```
+<ImportContent
+  source="/packages/sui/src/zklogin/address.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="computeZkLoginAddress"
+  noComments
+/>
 
 **Derive an address from an address seed:**
 
-```typescript
-import { computeZkLoginAddressFromSeed } from '@mysten/sui/zklogin';
-
-const address = computeZkLoginAddressFromSeed(addressSeed, 'https://accounts.google.com');
-```
+<ImportContent
+  source="/packages/sui/src/zklogin/address.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="computeZkLoginAddressFromSeed"
+  noComments
+/>
 
 **Serialize a zkLogin signature for transaction submission:**
 
-```typescript
-import { getZkLoginSignature } from '@mysten/sui/zklogin';
-
-// inputs: ZkLoginSignatureInputs from the prover
-// maxEpoch: the epoch limit embedded in the ephemeral key nonce
-// userSignature: the ephemeral key signature over the transaction bytes
-const serializedSignature = await getZkLoginSignature({
-  inputs,
-  maxEpoch,
-  userSignature,
-});
-```
+<ImportContent
+  source="/packages/sui/src/zklogin/signature.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="getZkLoginSignature"
+  noComments
+/>
 
 **Parse an existing serialized zkLogin signature:**
 
-```typescript
-import { parseZkLoginSignature } from '@mysten/sui/zklogin';
-
-const parsedSignature = await parseZkLoginSignature('BQNNMTY4NjAxMzAyO....');
-```
+<ImportContent
+  source="/packages/sui/src/zklogin/signature.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="parseZkLoginSignature"
+  noComments
+/>
 
 ### Proof generation
 
