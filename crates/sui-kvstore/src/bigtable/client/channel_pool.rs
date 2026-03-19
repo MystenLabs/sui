@@ -396,6 +396,9 @@ impl Service<Request<Body>> for ChannelPool {
         }
 
         let entries = self.inner.entries.load();
+        if entries.is_empty() {
+            return Poll::Ready(Err("no channels available".into()));
+        }
         let idx = self.inner.ticker.fetch_add(1, Ordering::Relaxed) % entries.len();
         let entry = &entries[idx];
         let mut channel = entry.channel.clone();
