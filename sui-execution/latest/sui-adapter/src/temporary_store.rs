@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gas_charger::GasCharger;
+use crate::gas_charger::{GasCharger, PaymentLocation};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -332,7 +332,12 @@ impl<'backing> TemporaryStore<'backing> {
         // we don't really care about the effects to gas, just use the input for it.
         // Gas coins are guaranteed to be at least size 1 and if more than 1
         // the first coin is where all the others are merged.
-        let gas_coin = gas_charger.gas_coin();
+        let gas_coin = gas_charger
+            .gas_payment_amount()
+            .and_then(|gp| match gp.location {
+                PaymentLocation::Coin(coin_id) => Some(coin_id),
+                PaymentLocation::AddressBalance(_) => None,
+            });
 
         let object_changes = self.get_object_changes();
 
@@ -404,6 +409,15 @@ impl<'backing> TemporaryStore<'backing> {
         debug_assert!(self.input_objects.contains_key(&id));
         debug_assert!(!object.is_immutable());
         self.execution_results.modified_objects.insert(id);
+        self.execution_results.written_objects.insert(id, object);
+    }
+
+    pub fn mutate_new_or_input_object(&mut self, object: Object) {
+        let id = object.id();
+        debug_assert!(!object.is_immutable());
+        if self.input_objects.contains_key(&id) {
+            self.execution_results.modified_objects.insert(id);
+        }
         self.execution_results.written_objects.insert(id, object);
     }
 
@@ -637,7 +651,7 @@ impl TemporaryStore<'_> {
         mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
-        let gas_objs: HashSet<&ObjectID> = gas_charger.gas_coins().map(|g| &g.0).collect();
+        let gas_objs: HashSet<&ObjectID> = gas_charger.used_coins().map(|g| &g.0).collect();
         let gas_owner = sponsor.as_ref().unwrap_or(sender);
 
         // mark input objects as authenticated
@@ -972,7 +986,7 @@ impl TemporaryStore<'_> {
         let mut total_input_rebate = 0;
         // total amount of SUI in storage rebate of output objects
         let mut total_output_rebate = 0;
-        for (_, input, output) in self.get_modified_objects() {
+        for (_id, input, output) in self.get_modified_objects() {
             if let Some(input) = input {
                 total_input_rebate += input.storage_rebate;
             }

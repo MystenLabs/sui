@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::linkage::resolved_linkage::{
-    ExecutableLinkage, ResolvedLinkage,
+use crate::{
+    gas_charger::GasPayment,
+    static_programmable_transactions::linkage::resolved_linkage::{
+        ExecutableLinkage, ResolvedLinkage,
+    },
 };
 use indexmap::IndexSet;
 use move_binary_format::file_format::{
@@ -26,7 +29,7 @@ use sui_types::{
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub gas_coin: Option<ObjectID>,
+    pub gas_payment: Option<GasPayment>,
     pub inputs: Inputs,
     pub commands: Commands,
 }

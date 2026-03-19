@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{
-    linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
+use crate::{
+    gas_charger::GasPayment,
+    static_programmable_transactions::{
+        linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
+    },
 };
 use indexmap::{IndexMap, IndexSet};
 use move_core_types::{account_address::AccountAddress, u256::U256};
@@ -16,7 +19,7 @@ use sui_types::base_types::{ObjectID, ObjectRef};
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub gas_coin: Option<ObjectID>,
+    pub gas_payment: Option<GasPayment>,
     /// Gathered BCS bytes from Pure inputs
     pub bytes: IndexSet<Vec<u8>>,
     // All input objects

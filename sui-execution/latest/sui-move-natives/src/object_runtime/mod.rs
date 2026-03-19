@@ -72,6 +72,7 @@ pub(crate) struct TestInventories {
     pub(crate) allocated_tickets: BTreeMap<ObjectID, (DynamicallyLoadedObjectMetadata, Value)>,
 }
 
+#[derive(Debug)]
 pub struct LoadedRuntimeObject {
     pub version: SequenceNumber,
     pub is_modified: bool,
@@ -324,10 +325,19 @@ impl<'a> ObjectRuntime<'a> {
             TransferResult::OwnerChanged
         };
         // assert!(end of transaction ==> same owner)
-        if end_of_transaction && !matches!(transfer_result, TransferResult::SameOwner) {
+        if end_of_transaction
+            && !matches!(
+                transfer_result,
+                TransferResult::New | TransferResult::SameOwner
+            )
+        {
             return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Untransferred object {} had its owner change", id)),
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                        "Untransferred object {} had its owner change or was not new",
+                        id
+                    ),
+                ),
             );
         }
 

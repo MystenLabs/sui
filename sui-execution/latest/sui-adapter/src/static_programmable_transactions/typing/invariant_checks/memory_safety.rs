@@ -292,7 +292,7 @@ impl Location {
 impl Context {
     fn new(_env: &Env, txn: &T::Transaction) -> anyhow::Result<Self> {
         let T::Transaction {
-            gas_coin,
+            gas_payment,
             bytes: _,
             objects,
             withdrawals,
@@ -303,7 +303,7 @@ impl Context {
         } = txn;
         let tx_context = Location::non_ref(T::Location::TxContext);
         let mut gas = Location::non_ref(T::Location::GasCoin);
-        if gas_coin.is_none() {
+        if gas_payment.is_none() {
             gas.move_value()
                 .map_err(|_| anyhow::anyhow!("gas coin should be initialized"))?;
         }
@@ -551,7 +551,7 @@ pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
 fn verify_(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
     let mut context = Context::new(env, txn)?;
     let T::Transaction {
-        gas_coin: _,
+        gas_payment: _,
         bytes: _,
         objects: _,
         withdrawals: _,

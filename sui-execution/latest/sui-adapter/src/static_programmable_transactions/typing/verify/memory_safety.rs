@@ -69,7 +69,7 @@ impl Value {
 
 impl Context {
     fn new(_env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
-        let gas_coin = if ast.gas_coin.is_none() {
+        let gas_coin = if ast.gas_payment.is_none() {
             None
         } else {
             Some(Value::NonRef)

@@ -243,7 +243,7 @@ mod verify {
                 .iter()
                 .map(|_| Some(Value))
                 .collect::<Vec<_>>();
-            let gas_coin = if ast.gas_coin.is_none() {
+            let gas_coin = if ast.gas_payment.is_none() {
                 None
             } else {
                 Some(Value)

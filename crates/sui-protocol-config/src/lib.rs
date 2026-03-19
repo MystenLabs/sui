@@ -5022,6 +5022,12 @@ impl ProtocolConfig {
         self.feature_flags.enable_address_balance_gas_payments = true;
         self.feature_flags.address_balance_gas_check_rgp_at_signing = true;
         self.feature_flags.address_balance_gas_reject_gas_coin_arg = true;
+        self.feature_flags.new_vm_enabled = true;
+        if let Some(cur) = self.execution_version
+            && cur < 4
+        {
+            self.execution_version = Some(4);
+        };
     }
 
     pub fn disable_address_balance_gas_payments_for_testing(&mut self) {

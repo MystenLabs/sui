@@ -9,7 +9,7 @@ mod checked {
     use crate::adapter::new_move_runtime;
     use crate::execution_mode::{self, ExecutionMode};
     use crate::execution_value::SuiResolver;
-    use crate::gas_charger::PaymentMethod;
+    use crate::gas_charger::{PaymentKind, PaymentMethod};
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
@@ -21,6 +21,7 @@ mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
+    use sui_types::coin_reservation::ParsedDigest;
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
@@ -75,7 +76,7 @@ mod checked {
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
-        WriteAccumulatorStorageCost, is_gas_paid_from_address_balance,
+        WriteAccumulatorStorageCost,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -85,6 +86,34 @@ mod checked {
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
+
+    fn payment_kind(gas_data: &GasData, transaction_kind: &TransactionKind) -> PaymentKind {
+        if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
+            PaymentKind::unmetered()
+        } else if gas_data.payment.is_empty() {
+            PaymentKind::smash(vec![PaymentMethod::AddressBalance(
+                gas_data.owner,
+                gas_data.budget,
+            )])
+            .expect("unable to create a payment kind with a single address balance")
+        } else {
+            let payment_methods = gas_data
+                .payment
+                .iter()
+                .map(|entry| {
+                    if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
+                        PaymentMethod::AddressBalance(gas_data.owner, parsed.reservation_amount())
+                    } else {
+                        PaymentMethod::Coin(*entry)
+                    }
+                })
+                .collect();
+            PaymentKind::smash(payment_methods).expect(
+                "unable to create a payment kind from payment methods. \
+                 Should not be possible wit ha non-empty vector",
+            )
+        }
+    }
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
@@ -140,18 +169,11 @@ mod checked {
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
 
-        let payment_method = if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
-            PaymentMethod::Unmetered
-        } else if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
-            PaymentMethod::AddressBalance(gas_data.owner)
-        } else {
-            PaymentMethod::Coins(gas_data.payment)
-        };
-
         let mut gas_charger = GasCharger::new(
             transaction_digest,
-            payment_method,
+            payment_kind(&gas_data, &transaction_kind),
             gas_status,
+            &mut temporary_store,
             protocol_config,
         );
 
@@ -325,8 +347,6 @@ mod checked {
         Result<Mode::ExecutionResults, ExecutionError>,
         Vec<ExecutionTiming>,
     ) {
-        gas_charger.smash_gas(temporary_store);
-
         // At this point no charges have been applied yet
         debug_assert!(
             gas_charger.no_charges(),
