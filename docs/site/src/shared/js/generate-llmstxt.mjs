@@ -46,6 +46,13 @@ function walk(dir, results = []) {
   return results;
 }
 
+function isDraft(filePath) {
+  const content = fs.readFileSync(filePath, "utf8");
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!match) return false;
+  return /^\s*draft:\s*true/m.test(match[1]);
+}
+
 function joinUrl(base, p) {
   if (!base) return "/" + p.replace(/^\//, "");
   return base.replace(/\/$/, "") + "/" + p.replace(/^\//, "");
@@ -155,6 +162,8 @@ if (skills.length) grouped["Sui Developer Skills"] = skills;
 // ── Markdown pages ───────────────────────────────────────────────────────────
 
 for (const file of files) {
+  if (isDraft(file)) continue;
+
   const rel = path.relative(markdownDir, file).replace(/\\/g, "/");
 
   const { section, subsection, isIndex, parts } = getHierarchy(rel);
@@ -171,8 +180,14 @@ for (const file of files) {
     title = formatTitle(path.basename(file, path.extname(file)));
   }
 
+  // Index files: preserve /index in the URL so they resolve correctly
+  // e.g. guides/developer/digital-assets/index.md → .../digital-assets/index.md
+  // Non-index files: strip extension and re-add .md
+  // e.g. guides/developer/coin/currency.md → .../coin/currency.md
   const cleanPath = rel.replace(/\.mdx?$/, "").replace(/\/index$/, "");
-  const url = joinUrl(baseUrl, cleanPath) + ".md";
+  const url = isIndex
+    ? joinUrl(baseUrl, cleanPath + "/index") + ".md"
+    : joinUrl(baseUrl, cleanPath) + ".md";
 
   if (!grouped[section]) grouped[section] = [];
 
