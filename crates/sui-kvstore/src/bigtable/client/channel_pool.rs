@@ -414,8 +414,10 @@ impl Service<Request<Body>> for ChannelPool {
         let metrics = self.inner.metrics.clone();
 
         Box::pin(async move {
+            let _guard = InFlightGuard {
+                entry: entry.clone(),
+            };
             let result = channel.call(request).await;
-            entry.in_flight.fetch_sub(1, Ordering::Relaxed);
             if let Some(m) = &metrics {
                 m.rpcs_completed.inc();
             }
@@ -429,6 +431,18 @@ impl Service<Request<Body>> for ChannelPool {
             }
             Ok(result?)
         })
+    }
+}
+
+/// Decrements `in_flight` when dropped, ensuring the count stays accurate even
+/// if the RPC future is cancelled (e.g. client disconnect).
+struct InFlightGuard {
+    entry: Arc<PoolEntry>,
+}
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        self.entry.in_flight.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
