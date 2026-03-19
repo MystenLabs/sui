@@ -255,19 +255,19 @@ impl ChannelPoolInner {
                 return;
             }
 
-            let mut current = (**self.entries.load()).clone();
-            let old_size = current.len();
-            let new_len = current
-                .len()
+            let mut new_entries = (**entries).clone();
+            let new_len = current_size
                 .saturating_sub(delta)
                 .max(self.config.min_pool_size);
-            current.truncate(new_len);
-            let new_size = current.len();
-            info!(old_size, new_size, total_in_flight, "pool resize: shrunk");
-            self.entries.store(Arc::new(current));
+            new_entries.truncate(new_len);
+            info!(
+                current_size,
+                new_len, total_in_flight, "pool resize: shrunk"
+            );
+            self.entries.store(Arc::new(new_entries));
             self.consecutive_low_load.store(0, Ordering::Relaxed);
             if let Some(m) = &self.metrics {
-                m.pool_size.set(new_size as i64);
+                m.pool_size.set(new_len as i64);
             }
         } else {
             // Load is above the low threshold — reset the downscale streak.
@@ -283,20 +283,22 @@ impl ChannelPoolInner {
                     return;
                 }
 
-                let mut current = (**self.entries.load()).clone();
-                let old_size = current.len();
+                let mut new_entries = (**entries).clone();
                 for _ in 0..delta {
                     match self.create_primed_entry().await {
-                        Ok(entry) => current.push(Arc::new(entry)),
+                        Ok(entry) => new_entries.push(Arc::new(entry)),
                         Err(e) => {
                             warn!(error = %e, "failed to create channel during pool expansion");
                             break;
                         }
                     }
                 }
-                let new_size = current.len();
-                info!(old_size, new_size, total_in_flight, "pool resize: expanded");
-                self.entries.store(Arc::new(current));
+                let new_size = new_entries.len();
+                info!(
+                    current_size,
+                    new_size, total_in_flight, "pool resize: expanded"
+                );
+                self.entries.store(Arc::new(new_entries));
                 if let Some(m) = &self.metrics {
                     m.pool_size.set(new_size as i64);
                 }
