@@ -3364,16 +3364,15 @@ async fn test_address_balance_gas_pay_all_sui() {
         test_env.chain_id,
     );
 
-    let signed_tx = test_env.cluster.sign_transaction(&tx).await;
-    let err = test_env
-        .cluster
-        .wallet
-        .execute_transaction_may_fail(signed_tx)
-        .await
-        .unwrap_err();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    let (error_kind, _) = effects.status().clone().unwrap_err();
     assert!(
-        err.to_string()
-            .contains("Argument::GasCoin is not supported with address balance gas payments"),
+        matches!(
+            error_kind,
+            sui_types::execution_status::ExecutionErrorKind::InsufficientCoinBalance
+        ),
+        "Expected InsufficientCoinBalance error for pay_all_sui with address balance gas, got: {:?}",
+        error_kind
     );
 
     test_env.verify_accumulator_exists(sender, 10_000_000);
