@@ -112,7 +112,6 @@ feature_flags:
   type_tags_in_object_runtime: true
   create_root_accumulator_object: true
   address_balance_gas_check_rgp_at_signing: true
-  address_balance_gas_reject_gas_coin_arg: true
   enable_multi_epoch_transaction_expiration: true
   relax_valid_during_for_owned_inputs: true
   enable_ptb_execution_v2: true
