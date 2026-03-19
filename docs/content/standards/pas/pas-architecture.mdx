@@ -228,6 +228,6 @@ PAS does not support or guarantee the following:
 |---|---|
 | `PolicyCap<T>` holder | Can change approval requirements for `T`. |
 | `TreasuryCap<C>` holder | Can create a policy (one-time) for `Balance<C>`. |
-| Anyone | Can create Accounts, deposit, and sync versioning. |
+| Account owner (`Auth`) | Can initiate send or unlock from their Account. |
+| Anyone | Can create Accounts, deposit, sync versioning. |
 | Approval witness package | Controls who can approve requests. |
-| PAS package `UpgradeCap` holder | Can manage the `Versioning` system to coordinate safe package upgrades and migrations. |
