@@ -1823,7 +1823,6 @@ where
         debug!("store already contains checkpoint contents");
         return Some(contents);
     }
-    return None;
 
     // Iterate through our selected peers trying each one in turn until we're able to
     // successfully get the target checkpoint
