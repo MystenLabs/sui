@@ -567,7 +567,7 @@ pub mod checked {
                         let event = AccumulatorEvent::from_balance_change(
                             *sui_address,
                             balance_type,
-                            i64::try_from(*reservation).unwrap(),
+                            i64::try_from(*reservation).unwrap().checked_neg().unwrap(),
                         )
                         .expect("Failed to create accumulator event for gas smashing");
                         temporary_store.add_accumulator_event(event);
