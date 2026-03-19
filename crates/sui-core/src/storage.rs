@@ -351,7 +351,11 @@ impl WriteStore for RocksDbStore {
         checkpoint: &VerifiedCheckpoint,
         contents: VerifiedCheckpointContents,
     ) -> Result<(), sui_types::storage::error::Error> {
-        if self.checkpoint_store.get_checkpoint_contents(&checkpoint.content_digest)?.is_some() {
+        if self
+            .checkpoint_store
+            .get_checkpoint_contents(&checkpoint.content_digest)?
+            .is_some()
+        {
             return Ok(());
         }
         self.cache_traits
