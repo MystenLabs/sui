@@ -7,8 +7,7 @@ use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
     BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
-    BALANCE_STRUCT_NAME, Balance, FUNDS_ACCUMULATOR_MODULE_NAME,
-    FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME,
+    Balance, FUNDS_ACCUMULATOR_MODULE_NAME, FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME,
 };
 use crate::coin_reservation::{
     CoinReservationResolverTrait, ParsedDigest, ParsedObjectRefWithdrawal,
@@ -47,8 +46,11 @@ use crate::{
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::{Either, Itertools};
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::IdentStr;
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use mysten_common::debug_fatal;
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
@@ -974,54 +976,15 @@ impl ProgrammableTransaction {
     pub fn validate_gasless_commands(&self, config: &ProtocolConfig) -> UserInputResult {
         #[allow(unused_mut)]
         let mut allowed_token_types = parse_gasless_allowed_token_types(config);
-        fail_point_arg!("gasless_extra_token_types", |extra: Vec<TypeInput>| {
+        fail_point_arg!("gasless_extra_token_types", |extra: Vec<TypeTag>| {
             allowed_token_types.extend(extra);
         });
         for command in &self.commands {
             match command {
                 Command::MoveCall(call) => {
-                    let is_balance_call = is_move_call(
-                        call,
-                        SUI_FRAMEWORK_PACKAGE_ID,
-                        BALANCE_MODULE_NAME.as_str(),
-                        BALANCE_SEND_FUNDS_FUNCTION_NAME.as_str(),
-                    ) || is_move_call(
-                        call,
-                        SUI_FRAMEWORK_PACKAGE_ID,
-                        BALANCE_MODULE_NAME.as_str(),
-                        BALANCE_REDEEM_FUNDS_FUNCTION_NAME.as_str(),
-                    );
-                    let is_withdrawal_split = is_move_call(
-                        call,
-                        SUI_FRAMEWORK_PACKAGE_ID,
-                        FUNDS_ACCUMULATOR_MODULE_NAME.as_str(),
-                        FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME.as_str(),
-                    );
+                    let token_type = GaslessFunction::extract_token_type(call)?;
                     fp_ensure!(
-                        is_balance_call || is_withdrawal_split,
-                        UserInputError::Unsupported(
-                            "Gasless transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string()
-                        )
-                    );
-
-                    fp_ensure!(
-                        call.type_arguments.len() == 1,
-                        UserInputError::Unsupported(
-                            "Gasless MoveCall must have exactly one type argument".to_string()
-                        )
-                    );
-                    let token_type = if is_withdrawal_split {
-                        extract_balance_inner_type(&call.type_arguments[0]).ok_or_else(|| {
-                            UserInputError::Unsupported(
-                                "Gasless withdrawal_split must use Balance<T> type argument"
-                                    .to_string(),
-                            )
-                        })?
-                    } else {
-                        &call.type_arguments[0]
-                    };
-                    fp_ensure!(
-                        allowed_token_types.contains(token_type),
+                        allowed_token_types.contains(&token_type),
                         UserInputError::Unsupported(
                             "Gasless transactions only support whitelisted token types".to_string()
                         )
@@ -1029,7 +992,7 @@ impl ProgrammableTransaction {
                 }
                 _ => {
                     return Err(UserInputError::Unsupported(
-                        "Gasless transactions can only call balance::send_funds, balance::redeem_funds, and funds_accumulator::withdrawal_split".to_string(),
+                        "Gasless transactions only support MoveCall commands".to_string(),
                     ));
                 }
             }
@@ -1038,38 +1001,88 @@ impl ProgrammableTransaction {
     }
 }
 
-fn is_move_call(
-    call: &ProgrammableMoveCall,
-    package: ObjectID,
-    module: &str,
-    function: &str,
-) -> bool {
-    call.package == package && call.module.as_str() == module && call.function.as_str() == function
+struct GaslessFunction {
+    package: AccountAddress,
+    module: &'static IdentStr,
+    function: &'static IdentStr,
+    extract: fn(&[TypeInput]) -> Result<TypeTag, UserInputError>,
 }
 
-fn parse_gasless_allowed_token_types(config: &ProtocolConfig) -> Vec<TypeInput> {
+fn direct_type_arg(type_args: &[TypeInput]) -> Result<TypeTag, UserInputError> {
+    let [single] = type_args else {
+        return Err(UserInputError::Unsupported(
+            "Gasless MoveCall must have exactly one type argument".to_string(),
+        ));
+    };
+    single
+        .to_type_tag()
+        .map_err(|e| UserInputError::Unsupported(format!("invalid type argument: {e}")))
+}
+
+fn balance_inner_type_arg(type_args: &[TypeInput]) -> Result<TypeTag, UserInputError> {
+    let tag = direct_type_arg(type_args)?;
+    Balance::maybe_get_balance_type_param(&tag).ok_or_else(|| {
+        UserInputError::Unsupported(
+            "Gasless withdrawal_split must use Balance<T> type argument".to_string(),
+        )
+    })
+}
+
+const GASLESS_ALLOWED_FUNCTIONS: &[GaslessFunction] = &[
+    GaslessFunction {
+        package: SUI_FRAMEWORK_ADDRESS,
+        module: BALANCE_MODULE_NAME,
+        function: BALANCE_SEND_FUNDS_FUNCTION_NAME,
+        extract: direct_type_arg,
+    },
+    GaslessFunction {
+        package: SUI_FRAMEWORK_ADDRESS,
+        module: BALANCE_MODULE_NAME,
+        function: BALANCE_REDEEM_FUNDS_FUNCTION_NAME,
+        extract: direct_type_arg,
+    },
+    GaslessFunction {
+        package: SUI_FRAMEWORK_ADDRESS,
+        module: FUNDS_ACCUMULATOR_MODULE_NAME,
+        function: FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME,
+        extract: balance_inner_type_arg,
+    },
+];
+
+impl GaslessFunction {
+    fn matches(&self, call: &ProgrammableMoveCall) -> bool {
+        let addr: AccountAddress = call.package.into();
+        self.package == addr
+            && call.module.as_str() == self.module.as_str()
+            && call.function.as_str() == self.function.as_str()
+    }
+
+    fn extract_token_type(call: &ProgrammableMoveCall) -> UserInputResult<TypeTag> {
+        let func = GASLESS_ALLOWED_FUNCTIONS
+            .iter()
+            .find(|f| f.matches(call))
+            .ok_or_else(|| {
+                UserInputError::Unsupported(format!(
+                    "Gasless transactions cannot call {}::{}::{}",
+                    call.package, call.module, call.function
+                ))
+            })?;
+        (func.extract)(&call.type_arguments)
+    }
+}
+
+fn parse_gasless_allowed_token_types(config: &ProtocolConfig) -> Vec<TypeTag> {
     config
         .gasless_allowed_token_types()
         .iter()
-        .map(|s| {
-            let tag: TypeTag = s
-                .parse()
-                .unwrap_or_else(|e| panic!("invalid gasless token type {s:?}: {e}"));
-            TypeInput::from(tag)
+        .filter_map(|s| match s.parse() {
+            Ok(tag) => Some(tag),
+            Err(e) => {
+                debug_fatal!("invalid gasless token type {s:?}: {e}");
+                None
+            }
         })
         .collect()
-}
-
-fn extract_balance_inner_type(ti: &TypeInput) -> Option<&TypeInput> {
-    if let TypeInput::Struct(s) = ti
-        && s.address == SUI_FRAMEWORK_ADDRESS
-        && s.module == BALANCE_MODULE_NAME.as_str()
-        && s.name == BALANCE_STRUCT_NAME.as_str()
-        && s.type_params.len() == 1
-    {
-        return Some(&s.type_params[0]);
-    }
-    None
 }
 
 /// A single command in a programmable transaction.

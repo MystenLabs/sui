@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
 use std::time::Duration;
 
 use move_core_types::{
@@ -15,15 +14,15 @@ use sui_macros::*;
 use sui_test_transaction_builder::FundSource;
 use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID,
-    base_types::SuiAddress,
+    base_types::{ObjectID, SuiAddress},
     effects::TransactionEffectsAPI,
     gas::GasCostSummary,
     gas_coin::GAS,
     messages_grpc::SubmitTxRequest,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        FundsWithdrawalArg, GasData, TransactionData, TransactionDataV1, TransactionExpiration,
-        TransactionKind,
+        Command, FundsWithdrawalArg, GasData, ProgrammableMoveCall, TransactionData,
+        TransactionDataV1, TransactionExpiration, TransactionKind,
     },
     type_input::TypeInput,
 };
@@ -80,11 +79,7 @@ async fn setup_custom_coin(test_env: &mut TestEnv, funding: &[(u64, SuiAddress)]
     assert!(effects.status().is_ok());
     register_fail_point_arg("gasless_extra_token_types", {
         let coin_type = coin_type.clone();
-        move || {
-            let mut extra = HashSet::new();
-            extra.insert(TypeInput::from(coin_type.clone()));
-            Some(extra)
-        }
+        move || Some(vec![coin_type.clone()])
     });
     coin_type
 }
@@ -328,9 +323,8 @@ async fn test_gasless_rejects_transfer_objects() {
 
     let err = result.unwrap_err();
     assert!(
-        err.to_string()
-            .contains("can only call balance::send_funds")
-            || err.to_string().contains("can only contain MoveCall"),
+        err.to_string().contains("Gasless transactions cannot call")
+            || err.to_string().contains("only support MoveCall"),
         "Expected function whitelist or MoveCall-only error, got: {err}"
     );
 
@@ -471,6 +465,218 @@ async fn test_gasless_custom_coin_transfer() {
     let recipient_after = test_env.get_balance(recipient, coin_type);
     assert_eq!(sender_after, sender_before - transfer_amount);
     assert_eq!(recipient_after, recipient_before + transfer_amount);
+
+    test_env.trigger_reconfiguration().await;
+}
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_gasless_rejects_split_coins_command() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(1000, coin_type.clone());
+    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+    let balance = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("redeem_funds").unwrap(),
+        vec![coin_type],
+        vec![withdraw_arg],
+    );
+    let amount = builder.pure(500u64).unwrap();
+    builder.command(Command::SplitCoins(balance, vec![amount]));
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+
+    let tx = test_env.gasless_transaction_data(tx_kind, sender, 0, 0);
+    let result = test_env.exec_tx_directly(tx).await;
+
+    let err = result.unwrap_err();
+    assert!(
+        err.to_string().contains("only support MoveCall"),
+        "Expected MoveCall-only error, got: {err}"
+    );
+
+    test_env.trigger_reconfiguration().await;
+}
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_gasless_rejects_zero_type_args() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(1000, coin_type);
+    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+    let recipient_arg = builder.pure(recipient).unwrap();
+    builder.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+        package: SUI_FRAMEWORK_PACKAGE_ID,
+        module: "balance".to_string(),
+        function: "send_funds".to_string(),
+        type_arguments: vec![],
+        arguments: vec![withdraw_arg, recipient_arg],
+    })));
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+
+    let tx = test_env.gasless_transaction_data(tx_kind, sender, 0, 0);
+    let result = test_env.exec_tx_directly(tx).await;
+
+    let err = result.unwrap_err();
+    assert!(
+        err.to_string().contains("exactly one type argument"),
+        "Expected type arg count error, got: {err}"
+    );
+
+    test_env.trigger_reconfiguration().await;
+}
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_gasless_rejects_multiple_type_args() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(1000, coin_type.clone());
+    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+    let recipient_arg = builder.pure(recipient).unwrap();
+    builder.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+        package: SUI_FRAMEWORK_PACKAGE_ID,
+        module: "balance".to_string(),
+        function: "send_funds".to_string(),
+        type_arguments: vec![
+            TypeInput::from(coin_type.clone()),
+            TypeInput::from(coin_type),
+        ],
+        arguments: vec![withdraw_arg, recipient_arg],
+    })));
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+
+    let tx = test_env.gasless_transaction_data(tx_kind, sender, 0, 0);
+    let result = test_env.exec_tx_directly(tx).await;
+
+    let err = result.unwrap_err();
+    assert!(
+        err.to_string().contains("exactly one type argument"),
+        "Expected type arg count error, got: {err}"
+    );
+
+    test_env.trigger_reconfiguration().await;
+}
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_gasless_rejects_non_balance_withdrawal_split() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(1000, coin_type.clone());
+    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+    let amount_arg = builder.pure(U256::from(500u64)).unwrap();
+    builder.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+        package: SUI_FRAMEWORK_PACKAGE_ID,
+        module: "funds_accumulator".to_string(),
+        function: "withdrawal_split".to_string(),
+        type_arguments: vec![TypeInput::from(coin_type)],
+        arguments: vec![withdraw_arg, amount_arg],
+    })));
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+
+    let tx = test_env.gasless_transaction_data(tx_kind, sender, 0, 0);
+    let result = test_env.exec_tx_directly(tx).await;
+
+    let err = result.unwrap_err();
+    assert!(
+        err.to_string().contains("must use Balance<T>"),
+        "Expected Balance<T> type error, got: {err}"
+    );
+
+    test_env.trigger_reconfiguration().await;
+}
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_gasless_rejects_non_framework_package() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
+
+    let fake_package = ObjectID::from_hex_literal("0xdead").unwrap();
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(1000, coin_type.clone());
+    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+    let recipient_arg = builder.pure(recipient).unwrap();
+    builder.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+        package: fake_package,
+        module: "balance".to_string(),
+        function: "send_funds".to_string(),
+        type_arguments: vec![TypeInput::from(coin_type)],
+        arguments: vec![withdraw_arg, recipient_arg],
+    })));
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+
+    let tx = test_env.gasless_transaction_data(tx_kind, sender, 0, 0);
+    let result = test_env.exec_tx_directly(tx).await;
+
+    let err = result.unwrap_err();
+    assert!(
+        err.to_string().contains("Gasless transactions cannot call"),
+        "Expected disallowed function error, got: {err}"
+    );
+
+    test_env.trigger_reconfiguration().await;
+}
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_gasless_rejects_nonzero_budget() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
+
+    let tx_kind = build_send_funds_ptb(1000, coin_type, recipient);
+    let tx = TransactionData::V1(TransactionDataV1 {
+        kind: tx_kind,
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: 0,
+            budget: 1000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: test_env.chain_id,
+            nonce: 0,
+        },
+    });
+    let result = test_env.exec_tx_directly(tx).await;
+
+    let err = result.unwrap_err();
+    assert!(
+        err.to_string().contains("gas_budget must be 0"),
+        "Expected zero budget error, got: {err}"
+    );
 
     test_env.trigger_reconfiguration().await;
 }

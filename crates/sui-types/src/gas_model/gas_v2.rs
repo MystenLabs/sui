@@ -257,6 +257,15 @@ mod checked {
             }
         }
 
+        /// Create a metered gas status for transaction execution.
+        ///
+        /// `gas_budget` and `gas_price` are the externally-visible charging parameters:
+        /// `gas_budget` caps total SUI spent on gas; `gas_price` determines per-unit cost
+        /// charged to the sender (0 for gasless transactions).
+        ///
+        /// `metering_price` and `computation_budget` are internal VM execution limits:
+        /// `metering_price` drives the cost table (always >0, even for gasless), and
+        /// `computation_budget` caps total compute units the VM will execute.
         fn new_metered(
             gas_budget: u64,
             gas_price: u64,
@@ -300,7 +309,6 @@ mod checked {
         ) -> SuiGasStatus {
             let max_computation_budget = config.max_gas_computation_bucket() * gas_price;
             let computation_budget = gas_budget.min(max_computation_budget);
-            debug_assert!(computation_budget > 0);
             Self::new_metered(
                 gas_budget,
                 gas_price,
