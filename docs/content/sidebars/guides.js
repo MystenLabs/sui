@@ -116,6 +116,7 @@ const guides = [
       'guides/developer/packages/upgrade',
       'guides/developer/packages/custom-policies',
       'guides/developer/packages/automated-address-management',
+	  'guides/developer/packages/openzeppelin',
     ],
   },
   {
