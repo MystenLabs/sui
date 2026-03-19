@@ -44,6 +44,16 @@ const IGNORE_FILES = new Set([
   "guides/developer/getting-started/sui-wallets.md",
   "guides/developer/coin/stablecoins.md",
   "guides/developer/app-examples/recaptcha.md",
+  "guides/developer/accessing-data/index.md",
+  "references/framework/sui_bridge/message_types.md",
+  "references/framework/sui_std/address.md",
+  "references/framework/sui_std/bool.md",
+  "references/framework/sui_sui/hex.md",
+  "references/framework/sui_sui/prover.md",
+  "references/framework/sui_sui_system/validator_wrapper.md",
+  "references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md",
+  "references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature.md",
+  "references/sui-framework-reference.md",
 ]);
 
 function walk(dir, results = []) {

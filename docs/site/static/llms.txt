@@ -63,7 +63,6 @@
 - [Indexer
     Walrus](https://docs.sui.io/guides/developer/accessing-data/custom-indexer/indexer-walrus.md)
 - [Grpc Overview](https://docs.sui.io/guides/developer/accessing-data/grpc-overview.md)
-- [Accessing Data Index](https://docs.sui.io/guides/developer/accessing-data/index.md)
 - [Query With Graphql](https://docs.sui.io/guides/developer/accessing-data/query-with-graphql.md)
 - [Using Events](https://docs.sui.io/guides/developer/accessing-data/using-events.md)
 - [Address Balances Migration](https://docs.sui.io/guides/developer/address-balances-migration.md)
@@ -260,16 +259,13 @@
 - [Crypto](https://docs.sui.io/references/framework/sui_bridge/crypto.md)
 - [Sui Bridge Index](https://docs.sui.io/references/framework/sui_bridge/index.md)
 - [Limiter](https://docs.sui.io/references/framework/sui_bridge/limiter.md)
-- [Message Types](https://docs.sui.io/references/framework/sui_bridge/message_types.md)
 - [Message](https://docs.sui.io/references/framework/sui_bridge/message.md)
 - [Treasury](https://docs.sui.io/references/framework/sui_bridge/treasury.md)
 
 ### References/Framework/Sui Std
-- [Address](https://docs.sui.io/references/framework/sui_std/address.md)
 - [Ascii](https://docs.sui.io/references/framework/sui_std/ascii.md)
 - [Bcs](https://docs.sui.io/references/framework/sui_std/bcs.md)
 - [Bit Vector](https://docs.sui.io/references/framework/sui_std/bit_vector.md)
-- [Bool](https://docs.sui.io/references/framework/sui_std/bool.md)
 - [Debug](https://docs.sui.io/references/framework/sui_std/debug.md)
 - [Fixed Point32](https://docs.sui.io/references/framework/sui_std/fixed_point32.md)
 - [Hash](https://docs.sui.io/references/framework/sui_std/hash.md)
@@ -321,7 +317,6 @@
 - [Groth16](https://docs.sui.io/references/framework/sui_sui/groth16.md)
 - [Group Ops](https://docs.sui.io/references/framework/sui_sui/group_ops.md)
 - [Hash](https://docs.sui.io/references/framework/sui_sui/hash.md)
-- [Hex](https://docs.sui.io/references/framework/sui_sui/hex.md)
 - [Hmac](https://docs.sui.io/references/framework/sui_sui/hmac.md)
 - [Sui Sui Index](https://docs.sui.io/references/framework/sui_sui/index.md)
 - [Kiosk Extension](https://docs.sui.io/references/framework/sui_sui/kiosk_extension.md)
@@ -338,7 +333,6 @@
 - [Poseidon](https://docs.sui.io/references/framework/sui_sui/poseidon.md)
 - [Priority Queue](https://docs.sui.io/references/framework/sui_sui/priority_queue.md)
 - [Protocol Config](https://docs.sui.io/references/framework/sui_sui/protocol_config.md)
-- [Prover](https://docs.sui.io/references/framework/sui_sui/prover.md)
 - [Random](https://docs.sui.io/references/framework/sui_sui/random.md)
 - [Ristretto255](https://docs.sui.io/references/framework/sui_sui/ristretto255.md)
 - [Sui](https://docs.sui.io/references/framework/sui_sui/sui.md)
@@ -369,7 +363,6 @@
 - [Sui System](https://docs.sui.io/references/framework/sui_sui_system/sui_system.md)
 - [Validator Cap](https://docs.sui.io/references/framework/sui_sui_system/validator_cap.md)
 - [Validator Set](https://docs.sui.io/references/framework/sui_sui_system/validator_set.md)
-- [Validator Wrapper](https://docs.sui.io/references/framework/sui_sui_system/validator_wrapper.md)
 - [Validator](https://docs.sui.io/references/framework/sui_sui_system/validator.md)
 - [Voting Power](https://docs.sui.io/references/framework/sui_sui_system/voting_power.md)
 - [Fullnode Protocol](https://docs.sui.io/references/fullnode-protocol.md)
@@ -472,8 +465,6 @@
     Ability](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/move-ability.md)
 - [Move
     Visibility](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/move-visibility.md)
-- [Multisig Member Signature
-    Scheme](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md)
 - [Owner
     Kind](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/enums/owner-kind.md)
 - [Regulated
@@ -706,8 +697,6 @@
     Value](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/move-value.md)
 - [Multisig
     Committee](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-committee.md)
-- [Multisig Member
-    Signature](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature.md)
 - [Multisig
     Member](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member.md)
 - [Multisig
@@ -882,7 +871,6 @@
 - [Withdrawal
     Reservation](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/unions/withdrawal-reservation.md)
 - [Sui Compared](https://docs.sui.io/references/sui-compared.md)
-- [Sui Framework Reference](https://docs.sui.io/references/sui-framework-reference.md)
 - [Sui Glossary](https://docs.sui.io/references/sui-glossary.md)
 - [Sui Graphql](https://docs.sui.io/references/sui-graphql.md)
 - [Sui Move](https://docs.sui.io/references/sui-move.md)
