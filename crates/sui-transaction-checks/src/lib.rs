@@ -409,7 +409,8 @@ mod checked {
             // and guaranteed to be available.
             (vec![], gas_budget)
         } else {
-            // when paying
+            // Gas payment may include a mix of coin objects and coin reservations (withdrawals).
+            // Sum up the reservation amounts separately since they don't have input objects.
             let mut available_address_balance_gas: u64 = 0;
             let mut gas_objects = vec![];
             for obj_ref in gas {
