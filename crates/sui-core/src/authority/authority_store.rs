@@ -966,9 +966,8 @@ impl AuthorityStore {
     ) -> SuiResult {
         trace!(?objects, "initialize_locks");
 
-        let live_object_markers = live_object_marker_table.multi_get(objects)?;
-
         if !is_force_reset {
+            let live_object_markers = live_object_marker_table.multi_get(objects)?;
             // If any live_object_markers exist and are not None, return errors for them
             // Note we don't check if there is a pre-existing lock. this is because initializing the live
             // object marker will not overwrite the lock and cause the validator to equivocate.
