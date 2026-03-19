@@ -374,7 +374,6 @@ const guides = [
         },
         items: [
           'guides/developer/app-examples/weather-oracle',
-          'guides/developer/app-examples/meta-pricing-oracle',
         ],
       },
     ],

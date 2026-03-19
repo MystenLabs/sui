@@ -70,6 +70,7 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::KeyPairWrapper;
+use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
@@ -952,6 +953,34 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         }
                     }
                 }))
+            }
+            SuiSubcommand::ViewFunds(ViewFundsCommand {
+                funds_type,
+                address: address_str,
+            }) => {
+                let type_tag = funds_type.into_type_tag(&|s| {
+                    Some(
+                        self.compiled_state
+                            .named_address_mapping
+                            .get(s)?
+                            .into_inner(),
+                    )
+                })?;
+                let address = match self.accounts.get(&address_str) {
+                    Some(test_account) => test_account.address,
+                    None => panic!("Unbound account {}", address_str),
+                };
+                let acc_obj_id = AccumulatorValue::get_field_id(address, &type_tag)?;
+                let obj = match ObjectStore::get_object(&*self.executor, acc_obj_id.inner()) {
+                    Some(obj) => obj,
+                    None => {
+                        return Ok(Some("No funds accumulator object found".to_owned()));
+                    }
+                };
+                let move_obj = obj.data.try_as_move().unwrap();
+                let acc_value = AccumulatorValue::try_from(move_obj).unwrap();
+                let value = acc_value.as_u128().unwrap();
+                Ok(Some(format!("{}", value)))
             }
             SuiSubcommand::TransferObject(TransferObjectCommand {
                 id: fake_id,
@@ -2800,7 +2829,7 @@ async fn init_sim_executor(
 
     // Get the actual object values from the simulator
     for (name, (addr, kp)) in account_kps {
-        let o = sim.store().owned_objects(addr).next().unwrap();
+        let o = sim.store_dyn().owned_objects(addr).next().unwrap();
         objects.push(o.clone());
         account_objects.insert(name.clone(), o.id());
 
@@ -2814,7 +2843,7 @@ async fn init_sim_executor(
         );
     }
     let o = sim
-        .store()
+        .store_dyn()
         .owned_objects(default_account_kp.0)
         .next()
         .unwrap();
@@ -2826,7 +2855,7 @@ async fn init_sim_executor(
     objects.push(o.clone());
 
     for (i, (addr, key_pair_wrapper)) in addr_keys.into_iter().enumerate() {
-        let o = sim.store().owned_objects(addr).next().unwrap();
+        let o = sim.store_dyn().owned_objects(addr).next().unwrap();
         let validator_account = TestAccount {
             address: addr,
             key_pair: key_pair_wrapper.account_key_pair,

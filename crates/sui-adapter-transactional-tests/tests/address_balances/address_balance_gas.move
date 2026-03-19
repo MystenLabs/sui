@@ -17,6 +17,8 @@
 
 //# create-checkpoint
 
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+
 // Empty transaction using address balance gas
 //# programmable --sender A --address-balance-gas
 
@@ -25,3 +27,7 @@
 
 // View gas coin after -- balance should be unchanged (except for the initial send_funds tx)
 //# view-object 0,0
+
+//# create-checkpoint
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> A

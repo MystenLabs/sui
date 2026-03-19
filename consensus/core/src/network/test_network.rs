@@ -12,7 +12,10 @@ use crate::{
     block::VerifiedBlock,
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
-    network::{BlockStream, NodeId, ObserverNetworkService, ValidatorNetworkService},
+    network::{
+        BlockRequestStream, BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService,
+        ValidatorNetworkService,
+    },
 };
 
 use super::ExtendedSerializedBlock;
@@ -109,6 +112,14 @@ impl ValidatorNetworkService for Mutex<TestService> {
 
 #[async_trait]
 impl ObserverNetworkService for Mutex<TestService> {
+    async fn handle_stream_blocks(
+        &self,
+        _peer: NodeId,
+        _request_stream: BlockRequestStream,
+    ) -> ConsensusResult<ObserverBlockStream> {
+        unimplemented!("ObserverNetworkService not implemented for TestService")
+    }
+
     async fn handle_fetch_blocks(
         &self,
         _peer: NodeId,

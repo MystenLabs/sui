@@ -20,146 +20,30 @@ for (let i = 0; i < args.length; i++) {
 
 const scriptDir = path.dirname(new URL(import.meta.url).pathname);
 const markdownDir = path.resolve(positional[0] ?? path.join(scriptDir, "../../static/markdown"));
-const baseUrl      = flags["base-url"]    ?? "";
 const outputFile = flags["output"] ?? path.join(scriptDir, "../../static/llms.txt");
-const siteDesc     = flags["description"] ?? "";
+const baseUrl = flags["base-url"] ?? "";
 
-// ── Auto-detect docusaurus config ────────────────────────────────────────────
-let resolvedName = flags["name"] ?? null;
-let resolvedBaseUrl = baseUrl;
-
-function findDocusaurusConfig(startDir) {
-  let dir = startDir;
-  for (let i = 0; i < 6; i++) {
-    for (const cfg of ["docusaurus.config.js", "docusaurus.config.ts"]) {
-      const p = path.join(dir, cfg);
-      if (fs.existsSync(p)) return fs.readFileSync(p, "utf8");
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
-}
-
-const configText = findDocusaurusConfig(markdownDir);
-if (configText) {
-  if (!resolvedName) {
-    const m = configText.match(/\btitle:\s*['"](.+?)['"]/);
-    if (m) resolvedName = m[1];
-  }
-  if (!resolvedBaseUrl) {
-    const m = configText.match(/\burl:\s*['"](.+?)['"]/);
-    if (m) resolvedBaseUrl = m[1];
-  }
-}
-resolvedName ??= "Documentation";
-
-// ── Resolve site description for blockquote ──────────────────────────────────
-// Priority: --description flag > Docusaurus tagline
-let siteDescription = siteDesc;
-if (!siteDescription && configText) {
-  const m = configText.match(/\btagline:\s*['"](.+?)['"]/);
-  if (m) siteDescription = m[1];
-}
+// ── Constants ────────────────────────────────────────────────────────────────
+const TARGET_CHARS = 100_000;
+const PINNED_SECTIONS = ["Move", "Top Level Navigation", "Sui Developer Skills"];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function walk(dir, results = []) {
   if (!fs.existsSync(dir)) return results;
+
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
+
     if (entry.isDirectory()) {
+      if (entry.name === "snippets") continue; // exclude snippets
       walk(full, results);
     } else if (entry.name.endsWith(".md") || entry.name.endsWith(".mdx")) {
       results.push(full);
     }
   }
+
   return results;
-}
-
-function parseMarkdown(filePath, content) {
-  let title = "";
-  let description = "";
-
-  // Check for metadata sidecar written by export script
-  const metaPath = filePath.replace(/\.md$/, ".meta.json");
-  if (fs.existsSync(metaPath)) {
-    try {
-      const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-      if (meta.title) title = meta.title;
-      if (meta.description) description = meta.description;
-    } catch {}
-  }
-
-  // Strip unwanted HTML before any processing
-  let body = content
-    .replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, "")
-    .replace(/<span\s+class="code-inline"[^>]*>[\s\S]*?<\/span>/gi, "")
-    .replace(/&nbsp;●&nbsp;/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&gt;/g, ">")
-    .replace(/&lt;/g, "<")
-    .replace(/&amp;/g, "&")
-    // Strip linear.app issue links: [text](https://linear.app/...) → just text
-    .replace(/\[([^\]]*)\]\(https?:\/\/linear\.app\/[^)]*\)/gi, "$1")
-    // Strip bare linear.app URLs
-    .replace(/https?:\/\/linear\.app\/\S+/gi, "")
-    // Strip linear issue references and {/ /} markers
-    .replace(/\{[^}]*linear\.app[^}]*\}/gi, "")
-    .replace(/\{\/\s*/g, "")
-    .replace(/\s*\/\}/g, "");
-
-  // Fallback: first H1
-  if (!title) {
-    const h1 = body.match(/^#\s+(.+)$/m);
-    if (h1) title = h1[1].trim();
-  }
-
-  // Fallback description: clean entire body, take first 100 chars of real text
-  if (!description) {
-    const clean = body
-      .replace(/^#+\s+.+$/gm, "")              // remove headings
-      .replace(/```[\s\S]*?```/g, "")           // remove code blocks
-      .replace(/`[^`]+`/g, "")                 // remove inline code
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links → text
-      .replace(/[*_]/g, "")                    // remove emphasis
-      .replace(/<[^>]+>/g, "")                 // strip remaining HTML
-      .replace(/^\s*\d+\.\s+/gm, "")           // remove ordered list markers
-      .replace(/^\s*[-*]\s+/gm, "")            // remove unordered list markers
-      .replace(/\n+/g, " ")                    // collapse newlines
-      .replace(/\s+/g, " ")                    // collapse whitespace
-      .trim();
-
-    if (clean.length > 0) {
-      const chunk = clean.slice(0, 300);
-      // Find the last sentence-ending punctuation within the chunk
-      const lastEnd = Math.max(chunk.lastIndexOf(". "), chunk.lastIndexOf("! "), chunk.lastIndexOf("? "));
-      if (lastEnd > 0) {
-        description = chunk.slice(0, lastEnd + 1).trim();
-      } else if (clean.length <= 300) {
-        // Entire text fits, use it as-is
-        description = clean.trim();
-      } else {
-        // No sentence boundary found, truncate at last word boundary
-        description = chunk.replace(/\s+\S*$/, "").trim();
-      }
-    }
-  }
-
-  // Discard redirect-page descriptions
-  if (/redirecting/i.test(description)) description = "";
-
-  return { title, description };
-}
-
-function fileToUrlPath(filePath, rootDir) {
-  let rel = path.relative(rootDir, filePath).replace(/\\/g, "/");
-  rel = rel.replace(/\.mdx?$/, "");
-  if (rel === "index" || rel.endsWith("/index")) {
-    rel = rel.replace(/\/?index$/, "") || "/";
-  }
-  return rel || "/";
 }
 
 function joinUrl(base, p) {
@@ -167,159 +51,267 @@ function joinUrl(base, p) {
   return base.replace(/\/$/, "") + "/" + p.replace(/^\//, "");
 }
 
-function toSectionTitle(seg) {
-  return seg.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function isLinearUrl(url) {
-  return /linear\.app/i.test(url);
-}
-
-// ── Collect pages ─────────────────────────────────────────────────────────────
-
-if (!fs.existsSync(markdownDir)) {
-  console.error(`Directory not found: ${markdownDir}`);
-  process.exit(1);
-}
-
-const files = walk(markdownDir)
-  .filter((f) => {
-    const rel = path.relative(markdownDir, f).replace(/\\/g, "/");
-    return !rel.startsWith("snippets/") && !f.endsWith(".meta.json");
-  })
-  .sort();
-
-if (!files.length) {
-  console.error(`No .md/.mdx files found in: ${markdownDir}`);
-  process.exit(1);
-}
-
-const pages = [];
-
-for (const file of files) {
-  const content = fs.readFileSync(file, "utf8");
-  if (!content.trim()) continue; // Skip empty files (e.g., drafts)
-  const { title, description } = parseMarkdown(file, content);
-  const urlPath = fileToUrlPath(file, markdownDir);
-
-  // Skip /design and /dev-guide sections
-  if (/^\/?(design|dev-guide)(\/)/.test(urlPath) || urlPath === "/design" || urlPath === "/dev-guide") continue;
-
-  const url = joinUrl(resolvedBaseUrl, urlPath) + ".md";
-
-  // Skip linear.app URLs
-  if (isLinearUrl(url)) continue;
-
-  // Derive title from filename if no heading found
-  const filename = path.basename(file, path.extname(file));
-  const derivedTitle = title || filename
+function formatTitle(str) {
+  return str
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
-
-  const segments = urlPath.replace(/^\//, "").split("/");
-  const section = segments.length > 1
-    ? toSectionTitle(segments[0])
-    : "General";
-
-  pages.push({ title: derivedTitle, url, description, section });
 }
 
-// Wrap a line to max 100 chars, continuing indented lines at the same indent level
-function wrapLine(line, indentSpaces = 0) {
+function wrapLine(line, indent = 0) {
   if (line.length <= 100) return [line];
-  const indent = " ".repeat(indentSpaces);
-  const words = line.trimStart().split(" ");
-  const lines = [];
-  let current = indent;
-  for (const word of words) {
-    if (current.length + word.length + 1 > 100 && current.trim().length > 0) {
-      lines.push(current.trimEnd());
-      current = indent + "    " + word + " ";
+  const pad = " ".repeat(indent);
+  const words = line.split(" ");
+  const out = [];
+  let cur = pad;
+
+  for (const w of words) {
+    if (cur.length + w.length + 1 > 100) {
+      out.push(cur.trimEnd());
+      cur = pad + "    " + w + " ";
     } else {
-      current += word + " ";
+      cur += w + " ";
     }
   }
-  if (current.trim()) lines.push(current.trimEnd());
-  return lines;
+  if (cur.trim()) out.push(cur.trimEnd());
+  return out;
 }
 
-// ── Build llms.txt ────────────────────────────────────────────────────────────
+// ── Hierarchy logic ──────────────────────────────────────────────────────────
 
-const TARGET_CHARS = 100_000;
+function getHierarchy(relPath) {
+  const parts = relPath.replace(/\.mdx?$/, "").split("/");
 
-const sectionOrder = [];
+  // Detect index files before popping
+  const isIndex = parts[parts.length - 1] === "index";
+  if (isIndex) parts.pop();
+
+  // Capitalize the section heading (e.g. "concepts" → "Concepts")
+  const section = formatTitle(parts[0] || "General");
+
+  // Use up to 3 path parts for subsection so guides/developer/app-examples
+  // groups under ### Guides/Developer/App Examples rather than flattening
+  // everything under ### Guides/Developer.
+  // Still requires parts.length >= 3 so flat files (section/file.md) never
+  // get a lone subsection heading.
+  const subsection = parts.length >= 3 ? parts.slice(0, 3).join("/") : null;
+
+  return { section, subsection, isIndex, parts };
+}
+
+// ── Skills loader ────────────────────────────────────────────────────────────
+
+function collectSkills() {
+  const base = path.join(scriptDir, "../../static");
+  const dirs = ["sui-move", "sui-frontend", "sui-app"];
+  const out = [];
+
+  for (const d of dirs) {
+    const full = path.join(base, d);
+    if (!fs.existsSync(full)) continue;
+
+    const files = walk(full);
+
+    for (const file of files) {
+      const rel = path.relative(base, file).replace(/\\/g, "/");
+      const title = formatTitle(path.basename(file, path.extname(file)));
+
+      out.push({
+        section: "Sui Developer Skills",
+        subsection: d,
+        title,
+        url: joinUrl(baseUrl, rel.replace(/\.mdx?$/, "") + ".md")
+      });
+    }
+  }
+
+  return out;
+}
+
+// ── Collect pages ────────────────────────────────────────────────────────────
+
+const files = walk(markdownDir);
 const grouped = {};
-for (const page of pages) {
-  if (!grouped[page.section]) {
-    sectionOrder.push(page.section);
-    grouped[page.section] = [];
+
+// ── Move (pinned) ────────────────────────────────────────────────────────────
+grouped["Move"] = [
+  {
+    title: "Move Language Reference",
+    url: "https://move-book.com/llms.txt",
+    description:
+      "Complete reference for the Move programming language as used on Sui. " +
+      "Covers syntax, types, functions, structs, abilities (copy, drop, store, key), " +
+      "generics, ownership and the Sui object model, entry functions, public functions, " +
+      "module structure, error handling, events, and testing with the Move test framework. " +
+      "Includes best practices for safe and efficient contracts, object creation and transfer, " +
+      "capability patterns, witness patterns, and hot potato patterns. " +
+      "Essential reference for all Move smart contract development on Sui."
   }
-  grouped[page.section].push(page);
+];
+
+// ── Skills (pinned) ──────────────────────────────────────────────────────────
+const skills = collectSkills();
+if (skills.length) grouped["Sui Developer Skills"] = skills;
+
+// ── Markdown pages ───────────────────────────────────────────────────────────
+
+for (const file of files) {
+  const rel = path.relative(markdownDir, file).replace(/\\/g, "/");
+
+  const { section, subsection, isIndex, parts } = getHierarchy(rel);
+
+  // Fix index titles: derive from the parent folder of the index file
+  let title;
+  if (isIndex) {
+    // parts has already had "index" popped — last element is the containing folder
+    // e.g. concepts/cryptography/index.md → parts = ["concepts","cryptography"] → "Cryptography Index"
+    // e.g. concepts/index.md             → parts = ["concepts"]               → "Concepts Index"
+    const parent = parts[parts.length - 1] || section;
+    title = `${formatTitle(parent)} Index`;
+  } else {
+    title = formatTitle(path.basename(file, path.extname(file)));
+  }
+
+  const cleanPath = rel.replace(/\.mdx?$/, "").replace(/\/index$/, "");
+  const url = joinUrl(baseUrl, cleanPath) + ".md";
+
+  if (!grouped[section]) grouped[section] = [];
+
+  grouped[section].push({
+    title,
+    url,
+    subsection
+  });
 }
 
-// First pass: description as link label
-const allLines = [`# ${resolvedName}`, ""];
-if (siteDescription) allLines.push(`> ${siteDescription}`, "");
-for (const section of sectionOrder) {
-  allLines.push(`## ${section}`, "");
-  for (const { title, url, description } of grouped[section]) {
-    const descLine = description ? `    Description: ${description}` : null;
-    allLines.push(...wrapLine(`- [${title}](${url})`, 0));
-    if (descLine) allLines.push(...wrapLine(descLine, 4));
-  }
-  allLines.push("");
-}
-let output = allLines.join("\n");
+// ── Merge single-entry sections into Top Level Navigation ────────────────────
+// Also collapse single-entry subsections (lone ### headings) within each section
 
-// Second pass: fall back to title only
-if (output.length > TARGET_CHARS) {
-  const trimmedLines = [`# ${resolvedName}`, ""];
-  if (siteDescription) trimmedLines.push(`> ${siteDescription}`, "");
-  for (const section of sectionOrder) {
-    trimmedLines.push(`## ${section}`, "");
-    for (const { title, url, description } of grouped[section]) {
-      trimmedLines.push(...wrapLine(`- [${title}](${url})`, 0));
-      if (description) trimmedLines.push(...wrapLine(`    Description: ${description}`, 4));
+const topLevel = [];
+
+for (const section of Object.keys(grouped)) {
+  if (PINNED_SECTIONS.includes(section)) continue;
+
+  const pages = grouped[section];
+
+  // Entire section has only one page → hoist to Top Level Navigation
+  if (pages.length === 1) {
+    topLevel.push({
+      ...pages[0],
+      title: `${formatTitle(section)} — ${pages[0].title}`,
+      subsection: null   // no subsection grouping in top-level
+    });
+    delete grouped[section];
+    continue;
+  }
+
+  // Count pages per subsection; subsections with only one page get subsection cleared
+  // so they render inline without a lone ### heading
+  const subCounts = {};
+  for (const page of pages) {
+    if (page.subsection) {
+      subCounts[page.subsection] = (subCounts[page.subsection] ?? 0) + 1;
     }
-    trimmedLines.push("");
   }
-  output = trimmedLines.join("\n");
+
+  for (const page of pages) {
+    if (page.subsection && subCounts[page.subsection] === 1) {
+      page.subsection = null;
+    }
+  }
 }
 
-// Third pass: drop pages proportionally per section
+if (topLevel.length) {
+  grouped["Top Level Navigation"] = topLevel;
+}
+
+// ── Sorting ──────────────────────────────────────────────────────────────────
+
+function sortSections(sections) {
+  return [
+    ...PINNED_SECTIONS.filter((s) => sections.includes(s)),
+    ...sections
+      .filter((s) => !PINNED_SECTIONS.includes(s))
+      .sort()
+  ];
+}
+
+function sortPages(pages) {
+  return pages.sort((a, b) => {
+    if (a.subsection && b.subsection && a.subsection !== b.subsection) {
+      return a.subsection.localeCompare(b.subsection);
+    }
+    return a.url.localeCompare(b.url);
+  });
+}
+
+// ── Build output ─────────────────────────────────────────────────────────────
+
+function build(ratio = 1) {
+  const lines = [];
+
+  // Static header (LLM optimized)
+  lines.push("# Sui Documentation for LLMs", "");
+  lines.push(
+    "> Comprehensive reference for Sui blockchain development, including Move smart contract programming, " +
+    "Sui framework concepts, frontend integration, and fullstack application architecture. " +
+    "Designed for efficient retrieval and grounding by large language models.",
+    ""
+  );
+
+  const sections = sortSections(Object.keys(grouped));
+
+  for (const section of sections) {
+    lines.push(`## ${section}`);
+
+    const pages = sortPages(grouped[section]);
+
+    const keep = PINNED_SECTIONS.includes(section)
+      ? pages.length
+      : Math.max(1, Math.floor(pages.length * ratio));
+
+    let currentSub = null;
+    let firstPage = true;
+
+    for (const page of pages.slice(0, keep)) {
+      if (page.subsection && page.subsection !== currentSub) {
+        currentSub = page.subsection;
+        // Blank line before ### to separate from preceding content,
+        // but also serves as the blank line after ## on first entry
+        lines.push("", `### ${formatTitle(currentSub)}`);
+      } else if (firstPage) {
+        // No subsection on first page — blank line after ## heading
+        lines.push("");
+      }
+      firstPage = false;
+
+      lines.push(...wrapLine(`- [${page.title}](${page.url})`, 0));
+      if (page.description) {
+        lines.push(...wrapLine(`  ${page.description}`, 2));
+      }
+    }
+
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+// ── Trim passes ──────────────────────────────────────────────────────────────
+
+let output = build(1);
+
 if (output.length > TARGET_CHARS) {
   const ratio = TARGET_CHARS / output.length;
-  const finalLines = [`# ${resolvedName}`, ""];
-  if (siteDescription) finalLines.push(`> ${siteDescription}`, "");
-  for (const section of sectionOrder) {
-    const sectionPages = grouped[section];
-    const keep = Math.max(1, Math.floor(sectionPages.length * ratio));
-    finalLines.push(`## ${section}`, "");
-    for (const { title, url, description } of sectionPages.slice(0, keep)) {
-      finalLines.push(...wrapLine(`- [${title}](${url})`, 0));
-      if (description) finalLines.push(...wrapLine(`    Description: ${description}`, 4));
-    }
-    finalLines.push("");
-  }
-  output = finalLines.join("\n");
+  output = build(ratio);
 }
 
-// Hard cap: truncate at last complete entry if still over limit
 if (output.length > TARGET_CHARS) {
-  const truncated = output.slice(0, TARGET_CHARS);
-  const lastNewline = truncated.lastIndexOf("\n- ");
-  if (lastNewline > 0) {
-    // Find the end of the line before this entry
-    const cutPoint = truncated.lastIndexOf("\n", lastNewline - 1);
-    output = (cutPoint > 0 ? truncated.slice(0, cutPoint) : truncated.slice(0, lastNewline)) + "\n";
-  } else {
-    output = truncated + "\n";
-  }
+  output = output.slice(0, TARGET_CHARS);
 }
 
-// Ensure output directory exists
-const outDir = path.dirname(path.resolve(outputFile));
-fs.mkdirSync(outDir, { recursive: true });
+// ── Write file ───────────────────────────────────────────────────────────────
 
+fs.mkdirSync(path.dirname(outputFile), { recursive: true });
 fs.writeFileSync(outputFile, output, "utf8");
-console.log(`✓ Generated ${outputFile} with ${pages.length} pages across ${sectionOrder.length} sections (${output.length.toLocaleString()} chars)`);
+
+console.log(`✓ Generated ${outputFile} (${output.length.toLocaleString()} chars)`);

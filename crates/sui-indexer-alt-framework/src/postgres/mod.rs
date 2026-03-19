@@ -109,8 +109,9 @@ pub mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
+    use sui_indexer_alt_framework_store_traits::CommitterWatermark;
     use sui_indexer_alt_framework_store_traits::Connection as _;
-    use sui_indexer_alt_framework_store_traits::{CommitterWatermark, InitWatermark};
+    use sui_indexer_alt_framework_store_traits::InitWatermark;
     use sui_types::full_checkpoint_content::Checkpoint;
 
     use crate::ConcurrentConfig;

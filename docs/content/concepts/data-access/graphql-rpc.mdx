@@ -34,7 +34,7 @@ The target times indicated are tentative and subject to updates based on project
 
 :::
 
-## Components 
+## Components
 
 The key components of the GraphQL and General-purpose Indexer stack include the following:
 
@@ -48,7 +48,7 @@ The key components of the GraphQL and General-purpose Indexer stack include the 
 
 - **Consistent Store:** Answers queries about the latest state of the network within the last hour (objects owned by addresses, objects by type, balances by address and type). Consistency is guaranteed by pinning queries to a specific (recent) checkpoint.
 
-- **Full node:** Enables transaction execution and simulation. 
+- **Full node:** Enables transaction execution and simulation.
 
 ## When to use
 
@@ -131,7 +131,7 @@ These pipelines capture the core blockchain data in its raw form, preserving com
 
 The following pipelines create indexed views that allow efficient filtering and querying based on different attributes (such as object owner, transaction type, affected addresses, event type). These indexes help identify the keys of interest, which can then fetch detailed content from the raw content `kv_` tables:
 
-**Tables:** `kv_checkpoints`, `kv_transactions`, `kv_objects`, `kv_packages` 
+**Tables:** `kv_checkpoints`, `kv_transactions`, `kv_objects`, `kv_packages`
 
 ### Transaction pipelines
 
@@ -141,11 +141,9 @@ These pipelines extract and index key transaction attributes to support efficien
 
 ### Object pipelines
 
-These pipelines manage current and historical object information. They store active object metadata, maintain version histories for each object, and categorize coin balances into buckets for efficient coin queries sorted by balances. `obj_versions` table is particularly important for the GraphQL service. It tracks the version history of all blockchain objects, storing object ID, version number, digest, and checkpoint sequence number. The GraphQL service uses this table as an efficient index to resolve object queries by version bounds, checkpoint bounds, or exact versions without loading full object data, enabling features like version pagination and temporal consistency.
+`obj_versions` tracks the version history of all blockchain objects, storing object ID, version number, digest, and checkpoint sequence number. The GraphQL service uses this table as an efficient index to resolve object queries by version bounds, checkpoint bounds, or exact versions without loading full object data, enabling features like version pagination and temporal consistency.
 
-Pruning policies can be configured for `obj_info` and `coin_balance_buckets` to retain historical data within a specified time range, balancing query needs with storage management. This allows supporting use cases that require querying recent object history without retaining all historical data indefinitely.
-
-**Tables**: `obj_info`, `obj_versions`, `coin_balance_buckets`
+**Tables**: `obj_versions`
 
 ### Epoch information pipelines
 
@@ -237,7 +235,7 @@ When designing your deployment, consider the trade-offs between cost, reliabilit
 
 - Postgres with short-retention and Archival Service results in optimization for cost and completeness, ideal for production deployments.
 
-### Best practices 
+### Best practices
 
 To improve performance and reliability, also consider these operational best practices:
 

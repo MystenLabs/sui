@@ -3,24 +3,6 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    coin_balance_buckets (object_id, cp_sequence_number) {
-        object_id -> Bytea,
-        cp_sequence_number -> Int8,
-        owner_kind -> Nullable<Int2>,
-        owner_id -> Nullable<Bytea>,
-        coin_type -> Nullable<Bytea>,
-        coin_balance_bucket -> Nullable<Int2>,
-    }
-}
-
-diesel::table! {
-    coin_balance_buckets_deletion_reference (cp_sequence_number, object_id) {
-        object_id -> Bytea,
-        cp_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     cp_bloom_blocks (cp_block_index, bloom_block_index) {
         cp_block_index -> Int8,
         bloom_block_index -> Int2,
@@ -158,26 +140,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    obj_info (object_id, cp_sequence_number) {
-        object_id -> Bytea,
-        cp_sequence_number -> Int8,
-        owner_kind -> Nullable<Int2>,
-        owner_id -> Nullable<Bytea>,
-        package -> Nullable<Bytea>,
-        module -> Nullable<Text>,
-        name -> Nullable<Text>,
-        instantiation -> Nullable<Bytea>,
-    }
-}
-
-diesel::table! {
-    obj_info_deletion_reference (cp_sequence_number, object_id) {
-        object_id -> Bytea,
-        cp_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     obj_versions (object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -256,8 +218,6 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
-    coin_balance_buckets,
-    coin_balance_buckets_deletion_reference,
     cp_bloom_blocks,
     cp_blooms,
     cp_sequence_numbers,
@@ -272,8 +232,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_packages,
     kv_protocol_configs,
     kv_transactions,
-    obj_info,
-    obj_info_deletion_reference,
     obj_versions,
     sum_displays,
     tx_affected_addresses,

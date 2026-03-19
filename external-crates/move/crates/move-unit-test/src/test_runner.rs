@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    format_module_id,
+    TraceType, format_module_id,
     test_reporter::{
         FailureReason, MoveError, TestFailure, TestResults, TestRunInfo, TestStatistics,
     },
@@ -30,7 +30,11 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
-use move_trace_format::format::{MoveTraceBuilder, TRACE_FILE_EXTENSION};
+use move_trace_format::tracers::instruction_only::InstructionOnlyTracer;
+use move_trace_format::{
+    format::{MoveTraceBuilder, TRACE_FILE_EXTENSION},
+    tracers::function_only::FunctionOnlyTracer,
+};
 use move_vm_runtime::{dev_utils::storage::StoredPackage, shared::gas::GasMeter};
 use move_vm_runtime::{
     dev_utils::{
@@ -64,7 +68,7 @@ pub struct SharedTestingConfig<V: VMTestSetup> {
     prng_seed: Option<u64>,
     num_iters: u64,
     deterministic_generation: bool,
-    trace_location: Option<String>,
+    trace_location: Option<(TraceType, String)>,
 }
 
 pub struct TestRunner<V: VMTestSetup> {
@@ -130,7 +134,7 @@ impl<V: VMTestSetup + Sync> TestRunner<V> {
         prng_seed: Option<u64>,
         num_iters: u64,
         deterministic_generation: bool,
-        trace_location: Option<String>,
+        trace_location: Option<(TraceType, String)>,
         tests: TestPlan,
         vm_test_setup: V,
     ) -> Result<Self> {
@@ -311,12 +315,19 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
             )
         }
 
-        let mut move_tracer = MoveTraceBuilder::new();
-        let tracer = if self.trace_location.is_some() {
-            Some(&mut move_tracer)
-        } else {
-            None
-        };
+        let mut move_tracer =
+            self.trace_location
+                .as_ref()
+                .map(|(trace_type, _)| match trace_type {
+                    TraceType::InstructionOnly => {
+                        MoveTraceBuilder::new_with_tracer(Box::new(InstructionOnlyTracer))
+                    }
+                    TraceType::FunctionOnly => {
+                        MoveTraceBuilder::new_with_tracer(Box::new(FunctionOnlyTracer))
+                    }
+                    TraceType::Full => MoveTraceBuilder::new(),
+                });
+        let tracer = move_tracer.as_mut();
 
         let mut gas_meter = self.vm_test_setup.new_meter(Some(self.execution_bound));
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
@@ -338,11 +349,7 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
             err.remove_exec_state();
         }
 
-        let trace = if self.trace_location.is_some() {
-            Some(move_tracer.into_trace())
-        } else {
-            None
-        };
+        let trace = move_tracer.map(|t| t.into_trace());
         let test_run_info = TestRunInfo::new(
             now.elapsed(),
             self.vm_test_setup.used_gas(self.execution_bound, gas_meter),
@@ -471,7 +478,7 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
         if let Some(location) = &self.trace_location {
             let trace_file_location = format!(
                 "{}/{}__{}{}.{}",
-                location,
+                location.1,
                 format_module_id(output.test_info, &output.test_plan.module_id).replace("::", "__"),
                 function_name,
                 if let Some(seed) = prng_seed {

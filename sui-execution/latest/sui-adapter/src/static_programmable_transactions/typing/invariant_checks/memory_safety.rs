@@ -290,7 +290,7 @@ impl Location {
 }
 
 impl Context {
-    fn new(env: &Env, txn: &T::Transaction) -> anyhow::Result<Self> {
+    fn new(_env: &Env, txn: &T::Transaction) -> anyhow::Result<Self> {
         let T::Transaction {
             gas_coin,
             bytes: _,
@@ -303,7 +303,7 @@ impl Context {
         } = txn;
         let tx_context = Location::non_ref(T::Location::TxContext);
         let mut gas = Location::non_ref(T::Location::GasCoin);
-        if gas_coin.is_none() && env.protocol_config.gasless_transaction_drop_safety() {
+        if gas_coin.is_none() {
             gas.move_value()
                 .map_err(|_| anyhow::anyhow!("gas coin should be initialized"))?;
         }

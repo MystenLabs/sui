@@ -471,7 +471,7 @@ fn argument(
 ///
 /// Returns true iff any return type is a hot potato
 fn move_call<Mode: ExecutionMode>(
-    env: &Env,
+    _env: &Env,
     context: &mut Context,
     call: &T::MoveCall,
     argument_cliques: &[(u16, CliqueID)],
@@ -482,12 +482,7 @@ fn move_call<Mode: ExecutionMode>(
     } = call;
     let visibility = function.visibility;
     let is_entry = function.is_entry;
-    // check rules around hot arguments and entry functions
-    let is_non_public = if env.protocol_config.restrict_hot_or_not_entry_functions() {
-        !matches!(visibility, Visibility::Public)
-    } else {
-        matches!(visibility, Visibility::Private)
-    };
+    let is_non_public = !matches!(visibility, Visibility::Public);
     if is_entry && is_non_public && !Mode::allow_arbitrary_values() {
         let mut hot_argument: Option<u16> = None;
         for (idx, clique) in argument_cliques {
