@@ -4,7 +4,7 @@
 use fastcrypto::traits::Signer;
 use std::mem;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::{AuthorityName, SequenceNumber, VerifiedExecutionData};
+use sui_types::base_types::{AuthorityName, VerifiedExecutionData};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -33,14 +33,10 @@ pub struct MockCheckpointBuilder {
     transactions: Vec<VerifiedExecutionData>,
     epoch_rolling_gas_cost_summary: GasCostSummary,
     epoch: u64,
-    accumulator_root_obj_initial_shared_version: SequenceNumber,
 }
 
 impl MockCheckpointBuilder {
-    pub fn new(
-        previous_checkpoint: VerifiedCheckpoint,
-        accumulator_root_obj_initial_shared_version: Option<SequenceNumber>,
-    ) -> Self {
+    pub fn new(previous_checkpoint: VerifiedCheckpoint) -> Self {
         let epoch_rolling_gas_cost_summary =
             previous_checkpoint.epoch_rolling_gas_cost_summary.clone();
         let epoch = previous_checkpoint.epoch;
@@ -50,8 +46,6 @@ impl MockCheckpointBuilder {
             transactions: Vec::new(),
             epoch_rolling_gas_cost_summary,
             epoch,
-            accumulator_root_obj_initial_shared_version:
-                accumulator_root_obj_initial_shared_version.unwrap_or(OBJECT_START_VERSION),
         }
     }
 
@@ -148,7 +142,7 @@ impl MockCheckpointBuilder {
         let settlement_txns = builder.build_tx(
             protocol_config,
             self.epoch,
-            self.accumulator_root_obj_initial_shared_version,
+            OBJECT_START_VERSION,
             checkpoint_height,
             checkpoint_seq,
         );
@@ -169,7 +163,7 @@ impl MockCheckpointBuilder {
     ) -> Transaction {
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
             self.epoch,
-            self.accumulator_root_obj_initial_shared_version,
+            OBJECT_START_VERSION,
             checkpoint_height,
             settlement_effects,
         );

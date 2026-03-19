@@ -192,7 +192,7 @@ where
 impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     pub fn new_with_network_config_store(config: &NetworkConfig, rng: R, store: S) -> Self {
         let keystore = KeyStore::from_network_config(config);
-        let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint(), None);
+        let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint());
 
         let genesis = &config.genesis;
         let epoch_state = EpochState::new(genesis.sui_system_object());
@@ -226,10 +226,8 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         config: &NetworkConfig,
         store: S,
         rng: R,
-        acc_initial_shared_obj_version: Option<SequenceNumber>,
     ) -> Self {
-        let checkpoint_builder =
-            MockCheckpointBuilder::new(checkpoint, acc_initial_shared_obj_version);
+        let checkpoint_builder = MockCheckpointBuilder::new(checkpoint);
         let epoch_state = EpochState::new(system_state);
         Self {
             rng,
