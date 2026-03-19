@@ -230,7 +230,7 @@ mod checked {
             transaction,
             true, // gas_ownership_checks
         )?;
-        check_objects(transaction, input_objects)?;
+        check_objects(transaction, input_objects, protocol_config)?;
         check_replay_protection(transaction, input_objects)?;
 
         Ok(gas_status)
@@ -439,7 +439,11 @@ mod checked {
     /// Check all the objects used in the transaction against the database, and ensure
     /// that they are all the correct version and number.
     #[instrument(level = "trace", skip_all)]
-    fn check_objects(transaction: &TransactionData, objects: &InputObjects) -> UserInputResult<()> {
+    fn check_objects(
+        transaction: &TransactionData,
+        objects: &InputObjects,
+        protocol_config: &ProtocolConfig,
+    ) -> UserInputResult<()> {
         // We require that mutable objects cannot show up more than once.
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for object in objects.iter() {
@@ -453,17 +457,17 @@ mod checked {
             }
         }
 
-        // Allow empty objects if gas is paid from address balance or entirely from coin reservations
-        let gas_paid_from_coin_reservations = !transaction.gas().is_empty()
-            && transaction
-                .gas()
-                .iter()
-                .all(|obj_ref| ParsedDigest::is_coin_reservation_digest(&obj_ref.2));
-        if !transaction.is_genesis_tx()
-            && objects.is_empty()
-            && !transaction.is_gas_paid_from_address_balance()
-            && !gas_paid_from_coin_reservations
-        {
+        // When coin reservations are enabled, allow empty objects if gas is paid from
+        // address balance or entirely from coin reservations (the gas coin is materialized
+        // from the address balance, so no input objects are needed).
+        let allow_empty_objects = protocol_config.enable_coin_reservation_obj_refs()
+            && (transaction.is_gas_paid_from_address_balance()
+                || (!transaction.gas().is_empty()
+                    && transaction
+                        .gas()
+                        .iter()
+                        .all(|obj_ref| ParsedDigest::is_coin_reservation_digest(&obj_ref.2))));
+        if !transaction.is_genesis_tx() && objects.is_empty() && !allow_empty_objects {
             return Err(UserInputError::ObjectInputArityViolation);
         }
 
