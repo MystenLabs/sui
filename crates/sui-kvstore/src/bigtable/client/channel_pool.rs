@@ -244,6 +244,7 @@ impl ChannelPoolInner {
             let delta =
                 (current_size.saturating_sub(pool_size_target)).min(self.config.max_resize_delta);
             if delta == 0 {
+                self.consecutive_low_load.store(0, Ordering::Relaxed);
                 return;
             }
 
