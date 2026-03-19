@@ -431,6 +431,11 @@ impl AuthorityPerpetualTables {
         Self::open(parent_path, None, None)
     }
 
+    #[cfg(tidehunter)]
+    pub fn force_rebuild_control_region(&self) -> anyhow::Result<()> {
+        self.objects.db.force_rebuild_control_region()
+    }
+
     // This is used by indexer to find the correct version of dynamic field child object.
     // We do not store the version of the child object, but because of lamport timestamp,
     // we know the child must have version number less then or eq to the parent.

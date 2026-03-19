@@ -1054,8 +1054,6 @@ pub async fn download_formal_snapshot(
     // and reduce startup time. No-op when compiled without tidehunter.
     #[cfg(tidehunter)]
     perpetual_db
-        .objects
-        .db
         .force_rebuild_control_region()
         .expect("Failed to rebuild tidehunter control region after snapshot restore");
 
