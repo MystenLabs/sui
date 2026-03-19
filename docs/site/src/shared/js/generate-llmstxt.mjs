@@ -29,16 +29,42 @@ const PINNED_SECTIONS = ["Move", "Top Level Navigation", "Sui Developer Skills"]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+const IGNORE_DIRS = new Set([
+  "snippets",
+]);
+
+const IGNORE_PATHS = new Set([
+  "guides/developer/digital-assets",
+  "guides/developer/wallets",
+]);
+
+const IGNORE_FILES = new Set([
+  "guides/operator/observability.md",
+  "references/ts-asset-tokenization.md",
+  "guides/developer/getting-started/sui-wallets.md",
+  "guides/developer/coin/stablecoins.md",
+  "guides/developer/app-examples/recaptcha.md",
+]);
+
 function walk(dir, results = []) {
   if (!fs.existsSync(dir)) return results;
 
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
+    const rel = path.relative(markdownDir, full).replace(/\\/g, "/");
 
     if (entry.isDirectory()) {
-      if (entry.name === "snippets") continue; // exclude snippets
+      // Ignore by directory name
+      if (IGNORE_DIRS.has(entry.name)) continue;
+
+      // Ignore by full relative path (subtrees)
+      if (IGNORE_PATHS.has(rel)) continue;
+
       walk(full, results);
     } else if (entry.name.endsWith(".md") || entry.name.endsWith(".mdx")) {
+      // Ignore specific files
+      if (IGNORE_FILES.has(rel)) continue;
+
       results.push(full);
     }
   }
@@ -48,9 +74,15 @@ function walk(dir, results = []) {
 
 function isDraft(filePath) {
   const content = fs.readFileSync(filePath, "utf8");
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (!match) return false;
-  return /^\s*draft:\s*true/m.test(match[1]);
+  // Only check within the first 1KB (safely within frontmatter range)
+  const head = content.slice(0, 1024);
+  // Must start with frontmatter delimiter
+  if (!head.startsWith("---")) return false;
+  // Find the closing delimiter
+  const end = head.indexOf("\n---", 3);
+  if (end === -1) return false;
+  const frontmatter = head.slice(0, end);
+  return /draft:\s*true/i.test(frontmatter);
 }
 
 function joinUrl(base, p) {
