@@ -107,6 +107,36 @@ snippetReq.keys().forEach((k: string) => {
 // These are generated at runtime or by separate prebuild steps
 const IGNORED_SNIPPET_DIRS = ["console-output/"];
 
+/**
+ * Extracts specific line ranges from text content.
+ * Supports single ranges ("5-20"), multiple ranges ("5-20,30-40"),
+ * and single lines ("5"). Ranges are 1-indexed and inclusive.
+ * Multiple ranges are joined with a blank line separator.
+ */
+function selectLines(text: string, rangeSpec: string): string {
+  const allLines = text.split("\n");
+  const parts = rangeSpec.split(",").map((s) => s.trim());
+  const segments: string[] = [];
+
+  for (const part of parts) {
+    if (part.includes("-")) {
+      const [startStr, endStr] = part.split("-").map((s) => s.trim());
+      const start = Math.max(1, parseInt(startStr, 10));
+      const end = Math.min(allLines.length, parseInt(endStr, 10));
+      if (!isNaN(start) && !isNaN(end) && start <= end) {
+        segments.push(allLines.slice(start - 1, end).join("\n"));
+      }
+    } else {
+      const lineNum = parseInt(part, 10);
+      if (!isNaN(lineNum) && lineNum >= 1 && lineNum <= allLines.length) {
+        segments.push(allLines[lineNum - 1]);
+      }
+    }
+  }
+
+  return segments.join("\n\n");
+}
+
 type Props = {
   /** For mode="snippet": path under /snippets. For mode="code": repo-relative path like "packages/foo/src/x.ts". */
   source: string;
@@ -133,6 +163,7 @@ type Props = {
   repo?: string;
   ref?: string;
   signatureOnly?: boolean; // if included, only display function signature
+  lines?: string; // line ranges to extract, e.g. "5-20" or "5-20,30-40" (1-indexed, inclusive)
 };
 
 export default function ImportContent({
@@ -160,6 +191,7 @@ export default function ImportContent({
   repo,
   ref,
   signatureOnly,
+  lines,
 }: Props) {
   const md = React.useMemo(
     () => new MarkdownIt({ html: true, linkify: true, typographer: true }),
@@ -323,6 +355,11 @@ export default function ImportContent({
       /\[dependencies\]\nsui\s?=\s?{\s?local\s?=.*sui-framework.*\n/i,
       "[dependencies]",
     );
+
+  // Apply line-range selection early, before other filters
+  if (lines) {
+    out = selectLines(out, lines);
+  }
 
   if (tag) {
     out = utils.returnTag(out, tag);

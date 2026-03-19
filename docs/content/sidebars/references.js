@@ -172,6 +172,16 @@ const references = [
 		],
 	},
 	'references/object-display-syntax',
+	{
+		type: 'link',
+		label: 'Open Zeppelin: Access Library',
+		href: 'https://docs.openzeppelin.com/contracts-sui/1.x/api/access',
+	},
+	{
+		type: 'link',
+		label: 'Open Zeppelin: Math Library',
+		href: 'https://docs.openzeppelin.com/contracts-sui/1.x/api/math',
+	},
 	'references/awesome-sui',
 	'references/awesome-sui-gaming',
 	'references/sui-glossary',
