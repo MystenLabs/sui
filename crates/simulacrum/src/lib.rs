@@ -195,7 +195,8 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint());
 
         let genesis = &config.genesis;
-        let epoch_state = EpochState::new(genesis.sui_system_object());
+        let chain_identifier = (*genesis.checkpoint().digest()).into();
+        let epoch_state = EpochState::new(genesis.sui_system_object(), chain_identifier);
 
         Self {
             rng,
@@ -228,7 +229,8 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         rng: R,
     ) -> Self {
         let checkpoint_builder = MockCheckpointBuilder::new(checkpoint);
-        let epoch_state = EpochState::new(system_state);
+        let chain_identifier = (*config.genesis.checkpoint().digest()).into();
+        let epoch_state = EpochState::new(system_state, chain_identifier);
         Self {
             rng,
             keystore,
@@ -479,6 +481,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let new_epoch_state = EpochState::new_with_protocol_config(
             self.store.get_system_state(),
             self.epoch_state.protocol_config().clone(),
+            self.epoch_state.chain_identifier(),
         );
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: new_epoch_state.committee().voting_rights.clone(),
