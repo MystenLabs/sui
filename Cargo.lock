@@ -5549,7 +5549,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.9"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5#9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5609,7 +5609,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5#9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -5618,7 +5618,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5#9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -5638,7 +5638,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5#9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -5655,7 +5655,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5#9c485ca7062a0e9dcc4d5581b30dd15e7ff7caa5"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -6083,8 +6083,10 @@ checksum = "f90f7dce0722e95104fcb095585910c0977252f286e354b5e3bd38902cd99988"
 [[package]]
 name = "futures-timer"
 version = "3.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=213e543d83b91c4aa904166bef255a6c0054c8a7#213e543d83b91c4aa904166bef255a6c0054c8a7"
+dependencies = [
+ "tokio",
+]
 
 [[package]]
 name = "futures-util"
@@ -12101,7 +12103,8 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.6.0",
- "tokio-macros 2.6.0 (git+https://github.com/MystenLabs/tokio-msim-fork.git?rev=6b1da10b18f9a4b1d42b1432415a0b3092908c77)",
+ "tokio-macros",
+ "tracing",
  "windows-sys 0.61.2",
 ]
 
@@ -18347,19 +18350,15 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 [[package]]
 name = "tokio"
 version = "1.49.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72a2903cd7736441aac9df9d7688bd0ce48edccaadf181c3b90be801e81d3d86"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=213e543d83b91c4aa904166bef255a6c0054c8a7#213e543d83b91c4aa904166bef255a6c0054c8a7"
 dependencies = [
  "bytes",
+ "futures",
  "libc",
- "mio 1.0.3",
- "parking_lot 0.12.3",
- "pin-project-lite",
- "signal-hook-registry",
- "socket2 0.6.0",
- "tokio-macros 2.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mio 0.8.11",
+ "msim",
+ "real_tokio",
  "tracing",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -18375,17 +18374,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "tokio-macros"
-version = "2.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
