@@ -64,20 +64,20 @@ public fun write_back(obj: &mut Object, ctx: &mut TxContext) {
 
 //# run test::m1::create --sender A
 
-//# view-object 2,4
-
 //# view-object 2,5
+
+//# view-object 2,4
 
 // for all of these, only the inputs are mutated
 
-//# run test::m1::borrow_mut --sender A --args object(2,4)
-
 //# run test::m1::borrow_mut --sender A --args object(2,5)
 
-//# run test::m1::add_remove --sender A --args object(2,4)
+//# run test::m1::borrow_mut --sender A --args object(2,4)
 
 //# run test::m1::add_remove --sender A --args object(2,5)
 
-//# run test::m1::write_back --sender A --args object(2,4)
+//# run test::m1::add_remove --sender A --args object(2,4)
 
 //# run test::m1::write_back --sender A --args object(2,5)
+
+//# run test::m1::write_back --sender A --args object(2,4)

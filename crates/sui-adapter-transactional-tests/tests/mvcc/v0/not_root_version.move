@@ -3,7 +3,7 @@
 
 // tests accessing version of the input parent, not the runtime parent
 
-//# init --addresses test=0x0 --accounts P1 P2 --protocol-version 16
+//# init --addresses test=0x0 --accounts P1 P2 --protocol-version 16 --file-format 6
 
 //# publish
 

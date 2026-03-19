@@ -10,49 +10,49 @@ task 1, lines 10-18:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 20-28:
 //# upgrade --package Test_DepDepV1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 3, lines 30-41:
 //# upgrade --package Test_DepDepV2 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 4, lines 44-49:
 //# publish --upgradeable --dependencies Test_DepDepV1 --sender A
 created: object(4,0), object(4,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6551200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 6558800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 51-59:
 //# upgrade --package Test_DepV1 --upgrade-capability 4,1 --dependencies Test_DepDepV2 --sender A
 created: object(5,0)
 mutated: object(0,0), object(4,1)
-gas summary: computation_cost: 1000000, storage_cost: 6551200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6558800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 6, lines 62-69:
 //# publish --upgradeable --dependencies Test_DepV1 Test_DepDepV1 --sender A
 created: object(6,0), object(6,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 7037600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, lines 71-78:
 //# upgrade --package Test_V1 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV2 --sender A
 created: object(7,0)
 mutated: object(0,0), object(6,1)
-gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 7037600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 8, lines 80-85:
 //# upgrade --package Test_V2 --upgrade-capability 6,1 --dependencies Test_DepV1 Test_DepDepV3 --sender A
 created: object(8,0)
 mutated: object(0,0), object(6,1)
-gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 7037600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 9, line 87:
 //# run Test_V1::M1::baz
@@ -120,19 +120,6 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 16, line 105:
-//# view-object 15,0
-Owner: Shared( 10 )
-Version: 10
-Contents: Test_DepDepV1::DepDepM1::Obj {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(15,0),
-        },
-    },
-    v: 7u64,
-}
-
-task 17, lines 107-112:
 //# view-object 15,1
 Owner: Shared( 10 )
 Version: 10
@@ -140,6 +127,19 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
     id: sui::object::UID {
         id: sui::object::ID {
             bytes: fake(15,1),
+        },
+    },
+    v: 7u64,
+}
+
+task 17, lines 107-112:
+//# view-object 15,0
+Owner: Shared( 10 )
+Version: 10
+Contents: Test_DepDepV1::DepDepM1::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(15,0),
         },
     },
     v: 0u64,

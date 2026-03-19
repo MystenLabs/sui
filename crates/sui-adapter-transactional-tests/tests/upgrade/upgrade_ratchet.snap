@@ -10,13 +10,13 @@ task 1, lines 6-12:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5646800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5662000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 13-16:
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 3, lines 18-20:
 //# run sui::package::only_additive_upgrades --args object(1,1) --sender A
@@ -32,13 +32,13 @@ task 5, lines 27-32:
 //# upgrade --package V1 --upgrade-capability 1,1 --sender A --policy additive
 created: object(5,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 6, lines 33-36:
 //# upgrade --package V2 --upgrade-capability 1,1 --sender A --policy dep_only
 created: object(6,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7, lines 38-40:
 //# run sui::package::only_dep_upgrades --args object(1,1) --sender A
@@ -59,7 +59,7 @@ task 10, lines 53-58:
 //# upgrade --package V3 --upgrade-capability 1,1 --sender A --policy dep_only
 created: object(10,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5016000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 11, lines 59-61:
 //# run sui::package::only_additive_upgrades --args object(1,1) --sender A

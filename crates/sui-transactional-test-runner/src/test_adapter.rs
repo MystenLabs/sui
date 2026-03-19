@@ -182,6 +182,8 @@ pub struct SuiTestAdapter {
     pub offchain_config: Option<OffChainConfig>,
     /// A trait encapsulating methods to interact with offchain state.
     pub offchain_reader: Option<Box<dyn OffchainStateReader>>,
+    /// Override for the file format version used when serializing compiled modules.
+    file_format_version: Option<u32>,
 }
 
 /// Extra args related to configuring the indexer and reader.
@@ -206,6 +208,8 @@ struct AdapterInitConfig {
     /// Configuration for offchain state reader read from the file itself, and can be passed to the
     /// specific indexing and reader flavor.
     offchain_config: Option<OffChainConfig>,
+    /// Override for the file format version used when serializing compiled modules.
+    file_format_version: Option<u32>,
 }
 
 pub(crate) struct StagedPackage {
@@ -264,6 +268,7 @@ impl AdapterInitConfig {
             enable_non_exclusive_writes,
             enable_address_balance_gas_payments,
             enable_coin_reservations,
+            file_format_version,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -351,6 +356,7 @@ impl AdapterInitConfig {
             default_gas_price,
             flavor,
             offchain_config,
+            file_format_version,
         }
     }
 }
@@ -428,6 +434,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             default_gas_price,
             flavor,
             offchain_config,
+            file_format_version,
         } = match task_opt.map(|t| t.command) {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
@@ -498,6 +505,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             // TODO: make this configurable
             gas_price: default_gas_price.unwrap_or(DEFAULT_GAS_PRICE),
             staged_modules: BTreeMap::new(),
+            file_format_version,
         };
 
         for well_known in WELL_KNOWN_OBJECTS.iter().copied() {
@@ -546,7 +554,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             .map(|m| {
                 let mut module_bytes = vec![];
                 m.module
-                    .serialize_with_version(m.module.version, &mut module_bytes)
+                    .serialize_with_version(self.serialize_version(&m.module), &mut module_bytes)
                     .unwrap();
                 Ok(module_bytes)
             })
@@ -1087,6 +1095,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let commands = ParsedCommand::parse_vec(&contents)?;
                 let staged = &self.staged_modules;
                 let state = &self.compiled_state;
+                let file_format_version = self.file_format_version;
                 let commands = commands
                     .into_iter()
                     .map(|c| {
@@ -1098,8 +1107,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                                     .iter()
                                     .map(|m| {
                                         let mut buf = vec![];
+                                        let version = file_format_version
+                                            .unwrap_or(m.module.version);
                                         m.module
-                                            .serialize_with_version(m.module.version, &mut buf)
+                                            .serialize_with_version(version, &mut buf)
                                             .unwrap();
                                         buf
                                     })
@@ -1350,7 +1361,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     .map(|m| {
                         let mut buf = vec![];
                         m.module
-                            .serialize_with_version(m.module.version, &mut buf)
+                            .serialize_with_version(self.serialize_version(&m.module), &mut buf)
                             .unwrap();
                         buf
                     })
@@ -1565,6 +1576,13 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
 }
 
 impl SuiTestAdapter {
+    /// Returns the file format version to use when serializing a module. If a file format
+    /// version override was specified via `--file-format`, that version is used; otherwise
+    /// the module's own version is used.
+    fn serialize_version(&self, module: &CompiledModule) -> u32 {
+        self.file_format_version.unwrap_or(module.version)
+    }
+
     pub fn with_offchain_reader(&mut self, offchain_reader: Box<dyn OffchainStateReader>) {
         self.offchain_reader = Some(offchain_reader);
     }
@@ -1704,7 +1722,7 @@ impl SuiTestAdapter {
             .map(|m| {
                 let mut module_bytes = vec![];
                 m.module
-                    .serialize_with_version(m.module.version, &mut module_bytes)?;
+                    .serialize_with_version(self.serialize_version(&m.module), &mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
@@ -2585,6 +2603,7 @@ impl Default for AdapterInitConfig {
             default_gas_price: None,
             flavor: None,
             offchain_config: None,
+            file_format_version: None,
         }
     }
 }

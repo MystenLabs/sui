@@ -3,7 +3,7 @@
 
 // tests vector of objects where operations involve generics (type parameters)
 
-//# init --addresses Test=0x0 --accounts A --protocol-version 20
+//# init --addresses Test=0x0 --accounts A --protocol-version 20 --file-format 6
 
 //# publish
 module Test::M {

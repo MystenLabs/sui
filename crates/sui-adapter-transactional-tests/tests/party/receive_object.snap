@@ -10,7 +10,7 @@ task 1, lines 6-42:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 8177600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 8192800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 44-46:
 //# run ex::m::mint
@@ -55,8 +55,20 @@ Contents: ex::m::PubB {
 }
 
 task 6, lines 56-58:
-//# view-object 2,3
+//# view-object 2,5
 Owner: Account Address ( fake(2,1) )
+Version: 3
+Contents: ex::m::PubB {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,5),
+        },
+    },
+}
+
+task 7, lines 59-61:
+//# view-object 2,3
+Owner: ConsensusAddressOwner( 3, fake(2,1) )
 Version: 3
 Contents: ex::m::PubB {
     id: sui::object::UID {
@@ -66,26 +78,14 @@ Contents: ex::m::PubB {
     },
 }
 
-task 7, lines 59-61:
-//# view-object 2,4
-Owner: ConsensusAddressOwner( 3, fake(2,1) )
-Version: 3
-Contents: ex::m::PubB {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,4),
-        },
-    },
-}
-
 task 8, lines 62-65:
-//# view-object 2,5
+//# view-object 2,4
 Owner: ConsensusAddressOwner( 3, fake(2,0) )
 Version: 3
 Contents: ex::m::PubB {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,5),
+            bytes: fake(2,4),
         },
     },
 }
@@ -108,26 +108,26 @@ Contents: ex::m::PubB {
 }
 
 task 11, line 72:
-//# run ex::m::receiver --args object(2,1) receiving(2,3)
-mutated: object(0,2), object(2,1), object(2,3)
+//# run ex::m::receiver --args object(2,1) receiving(2,5)
+mutated: object(0,2), object(2,1), object(2,5)
 gas summary: computation_cost: 1000000, storage_cost: 3450400,  storage_rebate: 3415896, non_refundable_storage_fee: 34504
 
 task 12, lines 74-77:
-//# view-object 2,3
+//# view-object 2,5
 Owner: Account Address ( _ )
 Version: 5
 Contents: ex::m::PubB {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,3),
+            bytes: fake(2,5),
         },
     },
 }
 
 task 13, line 79:
-//# run ex::m::receiver --args object(2,0) receiving(2,5)
+//# run ex::m::receiver --args object(2,0) receiving(2,4)
 Error: Error checking transaction input objects: Object used as shared is not shared
 
 task 14, line 81:
-//# run ex::m::receiver --args object(2,1) receiving(2,4)
+//# run ex::m::receiver --args object(2,1) receiving(2,3)
 Error: Error checking transaction input objects: Object used as shared is not shared

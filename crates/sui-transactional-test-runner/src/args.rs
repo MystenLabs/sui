@@ -102,6 +102,9 @@ pub struct SuiInitArgs {
     /// Enable coin reservations for gas payment
     #[clap(long = "enable-coin-reservations")]
     pub enable_coin_reservations: bool,
+    /// Override the file format version used when serializing compiled modules
+    #[clap(long = "file-format")]
+    pub file_format_version: Option<u32>,
 }
 
 #[derive(Debug, clap::Parser)]

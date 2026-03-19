@@ -11,7 +11,7 @@ task 1, lines 9-40:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 6726000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6741200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 42:
 //# run test::event_streams::emit_event --sender A --args 10
