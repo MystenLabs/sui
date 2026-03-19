@@ -10,4 +10,8 @@ impl Tracer for NopTracer {
         // keep all events
         true
     }
+
+    fn wants_effects(&self) -> bool {
+        true
+    }
 }

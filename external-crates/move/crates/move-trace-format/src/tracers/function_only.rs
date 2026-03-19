@@ -10,9 +10,11 @@ impl Tracer for FunctionOnlyTracer {
     fn notify(&mut self, event: &TraceEvent, _writer: Writer<'_>) -> bool {
         matches!(
             event,
-            TraceEvent::Instruction { .. }
-                | TraceEvent::OpenFrame { .. }
-                | TraceEvent::CloseFrame { .. }
+            TraceEvent::OpenFrame { .. } | TraceEvent::CloseFrame { .. }
         )
+    }
+
+    fn wants_effects(&self) -> bool {
+        false
     }
 }
