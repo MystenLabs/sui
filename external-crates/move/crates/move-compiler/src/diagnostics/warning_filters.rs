@@ -4,16 +4,33 @@
 use crate::{
     diagnostics::{
         Diagnostic, DiagnosticCode,
-        codes::{Category, DiagnosticInfo, ExternalPrefix, Severity, UnusedItem},
+        codes::{
+            Category, ExternalPrefix, INTERNAL_FILTER_REVERSE, Severity, UnusedItem,
+            internal_category_filter_range, internal_filter_index,
+        },
+    },
+    linters::{
+        LINT_CODE_CATEGORIES, LINT_FILTER_BASE, LINT_FILTER_REVERSE, LinterDiagnosticCategory,
+        NUM_LINT_CODES, lint_code_filter_index,
     },
     shared::{AstDebug, CompilationEnv, known_attributes},
+    sui_mode::linters::NUM_SUI_LINT_CODES,
 };
 use move_symbol_pool::Symbol;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    hash::Hash,
-    sync::Arc,
-};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::LazyLock;
+
+/// Number of u64 words in the internal bitset, derived from the total number of filter IDs.
+const INTERNAL_BITSET_WORDS: usize = (LINT_FILTER_BASE + NUM_LINT_CODES + 63) / 64;
+/// Total bit capacity of the internal bitset.
+pub const INTERNAL_BITSET_CAPACITY: usize = INTERNAL_BITSET_WORDS * u64::BITS as usize;
+/// Total bit capacity of the flavor bitset.
+pub const FLAVOR_BITSET_CAPACITY: usize = u64::BITS as usize;
+
+const _: () = assert!(
+    NUM_SUI_LINT_CODES <= FLAVOR_BITSET_CAPACITY,
+    "Sui lint codes exceed flavor bitset capacity"
+);
 
 pub const FILTER_ALL: &str = "all";
 pub const FILTER_UNUSED: &str = "unused";
@@ -65,60 +82,19 @@ pub type FilterPrefix = Option<Symbol>;
 pub type FilterName = Symbol;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct WarningFiltersScope(WarningFiltersScope_);
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-enum WarningFiltersScope_ {
-    /// Unsafe and should be used only for internal purposes, such as ide annotations
-    Empty,
-    /// The top-level warning filters given to the compiler instance. They are leaked as they will
-    /// be needed for the lifetime of the compiler instance.
-    Static(&'static WarningFiltersBuilder),
-    /// A user-defined warning filter scope, with a reference to the previous scope
-    Node(Arc<WarningFiltersScopeNode>),
+pub struct WarningFiltersScope {
+    current: WarningFilters,
+    stack: Vec<WarningFilters>,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-struct WarningFiltersScopeNode {
-    /// The warning filters for this scope
-    filters: WarningFilters,
-    /// The previous scope
-    prev: WarningFiltersScope_,
-}
-
-#[derive(Debug, Clone)]
-/// An intern table for warning filters. The underlying `Box` is not moved, so the pointer to the
-/// filter is stable.
-/// Safety: This table should not be dropped as long as any `WarningFilters` are alive
-pub struct WarningFiltersTable(HashSet<Box<WarningFiltersBuilder>>);
-
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
-/// An unsafe pointer into the intern table for warning filters.
-/// Safety: The `WarningFiltersTable` must be held as long as any `WarningFilters`s are alive.
-pub struct WarningFilters(*const WarningFiltersBuilder);
-unsafe impl Send for WarningFilters {}
-unsafe impl Sync for WarningFilters {}
-
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
-/// Used to filter out diagnostics, specifically used for warning suppression
-pub struct WarningFiltersBuilder {
-    filters: BTreeMap<ExternalPrefix, UnprefixedWarningFilters>,
-    for_dependency: bool, // if false, the filters are used for source code
-}
-
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
-/// Filters split by category and code
-enum UnprefixedWarningFilters {
-    /// Remove all warnings
-    All,
-    Specified {
-        /// Remove all diags of this category with optional known name
-        categories: BTreeMap<u8, Option<WellKnownFilterName>>,
-        /// Remove specific diags with optional known filter name
-        codes: BTreeMap<(u8, u8), Option<WellKnownFilterName>>,
-    },
-    /// No filter
-    Empty,
+#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Hash, Default)]
+pub struct WarningFilters {
+    /// Bitpacked filter for internal diagnostics AND non-flavor lint codes.
+    internal: [u64; INTERNAL_BITSET_WORDS],
+    /// Bitpacked filter for flavor-specific diagnostics (e.g., Sui lints).
+    flavor: u64,
+    /// Whether this filter applies to dependency code.
+    for_dependency: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
@@ -149,160 +125,179 @@ pub type WellKnownFilterName = &'static str;
 //**************************************************************************************************
 
 impl WarningFiltersScope {
-    /// Create a new scope with the given top-level warning filter, if any.
-    /// A `&'static WarningFiltersBuilder` is used to avoid cloning the filter table for each
-    /// new top-level scope needed
-    pub(crate) const fn root(
-        top_level_warning_filter_opt: Option<&'static WarningFiltersBuilder>,
-    ) -> Self {
-        match top_level_warning_filter_opt {
-            None => WarningFiltersScope(WarningFiltersScope_::Empty),
-            Some(top_level_warning_filter) => {
-                WarningFiltersScope(WarningFiltersScope_::Static(top_level_warning_filter))
-            }
+    pub(crate) fn root(top_level: Option<WarningFilters>) -> Self {
+        Self {
+            current: top_level.unwrap_or_default(),
+            stack: vec![],
         }
     }
 
     pub fn push(&mut self, filters: WarningFilters) {
-        let node = Arc::new(WarningFiltersScopeNode {
-            filters,
-            prev: self.0.clone(),
-        });
-        *self = WarningFiltersScope(WarningFiltersScope_::Node(node))
+        let mut merged = self.current;
+        merged.union(&filters);
+        self.stack
+            .push(std::mem::replace(&mut self.current, merged));
     }
 
     pub fn pop(&mut self) {
-        match std::mem::replace(&mut self.0, WarningFiltersScope_::Empty) {
-            WarningFiltersScope_::Empty => panic!("pop on empty scope"),
-            WarningFiltersScope_::Static(_) => panic!("pop on top level scope"),
-            WarningFiltersScope_::Node(node) => self.0 = node.prev.clone(),
-        }
+        self.current = self.stack.pop().expect("pop on empty scope");
     }
 
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
-        let mut scope = &self.0;
-        loop {
-            match scope {
-                WarningFiltersScope_::Empty => return false,
-                WarningFiltersScope_::Static(filters) => return filters.is_filtered(diag),
-                WarningFiltersScope_::Node(node) => {
-                    if node.filters.is_filtered(diag) {
-                        return true;
-                    }
-                    scope = &node.prev;
-                }
-            }
-        }
+        self.current.is_filtered(diag)
     }
 
     pub fn is_filtered_for_dependency(&self) -> bool {
-        let mut scope = &self.0;
-        loop {
-            match scope {
-                WarningFiltersScope_::Empty => return false,
-                WarningFiltersScope_::Static(filters) => return filters.for_dependency(),
-                WarningFiltersScope_::Node(node) => {
-                    if node.filters.for_dependency() {
-                        return true;
-                    }
-                    scope = &node.prev;
-                }
-            }
-        }
-    }
-}
-
-impl Default for WarningFiltersTable {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl WarningFiltersTable {
-    pub fn new() -> Self {
-        Self(HashSet::new())
-    }
-
-    pub fn add(&mut self, filters: WarningFiltersBuilder) -> WarningFilters {
-        let boxed = Box::new(filters);
-        let wf = {
-            let pinned_ref: &WarningFiltersBuilder = &boxed;
-            WarningFilters(pinned_ref as *const WarningFiltersBuilder)
-        };
-        match self.0.get(&boxed) {
-            Some(existing) => {
-                let existing_ref: &WarningFiltersBuilder = existing;
-                WarningFilters(existing_ref as *const WarningFiltersBuilder)
-            }
-            None => {
-                self.0.insert(boxed);
-                wf
-            }
-        }
+        self.current.for_dependency()
     }
 }
 
 impl WarningFilters {
-    pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
-        self.borrow().is_filtered(diag)
-    }
-
-    pub fn for_dependency(&self) -> bool {
-        self.borrow().for_dependency()
-    }
-
-    fn borrow(&self) -> &WarningFiltersBuilder {
-        unsafe { &*self.0 }
-    }
-}
-
-impl WarningFiltersBuilder {
     pub const fn new_for_source() -> Self {
         Self {
-            filters: BTreeMap::new(),
+            internal: [0; INTERNAL_BITSET_WORDS],
+            flavor: 0,
             for_dependency: false,
         }
     }
 
     pub const fn new_for_dependency() -> Self {
         Self {
-            filters: BTreeMap::new(),
+            internal: [0; INTERNAL_BITSET_WORDS],
+            flavor: 0,
             for_dependency: true,
         }
     }
 
     pub fn new_all_filter_alls(env: &CompilationEnv) -> Self {
-        let mut all_filter_alls = WarningFiltersBuilder::new_for_dependency();
+        let mut f = Self::new_for_dependency();
         for prefix in env.known_filter_names() {
-            for f in env.filter_from_str(prefix, FILTER_ALL) {
-                all_filter_alls.add(f);
+            for filter in env.filter_from_str(prefix, FILTER_ALL) {
+                f.add(filter);
             }
         }
-        all_filter_alls
+        f
     }
 
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
-        self.is_filtered_by_info(&diag.info)
-    }
-
-    fn is_filtered_by_info(&self, info: &DiagnosticInfo) -> bool {
-        let prefix = info.external_prefix();
-        self.filters
-            .get(&prefix)
-            .is_some_and(|filters| filters.is_filtered_by_info(info))
+        let info = diag.info();
+        if info.severity() > Severity::Warning {
+            return false;
+        }
+        match info.external_prefix() {
+            None => match internal_filter_index(info.category(), info.code()) {
+                Some(idx) => test_internal_bit(&self.internal, idx),
+                None => false,
+            },
+            _ => {
+                if is_flavor_category(info.category()) {
+                    match flavor_filter_index(info.category(), info.code()) {
+                        Some(idx) => self.flavor & (1u64 << idx) != 0,
+                        None => false,
+                    }
+                } else {
+                    match lint_code_filter_index(info.category(), info.code()) {
+                        Some(idx) => test_internal_bit(&self.internal, idx),
+                        None => false,
+                    }
+                }
+            }
+        }
     }
 
     pub fn union(&mut self, other: &Self) {
-        for (prefix, filters) in &other.filters {
-            self.filters
-                .entry(*prefix)
-                .or_insert_with(UnprefixedWarningFilters::new)
-                .union(filters);
+        for i in 0..INTERNAL_BITSET_WORDS {
+            self.internal[i] |= other.internal[i];
         }
+        self.flavor |= other.flavor;
         // if there is a dependency code filter on the stack, it means we are filtering dependent
         // code and this information must be preserved when stacking up additional filters (which
         // involves union of the current filter with the new one)
         self.for_dependency = self.for_dependency || other.for_dependency;
+    }
+
+    pub fn add(&mut self, filter: WarningFilter) {
+        match filter {
+            WarningFilter::All(prefix) => match prefix {
+                None => self.internal = [u64::MAX; INTERNAL_BITSET_WORDS],
+                _ => {
+                    // Set all non-flavor lint bits in internal
+                    for i in 0..NUM_LINT_CODES {
+                        set_internal_bit(&mut self.internal, LINT_FILTER_BASE + i);
+                    }
+                    // Set all flavor bits
+                    self.flavor = u64::MAX;
+                }
+            },
+            WarningFilter::Category {
+                prefix, category, ..
+            } => match prefix {
+                None => {
+                    let (base, count) =
+                        internal_category_filter_range(category).unwrap_or_else(|| {
+                            panic!(
+                                "ICE: unknown internal diagnostic category {category} \
+                                 in warning filter"
+                            )
+                        });
+                    for i in 0..count as usize {
+                        set_internal_bit(&mut self.internal, base + i);
+                    }
+                }
+                _ => {
+                    if is_flavor_category(category) {
+                        let (base, count) = flavor_category_range(category).unwrap_or_else(|| {
+                            panic!("ICE: unknown flavor category {category} in warning filter")
+                        });
+                        for i in 0..count {
+                            self.flavor |= 1u64 << (base + i);
+                        }
+                    } else {
+                        // Filter all lint codes in this category
+                        for (i, &cat) in LINT_CODE_CATEGORIES.iter().enumerate() {
+                            if cat == category {
+                                set_internal_bit(&mut self.internal, LINT_FILTER_BASE + i);
+                            }
+                        }
+                    }
+                }
+            },
+            WarningFilter::Code {
+                prefix,
+                category,
+                code,
+                ..
+            } => match prefix {
+                None => {
+                    let idx = internal_filter_index(category, code).unwrap_or_else(|| {
+                        panic!(
+                            "ICE: unknown internal diagnostic ({category}, {code}) \
+                             in warning filter"
+                        )
+                    });
+                    set_internal_bit(&mut self.internal, idx);
+                }
+                _ => {
+                    if is_flavor_category(category) {
+                        let idx = flavor_filter_index(category, code).unwrap_or_else(|| {
+                            panic!(
+                                "ICE: unknown flavor diagnostic ({category}, {code}) \
+                                 in warning filter"
+                            )
+                        });
+                        self.flavor |= 1u64 << idx;
+                    } else {
+                        let idx = lint_code_filter_index(category, code).unwrap_or_else(|| {
+                            panic!(
+                                "ICE: unknown lint diagnostic ({category}, {code}) \
+                                 in warning filter"
+                            )
+                        });
+                        set_internal_bit(&mut self.internal, idx);
+                    }
+                }
+            },
+        }
     }
 
     pub fn add_all(&mut self, filters: impl IntoIterator<Item = WarningFilter>) {
@@ -311,139 +306,71 @@ impl WarningFiltersBuilder {
         }
     }
 
-    pub fn add(&mut self, filter: WarningFilter) {
-        let (prefix, category, code, name) = match filter {
-            WarningFilter::All(prefix) => {
-                self.filters.insert(prefix, UnprefixedWarningFilters::All);
-                return;
-            }
-            WarningFilter::Category {
-                prefix,
-                category,
-                name,
-            } => (prefix, category, None, name),
-            WarningFilter::Code {
-                prefix,
-                category,
-                code,
-                name,
-            } => (prefix, category, Some(code), name),
-        };
-        self.filters
-            .entry(prefix)
-            .or_insert(UnprefixedWarningFilters::Empty)
-            .add(category, code, name)
-    }
-
-    pub fn unused_warnings_filter_for_test() -> Self {
-        Self {
-            filters: BTreeMap::from([(
-                None,
-                UnprefixedWarningFilters::unused_warnings_filter_for_test(),
-            )]),
-            for_dependency: false,
-        }
-    }
-
     pub fn for_dependency(&self) -> bool {
         self.for_dependency
     }
-}
-
-impl UnprefixedWarningFilters {
-    pub fn new() -> Self {
-        Self::Empty
-    }
-
-    fn is_filtered_by_info(&self, info: &DiagnosticInfo) -> bool {
-        match self {
-            Self::All => info.severity() <= Severity::Warning,
-            Self::Specified { categories, codes } => {
-                info.severity() <= Severity::Warning
-                    && (categories.contains_key(&info.category())
-                        || codes.contains_key(&(info.category(), info.code())))
-            }
-            Self::Empty => false,
-        }
-    }
-
-    pub fn union(&mut self, other: &Self) {
-        match (self, other) {
-            // if self is empty, just take the other filter
-            (s @ Self::Empty, _) => *s = other.clone(),
-            // if other is empty, or self is ALL, no change to the filter
-            (_, Self::Empty) => (),
-            (Self::All, _) => (),
-            // if other is all, self is now all
-            (s, Self::All) => *s = Self::All,
-            // category and code level union
-            (
-                Self::Specified { categories, codes },
-                Self::Specified {
-                    categories: other_categories,
-                    codes: other_codes,
-                },
-            ) => {
-                categories.extend(other_categories);
-                // remove any codes covered by the category level filter
-                codes.extend(
-                    other_codes
-                        .iter()
-                        .filter(|((category, _), _)| !categories.contains_key(category)),
-                );
-            }
-        }
-    }
-
-    /// Add a specific filter to the filter map.
-    /// If filter_code is None, then the filter applies to all codes in the filter_category.
-    fn add(
-        &mut self,
-        filter_category: u8,
-        filter_code: Option<u8>,
-        filter_name: Option<WellKnownFilterName>,
-    ) {
-        match self {
-            Self::All => (),
-            Self::Empty => {
-                *self = Self::Specified {
-                    categories: BTreeMap::new(),
-                    codes: BTreeMap::new(),
-                };
-                self.add(filter_category, filter_code, filter_name)
-            }
-            Self::Specified { categories, .. } if categories.contains_key(&filter_category) => (),
-            Self::Specified { categories, codes } => {
-                if let Some(filter_code) = filter_code {
-                    codes.insert((filter_category, filter_code), filter_name);
-                } else {
-                    categories.insert(filter_category, filter_name);
-                    codes.retain(|(category, _), _| *category != filter_category);
-                }
-            }
-        }
-    }
 
     pub fn unused_warnings_filter_for_test() -> Self {
-        let filtered_codes = [
-            (UnusedItem::Function, FILTER_UNUSED_FUNCTION),
-            (UnusedItem::StructField, FILTER_UNUSED_STRUCT_FIELD),
-            (UnusedItem::FunTypeParam, FILTER_UNUSED_TYPE_PARAMETER),
-            (UnusedItem::Constant, FILTER_UNUSED_CONST),
-            (UnusedItem::MutReference, FILTER_UNUSED_MUT_REF),
-            (UnusedItem::MutParam, FILTER_UNUSED_MUT_PARAM),
-        ]
-        .into_iter()
-        .map(|(item, filter)| {
+        let mut result = Self::new_for_source();
+        for item in [
+            UnusedItem::Function,
+            UnusedItem::StructField,
+            UnusedItem::FunTypeParam,
+            UnusedItem::Constant,
+            UnusedItem::MutReference,
+            UnusedItem::MutParam,
+        ] {
             let info = item.into_info();
-            ((info.category(), info.code()), Some(filter))
-        })
-        .collect();
-        Self::Specified {
-            categories: BTreeMap::new(),
-            codes: filtered_codes,
+            if let Some(idx) = internal_filter_index(info.category(), info.code()) {
+                result.internal[idx / 64] |= 1u64 << (idx % 64);
+            }
         }
+        result
     }
+}
+
+const FLAVOR_CATEGORY: u8 = LinterDiagnosticCategory::Sui as u8;
+
+fn flavor_filter_index(category: u8, code: u8) -> Option<usize> {
+    if category == FLAVOR_CATEGORY {
+        Some(code as usize)
+    } else {
+        None
+    }
+}
+
+fn is_flavor_category(category: u8) -> bool {
+    category == FLAVOR_CATEGORY
+}
+
+fn flavor_category_range(category: u8) -> Option<(usize, usize)> {
+    if category == FLAVOR_CATEGORY {
+        Some((0, NUM_SUI_LINT_CODES))
+    } else {
+        None
+    }
+}
+
+fn flavor_filter_reverse(idx: usize) -> Option<(u8, u8)> {
+    if idx < NUM_SUI_LINT_CODES {
+        Some((FLAVOR_CATEGORY, idx as u8))
+    } else {
+        None
+    }
+}
+
+fn set_internal_bit(internal: &mut [u64; INTERNAL_BITSET_WORDS], idx: usize) {
+    let word = idx / 64;
+    let bit = idx % 64;
+    if word < INTERNAL_BITSET_WORDS {
+        internal[word] |= 1u64 << bit;
+    }
+}
+
+fn test_internal_bit(internal: &[u64; INTERNAL_BITSET_WORDS], idx: usize) -> bool {
+    let word = idx / 64;
+    let bit = idx % 64;
+    word < INTERNAL_BITSET_WORDS && (internal[word] & (1u64 << bit)) != 0
 }
 
 impl WarningFilter {
@@ -539,44 +466,105 @@ impl WarningFilter {
     }
 }
 
-impl AstDebug for WarningFilters {
-    fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
-        self.borrow().ast_debug(w);
+static FILTER_NAME_LOOKUP: LazyLock<BTreeMap<(ExternalPrefix, u8, u8), &'static str>> =
+    LazyLock::new(|| {
+        WarningFilter::compiler_known_filters()
+            .into_values()
+            .chain(WarningFilter::ide_known_filters().into_values())
+            .flatten()
+            .filter_map(|f| match f {
+                WarningFilter::Code {
+                    prefix,
+                    category,
+                    code,
+                    name: Some(name),
+                } => Some(((prefix, category, code), name)),
+                WarningFilter::Category {
+                    prefix,
+                    category,
+                    name: Some(name),
+                } => Some(((prefix, category, 0), name)),
+                _ => None,
+            })
+            .collect()
+    });
+
+fn iter_set_bits(words: &[u64; INTERNAL_BITSET_WORDS]) -> impl Iterator<Item = usize> + '_ {
+    words.iter().enumerate().flat_map(|(word_idx, &word)| {
+        (0..64u32).filter_map(move |bit| {
+            if word & (1u64 << bit) != 0 {
+                Some(word_idx * 64 + bit as usize)
+            } else {
+                None
+            }
+        })
+    })
+}
+
+fn format_filter(prefix: ExternalPrefix, cat: u8, code: u8) -> String {
+    match FILTER_NAME_LOOKUP.get(&(prefix, cat, code)) {
+        Some(n) => (*n).to_owned(),
+        None => format!("({},{})", cat, code),
     }
 }
 
-impl AstDebug for WarningFiltersBuilder {
+impl AstDebug for WarningFilters {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
-        for (prefix, filters) in &self.filters {
-            let prefix_str = prefix.unwrap_or(known_attributes::DiagnosticAttribute::ALLOW);
-            match filters {
-                UnprefixedWarningFilters::All => w.write(format!(
-                    "#[{}({})]",
-                    prefix_str,
-                    WarningFilter::All(*prefix).to_str().unwrap(),
-                )),
-                UnprefixedWarningFilters::Specified { categories, codes } => {
-                    w.write(format!("#[{}(", prefix_str));
-                    let items = categories
-                        .iter()
-                        .map(|(cat, n)| WarningFilter::Category {
-                            prefix: *prefix,
-                            category: *cat,
-                            name: *n,
-                        })
-                        .chain(codes.iter().map(|((cat, code), n)| WarningFilter::Code {
-                            prefix: *prefix,
-                            category: *cat,
-                            code: *code,
-                            name: *n,
-                        }));
-                    w.list(items, ",", |w, filter| {
-                        w.write(filter.to_str().unwrap());
-                        false
-                    });
-                    w.write(")]")
+        let prefix_str = known_attributes::DiagnosticAttribute::ALLOW;
+
+        // Internal bitset: partition into internal (prefix=None) and lint (prefix=Some) items
+        if self.internal == [u64::MAX; INTERNAL_BITSET_WORDS] {
+            w.write(format!("#[{}(all)]", prefix_str));
+        } else {
+            let mut internal_items = vec![];
+            let mut lint_items = vec![];
+            for idx in iter_set_bits(&self.internal) {
+                if idx < LINT_FILTER_BASE {
+                    if let Some(&(cat, code)) = INTERNAL_FILTER_REVERSE.get(idx) {
+                        internal_items.push(format_filter(None, cat, code));
+                    }
+                } else {
+                    let lint_idx = idx - LINT_FILTER_BASE;
+                    if let Some(&(cat, code)) = LINT_FILTER_REVERSE.get(lint_idx) {
+                        lint_items.push(format_filter(Some(""), cat, code));
+                    }
                 }
-                UnprefixedWarningFilters::Empty => (),
+            }
+            if !internal_items.is_empty() {
+                w.write(format!("#[{}(", prefix_str));
+                w.list(&internal_items, ",", |w, item| {
+                    w.write(item);
+                    false
+                });
+                w.write(")]");
+            }
+            if !lint_items.is_empty() {
+                w.write(format!("#[lint("));
+                w.list(&lint_items, ",", |w, item| {
+                    w.write(item);
+                    false
+                });
+                w.write(")]");
+            }
+        }
+
+        // Flavor filters
+        if self.flavor != 0 {
+            let mut items = vec![];
+            for bit in 0..64u32 {
+                if self.flavor & (1u64 << bit) != 0 {
+                    if let Some((cat, code)) = flavor_filter_reverse(bit as usize) {
+                        items.push(format_filter(Some(""), cat, code));
+                    }
+                }
+            }
+            if !items.is_empty() {
+                w.write(format!("#[lint("));
+                w.list(&items, ",", |w, item| {
+                    w.write(item);
+                    false
+                });
+                w.write(")]");
             }
         }
     }

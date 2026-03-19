@@ -132,6 +132,55 @@ macro_rules! codes {
             }
         )*
 
+        /// Number of codes per internal diagnostic category.
+        const INTERNAL_FILTER_SIZES: &[u8] = &[
+            $(0u8 $(+ { let _ = stringify!($code); 1u8 })*),*
+        ];
+
+        /// Precomputed base offset for each category (cumulative sum of prior sizes).
+        const INTERNAL_FILTER_OFFSETS: &[usize] = &{
+            let mut offsets = [0usize; INTERNAL_FILTER_SIZES.len()];
+            let mut i = 1;
+            while i < INTERNAL_FILTER_SIZES.len() {
+                offsets[i] = offsets[i - 1] + INTERNAL_FILTER_SIZES[i - 1] as usize;
+                i += 1;
+            }
+            offsets
+        };
+
+        /// Total number of internal diagnostic filter IDs.
+        pub const TOTAL_INTERNAL_FILTER_IDS: usize = {
+            let len = INTERNAL_FILTER_SIZES.len();
+            if len == 0 { 0 }
+            else { INTERNAL_FILTER_OFFSETS[len - 1] + INTERNAL_FILTER_SIZES[len - 1] as usize }
+        };
+
+        /// Maps an internal diagnostic (category, code) to a dense filter index.
+        pub const fn internal_filter_index(category: u8, code: u8) -> Option<usize> {
+            let cat = category as usize;
+            if code == 0
+                || cat >= INTERNAL_FILTER_SIZES.len()
+                || code > INTERNAL_FILTER_SIZES[cat]
+            {
+                return None;
+            }
+            Some(INTERNAL_FILTER_OFFSETS[cat] + code as usize - 1)
+        }
+
+        /// Returns the base offset and count for an internal category.
+        pub const fn internal_category_filter_range(category: u8) -> Option<(usize, u8)> {
+            let cat = category as usize;
+            if cat >= INTERNAL_FILTER_SIZES.len() {
+                return None;
+            }
+            Some((INTERNAL_FILTER_OFFSETS[cat], INTERNAL_FILTER_SIZES[cat]))
+        }
+
+        /// Reverse mapping from dense filter index to (category, code).
+        pub const INTERNAL_FILTER_REVERSE: &[(u8, u8)] = &[
+            $($((Category::$cat as u8, $cat::$code as u8),)*)*
+        ];
+
     };
 }
 

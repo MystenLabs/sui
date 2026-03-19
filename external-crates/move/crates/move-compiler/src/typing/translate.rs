@@ -63,7 +63,6 @@ pub fn program(
 ) -> T::Program {
     let N::Program {
         mut info,
-        warning_filters_table,
         inner: N::Program_ { modules: nmodules },
     } = prog;
 
@@ -83,7 +82,6 @@ pub fn program(
         TypingProgramInfo::new(compilation_env, pre_compiled_lib, &modules, module_use_funs);
     let prog = T::Program {
         modules,
-        warning_filters_table,
         info: Arc::new(program_info),
     };
     compilation_env

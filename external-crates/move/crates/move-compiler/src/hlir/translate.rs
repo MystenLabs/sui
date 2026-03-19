@@ -313,16 +313,11 @@ pub fn program(compilation_env: &CompilationEnv, prog: T::Program) -> H::Program
     let mut context = Context::new(compilation_env, &prog);
     let T::Program {
         modules: tmodules,
-        warning_filters_table,
         info,
     } = prog;
     let modules = modules(&mut context, tmodules);
 
-    H::Program {
-        modules,
-        warning_filters_table,
-        info,
-    }
+    H::Program { modules, info }
 }
 
 fn modules(

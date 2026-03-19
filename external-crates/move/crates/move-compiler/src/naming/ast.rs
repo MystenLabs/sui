@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
+    diagnostics::warning_filters::WarningFilters,
     expansion::ast::{
         AbilitySet, Attributes, DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent,
         Mutability, Value, Value_, Visibility, ability_constraints_ast_debug,
@@ -33,8 +33,6 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Program {
     pub info: NamingProgramInfo,
-    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
-    pub warning_filters_table: Arc<WarningFiltersTable>,
     pub inner: Program_,
 }
 

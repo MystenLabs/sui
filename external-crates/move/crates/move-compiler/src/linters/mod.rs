@@ -100,6 +100,34 @@ macro_rules! lints {
                 StyleCodes::$enum_name.category_code_and_filter_name(),
             )*
         ];
+
+        /// Base dense filter index for lint codes in the internal bitset.
+        pub const LINT_FILTER_BASE: usize = crate::diagnostics::codes::TOTAL_INTERNAL_FILTER_IDS;
+
+        /// Number of lint codes defined by the lints! macro.
+        pub const NUM_LINT_CODES: usize = 0usize $(+ { let _ = stringify!($enum_name); 1usize })*;
+
+        /// Category for each lint code, indexed by (variant_value - 1).
+        pub const LINT_CODE_CATEGORIES: &[u8] = &[
+            $($category as u8),*
+        ];
+
+        /// Maps a lint (category, code) to its dense filter index in the internal bitset.
+        /// Returns `None` if the code is out of range or the category does not match.
+        pub const fn lint_code_filter_index(category: u8, code: u8) -> Option<usize> {
+            if code == 0 || code as usize > NUM_LINT_CODES {
+                return None;
+            }
+            if LINT_CODE_CATEGORIES[code as usize - 1] != category {
+                return None;
+            }
+            Some(LINT_FILTER_BASE + code as usize - 1)
+        }
+
+        /// Reverse mapping: dense index (relative to LINT_FILTER_BASE) -> (category, code).
+        pub const LINT_FILTER_REVERSE: &[(u8, u8)] = &[
+            $(($category as u8, StyleCodes::$enum_name as u8)),*
+        ];
     }
 }
 

@@ -6,10 +6,7 @@ use crate::{
     PreCompiledProgramInfo, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
-        warning_filters::{
-            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters, WarningFiltersBuilder,
-            WarningFiltersTable,
-        },
+        warning_filters::{FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters},
     },
     editions::{self, Edition, FeatureGate, Flavor},
     expansion::{
@@ -57,7 +54,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     iter::IntoIterator,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use super::ast::StdlibDefinitions;
@@ -89,7 +86,6 @@ pub(super) struct DefnContext<'env> {
 pub(super) struct Context<'env> {
     defn_context: DefnContext<'env>,
     address: Option<Address>,
-    warning_filters_table: Mutex<WarningFiltersTable>,
     // Cached warning filters for all available prefixes. Used by non-source defs
     // and dependency packages
     all_filter_alls: WarningFilters,
@@ -112,9 +108,7 @@ impl<'env> Context<'env> {
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
         address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
-        let mut warning_filters_table = WarningFiltersTable::new();
-        let all_filter_alls = WarningFiltersBuilder::new_all_filter_alls(compilation_env);
-        let all_filter_alls = warning_filters_table.add(all_filter_alls);
+        let all_filter_alls = WarningFilters::new_all_filter_alls(compilation_env);
         let reporter = compilation_env.diagnostic_reporter_at_top_level();
         let defn_context = DefnContext {
             env: compilation_env,
@@ -131,33 +125,18 @@ impl<'env> Context<'env> {
         Context {
             defn_context,
             address: None,
-            warning_filters_table: Mutex::new(warning_filters_table),
             all_filter_alls,
             path_expander: None,
         }
     }
 
-    /// Hands back the warning filters table and any unused module extension.
-    fn finish(
-        self,
-    ) -> (
-        WarningFiltersTable,
-        BTreeMap<Address, BTreeMap<ModuleName, P::ModuleDefinition>>,
-    ) {
-        let Context {
-            defn_context,
-            warning_filters_table,
-            ..
-        } = self;
+    /// Hands back any unused module extension.
+    fn finish(self) -> BTreeMap<Address, BTreeMap<ModuleName, P::ModuleDefinition>> {
+        let Context { defn_context, .. } = self;
         let DefnContext {
             module_extensions, ..
         } = defn_context;
-        (
-            warning_filters_table
-                .into_inner()
-                .expect("Missing warning filters table"),
-            module_extensions,
-        )
+        module_extensions
     }
 
     fn env(&self) -> &CompilationEnv {
@@ -796,7 +775,7 @@ pub fn program(
 
     // Finish up context, and report any unused extensions
 
-    let (warning_filters_table, module_extensions) = ctxt.finish();
+    let module_extensions = ctxt.finish();
 
     for (addr, pkg) in module_extensions {
         if matches!(addr, Address::NamedUnassigned(_)) {
@@ -819,10 +798,7 @@ pub fn program(
         }
     }
 
-    let warning_filters_table = Arc::new(warning_filters_table);
-
     E::Program {
-        warning_filters_table,
         modules: module_map,
     }
 }
@@ -1577,11 +1553,7 @@ fn module_warning_filter(
     } else {
         let config = context.env().package_config(package);
         filters.union(&config.warning_filter);
-        context
-            .warning_filters_table
-            .get_mut()
-            .expect("Warning filters table missing")
-            .add(filters)
+        filters
     }
 }
 
@@ -1597,11 +1569,7 @@ fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> W
             .filter_from_str(none, FILTER_UNUSED_STRUCT_FIELD);
         wf.add_all(new_filters);
     }
-    context
-        .warning_filters_table
-        .get_mut()
-        .expect("Warning filter table missing")
-        .add(wf)
+    wf
 }
 
 fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
@@ -1612,18 +1580,17 @@ fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) ->
         let new_filters = context.env().filter_from_str(none, FILTER_DEPRECATED);
         wf.add_all(new_filters);
     }
-    context.warning_filters_table.get_mut().unwrap().add(wf)
+    wf
 }
 
 fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
-    let wf = warning_filter_(context, attributes);
-    context.warning_filters_table.get_mut().unwrap().add(wf)
+    warning_filter_(context, attributes)
 }
 
 /// Finds the warning filters from the #[allow(_)] attribute and the deprecated #[lint_allow(_)]
 /// attribute.
-fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFiltersBuilder {
-    let mut warning_filters = WarningFiltersBuilder::new_for_source();
+fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilters {
+    let mut warning_filters = WarningFilters::new_for_source();
     // Attributes are guaranteedto be sets by now, and everything was flattened during parsing.
     if let Some(lint_allow) = attributes.get_(&known_attributes::AttributeKind_::LintAllow) {
         let KnownAttribute::Diagnostic(DiagnosticAttribute::LintAllow { allow_set }) =
@@ -1636,7 +1603,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
                     lint_allow.value.attribute_kind()
                 )
             )));
-            return WarningFiltersBuilder::new_for_source();
+            return WarningFilters::new_for_source();
         };
 
         let prefix = Some(DiagnosticAttribute::LINT_SYMBOL);
@@ -1665,7 +1632,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
                     allow.value.attribute_kind()
                 )
             )));
-            return WarningFiltersBuilder::new_for_source();
+            return WarningFilters::new_for_source();
         };
 
         for (prefix, name) in allow_set {

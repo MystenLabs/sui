@@ -12,8 +12,8 @@ use crate::{
         Diagnostic, DiagnosticReporter, Diagnostics, DiagnosticsFormat,
         codes::{DiagnosticsID, Severity},
         warning_filters::{
-            FILTER_ALL, FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder,
-            WarningFiltersScope, WarningFiltersTable,
+            FILTER_ALL, FilterName, FilterPrefix, WarningFilter, WarningFilters,
+            WarningFiltersScope,
         },
     },
     editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
@@ -238,7 +238,7 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
 pub struct CompilationEnv {
     flags: Flags,
     modes: BTreeSet<Symbol>,
-    top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder>,
+    top_level_warning_filter_scope: Option<WarningFilters>,
     diags: Arc<RwLock<Diagnostics>>,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
@@ -263,7 +263,7 @@ impl CompilationEnv {
         flags: Flags,
         mut visitors: Vec<cli::compiler::Visitor>,
         save_hooks: Vec<SaveHook>,
-        warning_filters: Option<WarningFiltersBuilder>,
+        warning_filters: Option<WarningFilters>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
         files_to_compile: Option<BTreeSet<PathBuf>>,
@@ -301,18 +301,13 @@ impl CompilationEnv {
             })
             .collect();
 
-        let top_level_warning_filter_opt = if flags.silence_warnings() {
-            let mut f = WarningFiltersBuilder::new_for_source();
+        let top_level_warning_filter_scope: Option<WarningFilters> = if flags.silence_warnings() {
+            let mut f = WarningFilters::new_for_source();
             f.add(WarningFilter::All(None));
             Some(f)
         } else {
             warning_filters
         };
-        let top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder> =
-            top_level_warning_filter_opt.map(|f| {
-                let f: &'static WarningFiltersBuilder = Box::leak(Box::new(f));
-                f
-            });
         let mut diags = Diagnostics::new();
         if flags.json_errors() {
             diags.set_format(DiagnosticsFormat::JSON);
@@ -915,7 +910,7 @@ fn parse_symbol(s: &str) -> Result<Symbol, String> {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PackageConfig {
     pub is_dependency: bool,
-    pub warning_filter: WarningFiltersBuilder,
+    pub warning_filter: WarningFilters,
     pub flavor: Flavor,
     pub edition: Edition,
 }
@@ -924,7 +919,7 @@ impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             is_dependency: false,
-            warning_filter: WarningFiltersBuilder::new_for_source(),
+            warning_filter: WarningFilters::new_for_source(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }
@@ -967,7 +962,6 @@ fn check<T: Send + Sync>() {}
 fn check_all() {
     check::<Visitors>();
     check::<&Visitors>();
-    check::<&WarningFiltersTable>();
     check::<&WarningFiltersScope>();
     check::<&CompilationEnv>();
 }

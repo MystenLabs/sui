@@ -98,6 +98,8 @@ pub enum LinterDiagnosticCode {
     UncallableFunction,
 }
 
+pub const NUM_SUI_LINT_CODES: usize = 12;
+
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     let filters = vec![
         WarningFilter::All(Some(LINT_WARNING_PREFIX)),
