@@ -2668,7 +2668,9 @@ impl ProtocolConfig {
     }
 
     pub fn new_vm_enabled(&self) -> bool {
-        debug_assert!(self.execution_version.is_some_and(|v| v >= 4));
+        debug_assert!(
+            !self.feature_flags.new_vm_enabled || self.execution_version.is_some_and(|v| v >= 4)
+        );
         self.feature_flags.new_vm_enabled
     }
 }
