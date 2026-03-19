@@ -10,27 +10,23 @@ use crate::{
         },
     },
     linters::{
-        LINT_CODE_CATEGORIES, LINT_FILTER_BASE, LINT_FILTER_REVERSE, LinterDiagnosticCategory,
-        NUM_LINT_CODES, lint_code_filter_index,
+        ALLOW_ATTR_CATEGORY, LINT_CODE_CATEGORIES, LINT_FILTER_BASE, LINT_FILTER_REVERSE,
+        LinterDiagnosticCategory, NUM_LINT_CODES, lint_code_filter_index,
     },
     shared::{AstDebug, CompilationEnv, known_attributes},
-    sui_mode::linters::NUM_SUI_LINT_CODES,
 };
 use move_symbol_pool::Symbol;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use std::sync::LazyLock;
 
 /// Number of u64 words in the internal bitset, derived from the total number of filter IDs.
 const INTERNAL_BITSET_WORDS: usize = (LINT_FILTER_BASE + NUM_LINT_CODES + 63) / 64;
 /// Total bit capacity of the internal bitset.
 pub const INTERNAL_BITSET_CAPACITY: usize = INTERNAL_BITSET_WORDS * u64::BITS as usize;
-/// Total bit capacity of the flavor bitset.
+/// Total bit capacity of the flavor bitset (one u64).
 pub const FLAVOR_BITSET_CAPACITY: usize = u64::BITS as usize;
-
-const _: () = assert!(
-    NUM_SUI_LINT_CODES <= FLAVOR_BITSET_CAPACITY,
-    "Sui lint codes exceed flavor bitset capacity"
-);
 
 pub const FILTER_ALL: &str = "all";
 pub const FILTER_UNUSED: &str = "unused";
@@ -87,7 +83,7 @@ pub struct WarningFiltersScope {
     stack: Vec<WarningFilters>,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Hash, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Default)]
 pub struct WarningFilters {
     /// Bitpacked filter for internal diagnostics AND non-flavor lint codes.
     internal: [u64; INTERNAL_BITSET_WORDS],
@@ -96,6 +92,11 @@ pub struct WarningFilters {
     /// Whether this filter applies to dependency code.
     for_dependency: bool,
 }
+
+const _: () = assert!(
+    std::mem::size_of::<WarningFilters>() <= 64,
+    "WarningFilters grew too large — consider interning or heap-allocating the bitset"
+);
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 /// Represents a single annotation for a diagnostic filter
@@ -140,7 +141,10 @@ impl WarningFiltersScope {
     }
 
     pub fn pop(&mut self) {
-        self.current = self.stack.pop().expect("pop on empty scope");
+        self.current = self
+            .stack
+            .pop()
+            .expect("ICE: pop on root warning filter scope (mismatched push/pop)");
     }
 
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
@@ -169,6 +173,15 @@ impl WarningFilters {
         }
     }
 
+    /// Pre-computed filter that suppresses all internal (non-prefixed) warnings.
+    /// Does NOT suppress flavor (e.g., Sui) or lint-prefixed warnings, matching the
+    /// semantics of `WarningFilter::All(None)`.
+    pub const SILENCE_ALL_INTERNAL: Self = Self {
+        internal: [u64::MAX; INTERNAL_BITSET_WORDS],
+        flavor: 0,
+        for_dependency: false,
+    };
+
     pub fn new_all_filter_alls(env: &CompilationEnv) -> Self {
         let mut f = Self::new_for_dependency();
         for prefix in env.known_filter_names() {
@@ -190,7 +203,7 @@ impl WarningFilters {
                 None => false,
             },
             _ => {
-                if is_flavor_category(info.category()) {
+                if info.category() == FLAVOR_CATEGORY {
                     match flavor_filter_index(info.category(), info.code()) {
                         Some(idx) => self.flavor & (1u64 << idx) != 0,
                         None => false,
@@ -219,13 +232,14 @@ impl WarningFilters {
     pub fn add(&mut self, filter: WarningFilter) {
         match filter {
             WarningFilter::All(prefix) => match prefix {
+                // All(None) only suppresses internal (non-prefixed) warnings. Prefixed
+                // warnings (lint, flavor) are keyed separately and require their own
+                // All(Some(_)) to suppress, matching the old per-prefix BTreeMap behavior.
                 None => self.internal = [u64::MAX; INTERNAL_BITSET_WORDS],
                 _ => {
-                    // Set all non-flavor lint bits in internal
                     for i in 0..NUM_LINT_CODES {
                         set_internal_bit(&mut self.internal, LINT_FILTER_BASE + i);
                     }
-                    // Set all flavor bits
                     self.flavor = u64::MAX;
                 }
             },
@@ -245,15 +259,11 @@ impl WarningFilters {
                     }
                 }
                 _ => {
-                    if is_flavor_category(category) {
-                        let (base, count) = flavor_category_range(category).unwrap_or_else(|| {
-                            panic!("ICE: unknown flavor category {category} in warning filter")
-                        });
-                        for i in 0..count {
-                            self.flavor |= 1u64 << (base + i);
-                        }
+                    if category == FLAVOR_CATEGORY {
+                        // Set all flavor bits; over-approximation is harmless since
+                        // is_filtered only matches codes that actually exist.
+                        self.flavor = u64::MAX;
                     } else {
-                        // Filter all lint codes in this category
                         for (i, &cat) in LINT_CODE_CATEGORIES.iter().enumerate() {
                             if cat == category {
                                 set_internal_bit(&mut self.internal, LINT_FILTER_BASE + i);
@@ -278,7 +288,7 @@ impl WarningFilters {
                     set_internal_bit(&mut self.internal, idx);
                 }
                 _ => {
-                    if is_flavor_category(category) {
+                    if category == FLAVOR_CATEGORY {
                         let idx = flavor_filter_index(category, code).unwrap_or_else(|| {
                             panic!(
                                 "ICE: unknown flavor diagnostic ({category}, {code}) \
@@ -310,6 +320,8 @@ impl WarningFilters {
         self.for_dependency
     }
 
+    /// Builds a filter for tests that suppresses: unused_function, unused_field,
+    /// unused_type_parameter, unused_const, unused_mut_ref, unused_mut_parameter.
     pub fn unused_warnings_filter_for_test() -> Self {
         let mut result = Self::new_for_source();
         for item in [
@@ -322,7 +334,7 @@ impl WarningFilters {
         ] {
             let info = item.into_info();
             if let Some(idx) = internal_filter_index(info.category(), info.code()) {
-                result.internal[idx / 64] |= 1u64 << (idx % 64);
+                set_internal_bit(&mut result.internal, idx);
             }
         }
         result
@@ -332,45 +344,35 @@ impl WarningFilters {
 const FLAVOR_CATEGORY: u8 = LinterDiagnosticCategory::Sui as u8;
 
 fn flavor_filter_index(category: u8, code: u8) -> Option<usize> {
-    if category == FLAVOR_CATEGORY {
-        Some(code as usize)
-    } else {
-        None
+    if category != FLAVOR_CATEGORY || code == 0 || code as usize > FLAVOR_BITSET_CAPACITY {
+        return None;
     }
+    Some(code as usize - 1)
 }
 
-fn is_flavor_category(category: u8) -> bool {
-    category == FLAVOR_CATEGORY
-}
-
-fn flavor_category_range(category: u8) -> Option<(usize, usize)> {
-    if category == FLAVOR_CATEGORY {
-        Some((0, NUM_SUI_LINT_CODES))
-    } else {
-        None
-    }
-}
-
-fn flavor_filter_reverse(idx: usize) -> Option<(u8, u8)> {
-    if idx < NUM_SUI_LINT_CODES {
-        Some((FLAVOR_CATEGORY, idx as u8))
-    } else {
-        None
-    }
+/// Reverse-maps a flavor bit index back to a (category, code) pair.
+fn flavor_filter_reverse(idx: usize) -> (u8, u8) {
+    (FLAVOR_CATEGORY, (idx + 1) as u8)
 }
 
 fn set_internal_bit(internal: &mut [u64; INTERNAL_BITSET_WORDS], idx: usize) {
+    debug_assert!(
+        idx / 64 < INTERNAL_BITSET_WORDS,
+        "ICE: filter index {idx} out of range for internal bitset"
+    );
     let word = idx / 64;
     let bit = idx % 64;
-    if word < INTERNAL_BITSET_WORDS {
-        internal[word] |= 1u64 << bit;
-    }
+    internal[word] |= 1u64 << bit;
 }
 
 fn test_internal_bit(internal: &[u64; INTERNAL_BITSET_WORDS], idx: usize) -> bool {
+    debug_assert!(
+        idx / 64 < INTERNAL_BITSET_WORDS,
+        "ICE: filter index {idx} out of range for internal bitset"
+    );
     let word = idx / 64;
     let bit = idx % 64;
-    word < INTERNAL_BITSET_WORDS && (internal[word] & (1u64 << bit)) != 0
+    (internal[word] & (1u64 << bit)) != 0
 }
 
 impl WarningFilter {
@@ -491,30 +493,68 @@ static FILTER_NAME_LOOKUP: LazyLock<BTreeMap<(ExternalPrefix, u8, u8), &'static 
 
 fn iter_set_bits(words: &[u64; INTERNAL_BITSET_WORDS]) -> impl Iterator<Item = usize> + '_ {
     words.iter().enumerate().flat_map(|(word_idx, &word)| {
-        (0..64u32).filter_map(move |bit| {
-            if word & (1u64 << bit) != 0 {
-                Some(word_idx * 64 + bit as usize)
-            } else {
-                None
+        let base = word_idx * 64;
+        let mut w = word;
+        std::iter::from_fn(move || {
+            if w == 0 {
+                return None;
             }
+            let bit = w.trailing_zeros() as usize;
+            w &= w - 1;
+            Some(base + bit)
         })
     })
 }
 
-fn format_filter(prefix: ExternalPrefix, cat: u8, code: u8) -> String {
+fn format_filter(prefix: ExternalPrefix, cat: u8, code: u8) -> Cow<'static, str> {
     match FILTER_NAME_LOOKUP.get(&(prefix, cat, code)) {
-        Some(n) => (*n).to_owned(),
-        None => format!("({},{})", cat, code),
+        Some(n) => Cow::Borrowed(*n),
+        None => Cow::Owned(format!("({},{})", cat, code)),
+    }
+}
+
+impl fmt::Debug for WarningFilters {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut s = f.debug_struct("WarningFilters");
+        let mut internal_names = vec![];
+        for idx in iter_set_bits(&self.internal) {
+            if idx < LINT_FILTER_BASE {
+                if let Some(&(cat, code)) = INTERNAL_FILTER_REVERSE.get(idx) {
+                    internal_names.push(format_filter(None, cat, code));
+                }
+            } else {
+                let lint_idx = idx - LINT_FILTER_BASE;
+                if let Some(&(cat, code)) = LINT_FILTER_REVERSE.get(lint_idx) {
+                    internal_names.push(format_filter(Some(""), cat, code));
+                }
+            }
+        }
+        if !internal_names.is_empty() {
+            s.field("internal", &internal_names);
+        }
+        let mut flavor_names = vec![];
+        let mut fl = self.flavor;
+        while fl != 0 {
+            let bit = fl.trailing_zeros() as usize;
+            fl &= fl - 1;
+            let (cat, code) = flavor_filter_reverse(bit);
+            flavor_names.push(format_filter(Some(""), cat, code));
+        }
+        if !flavor_names.is_empty() {
+            s.field("flavor", &flavor_names);
+        }
+        s.field("for_dependency", &self.for_dependency);
+        s.finish()
     }
 }
 
 impl AstDebug for WarningFilters {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
-        let prefix_str = known_attributes::DiagnosticAttribute::ALLOW;
+        let allow_prefix = known_attributes::DiagnosticAttribute::ALLOW;
+        let lint_prefix = ALLOW_ATTR_CATEGORY;
 
-        // Internal bitset: partition into internal (prefix=None) and lint (prefix=Some) items
         if self.internal == [u64::MAX; INTERNAL_BITSET_WORDS] {
-            w.write(format!("#[{}(all)]", prefix_str));
+            w.write(format!("#[{}(all)]", allow_prefix));
         } else {
             let mut internal_items = vec![];
             let mut lint_items = vec![];
@@ -531,41 +571,109 @@ impl AstDebug for WarningFilters {
                 }
             }
             if !internal_items.is_empty() {
-                w.write(format!("#[{}(", prefix_str));
+                w.write(format!("#[{}(", allow_prefix));
                 w.list(&internal_items, ",", |w, item| {
-                    w.write(item);
+                    w.write(item.as_ref());
                     false
                 });
                 w.write(")]");
             }
             if !lint_items.is_empty() {
-                w.write(format!("#[lint("));
+                w.write(format!("#[{}(", lint_prefix));
                 w.list(&lint_items, ",", |w, item| {
-                    w.write(item);
+                    w.write(item.as_ref());
                     false
                 });
                 w.write(")]");
             }
         }
 
-        // Flavor filters
         if self.flavor != 0 {
             let mut items = vec![];
-            for bit in 0..64u32 {
-                if self.flavor & (1u64 << bit) != 0 {
-                    if let Some((cat, code)) = flavor_filter_reverse(bit as usize) {
-                        items.push(format_filter(Some(""), cat, code));
-                    }
-                }
+            let mut fl = self.flavor;
+            while fl != 0 {
+                let bit = fl.trailing_zeros() as usize;
+                fl &= fl - 1;
+                let (cat, code) = flavor_filter_reverse(bit);
+                items.push(format_filter(Some(""), cat, code));
             }
             if !items.is_empty() {
-                w.write(format!("#[lint("));
+                w.write(format!("#[{}(", lint_prefix));
                 w.list(&items, ",", |w, item| {
-                    w.write(item);
+                    w.write(item.as_ref());
                     false
                 });
                 w.write(")]");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::diagnostics::codes::{Category, UnusedItem};
+    use move_ir_types::location::Loc;
+
+    fn make_filter_for_code(category: u8, code: u8) -> WarningFilters {
+        let mut f = WarningFilters::new_for_source();
+        f.add(WarningFilter::Code {
+            prefix: None,
+            category,
+            code,
+            name: None,
+        });
+        f
+    }
+
+    fn make_diag(code: impl Into<crate::diagnostics::codes::DiagnosticInfo>) -> Diagnostic {
+        Diagnostic::new(
+            code,
+            (Loc::invalid(), "test"),
+            std::iter::empty::<(Loc, String)>(),
+            std::iter::empty::<String>(),
+        )
+    }
+
+    #[test]
+    fn scope_push_pop_equivalence() {
+        let cat = Category::UnusedItem as u8;
+        let code_a = UnusedItem::Variable as u8;
+        let code_b = UnusedItem::Assignment as u8;
+
+        let root_filter = make_filter_for_code(cat, code_a);
+        let child_filter = make_filter_for_code(cat, code_b);
+
+        let diag_a = make_diag(UnusedItem::Variable);
+        let diag_b = make_diag(UnusedItem::Assignment);
+
+        let mut scope = WarningFiltersScope::root(Some(root_filter));
+
+        // Root filters code_a but not code_b
+        assert!(scope.is_filtered(&diag_a));
+        assert!(!scope.is_filtered(&diag_b));
+
+        // After push, both are filtered (union semantics)
+        scope.push(child_filter);
+        assert!(scope.is_filtered(&diag_a));
+        assert!(scope.is_filtered(&diag_b));
+
+        // After pop, only code_a is filtered again
+        scope.pop();
+        assert!(scope.is_filtered(&diag_a));
+        assert!(!scope.is_filtered(&diag_b));
+    }
+
+    #[test]
+    fn silence_all_internal_filters_warnings() {
+        let diag = make_diag(UnusedItem::Variable);
+        assert!(WarningFilters::SILENCE_ALL_INTERNAL.is_filtered(&diag));
+    }
+
+    #[test]
+    fn empty_filter_filters_nothing() {
+        let diag = make_diag(UnusedItem::Variable);
+        let f = WarningFilters::new_for_source();
+        assert!(!f.is_filtered(&diag));
     }
 }

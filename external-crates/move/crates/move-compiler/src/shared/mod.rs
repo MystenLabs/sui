@@ -302,9 +302,7 @@ impl CompilationEnv {
             .collect();
 
         let top_level_warning_filter_scope: Option<WarningFilters> = if flags.silence_warnings() {
-            let mut f = WarningFilters::new_for_source();
-            f.add(WarningFilter::All(None));
-            Some(f)
+            Some(WarningFilters::SILENCE_ALL_INTERNAL)
         } else {
             warning_filters
         };

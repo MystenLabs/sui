@@ -1,11 +1,12 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 285
 info:
   flavor: sui
   edition: legacy
   lint: true
 ---
-warning[Lint W99001]: non-composable transfer to sender
+warning[Lint W99002]: non-composable transfer to sender
    ┌─ tests/sui_mode/linter/self_transfer.move:23:9
    │
 22 │     public fun public_transfer_bad(ctx: &mut TxContext) {
@@ -18,7 +19,7 @@ warning[Lint W99001]: non-composable transfer to sender
    │
    = This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W99001]: non-composable transfer to sender
+warning[Lint W99002]: non-composable transfer to sender
    ┌─ tests/sui_mode/linter/self_transfer.move:27:9
    │
 26 │     public fun private_transfer_bad(ctx: &mut TxContext) {
@@ -31,7 +32,7 @@ warning[Lint W99001]: non-composable transfer to sender
    │
    = This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W99001]: non-composable transfer to sender
+warning[Lint W99002]: non-composable transfer to sender
    ┌─ tests/sui_mode/linter/self_transfer.move:39:9
    │
 36 │     public fun transfer_through_assigns_bad(ctx: &mut TxContext) {

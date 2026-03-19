@@ -82,8 +82,19 @@ pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
-#[repr(u8)]
-pub enum LinterDiagnosticCode {
+macro_rules! sui_lint_codes {
+    ($($variant:ident),* $(,)?) => {
+        #[repr(u8)]
+        pub enum LinterDiagnosticCode {
+            DontStartAtZeroPlaceholder,
+            $($variant,)*
+        }
+
+        pub const NUM_SUI_LINT_CODES: usize = 0usize $(+ { let _ = stringify!($variant); 1usize })*;
+    }
+}
+
+sui_lint_codes!(
     ShareOwned,
     SelfTransfer,
     CustomStateChange,
@@ -96,9 +107,12 @@ pub enum LinterDiagnosticCode {
     PreferMutableTxContext,
     UnnecessaryPublicEntry,
     UncallableFunction,
-}
+);
 
-pub const NUM_SUI_LINT_CODES: usize = 12;
+const _: () = assert!(
+    NUM_SUI_LINT_CODES <= crate::diagnostics::warning_filters::FLAVOR_BITSET_CAPACITY,
+    "Sui lint codes exceed flavor bitset capacity"
+);
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     let filters = vec![
