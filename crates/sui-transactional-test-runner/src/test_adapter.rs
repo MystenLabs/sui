@@ -1107,11 +1107,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                                     .iter()
                                     .map(|m| {
                                         let mut buf = vec![];
-                                        let version = file_format_version
-                                            .unwrap_or(m.module.version);
-                                        m.module
-                                            .serialize_with_version(version, &mut buf)
-                                            .unwrap();
+                                        let version =
+                                            file_format_version.unwrap_or(m.module.version);
+                                        m.module.serialize_with_version(version, &mut buf).unwrap();
                                         buf
                                     })
                                     .collect();
