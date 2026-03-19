@@ -236,14 +236,6 @@ impl ChannelPoolInner {
             / 2.0;
 
         if load <= self.config.min_rpcs_per_channel as f64 {
-            // Scale down: load is too low. Require consecutive low-load observations
-            // before actually shrinking, to avoid flapping (mirrors official Google Go
-            // client continuousDownscaleRuns logic).
-            let runs = self.consecutive_low_load.fetch_add(1, Ordering::Relaxed) + 1;
-            if runs < self.config.downscale_threshold {
-                return;
-            }
-
             // Ideal pool size to bring per-channel load back to target_load.
             // We don't jump straight to this size — delta is capped by max_resize_delta
             // to avoid removing too many channels at once and causing a load spike.
@@ -252,7 +244,14 @@ impl ChannelPoolInner {
             let delta =
                 (current_size.saturating_sub(pool_size_target)).min(self.config.max_resize_delta);
             if delta == 0 {
-                self.consecutive_low_load.store(0, Ordering::Relaxed);
+                return;
+            }
+
+            // Scale down: load is too low. Require consecutive low-load observations
+            // before actually shrinking, to avoid flapping (mirrors official Google Go
+            // client continuousDownscaleRuns logic).
+            let runs = self.consecutive_low_load.fetch_add(1, Ordering::Relaxed) + 1;
+            if runs < self.config.downscale_threshold {
                 return;
             }
 
