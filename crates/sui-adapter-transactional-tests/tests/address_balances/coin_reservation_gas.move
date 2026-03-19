@@ -4,7 +4,7 @@
 // Tests gas payment using withdrawals (drawing from address balance) combined
 // with real coin objects.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-accumulators
+//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
 
 //# view-object 0,0
 

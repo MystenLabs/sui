@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
 ---
 processed 12 tasks
 
@@ -51,7 +52,7 @@ task 6, lines 35-40:
 //> TransferObjects([Result(0)], Input(1))
 // Case 3: multiple coin objects that together don't cover budget
 // two coins of 0.1 SUI each = 0.2 SUI total, budget is 5 SUI
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+Error: Error checking transaction input objects: Balance of gas object 100000000 is lower than the needed amount: 5000000000
 
 task 7, lines 41-46:
 //# programmable --sender A --gas-payment object(2,0) --gas-payment object(3,0) --inputs 1000 @B
@@ -67,7 +68,7 @@ task 8, lines 47-52:
 //> TransferObjects([Result(0)], Input(1))
 // Case 5: mixed coin object and withdrawal that together don't cover budget
 // coin of 0.1 SUI + withdrawal of 0.1 SUI = 0.2 SUI total, budget is 5 SUI
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+Error: Error checking transaction input objects: Balance of gas object 200000000 is lower than the needed amount: 5000000000
 
 task 9, lines 53-58:
 //# programmable --sender A --gas-payment object(2,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(100000000) --inputs 1000 @B
@@ -75,7 +76,7 @@ task 9, lines 53-58:
 //> TransferObjects([Result(0)], Input(1))
 // Case 6: withdrawal exceeds address balance
 // try to reserve 1000 SUI when address balance is only 0.2 SUI
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+Error: Error checking transaction input objects: Balance of gas object 200000000 is lower than the needed amount: 5000000000
 
 task 10, lines 59-64:
 //# programmable --sender A --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(1000000000000) --inputs 1000 @B
@@ -83,7 +84,7 @@ task 10, lines 59-64:
 //> TransferObjects([Result(0)], Input(1))
 // Case 7: empty gas payment (pure address balance) with insufficient balance
 // B has no address balance, needs 5 SUI
-Error: Error checking transaction input objects: Gas object is not an owned object with owner: AddressOwner(@A)
+Error: Error checking transaction input objects: Invalid withdraw reservation: Available amount in account for object id object(1,0) is less than requested: 200000000 < 1000000000000
 
 task 11, lines 65-67:
 //# programmable --sender B --address-balance-gas --inputs 1000 @A

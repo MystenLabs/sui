@@ -4,7 +4,7 @@
 // Tests that transactions fail appropriately when gas payment is insufficient
 // for all possible forms of gas payment.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-accumulators
+//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
 
 // setup: send funds to A's address balance
 //# programmable --sender A --inputs 200000000 @A
