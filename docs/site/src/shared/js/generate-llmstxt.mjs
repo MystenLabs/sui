@@ -21,7 +21,7 @@ for (let i = 0; i < args.length; i++) {
 const scriptDir = path.dirname(new URL(import.meta.url).pathname);
 const markdownDir = path.resolve(positional[0] ?? path.join(scriptDir, "../../static/markdown"));
 const outputFile = flags["output"] ?? path.join(scriptDir, "../../../static/llms.txt");
-const baseUrl = flags["base-url"] ?? "";
+const baseUrl = flags["base-url"] ?? "https://docs.sui.io";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const TARGET_CHARS = 100_000;
