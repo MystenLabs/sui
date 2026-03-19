@@ -256,9 +256,9 @@ impl AuthorityPerpetualTables {
                 "owned_object_transaction_locks".to_string(),
                 ThConfig::new_with_config_indexing(
                     owned_object_transaction_locks_indexing,
-                    mutexes,
-                    KeyType::uniform(default_cells_per_mutex() * 4),
-                    bloom_config.clone().with_max_dirty_keys(4048),
+                    mutexes * 16,
+                    KeyType::uniform(default_cells_per_mutex()),
+                    bloom_config.clone().with_max_dirty_keys(16192),
                 ),
             ),
             (
