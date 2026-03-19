@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use crate::error::Error;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
-use sui_rpc::proto::sui::rpc::v2::{Bcs, UserSignature, VerifySignatureRequest};
 use sui_rpc::Client;
+use sui_rpc::proto::sui::rpc::v2::{Bcs, UserSignature, VerifySignatureRequest};
 use sui_types::{
     base_types::SuiAddress,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
