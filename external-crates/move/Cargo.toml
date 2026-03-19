@@ -86,7 +86,7 @@ leb128 = "0.2.5"
 lasso = { version = "0.7.3", features = ["multi-threaded", "inline-more"] }
 libfuzzer-sys = "0.4"
 log = { version = "0.4.14", features = ["serde"] }
-lru = "0.13.0"
+lru = "0.16.3"
 lsp-server = "0.7.6"
 lsp-types = "0.95.1"
 memory-stats = "1.0.0"
@@ -114,7 +114,7 @@ proptest-derive = "0.5"
 quick_cache = { version = "0.6.18", features = ["stats"] }
 quote = "1.0.9"
 rand = "0.8.0"
-ratatui = "0.29.0"
+ratatui = "0.30.0"
 rayon = "1.10.0"
 ref-cast = "1.0.6"
 regex = "1.5.5"
