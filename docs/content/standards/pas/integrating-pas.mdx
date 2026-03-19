@@ -9,19 +9,29 @@ To integrate with the Permissioned Assets Standard (PAS), you must:
 
 1. Define your approval witness using `public struct MyApproval() has drop;`
 
-2. Create a policy with `policy::new_for_currency` and set required approvals per action.
+2. Create a policy with `policy::new_for_currency` and set the required approval per action.
 
 3. Build your approval logic using a function that takes `&mut Request<...>`, validates, and calls `request.approve(MyApproval())`.
 
 4. Set template commands so clients can build PTBs automatically.
 
-## Define an approval witness 
+## Define an approval witness
 
-[needs example]
+An approval witness is a zero-sized struct with `drop` that acts as a type-level stamp. Each witness represents a distinct approval your contract can grant:
+
+```move
+/// Witness for approved transfers between accounts.
+public struct MyTransferApproval() has drop;
+
+/// Witness for approved clawbacks (issuer withdrawal).
+public struct MyClawbackApproval() has drop;
+```
+
+You can define one witness type per action to serve as its approval. Each witness is registered independently in the policy and can optionally have its own template command.
 
 ## Set up a policy for a currency
 
-A `Policy<Balance<C>>` defines which approvals are required for each action type. You need a `TreasuryCap<C>` to prove ownership of the currency.
+A `Policy<Balance<C>>` defines which approval is required for each action type. You need a `TreasuryCap<C>` to prove ownership of the currency.
 
 Use in a package:
 
@@ -32,20 +42,34 @@ let (mut policy, policy_cap) = policy::new_for_currency(
     true, // clawback_allowed
 );
 
-// Require `MyApproval` witness for transfers
-policy.set_required_approval<Balance<T>, MyApproval>(&policy_cap, "send_funds");
+// Require MyTransferApproval witness for transfers
+policy.set_required_approval<Balance<T>, MyTransferApproval>(&policy_cap, "send_funds");
 
-// Require `MyApproval` witness for clawbacks
-policy.set_required_approval<Balance<T>, MyApproval>(&policy_cap, "clawback_funds");
+// Require MyClawbackApproval witness for clawbacks
+policy.set_required_approval<Balance<T>, MyClawbackApproval>(&policy_cap, "clawback_funds");
 
 policy.share();
 ```
 
 Supported actions: `"send_funds"`, `"unlock_funds"`, `"clawback_funds"`.
 
-## Define approval logic 
+## Define approval logic
 
-[needs example]
+Your approval function takes a mutable reference to a `Request`, runs your validation, and stamps it with the witness:
+
+Transfers require an external check (for example, a KYC registry):
+
+```move
+public fun approve_transfer(
+    registry: &KYCRegistry,
+    request: &mut Request<SendFunds<Balance<MY_COIN>>>,
+) {
+    assert!(registry.users.contains(&request.data().recipient()), ENotKYCd);
+    request.approve(MyTransferApproval());
+}
+```
+
+See the [KYC example `kyc_registry`](https://github.com/MystenLabs/pas/blob/main/packages/examples/kyc/sources/kyc_registry.move) for a complete implementation.
 
 ## Set template commands
 
@@ -86,32 +110,35 @@ The template is keyed by `A`, the witness type used to approve requests. This cr
 
 ### Example
 
-Given an example approval function in your package:
+Given the approval function from the [KYC example `kyc_registry`](https://github.com/MystenLabs/pas/blob/main/packages/examples/kyc/sources/kyc_registry.move):
 
 ```move
-public fun approve_transfer(request: &mut Request<SendFunds<Balance<MY_ASSET>>>, _clock: &Clock) {
-    // Your validation logic here
-    request.approve(TransferApproval());
+public fun approve_transfer(
+    registry: &KYCRegistry,
+    request: &mut Request<SendFunds<Balance<MY_COIN>>>,
+) {
+    assert!(registry.users.contains(&request.data().recipient()), ENotKYCd);
+    request.approve(MyTransferApproval());
 }
 ```
 
 You register a template that describes how to call it:
 
 ```move
-let type_name = type_name::with_defining_ids<MY_ASSET>();
+let type_name = type_name::with_defining_ids<MY_COIN>();
 
 let cmd = ptb::move_call(
     type_name.address_string().to_string(),             // package ID
-    "my_module",                                        // module
+    "kyc_registry",                                     // module
     "approve_transfer",                                 // function
     vector[
+        ptb::object_by_id(object::id(registry)),        // KYCRegistry shared object
         ptb::ext_input<PAS>("request"),                  // the request (resolved by SDK)
-        ptb::object_by_id(@0x6.to_id()),                // Clock object
     ],
     vector[],       // type arguments
 );
 
-templates.set_template_command(internal::permit<TransferApproval>(), cmd);
+templates.set_template_command(internal::permit<MyTransferApproval>(), cmd);
 ```
 
 ### Common argument types for templates
