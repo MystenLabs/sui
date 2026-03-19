@@ -171,7 +171,7 @@ function stripToc(md) {
 
   // Also strip any HTML <ul> TOC blocks with anchor links
   const cleaned2 = cleaned.replace(
-    /<ul>\s*(?:<li[^>]*>\s*<a\s+href="#[^"]*">[\s\S]*?<\/a>\s*<\/li>\s*)+<\/ul>/g,
+    /<ul>\s*(?:<li[^>]*>\s*<a\s+href="#[^"]*">[^<]*<\/a>\s*<\/li>\s*)+<\/ul>/g,
     "",
   );
 
