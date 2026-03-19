@@ -15,14 +15,6 @@ pub trait Tracer {
     fn notify(&mut self, event: &TraceEvent, writer: Writer<'_>) -> bool;
 }
 
-pub struct NopTracer;
-impl Tracer for NopTracer {
-    fn notify(&mut self, _event: &TraceEvent, _writer: Writer<'_>) -> bool {
-        // keep all events
-        true
-    }
-}
-
 impl<T: Tracer> Tracer for &mut T {
     fn notify(&mut self, event: &TraceEvent, writer: Writer<'_>) -> bool {
         <T as Tracer>::notify(self, event, writer)

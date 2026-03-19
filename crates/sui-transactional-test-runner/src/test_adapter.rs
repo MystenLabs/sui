@@ -25,6 +25,7 @@ use move_compiler::{
 };
 use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
+use move_core_types::parsing::values::ParsedValue;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -108,11 +109,14 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
 use sui_types::{SUI_SYSTEM_PACKAGE_ID, utils::to_sender_signed_transaction};
+use sui_types::{balance::Balance, gas_coin::GAS};
+use sui_types::{
+    coin_reservation::ParsedObjectRefWithdrawal, gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING,
+};
 use sui_types::{
     execution_status::{ExecutionFailure, ExecutionStatus},
     transaction::TransactionKind,
 };
-use sui_types::{gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
 use sui_types::{
     move_package::MovePackage,
     transaction::{Argument, CallArg, TransactionDataAPI, TransactionExpiration},
@@ -563,7 +567,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 builder.publish_immutable(modules_bytes, dependencies);
             };
             let pt = builder.finish();
-            let payments = self.get_payments(sender_acc, vec![]);
+            let payments = vec![
+                self.get_object(&sender_acc.gas, None)
+                    .unwrap()
+                    .compute_object_reference(),
+            ];
 
             let transaction = TransactionData::new_programmable(
                 sender_acc.address,
@@ -1106,10 +1114,15 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         None if address_balance_gas => self.get_replay_protected_expiration(),
                         None => TransactionExpiration::None,
                     };
+                    let sender_acc = self.get_sender(sender.clone());
+                    let sponsor_acc = sponsor
+                        .clone()
+                        .map_or(sender_acc, |a| self.get_sender(Some(a)));
+                    let payment_refs = self.resolve_gas_payments(sponsor_acc, gas_payment)?;
                     let transaction = self.sign_sponsor_txn(
                         sender,
                         sponsor,
-                        gas_payment.unwrap_or_default(),
+                        payment_refs,
                         |sender, sponsor, gas| {
                             let gas = if address_balance_gas { vec![] } else { gas };
                             let mut tx_data = TransactionData::new_programmable_allow_sponsor(
@@ -1138,7 +1151,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     let payments = if address_balance_gas {
                         vec![]
                     } else {
-                        self.get_payments(sponsor, gas_payment.unwrap_or_default())
+                        self.resolve_gas_payments(sponsor, gas_payment)?
                     };
 
                     let mut transaction = TransactionData::new_programmable(
@@ -1784,30 +1797,64 @@ impl SuiTestAdapter {
             /* gas */ Vec<ObjectRef>,
         ) -> TransactionData,
     ) -> Transaction {
-        self.sign_sponsor_txn(sender, None, vec![], move |sender, _, gas| {
+        let sender_acc = self.get_sender(sender.clone());
+        let gas_ref = self
+            .get_object(&sender_acc.gas, None)
+            .unwrap()
+            .compute_object_reference();
+        self.sign_sponsor_txn(sender, None, vec![gas_ref], move |sender, _, gas| {
             txn_data(sender, gas)
         })
     }
 
-    fn get_payments(&self, sponsor: &TestAccount, payments: Vec<FakeID>) -> Vec<ObjectRef> {
-        let payments = if payments.is_empty() {
-            vec![sponsor.gas]
-        } else {
-            payments
-                .into_iter()
-                .map(|payment| {
-                    self.fake_to_real_object_id(payment)
-                        .expect("Could not find specified payment object")
-                })
-                .collect::<Vec<ObjectID>>()
+    fn resolve_gas_payments(
+        &self,
+        sponsor: &TestAccount,
+        gas_payment: Option<Vec<ParsedValue<SuiExtraValueArgs>>>,
+    ) -> anyhow::Result<Vec<ObjectRef>> {
+        let Some(payments) = gas_payment else {
+            let obj = self.get_object(&sponsor.gas, None).unwrap();
+            return Ok(vec![obj.compute_object_reference()]);
         };
-
-        payments
+        if payments.is_empty() {
+            let obj = self.get_object(&sponsor.gas, None).unwrap();
+            return Ok(vec![obj.compute_object_reference()]);
+        }
+        let resolved = self.compiled_state.resolve_args(payments)?;
+        let chain_id = self.get_chain_identifier();
+        let current_epoch = self.get_latest_epoch_id().unwrap_or(0);
+        resolved
             .into_iter()
-            .map(|payment| {
-                self.get_object(&payment, None)
-                    .unwrap()
-                    .compute_object_reference()
+            .map(|value| match value {
+                SuiValue::Object(fake_id, _) => {
+                    let obj_id = self
+                        .fake_to_real_object_id(fake_id)
+                        .expect("Could not find specified payment object");
+                    Ok(self
+                        .get_object(&obj_id, None)
+                        .unwrap()
+                        .compute_object_reference())
+                }
+                SuiValue::Withdraw(amount, type_tag) => {
+                    let expected_type = Balance::type_tag(GAS::type_tag());
+                    assert!(
+                        type_tag == expected_type,
+                        "Gas payment withdraw type must be {}, got {}",
+                        expected_type,
+                        type_tag
+                    );
+                    let accumulator_obj_id =
+                        *AccumulatorValue::get_field_id(sponsor.address, &expected_type)
+                            .expect("Failed to compute accumulator object ID")
+                            .inner();
+                    Ok(
+                        ParsedObjectRefWithdrawal::new(accumulator_obj_id, current_epoch, amount)
+                            .encode(SequenceNumber::new(), chain_id),
+                    )
+                }
+                _ => bail!(
+                    "Invalid gas payment: only object(...) and withdraw<...>(...) are allowed"
+                ),
             })
             .collect()
     }
@@ -1816,7 +1863,7 @@ impl SuiTestAdapter {
         &self,
         sender: Option<String>,
         sponsor: Option<String>,
-        payment: Vec<FakeID>,
+        payment_refs: Vec<ObjectRef>,
         txn_data: impl FnOnce(
             /* sender */ SuiAddress,
             /* sponsor */ SuiAddress,
@@ -1825,8 +1872,6 @@ impl SuiTestAdapter {
     ) -> Transaction {
         let sender = self.get_sender(sender);
         let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
-
-        let payment_refs = self.get_payments(sponsor, payment);
 
         let data = txn_data(sender.address, sponsor.address, payment_refs);
 
@@ -2829,7 +2874,7 @@ async fn init_sim_executor(
 
     // Get the actual object values from the simulator
     for (name, (addr, kp)) in account_kps {
-        let o = sim.store().owned_objects(addr).next().unwrap();
+        let o = sim.store_dyn().owned_objects(addr).next().unwrap();
         objects.push(o.clone());
         account_objects.insert(name.clone(), o.id());
 
@@ -2843,7 +2888,7 @@ async fn init_sim_executor(
         );
     }
     let o = sim
-        .store()
+        .store_dyn()
         .owned_objects(default_account_kp.0)
         .next()
         .unwrap();
@@ -2855,7 +2900,7 @@ async fn init_sim_executor(
     objects.push(o.clone());
 
     for (i, (addr, key_pair_wrapper)) in addr_keys.into_iter().enumerate() {
-        let o = sim.store().owned_objects(addr).next().unwrap();
+        let o = sim.store_dyn().owned_objects(addr).next().unwrap();
         let validator_account = TestAccount {
             address: addr,
             key_pair: key_pair_wrapper.account_key_pair,

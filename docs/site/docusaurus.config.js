@@ -48,7 +48,6 @@ const config = {
   onDuplicateRoutes: 'ignore',
 
   staticDirectories: ["static", "src/open-spec"],
-
   markdown: {
     format: "detect",
     mermaid: true,

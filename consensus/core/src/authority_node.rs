@@ -31,7 +31,9 @@ use crate::{
     leader_schedule::LeaderSchedule,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{NetworkManager, tonic_network::TonicManager},
+    network::{
+        CommitSyncerClient, NetworkManager, SynchronizerClient, tonic_network::TonicManager,
+    },
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::RoundTracker,
@@ -218,6 +220,23 @@ where
         let mut network_manager = N::new(context.clone(), network_keypair);
         let validator_client = network_manager.validator_client();
 
+        let synchronizer_client = Arc::new(SynchronizerClient::<
+            N::ValidatorClient,
+            N::ObserverClient,
+        >::new(
+            context.clone(),
+            Some(validator_client.clone()),
+            None, // TODO: set observer client if want to talk to a peer's observer server.
+        ));
+        let commit_syncer_client = Arc::new(CommitSyncerClient::<
+            N::ValidatorClient,
+            N::ObserverClient,
+        >::new(
+            context.clone(),
+            Some(validator_client.clone()),
+            None, // TODO: set observer client if want to talk to a peer's observer server.
+        ));
+
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -308,7 +327,7 @@ where
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         let synchronizer = Synchronizer::start(
-            validator_client.clone(),
+            synchronizer_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
@@ -327,7 +346,7 @@ where
             block_verifier.clone(),
             transaction_certifier.clone(),
             round_tracker.clone(),
-            validator_client.clone(),
+            commit_syncer_client.clone(),
             dag_state.clone(),
         )
         .start();

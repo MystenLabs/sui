@@ -19,7 +19,7 @@ use move_package_alt_compilation::{
     find_env,
 };
 use move_symbol_pool::Symbol;
-use move_unit_test::{TRACE_DIR, UnitTestingConfig, vm_test_setup::VMTestSetup};
+use move_unit_test::{TRACE_DIR, TraceType, UnitTestingConfig, vm_test_setup::VMTestSetup};
 // if windows
 #[cfg(target_family = "windows")]
 use std::os::windows::process::ExitStatusExt;
@@ -64,7 +64,7 @@ pub struct Test {
     /// Verbose mode
     #[clap(long = "verbose")]
     pub verbose_mode: bool,
-    /// Collect coverage information for later use with the various `move coverage` subcommands. Currently supported only in debug builds.
+    /// Collect coverage information for later use with the various `move coverage` subcommands.
     #[clap(long = "coverage")]
     pub compute_coverage: bool,
 
@@ -77,8 +77,8 @@ pub struct Test {
     pub rand_num_iters: Option<u64>,
 
     /// Enable tracing for tests.
-    #[clap(long = "trace")]
-    pub trace: bool,
+    #[clap(long = "trace", default_missing_value = "full", num_args = 0..=1)]
+    pub trace: Option<TraceType>,
 }
 
 impl Test {
@@ -91,7 +91,7 @@ impl Test {
         let rerooted_path = reroot_path(path)?;
         let compute_coverage = self.compute_coverage;
         // save disassembly if trace execution is enabled
-        let save_disassembly = self.trace;
+        let save_disassembly = self.trace.is_some();
         let result = run_move_unit_tests::<F, V, Stdout>(
             &rerooted_path,
             config,
@@ -178,7 +178,9 @@ pub async fn run_move_unit_tests<F: MoveFlavor, V: VMTestSetup + Sync, W: Write 
     // If we are computing coverage, then we need to enable tracing, since the coverage information
     // is derived from the trace. If the user explicitly set the trace config, then we respect that
     // and don't override it.
-    unit_test_config.trace = unit_test_config.trace || compute_coverage;
+    if compute_coverage && unit_test_config.trace.is_none() {
+        unit_test_config.trace = Some(TraceType::InstructionOnly);
+    }
 
     // Compile the package. We need to intercede in the compilation, process being performed by the
     // Move package system, to first grab the compilation env, construct the test plan from it, and

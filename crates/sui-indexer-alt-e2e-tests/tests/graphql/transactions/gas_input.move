@@ -33,7 +33,7 @@ module test::simple {
 //> 1: TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2));
 
 // Digest 4: Use BOTH split coins from Digest 3 as multiple gas payments
-//# programmable --sender A --gas-payment 3,0 --gas-payment 3,1 --gas-budget 500000000 --inputs object(1,0)
+//# programmable --sender A --gas-payment object(3,0) --gas-payment object(3,1) --gas-budget 500000000 --inputs object(1,0)
 //> 0: test::simple::increment(Input(0));
 
 //# create-checkpoint

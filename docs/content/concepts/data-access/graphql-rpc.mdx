@@ -14,7 +14,7 @@ For practical examples, see [Querying Sui RPC with GraphQL](/guides/developer/ac
 
 :::
 
-The GraphQL RPC Service reads data from the General-purpose Indexer's Postgres-compatible database, Archival Store and Service, and a full node. GraphQL RPC is an alternative to the gRPC API. The General-purpose Indexer is a scalable implementation of the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework). The framework ingests data using the remote checkpoint store and full node RPCs. It lets you configure it to load different types of Sui network data into Postgres tables in parallel, improving data ingestion performance. You can also configure pruning for different tables to balance performance and cost.
+The GraphQL RPC Service reads data from the General-purpose Indexer's Postgres-compatible database, Archival Store and Service, and a full node. GraphQL RPC is an alternative to the gRPC API. The General-purpose Indexer is a scalable implementation of the [custom indexing framework](/guides/developer/accessing-data/custom-indexer). The framework ingests data using the remote checkpoint store and full node RPCs. It lets you configure it to load different types of Sui network data into Postgres tables in parallel, improving data ingestion performance. You can also configure pruning for different tables to balance performance and cost.
 
 #### High-level release timeline
 
@@ -34,7 +34,7 @@ The target times indicated are tentative and subject to updates based on project
 
 :::
 
-## Components 
+## Components
 
 The key components of the GraphQL and General-purpose Indexer stack include the following:
 
@@ -48,7 +48,7 @@ The key components of the GraphQL and General-purpose Indexer stack include the 
 
 - **Consistent Store:** Answers queries about the latest state of the network within the last hour (objects owned by addresses, objects by type, balances by address and type). Consistency is guaranteed by pinning queries to a specific (recent) checkpoint.
 
-- **Full node:** Enables transaction execution and simulation. 
+- **Full node:** Enables transaction execution and simulation.
 
 ## When to use
 
@@ -131,7 +131,7 @@ These pipelines capture the core blockchain data in its raw form, preserving com
 
 The following pipelines create indexed views that allow efficient filtering and querying based on different attributes (such as object owner, transaction type, affected addresses, event type). These indexes help identify the keys of interest, which can then fetch detailed content from the raw content `kv_` tables:
 
-**Tables:** `kv_checkpoints`, `kv_transactions`, `kv_objects`, `kv_packages` 
+**Tables:** `kv_checkpoints`, `kv_transactions`, `kv_objects`, `kv_packages`
 
 ### Transaction pipelines
 
@@ -141,11 +141,9 @@ These pipelines extract and index key transaction attributes to support efficien
 
 ### Object pipelines
 
-These pipelines manage current and historical object information. They store active object metadata, maintain version histories for each object, and categorize coin balances into buckets for efficient coin queries sorted by balances. `obj_versions` table is particularly important for the GraphQL service. It tracks the version history of all blockchain objects, storing object ID, version number, digest, and checkpoint sequence number. The GraphQL service uses this table as an efficient index to resolve object queries by version bounds, checkpoint bounds, or exact versions without loading full object data, enabling features like version pagination and temporal consistency.
+`obj_versions` tracks the version history of all blockchain objects, storing object ID, version number, digest, and checkpoint sequence number. The GraphQL service uses this table as an efficient index to resolve object queries by version bounds, checkpoint bounds, or exact versions without loading full object data, enabling features like version pagination and temporal consistency.
 
-Pruning policies can be configured for `obj_info` and `coin_balance_buckets` to retain historical data within a specified time range, balancing query needs with storage management. This allows supporting use cases that require querying recent object history without retaining all historical data indefinitely.
-
-**Tables**: `obj_info`, `obj_versions`, `coin_balance_buckets`
+**Tables**: `obj_versions`
 
 ### Epoch information pipelines
 
@@ -205,7 +203,7 @@ Retaining long-term historical data in Postgres is not recommended unless requir
 
 For all production deployments, pair Postgres with the [Archival Service](/guides/developer/accessing-data/archival-store.mdx) to support point lookups of transactions, objects, and checkpoints when relevant data does not exist in Postgres. The Archival Service serves as the backend for historical versions and checkpoint data, reducing pressure on your Postgres instance. While not strictly required, use the Archival Service in any production setup that aims to support high-retention GraphQL or gRPC workloads.
 
-Current implementation supports [GCP Bigtable](https://cloud.google.com/bigtable) which is a highly scalable and performant data store. If you plan to operate your own archival store, refer to `sui-kvstore` and `sui-kv-rpc` for indexer setup and RPC service implementation respectively. For the indexer setup, make sure to use the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework). If you're interested in contributing support for other scalable data stores, reach out on GitHub by creating a new issue.
+Current implementation supports [GCP Bigtable](https://cloud.google.com/bigtable) which is a highly scalable and performant data store. If you plan to operate your own archival store, refer to `sui-kvstore` and `sui-kv-rpc` for indexer setup and RPC service implementation respectively. For the indexer setup, make sure to use the [custom indexing framework](/guides/developer/accessing-data/custom-indexer). If you're interested in contributing support for other scalable data stores, reach out on GitHub by creating a new issue.
 
 <details>
 <summary>
@@ -237,7 +235,7 @@ When designing your deployment, consider the trade-offs between cost, reliabilit
 
 - Postgres with short-retention and Archival Service results in optimization for cost and completeness, ideal for production deployments.
 
-### Best practices 
+### Best practices
 
 To improve performance and reliability, also consider these operational best practices:
 

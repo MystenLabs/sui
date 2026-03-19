@@ -756,7 +756,7 @@
     },
     {
       "source": "/concepts/custom-indexing-framework",
-      "destination": "/guides/developer/accessing-data/custom-indexing-framework"
+      "destination": "/guides/developer/accessing-data/custom-indexer"
     },
     {
       "source": "/concepts/custom-indexer/pipeline-architecture",
@@ -932,7 +932,7 @@
     },
     {
       "source": "/concepts/data-access/custom-indexing-framework",
-      "destination": "/guides/developer/accessing-data/custom-indexing-framework"
+      "destination": "/guides/developer/accessing-data/custom-indexer"
     },
     {
       "source": "/concepts/data-access/grpc-overview",
@@ -3366,7 +3366,92 @@
     { "source": "/references/framework/sui_sui_system.md", "destination": "/references/framework/sui_sui_system/index.md" },
     { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" },
     { "source": "/standards/display", "destination": "/guides/developer/objects/display/display-overview" },
-    { "source": "/standards/display-v2-migration", "destination": "/guides/developer/objects/display" }
+    { "source": "/standards/display-v2-migration", "destination": "/guides/developer/objects/display" },
+    {
+      "source": "/code-of-conduct",
+      "destination": "/references/contribute/code-of-conduct",
+      "permanent": true
+    },
+    {
+      "source": "/style-guide",
+      "destination": "/references/contribute/style-guide",
+      "permanent": true
+    },
+    {
+      "source": "/sui-compared",
+      "destination": "/references/sui-compared",
+      "permanent": true
+    },
+    {
+      "source": "/sui-framework-reference",
+      "destination": "/references/framework",
+      "permanent": true
+    },
+    {
+      "source": "/sui-glossary",
+      "destination": "/references/sui-glossary",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/architecture",
+      "destination": "/concepts/sui-architecture",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/architecture/index",
+      "destination": "/concepts/sui-architecture",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/cryptography/zklogin-integration/index",
+      "destination": "/guides/developer/cryptography/zklogin-integration/zklogin",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft-rental",
+      "destination": "/guides/developer/nft/nft-rental",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft-soulbound",
+      "destination": "/guides/developer/nft/nft-soulbound",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/object-ownership/index",
+      "destination": "/guides/developer/objects/object-ownership",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/operator",
+      "destination": "/guides/operator",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/packages/index",
+      "destination": "/guides/developer/packages",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/suiplay0x1",
+      "destination": "/guides/suiplay0x1",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/transactions/index",
+      "destination": "/guides/developer/transactions",
+      "permanent": true
+    },
+    {
+      "source": "/developer/guides/getting-started",
+      "destination": "/guides/developer/getting-started",
+      "permanent": true
+    },
+    {
+      "source": "/references/sui-api/sui-graphql/beta/reference",
+      "destination": "/references/sui-graphql",
+      "permanent": true
+    }
   ],
   "rewrites": [
     {

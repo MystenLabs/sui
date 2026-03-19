@@ -8,7 +8,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
 use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
-use sui_indexer_alt_schema::objects::StoredOwnerKind;
 use sui_json_rpc_types::Page as PageResponse;
 use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_types::Identifier;
@@ -82,7 +81,7 @@ pub(super) async fn owned_objects(
             query_objects(
                 ctx,
                 owner,
-                StoredOwnerKind::Address,
+                OwnerKind::Address,
                 Some(format!("!{}", filter_to_type_string(&exclusions[0]))),
                 cursor,
                 limit,
@@ -94,7 +93,7 @@ pub(super) async fn owned_objects(
             query_objects(
                 ctx,
                 owner,
-                StoredOwnerKind::Address,
+                OwnerKind::Address,
                 filter.as_ref().map(filter_to_type_string),
                 cursor,
                 limit,
@@ -123,7 +122,7 @@ pub(crate) async fn dynamic_fields(
     query_objects(
         ctx,
         owner.into(),
-        StoredOwnerKind::Object,
+        OwnerKind::Object,
         Some(type_.to_canonical_string(true)),
         cursor,
         limit,
@@ -143,7 +142,7 @@ fn filter_to_type_string(filter: &SuiObjectDataFilter) -> String {
 async fn query_objects(
     ctx: &Context,
     owner: SuiAddress,
-    kind: StoredOwnerKind,
+    kind: OwnerKind,
     object_type: Option<String>,
     cursor: Option<String>,
     limit: Option<usize>,
@@ -157,23 +156,19 @@ async fn query_objects(
         None,
     )?;
 
-    let owner_kind = match kind {
-        StoredOwnerKind::Address => OwnerKind::Address,
-        StoredOwnerKind::Object => OwnerKind::Object,
-        StoredOwnerKind::Shared | StoredOwnerKind::Immutable => {
-            return Ok(PageResponse {
-                data: vec![],
-                next_cursor: None,
-                has_next_page: false,
-            });
-        }
-    };
+    if kind != OwnerKind::Address && kind != OwnerKind::Object {
+        return Ok(PageResponse {
+            data: vec![],
+            next_cursor: None,
+            has_next_page: false,
+        });
+    }
 
     let results = ctx
         .consistent_reader()
         .list_owned_objects(
             None,
-            owner_kind,
+            kind,
             Some(owner.to_string()),
             object_type,
             Some(page.limit as u32),
