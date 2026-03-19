@@ -2,6 +2,7 @@
 
 > Comprehensive reference for Sui blockchain development, including Move smart contract programming, Sui framework concepts, frontend integration, and fullstack application architecture. Designed for efficient retrieval and grounding by large language models.
 
+
 ## Move
 
 - [Move Language Reference](https://move-book.com/llms.txt)
