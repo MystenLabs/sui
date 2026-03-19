@@ -48,6 +48,12 @@ fn rewrite_programmable_transaction_for_coin_reservations(
         {
             compat_args.push(true);
 
+            // unwrap: This cannot fail because:
+            // 1. Coin reservations are validated in `process_funds_withdrawals_for_signing` before
+            //    execution, which checks that the accumulator exists and is owned by the sender.
+            // 2. The scheduler reserves funds before allowing the transaction to execute. If the
+            //    accumulator were deleted (balance dropped to 0), the reservation would fail and
+            //    the transaction would not enter execution.
             let withdraw = coin_reservation_resolver
                 .resolve_funds_withdrawal(sender, parsed)
                 .unwrap();
