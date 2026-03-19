@@ -31,6 +31,7 @@ indexmap.workspace = true
 lcov.workspace = true
 move-trace-format.workspace = true
 move-compiler.workspace = true
+rayon.workspace = true
 
 [features]
 default = []
