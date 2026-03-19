@@ -54,7 +54,8 @@ const IGNORE_FILES = new Set([
   "references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md",
   "references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature.md",
   "references/sui-framework-reference.md",
-  "release-notes.md",
+  "/references/release-notes.md",
+  "/references/awesome-sui.md",
 ]);
 
 function walk(dir, results = []) {
