@@ -410,7 +410,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     ]));
 
     let manifest_file = overlay_fs_root
-        .join(pkg_path.to_string_lossy().replace('\\', "/"))
+        .join(pkg_path.to_string_lossy().to_string())
         .and_then(|p| p.join(MANIFEST_FILE_NAME))
         .and_then(|p| p.open_file());
 
@@ -690,7 +690,20 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         // (both dependency and user-space) to ensure function bodies are preserved
                         let mut all_files = files_to_compile.clone();
                         all_files.extend(caching_result.get_all_files_to_compile_fully());
-                        Some(all_files)
+                        // Compiler uses VFS paths created by joining canonicalized paths
+                        // to the VFS root. We are dealing with canonicalized paths here as well
+                        // as the compiler, so we need to convert them to VFS path format the same
+                        // way to make sure that the compiler will recognize them.
+                        let vfs_files: BTreeSet<PathBuf> = all_files
+                            .iter()
+                            .filter_map(|p| {
+                                overlay_fs_root
+                                    .join(&*p.to_string_lossy())
+                                    .ok()
+                                    .map(|vfs_path| PathBuf::from(vfs_path.as_str()))
+                            })
+                            .collect();
+                        Some(vfs_files)
                     })
                     .run::<PASS_PARSER>()?;
                 let compiler = match compilation_result {
@@ -1003,7 +1016,7 @@ fn compute_mapped_files<F: MoveFlavor>(
             // there is a fair number of unwraps here but if we can't read the files
             // that by all accounts should be in the file system, then there is not much
             // we can do so it's better to fail so that we can investigate
-            let vfs_file_path = overlay_fs.join(fname.replace('\\', "/")).unwrap();
+            let vfs_file_path = overlay_fs.join(fname.as_str()).unwrap();
             let mut vfs_file = vfs_file_path.open_file().unwrap();
             let _ = vfs_file.read_to_string(&mut contents);
             let fhash = FileHash::new(&contents);

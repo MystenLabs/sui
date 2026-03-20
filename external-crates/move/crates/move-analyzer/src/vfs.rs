@@ -59,8 +59,7 @@ pub fn on_text_document_sync_notification(
         file_path: PathBuf,
         first_access: bool,
     ) -> Option<Box<dyn Write + Send>> {
-        let path_str = file_path.to_string_lossy().replace('\\', "/");
-        let Some(vfs_path) = ide_files.join(path_str).ok() else {
+        let Some(vfs_path) = ide_files.join(file_path.to_string_lossy()).ok() else {
             eprintln!(
                 "Could not construct file path for file creation at {:?}",
                 file_path
@@ -79,8 +78,7 @@ pub fn on_text_document_sync_notification(
     }
 
     fn vfs_file_remove(ide_files: &VfsPath, file_path: PathBuf) {
-        let path_str = file_path.to_string_lossy().replace('\\', "/");
-        let Some(vfs_path) = ide_files.join(path_str).ok() else {
+        let Some(vfs_path) = ide_files.join(file_path.to_string_lossy()).ok() else {
             eprintln!(
                 "Could not construct file path for file removal at {:?}",
                 file_path
