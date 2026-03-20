@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use anyhow::Result;
 use tokio::sync::Mutex;
@@ -65,12 +66,18 @@ struct MockState {
 #[derive(Clone)]
 pub struct MockBigtableServer {
     state: Arc<Mutex<MockState>>,
+    /// When true, PingAndWarm returns an error.
+    pub ping_should_fail: Arc<AtomicBool>,
+    /// Total number of requests received across all RPCs.
+    pub request_count: Arc<AtomicUsize>,
 }
 
 impl MockBigtableServer {
     pub fn new() -> Self {
         Self {
             state: Arc::new(Mutex::new(MockState::default())),
+            ping_should_fail: Arc::new(AtomicBool::new(false)),
+            request_count: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -129,6 +136,7 @@ impl Bigtable for MockBigtableServer {
         &self,
         request: Request<MutateRowsRequest>,
     ) -> Result<Response<Self::MutateRowsStream>, Status> {
+        self.request_count.fetch_add(1, Ordering::Relaxed);
         let req = request.into_inner();
         let mut state = self.state.lock().await;
 
@@ -205,7 +213,11 @@ impl Bigtable for MockBigtableServer {
         &self,
         _request: Request<PingAndWarmRequest>,
     ) -> Result<Response<PingAndWarmResponse>, Status> {
-        Err(Status::unimplemented("not implemented for mock"))
+        self.request_count.fetch_add(1, Ordering::Relaxed);
+        if self.ping_should_fail.load(Ordering::Relaxed) {
+            return Err(Status::unavailable("injected ping failure"));
+        }
+        Ok(Response::new(PingAndWarmResponse {}))
     }
 
     async fn read_modify_write_row(

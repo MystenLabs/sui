@@ -614,6 +614,68 @@ async fn test_address_balance_gas() {
 }
 
 #[sim_test]
+async fn test_address_balance_gas_v3_accumulator_sign() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg.set_execution_version_for_testing(3);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, gas_package_id) = setup_address_balance_account(&mut test_env, 10_000_000).await;
+
+    let tx = create_storage_test_transaction_address_balance(
+        sender,
+        gas_package_id,
+        test_env.rgp,
+        test_env.chain_id,
+        None,
+        0,
+    );
+
+    let signed_tx = test_env.cluster.sign_transaction(&tx).await;
+    let (effects, _) = test_env
+        .cluster
+        .execute_transaction_return_raw_effects(signed_tx)
+        .await
+        .expect("Transaction should succeed");
+
+    assert!(effects.status().is_ok());
+
+    let gas_summary = effects.gas_cost_summary();
+    let net_gas = gas_summary.net_gas_usage();
+    assert!(net_gas > 0, "Expected positive net gas usage");
+
+    let acc_events = effects.accumulator_events();
+    assert_eq!(
+        acc_events.len(),
+        1,
+        "Expected exactly one accumulator event"
+    );
+
+    match &acc_events[0].write.operation {
+        sui_types::effects::AccumulatorOperation::Split => {}
+        sui_types::effects::AccumulatorOperation::Merge => {
+            panic!("Gas charge produced Merge (deposit) instead of Split (withdrawal).");
+        }
+    }
+
+    match &acc_events[0].write.value {
+        sui_types::effects::AccumulatorValue::Integer(value) => {
+            assert_eq!(
+                *value, net_gas as u64,
+                "Accumulator event value should match net gas usage"
+            );
+        }
+        _ => panic!("Expected Integer accumulator value"),
+    }
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
 async fn test_sponsored_address_balance_storage_rebates() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {

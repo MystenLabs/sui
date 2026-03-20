@@ -37,6 +37,7 @@ use sui_swarm_config::network_config_builder::{
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::CommitteeTrait;
@@ -533,10 +534,21 @@ impl TestCluster {
         timeout(
             Duration::from_secs(60),
             self.fullnode_handle.sui_node.with_async(|node| async move {
-                let mut txns = node.state().subscription_handler.subscribe_transactions(
+                let state = node.state();
+                let mut txns = state.subscription_handler.subscribe_transactions(
                     TransactionFilter::ChangedObject(ObjectID::from_hex_literal("0x7").unwrap()),
                 );
-                let state = node.state();
+
+                // Check if the state was already updated before subscribe_transactions was called
+                // above (after trigger_reconfiguration completes, the AuthenticatorStateUpdate
+                // transaction may have already been committed).
+                let has_active_jwks = get_authenticator_state(state.get_object_store())
+                    .ok()
+                    .flatten()
+                    .is_some_and(|state| !state.active_jwks.is_empty());
+                if has_active_jwks {
+                    return;
+                }
 
                 while let Some(tx) = txns.next().await {
                     let digest = *tx.transaction_digest();

@@ -31,6 +31,10 @@ const mediaTargetDir = path.join(
   "../../static/awesome-sui/media",
 );
 
+const MAX_PAGE_CHARS = 49500;
+const GITHUB_SOURCE_URL =
+  "https://github.com/sui-foundation/awesome-sui/blob/main/README.md";
+
 // Process the content to remove the Contents section and transform list items
 function processContent(content) {
   // Skip initial content: level 1 heading, anchor element, and first line starting with '>'
@@ -228,12 +232,76 @@ function processDetailContent(content) {
   return processedContent;
 }
 
+// Truncate content to stay under the character limit while preserving valid markup
+function truncateContent(content, maxChars, frontmatter) {
+  const truncationNotice = `\n\n---\n\n:::info\n\nThis page has been truncated to stay within size limits. View the full list on the [Awesome Sui GitHub repo](${GITHUB_SOURCE_URL}).\n\n:::\n`;
+
+  const availableChars = maxChars - frontmatter.length - truncationNotice.length;
+
+  if (content.length <= availableChars) {
+    return content;
+  }
+
+  console.log(
+    `⚠️ Content is ${frontmatter.length + content.length} chars, truncating to stay under ${maxChars}...`,
+  );
+
+  // Find a safe truncation point: cut at a section boundary (## or ###) that fits
+  const lines = content.split("\n");
+  let truncated = "";
+  let lastSafeCut = "";
+  let openDivs = 0;
+
+  for (const line of lines) {
+    const candidate = truncated + line + "\n";
+
+    // Track open/close divs for cleanup
+    const divOpens = (line.match(/<div\b/g) || []).length;
+    const divCloses = (line.match(/<\/div>/g) || []).length;
+    openDivs += divOpens - divCloses;
+
+    if (candidate.length > availableChars) {
+      break;
+    }
+
+    truncated = candidate;
+
+    // Mark safe cut points at section headings (when no divs are open)
+    if (line.match(/^#{2,3} /) && openDivs <= 0) {
+      // Cut just before this heading
+      const idx = truncated.lastIndexOf(line);
+      if (idx > 0) {
+        lastSafeCut = truncated.substring(0, idx).trimEnd();
+      }
+    }
+  }
+
+  // Use the last safe section boundary, or fall back to the raw truncation
+  let result = lastSafeCut || truncated.trimEnd();
+
+  // Close any unclosed divs
+  const remainingOpens = (result.match(/<div\b/g) || []).length;
+  const remainingCloses = (result.match(/<\/div>/g) || []).length;
+  const unclosed = remainingOpens - remainingCloses;
+  if (unclosed > 0) {
+    result += "\n" + "</div>\n".repeat(unclosed);
+  }
+
+  result += truncationNotice;
+
+  console.log(
+    `✅ Truncated from ${frontmatter.length + content.length} to ${frontmatter.length + result.length} chars`,
+  );
+
+  return result;
+}
+
 // Convert README.md
 console.log("Reading README file:", readmePath);
 const readmeContent = fs.readFileSync(readmePath, "utf8");
 const processedReadmeContent = processContent(readmeContent);
 
-const readmeMdxContent = `---
+const frontmatter = `---
 title: Awesome Sui
 description: A curated list of awesome developer tools and infrastructure projects within the Sui ecosystem.
 ---
@@ -244,7 +312,15 @@ Visit the [Awesome Sui repo](https://github.com/sui-foundation/awesome-sui/tree/
 
 :::
 
-${processedReadmeContent}`;
+`;
+
+const finalContent = truncateContent(
+  processedReadmeContent,
+  MAX_PAGE_CHARS,
+  frontmatter,
+);
+
+const readmeMdxContent = frontmatter + finalContent;
 
 // Ensure target directories exist
 const readmeTargetDir = path.dirname(readmeTargetPath);
@@ -254,6 +330,7 @@ if (!fs.existsSync(readmeTargetDir)) {
 
 // Write the main README MDX file
 console.log("Writing README target file:", readmeTargetPath);
+console.log(`Final file size: ${readmeMdxContent.length} chars`);
 fs.writeFileSync(readmeTargetPath, readmeMdxContent, "utf8");
 
 console.log("✅ Successfully converted README.md");

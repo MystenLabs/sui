@@ -41,6 +41,7 @@ use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
 
 pub use crate::bigtable::client::BigTableClient;
+pub use crate::bigtable::client::PoolConfig;
 pub use crate::bigtable::store::BigTableConnection;
 pub use crate::bigtable::store::BigTableStore;
 pub use crate::handlers::BigTableHandler;
@@ -58,6 +59,7 @@ pub use crate::handlers::PrevEpochUpdate;
 pub use crate::handlers::ProtocolConfigsPipeline;
 pub use crate::handlers::SystemPackagesPipeline;
 pub use crate::handlers::TransactionsPipeline;
+pub use config::BigtablePoolLayer;
 pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
 pub use config::IndexerConfig;

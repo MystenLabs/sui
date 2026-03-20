@@ -386,7 +386,7 @@ pub mod checked {
                         let accumulator_event = AccumulatorEvent::from_balance_change(
                             payer_address,
                             balance_type,
-                            net_change,
+                            net_change.checked_neg().unwrap(),
                         )
                         .expect("Failed to create accumulator event for gas balance");
 

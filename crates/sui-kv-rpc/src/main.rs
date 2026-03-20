@@ -9,8 +9,32 @@ use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_kv_rpc::KvRpcServer;
+use sui_kv_rpc::{KvRpcServer, PoolConfig};
 use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler, ServerVersion};
+
+#[derive(Parser)]
+struct PoolArgs {
+    /// Number of gRPC channels to create at startup
+    #[clap(long = "bigtable-initial-pool-size", default_value_t = PoolConfig::default().initial_pool_size)]
+    bigtable_initial_pool_size: usize,
+    /// Minimum number of channels the pool will maintain
+    #[clap(long = "bigtable-min-pool-size", default_value_t = PoolConfig::default().min_pool_size)]
+    bigtable_min_pool_size: usize,
+    /// Maximum number of channels the pool can scale to
+    #[clap(long = "bigtable-max-pool-size", default_value_t = PoolConfig::default().max_pool_size)]
+    bigtable_max_pool_size: usize,
+}
+
+impl From<PoolArgs> for PoolConfig {
+    fn from(args: PoolArgs) -> Self {
+        Self {
+            initial_pool_size: args.bigtable_initial_pool_size,
+            min_pool_size: args.bigtable_min_pool_size,
+            max_pool_size: args.bigtable_max_pool_size,
+            ..Self::default()
+        }
+    }
+}
 use telemetry_subscribers::TelemetryConfig;
 use tonic::transport::{Identity, Server, ServerTlsConfig};
 
@@ -43,6 +67,8 @@ struct App {
     /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000)
     #[clap(long = "bigtable-channel-timeout-ms")]
     bigtable_channel_timeout_ms: Option<u64>,
+    #[clap(flatten)]
+    pool: PoolArgs,
 }
 
 async fn health_check() -> &'static str {
@@ -63,6 +89,8 @@ async fn main() -> Result<()> {
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
     let channel_timeout = app.bigtable_channel_timeout_ms.map(Duration::from_millis);
+    let pool_config: PoolConfig = app.pool.into();
+
     let server = KvRpcServer::new(
         app.instance_id,
         app.bigtable_project,
@@ -72,6 +100,7 @@ async fn main() -> Result<()> {
         server_version,
         &registry,
         app.credentials,
+        pool_config,
     )
     .await?;
     let addr = app.address.parse()?;
