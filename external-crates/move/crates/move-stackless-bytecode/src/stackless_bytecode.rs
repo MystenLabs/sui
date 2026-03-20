@@ -97,6 +97,12 @@ pub enum Constant {
     U16(u16),
     U32(u32),
     U256(U256),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    I256(move_core_types::i256::I256),
 }
 
 impl From<&u256::U256> for Constant {
@@ -160,6 +166,13 @@ pub enum Operation {
     CastU32,
     CastU64,
     CastU128,
+    CastI8,
+    CastI16,
+    CastI32,
+    CastI64,
+    CastI128,
+    CastI256,
+    Neg,
     Not,
 
     // Binary
@@ -229,6 +242,13 @@ impl Operation {
             Operation::CastU64 => true,
             Operation::CastU128 => true,
             Operation::CastU256 => true,
+            Operation::CastI8 => true,
+            Operation::CastI16 => true,
+            Operation::CastI32 => true,
+            Operation::CastI64 => true,
+            Operation::CastI128 => true,
+            Operation::CastI256 => true,
+            Operation::Neg => true,
             Operation::Not => false,
             Operation::Add => true,
             Operation::Sub => true,
@@ -992,6 +1012,13 @@ impl fmt::Display for OperationDisplay<'_> {
             CastU64 => write!(f, "(u64)")?,
             CastU128 => write!(f, "(u128)")?,
             CastU256 => write!(f, "(u256)")?,
+            CastI8 => write!(f, "(i8)")?,
+            CastI16 => write!(f, "(i16)")?,
+            CastI32 => write!(f, "(i32)")?,
+            CastI64 => write!(f, "(i64)")?,
+            CastI128 => write!(f, "(i128)")?,
+            CastI256 => write!(f, "(i256)")?,
+            Neg => write!(f, "-")?,
             Not => write!(f, "!")?,
 
             // Binary
@@ -1117,6 +1144,12 @@ impl fmt::Display for Constant {
             Vector(x) => write!(f, "{:?}", x.iter().map(|v| format!("{}", v)).collect_vec())?,
             U16(x) => write!(f, "{}", x)?,
             U32(x) => write!(f, "{}", x)?,
+            I8(x) => write!(f, "{}", x)?,
+            I16(x) => write!(f, "{}", x)?,
+            I32(x) => write!(f, "{}", x)?,
+            I64(x) => write!(f, "{}", x)?,
+            I128(x) => write!(f, "{}", x)?,
+            I256(x) => write!(f, "{}", x)?,
         }
         Ok(())
     }

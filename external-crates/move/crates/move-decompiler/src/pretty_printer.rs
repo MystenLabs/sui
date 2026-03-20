@@ -525,6 +525,13 @@ fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
         PrimitiveOp::CastU64 => exp(context, &args[0]).concat(D::text("as u64")),
         PrimitiveOp::CastU128 => exp(context, &args[0]).concat(D::text("as u128")),
         PrimitiveOp::CastU256 => exp(context, &args[0]).concat(D::text("as u256")),
+        PrimitiveOp::CastI8 => exp(context, &args[0]).concat(D::text("as i8")),
+        PrimitiveOp::CastI16 => exp(context, &args[0]).concat(D::text("as i16")),
+        PrimitiveOp::CastI32 => exp(context, &args[0]).concat(D::text("as i32")),
+        PrimitiveOp::CastI64 => exp(context, &args[0]).concat(D::text("as i64")),
+        PrimitiveOp::CastI128 => exp(context, &args[0]).concat(D::text("as i128")),
+        PrimitiveOp::CastI256 => exp(context, &args[0]).concat(D::text("as i256")),
+        PrimitiveOp::Neg => D::text("-").concat(exp(context, &args[0]).parens()),
 
         PrimitiveOp::Add => bin(&args[0], "+", &args[1]),
         PrimitiveOp::Subtract => bin(&args[0], "-", &args[1]),
