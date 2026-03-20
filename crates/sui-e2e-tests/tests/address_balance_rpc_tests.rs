@@ -440,3 +440,84 @@ async fn test_rpc_get_coins_pagination_consistency() {
 
     test_env.cluster.trigger_reconfiguration().await;
 }
+
+#[sim_test]
+async fn test_rpc_get_all_coins_includes_fake_coin() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    // Test that suix_getAllCoins includes the fake coin at position 1 for each coin type.
+    // When multiple coin types exist, the ordering should be:
+    // [real<T1>, fake<T1>, ..., real<T2>, fake<T2>, ...]
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let address_balance_amount = 5_000_000_000u64;
+
+    // Get the initial coin count using getAllCoins
+    let params = rpc_params![sender, Option::<String>::None, Option::<usize>::None];
+    let initial_coins: CoinPage = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getAllCoins", params)
+        .await
+        .unwrap();
+    let initial_coin_count = initial_coins.data.len();
+    assert!(initial_coin_count >= 1, "Need at least one real coin");
+
+    // Fund sender's address balance
+    test_env
+        .fund_one_address_balance(sender, address_balance_amount)
+        .await;
+
+    // Get the fake coin object ref
+    let fake_coin_ref = test_env.encode_coin_reservation(sender, 0, address_balance_amount);
+    let masked_object_id = fake_coin_ref.0;
+
+    // Query getAllCoins
+    let params = rpc_params![sender, Option::<String>::None, Option::<usize>::None];
+    let coins: CoinPage = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getAllCoins", params)
+        .await
+        .unwrap();
+
+    // Should have one more coin than before (the fake coin)
+    assert_eq!(
+        coins.data.len(),
+        initial_coin_count + 1,
+        "getAllCoins should include the fake coin. Initial: {}, Got: {}",
+        initial_coin_count,
+        coins.data.len()
+    );
+
+    // Find the fake coin and verify it's at the right position
+    let fake_coin_position = coins
+        .data
+        .iter()
+        .position(|c| c.coin_object_id == masked_object_id);
+    assert!(
+        fake_coin_position.is_some(),
+        "Fake coin should be present in getAllCoins results"
+    );
+
+    // The fake coin should be at position 1 within SUI coins (after the first real SUI coin)
+    // Since all our coins are SUI in this test, it should be at global position 1
+    assert_eq!(
+        fake_coin_position.unwrap(),
+        1,
+        "Fake coin should be at position 1"
+    );
+
+    test_env.cluster.trigger_reconfiguration().await;
+}

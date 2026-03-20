@@ -4818,6 +4818,32 @@ impl AuthorityState {
         )))
     }
 
+    /// Returns fake ObjectRefs for all address balances of an owner, keyed by coin type string.
+    /// Used by get_all_coins to include fake coins for each coin type.
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_all_address_balance_coin_infos(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiResult<std::collections::HashMap<String, (ObjectRef, u64, TransactionDigest)>> {
+        let indexes = self
+            .indexes
+            .as_ref()
+            .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
+
+        let mut result = std::collections::HashMap::new();
+        for currency_type in indexes.get_address_balance_coin_types_iter(owner) {
+            let balance_type = sui_types::balance::Balance::type_tag(currency_type.clone());
+            if let Some((obj_ref, balance, prev_tx)) =
+                self.get_address_balance_coin_info(owner, balance_type)?
+            {
+                // Use currency_type.to_string() to match the format in CoinIndexKey2
+                // (e.g., "0x2::sui::SUI", not "0x2::coin::Coin<0x2::sui::SUI>")
+                result.insert(currency_type.to_string(), (obj_ref, balance, prev_tx));
+            }
+        }
+        Ok(result)
+    }
+
     fn get_owner_at_version(
         object_store: &Arc<dyn ObjectStore + Send + Sync>,
         object_id: &ObjectID,
