@@ -636,17 +636,51 @@ impl AuthorityStore {
         Ok(())
     }
 
-    pub fn bulk_insert_live_objects(
-        perpetual_db: &AuthorityPerpetualTables,
-        live_objects: impl Iterator<Item = LiveObject>,
+    pub async fn bulk_insert_live_objects(
+        perpetual_db: Arc<AuthorityPerpetualTables>,
+        objects: Vec<LiveObject>,
         expected_sha3_digest: &[u8; 32],
     ) -> SuiResult<()> {
+        // Verify SHA3 over the full object set before inserting.
         let mut hasher = Sha3_256::default();
+        for object in &objects {
+            hasher.update(object.object_reference().2.inner());
+        }
+        let sha3_digest = hasher.finalize().digest;
+        if *expected_sha3_digest != sha3_digest {
+            error!(
+                "Sha does not match! expected: {:?}, actual: {:?}",
+                expected_sha3_digest, sha3_digest
+            );
+            return Err(SuiError::from("Sha does not match"));
+        }
+
+        const NUM_PARALLEL_CHUNKS: usize = 8;
+        let chunk_size = ((objects.len() + NUM_PARALLEL_CHUNKS - 1) / NUM_PARALLEL_CHUNKS).max(1);
+        let mut remaining = objects;
+        let mut handles = Vec::new();
+        while !remaining.is_empty() {
+            let take = chunk_size.min(remaining.len());
+            let chunk: Vec<LiveObject> = remaining.drain(..take).collect();
+            let db = perpetual_db.clone();
+            handles.push(tokio::task::spawn_blocking(move || {
+                Self::insert_objects_chunk(db, chunk)
+            }));
+        }
+        for handle in handles {
+            handle.await.expect("insert task panicked")?;
+        }
+        Ok(())
+    }
+
+    fn insert_objects_chunk(
+        perpetual_db: Arc<AuthorityPerpetualTables>,
+        objects: Vec<LiveObject>,
+    ) -> SuiResult<()> {
         let mut batch = perpetual_db.objects.batch();
         let mut written = 0usize;
         const MAX_BATCH_SIZE: usize = 100_000;
-        for object in live_objects {
-            hasher.update(object.object_reference().2.inner());
+        for object in objects {
             match object {
                 LiveObject::Normal(object) => {
                     let store_object_wrapper = get_store_object(object.clone());
@@ -682,14 +716,6 @@ impl AuthorityStore {
                 batch = perpetual_db.objects.batch();
                 written = 0;
             }
-        }
-        let sha3_digest = hasher.finalize().digest;
-        if *expected_sha3_digest != sha3_digest {
-            error!(
-                "Sha does not match! expected: {:?}, actual: {:?}",
-                expected_sha3_digest, sha3_digest
-            );
-            return Err(SuiError::from("Sha does not match"));
         }
         batch.write()?;
         Ok(())

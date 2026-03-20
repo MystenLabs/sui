@@ -925,7 +925,7 @@ pub async fn download_formal_snapshot(
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
         reader
-            .read(&perpetual_db_clone, abort_registration, Some(sender))
+            .read(perpetual_db_clone.clone(), abort_registration, Some(sender))
             .await
             .unwrap_or_else(|err| panic!("Failed during read: {}", err));
         info!("Snapshot download complete");

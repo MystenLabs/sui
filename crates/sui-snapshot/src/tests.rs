@@ -120,10 +120,14 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         3,     // max_retries
     )
     .await?;
-    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
+    let restored_perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &restored_db_path,
+        None,
+        None,
+    ));
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     snapshot_reader
-        .read(&restored_perpetual_db, abort_registration, None)
+        .read(restored_perpetual_db.clone(), abort_registration, None)
         .await?;
     compare_live_objects(&perpetual_db, &restored_perpetual_db, true)?;
     Ok(())
@@ -176,10 +180,14 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         3,     // max_retries
     )
     .await?;
-    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
+    let restored_perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &restored_db_path,
+        None,
+        None,
+    ));
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     snapshot_reader
-        .read(&restored_perpetual_db, abort_registration, None)
+        .read(restored_perpetual_db.clone(), abort_registration, None)
         .await?;
     compare_live_objects(
         &perpetual_db,
@@ -303,10 +311,14 @@ async fn test_snapshot_restore_from_archive() -> Result<(), anyhow::Error> {
         3,     // max_retries
     )
     .await?;
-    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
+    let restored_perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &restored_db_path,
+        None,
+        None,
+    ));
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     snapshot_reader
-        .read(&restored_perpetual_db, abort_registration, None)
+        .read(restored_perpetual_db.clone(), abort_registration, None)
         .await?;
     compare_live_objects(&perpetual_db, &restored_perpetual_db, true)?;
     Ok(())
