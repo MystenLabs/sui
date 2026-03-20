@@ -6,14 +6,15 @@ This crate provides a flexible data store abstraction for retrieving and caching
 Sui blockchain data (transactions, epochs, objects). The stores are loosely modeled
 after the GraphQL schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
 
-## Core Traits
+## Capability Traits
 
-- `TransactionStore` - Retrieve transaction data and effects by digest
-- `EpochStore` - Retrieve epoch information and protocol configuration
-- `ObjectStore` - Retrieve objects by their keys with flexible version queries
+- `TransactionStore` / `TransactionStoreWriter`
+- `EpochStore` / `EpochStoreWriter`
+- `ObjectStore` / `ObjectStoreWriter`
+- `CheckpointStore` / `CheckpointStoreWriter`
 
-The read traits above have corresponding writer traits (`TransactionStoreWriter`,
-`EpochStoreWriter`, `ObjectStoreWriter`) for stores that support write-back caching.
+`ReadDataStore` and `ReadWriteDataStore` remain convenience bundles for the
+transaction/epoch/object capability set.
 
 ## Store Implementations
 
@@ -23,56 +24,51 @@ The read traits above have corresponding writer traits (`TransactionStoreWriter`
 | `FileSystemStore` | Persistent local disk cache | Yes | Yes |
 | `InMemoryStore` | Unbounded in-memory cache | Yes | Yes |
 | `LruMemoryStore` | Bounded LRU cache | Yes | Yes |
-| `ReadThroughStore` | Composable two-tier caching pattern | Yes | Yes* |
+| `ReadThroughStore` | Read-through cache over a source | Yes | Primary only |
+| `WriteThroughStore` | Hot cache over a writable backing store | Yes | Yes |
+| `CompositeStore` | Routes each capability to a different chain | Yes | Yes |
 
-\* `ReadThroughStore` delegates writes to its secondary (backing) store.
+## Composition Primitives
 
-## Architecture
+`ReadThroughStore<Primary, Secondary>`
+- Reads `Primary` first, falls back to `Secondary`, and caches successful misses into `Primary`.
+- Direct writes update `Primary` only.
 
-The typical 3-tier cache composition: Memory → FileSystem → GraphQL
+`WriteThroughStore<Primary, Secondary>`
+- Reads `Primary` first, falls back to `Secondary`, and caches successful misses into `Primary`.
+- Direct writes update `Secondary` first, then `Primary`.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Client Code                              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              ReadThroughStore<Memory, Inner>                    │
-│      Fast in-memory cache (LruMemoryStore or InMemoryStore)     │
-└─────────────────────────────────────────────────────────────────┘
-                              │ cache miss
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│           ReadThroughStore<FileSystem, Remote>                  │
-│         Persistent disk cache (FileSystemStore)                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │ cache miss
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    DataStore (GraphQL)                          │
-│              Remote data source (mainnet/testnet)               │
-└─────────────────────────────────────────────────────────────────┘
-```
+`CompositeStore<Tx, Epoch, Obj, Ckpt>`
+- Routes each capability to its dedicated chain.
+- It is a router, not a search-order combinator.
 
 ## Composition Examples
 
-Use `ReadThroughStore<Primary, Secondary>` to compose cache layers:
-
 ```rust
-use sui_data_store::{Node, stores::{DataStore, LruMemoryStore, ReadThroughStore, FileSystemStore}};
+use sui_data_store::{
+    Node,
+    stores::{
+        CompositeStore, DataStore, FileSystemStore, InMemoryStore, ReadThroughStore,
+        WriteThroughStore,
+    },
+};
 
-// Full 3-tier: Memory → FileSystem → GraphQL (typical production setup)
-let graphql = DataStore::new(Node::Mainnet);
+// Filesystem -> GraphQL for object reads, persisting successful misses to disk.
+let graphql = DataStore::new(Node::Mainnet, "test-version")?;
 let disk = FileSystemStore::new(Node::Mainnet)?;
-let disk_with_remote = ReadThroughStore::new(disk, graphql);
-let memory = LruMemoryStore::new(Node::Mainnet);
-let store = ReadThroughStore::new(memory, disk_with_remote);
+let disk_then_graphql = ReadThroughStore::new(disk, graphql);
 
-// 2-tier: Memory + FileSystem (e.g., CI testing with pre-populated disk cache)
+// In-memory -> filesystem for generic writable caching.
+let memory = InMemoryStore::new(Node::Mainnet);
 let disk = FileSystemStore::new(Node::Mainnet)?;
-let memory = LruMemoryStore::new(Node::Mainnet);
-let store = ReadThroughStore::new(memory, disk);
+let hot_mem_fs = WriteThroughStore::new(memory, disk);
+
+// Route different capabilities to different chains.
+let transactions = hot_mem_fs;
+let epochs = /* another chain or the same chain */;
+let objects = /* e.g. WriteThroughStore<InMemoryStore, ReadThroughStore<FileSystemStore, DataStore>> */;
+let checkpoints = /* another chain or the same chain */;
+let store = CompositeStore::new(transactions, epochs, objects, checkpoints);
 ```
 
 ## Version Queries
