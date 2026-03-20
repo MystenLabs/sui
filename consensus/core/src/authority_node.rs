@@ -59,7 +59,7 @@ pub enum ConsensusAuthority {
 // by connecting to a dictated peer.
 #[derive(Clone)]
 pub enum NodeType {
-    Validator(AuthorityIndex, ProtocolKeyPair),
+    Validator(AuthorityIndex, Box<ProtocolKeyPair>),
     Observer,
 }
 
@@ -174,15 +174,15 @@ where
         boot_counter: u64,
     ) -> Self {
         let metrics = initialise_metrics(registry);
-        match node_type {
-            NodeType::Validator(own_index, protocol_keypair) => {
+        match &node_type {
+            NodeType::Validator(own_index, _protocol_keypair) => {
                 assert!(
-                    committee.is_valid_index(own_index),
+                    committee.is_valid_index(*own_index),
                     "Invalid own index {}",
                     own_index
                 );
 
-                let own_hostname = committee.authority(own_index).hostname.clone();
+                let own_hostname = committee.authority(*own_index).hostname.clone();
                 info!(
                     "Starting consensus validator authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
                     own_index,
@@ -223,7 +223,7 @@ where
         info!("Consensus committee: {:?}", committee);
         let context = Arc::new(Context::new(
             epoch_start_timestamp_ms,
-            node_type,
+            node_type.clone(),
             committee,
             parameters,
             protocol_config,
@@ -567,11 +567,10 @@ mod tests {
         let authority = ConsensusAuthority::start(
             network_type,
             0,
-            own_index,
+            NodeType::Validator(own_index, Box::new(protocol_keypair)),
             committee,
             parameters,
             ProtocolConfig::get_for_max_version_UNSAFE(),
-            protocol_keypair,
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
@@ -935,11 +934,10 @@ mod tests {
         let authority = ConsensusAuthority::start(
             network_type,
             0,
-            index,
+            NodeType::Validator(index, Box::new(protocol_keypair)),
             committee,
             parameters,
             protocol_config,
-            protocol_keypair,
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),

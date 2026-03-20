@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::{BTreeMap, BTreeSet}, iter, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, iter, sync::Arc, time::Duration};
 
 use consensus_config::ProtocolKeyPair;
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
@@ -11,11 +11,12 @@ use tracing::{debug, info, trace};
 
 use crate::{
     ancestor::{AncestorState, AncestorStateManager},
-    block::{Block, BlockAPI, BlockV1, BlockV2, ExtendedBlock, GENESIS_ROUND, SignedBlock, VerifiedBlock},
+    block::{
+        Block, BlockAPI, BlockV1, BlockV2, ExtendedBlock, GENESIS_ROUND, SignedBlock, Slot,
+        VerifiedBlock,
+    },
     context::Context,
     dag_state::DagState,
-    error::ConsensusResult,
-    leader_schedule::LeaderSchedule,
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction::TransactionConsumer,
@@ -29,10 +30,7 @@ const MAX_COMMIT_VOTES_PER_BLOCK: usize = 100;
 pub(crate) trait Proposer: Send + Sync {
     /// Attempts to create and return a new block proposal.
     /// Returns None if conditions for proposal are not met.
-    fn try_new_block(
-        &mut self,
-        force: bool
-    ) -> Option<ExtendedBlock>;
+    fn try_new_block(&mut self, force: bool) -> Option<ExtendedBlock>;
 
     /// Returns whether this node should propose blocks
     fn should_propose(&self) -> bool;
@@ -53,10 +51,14 @@ pub(crate) trait Proposer: Send + Sync {
     fn last_proposed_block(&self) -> Option<VerifiedBlock>;
 
     /// Sets propagation scores on the ancestor state manager (validators only)
-    fn set_propagation_scores(&mut self, scores: BTreeMap<consensus_config::AuthorityIndex, u64>);
+    fn set_propagation_scores(&mut self, scores: crate::leader_scoring::ReputationScores);
 
     /// Notifies transaction consumer about committed own blocks (validators only)
     fn notify_own_blocks_committed(&self, block_refs: Vec<BlockRef>, gc_round: Round);
+
+    /// Returns the round tracker for tests (validators only)
+    #[cfg(test)]
+    fn round_tracker_for_tests(&self) -> Option<Arc<RwLock<RoundTracker>>>;
 }
 
 /// Validator proposal engine - full block proposal implementation
@@ -71,7 +73,7 @@ pub(crate) struct ValidatorProposer {
     ancestor_state_manager: AncestorStateManager,
     round_tracker: Arc<RwLock<RoundTracker>>,
     dag_state: Arc<RwLock<DagState>>,
-    leader_schedule: Arc<LeaderSchedule>,
+    committer: Arc<crate::universal_committer::UniversalCommitter>,
 }
 
 impl ValidatorProposer {
@@ -84,7 +86,7 @@ impl ValidatorProposer {
         last_known_proposed_round: Option<Round>,
         ancestor_state_manager: AncestorStateManager,
         round_tracker: Arc<RwLock<RoundTracker>>,
-        leader_schedule: Arc<LeaderSchedule>,
+        committer: Arc<crate::universal_committer::UniversalCommitter>,
     ) -> Self {
         let last_included_ancestors = vec![None; context.committee.size()];
         Self {
@@ -98,7 +100,7 @@ impl ValidatorProposer {
             ancestor_state_manager,
             round_tracker,
             dag_state,
-            leader_schedule,
+            committer,
         }
     }
 
@@ -137,20 +139,22 @@ impl ValidatorProposer {
             .timestamp_ms()
     }
 
-    fn first_leader(&self, round: Round) -> usize {
-        self.leader_schedule.elect_leader(round, 0).value()
+    fn leaders(&self, round: Round) -> Vec<Slot> {
+        self.committer
+            .get_leaders(round)
+            .into_iter()
+            .map(|authority_index| Slot::new(round, authority_index))
+            .collect()
+    }
+
+    fn first_leader(&self, round: Round) -> consensus_config::AuthorityIndex {
+        self.leaders(round).first().unwrap().authority
     }
 
     fn leaders_exist(&self, round: Round) -> bool {
         let dag_state = self.dag_state.read();
-        let number_of_leaders = self.context
-            .protocol_config
-            .mysticeti_num_leaders_per_round()
-            .unwrap_or(1);
-
-        for offset in 0..number_of_leaders {
-            let leader_index = self.leader_schedule.elect_leader(round, offset as u32);
-            if !dag_state.contains_cached_block_at_slot(leader_index.into()) {
+        for leader in self.leaders(round) {
+            if !dag_state.contains_cached_block_at_slot(leader) {
                 return false;
             }
         }
@@ -378,10 +382,7 @@ impl ValidatorProposer {
 }
 
 impl Proposer for ValidatorProposer {
-    fn try_new_block(
-        &mut self,
-        force: bool,
-    ) -> Option<ExtendedBlock> {
+    fn try_new_block(&mut self, force: bool) -> Option<ExtendedBlock> {
         let _s = self
             .context
             .metrics
@@ -704,13 +705,18 @@ impl Proposer for ValidatorProposer {
         Some(self.dag_state.read().get_last_proposed_block())
     }
 
-    fn set_propagation_scores(&mut self, scores: BTreeMap<consensus_config::AuthorityIndex, u64>) {
+    fn set_propagation_scores(&mut self, scores: crate::leader_scoring::ReputationScores) {
         self.ancestor_state_manager.set_propagation_scores(scores);
     }
 
     fn notify_own_blocks_committed(&self, block_refs: Vec<BlockRef>, gc_round: Round) {
         self.transaction_consumer
             .notify_own_blocks_status(block_refs, gc_round);
+    }
+
+    #[cfg(test)]
+    fn round_tracker_for_tests(&self) -> Option<Arc<RwLock<RoundTracker>>> {
+        Some(self.round_tracker.clone())
     }
 }
 
@@ -724,10 +730,7 @@ impl ObserverProposer {
 }
 
 impl Proposer for ObserverProposer {
-    fn try_new_block(
-        &mut self,
-        _force: bool
-    ) -> Option<ExtendedBlock> {
+    fn try_new_block(&mut self, _force: bool) -> Option<ExtendedBlock> {
         None
     }
 
@@ -751,11 +754,16 @@ impl Proposer for ObserverProposer {
         None
     }
 
-    fn set_propagation_scores(&mut self, _scores: BTreeMap<consensus_config::AuthorityIndex, u64>) {
+    fn set_propagation_scores(&mut self, _scores: crate::leader_scoring::ReputationScores) {
         // No-op for observers
     }
 
     fn notify_own_blocks_committed(&self, _block_refs: Vec<BlockRef>, _gc_round: Round) {
         // No-op for observers
+    }
+
+    #[cfg(test)]
+    fn round_tracker_for_tests(&self) -> Option<Arc<RwLock<RoundTracker>>> {
+        None
     }
 }

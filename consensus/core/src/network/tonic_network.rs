@@ -1429,9 +1429,13 @@ mod tests {
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let metrics = initialise_metrics(Registry::new());
 
+        let authority_index = committee.to_authority_index(0).unwrap();
         let context = Arc::new(Context::new(
             0,
-            committee.to_authority_index(0).unwrap(),
+            crate::authority_node::NodeType::Validator(
+                authority_index,
+                Box::new(keypairs[0].1.clone()),
+            ),
             committee,
             parameters,
             protocol_config,
