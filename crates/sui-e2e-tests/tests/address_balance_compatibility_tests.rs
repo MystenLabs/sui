@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use sui_macros::*;
-use sui_simulator::has_mainnet_protocol_config_override;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, SequenceNumber, SuiAddress},
@@ -14,9 +14,6 @@ use test_cluster::addr_balance_test_env::{TestEnvBuilder, get_sui_accumulator_ob
 
 #[sim_test]
 async fn test_coin_reservation_validation() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -208,9 +205,6 @@ async fn test_coin_reservation_validation() {
 
 #[sim_test]
 async fn test_coin_reservation_gating() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     let mut test_env = TestEnvBuilder::new().build().await;
 
     let sender = test_env.get_sender(0);
@@ -234,9 +228,6 @@ async fn test_coin_reservation_gating() {
 
 #[sim_test]
 async fn test_valid_coin_reservation_transfers() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -282,9 +273,6 @@ async fn test_valid_coin_reservation_transfers() {
 
 #[sim_test]
 async fn test_valid_coin_reservation_gas_payments() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -334,9 +322,6 @@ async fn test_valid_coin_reservation_gas_payments() {
 
 #[sim_test]
 async fn test_gas_coin_callarg_with_coin_reservation_gas() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Tests GasCoin materialization when gas is paid purely via coin reservation.
     // The coin reservation must include both the gas budget AND any amount the
     // transaction wants to use via GasCoin. The materialized GasCoin will have
@@ -418,9 +403,6 @@ async fn test_gas_coin_callarg_with_coin_reservation_gas() {
 
 #[sim_test]
 async fn test_gas_coin_by_ref_with_coin_reservation_gas() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Tests GasCoin materialization when GasCoin is used by reference (not consumed).
     // Uses transfer_sui_to_address_balance which splits from GasCoin and sends to
     // address balance, leaving the GasCoin still alive (not transferred by value).
@@ -483,9 +465,6 @@ async fn test_gas_coin_by_ref_with_coin_reservation_gas() {
 
 #[sim_test]
 async fn test_gas_coin_callarg_with_mixed_gas() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Test that GasCoin arg works when gas is [real, fake].
     // The real coin becomes the smashed gas coin, so GasCoin should work.
 
@@ -563,9 +542,6 @@ async fn test_gas_coin_callarg_with_mixed_gas() {
 
 #[sim_test]
 async fn test_add_money_to_fake_coin() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -603,9 +579,6 @@ async fn test_add_money_to_fake_coin() {
 
 #[sim_test]
 async fn test_split_from_fake_coin() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -640,9 +613,6 @@ async fn test_split_from_fake_coin() {
 
 #[sim_test]
 async fn test_coin_reservation_enforced_when_not_used() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -671,9 +641,6 @@ async fn test_coin_reservation_enforced_when_not_used() {
 
 #[sim_test]
 async fn test_deny_list_enforced_for_coin_reservation() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // See existing deny list tests:
     // - crates/sui-e2e-tests/tests/per_epoch_config_stress_tests.rs (uses deny_list_v2_add/remove)
     // - crates/sui-e2e-tests/tests/rpc/v2/state_service/get_coin_info.rs::test_get_coin_info_regulated_coin
@@ -685,9 +652,6 @@ async fn test_deny_list_enforced_for_coin_reservation() {
 
 #[sim_test]
 async fn test_wrong_chain_id() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -717,9 +681,6 @@ async fn test_wrong_chain_id() {
 
 #[sim_test]
 async fn test_gas_smash_into_fake_coin() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Test gas smashing where the first coin is a fake coin (coin reservation)
     // and the second coin is a real coin. The real coin should be smashed into
     // the address balance.
@@ -779,9 +740,6 @@ async fn test_gas_smash_into_fake_coin() {
 
 #[sim_test]
 async fn test_gas_smash_multiple_fake_coins() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Test gas smashing where the first two coins are fake coins (coin reservations)
     // and the third coin is a real coin. The real coin should be smashed into
     // the address balance.
@@ -843,9 +801,6 @@ async fn test_gas_smash_multiple_fake_coins() {
 
 #[sim_test]
 async fn test_gas_smash_from_fake_coin() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Test gas smashing where the first coin is a real coin and the second coin
     // is a fake coin (coin reservation). The fake coin value should be withdrawn
     // from address balance and smashed into the real coin.
@@ -904,9 +859,6 @@ async fn test_gas_smash_from_fake_coin() {
 
 #[sim_test]
 async fn test_gas_coin_not_owned_by_gas_owner() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Send a transaction using a coin reservation that is not owned by the sender.
     // Verify tx is rejected.
 
@@ -946,9 +898,6 @@ async fn test_gas_coin_not_owned_by_gas_owner() {
 
 #[sim_test]
 async fn test_gas_payment_mix_of_owners() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
@@ -986,9 +935,6 @@ async fn test_gas_payment_mix_of_owners() {
 
 #[sim_test]
 async fn test_coin_reservation_rejected_in_sponsored_transaction() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     use shared_crypto::intent::Intent;
     use sui_keys::keystore::AccountKeystore;
     use sui_types::transaction::{GasData, ProgrammableTransaction, Transaction, TransactionData};
@@ -1059,9 +1005,6 @@ async fn test_coin_reservation_rejected_in_sponsored_transaction() {
 
 #[sim_test]
 async fn test_merge_coin_into_gas_coin_with_coin_reservation() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Tests merging a real coin into the ephemeral GasCoin when gas is paid via
     // coin reservation. The GasCoin starts with (reservation - budget) balance.
     // After merging, the GasCoin should hold the merged coin's value plus whatever

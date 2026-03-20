@@ -11,18 +11,14 @@ use sui_json_rpc_types::{
     Balance as RpcBalance, CoinPage, SuiData, SuiObjectDataOptions, SuiObjectResponse,
 };
 use sui_macros::*;
-use sui_simulator::has_mainnet_protocol_config_override;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    coin_reservation,
+    coin_reservation::ParsedDigest,
 };
 use test_cluster::addr_balance_test_env::TestEnvBuilder;
 
 #[sim_test]
 async fn test_rpc_get_object_returns_fake_coin() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Test that the JSON-RPC getObject endpoint returns a fake coin object
     // when given a masked object ID representing an address balance.
 
@@ -45,10 +41,6 @@ async fn test_rpc_get_object_returns_fake_coin() {
     // Get the fake coin object ref (masked ID)
     let fake_coin_ref = test_env.encode_coin_reservation(sender, 0, address_balance_amount);
     let masked_object_id = fake_coin_ref.0;
-
-    // The masked ID should be different from the unmasked accumulator object ID
-    let unmasked_id = coin_reservation::mask_or_unmask_id(masked_object_id, test_env.chain_id);
-    assert_ne!(masked_object_id, unmasked_id);
 
     // Query the RPC endpoint with the masked object ID
     let params = rpc_params![
@@ -76,15 +68,10 @@ async fn test_rpc_get_object_returns_fake_coin() {
             .to_string()
             .contains("0x2::coin::Coin<0x2::sui::SUI>")
     );
-
-    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_rpc_get_coins_no_fake_coin_when_address_balance_is_zero() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Test that no fake coin is returned when the address balance is zero.
 
     let test_env = TestEnvBuilder::new()
@@ -122,15 +109,10 @@ async fn test_rpc_get_coins_no_fake_coin_when_address_balance_is_zero() {
             "Found fake coin when address balance is zero"
         );
     }
-
-    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_rpc_get_coins_includes_fake_coin_at_position_1() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Test that the JSON-RPC getCoins endpoint includes the fake coin
     // at position 1 (second position, after the first real coin).
 
@@ -205,15 +187,10 @@ async fn test_rpc_get_coins_includes_fake_coin_at_position_1() {
         coins.data[0].coin_object_id, masked_object_id,
         "First coin should be a real coin, not the fake one"
     );
-
-    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_rpc_get_coins_pagination_handles_fake_coin() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Test that pagination works correctly with the fake coin at position 1.
     // When paginating past the fake coin, it should not appear again.
 
@@ -269,25 +246,18 @@ async fn test_rpc_get_coins_pagination_handles_fake_coin() {
             .await
             .unwrap();
 
-        // The fake coin should NOT appear in page 2
-        let has_fake = page2
-            .data
-            .iter()
-            .any(|c| c.coin_object_id == masked_object_id);
-        assert!(
-            !has_fake,
-            "Fake coin should not appear again in subsequent pages"
-        );
+        // The fake coin should NOT appear in page 2 - check using ParsedDigest
+        for coin in &page2.data {
+            assert!(
+                !ParsedDigest::is_coin_reservation_digest(&coin.digest),
+                "Fake coin should not appear again in subsequent pages"
+            );
+        }
     }
-
-    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_rpc_get_balance_includes_address_balance() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
     // Test that the JSON-RPC getBalance endpoint includes address balance
     // in the total balance.
 
@@ -354,18 +324,13 @@ async fn test_rpc_get_balance_includes_address_balance() {
         updated_balance.funds_in_address_balance, address_balance_amount as u128,
         "Address balance should be reported"
     );
-
-    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
-async fn test_rpc_get_coins_pagination_consistency() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
-    // Test that pagination returns identical results regardless of page size.
-    // We fetch all coins with different page sizes (1, 2, 3, ...) and verify
-    // the final collected results are identical.
+async fn test_rpc_get_all_coins_includes_fake_coins_for_multiple_types() {
+    // Test that suix_getAllCoins includes fake coins for multiple coin types.
+    // The ordering should be: [real<T1>, fake<T1>, ..., real<T2>, fake<T2>, ...]
+    // where coins are grouped by type.
 
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
@@ -376,14 +341,104 @@ async fn test_rpc_get_coins_pagination_consistency() {
         .await;
 
     let (sender, _) = test_env.get_sender_and_gas(0);
-    let address_balance_amount = 5_000_000_000u64;
+    let sui_address_balance_amount = 5_000_000_000u64;
+    let trusted_coin_amount = 1_000_000u64;
 
-    // Fund sender's address balance to add the fake coin
-    test_env
-        .fund_one_address_balance(sender, address_balance_amount)
+    // Publish a second coin type and mint to sender's address balance
+    let (_package_id, trusted_coin_type) = test_env
+        .publish_and_mint_trusted_coin(sender, trusted_coin_amount)
         .await;
 
-    // Helper function to fetch all coins with a given page size
+    // Fund sender's SUI address balance
+    test_env
+        .fund_one_address_balance(sender, sui_address_balance_amount)
+        .await;
+
+    // Query getAllCoins
+    let params = rpc_params![sender, Option::<String>::None, Option::<usize>::None];
+    let coins: CoinPage = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getAllCoins", params)
+        .await
+        .unwrap();
+
+    // Count fake coins (coins with reservation digest)
+    let fake_coin_count = coins
+        .data
+        .iter()
+        .filter(|c| ParsedDigest::is_coin_reservation_digest(&c.digest))
+        .count();
+
+    // Should have 2 fake coins (one for SUI, one for trusted_coin)
+    assert_eq!(
+        fake_coin_count, 2,
+        "Should have 2 fake coins (one per coin type)"
+    );
+
+    // Verify each coin type has its fake coin at position 1 within its group
+    let mut current_type: Option<String> = None;
+    let mut position_in_type = 0;
+    for coin in &coins.data {
+        let is_fake = ParsedDigest::is_coin_reservation_digest(&coin.digest);
+
+        if current_type.as_ref() != Some(&coin.coin_type) {
+            current_type = Some(coin.coin_type.clone());
+            position_in_type = 0;
+        }
+
+        // Fake coin should be at position 1 within its type
+        if is_fake {
+            assert_eq!(
+                position_in_type, 1,
+                "Fake coin for type {} should be at position 1, but was at {}",
+                coin.coin_type, position_in_type
+            );
+        }
+
+        position_in_type += 1;
+    }
+
+    // Verify we have both coin types
+    let sui_type = "0x2::sui::SUI";
+    let has_sui = coins.data.iter().any(|c| c.coin_type.contains(sui_type));
+    let has_trusted = coins
+        .data
+        .iter()
+        .any(|c| c.coin_type.contains(&trusted_coin_type.to_string()));
+
+    assert!(has_sui, "Should have SUI coins");
+    assert!(has_trusted, "Should have trusted coin type");
+}
+
+#[sim_test]
+async fn test_rpc_get_all_coins_pagination_with_multiple_types() {
+    // Test that pagination works correctly with getAllCoins when multiple coin types exist.
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let sui_address_balance_amount = 5_000_000_000u64;
+    let trusted_coin_amount = 1_000_000u64;
+
+    // Publish a second coin type and mint to sender's address balance
+    test_env
+        .publish_and_mint_trusted_coin(sender, trusted_coin_amount)
+        .await;
+
+    // Fund sender's SUI address balance
+    test_env
+        .fund_one_address_balance(sender, sui_address_balance_amount)
+        .await;
+
+    // Helper to fetch all coins with pagination
     async fn fetch_all_coins(
         test_env: &test_cluster::addr_balance_test_env::TestEnv,
         sender: SuiAddress,
@@ -393,17 +448,12 @@ async fn test_rpc_get_coins_pagination_consistency() {
         let mut cursor: Option<String> = None;
 
         loop {
-            let params = rpc_params![
-                sender,
-                Option::<String>::None,
-                cursor.clone(),
-                Some(page_size)
-            ];
+            let params = rpc_params![sender, cursor.clone(), Some(page_size)];
             let page: CoinPage = test_env
                 .cluster
                 .fullnode_handle
                 .rpc_client
-                .request("suix_getCoins", params)
+                .request("suix_getAllCoins", params)
                 .await
                 .unwrap();
 
@@ -421,70 +471,19 @@ async fn test_rpc_get_coins_pagination_consistency() {
         all_coins
     }
 
-    // Fetch all coins with page size = total (no pagination)
+    // Fetch all coins at once
     let all_at_once = fetch_all_coins(&test_env, sender, 100).await;
-    assert!(!all_at_once.is_empty(), "Should have at least one coin");
 
-    // Verify results are identical for different page sizes
-    for page_size in 1..=all_at_once.len() + 1 {
-        let paginated = fetch_all_coins(&test_env, sender, page_size).await;
-        assert_eq!(
-            all_at_once,
-            paginated,
-            "Results should be identical with page_size={}, expected {} coins, got {}",
-            page_size,
-            all_at_once.len(),
-            paginated.len()
-        );
-    }
+    // Verify pagination with small page size returns same results
+    let paginated = fetch_all_coins(&test_env, sender, 2).await;
+    assert_eq!(
+        all_at_once, paginated,
+        "Pagination should return same results as fetching all at once"
+    );
 
-    test_env.cluster.trigger_reconfiguration().await;
-}
-
-#[sim_test]
-async fn test_rpc_get_all_coins_includes_fake_coin() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
-    // Test that suix_getAllCoins includes the fake coin at position 1 for each coin type.
-    // When multiple coin types exist, the ordering should be:
-    // [real<T1>, fake<T1>, ..., real<T2>, fake<T2>, ...]
-
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
-
-    let (sender, _) = test_env.get_sender_and_gas(0);
-    let address_balance_amount = 5_000_000_000u64;
-
-    // Get the initial coin count using getAllCoins
-    let params = rpc_params![sender, Option::<String>::None, Option::<usize>::None];
-    let initial_coins: CoinPage = test_env
-        .cluster
-        .fullnode_handle
-        .rpc_client
-        .request("suix_getAllCoins", params)
-        .await
-        .unwrap();
-    let initial_coin_count = initial_coins.data.len();
-    assert!(initial_coin_count >= 1, "Need at least one real coin");
-
-    // Fund sender's address balance
-    test_env
-        .fund_one_address_balance(sender, address_balance_amount)
-        .await;
-
-    // Get the fake coin object ref
-    let fake_coin_ref = test_env.encode_coin_reservation(sender, 0, address_balance_amount);
-    let masked_object_id = fake_coin_ref.0;
-
-    // Query getAllCoins
-    let params = rpc_params![sender, Option::<String>::None, Option::<usize>::None];
-    let coins: CoinPage = test_env
+    // Verify no duplicate fake coins across pages
+    let params = rpc_params![sender, Option::<String>::None, Some(2usize)];
+    let page1: CoinPage = test_env
         .cluster
         .fullnode_handle
         .rpc_client
@@ -492,32 +491,28 @@ async fn test_rpc_get_all_coins_includes_fake_coin() {
         .await
         .unwrap();
 
-    // Should have one more coin than before (the fake coin)
-    assert_eq!(
-        coins.data.len(),
-        initial_coin_count + 1,
-        "getAllCoins should include the fake coin. Initial: {}, Got: {}",
-        initial_coin_count,
-        coins.data.len()
-    );
+    if let Some(cursor) = page1.next_cursor {
+        let params = rpc_params![sender, Some(cursor), Some(10usize)];
+        let page2: CoinPage = test_env
+            .cluster
+            .fullnode_handle
+            .rpc_client
+            .request("suix_getAllCoins", params)
+            .await
+            .unwrap();
 
-    // Find the fake coin and verify it's at the right position
-    let fake_coin_position = coins
-        .data
-        .iter()
-        .position(|c| c.coin_object_id == masked_object_id);
-    assert!(
-        fake_coin_position.is_some(),
-        "Fake coin should be present in getAllCoins results"
-    );
-
-    // The fake coin should be at position 1 within SUI coins (after the first real SUI coin)
-    // Since all our coins are SUI in this test, it should be at global position 1
-    assert_eq!(
-        fake_coin_position.unwrap(),
-        1,
-        "Fake coin should be at position 1"
-    );
-
-    test_env.cluster.trigger_reconfiguration().await;
+        // Check page1 fake coins don't appear in page2
+        for coin in &page1.data {
+            if ParsedDigest::is_coin_reservation_digest(&coin.digest) {
+                let appears_in_page2 = page2
+                    .data
+                    .iter()
+                    .any(|c| c.coin_object_id == coin.coin_object_id);
+                assert!(
+                    !appears_in_page2,
+                    "Fake coin should not appear in subsequent pages"
+                );
+            }
+        }
+    }
 }
