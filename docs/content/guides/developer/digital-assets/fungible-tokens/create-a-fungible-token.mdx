@@ -1,123 +1,59 @@
 ---
 title: "Create Fungible Tokens: Currency Standard"
+draft: true
 description: Learn how to create currencies and mint coins and tokens on the Sui network.
-keywords: [ mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry ]
+keywords: [mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry]
 ---
 
-### Currency creation process
+Assets created using the Currency Standard are free-flowing, [wrappable](/guides/developer/objects/object-ownership/wrapped.mdx), [freely transferable](/guides/developer/objects/transfers/custom-rules.mdx) fungible assets that you can store in any app. The Currency Standard uses the [`sui::coin_registry`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin_registry.md) module and the `Currency` object for metadata.
 
-The registry system supports two currency creation methods:
+The `Currency<T>` type represents open-loop fungible tokens. Currencies are denominated by their type parameter `T`, which is also associated with metadata (like name, symbol, and decimal precision) that applies to all instances of `Currency<T>`. The `sui::coin_registry` module exposes an interface over `Currency<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Currency<T>` is interchangeable with any other unit of `T`, similar to how traditional fiat currencies operate.
 
-1. **Standard creation:** Call `new_currency<T>()` when creating the coin outside of the `init` function of your package.
-1. **One-Time Witness creation:** Use `new_currency_with_otw<T>()` with a One-Time Witness for uniqueness proof.
-
-:::caution
-Proper creation and RPC support **requires** a second transaction to promote the currency to the registry.
-:::
-
-Both methods return a `CurrencyInitializer<T>` that allows configuration before finalization:
-
-<details>
-<summary>
-Regular currency creation
-</summary>
-<ImportContent source="examples/move/coin/sources/non_otw_currency.move" mode="code" />
-</details>
-
-<details>
-<summary>
-One-Time Witness currency creation
-</summary>
-<ImportContent source="examples/move/coin/sources/my_coin_new.move" mode="code" />
-</details>
-
-The initialization process allows for:
-
-- **Supply model selection:** Choose fixed, burn-only, or flexible supply.
-- **Regulatory configuration:** Add deny list capabilities if needed.
-
-:::caution Proper creation and RPC support **requires** a second transaction to promote the currency to the registry.
-
-After initialization of a currency using the One-Time Witness method, you **must** call [`coin_registry::finalize_registration`](/standards/currency.mdx#coin-finalization) to create the shared `Currency` object that the Coin Registry can track.
-
-:::
-
-
-## Fungible tokens: Currency standard
-
-The Currency standard is an example of an open-loop system. It supports free-flowing, [wrappable](/guides/developer/objects/object-ownership/wrapped.mdx), [freely transferable](/guides/developer/objects/transfers/custom-rules.mdx) fungible assets that you can store in any application. It uses the [`sui::coin_registry`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin_registry.md) module and the `Currency` object for metadata. **Currency** refers to the object that is created in Coin Registry, which describes the currency properties and setup.
-
-The `Currency<T>` type represents open-loop fungible tokens (see `Token<T>` for closed-loop tokens). Currencies are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Currency<T>`. The `sui::coin_registry` module exposes an interface over `Currency<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Currency<T>` is interchangeable with any other unit of `T`, much like how traditional fiat currencies operate.
-
-Fungible tokens created using the Currency standard are referred to as **coins**.
-
-You can create coins with the Currency standard using `coin_registry::new_currency` and `coin_registry::new_currency_with_otw`:
-
-- **Standard creation** (`coin_registry::new_currency`): Recommended for most cases. You can call this method any time after the coin type is published.
-
-- **One-Time Witness creation** (`coin_registry::new_currency_with_otw`): Uses a One-Time Witness for uniqueness proof. Requires a two-step publish and finalize process.
-
-### Coin Registry 
+## Coin Registry
 
 The Coin Registry system provides a centralized approach to currency management through the `sui::coin_registry` module. The registry is a shared object located at address `0xc` that stores metadata, supply information, and regulatory status for all registered coin types.
 
-### When to use Currency
+## Creation options
 
-Assets can offer specialized abilities while following the Currency Standard. For example, you can create regulated coins that allow their creator to add specific addresses to a deny list, so that the identified addresses cannot use the coin as inputs to transactions.
+The registry supports two different coin creation flows:
 
-Use the Currency standard if you are:
+- **Standard creation** (`coin_registry::new_currency`): Recommended for most cases. You can call this method any time after the coin type is published.
+- **One-Time Witness creation** (`coin_registry::new_currency_with_otw`): Uses a One-Time Witness for uniqueness proof. Requires a two-step publish and finalize process.
 
-- Creating a new coin and want to use Coin Registry
-- Need advanced supply chain management, such as fixed supply, burn-only supply, or uncontrolled supply
-- Need regulatory tracking such as deny lists
-- Need enhanced integration options with wallets, exchanges, and apps
-- Need future-proofing options and access to ongoing registry improvements
+Both creation methods return a `CurrencyInitializer<T>` that allows for additional configuration:
 
-[Learn more about using Currency](/standards/currency).
+- **Regulated tokens:** Add deny list capabilities to make your token regulated.
+- **Supply model:** Choose between fixed, burn-only, or flexible supply.
+- **Extensions:** Include additional fields for custom functionality.
 
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" struct="CurrencyInitializer" />
 
+## Standard creation (recommended)
 
-There are three main tasks to implement in this project:
+Use the `new_currency` function at any time after the coin type is published. It creates a shared `Currency<T>` object, where type `T` must be a key-only type (`public struct MyCoin has key { id: UID }`):
 
-1. Create Silver Currency
-In silver.move, implement the create_silver_currency function to create a new currency with:
+<ImportContent source="examples/move/coin/sources/non_otw_currency.move" mode="code" fun="new_currency" noComments />
 
-9 decimals
-"Silver" as name
-"SILVER" as symbol
-A description and icon URL
-2. Implement Minting
-In silver.move, implement the minting functionality in the test to:
+Once you call the `finalize` function, currency creation is complete:
 
-Create a coin of specified amount
-Verify the total supply is updated correctly
-3. Implement Burning
-In silver.move, implement the burning functionality in the test to:
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize" signatureOnly />
 
-Burn a previously minted coin
-Verify the total supply is reduced correctly
+## One-Time Witness creation
 
-https://github.com/MystenLabs/sui-move-bootcamp/tree/main/I1
+Proper creation and RPC support requires a second transaction to promote the currency to the registry.
 
+One-Time Witness creation of a new coin is a two-step process. The initialization process begins with package publication:
 
-fixed supply
-1. Initialize Fixed Supply
-In silver.move, implement the init function to:
+<ImportContent source="examples/move/coin/sources/my_coin_new.move" mode="code" fun="init" noComments />
 
-Mint the total supply of 10,000,000,000,000,000,000 coins
-Transfer the coins to the sender
-Lock the treasury cap inside a freezer as a dynamic object field
-Freeze the freezer to prevent further modifications
-2. Burn Upgrade Cap
-In publish.ts, modify the publishPackage function to:
+Then, call `coin_registry::finalize_registration` to place the coin into the registry:
 
-Burn the upgrade cap instead of transferring it
-This ensures the package cannot be upgraded in the future
+```sh
+# Requires the ID of the Currency object created during publishing.
+# This step is only required for OTW-created currencies.
+sui client ptb \
+    --assign @created_currency_object_id currency_to_promote \
+    --move-call 0x2::coin_registry::finalize_registration <CURRENCY_TYPE> @0xc currency_to_promote
+```
 
-https://github.com/MystenLabs/sui-move-bootcamp/tree/main/I2
-
-
-governance controlled 
-
-https://github.com/MystenLabs/sui-move-bootcamp/tree/main/I3
-
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize_registration" signatureOnly />

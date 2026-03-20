@@ -1,0 +1,23 @@
+
+
+fixed supply
+1. Initialize Fixed Supply
+In silver.move, implement the init function to:
+
+Mint the total supply of 10,000,000,000,000,000,000 coins
+Transfer the coins to the sender
+Lock the treasury cap inside a freezer as a dynamic object field
+Freeze the freezer to prevent further modifications
+2. Burn Upgrade Cap
+In publish.ts, modify the publishPackage function to:
+
+Burn the upgrade cap instead of transferring it
+This ensures the package cannot be upgraded in the future
+
+https://github.com/MystenLabs/sui-move-bootcamp/tree/main/I2
+
+
+governance controlled 
+
+https://github.com/MystenLabs/sui-move-bootcamp/tree/main/I3
+

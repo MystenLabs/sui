@@ -1,30 +1,135 @@
 ---
 title: "Create Fungible Tokens: Coin Standard"
+draft: true
 description: Learn how to create currencies and mint coins and tokens on the Sui network.
-keywords: [ mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry ]
+keywords: [mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry]
 ---
 
-## Fungible tokens: Coin standard
+The Coin standard uses the [`sui::coin`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md) module to define fungible assets called coins that have `key` and `store` abilities. Coins support wrapping and public transfer functionality.
 
-The Coin standard defines fungible tokens that have `key + store` abilities. Coin supports wrapping and public transfers. It uses the [`sui::coin`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md) module. Coin refers to a **single object wrapper for a fungible asset**.
+The `Coin<T>` type represents open-loop fungible tokens, denominated by their type parameter `T`, which is also associated with metadata that applies to all instances of `Coin<T>`. The `sui::coin` module exposes an interface over `Coin<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Coin<T>` is interchangeable with any other unit of `T`, similar to how traditional fiat currencies operate.
 
-The `Coin<T>` type represents open-loop fungible tokens. Coins are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Coin<T>`. The `sui::coin` module exposes an interface over `Coin<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Coin<T>` is interchangeable with any other unit of `T`, much like how traditional fiat currencies operate.
+## Use the Coin standard
 
-Fungible tokens created using the Coin standard are referred to as **coins**.
+To create a coin, you must define the metadata, create the currency, and mint the initial supply.
 
-When you create a coin using the `coin::create_currency` function, the publisher of the smart contract that creates the coin receives a `TreasuryCap` object. The Coin standard uses `CoinMetadata` to define the coin's metadata.
+##### Step 1: Define the metadata
 
-### When to use Coin
+Define the metadata for the coin, including its name, description, symbol, icon URL, and decimals:
 
-Use the Coin standard if you are:
+<ImportContent
+	source="I1/silver/sources/silver.move"
+	mode="code"
+	org="MystenLabs"
+	repo="sui-move-bootcamp"
+	lines="11-15"
+/>
 
-- Working with legacy code or maintaining an existing coin that was created with the `sui::coin` module
+This example creates a coin with 9 decimals, the name Silver, a description, the symbol SILVER, and an icon URL for an asset stored on Walrus.
 
-- Creating a coin that does not require advanced supply tracking or regulatory features
+##### Step 2: Create the currency
 
-- Familiar with the `CoinMetadata<T>` object for metadata storage
+Create the coin using the `coin::create_currency` function:
 
-[Learn more about using Coin](/standards/coin).
+<ImportContent
+	source="I1/silver/sources/silver.move"
+	mode="code"
+	org="MystenLabs"
+	repo="sui-move-bootcamp"
+	fun="create_currency"
+/>
 
+##### Step 3: Mint the initial supply
 
-https://github.com/jessiemongeon1/sui/blob/main/examples/move/coin/sources/my_coin.move
+Mint the initial supply of your coin:
+
+<ImportContent
+	source="I1/silver/sources/silver.move"
+	mode="code"
+	org="MystenLabs"
+	repo="sui-move-bootcamp"
+	fun="mint"
+/>
+
+[View the full example](https://github.com/MystenLabs/sui-move-bootcamp/blob/main/I1) or learn more about the [Coin Standard](https://docs.sui.io/standards/coin).
+
+## Managing coins
+
+Sui supports two ways to hold fungible assets: **address balances** and **coin objects**. Address balances are the recommended default for most use cases. Coin objects remain available for scenarios that require explicit object-level control.
+
+## Address balances
+
+Address balances provide a canonical balance for each coin type tied directly to a Sui address. Funds sent through `send_funds` merge automatically into a single balance per coin type, with no object management required.
+
+Key advantages of address balances:
+
+- No coin selection or merging logic needed.
+- Stateless transaction construction without querying object states.
+- Gas payment directly from SUI address balances.
+- Multiple deposits merge automatically.
+
+The TypeScript SDK (v2+) uses address balances by default. When you use `coinWithBalance`, the SDK draws from address balances first and falls back to coin objects only when needed. For gas payment, pass an empty array to `setGasPayment` to pay from your address balance.
+
+See [Address Balances Migration Guide](/concepts/coin-mgt/address-balances.mdx) for the full reference on using address balances, including withdrawal patterns, gas payment, sponsored transactions, and balance queries.
+
+## Coin objects
+
+Coin objects are address-owned objects that represent a specific amount of a given coin type. Before address balances, all funds on Sui were held as coin objects. They remain fully functional and are not deprecated.
+
+Coin objects are useful when you need to:
+
+- Pass a `Coin<T>` or `&mut Coin<T>` directly to a Move function that expects one.
+- Hold funds inside another object (for example, in a shared escrow or liquidity pool).
+- Control the exact set of objects used in a transaction.
+
+Because coin objects are owned objects, they enable highly parallel transaction execution. Each coin is an independent object with its own version, so transactions that touch different coins can execute concurrently without contention.
+
+### Accumulating coin objects
+
+It is common to accumulate many coin objects over time, especially if you receive frequent transfers. Some scenarios require merging coins into a single object. For example, if no single coin holds enough value to cover a transaction, you must merge coins first.
+
+You can convert coin objects into an address balance at any time by calling `coin::send_funds` with your own address as the recipient. See [Converting Existing Coins to Address Balances](/concepts/coin-mgt/address-balances.mdx#converting-existing-coins-to-address-balances) for instructions.
+
+## Gas smashing
+
+When executing a transaction, you can provide multiple coins as gas payment rather than a single coin. This feature, known as gas smashing, automatically merges the provided coins into the first coin in the payment vector. That merged coin, minus the gas budget, is then available inside the transaction for use in any command. If unused, it returns to the sender.
+
+Gas smashing applies only to `Coin<SUI>` objects, because SUI is the only coin type accepted for gas payment.
+
+You can provide as many coins as you want (up to a maximum defined in the protocol configuration). Gas smashing is a useful tool when you need to consolidate SUI coins as part of a transaction.
+
+:::tip
+
+If you use address balance gas payment (by passing an empty gas payment array), you do not need gas smashing. Address balance gas payment removes the need to select or merge gas coins entirely.
+
+:::
+
+See [Gas Smashing](/guides/developer/transactions/gas-smashing.mdx) for more details.
+
+## Non-SUI coin types
+
+Address balances work for any coin type, not just SUI. You can send and withdraw non-SUI coins through `send_funds` and `redeem_funds` the same way you do with SUI.
+
+Many existing Move contracts still accept `Coin<T>` as a function argument. If you hold funds as an address balance and need to call such a contract, withdraw from your address balance and redeem to a `Coin<T>` within your programmable transaction block (PTB). The `coinWithBalance` intent in the TypeScript SDK handles this automatically.
+
+For explicit coin manipulation within a PTB, use the `mergeCoins` command to combine multiple coin objects into one, and `splitCoins` to break a coin into smaller pieces. These operations are inexpensive but require you to know your coin distribution and transaction needs.
+
+## Concurrency
+
+Address balances significantly reduce concurrency challenges for most use cases. Because address balance gas payments do not require owned object inputs, you can build and sign multiple transactions without worrying about object version conflicts or locking.
+
+### When concurrency still matters
+
+If your transactions use coin objects (or any other owned objects) as inputs, the original concurrency constraints apply. Each owned object has a version, and the system locks it when you sign a transaction. This lock prevents using the same object in another transaction until the first one executes. Attempting to sign multiple transactions with the same owned object can result in equivocation, which makes the object unusable until the end of the epoch.
+
+When you require heavy concurrency with coin objects, split a coin into as many coins as the number of transactions you plan to execute concurrently. Alternatively, provide different coins (through gas smashing) to each transaction. The set of coins used across concurrent transactions must have no overlap.
+
+:::info
+
+Concurrency in transaction execution is not the only performance consideration. Discovering and fetching objects, and dry running transactions, each require round trips to a full node. These round trips can affect performance significantly in high-throughput scenarios.
+
+:::
+
+### Recommended approach
+
+For most applications, use address balances for gas payment and fund transfers. Reserve coin object management for cases where a Move contract requires a `Coin<T>` argument or where you need explicit control over owned objects. This approach minimizes concurrency issues and simplifies transaction construction.
