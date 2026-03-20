@@ -361,6 +361,7 @@ const guides = [
       'guides/developer/app-examples/e2e-counter',
       'guides/developer/app-examples/client-tssdk',
       'guides/developer/app-examples/trustless-swap',
+	  'guides/developer/app-examples/trustless-swap-frontend',
       'guides/developer/app-examples/coin-flip',
       'guides/developer/app-examples/reviews-rating',
       'guides/developer/app-examples/blackjack',
