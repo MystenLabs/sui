@@ -448,6 +448,10 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
                 )
             }
             TypeTag::Signer => unreachable!("Signer arguments not allowed"),
+            TypeTag::I8 | TypeTag::I16 | TypeTag::I32 | TypeTag::I64 | TypeTag::I128
+            | TypeTag::I256 => {
+                unreachable!("Signed integer arguments not yet supported in unit tests")
+            }
         }
     }
 

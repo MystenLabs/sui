@@ -1302,6 +1302,12 @@ impl Disassembler<'_> {
             SignatureToken::U64 => any_write!(buffer, "u64").map(|_| ()),
             SignatureToken::U128 => any_write!(buffer, "u128").map(|_| ()),
             SignatureToken::U256 => any_write!(buffer, "u256").map(|_| ()),
+            SignatureToken::I8 => any_write!(buffer, "i8").map(|_| ()),
+            SignatureToken::I16 => any_write!(buffer, "i16").map(|_| ()),
+            SignatureToken::I32 => any_write!(buffer, "i32").map(|_| ()),
+            SignatureToken::I64 => any_write!(buffer, "i64").map(|_| ()),
+            SignatureToken::I128 => any_write!(buffer, "i128").map(|_| ()),
+            SignatureToken::I256 => any_write!(buffer, "i256").map(|_| ()),
             SignatureToken::Address => any_write!(buffer, "address").map(|_| ()),
             SignatureToken::Signer => any_write!(buffer, "signer").map(|_| ()),
             SignatureToken::Datatype(struct_handle_idx) => any_write!(

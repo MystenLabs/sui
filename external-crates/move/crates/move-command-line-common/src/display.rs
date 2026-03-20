@@ -52,7 +52,13 @@ pub fn try_render_constant(constant: &Constant) -> RenderResult {
             .map(|x| x.to_string())
             .map_or(RenderResult::NotRendered, RenderResult::AsValue),
 
-        SignatureToken::Signer
+        SignatureToken::I8
+        | SignatureToken::I16
+        | SignatureToken::I32
+        | SignatureToken::I64
+        | SignatureToken::I128
+        | SignatureToken::I256
+        | SignatureToken::Signer
         | SignatureToken::Vector(_)
         | SignatureToken::Datatype(_)
         | SignatureToken::DatatypeInstantiation(_)
