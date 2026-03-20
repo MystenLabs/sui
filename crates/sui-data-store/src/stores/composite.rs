@@ -3,18 +3,20 @@
 
 //! Composite store skeleton.
 
-use crate::{
-    CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
-    FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, StoreSummary, TransactionInfo,
-    TransactionStore, TransactionStoreWriter,
-};
-use anyhow::{Error, Result};
 use std::io::Write;
+
+use anyhow::{Error, Result};
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Object,
     supported_protocol_versions::ProtocolConfig,
+};
+
+use crate::{
+    CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
+    FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, StoreSummary, TransactionInfo,
+    TransactionStore, TransactionStoreWriter,
 };
 
 /// A router that delegates each capability to a dedicated backing chain.
