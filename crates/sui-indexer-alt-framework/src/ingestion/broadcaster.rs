@@ -380,11 +380,16 @@ async fn stream_and_broadcast_range(
                 checkpoint = sequence_number,
                 lo, "Skipping already processed checkpoint"
             );
+            metrics.total_skipped_streamed_checkpoints.inc();
+            metrics
+                .latest_skipped_streamed_checkpoint
+                .set(sequence_number as i64);
             continue;
         }
 
         if sequence_number > lo {
             warn!(checkpoint = sequence_number, lo, "Out-of-order checkpoint");
+            metrics.total_out_of_order_streamed_checkpoints.inc();
             // Return to main loop to fill up the gap.
             break;
         }
@@ -968,6 +973,8 @@ mod tests {
         assert_eq!(metrics.total_streamed_checkpoints.get(), 70);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
         assert_eq!(metrics.latest_streamed_checkpoint.get(), 99);
+        assert_eq!(metrics.total_skipped_streamed_checkpoints.get(), 30);
+        assert_eq!(metrics.latest_skipped_streamed_checkpoint.get(), 29);
 
         svc.join().await.unwrap();
     }
@@ -1007,6 +1014,8 @@ mod tests {
         assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
         assert_eq!(metrics.latest_streamed_checkpoint.get(), 19);
+        assert_eq!(metrics.total_skipped_streamed_checkpoints.get(), 2);
+        assert_eq!(metrics.latest_skipped_streamed_checkpoint.get(), 4);
 
         svc.join().await.unwrap();
     }
@@ -1047,6 +1056,7 @@ mod tests {
         assert_eq!(metrics.total_streamed_checkpoints.get(), 6);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 4);
         assert_eq!(metrics.latest_streamed_checkpoint.get(), 9);
+        assert_eq!(metrics.total_out_of_order_streamed_checkpoints.get(), 1);
 
         svc.join().await.unwrap();
     }
