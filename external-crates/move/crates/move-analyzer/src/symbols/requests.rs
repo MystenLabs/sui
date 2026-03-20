@@ -37,13 +37,9 @@ pub fn on_go_to_def_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<GotoDefinitionParams>(request.params.clone())
         .expect("could not deserialize go-to-def request");
 
-    let fpath = canonical_path_from_uri(
-        &parameters
-            .text_document_position_params
-            .text_document
-            .uri,
-    )
-    .unwrap();
+    let fpath =
+        canonical_path_from_uri(&parameters.text_document_position_params.text_document.uri)
+            .unwrap();
     let loc = parameters.text_document_position_params.position;
     let line = loc.line;
     let col = loc.character;
@@ -68,13 +64,9 @@ pub fn on_go_to_type_def_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<GotoTypeDefinitionParams>(request.params.clone())
         .expect("could not deserialize go-to-type-def request");
 
-    let fpath = canonical_path_from_uri(
-        &parameters
-            .text_document_position_params
-            .text_document
-            .uri,
-    )
-    .unwrap();
+    let fpath =
+        canonical_path_from_uri(&parameters.text_document_position_params.text_document.uri)
+            .unwrap();
     let loc = parameters.text_document_position_params.position;
     let line = loc.line;
     let col = loc.character;
@@ -156,13 +148,9 @@ pub fn on_hover_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<HoverParams>(request.params.clone())
         .expect("could not deserialize hover request");
 
-    let fpath = canonical_path_from_uri(
-        &parameters
-            .text_document_position_params
-            .text_document
-            .uri,
-    )
-    .unwrap();
+    let fpath =
+        canonical_path_from_uri(&parameters.text_document_position_params.text_document.uri)
+            .unwrap();
     let loc = parameters.text_document_position_params.position;
     let line = loc.line;
     let col = loc.character;
