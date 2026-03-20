@@ -503,6 +503,9 @@ pub enum Error {
 
     #[error("no layout available for value")]
     NoValueLayout,
+
+    #[error("signed integer layouts are not yet supported in visitor")]
+    UnsupportedSignedIntLayout,
 }
 
 /// The null traversal implements `Traversal` and `Visitor` but without doing anything (does not
@@ -889,6 +892,10 @@ pub(crate) fn visit_value<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
         L::Signer => {
             let v = AccountAddress::new(driver.read_exact()?);
             visitor.visit_signer(&driver, v)
+        }
+
+        L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => {
+            Err(Error::UnsupportedSignedIntLayout.into())
         }
 
         L::Vector(l) => visit_vector(driver, l.as_ref(), visitor),

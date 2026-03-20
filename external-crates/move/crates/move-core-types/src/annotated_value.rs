@@ -6,6 +6,7 @@ use crate::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
     annotated_visitor::{Error as VError, ValueDriver, Visitor, visit_struct, visit_value},
+    i256,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value::{self as R, MOVE_STRUCT_FIELDS, MOVE_STRUCT_TYPE},
@@ -71,6 +72,13 @@ pub enum MoveValue {
     U32(u32),
     U256(u256::U256),
     Variant(MoveVariant),
+    // NOTE: Added for signed integers, do not reorder!
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    I256(i256::I256),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -141,6 +149,19 @@ pub enum MoveTypeLayout {
     U256,
     #[serde(rename(serialize = "enum", deserialize = "enum"))]
     Enum(Box<MoveEnumLayout>),
+    // NOTE: Added for signed integers, do not reorder!
+    #[serde(rename(serialize = "i8", deserialize = "i8"))]
+    I8,
+    #[serde(rename(serialize = "i16", deserialize = "i16"))]
+    I16,
+    #[serde(rename(serialize = "i32", deserialize = "i32"))]
+    I32,
+    #[serde(rename(serialize = "i64", deserialize = "i64"))]
+    I64,
+    #[serde(rename(serialize = "i128", deserialize = "i128"))]
+    I128,
+    #[serde(rename(serialize = "i256", deserialize = "i256"))]
+    I256,
 }
 
 impl MoveStructLayout {
@@ -171,6 +192,12 @@ impl MoveTypeLayout {
             L::U64 => matches!(type_, T::U64),
             L::U128 => matches!(type_, T::U128),
             L::U256 => matches!(type_, T::U256),
+            L::I8 => matches!(type_, T::I8),
+            L::I16 => matches!(type_, T::I16),
+            L::I32 => matches!(type_, T::I32),
+            L::I64 => matches!(type_, T::I64),
+            L::I128 => matches!(type_, T::I128),
+            L::I256 => matches!(type_, T::I256),
             L::Address => matches!(type_, T::Address),
             L::Signer => matches!(type_, T::Signer),
             L::Vector(l) => matches!(type_, T::Vector(t) if l.is_type(t)),
@@ -244,6 +271,12 @@ impl MoveValue {
             MoveValue::U16(u) => R::MoveValue::U16(u),
             MoveValue::U32(u) => R::MoveValue::U32(u),
             MoveValue::U256(u) => R::MoveValue::U256(u),
+            MoveValue::I8(i) => R::MoveValue::I8(i),
+            MoveValue::I16(i) => R::MoveValue::I16(i),
+            MoveValue::I32(i) => R::MoveValue::I32(i),
+            MoveValue::I64(i) => R::MoveValue::I64(i),
+            MoveValue::I128(i) => R::MoveValue::I128(i),
+            MoveValue::I256(i) => R::MoveValue::I256(i),
         }
     }
 }
@@ -365,6 +398,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
             MoveTypeLayout::U64 => u64::deserialize(deserializer).map(MoveValue::U64),
             MoveTypeLayout::U128 => u128::deserialize(deserializer).map(MoveValue::U128),
             MoveTypeLayout::U256 => u256::U256::deserialize(deserializer).map(MoveValue::U256),
+            MoveTypeLayout::I8 => i8::deserialize(deserializer).map(MoveValue::I8),
+            MoveTypeLayout::I16 => i16::deserialize(deserializer).map(MoveValue::I16),
+            MoveTypeLayout::I32 => i32::deserialize(deserializer).map(MoveValue::I32),
+            MoveTypeLayout::I64 => i64::deserialize(deserializer).map(MoveValue::I64),
+            MoveTypeLayout::I128 => i128::deserialize(deserializer).map(MoveValue::I128),
+            MoveTypeLayout::I256 => i256::I256::deserialize(deserializer).map(MoveValue::I256),
             MoveTypeLayout::Address => {
                 AccountAddress::deserialize(deserializer).map(MoveValue::Address)
             }
@@ -534,6 +573,12 @@ impl serde::Serialize for MoveValue {
             MoveValue::U64(i) => serializer.serialize_u64(*i),
             MoveValue::U128(i) => serializer.serialize_u128(*i),
             MoveValue::U256(i) => i.serialize(serializer),
+            MoveValue::I8(i) => serializer.serialize_i8(*i),
+            MoveValue::I16(i) => serializer.serialize_i16(*i),
+            MoveValue::I32(i) => serializer.serialize_i32(*i),
+            MoveValue::I64(i) => serializer.serialize_i64(*i),
+            MoveValue::I128(i) => serializer.serialize_i128(*i),
+            MoveValue::I256(i) => i.serialize(serializer),
             MoveValue::Address(a) => a.serialize(serializer),
             MoveValue::Signer(a) => a.serialize(serializer),
             MoveValue::Vector(v) => {
@@ -598,6 +643,12 @@ impl fmt::Display for MoveTypeLayout {
             U64 => write!(f, "u64"),
             U128 => write!(f, "u128"),
             U256 => write!(f, "u256"),
+            I8 => write!(f, "i8"),
+            I16 => write!(f, "i16"),
+            I32 => write!(f, "i32"),
+            I64 => write!(f, "i64"),
+            I128 => write!(f, "i128"),
+            I256 => write!(f, "i256"),
             Address => write!(f, "address"),
             Signer => write!(f, "signer"),
             Vector(typ) if f.alternate() => write!(f, "vector<{typ:#}>"),
@@ -673,6 +724,12 @@ impl From<&MoveTypeLayout> for TypeTag {
             MoveTypeLayout::U64 => TypeTag::U64,
             MoveTypeLayout::U128 => TypeTag::U128,
             MoveTypeLayout::U256 => TypeTag::U256,
+            MoveTypeLayout::I8 => TypeTag::I8,
+            MoveTypeLayout::I16 => TypeTag::I16,
+            MoveTypeLayout::I32 => TypeTag::I32,
+            MoveTypeLayout::I64 => TypeTag::I64,
+            MoveTypeLayout::I128 => TypeTag::I128,
+            MoveTypeLayout::I256 => TypeTag::I256,
             MoveTypeLayout::Signer => TypeTag::Signer,
             MoveTypeLayout::Vector(v) => {
                 let inner_type = &**v;
@@ -705,6 +762,12 @@ impl fmt::Display for MoveValue {
             MoveValue::U64(u) => write!(f, "{}u64", u),
             MoveValue::U128(u) => write!(f, "{}u128", u),
             MoveValue::U256(u) => write!(f, "{}u256", u),
+            MoveValue::I8(i) => write!(f, "{}i8", i),
+            MoveValue::I16(i) => write!(f, "{}i16", i),
+            MoveValue::I32(i) => write!(f, "{}i32", i),
+            MoveValue::I64(i) => write!(f, "{}i64", i),
+            MoveValue::I128(i) => write!(f, "{}i128", i),
+            MoveValue::I256(i) => write!(f, "{}i256", i),
             MoveValue::Bool(false) => write!(f, "false"),
             MoveValue::Bool(true) => write!(f, "true"),
             MoveValue::Address(a) => write!(f, "{}", a.to_hex_literal()),
