@@ -576,10 +576,10 @@ impl StateRead for AuthorityState {
 
             // After first real coin of a type, emit its fake coin (if not already emitted).
             if is_first_real && !fake_emitted.get(coin_type).copied().unwrap_or(false) {
-                if let Some(fake) = fake_coins.get(coin_type) {
-                    if result.len() < limit {
-                        result.push(fake.clone());
-                    }
+                if let Some(fake) = fake_coins.get(coin_type)
+                    && result.len() < limit
+                {
+                    result.push(fake.clone());
                 }
                 fake_emitted.insert(coin_type.clone(), true);
             }
