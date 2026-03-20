@@ -5,10 +5,13 @@
 //! for coordinating the symbolication process between different threads
 //! in the analyzer.
 
-use crate::symbols::{
-    Symbols,
-    compilation::{CachedPackages, MANIFEST_FILE_NAME},
-    get_symbols,
+use crate::{
+    symbols::{
+        Symbols,
+        compilation::{CachedPackages, MANIFEST_FILE_NAME},
+        get_symbols,
+    },
+    utils::canonicalize_path,
 };
 
 use anyhow::{Result, anyhow};
@@ -248,10 +251,7 @@ impl SymbolicatorRunner {
             let current_path = current_path_opt.unwrap();
             let manifest_path = current_path.join(MANIFEST_FILE_NAME);
             if manifest_path.is_file() {
-                return Some(
-                    dunce::canonicalize(current_path)
-                        .unwrap_or_else(|_| current_path.to_path_buf()),
-                );
+                return Some(canonicalize_path(current_path.to_path_buf()));
             }
             current_path_opt = current_path.parent();
         }

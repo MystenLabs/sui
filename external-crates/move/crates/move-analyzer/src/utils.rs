@@ -83,7 +83,7 @@ pub fn lsp_position_to_loc(
 /// `to_file_path()` result if canonicalization fails (e.g., file not yet on disk).
 pub fn canonical_path_from_uri(uri: &Url) -> Option<PathBuf> {
     let path = uri.to_file_path().ok()?;
-    Some(dunce::canonicalize(&path).unwrap_or(path))
+    Some(canonicalize_path(path))
 }
 
 /// Canonicalize a PathBuf, falling back to the original if canonicalization fails.
