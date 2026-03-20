@@ -464,7 +464,11 @@ impl TestEnv {
         // extract the newly published package id.
         let package_id = effects.published_packages().into_iter().next().unwrap();
 
-        // call trusted_coin::mint to mint coins
+        let coin_type: TypeTag = format!("{}::trusted_coin::TRUSTED_COIN", package_id)
+            .parse()
+            .unwrap();
+
+        // Mint coin for address balance
         let test_tx_builder = self.tx_builder(sender);
         let mint_tx = test_tx_builder
             .move_call(
@@ -479,7 +483,6 @@ impl TestEnv {
             .build();
         let (_, mint_effects) = self.exec_tx_directly(mint_tx).await.unwrap();
 
-        // the trusted coin is the only address-owned object created.
         let trusted_coin_ref = mint_effects
             .created()
             .iter()
@@ -487,11 +490,15 @@ impl TestEnv {
             .unwrap()
             .0;
 
-        let coin_type: TypeTag = format!("{}::trusted_coin::TRUSTED_COIN", package_id)
-            .parse()
+        // Get updated treasury cap ref
+        let treasury_cap = mint_effects
+            .mutated()
+            .iter()
+            .map(|(obj_ref, _)| *obj_ref)
+            .find(|obj_ref| obj_ref.0 == treasury_cap.0)
             .unwrap();
 
-        // Transfer the coins to the sender's address balance
+        // Transfer the coin to address balance
         let send_tx = self
             .tx_builder(sender)
             .transfer_funds_to_address_balance(
@@ -505,6 +512,26 @@ impl TestEnv {
             send_effects.status().is_ok(),
             "Transaction should succeed, got: {:?}",
             send_effects.status()
+        );
+
+        // Mint a second coin to keep as a real coin (not transferred to address balance)
+        let test_tx_builder = self.tx_builder(sender);
+        let mint_tx = test_tx_builder
+            .move_call(
+                package_id,
+                "trusted_coin",
+                "mint",
+                vec![
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap)),
+                    CallArg::Pure(bcs::to_bytes(&amount).unwrap()),
+                ],
+            )
+            .build();
+        let (_, mint_effects) = self.exec_tx_directly(mint_tx).await.unwrap();
+        assert!(
+            mint_effects.status().is_ok(),
+            "Second mint should succeed, got: {:?}",
+            mint_effects.status()
         );
 
         (package_id, coin_type)
