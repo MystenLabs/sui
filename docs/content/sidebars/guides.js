@@ -346,7 +346,7 @@ const guides = [
       'guides/developer/nautilus/nautilus-design',
       'guides/developer/nautilus/using-nautilus',
       'guides/developer/nautilus/customize-nautilus',
-      'guides/developer/nautilus/marlin',
+      'guides/developer/nautilus/community-dev-tools',
       'guides/developer/nautilus/seal',
     ],
   },
