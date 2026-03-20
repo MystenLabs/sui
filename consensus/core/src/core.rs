@@ -38,7 +38,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     leader_schedule::LeaderSchedule,
-    proposer::{ObserverProposer, Proposer, ValidatorProposer},
+    proposer::{Proposer, ValidatorProposer},
     round_tracker::RoundTracker,
     transaction::TransactionConsumer,
     transaction_certifier::TransactionCertifier,
@@ -71,9 +71,9 @@ pub(crate) struct Core {
     signals: CoreSignals,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
     dag_state: Arc<RwLock<DagState>>,
-    /// Block proposal engine that differs between Validator and Observer nodes.
-    /// Validators propose blocks while Observers do not.
-    proposer: Box<dyn Proposer>,
+    /// Block proposal engine for Validator nodes only.
+    /// Validators have a proposer to create blocks, Observers have None (they only receive blocks).
+    proposer: Option<Box<dyn Proposer>>,
 }
 
 impl Core {
@@ -107,7 +107,10 @@ impl Core {
             .build(),
         );
 
-        let last_proposed_block = dag_state.read().get_last_proposed_block();
+        let last_proposed_block = dag_state
+            .read()
+            .get_last_proposed_block()
+            .expect("A block should have been returned");
         let last_signaled_round = last_proposed_block.round();
 
         // Recover the last included ancestor rounds based on the last proposed block
@@ -139,7 +142,7 @@ impl Core {
         };
 
         // Create the ValidatorProposer
-        let proposer = Box::new(ValidatorProposer::new(
+        let proposer = Some(Box::new(ValidatorProposer::new(
             dag_state.clone(),
             context.clone(),
             transaction_consumer,
@@ -149,7 +152,7 @@ impl Core {
             ancestor_state_manager,
             round_tracker.clone(),
             committer.clone(),
-        ));
+        )) as Box<dyn Proposer>);
 
         Self {
             context,
@@ -194,9 +197,6 @@ impl Core {
         // For the Observer nodes let's consider the last signaled round as the latest threshold clock round.
         let last_signaled_round = dag_state.read().threshold_clock_round();
 
-        // Create the ObserverProposer (no-op implementation)
-        let proposer = Box::new(ObserverProposer::new());
-
         Self {
             context,
             last_signaled_round,
@@ -207,7 +207,7 @@ impl Core {
             commit_observer,
             signals,
             dag_state,
-            proposer,
+            proposer: None,
         }
         .recover_observer()
     }
@@ -243,12 +243,13 @@ impl Core {
         {
             last_proposed_block
         } else {
-            let last_proposed_block = self
+            let proposer = self
                 .proposer
-                .last_proposed_block()
-                .unwrap_or_else(|| self.dag_state.read().get_last_proposed_block());
+                .as_ref()
+                .expect("Validator must have proposer");
+            let last_proposed_block = proposer.last_proposed_block();
 
-            if self.proposer.should_propose() {
+            if proposer.should_propose() {
                 assert!(
                     last_proposed_block.round() > GENESIS_ROUND,
                     "At minimum a block of round higher than genesis should have been produced during recovery"
@@ -462,7 +463,9 @@ impl Core {
         force: bool,
     ) -> ConsensusResult<Option<VerifiedBlock>> {
         let _scope = monitored_scope("Core::new_block");
-        if self.last_proposed_round().unwrap_or(0) < round {
+        if let Some(last_round) = self.last_proposed_round()
+            && last_round < round
+        {
             self.context
                 .metrics
                 .node_metrics
@@ -519,7 +522,9 @@ impl Core {
     // When force is true, ignore if leader from the last round exists among ancestors and if
     // the minimum round delay has passed.
     fn try_propose(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
-        if let Some(extended_block) = self.proposer.try_new_block(force) {
+        if let Some(proposer) = &mut self.proposer
+            && let Some(extended_block) = proposer.try_new_block(force)
+        {
             self.signals.new_block(extended_block.clone())?;
 
             fail_point!("consensus-after-propose");
@@ -587,7 +592,9 @@ impl Core {
                     .read()
                     .reputation_scores
                     .clone();
-                self.proposer.set_propagation_scores(propagation_scores);
+                if let Some(proposer) = &mut self.proposer {
+                    proposer.set_propagation_scores(propagation_scores);
+                }
 
                 commits_until_update = self
                     .leader_schedule
@@ -696,8 +703,12 @@ impl Core {
                 (block.author() == self.context.own_index).then_some(block.reference())
             })
             .collect::<Vec<_>>();
-        self.proposer
-            .notify_own_blocks_committed(committed_block_refs, self.dag_state.read().gc_round());
+        if let Some(proposer) = &self.proposer {
+            proposer.notify_own_blocks_committed(
+                committed_block_refs,
+                self.dag_state.read().gc_round(),
+            );
+        }
 
         Ok(committed_sub_dags)
     }
@@ -710,30 +721,38 @@ impl Core {
     /// Sets the delay by round for propagating blocks to a quorum.
     pub(crate) fn set_propagation_delay(&mut self, delay: Round) {
         info!("Propagation round delay set to: {delay}");
-        self.proposer.set_propagation_delay(delay);
+        if let Some(proposer) = &mut self.proposer {
+            proposer.set_propagation_delay(delay);
+        }
     }
 
     /// Sets the min propose round for the proposer allowing to propose blocks only for round numbers
     /// `> last_known_proposed_round`. At the moment is allowed to call the method only once leading to a panic
     /// if attempt to do multiple times.
     pub(crate) fn set_last_known_proposed_round(&mut self, round: Round) {
-        if self.proposer.get_last_known_proposed_round().is_some() {
-            panic!(
-                "Should not attempt to set the last known proposed round if that has been already set"
-            );
+        if let Some(proposer) = &mut self.proposer {
+            if proposer.get_last_known_proposed_round().is_some() {
+                panic!(
+                    "Should not attempt to set the last known proposed round if that has been already set"
+                );
+            }
+            proposer.set_last_known_proposed_round(round);
+            info!("Last known proposed round set to {round}");
         }
-        self.proposer.set_last_known_proposed_round(round);
-        info!("Last known proposed round set to {round}");
     }
 
     /// Returns true if the node should propose blocks.
+    /// Observers always return false since they don't have a proposer.
     pub(crate) fn should_propose(&self) -> bool {
-        self.proposer.should_propose()
+        self.proposer
+            .as_ref()
+            .map(|p| p.should_propose())
+            .unwrap_or(false)
     }
 
-    /// Returns the last proposed round, if any.
+    /// Returns the last proposed round, or None if this is an observer node.
     pub(crate) fn last_proposed_round(&self) -> Option<Round> {
-        self.proposer.last_proposed_round()
+        self.proposer.as_ref().map(|p| p.last_proposed_round())
     }
 
     // Tries to select a prefix of certified commits to be committed next respecting the `limit`.
@@ -780,14 +799,22 @@ impl Core {
     }
 
     /// Helper method for tests to get the last proposed block from the proposer.
-    pub(crate) fn last_proposed_block(&self) -> Option<VerifiedBlock> {
-        self.proposer.last_proposed_block()
+    #[cfg(test)]
+    pub(crate) fn last_proposed_block(&self) -> VerifiedBlock {
+        self.proposer
+            .as_ref()
+            .expect("Proposer should be present")
+            .last_proposed_block()
     }
 
     /// Helper method for tests to get the round tracker from the proposer.
+    /// Returns None if this is an observer node.
     #[cfg(test)]
-    pub(crate) fn round_tracker_for_tests(&self) -> Option<Arc<RwLock<RoundTracker>>> {
-        self.proposer.round_tracker_for_tests()
+    pub(crate) fn round_tracker_for_tests(&self) -> Arc<RwLock<RoundTracker>> {
+        self.proposer
+            .as_ref()
+            .expect("Proposer should be present")
+            .round_tracker_for_tests()
     }
 }
 
@@ -1472,7 +1499,7 @@ mod test {
         _ = core.add_blocks(vec![block_1]);
 
         assert_eq!(core.last_proposed_round(), Some(1));
-        expected_ancestors.insert(core.last_proposed_block().unwrap().reference());
+        expected_ancestors.insert(core.last_proposed_block().reference());
         // attempt to create a block - none will be produced.
         assert!(core.try_propose(false).unwrap().is_none());
 
@@ -1487,7 +1514,7 @@ mod test {
 
         assert_eq!(core.last_proposed_round(), Some(2));
 
-        let proposed_block = core.last_proposed_block().unwrap();
+        let proposed_block = core.last_proposed_block();
         assert_eq!(proposed_block.round(), 2);
         assert_eq!(proposed_block.author(), context.own_index);
         assert_eq!(proposed_block.ancestors().len(), 3);
@@ -1907,23 +1934,20 @@ mod test {
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
 
-        core.round_tracker_for_tests()
-            .unwrap()
-            .write()
-            .update_from_probe(
-                vec![
-                    vec![10, 10, 10, 10],
-                    vec![10, 10, 10, 10],
-                    vec![10, 10, 10, 10],
-                    vec![10, 10, 10, 10],
-                ],
-                vec![
-                    vec![10, 10, 10, 10],
-                    vec![10, 10, 10, 10],
-                    vec![10, 10, 10, 10],
-                    vec![10, 10, 10, 10],
-                ],
-            );
+        core.round_tracker_for_tests().write().update_from_probe(
+            vec![
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+            ],
+            vec![
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+                vec![10, 10, 10, 10],
+            ],
+        );
 
         // Try to propose - no block should be produced.
         assert!(core.try_propose(true).unwrap().is_none());
@@ -2001,7 +2025,7 @@ mod test {
 
                 assert_eq!(core_fixture.core.last_proposed_round(), Some(round));
 
-                this_round_blocks.push(core_fixture.core.last_proposed_block().unwrap().clone());
+                this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
             }
 
             last_round_blocks = this_round_blocks;
@@ -2087,7 +2111,6 @@ mod test {
                 core_fixture
                     .core
                     .round_tracker_for_tests()
-                    .unwrap()
                     .write()
                     .update_from_probe(
                         vec![
@@ -2123,7 +2146,7 @@ mod test {
 
                 assert_eq!(core_fixture.core.last_proposed_round(), Some(round));
 
-                this_round_blocks.push(core_fixture.core.last_proposed_block().unwrap().clone());
+                this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
             }
 
             last_round_blocks = this_round_blocks;
@@ -2143,7 +2166,6 @@ mod test {
                 core_fixture
                     .core
                     .round_tracker_for_tests()
-                    .unwrap()
                     .write()
                     .update_from_probe(
                         vec![
@@ -2177,7 +2199,7 @@ mod test {
                     }
                 }
 
-                this_round_blocks.push(core_fixture.core.last_proposed_block().unwrap().clone());
+                this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
 
                 for block in this_round_blocks.iter() {
                     if block.author() != AuthorityIndex::new_for_test(4) {
@@ -2349,7 +2371,7 @@ mod test {
         transaction_certifier
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().unwrap().round(), 15);
+        assert_eq!(core.last_proposed_block().round(), 15);
 
         builder
             .layer(15)
@@ -2369,7 +2391,7 @@ mod test {
             .filter(|block| block.round() == 15)
             .map(|block| block.reference())
             .collect();
-        let included_block_references = iter::once(core.last_proposed_block().as_ref().unwrap())
+        let included_block_references = iter::once(&core.last_proposed_block())
             .chain(blocks.iter())
             .filter(|block| block.author() != AuthorityIndex::new_for_test(1))
             .map(|block| block.reference())
@@ -2379,7 +2401,7 @@ mod test {
         transaction_certifier
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().unwrap().round(), 16);
+        assert_eq!(core.last_proposed_block().round(), 16);
 
         // Check that a new block has been proposed & signaled.
         let extended_block = loop {
@@ -2423,7 +2445,7 @@ mod test {
         transaction_certifier
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().unwrap().round(), 16);
+        assert_eq!(core.last_proposed_block().round(), 16);
 
         // Simulate a leader timeout and a force proposal where we will include
         // one EXCLUDE ancestor when we go to select ancestors for the next proposal
@@ -2476,7 +2498,7 @@ mod test {
             ],
         );
 
-        let included_block_references = iter::once(core.last_proposed_block().as_ref().unwrap())
+        let included_block_references = iter::once(&core.last_proposed_block())
             .chain(blocks.iter())
             .filter(|block| block.round() == 22 || block.author() == core.context.own_index)
             .map(|block| block.reference())
@@ -2487,7 +2509,7 @@ mod test {
         transaction_certifier
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().unwrap().round(), 23);
+        assert_eq!(core.last_proposed_block().round(), 23);
 
         // Check that a new block has been proposed & signaled.
         let extended_block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
@@ -2743,7 +2765,6 @@ mod test {
                 core_fixture
                     .core
                     .round_tracker_for_tests()
-                    .unwrap()
                     .write()
                     .update_from_probe(
                         vec![
@@ -2783,9 +2804,9 @@ mod test {
                 );
 
                 // append the new block to this round blocks
-                this_round_blocks.push(core_fixture.core.last_proposed_block().unwrap().clone());
+                this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
 
-                let block = core_fixture.core.last_proposed_block().unwrap();
+                let block = core_fixture.core.last_proposed_block();
 
                 // ensure that produced block is referring to the blocks of last_round
                 assert_eq!(
@@ -3223,7 +3244,6 @@ mod test {
                 core_fixture
                     .core
                     .round_tracker_for_tests()
-                    .unwrap()
                     .write()
                     .update_from_probe(
                         vec![
@@ -3267,9 +3287,9 @@ mod test {
                 );
 
                 // append the new block to this round blocks
-                this_round_blocks.push(core_fixture.core.last_proposed_block().unwrap().clone());
+                this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
 
-                let block = core_fixture.core.last_proposed_block().unwrap();
+                let block = core_fixture.core.last_proposed_block();
 
                 // ensure that produced block is referring to the blocks of last_round
                 assert_eq!(
@@ -3383,7 +3403,6 @@ mod test {
                 core_fixture
                     .core
                     .round_tracker_for_tests()
-                    .unwrap()
                     .write()
                     .update_from_probe(
                         vec![
@@ -3423,9 +3442,9 @@ mod test {
                 );
 
                 // append the new block to this round blocks
-                this_round_blocks.push(core_fixture.core.last_proposed_block().unwrap().clone());
+                this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
 
-                let block = core_fixture.core.last_proposed_block().unwrap();
+                let block = core_fixture.core.last_proposed_block();
 
                 // ensure that produced block is referring to the blocks of last_round
                 assert_eq!(
@@ -3497,7 +3516,6 @@ mod test {
                 core_fixture
                     .core
                     .round_tracker_for_tests()
-                    .unwrap()
                     .write()
                     .update_from_probe(
                         vec![
@@ -3515,7 +3533,7 @@ mod test {
                     );
                 core_fixture.core.new_block(round, true).unwrap();
 
-                let block = core_fixture.core.last_proposed_block().unwrap();
+                let block = core_fixture.core.last_proposed_block();
                 assert_eq!(block.round(), round);
 
                 // append the new block to this round blocks
@@ -3537,7 +3555,7 @@ mod test {
 
         // Assert that a block has been created for round 11 and it references to blocks of round 10 for the other peers, and
         // to round 1 for its own block (created after recovery).
-        let block = core_fixture.core.last_proposed_block().unwrap();
+        let block = core_fixture.core.last_proposed_block();
         assert_eq!(block.round(), 11);
         assert_eq!(block.ancestors().len(), 4);
         for block_ref in block.ancestors() {

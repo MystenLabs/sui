@@ -25,8 +25,8 @@ use crate::{
 
 const MAX_COMMIT_VOTES_PER_BLOCK: usize = 100;
 
-/// Trait for handling block proposal logic. Validators implement full proposal
-/// logic, while Observers use a no-op implementation.
+/// Trait for handling block proposal logic.
+/// Only Validators have a proposer; Observers use None for the proposer field in Core.
 pub(crate) trait Proposer: Send + Sync {
     /// Attempts to create and return a new block proposal.
     /// Returns None if conditions for proposal are not met.
@@ -45,10 +45,10 @@ pub(crate) trait Proposer: Send + Sync {
     fn get_last_known_proposed_round(&self) -> Option<Round>;
 
     /// Returns the round of the last proposed block (validators only)
-    fn last_proposed_round(&self) -> Option<Round>;
+    fn last_proposed_round(&self) -> Round;
 
     /// Returns the last proposed block (validators only)
-    fn last_proposed_block(&self) -> Option<VerifiedBlock>;
+    fn last_proposed_block(&self) -> VerifiedBlock;
 
     /// Sets propagation scores on the ancestor state manager (validators only)
     fn set_propagation_scores(&mut self, scores: crate::leader_scoring::ReputationScores);
@@ -58,7 +58,7 @@ pub(crate) trait Proposer: Send + Sync {
 
     /// Returns the round tracker for tests (validators only)
     #[cfg(test)]
-    fn round_tracker_for_tests(&self) -> Option<Arc<RwLock<RoundTracker>>>;
+    fn round_tracker_for_tests(&self) -> Arc<RwLock<RoundTracker>>;
 }
 
 /// Validator proposal engine - full block proposal implementation
@@ -104,38 +104,18 @@ impl ValidatorProposer {
         }
     }
 
-    pub(crate) fn transaction_consumer(&self) -> &TransactionConsumer {
-        &self.transaction_consumer
-    }
-
-    pub(crate) fn transaction_certifier(&self) -> &TransactionCertifier {
-        &self.transaction_certifier
-    }
-
-    pub(crate) fn ancestor_state_manager(&self) -> &AncestorStateManager {
-        &self.ancestor_state_manager
-    }
-
-    pub(crate) fn ancestor_state_manager_mut(&mut self) -> &mut AncestorStateManager {
-        &mut self.ancestor_state_manager
-    }
-
-    pub(crate) fn round_tracker(&self) -> &Arc<RwLock<RoundTracker>> {
-        &self.round_tracker
-    }
-
-    pub(crate) fn last_included_ancestors(&self) -> &Vec<Option<BlockRef>> {
-        &self.last_included_ancestors
-    }
-
     fn last_proposed_block(&self) -> VerifiedBlock {
-        self.dag_state.read().get_last_proposed_block()
+        self.dag_state
+            .read()
+            .get_last_proposed_block()
+            .expect("A block should have been returned")
     }
 
     fn last_proposed_timestamp_ms(&self) -> BlockTimestampMs {
         self.dag_state
             .read()
             .get_last_proposed_block()
+            .expect("A block should have been returned")
             .timestamp_ms()
     }
 
@@ -399,11 +379,19 @@ impl Proposer for ValidatorProposer {
         let clock_round = {
             let dag_state = self.dag_state.read();
             let clock_round = dag_state.threshold_clock_round();
-            if clock_round <= dag_state.get_last_proposed_block().round() {
+            if clock_round
+                <= dag_state
+                    .get_last_proposed_block()
+                    .expect("A block should have been returned")
+                    .round()
+            {
                 debug!(
                     "Skipping block proposal for round {} as it is not higher than the last proposed block {}",
                     clock_round,
-                    dag_state.get_last_proposed_block().round()
+                    dag_state
+                        .get_last_proposed_block()
+                        .expect("A block should have been returned")
+                        .round()
                 );
                 return None;
             }
@@ -701,12 +689,19 @@ impl Proposer for ValidatorProposer {
         self.last_known_proposed_round
     }
 
-    fn last_proposed_round(&self) -> Option<Round> {
-        Some(self.dag_state.read().get_last_proposed_block().round())
+    fn last_proposed_round(&self) -> Round {
+        self.dag_state
+            .read()
+            .get_last_proposed_block()
+            .expect("A block should have been returned")
+            .round()
     }
 
-    fn last_proposed_block(&self) -> Option<VerifiedBlock> {
-        Some(self.dag_state.read().get_last_proposed_block())
+    fn last_proposed_block(&self) -> VerifiedBlock {
+        self.dag_state
+            .read()
+            .get_last_proposed_block()
+            .expect("A block should have been returned")
     }
 
     fn set_propagation_scores(&mut self, scores: crate::leader_scoring::ReputationScores) {
@@ -719,55 +714,7 @@ impl Proposer for ValidatorProposer {
     }
 
     #[cfg(test)]
-    fn round_tracker_for_tests(&self) -> Option<Arc<RwLock<RoundTracker>>> {
-        Some(self.round_tracker.clone())
-    }
-}
-
-/// Observer proposal engine - no-op implementation for observers
-pub(crate) struct ObserverProposer;
-
-impl ObserverProposer {
-    pub(crate) fn new() -> Self {
-        Self
-    }
-}
-
-impl Proposer for ObserverProposer {
-    fn try_new_block(&mut self, _force: bool) -> Option<ExtendedBlock> {
-        None
-    }
-
-    fn should_propose(&self) -> bool {
-        false
-    }
-
-    fn set_propagation_delay(&mut self, _delay: Round) {}
-
-    fn set_last_known_proposed_round(&mut self, _round: Round) {}
-
-    fn get_last_known_proposed_round(&self) -> Option<Round> {
-        None
-    }
-
-    fn last_proposed_round(&self) -> Option<Round> {
-        None
-    }
-
-    fn last_proposed_block(&self) -> Option<VerifiedBlock> {
-        None
-    }
-
-    fn set_propagation_scores(&mut self, _scores: crate::leader_scoring::ReputationScores) {
-        // No-op for observers
-    }
-
-    fn notify_own_blocks_committed(&self, _block_refs: Vec<BlockRef>, _gc_round: Round) {
-        // No-op for observers
-    }
-
-    #[cfg(test)]
-    fn round_tracker_for_tests(&self) -> Option<Arc<RwLock<RoundTracker>>> {
-        None
+    fn round_tracker_for_tests(&self) -> Arc<RwLock<RoundTracker>> {
+        self.round_tracker.clone()
     }
 }
