@@ -117,6 +117,55 @@ fn read_u256_internal(
     Ok(move_core_types::u256::U256::from_le_bytes(&u256_bytes))
 }
 
+fn read_i8_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i8> {
+    let byte = cursor.read_u8().map_err(|_| {
+        PartialVMError::new(StatusCode::MALFORMED).with_message("Unexpected EOF".to_string())
+    })?;
+    Ok(byte as i8)
+}
+
+fn read_i16_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i16> {
+    let mut bytes = [0; 2];
+    cursor
+        .read_exact(&mut bytes)
+        .map_err(|_| PartialVMError::new(StatusCode::MALFORMED))?;
+    Ok(i16::from_le_bytes(bytes))
+}
+
+fn read_i32_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i32> {
+    let mut bytes = [0; 4];
+    cursor
+        .read_exact(&mut bytes)
+        .map_err(|_| PartialVMError::new(StatusCode::MALFORMED))?;
+    Ok(i32::from_le_bytes(bytes))
+}
+
+fn read_i64_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i64> {
+    let mut bytes = [0; 8];
+    cursor
+        .read_exact(&mut bytes)
+        .map_err(|_| PartialVMError::new(StatusCode::MALFORMED))?;
+    Ok(i64::from_le_bytes(bytes))
+}
+
+fn read_i128_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i128> {
+    let mut bytes = [0; 16];
+    cursor
+        .read_exact(&mut bytes)
+        .map_err(|_| PartialVMError::new(StatusCode::MALFORMED))?;
+    Ok(i128::from_le_bytes(bytes))
+}
+
+fn read_i256_internal(
+    cursor: &mut VersionedCursor,
+) -> BinaryLoaderResult<move_core_types::i256::I256> {
+    let mut bytes = [0; 32];
+    cursor
+        .read_exact(&mut bytes)
+        .map_err(|_| PartialVMError::new(StatusCode::MALFORMED))?;
+    Ok(move_core_types::i256::I256::from_le_bytes(&bytes))
+}
+
 //
 // Helpers to read all uleb128 encoded integers.
 //
@@ -1129,6 +1178,12 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                 S::U64 => T::Saturated(SignatureToken::U64),
                 S::U128 => T::Saturated(SignatureToken::U128),
                 S::U256 => T::Saturated(SignatureToken::U256),
+                S::I8 => T::Saturated(SignatureToken::I8),
+                S::I16 => T::Saturated(SignatureToken::I16),
+                S::I32 => T::Saturated(SignatureToken::I32),
+                S::I64 => T::Saturated(SignatureToken::I64),
+                S::I128 => T::Saturated(SignatureToken::I128),
+                S::I256 => T::Saturated(SignatureToken::I256),
                 S::ADDRESS => T::Saturated(SignatureToken::Address),
                 S::SIGNER => T::Saturated(SignatureToken::Signer),
                 S::VECTOR => T::Vector,
@@ -1713,6 +1768,32 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             _ => (),
         };
 
+        match opcode {
+            Opcodes::LD_I8
+            | Opcodes::LD_I16
+            | Opcodes::LD_I32
+            | Opcodes::LD_I64
+            | Opcodes::LD_I128
+            | Opcodes::LD_I256
+            | Opcodes::CAST_I8
+            | Opcodes::CAST_I16
+            | Opcodes::CAST_I32
+            | Opcodes::CAST_I64
+            | Opcodes::CAST_I128
+            | Opcodes::CAST_I256
+            | Opcodes::NEG
+                if (cursor.version() < VERSION_8) =>
+            {
+                return Err(
+                    PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
+                        "Signed integer bytecodes not supported in bytecode version {}",
+                        cursor.version()
+                    )),
+                );
+            }
+            _ => (),
+        };
+
         // conversion
         let bytecode = match opcode {
             Opcodes::POP => Bytecode::Pop,
@@ -1856,6 +1937,19 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
                 let jti = load_jump_table_index(cursor)?;
                 Bytecode::VariantSwitch(VariantJumpTableIndex(jti))
             }
+            Opcodes::LD_I8 => Bytecode::LdI8(read_i8_internal(cursor)?),
+            Opcodes::LD_I16 => Bytecode::LdI16(read_i16_internal(cursor)?),
+            Opcodes::LD_I32 => Bytecode::LdI32(read_i32_internal(cursor)?),
+            Opcodes::LD_I64 => Bytecode::LdI64(read_i64_internal(cursor)?),
+            Opcodes::LD_I128 => Bytecode::LdI128(Box::new(read_i128_internal(cursor)?)),
+            Opcodes::LD_I256 => Bytecode::LdI256(Box::new(read_i256_internal(cursor)?)),
+            Opcodes::CAST_I8 => Bytecode::CastI8,
+            Opcodes::CAST_I16 => Bytecode::CastI16,
+            Opcodes::CAST_I32 => Bytecode::CastI32,
+            Opcodes::CAST_I64 => Bytecode::CastI64,
+            Opcodes::CAST_I128 => Bytecode::CastI128,
+            Opcodes::CAST_I256 => Bytecode::CastI256,
+            Opcodes::NEG => Bytecode::Neg,
             // ******** DEPRECATED BYTECODES ********
             Opcodes::EXISTS_DEPRECATED => {
                 check_deprecate_global_storage_ops(cursor)?;
@@ -1948,6 +2042,12 @@ impl SerializedType {
             0xD => Ok(SerializedType::U16),
             0xE => Ok(SerializedType::U32),
             0xF => Ok(SerializedType::U256),
+            0x10 => Ok(SerializedType::I8),
+            0x11 => Ok(SerializedType::I16),
+            0x12 => Ok(SerializedType::I32),
+            0x13 => Ok(SerializedType::I64),
+            0x14 => Ok(SerializedType::I128),
+            0x15 => Ok(SerializedType::I256),
             _ => Err(PartialVMError::new(StatusCode::UNKNOWN_SERIALIZED_TYPE)),
         }
     }
@@ -2109,6 +2209,19 @@ impl Opcodes {
             0x54 => Ok(Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF),
             0x55 => Ok(Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF),
             0x56 => Ok(Opcodes::VARIANT_SWITCH),
+            0x57 => Ok(Opcodes::LD_I8),
+            0x58 => Ok(Opcodes::LD_I16),
+            0x59 => Ok(Opcodes::LD_I32),
+            0x5A => Ok(Opcodes::LD_I64),
+            0x5B => Ok(Opcodes::LD_I128),
+            0x5C => Ok(Opcodes::LD_I256),
+            0x5D => Ok(Opcodes::CAST_I8),
+            0x5E => Ok(Opcodes::CAST_I16),
+            0x5F => Ok(Opcodes::CAST_I32),
+            0x60 => Ok(Opcodes::CAST_I64),
+            0x61 => Ok(Opcodes::CAST_I128),
+            0x62 => Ok(Opcodes::CAST_I256),
+            0x63 => Ok(Opcodes::NEG),
             _ => Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE)),
         }
     }

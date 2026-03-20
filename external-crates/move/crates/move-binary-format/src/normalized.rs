@@ -70,6 +70,18 @@ pub enum Type<S> {
     U32,
     #[serde(rename = "u256")]
     U256,
+    #[serde(rename = "i8")]
+    I8,
+    #[serde(rename = "i16")]
+    I16,
+    #[serde(rename = "i32")]
+    I32,
+    #[serde(rename = "i64")]
+    I64,
+    #[serde(rename = "i128")]
+    I128,
+    #[serde(rename = "i256")]
+    I256,
 }
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
@@ -308,6 +320,19 @@ pub enum Bytecode<S: Hash + Eq> {
     CastU16,
     CastU32,
     CastU256,
+    LdI8(i8),
+    LdI16(i16),
+    LdI32(i32),
+    LdI64(i64),
+    LdI128(Box<i128>),
+    LdI256(Box<move_core_types::i256::I256>),
+    CastI8,
+    CastI16,
+    CastI32,
+    CastI64,
+    CastI128,
+    CastI256,
+    Neg,
     PackVariant(Box<VariantRef<S>>),
     UnpackVariant(Box<VariantRef<S>>),
     UnpackVariantImmRef(Box<VariantRef<S>>),
@@ -367,6 +392,12 @@ impl<S> Type<S> {
             S::U64 => Type::U64,
             S::U128 => Type::U128,
             S::U256 => Type::U256,
+            S::I8 => Type::I8,
+            S::I16 => Type::I16,
+            S::I32 => Type::I32,
+            S::I64 => Type::I64,
+            S::I128 => Type::I128,
+            S::I256 => Type::I256,
             S::Address => Type::Address,
             S::Signer => Type::Signer,
             S::Vector(t) => Type::Vector(Box::new(Type::new(pool, m, t))),
@@ -403,6 +434,12 @@ impl<S> Type<S> {
             T::U64 => TypeTag::U64,
             T::U128 => TypeTag::U128,
             T::U256 => TypeTag::U256,
+            T::I8 => TypeTag::I8,
+            T::I16 => TypeTag::I16,
+            T::I32 => TypeTag::I32,
+            T::I64 => TypeTag::I64,
+            T::I128 => TypeTag::I128,
+            T::I256 => TypeTag::I256,
             T::Address => TypeTag::Address,
             T::Signer => TypeTag::Signer,
             T::Vector(t) => TypeTag::Vector(Box::new(
@@ -431,6 +468,12 @@ impl<S> Type<S> {
             TypeTag::U64 => T::U64,
             TypeTag::U128 => T::U128,
             TypeTag::U256 => T::U256,
+            TypeTag::I8 => T::I8,
+            TypeTag::I16 => T::I16,
+            TypeTag::I32 => T::I32,
+            TypeTag::I64 => T::I64,
+            TypeTag::I128 => T::I128,
+            TypeTag::I256 => T::I256,
             TypeTag::Address => T::Address,
             TypeTag::Signer => T::Signer,
             TypeTag::Vector(ty) => T::Vector(Box::new(T::from_type_tag(pool, ty))),
@@ -458,6 +501,12 @@ impl<S> Type<S> {
             T::U64 => true,
             T::U128 => true,
             T::U256 => true,
+            T::I8 => true,
+            T::I16 => true,
+            T::I32 => true,
+            T::I64 => true,
+            T::I128 => true,
+            T::I256 => true,
             T::Address => true,
             T::Signer => true,
             T::Datatype(dt) => dt.is_closed(),
@@ -478,6 +527,12 @@ impl<S> Type<S> {
             | T::U64
             | T::U128
             | T::U256
+            | T::I8
+            | T::I16
+            | T::I32
+            | T::I64
+            | T::I128
+            | T::I256
             | T::Address
             | T::Signer => self.clone(),
             T::Reference(mut_, ty) => T::Reference(*mut_, Box::new(ty.subst(type_args))),
@@ -1362,6 +1417,13 @@ impl<S: Hash + Eq> Bytecode<S> {
             FB::CastU16 => B::CastU16,
             FB::CastU32 => B::CastU32,
             FB::CastU256 => B::CastU256,
+            FB::CastI8 => B::CastI8,
+            FB::CastI16 => B::CastI16,
+            FB::CastI32 => B::CastI32,
+            FB::CastI64 => B::CastI64,
+            FB::CastI128 => B::CastI128,
+            FB::CastI256 => B::CastI256,
+            FB::Neg => B::Neg,
             FB::BrTrue(x) => B::BrTrue(*x),
             FB::BrFalse(x) => B::BrFalse(*x),
             FB::Branch(x) => B::Branch(*x),
@@ -1374,6 +1436,12 @@ impl<S: Hash + Eq> Bytecode<S> {
             FB::LdU16(x) => B::LdU16(*x),
             FB::LdU32(x) => B::LdU32(*x),
             FB::LdU256(x) => B::LdU256(x.clone()),
+            FB::LdI8(x) => B::LdI8(*x),
+            FB::LdI16(x) => B::LdI16(*x),
+            FB::LdI32(x) => B::LdI32(*x),
+            FB::LdI64(x) => B::LdI64(*x),
+            FB::LdI128(x) => B::LdI128(x.clone()),
+            FB::LdI256(x) => B::LdI256(x.clone()),
             FB::LdConst(const_idx) => B::LdConst(tables.constants[const_idx.0 as usize].clone()),
             FB::Call(fh_idx) => B::Call(Box::new(FunctionRef::new(tables, pool, m, *fh_idx, None))),
             FB::CallGeneric(fhi_idx) => B::Call(Box::new(FunctionRef::instantiated(
@@ -1507,7 +1575,14 @@ impl<S: Hash + Eq> Bytecode<S> {
             | (B::Shr, B::Shr)
             | (B::CastU16, B::CastU16)
             | (B::CastU32, B::CastU32)
-            | (B::CastU256, B::CastU256) => true,
+            | (B::CastU256, B::CastU256)
+            | (B::CastI8, B::CastI8)
+            | (B::CastI16, B::CastI16)
+            | (B::CastI32, B::CastI32)
+            | (B::CastI64, B::CastI64)
+            | (B::CastI128, B::CastI128)
+            | (B::CastI256, B::CastI256)
+            | (B::Neg, B::Neg) => true,
             (B::BrTrue(x), B::BrTrue(y))
             | (B::BrFalse(x), B::BrFalse(y))
             | (B::Branch(x), B::Branch(y)) => x == y,
@@ -1536,6 +1611,12 @@ impl<S: Hash + Eq> Bytecode<S> {
             (B::LdU16(x), B::LdU16(y)) => x == y,
             (B::LdU32(x), B::LdU32(y)) => x == y,
             (B::LdU256(x), B::LdU256(y)) => x == y,
+            (B::LdI8(x), B::LdI8(y)) => x == y,
+            (B::LdI16(x), B::LdI16(y)) => x == y,
+            (B::LdI32(x), B::LdI32(y)) => x == y,
+            (B::LdI64(x), B::LdI64(y)) => x == y,
+            (B::LdI128(x), B::LdI128(y)) => x == y,
+            (B::LdI256(x), B::LdI256(y)) => x == y,
             (B::PackVariant(x), B::PackVariant(y)) => x.equivalent(y),
             (B::UnpackVariant(x), B::UnpackVariant(y)) => x.equivalent(y),
             (B::UnpackVariantImmRef(x), B::UnpackVariantImmRef(y)) => x.equivalent(y),
@@ -1619,6 +1700,19 @@ impl<S: Hash + Eq> Bytecode<S> {
             | Bytecode::CastU16
             | Bytecode::CastU32
             | Bytecode::CastU256
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::PackVariant(_)
             | Bytecode::UnpackVariant(_)
             | Bytecode::UnpackVariantImmRef(_)
@@ -1694,6 +1788,19 @@ impl<S: Hash + Eq> Bytecode<S> {
             | Bytecode::CastU16
             | Bytecode::CastU32
             | Bytecode::CastU256
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::PackVariant(_)
             | Bytecode::UnpackVariant(_)
             | Bytecode::UnpackVariantImmRef(_)
@@ -1787,6 +1894,19 @@ impl<S: Hash + Eq> Bytecode<S> {
             | Bytecode::CastU16
             | Bytecode::CastU32
             | Bytecode::CastU256
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::PackVariant(_)
             | Bytecode::UnpackVariant(_)
             | Bytecode::UnpackVariantImmRef(_)
@@ -1889,6 +2009,12 @@ impl<S: std::fmt::Display> std::fmt::Display for Type<S> {
             Type::U64 => write!(f, "u64"),
             Type::U128 => write!(f, "u128"),
             Type::U256 => write!(f, "u256"),
+            Type::I8 => write!(f, "i8"),
+            Type::I16 => write!(f, "i16"),
+            Type::I32 => write!(f, "i32"),
+            Type::I64 => write!(f, "i64"),
+            Type::I128 => write!(f, "i128"),
+            Type::I256 => write!(f, "i256"),
             Type::Address => write!(f, "address"),
             Type::Signer => write!(f, "signer"),
             Type::Bool => write!(f, "bool"),

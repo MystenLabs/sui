@@ -89,6 +89,12 @@ pub enum SignatureTokenGen {
     U64,
     U128,
     U256,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
     Address,
     Signer,
     TypeParameter(PropIndex),
@@ -128,7 +134,7 @@ impl SignatureTokenGen {
         use SignatureTokenGen::*;
 
         static OWNED_NON_STRUCTS: &[SignatureTokenGen] =
-            &[Bool, U8, U16, U32, U64, U128, U256, Address, Signer];
+            &[Bool, U8, U16, U32, U64, U128, U256, I8, I16, I32, I64, I128, I256, Address, Signer];
 
         select(OWNED_NON_STRUCTS)
     }
@@ -167,6 +173,12 @@ impl SignatureTokenGen {
             U64 => SignatureToken::U64,
             U128 => SignatureToken::U128,
             U256 => SignatureToken::U256,
+            I8 => SignatureToken::I8,
+            I16 => SignatureToken::I16,
+            I32 => SignatureToken::I32,
+            I64 => SignatureToken::I64,
+            I128 => SignatureToken::I128,
+            I256 => SignatureToken::I256,
             Address => SignatureToken::Address,
             Signer => SignatureToken::Signer,
             Struct(idx) => {

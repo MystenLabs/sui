@@ -18,6 +18,12 @@ fn sig_to_ty(sig: &SignatureToken) -> Option<MoveTypeLayout> {
         SignatureToken::U128 => Some(MoveTypeLayout::U128),
         SignatureToken::U256 => Some(MoveTypeLayout::U256),
         SignatureToken::Vector(v) => Some(MoveTypeLayout::Vector(Box::new(sig_to_ty(v.as_ref())?))),
+        SignatureToken::I8 => Some(MoveTypeLayout::I8),
+        SignatureToken::I16 => Some(MoveTypeLayout::I16),
+        SignatureToken::I32 => Some(MoveTypeLayout::I32),
+        SignatureToken::I64 => Some(MoveTypeLayout::I64),
+        SignatureToken::I128 => Some(MoveTypeLayout::I128),
+        SignatureToken::I256 => Some(MoveTypeLayout::I256),
         SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_)
         | SignatureToken::Datatype(_)
@@ -37,6 +43,12 @@ fn ty_to_sig(ty: &MoveTypeLayout) -> Option<SignatureToken> {
         MoveTypeLayout::U128 => Some(SignatureToken::U128),
         MoveTypeLayout::U256 => Some(SignatureToken::U256),
         MoveTypeLayout::Vector(v) => Some(SignatureToken::Vector(Box::new(ty_to_sig(v.as_ref())?))),
+        MoveTypeLayout::I8 => Some(SignatureToken::I8),
+        MoveTypeLayout::I16 => Some(SignatureToken::I16),
+        MoveTypeLayout::I32 => Some(SignatureToken::I32),
+        MoveTypeLayout::I64 => Some(SignatureToken::I64),
+        MoveTypeLayout::I128 => Some(SignatureToken::I128),
+        MoveTypeLayout::I256 => Some(SignatureToken::I256),
         MoveTypeLayout::Struct(_) => None,
         MoveTypeLayout::Enum(_) => None,
         MoveTypeLayout::Bool => Some(SignatureToken::Bool),
