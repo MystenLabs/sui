@@ -15,7 +15,9 @@ use crate::{
 };
 use indexmap::IndexSet;
 use sui_types::{
+    SUI_FRAMEWORK_ADDRESS,
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
+    coin::{COIN_MODULE_NAME, SEND_FUNDS_FUNC_NAME},
     error::{ExecutionError, SafeIndex, command_argument_error},
     execution_status::{CommandArgumentError, ExecutionErrorKind},
     id::RESOLVED_SUI_ID,
@@ -70,7 +72,8 @@ impl Context {
 ///    permissible
 ///    - Can be relaxed under certain execution modes
 /// 2. That any `Object` arguments are used validly. This means mutable references are taken only
-///    on mutable objects. And that the gas coin is only taken by value in transfer objects
+///    on mutable objects. And that the gas coin is only taken by value in transfer objects or with
+///    `sui::coin::send_funds`.
 pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction {
         gas_payment: _,
@@ -237,7 +240,10 @@ fn command(context: &mut Context, sp!(_, c): &T::Command) -> Result<(), Executio
     match &c.command {
         T::Command__::MoveCall(mc) => {
             check_obj_usages(context, &mc.arguments)?;
-            check_gas_by_values(&mc.arguments)?;
+            if !is_coin_send_funds(&mc.function) {
+                // We allow the gas coin to be used with `sui::coin::send_funds`
+                check_gas_by_values(&mc.arguments)?;
+            }
         }
         T::Command__::TransferObjects(objects, recipient) => {
             check_obj_usages(context, objects)?;
@@ -379,4 +385,10 @@ fn check_gas_by_value_loc(idx: u16, location: &T::Location) -> Result<(), Execut
         | T::Location::ReceivingInput(_)
         | T::Location::Result(_, _) => Ok(()),
     }
+}
+
+pub fn is_coin_send_funds(function: &T::LoadedFunction) -> bool {
+    function.original_mid.address() == &SUI_FRAMEWORK_ADDRESS
+        && function.original_mid.name() == COIN_MODULE_NAME
+        && function.name.as_ident_str() == SEND_FUNDS_FUNC_NAME
 }

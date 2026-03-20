@@ -28,6 +28,7 @@ use move_binary_format::{
     normalized,
 };
 use move_core_types::{
+    account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
     u256::U256,
@@ -64,7 +65,7 @@ use sui_move_natives::object_runtime::{
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     TypeTag,
-    accumulator_event::AccumulatorEvent,
+    accumulator_event::{self, AccumulatorEvent},
     accumulator_root::{self, AccumulatorObjId},
     balance::Balance,
     base_types::{
@@ -76,6 +77,7 @@ use sui_types::{
     event::Event,
     execution::{ExecutionResults, ExecutionResultsV2},
     execution_status::{CommandArgumentError, ExecutionErrorKind, PackageUpgradeError},
+    gas, gas_coin,
     metrics::LimitsMetrics,
     move_package::{
         MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
@@ -189,6 +191,17 @@ pub struct InputObjectMetadata {
     pub type_: Type,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum GasCoinTransfer {
+    TransferObjects,
+    SendFunds {
+        /// Balance before destruction via send funds.
+        /// In other words, the amount sent to the recipient.
+        value: u64,
+        recipient: AccountAddress,
+    },
+}
+
 #[derive(Copy, Clone)]
 enum UsageKind {
     Move,
@@ -246,6 +259,8 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension> {
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
     locations: Locations,
+    /// Tracks where the gas coin was sent, if it was moved by value
+    gas_coin_transfer: Option<GasCoinTransfer>,
     // cache of Move VMs created this transaction for different linkage contexts so that we can reuse them.
     executable_vm_cache: QCache<LinkageHash, MoveVM<'env>>,
 }
@@ -429,8 +444,20 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 receiving_inputs,
                 results: vec![],
             },
+            gas_coin_transfer: None,
             executable_vm_cache: QCache::new(1024),
         })
+    }
+
+    pub(crate) fn record_gas_coin_transfer(
+        &mut self,
+        transfer: GasCoinTransfer,
+    ) -> Result<(), ExecutionError> {
+        if self.gas_coin_transfer.is_some() {
+            invariant_violation!("Gas coin destination set more than once");
+        }
+        self.gas_coin_transfer = Some(transfer);
+        Ok(())
     }
 
     pub fn finish<Mode: ExecutionMode>(mut self) -> Result<ExecutionResults, ExecutionError> {
@@ -438,6 +465,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             !self.locations.tx_context_value.local(0)?.is_invalid()?,
             "tx context value should be present"
         );
+        let gas_coin_transfer = self.gas_coin_transfer;
         let gas = std::mem::take(&mut self.locations.gas);
         let object_input_metadata = std::mem::take(&mut self.locations.input_object_metadata);
         let mut object_inputs =
@@ -447,15 +475,19 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         let mut by_value_shared_objects = BTreeSet::new();
         let mut consensus_owner_objects = BTreeMap::new();
         let mut gas_payment_location = None;
-        let mut gas_coin_moved = None;
         let gas = gas
             .map(|(payment_location, m, mut g)| {
                 gas_payment_location = Some(payment_location);
                 let value_opt = g.local(0)?.move_if_valid()?;
-                gas_coin_moved = Some(value_opt.is_none());
+                let moved = value_opt.is_none();
+                assert_invariant!(
+                    moved == gas_coin_transfer.is_some(),
+                    "Gas coin moved requires gas coin transfer to be recorded, and vice versa"
+                );
                 Result::<_, ExecutionError>::Ok((m, value_opt))
             })
             .transpose()?;
+
         let gas_id_opt = gas.as_ref().map(|(m, _)| m.id);
         let object_inputs = object_input_metadata
             .into_iter()
@@ -555,25 +587,27 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         );
         // Refund unused gas to the coin, real or ephemeral
         if let Some(gas_id) = gas_id_opt {
+            // deleted implies was moved and used in send_funds
             assert_invariant!(
-                !deleted_object_ids.contains(&gas_id),
+                !deleted_object_ids.contains(&gas_id)
+                    || gas_coin_transfer.is_some_and(|destination| matches!(
+                        destination,
+                        GasCoinTransfer::SendFunds { .. }
+                    )),
                 "Gas coin should not be deleted"
             );
             let Some(gas_payment_location) = gas_payment_location else {
                 invariant_violation!("Gas payment should be specified if gas ID is present");
             };
-            let Some(gas_coin_moved) = gas_coin_moved else {
-                invariant_violation!("Gas value status should be specified if gas ID is present");
-            };
-            refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
-            finish_ephemeral_gas_coin(
+            finish_gas_coin(
                 gas_charger,
                 &mut writes,
                 &mut created_object_ids,
+                &deleted_object_ids,
                 &mut accumulator_events,
                 gas_id,
                 gas_payment_location,
-                gas_coin_moved,
+                gas_coin_transfer,
             )?;
         }
 
@@ -1497,6 +1531,13 @@ impl CtxValue {
         )?))
     }
 
+    pub fn owned_coin_value(self) -> Result<(CtxValue, u64), ExecutionError> {
+        let mut local = Locals::new(vec![Some(self.0)])?;
+        let value = local.local(0)?.borrow()?.coin_ref_value()?;
+        let coin = CtxValue(local.local(0)?.move_()?);
+        Ok((coin, value))
+    }
+
     pub fn coin_ref_value(self) -> Result<u64, ExecutionError> {
         self.0.coin_ref_value()
     }
@@ -1511,6 +1552,10 @@ impl CtxValue {
 
     pub fn into_upgrade_ticket(self) -> Result<UpgradeTicket, ExecutionError> {
         self.0.into_upgrade_ticket()
+    }
+
+    pub fn to_address(&self) -> Result<AccountAddress, ExecutionError> {
+        self.0.copy()?.cast()
     }
 
     /// Used to get access the inner Value for tracing.
@@ -1629,80 +1674,135 @@ fn copy_value(meter: &mut GasCharger, env: &Env, value: &Value) -> Result<Value,
 }
 
 /// The max budget was deducted from the gas coin at the beginning of the transaction,
-/// now we return exactly that amount. Gas will be charged by the execution engine
+/// now we return exactly that amount. Gas will be charged by the execution engine.
+/// If the gas coin was transferred in any way, set the charge location.
 fn refund_max_gas_budget<OType>(
     writes: &mut IndexMap<ObjectID, (Owner, OType, VMValue)>,
-    gas_charger: &mut GasCharger,
-    gas_id: ObjectID,
-) -> Result<(), ExecutionError> {
-    let Some((_, _, value_ref)) = writes.get_mut(&gas_id) else {
-        invariant_violation!("Gas object cannot be wrapped or destroyed")
-    };
-    // replace with dummy value
-    let value = std::mem::replace(value_ref, VMValue::u8(0));
-    let mut locals = Locals::new([Some(value.into())])?;
-    let mut local = locals.local(0)?;
-    let coin_value = local.borrow()?.coin_ref_value()?;
-    let additional = gas_charger.gas_budget();
-    if coin_value.checked_add(additional).is_none() {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::CoinBalanceOverflow,
-            "Gas coin too large after returning the max gas budget",
-        ));
-    };
-    local.borrow()?.coin_ref_add_balance(additional)?;
-    // put the value back
-    *value_ref = local.move_()?.into();
-    Ok(())
-}
-
-/// If the gas coin was created from an address balance (ephemeral), remove it from the writes
-/// and loaded runtime objects, and return the remaining balance to the in-memory store.
-/// In any case, if it was ephemeral, it needs to be removed from loaded runtime objects
-fn finish_ephemeral_gas_coin<OType>(
-    gas_charger: &mut GasCharger,
-    writes: &mut IndexMap<ObjectID, (Owner, OType, VMValue)>,
-    created_object_ids: &mut IndexSet<ObjectID>,
     accumulator_events: &mut Vec<MoveAccumulatorEvent>,
+    gas_charger: &mut GasCharger,
     gas_id: ObjectID,
-    gas_payment: GasPayment,
-    gas_coin_moved: bool,
+    gas_coin_transfer: Option<&GasCoinTransfer>,
 ) -> Result<(), ExecutionError> {
-    let address = match gas_payment.location {
-        // The gas payment was a coin, so it is not ephemeral
-        PaymentLocation::Coin(_) => return Ok(()),
-        PaymentLocation::AddressBalance(address) => address,
-    };
-
-    // See if the gas coin was transferred or remains with the original owner
-    let Some((_owner, _ty, _value)) = writes.get(&gas_id) else {
-        invariant_violation!("Ephemeral gas coin must be in writes")
-    };
-    let net_balance_change = if gas_coin_moved {
-        // double check that the gas coin has enough balance
-        let coin_value = {
+    match gas_coin_transfer {
+        Some(GasCoinTransfer::SendFunds { recipient, .. }) => {
+            // if the gas coin was transferred to an address balance, send the budget to that
+            // address balance
+            assert_invariant!(
+                !writes.contains_key(&gas_id),
+                "Gas coin should not be in writes if it was used with send_funds"
+            );
+            balance_change_accumulator_event(
+                accumulator_events,
+                *recipient,
+                checked_as!(gas_charger.gas_budget(), i64)?,
+            )?;
+        }
+        Some(GasCoinTransfer::TransferObjects) | None => {
             let Some((_, _, value_ref)) = writes.get_mut(&gas_id) else {
-                invariant_violation!("Ephemeral gas coin must be in writes")
+                invariant_violation!("Gas object cannot be wrapped or destroyed")
             };
             // replace with dummy value
             let value = std::mem::replace(value_ref, VMValue::u8(0));
             let mut locals = Locals::new([Some(value.into())])?;
             let mut local = locals.local(0)?;
             let coin_value = local.borrow()?.coin_ref_value()?;
-            // put the coin back
+            let additional = gas_charger.gas_budget();
+            if coin_value.checked_add(additional).is_none() {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::CoinBalanceOverflow,
+                    "Gas coin too large after returning the max gas budget",
+                ));
+            };
+            local.borrow()?.coin_ref_add_balance(additional)?;
+            // put the value back
             *value_ref = local.move_()?.into();
-            coin_value
-        };
-        assert_invariant!(
-            coin_value >= gas_charger.gas_budget(),
-            "Gas coin balance should be at least the max gas budget"
-        );
+        }
+    };
+    Ok(())
+}
+
+fn finish_gas_coin<OType>(
+    gas_charger: &mut GasCharger,
+    writes: &mut IndexMap<ObjectID, (Owner, OType, VMValue)>,
+    created_object_ids: &mut IndexSet<ObjectID>,
+    deleted_object_ids: &IndexSet<ObjectID>,
+    accumulator_events: &mut Vec<MoveAccumulatorEvent>,
+    gas_id: ObjectID,
+    gas_payment: GasPayment,
+    gas_coin_transfer: Option<GasCoinTransfer>,
+) -> Result<(), ExecutionError> {
+    // return the max gas budget to the current gas location
+    refund_max_gas_budget(
+        writes,
+        accumulator_events,
+        gas_charger,
+        gas_id,
+        gas_coin_transfer.as_ref(),
+    )?;
+
+    // Set the charge location if it was transferred
+    // This might not actually "override" (that is the actual charge location might be the same
+    // as it was at the beginning of the transaction), in the case where the coin was real and
+    // was transferred, or in the case where the coin was ephemeral and transferred to the
+    // an address balance recipient that matches the original address balance charge location
+    match &gas_coin_transfer {
+        Some(GasCoinTransfer::SendFunds { recipient, .. }) => {
+            gas_charger.override_gas_charge_location(PaymentLocation::AddressBalance(
+                (*recipient).into(),
+            ))?;
+        }
+        Some(GasCoinTransfer::TransferObjects) => {
+            gas_charger.override_gas_charge_location(PaymentLocation::Coin(gas_id))?;
+        }
+        None => (),
+    }
+
+    // If the gas coin was not ephemeral, then we are done.
+    let address = match gas_payment.location {
+        PaymentLocation::Coin(_) => return Ok(()),
+        PaymentLocation::AddressBalance(address) => address,
+    };
+
+    let Some((_owner, _ty, _value)) = writes.get(&gas_id) else {
+        invariant_violation!("Ephemeral gas coin must be in writes")
+    };
+    let net_balance_change = if let Some(gas_coin_transfer) = gas_coin_transfer {
+        // sanity check storage changes
+        match gas_coin_transfer {
+            GasCoinTransfer::TransferObjects => {
+                assert!(
+                    created_object_ids.contains(&gas_id),
+                    "ephemeral coin should be newly created"
+                );
+                assert!(
+                    !deleted_object_ids.contains(&gas_id),
+                    "ephemeral coin should not be deleted if transferred as an object"
+                );
+                assert!(
+                    writes.contains_key(&gas_id),
+                    "ephemeral coin should be in writes if transferred as an object"
+                );
+            }
+            GasCoinTransfer::SendFunds { .. } => {
+                assert!(
+                    !created_object_ids.contains(&gas_id),
+                    "ephemeral coin should not be newly created if transferred with send_funds"
+                );
+                assert!(
+                    !deleted_object_ids.contains(&gas_id),
+                    "ephemeral coin should not be deleted if transferred with send_funds"
+                );
+                assert!(
+                    !writes.contains_key(&gas_id),
+                    "ephemeral coin should not be in writes if transferred with send_funds"
+                );
+            }
+        }
 
         // If the gas coin was moved, it was transferred.
         // In such a case, the gas coin has a new location, so we fully withdraw the gas amount
-        // and keep it in the coin object. The coin is now the source of payment instead of
-        // the address balance.
-        gas_charger.override_gas_charge_location(PaymentLocation::Coin(gas_id))?;
+        // and keep it in the coin object. The transferred location is now the source of payment
+        // instead of the address balance.
         let Some(net_balance_change) = gas_payment
             .amount
             .try_into()
@@ -1733,33 +1833,42 @@ fn finish_ephemeral_gas_coin<OType>(
         };
         net_balance_change
     };
-    if net_balance_change != 0 {
-        let balance_type = Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
-        let Some(accumulator_id) =
-            accumulator_root::AccumulatorValue::get_field_id(address, &balance_type).ok()
-        else {
-            invariant_violation!("Failed to compute accumulator field id")
-        };
-        let (action, value) = if net_balance_change < 0 {
-            (
-                MoveAccumulatorAction::Split,
-                MoveAccumulatorValue::U64(net_balance_change.unsigned_abs()),
-            )
-        } else {
-            (
-                MoveAccumulatorAction::Merge,
-                MoveAccumulatorValue::U64(net_balance_change as u64),
-            )
-        };
-        accumulator_events.push(MoveAccumulatorEvent {
-            accumulator_id: *accumulator_id.inner(),
-            action,
-            target_addr: address.into(),
-            target_ty: balance_type,
-            value,
-        });
-    }
+    balance_change_accumulator_event(accumulator_events, address.into(), net_balance_change)?;
+    Ok(())
+}
 
+fn balance_change_accumulator_event(
+    accumulator_events: &mut Vec<MoveAccumulatorEvent>,
+    address: AccountAddress,
+    balance_change: i64,
+) -> Result<(), ExecutionError> {
+    if balance_change == 0 {
+        return Ok(());
+    }
+    let balance_type = Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
+    let Some(accumulator_id) =
+        accumulator_root::AccumulatorValue::get_field_id(address.into(), &balance_type).ok()
+    else {
+        invariant_violation!("Failed to compute accumulator field id")
+    };
+    let (action, value) = if balance_change < 0 {
+        (
+            MoveAccumulatorAction::Split,
+            MoveAccumulatorValue::U64(balance_change.unsigned_abs()),
+        )
+    } else {
+        (
+            MoveAccumulatorAction::Merge,
+            MoveAccumulatorValue::U64(balance_change as u64),
+        )
+    };
+    accumulator_events.push(MoveAccumulatorEvent {
+        accumulator_id: *accumulator_id.inner(),
+        action,
+        target_addr: address,
+        target_ty: balance_type,
+        value,
+    });
     Ok(())
 }
 
