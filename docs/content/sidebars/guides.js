@@ -291,7 +291,7 @@ const guides = [
     items: [
       `guides/developer/wallets/what-is-a-wallet`,
       `guides/developer/wallets/slush`,
-      `guides/developer/wallets/slef-custody`,
+      `guides/developer/wallets/self-custody`,
       `guides/developer/wallets/zk-login-wallets`,
       'guides/developer/wallets/suilink'
     ],
