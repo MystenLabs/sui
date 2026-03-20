@@ -227,53 +227,20 @@ impl BigTableClient {
     }
 
     /// Get the pipeline watermark from the watermarks table.
-    /// Falls back to the legacy `[0]` row if the pipeline-specific row is missing.
-    // TODO(migration): Remove legacy fallback once all pipelines have their own watermarks.
     pub async fn get_pipeline_watermark(&mut self, pipeline: &str) -> Result<Option<Watermark>> {
         let pipeline_key = tables::watermarks::encode_key(pipeline);
-        let legacy_key = vec![0u8];
 
         let rows = self
-            .multi_get(
-                tables::watermark_alt_legacy::NAME,
-                vec![pipeline_key.clone(), legacy_key.clone()],
-                None,
-            )
+            .multi_get(tables::watermarks::NAME, vec![pipeline_key.clone()], None)
             .await?;
-
-        let mut pipeline_wm = None;
-        let mut legacy_checkpoint = None;
 
         for (key, row) in rows {
             if key.as_ref() == pipeline_key.as_slice() {
-                pipeline_wm = Some(tables::watermarks::decode(&row)?);
-            } else if key.as_ref() == legacy_key.as_slice()
-                && let Some((_, value_bytes)) = row.last()
-            {
-                let next = u64::from_be_bytes(value_bytes.as_ref().try_into()?);
-                if next > 0 {
-                    legacy_checkpoint = Some(next - 1);
-                }
+                return Ok(Some(tables::watermarks::decode(&row)?));
             }
         }
 
-        if let Some(wm) = pipeline_wm {
-            return Ok(Some(wm));
-        }
-
-        // Don't fall back to legacy watermark when legacy mode is disabled.
-        // This prevents tasked backfill pipelines from inheriting the main
-        // pipeline's watermark from the legacy [0] row.
-        if !crate::write_legacy_data() {
-            return Ok(None);
-        }
-
-        Ok(legacy_checkpoint.map(|cp| Watermark {
-            epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: cp,
-            tx_hi: 0,
-            timestamp_ms_hi_inclusive: 0,
-        }))
+        Ok(None)
     }
 
     /// Set the pipeline watermark in the watermarks table.
@@ -735,9 +702,7 @@ impl KeyValueStoreReader for BigTableClient {
             .map(|name| tables::watermarks::encode_key(name))
             .collect();
 
-        let rows = self
-            .multi_get(tables::watermark_alt_legacy::NAME, keys, None)
-            .await?;
+        let rows = self.multi_get(tables::watermarks::NAME, keys, None).await?;
 
         if rows.len() != pipelines.len() {
             return Ok(None);
