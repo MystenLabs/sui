@@ -564,7 +564,7 @@ impl StateRead for AuthorityState {
         let real_coins_iter = self.get_owned_coins_iterator_with_cursor(
             owner,
             real_cursor.clone(),
-            limit * 2, // Fetch extra to account for fake coins we'll insert
+            limit + 1, // +1 in case we skip a coin when resuming from a fake coin cursor
             one_coin_type_only,
         )?;
 
