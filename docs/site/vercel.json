@@ -612,27 +612,33 @@
     },
     {
       "source": "/references/sui-api/sui-graphql/reference/:path*",
-      "destination": "/references/sui-api/sui-graphql/beta/reference/:path*"
+      "destination": "/references/sui-api/sui-graphql/beta/reference/:path*",
+      "permanent": true
     },
     {
       "source": "/guides/operator/validator-committee",
-      "destination": "/concepts/sui-architecture/consensus"
+      "destination": "/concepts/sui-architecture/consensus",
+      "permanent": true
     },
     {
       "source": "/guides/operator/node-tools",
-      "destination": "/guides/operator/validator/node-tools"
+      "destination": "/guides/operator/validator/node-tools",
+      "permanent": true
     },
     {
       "source": "/guides/operator/validator-config",
-      "destination": "/guides/operator/validator/validator-config"
+      "destination": "/guides/operator/validator/validator-config",
+      "permanent": true
     },
     {
       "source": "/guides/operator/validator-tasks",
-      "destination": "/guides/operator/validator/validator-tasks"
+      "destination": "/guides/operator/validator/validator-tasks",
+      "permanent": true
     },
     {
       "source": "/standards/deepbookv2/:path*",
-      "destination": "/standards/deepbook"
+      "destination": "/standards/deepbook",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/graphql-migration",
@@ -641,55 +647,68 @@
     },
     {
       "source": "/references/framework/bridge/:path*",
-      "destination": "/references/framework/sui_bridge/:path*"
+      "destination": "/references/framework/sui_bridge/:path*",
+      "permanent": true
     },
     {
       "source": "/references/framework/std/:path*",
-      "destination": "/references/framework/sui_std/:path*"
+      "destination": "/references/framework/sui_std/:path*",
+      "permanent": true
     },
     {
       "source": "/references/framework/sui/:path*",
-      "destination": "/references/framework/sui_sui/:path*"
+      "destination": "/references/framework/sui_sui/:path*",
+      "permanent": true
     },
     {
       "source": "/references/framework/sui_system/:path*",
-      "destination": "/references/framework/sui_sui_system/:path*"
+      "destination": "/references/framework/sui_sui_system/:path*",
+      "permanent": true
     },
     {
       "source": "/standards/deepbookv3",
-      "destination": "/standards/deepbook"
+      "destination": "/standards/deepbook",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect",
-      "destination": "/guides/developer/sui-101/connect"
+      "destination": "/guides/developer/sui-101/connect",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/local-network",
-      "destination": "/guides/developer/getting-started/local-network"
+      "destination": "/guides/developer/getting-started/local-network",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/data-serving",
-      "destination": "/concepts/data-access/data-serving"
+      "destination": "/concepts/data-access/data-serving",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/write-package",
-      "destination": "/guides/developer/getting-started/hello-world"
+      "destination": "/guides/developer/getting-started/hello-world",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/build-test",
-      "destination": "/guides/developer/getting-started/hello-world"
+      "destination": "/guides/developer/getting-started/hello-world",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/publish",
-      "destination": "/guides/developer/getting-started/hello-world"
+      "destination": "/guides/developer/getting-started/hello-world",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/client-tssdk",
-      "destination": "/guides/developer/sui-101/client-tssdk"
+      "destination": "/guides/developer/sui-101/client-tssdk",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/debug",
-      "destination": "/references/ide/debugger"
+      "destination": "/references/ide/debugger",
+      "permanent": true
     },
     {
       "source": "/guides/developer/stablecoins",
@@ -698,15 +717,18 @@
     },
     {
       "source": "/standards/coin",
-      "destination": "/standards/currency"
+      "destination": "/standards/currency",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/graphql-rpc",
-      "destination": "/concepts/data-access/graphql-rpc"
+      "destination": "/concepts/data-access/graphql-rpc",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/gas-pricing",
-      "destination": "concepts/tokenomics/gas-in-sui"
+      "destination": "concepts/tokenomics/gas-in-sui",
+      "permanent": true
     },
     {
       "source": "/concepts/components",
@@ -715,19 +737,23 @@
     },
     {
       "source": "/operator/validator/validator-committee",
-      "destination": "/concepts/sui-architecture/consensus"
+      "destination": "/concepts/sui-architecture/consensus",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/avoid-equivocation",
-      "destination": "/concepts/sui-architecture/epochs"
+      "destination": "/concepts/sui-architecture/epochs",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/data-serving",
-      "destination": "/concepts/data-access/data-serving"
+      "destination": "/concepts/data-access/data-serving",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/indexer-functions",
-      "destination": "/concepts/data-access/data-serving"
+      "destination": "/concepts/data-access/data-serving",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/transaction-lifecycle",
@@ -736,35 +762,43 @@
     },
     {
       "source": "/concepts/app-devs",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/grpc-overview",
-      "destination": "/concepts/data-access/grpc"
+      "destination": "/concepts/data-access/grpc",
+      "permanent": true
     },
     {
       "source": "/concepts/graphql-indexer",
-      "destination": "/concepts/data-access/custom-indexers"
+      "destination": "/concepts/data-access/custom-indexers",
+      "permanent": true
     },
     {
       "source": "/concepts/data-access/graphql-indexer",
-      "destination": "/concepts/data-access/custom-indexers"
+      "destination": "/concepts/data-access/custom-indexers",
+      "permanent": true
     },
     {
       "source": "/concepts/graphql-rpc",
-      "destination": "/concepts/data-access/graphql-rpc"
+      "destination": "/concepts/data-access/graphql-rpc",
+      "permanent": true
     },
     {
       "source": "/concepts/custom-indexing-framework",
-      "destination": "/guides/developer/accessing-data/custom-indexing-framework"
+      "destination": "/guides/developer/accessing-data/custom-indexing-framework",
+      "permanent": true
     },
     {
       "source": "/concepts/custom-indexer/pipeline-architecture",
-      "destination": "/concepts/data-access/pipeline-architecture"
+      "destination": "/concepts/data-access/pipeline-architecture",
+      "permanent": true
     },
     {
       "source": "/concepts/archival-store",
-      "destination": "/guides/developer/accessing-data/archival-store"
+      "destination": "/guides/developer/accessing-data/archival-store",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-auth",
@@ -773,87 +807,108 @@
     },
     {
       "source": "/concepts/transactions/transaction-auth/keys-addresses",
-      "destination": "/concepts/transactions/transaction-auth"
+      "destination": "/concepts/transactions/transaction-auth",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/transaction-auth/keys-addresses",
-      "destination": "/concepts/transactions/transaction-auth"
+      "destination": "/concepts/transactions/transaction-auth",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/transaction-auth/:path*",
-      "destination": "/concepts/transactions/transaction-auth/:path*"
+      "destination": "/concepts/transactions/transaction-auth/:path*",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/vesting-strategies",
-      "destination": "/guides/developer/coin/vesting-strategies"
+      "destination": "/guides/developer/coin/vesting-strategies",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/object-ownership",
-      "destination": "/guides/developer/objects/object-ownership"
+      "destination": "/guides/developer/objects/object-ownership",
+      "permanent": true
     },
     {
       "source": "/concepts/object-model",
-      "destination": "/guides/developer/objects/object-model"
+      "destination": "/guides/developer/objects/object-model",
+      "permanent": true
     },
     {
       "source": "/concepts/object-ownership",
-      "destination": "/guides/developer/objects/object-ownership"
+      "destination": "/guides/developer/objects/object-ownership",
+      "permanent": true
     },
     {
       "source": "/concepts/object-ownership/:path*",
-      "destination": "/guides/developer/objects/object-ownership/:path*"
+      "destination": "/guides/developer/objects/object-ownership/:path*",
+      "permanent": true
     },
     {
       "source": "/concepts/transfers",
-      "destination": "/guides/developer/objects/transfers"
+      "destination": "/guides/developer/objects/transfers",
+      "permanent": true
     },
     {
       "source": "/concepts/transfers/:path*",
-      "destination": "/guides/developer/objects/transfers/:path*"
+      "destination": "/guides/developer/objects/transfers/:path*",
+      "permanent": true
     },
     {
       "source": "/concepts/versioning",
-      "destination": "/guides/developer/objects/versioning"
+      "destination": "/guides/developer/objects/versioning",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/connect",
-      "destination": "/guides/developer/getting-started/hello-world"
+      "destination": "/guides/developer/getting-started/hello-world",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/derived-objects",
-      "destination": "/guides/developer/objects/derived-objects"
+      "destination": "/guides/developer/objects/derived-objects",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/move-package-management",
-      "destination": "/guides/developer/packages/move-package-management"
+      "destination": "/guides/developer/packages/move-package-management",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/packages/upgrade",
-      "destination": "/guides/developer/packages/upgrade"
+      "destination": "/guides/developer/packages/upgrade",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/packages/custom-policies",
-      "destination": "/guides/developer/packages/custom-policies"
+      "destination": "/guides/developer/packages/custom-policies",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/packages/automated-address-management",
-      "destination": "/guides/developer/packages/automated-address-management"
+      "destination": "/guides/developer/packages/automated-address-management",
+      "permanent": true
     },
     {
       "source": "/concepts/dynamic-fields",
-      "destination": "/guides/developer/objects/dynamic-fields"
+      "destination": "/guides/developer/objects/dynamic-fields",
+      "permanent": true
     },
     {
       "source": "/concepts/dynamic-fields/tables-bags",
-      "destination": "/guides/developer/objects/tables-bags"
+      "destination": "/guides/developer/objects/tables-bags",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/nautilus",
-      "destination": "/guides/developer/nautilus/"
+      "destination": "/guides/developer/nautilus/",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/nautilus/using-nautilus",
-      "destination": "/guides/developer/nautilus/using-nautilus"
+      "destination": "/guides/developer/nautilus/using-nautilus",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/move-2024-migration",
@@ -862,47 +917,58 @@
     },
     {
       "source": "/guides/developer/sui-101/coin-mgt",
-      "destination": "/concepts/transactions/coin-mgt"
+      "destination": "/concepts/transactions/coin-mgt",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/custom-indexer",
-      "destination": "/guides/developer/accessing-data/custom-indexer"
+      "destination": "/guides/developer/accessing-data/custom-indexer",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/custom-indexer/build",
-      "destination": "/guides/developer/accessing-data/custom-indexer/build"
+      "destination": "/guides/developer/accessing-data/custom-indexer/build",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/custom-indexer/indexer-data-integration",
-      "destination": "/concepts/data-access/indexer-data-integration"
+      "destination": "/concepts/data-access/indexer-data-integration",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/custom-indexer/indexer-runtime-perf",
-      "destination": "/concepts/data-access/indexer-runtime-perf"
+      "destination": "/concepts/data-access/indexer-runtime-perf",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/custom-indexer/indexer-walrus",
-      "destination": "/guides/developer/accessing-data/custom-indexer/indexer-walrus"
+      "destination": "/guides/developer/accessing-data/custom-indexer/indexer-walrus",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/graphql-rpc",
-      "destination": "/concepts/data-access/graphql-rpc"
+      "destination": "/concepts/data-access/graphql-rpc",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/using-events",
-      "destination": "/guides/developer/accessing-data/using-events"
+      "destination": "/guides/developer/accessing-data/using-events",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/local-fee-markets",
-      "destination": "/guides/developer/objects/local-fee-markets"
+      "destination": "/guides/developer/objects/local-fee-markets",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/access-time",
-      "destination": "/guides/developer/on-chain-primitives/access-time"
+      "destination": "/guides/developer/on-chain-primitives/access-time",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/randomness-onchain",
-      "destination": "/guides/developer/on-chain-primitives/randomness-onchain"
+      "destination": "/guides/developer/on-chain-primitives/randomness-onchain",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/building-ptb",
@@ -916,1295 +982,1618 @@
     },
     {
       "source": "/guides/developer/sui-101/simulating-refs",
-      "destination": "/guides/developer/objects/simulating-refs"
+      "destination": "/guides/developer/objects/simulating-refs",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/sponsor-txn",
-      "destination": "/guides/developer/transactions/sponsor-txn"
+      "destination": "/guides/developer/transactions/sponsor-txn",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/working-with-ptbs",
-      "destination": "/guides/developer/transactions/ptbs/prog-txn-blocks"
+      "destination": "/guides/developer/transactions/ptbs/prog-txn-blocks",
+      "permanent": true
     },
     {
       "source": "/concepts/data-access/archival-store",
-      "destination": "/guides/developer/accessing-data/archival-store"
+      "destination": "/guides/developer/accessing-data/archival-store",
+      "permanent": true
     },
     {
       "source": "/concepts/data-access/custom-indexing-framework",
-      "destination": "/guides/developer/accessing-data/custom-indexing-framework"
+      "destination": "/guides/developer/accessing-data/custom-indexing-framework",
+      "permanent": true
     },
     {
       "source": "/concepts/data-access/grpc-overview",
-      "destination": "/concepts/data-access/grpc"
+      "destination": "/concepts/data-access/grpc",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/architecture",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/governance",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/object-model",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/references/rpc",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-object-model",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/gas-fees",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/zklogin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-upgrade",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/sui-validator",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/mysticeti",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/oracles",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/checkpoints",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/references/sdk/rust",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/programmable-transaction-blocks",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/objects",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/games",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-install",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/zklogin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/validator/validator-setup",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/graphql",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-cli-client",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/technology",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/apps/deepbook",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/apps/sui-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/consensus/mysticeti",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/staking",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-compared",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/staking-and-participation",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/staking-unstaking",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-smart-contract",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-testnet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-testnet-sui",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/install-cli",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/working-with-coins",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-cli-client",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-cli/client-commands",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-programmable-transaction-blocks",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/user/stake-delegate",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/tokenomics/token-release-schedule",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/zklogin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/object-model/one-time-witness",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-object-runtime/object-basics",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/fungible-tokens",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking-and-participation",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking-rewards",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/gas-fees",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/rpc-api",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/zklogin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/best-practices/security",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/deepbookv3/introduction",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/move-write-package",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/sui-cli-client",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/staking-unstaking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/create-nft",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/sui-addresses",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-grpc",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-jsonrpc",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-concepts",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/create-coin-token",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/use-randomness",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-sdk",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-token",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-zklogin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/run-fullnode",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/validator-guide",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/rpc/fullnode",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-token",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/sui-tokenomics",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/tutorials/apps/simple-dex",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/apps/slush-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/graphql",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/smart-contracts/security",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/sui-move/token-standard",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/groth16",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/object-centric-model",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/scaling",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/storage/walrus",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/tokenomics",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-economics",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/object",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-ns",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-token",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/stake-subsidy",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/nft-marketplaces",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/objects",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/overview",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/sui-testnet",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transaction-processing",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/zklogin",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/develop",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/consumer/staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/run-indexer",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/connect-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/distributed-counter",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/devnet-testnet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/coin-flip",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/full-node",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/build-from-main",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-metamask",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-network",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/sui-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/publish",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/sui-overview",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-coin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-economics/gas-pricing",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-liquid-staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-concepts/coin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-vs-rust",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/move.toml-manifest",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/reference/arithmetic",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/write-smart-contracts",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-multisig",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallets",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/wallet-integration/zklogin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/wallet-standard",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/zklogin-integration",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/sui-foundation-delegation",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/sui-tool",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/sui-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/sui-wallet/ledger-support",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/sui-wallet/staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/sui-object-model",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/proposals/sip-39",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/cli-client",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/cli/tool",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-api/reference/rest/transaction-operations/dry-run-transaction-block",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-graphql/reference",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-tokenomics",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-typescript-sdk",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/standards/suins",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/tokenomics",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/merge-coins",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/move/sui/package",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/applications",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/applications/walrus",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/apps/walrus/overview",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/architecture",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/move/publish",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/rpc",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/architecture/high-level-overview",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/objects-transactions-gas/objects/object-versioning",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-gas",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-gas-model",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-governance",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/gas-coins",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/generics",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/objects/destroying-objects",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-object-model/storage-gas",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-overview",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-performance",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/gas-fees",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/token/sui-token",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking-and-delegation",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transaction-deps",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-auth/consensus",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-auth/zklogin",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-types",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/validators",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/contribute/security",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/apps/walrus",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/consumer/slush",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/consumer/stake",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/consumer/sui-wallets",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/build-from-source",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/programmable-transaction-blocks",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/pruning",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/testing-modules",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/token",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/wallet-kit",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/zk-login-salt-management",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/coin/managed",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/common-tasks/create-nft",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/crypto/signing",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/cryptography/keypairs",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/create-coin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/quick-start",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-move-package",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-devnet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-grpc",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/create-your-first-dapp",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/first-app",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-a-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-sui-binary",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-testnet-funds",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/installation",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/move",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/seal",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/counter-e2e",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/create-fungible-token",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/gas-fees",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/sign-transaction",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/testing-tooling",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-assets/nfts",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-local-network",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-local-testnet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-mobile",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-concepts/object-ownership",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-examples",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-guides/token-standard",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-standards/closed-loop-token",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/examples/nft",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/flash-loan",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/modules-and-packages",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/move-differences",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/publish-modules",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/publish-package",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-performance",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-sdk-examples",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallet-kit/sign-message",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/suins",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/token-standard",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operating-a-validator/staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/run-full-node",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/staking-rewards",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/sui-full-node/indexing",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/validator-rewards",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/participant/staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/sui-tokenomics/sui-token",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/validator/staking-delegation",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/validator/staking-unstaking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/zklogin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/sui-transaction-model",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/tokenomics/stake-subsidy",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/tokenomics/staking-and-participation",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/move",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/move/sui/random",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/move/syntax/modules",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/networks",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-framework/sui/versioned",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-system",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-txns",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/standards/coin-standard",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/standards/zklogin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/building-from-source",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-economics/overview",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/apps/deepbook/reference/fees",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/apps/dexes",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/apps/walrus",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/build-install",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/dapp-kit",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/devnet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/programmable-objects/programmable-transaction-blocks",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/testing",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/zklogin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/architecture/high-level",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/merkle-trees",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/sui-addresses",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/gas",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/gas-fees",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/objects",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/objects/kiosk",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/overview",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/randomness",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/staking-unstaking",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-addresses",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/transaction-model",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/transaction-processing",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-bridge",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-consensus",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-consensus/mysticeti",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-deny-list",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-economy/gas",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-indexer",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-jsonrpc-api",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/applications/kiosk",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/applications/nft-protocol/kiosk",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/object-centric-world",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/receiving-objects",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/sponsored-transactions",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/testing",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move/object-model",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move/overview",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-nodes",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-object-runtime",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-ownership",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-wallet",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/token-io/nft",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/stablecoins/usdc",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking-and-inflation",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/token-utility",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transaction-flow",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transaction-lifecycle",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/programmable-transaction-blocks",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-auth/authorized",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/guides/app-examples",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/build",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/bcs",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/grpc",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/coin-standard",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/cryptography/zklogin-recovery",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/dapp-connect-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/dapp-kit/dapp-kit-intro",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/examples/tic-tac-toe",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/admin-dashboard",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/publish-package",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/shared-counter",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/write-smart-contract",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-package/publish-package",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/call-move-functions",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/cli-client",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/deploy-on-sui",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/move-setup",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/run-a-local-full-node",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/zk-login",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/grants",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/kiosk",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/liquid-staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/move/move-registry",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/nft/kiosk",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/starter-templates",
@@ -2213,863 +2602,1078 @@
     },
     {
       "source": "/guides/developer/sui-101/create-capabilities",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/creating-coin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/gas-in-sui",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/graphql",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/working-with-bcs",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/working-with-keys",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-bridge",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-cli-client/ptb",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-reference",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/create-nft",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/kiosk",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/migration-guide",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/move-prover",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/move-toml",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/object",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-programmability/interacting-with-contracts",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-prover",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-sdk/rust-sdk",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-signatures",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/wallet-kit/quickstart",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/wallets/web3-integration",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operate-a-sui-node",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operating-a-validator/staking-and-delegation",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operating-a-validator/staking-rewards",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/configure-snapshots",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/run-validator",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/stake-management",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/sui-consensus",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/sui-fullnode",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/validator/setup-validator",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/validator/validator-setup",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/sui-tokenomics/staking-and-unstaking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/sui-tokenomics/staking-rewards",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/user/sui-wallets/ledger",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/validator/staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/intro-to-sui",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/about-sui/performance",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/consensus",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/sui-architecture/consensus",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/sui-architecture/high-level-view",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/tokenomics/gas-fees",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/api/reference",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/fullnode-protocol/grpc-v2",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/move-stdlib/crypto/ecdsa_k1",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/move/stdlib/ecdsa_k1",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/move/test_scenario",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/rpc/servers",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-consensus",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-glossary",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-move-examples",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-move/coin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-protocol/sui-consensus",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-token.pdf",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/applications/walrus/overview",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/dapps/connecting-to-wallets",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/dev-guide",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/devex/swap-fees",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/move-apps",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/sui-sdk-kit/sui-java-sdk",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/build/wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/components/narwhal",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/zklogin/user-salt",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/deepbook",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/economics/gas-pricing",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/governance/epoch",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/governance/validators",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/objects/object-model",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/parallel-execution",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/consensus-engine",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/consensus/mysticeti",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/fees",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/gas-fees",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/gas-model",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/high-level-architecture",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/object-centric",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/sui-transaction-processing",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/transaction-processing/gas-fees",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/transactions-and-consensus",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-delegated-pos",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-grants",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/events",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/programming-with-objects",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/storage/gas-storage-fund",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move-differences",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-move/move-overview",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-objects/object-ownership",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-objects/runtime/object-runtime",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/staking-delegation",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/staking-rewards",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/sui-token",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-transaction-builder/gas-fees",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/technology-overview",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/airdrop",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/gas",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/gas-distribution",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/object-renting",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/package-publish",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/token-sui",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/gas",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/mysticeti",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/prog-txns/mysticeti",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/developing/building-apps/first-app",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/build/smart-contracts",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/consumer/zk-login",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/dev-inspect",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/create-currency",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/fungible-token",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/games/coin-flip",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/nft",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/personal-message",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/prediction-market",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/random",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/sponsored-transactions",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/coin/create-coin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/blackjack",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/first-app/write-move-packages",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/flash-loans",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/framework/move",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-start",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/cli",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/first-move-move",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-tokens",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/sui-wallets",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/wallets",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/graphql/reference/queries",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/object-io",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sdk/rust-sdk",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/security/gas-charges",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/smart-contracts/upgrade-packages",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/coin-management",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/connect-wallet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/send-receive-tokens",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/using-move",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/using-phantom",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/working-objects",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-api/graphql",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-architecture/high-level",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-examples/fungible-tokens",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-land/move-toml",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-tutorial/ch01-get-started",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/coin",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/publishing",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-nft",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallet-kit",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallet-standard",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/testing",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/troubleshooting",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/wallet-integrations",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/wallet-kit",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/walrus",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operating/staking-unstaking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/full-node/setup",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/fullnode/run-fullnode",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/prune-node",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/validator-activities",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/validator/update-validator-info",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/user/stake-sui",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/user/sui-wallets/hardware-wallets/ledger",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/validator/run-a-validator",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/architecture/high-level-overview",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/architecture/overview",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/move/move-overview",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/objects/object-ownership",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/tokenomics/sui-economy",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/quick-start",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/cli/suiup",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/dapp-kit",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sdk/typescript",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-dapp-toolkit",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-framework/staking-pool",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-token/use",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-types/transaction",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/transaction-format",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/sui-paper/sui.pdf",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/sui-rpc",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/technology/architecture",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/technology/transaction-flow",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/sui-whitepaper",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/contribute-to-sui-repos",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/bridge",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/tokenomics/staking",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/coin",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/guides/developer/deepbook",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/sui-move/modules/coin_registry",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-token-standard",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/cli/client",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/contribute/faq",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/deepbook",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/references/rpc/mainnet",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/create-coin/loyalty",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/operator/full-node",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/validator/run-validator",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/learn/architecture/consensus/mysticeti",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/deepbookv3/flash-loans",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/rewards",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/economics",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-cli/client",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/explore/panzerdogs",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/localize-sui-docs",
-      "destination": "/guides"
+      "destination": "/references/contribute/localize-sui-docs",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics/sui-token",
-      "destination": "/concepts"
+      "destination": "/concepts/tokenomics/tokenomics-overview",
+      "permanent": true
     },
     {
       "source": "/exchange-integration-guide",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/transaction-auth",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/cli-install",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/concepts/sui-architecture",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/concepts/consensus",
-      "destination": "/concepts"
+      "destination": "/concepts",
+      "permanent": true
     },
     {
       "source": "/build/programming-with-objects",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/nautilus/index",
-      "destination": "/guides/developer/nautilus"
+      "destination": "/guides/developer/nautilus",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101",
-      "destination": "/guides"
+      "destination": "/guides",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/client-tssdk",
-      "destination": "/guides/developer/app-examples/client-tssdk"
+      "destination": "/guides/developer/app-examples/client-tssdk",
+      "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/common-errors",
-      "destination": "/guides/developer/common-errors"
+      "destination": "/guides/developer/common-errors",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/coin-mgt",
-      "destination": "/concepts/coin-mgt"
+      "destination": "/concepts/coin-mgt",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions",
-      "destination": "/guides/developer/transactions/txn-overview"
+      "destination": "/guides/developer/transactions/txn-overview",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/prog-txn-blocks",
@@ -3078,39 +3682,48 @@
     },
     {
       "source": "/concepts/transactions/transaction-auth/intent-signing",
-      "destination": "/guides/developer/transactions/transaction-auth/intent-signing"
+      "destination": "/guides/developer/transactions/transaction-auth/intent-signing",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-auth/multisig",
-      "destination": "/guides/developer/transactions/transaction-auth/multisig"
+      "destination": "/guides/developer/transactions/transaction-auth/multisig",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-auth/offline-signing",
-      "destination": "/guides/developer/transactions/transaction-auth/offline-signing"
+      "destination": "/guides/developer/transactions/transaction-auth/offline-signing",
+      "permanent": true
     },
     {
       "source": "/guides/developer/transactions/working-with-ptbs",
-      "destination": "/guides/developer/transactions/ptbs/prog-txn-blocks"
+      "destination": "/guides/developer/transactions/ptbs/prog-txn-blocks",
+      "permanent": true
     },
     {
       "source": "/concepts/transactions/sponsored-transactions",
-      "destination": "/guides/developer/transactions/sponsor-txn"
+      "destination": "/guides/developer/transactions/sponsor-txn",
+      "permanent": true
     },
     {
       "source": "/guides/developer/accessing-data/custom-indexer/indexer-runtime-perf",
-      "destination": "/concepts/data-access/indexer-runtime-perf"
+      "destination": "/concepts/data-access/indexer-runtime-perf",
+      "permanent": true
     },
     {
       "source": "/guides/developer/accessing-data/custom-indexer/pipeline-architecture",
-      "destination": "/concepts/data-access/pipeline-architecture"
+      "destination": "/concepts/data-access/pipeline-architecture",
+      "permanent": true
     },
     {
       "source": "/guides/developer/accessing-data/custom-indexer/indexer-data-integration",
-      "destination": "/concepts/data-access/indexer-data-integration"
+      "destination": "/concepts/data-access/indexer-data-integration",
+      "permanent": true
     },
     {
       "source": "/concepts/cryptography/nautilus/nautilus-design",
-      "destination": "/guides/developer/nautilus/nautilus-design"
+      "destination": "/guides/developer/nautilus/nautilus-design",
+      "permanent": true
     },
     {
       "source": "/concepts/tokenomics",
@@ -3307,41 +3920,106 @@
       "destination": "/references/sui-api/sui-graphql/beta/reference",
       "permanent": true
     },
-    { "source": "/concepts/cryptography.md", "destination": "/concepts/cryptography/index.md" },
-    { "source": "/guides/developer/accessing-data/custom-indexer.md", "destination": "/guides/developer/accessing-data/custom-indexer/index.md" },
-    { "source": "/guides/developer/app-examples.md", "destination": "/guides/developer/app-examples/index.md" },
-    { "source": "/guides/developer/coin.md", "destination": "/guides/developer/coin/index.md" },
-    { "source": "/guides/developer/cryptography.md", "destination": "/guides/developer/cryptography/index.md" },
-    { "source": "/guides/developer/cryptography/zklogin-integration.md", "destination": "/guides/developer/cryptography/zklogin-integration/index.md" },
-    { "source": "/guides/developer/getting-started.md", "destination": "/guides/developer/getting-started/index.md" },
-    { "source": "/guides/developer/nautilus.md", "destination": "/guides/developer/nautilus/index.md" },
-    { "source": "/references/framework/sui_bridge.md", "destination": "/references/framework/sui_bridge/index.md" },
-    { "source": "/references/framework/sui_std.md", "destination": "/references/framework/sui_std/index.md" },
-    { "source": "/references/framework/sui_sui.md", "destination": "/references/framework/sui_sui/index.md" },
-    { "source": "/references/framework/sui_sui_system.md", "destination": "/references/framework/sui_sui_system/index.md" },
-    { "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md", "destination": "/references/sui-api/sui-graphql/beta/reference" },
-    { "source": "/standards/display", "destination": "/guides/developer/objects/display/display-overview" },
-    { "source": "/standards/display-v2-migration", "destination": "/guides/developer/objects/display" },
-    { "source": "/concepts/sui-architecture.md", "destination": "/concepts/sui-architecture", "permanent": true },
-    { "source": "/concepts/tokenomics.md", "destination": "/concepts/tokenomics", "permanent": true },
-    { "source": "/guides/developer/accessing-data.md", "destination": "/guides/developer/accessing-data", "permanent": true },
-    { "source": "/guides/developer/digital-assets.md", "destination": "/guides/developer/digital-assets", "permanent": true },
-    { "source": "/guides/developer/digital-assets/examples-patterns.md", "destination": "/guides/developer/digital-assets/examples-patterns", "permanent": true },
-    { "source": "/guides/developer/digital-assets/fungible-tokens.md", "destination": "/guides/developer/digital-assets/fungible-tokens", "permanent": true },
-    { "source": "/guides/developer/nft.md", "destination": "/guides/developer/nft", "permanent": true },
-    { "source": "/guides/developer/objects.md", "destination": "/guides/developer/objects", "permanent": true },
-    { "source": "/guides/developer/objects/display.md", "destination": "/guides/developer/objects/display", "permanent": true },
-    { "source": "/guides/developer/objects/object-ownership.md", "destination": "/guides/developer/objects/object-ownership", "permanent": true },
-    { "source": "/guides/developer/objects/transfers.md", "destination": "/guides/developer/objects/transfers", "permanent": true },
-    { "source": "/guides/developer/on-chain-primitives.md", "destination": "/guides/developer/on-chain-primitives", "permanent": true },
-    { "source": "/guides/developer/packages.md", "destination": "/guides/developer/packages", "permanent": true },
-    { "source": "/guides/developer/transactions.md", "destination": "/guides/developer/transactions", "permanent": true },
-    { "source": "/guides/developer/transactions/ptbs.md", "destination": "/guides/developer/transactions/ptbs", "permanent": true },
-    { "source": "/guides/developer/transactions/transaction-auth.md", "destination": "/guides/developer/transactions/transaction-auth", "permanent": true },
-    { "source": "/guides/developer/wallets.md", "destination": "/guides/developer/wallets", "permanent": true },
-    { "source": "/guides/operator.md", "destination": "/guides/operator", "permanent": true },
-    { "source": "/guides/suiplay0x1.md", "destination": "/guides/suiplay0x1", "permanent": true },
-    { "source": "/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature.md", "destination": "/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature", "permanent": true }
+    {
+      "source": "/concepts/cryptography.md",
+      "destination": "/concepts/cryptography/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/accessing-data/custom-indexer.md",
+      "destination": "/guides/developer/accessing-data/custom-indexer/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/app-examples.md",
+      "destination": "/guides/developer/app-examples/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/coin.md",
+      "destination": "/guides/developer/coin/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/cryptography.md",
+      "destination": "/guides/developer/cryptography/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/cryptography/zklogin-integration.md",
+      "destination": "/guides/developer/cryptography/zklogin-integration/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/getting-started.md",
+      "destination": "/guides/developer/getting-started/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nautilus.md",
+      "destination": "/guides/developer/nautilus/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/references/framework/sui_bridge.md",
+      "destination": "/references/framework/sui_bridge/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/references/framework/sui_std.md",
+      "destination": "/references/framework/sui_std/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/references/framework/sui_sui.md",
+      "destination": "/references/framework/sui_sui/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/references/framework/sui_sui_system.md",
+      "destination": "/references/framework/sui_sui_system/index.md",
+      "permanent": true
+    },
+    {
+      "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md",
+      "destination": "/references/sui-api/sui-graphql/beta/reference",
+      "permanent": true
+    },
+    {
+      "source": "/standards/display",
+      "destination": "/guides/developer/objects/display/display-overview",
+      "permanent": true
+    },
+    {
+      "source": "/standards/display-v2-migration",
+      "destination": "/guides/developer/objects/display",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/transactions/index",
+      "destination": "/guides/developer/transactions/txn-overview",
+      "permanent": true
+    },
+    {
+      "source": "/style-guide",
+      "destination": "/references/contribute/style-guide",
+      "permanent": true
+    },
+    {
+      "source": "/sui-compared",
+      "destination": "/guides",
+      "permanent": true
+    },
+    {
+      "source": "/sui-framework-reference",
+      "destination": "/references/framework",
+      "permanent": true
+    },
+    {
+      "source": "/sui-glossary",
+      "destination": "/references/sui-glossary",
+      "permanent": true
+    }
   ],
   "rewrites": [
     {
