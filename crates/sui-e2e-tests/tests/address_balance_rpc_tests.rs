@@ -76,14 +76,14 @@ async fn setup_scenario(
     // Transfer SUI coins to recipient
     for _ in 0..scenario.sui.real_coins {
         test_env
-            .transfer_sui_coin(funder, recipient, 1_000_000_000)
+            .transfer_sui(funder, recipient, 1_000_000_000)
             .await;
     }
 
     // Fund SUI address balance if configured
     if scenario.sui.has_address_balance {
         test_env
-            .fund_address_balance_for_recipient(funder, recipient, 1_000_000_000)
+            .transfer_sui_to_address_balance(funder, recipient, 1_000_000_000)
             .await;
     }
 
@@ -409,10 +409,10 @@ async fn test_pagination_consistency_get_all_coins() {
     // Create custom coin type with address balance
     let recipient = SuiAddress::random_for_testing_only();
     test_env
-        .transfer_sui_coin(funder, recipient, 1_000_000_000)
+        .transfer_sui(funder, recipient, 1_000_000_000)
         .await;
     test_env
-        .fund_address_balance_for_recipient(funder, recipient, 1_000_000_000)
+        .transfer_sui_to_address_balance(funder, recipient, 1_000_000_000)
         .await;
 
     let custom_config = CoinTypeConfig {
