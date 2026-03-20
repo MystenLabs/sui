@@ -262,7 +262,25 @@ impl<'a> SignatureChecker<'a> {
                 | VariantSwitch(_) => {
                     return Err(
                         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message("Unexpected variant opcode in version 0".to_string()),
+                            .with_message("Unexpected variant opcode in version 2".to_string()),
+                    );
+                }
+                LdI8(_)
+                | LdI16(_)
+                | LdI32(_)
+                | LdI64(_)
+                | LdI128(_)
+                | LdI256(_)
+                | CastI8
+                | CastI16
+                | CastI32
+                | CastI64
+                | CastI128
+                | CastI256
+                | Neg => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message("Unexpected signed int opcode in version 2".to_string()),
                     );
                 }
             };
@@ -314,6 +332,12 @@ impl<'a> SignatureChecker<'a> {
             | SignatureToken::U64
             | SignatureToken::U128
             | SignatureToken::U256
+            | SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256
             | SignatureToken::Address
             | SignatureToken::Signer => {}
         }
@@ -348,8 +372,8 @@ impl<'a> SignatureChecker<'a> {
     fn check_signature_token(&self, ty: &SignatureToken) -> PartialVMResult<()> {
         use SignatureToken::*;
         match ty {
-            U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | Datatype(_)
-            | TypeParameter(_) => Ok(()),
+            U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256 | Bool
+            | Address | Signer | Datatype(_) | TypeParameter(_) => Ok(()),
             Reference(_) | MutableReference(_) => {
                 // TODO: Prop tests expect us to NOT check the inner types.
                 // Revisit this once we rework prop tests.
@@ -429,6 +453,12 @@ impl<'a> SignatureChecker<'a> {
             | SignatureToken::U64
             | SignatureToken::U128
             | SignatureToken::U256
+            | SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256
             | SignatureToken::Address
             | SignatureToken::Signer => Ok(()),
         }

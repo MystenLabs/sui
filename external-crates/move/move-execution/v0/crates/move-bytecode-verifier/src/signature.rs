@@ -257,6 +257,24 @@ impl<'a> SignatureChecker<'a> {
                             .with_message("Unexpected variant opcode in version 0".to_string()),
                     );
                 }
+                LdI8(_)
+                | LdI16(_)
+                | LdI32(_)
+                | LdI64(_)
+                | LdI128(_)
+                | LdI256(_)
+                | CastI8
+                | CastI16
+                | CastI32
+                | CastI64
+                | CastI128
+                | CastI256
+                | Neg => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message("Unexpected signed int opcode in version 0".to_string()),
+                    );
+                }
             };
             result.map_err(|err| {
                 err.append_message_with_separator(' ', format!("at offset {} ", offset))
@@ -308,6 +326,19 @@ impl<'a> SignatureChecker<'a> {
             | SignatureToken::U256
             | SignatureToken::Address
             | SignatureToken::Signer => {}
+            SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(
+                            "Unexpected signed int signature token in version 0".to_string(),
+                        ),
+                );
+            }
         }
         Ok(())
     }
@@ -342,6 +373,12 @@ impl<'a> SignatureChecker<'a> {
         match ty {
             U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | Datatype(_)
             | TypeParameter(_) => Ok(()),
+            I8 | I16 | I32 | I64 | I128 | I256 => {
+                Err(PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(
+                        "Unexpected signed int signature token in version 0".to_string(),
+                    ))
+            }
             Reference(_) | MutableReference(_) => {
                 // TODO: Prop tests expect us to NOT check the inner types.
                 // Revisit this once we rework prop tests.
@@ -416,6 +453,16 @@ impl<'a> SignatureChecker<'a> {
             | SignatureToken::U256
             | SignatureToken::Address
             | SignatureToken::Signer => Ok(()),
+            SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    "Unexpected signed int signature token in version 0".to_string(),
+                ),
+            ),
         }
     }
 

@@ -621,6 +621,24 @@ fn execute_inner(
         Bytecode::VariantSwitch(_) => {
             state.release_value(safe_unwrap_err!(verifier.stack.pop()), meter)?
         }
+        Bytecode::LdI8(_)
+        | Bytecode::LdI16(_)
+        | Bytecode::LdI32(_)
+        | Bytecode::LdI64(_)
+        | Bytecode::LdI128(_)
+        | Bytecode::LdI256(_)
+        | Bytecode::CastI8
+        | Bytecode::CastI16
+        | Bytecode::CastI32
+        | Bytecode::CastI64
+        | Bytecode::CastI128
+        | Bytecode::CastI256
+        | Bytecode::Neg => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Unexpected signed int opcode in version 3".to_string()),
+            );
+        }
     };
     Ok(())
 }

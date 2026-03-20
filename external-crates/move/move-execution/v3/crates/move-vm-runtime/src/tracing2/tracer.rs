@@ -930,6 +930,12 @@ impl VMTracer<'_> {
             | B::LdU64(_)
             | B::LdU128(_)
             | B::LdU256(_)
+            | B::LdI8(_)
+            | B::LdI16(_)
+            | B::LdI32(_)
+            | B::LdI64(_)
+            | B::LdI128(_)
+            | B::LdI256(_)
             | B::LdFalse
             | B::LdTrue
             | B::LdConst(_) => {
@@ -950,6 +956,13 @@ impl VMTracer<'_> {
             | B::CastU64
             | B::CastU128
             | B::CastU256
+            | B::CastI8
+            | B::CastI16
+            | B::CastI32
+            | B::CastI64
+            | B::CastI128
+            | B::CastI256
+            | B::Neg
             | B::Pop
             | B::BrTrue(_)
             | B::BrFalse(_)
@@ -1704,6 +1717,19 @@ impl VMTracer<'_> {
                 self.trace
                     .instruction(instruction, vec![], effects, remaining_gas, pc);
             }
+            B::LdI8(_)
+            | B::LdI16(_)
+            | B::LdI32(_)
+            | B::LdI64(_)
+            | B::LdI128(_)
+            | B::LdI256(_)
+            | B::CastI8
+            | B::CastI16
+            | B::CastI32
+            | B::CastI64
+            | B::CastI128
+            | B::CastI256
+            | B::Neg => unreachable!("Signed integer operations not supported in v3"),
             B::ExistsDeprecated(_)
             | B::ExistsGenericDeprecated(_)
             | B::MoveFromDeprecated(_)

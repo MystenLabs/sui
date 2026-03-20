@@ -1260,6 +1260,19 @@ impl Frame {
             | Bytecode::UnpackVariantGenericImmRef(_)
             | Bytecode::UnpackVariantGenericMutRef(_)
             | Bytecode::VariantSwitch(_) => unreachable!("enums not supported in v0"),
+            Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg => unreachable!("signed ints not supported in v0"),
         }
 
         Ok(InstrRet::Ok)

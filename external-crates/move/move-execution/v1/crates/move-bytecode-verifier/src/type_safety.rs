@@ -953,6 +953,24 @@ fn verify_instr(
                     .with_message("Unexpected variant opcode in version 1".to_string()),
             );
         }
+        Bytecode::LdI8(_)
+        | Bytecode::LdI16(_)
+        | Bytecode::LdI32(_)
+        | Bytecode::LdI64(_)
+        | Bytecode::LdI128(_)
+        | Bytecode::LdI256(_)
+        | Bytecode::CastI8
+        | Bytecode::CastI16
+        | Bytecode::CastI32
+        | Bytecode::CastI64
+        | Bytecode::CastI128
+        | Bytecode::CastI256
+        | Bytecode::Neg => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Unexpected signed int opcode in version 1".to_string()),
+            );
+        }
     };
     Ok(())
 }
@@ -1005,6 +1023,9 @@ fn instantiate(token: &SignatureToken, subst: &Signature) -> SignatureToken {
             // file and that this guarantees that type parameter indices are always in bounds.
             debug_assert!((*idx as usize) < subst.len());
             subst.0[*idx as usize].clone()
+        }
+        I8 | I16 | I32 | I64 | I128 | I256 => {
+            unreachable!("Unexpected signed int type in version 1")
         }
     }
 }

@@ -1434,6 +1434,22 @@ impl Frame {
                 *pc = jump_table[tag as usize];
                 return Ok(InstrRet::Branch);
             }
+            Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg => {
+                return Err(PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Signed integer operations not supported in v3".to_string()));
+            }
         }
 
         Ok(InstrRet::Ok)
