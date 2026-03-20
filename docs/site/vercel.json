@@ -4020,16 +4020,6 @@
       "destination": "/references/sui-glossary",
       "permanent": true
     }
-    {
-      "source": "/references/awesome-sui.md",
-      "destination": "/references/awesome-sui",
-      "permanent": true
-    },
-    {
-      "source": "/references/release-notes.md",
-      "destination": "/references/release-notes",
-      "permanent": true
-    }
   ],
   "rewrites": [
     {
