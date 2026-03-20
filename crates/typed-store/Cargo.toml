@@ -39,7 +39,7 @@ itertools.workspace = true
 mysten-common.workspace = true
 mysten-metrics.workspace = true
 [target.'cfg(not(windows))'.dependencies]
-tidehunter = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "1521654c2cc414d76042d5e877bb246a961a09c7", version = "0.1.0", optional = true}
+tidehunter = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "cf13914bc6454d4dd2e875efe4d3aa28732cac9d", version = "0.1.0", optional = true}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 rocksdb = { version = "0.22.0", default-features = false, features = ["jemalloc"] }
