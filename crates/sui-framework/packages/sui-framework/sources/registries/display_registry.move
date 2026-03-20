@@ -164,6 +164,10 @@ entry fun destroy_system_migration_cap(cap: SystemMigrationCap) {
     id.delete();
 }
 
+entry fun transfer_migration_cap(cap: SystemMigrationCap, recipient: address) {
+    transfer::transfer(cap, recipient);
+}
+
 /// Allow deleting legacy display objects, as long as the cap has been claimed first.
 public fun delete_legacy<T: key>(display: &Display<T>, legacy: LegacyDisplay<T>) {
     assert!(display.cap_id.is_some(), ECapNotClaimed);
