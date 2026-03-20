@@ -157,10 +157,13 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
             })));
         };
 
-        // If the next accessor is for a dynamic field, try and find the parent ID within this
-        // struct, but don't consume the accessor (the dynamic field access will be handled by the
+        // If the next accessor is for a dynamic field or derived object, try and find the parent
+        // ID within this struct, but don't consume the accessor (the lookup will be handled by the
         // interpreter).
-        if matches!(accessor, Accessor::DFIndex(_) | Accessor::DOFIndex(_)) {
+        if matches!(
+            accessor,
+            Accessor::DFIndex(_) | Accessor::DOFIndex(_) | Accessor::Derived(_)
+        ) {
             return AddressExtractor
                 .visit_struct(driver)
                 .map(|a| a.map(Value::Address));

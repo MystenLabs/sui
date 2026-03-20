@@ -96,9 +96,23 @@ Load a dynamic object field (the value is a full Sui object):
 
 Each `=>` access costs 2 object loads (1 for the wrapper `Field`, 1 for the object).
 
+### Derived object access (`~>`)
+
+Load a derived object from on-chain storage using the parent object and a derived key:
+
+```
+{parent~>['key']}       — derived object with string key 'key'
+{parent~>['key'].x}     — access field 'x' on the loaded object
+{parent.id~>['key'].id} — load the object and read its UID
+{registry~>[$self]}     — use the current object as the derived key
+```
+
+Each `~>` access costs 1 object load from the budget.
+
 ## Literal values
 
-Literals can appear as expression roots or as dynamic field name keys.
+Literals can appear as expression roots or as keys for dynamic field, dynamic object field, and
+derived object lookups.
 
 ### Scalars
 
@@ -372,6 +386,7 @@ accessor ::= '.' IDENT
            | '[' chain ']'
            | '->' '[' chain ']'
            | '=>' '[' chain ']'
+           | '~>' '[' chain ']'
 
 literal  ::= address | bool | number | string | vector | struct | enum
 

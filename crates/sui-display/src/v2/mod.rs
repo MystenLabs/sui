@@ -357,6 +357,23 @@ mod tests {
         Ok(Some(value.derive_dynamic_object_field_id(parent)?.into()))
     }
 
+    async fn derived_object_id(
+        store: MockStore,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        parent: AccountAddress,
+        literal: &str,
+    ) -> Result<Option<AccountAddress>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+
+        let name = Name::parse(Limits::default(), literal)?;
+        let Some(value) = name.eval(&interpreter).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(value.derive_object_id(parent)?.into()))
+    }
+
     /// Helper to parse display fields and render them against the provided object.
     async fn format<'s>(
         store: impl Store,
@@ -509,6 +526,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_extract_with_derived_object_loads() {
+        let parent = AccountAddress::from_str("0x5100").unwrap();
+        let child = AccountAddress::from_str("0x5101").unwrap();
+        let bytes = bcs::to_bytes(&parent).unwrap();
+
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![(
+                "parent",
+                struct_(
+                    "0x1::m::Parent",
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
+                ),
+            )],
+        );
+
+        let store = MockStore::default().with_derived_object(
+            parent,
+            "derived_key",
+            L::Struct(Box::new(move_utf8_str_layout())),
+            (child, 111u64, 222u64),
+            struct_(
+                "0x1::m::Child",
+                vec![
+                    ("id", L::Struct(Box::new(UID::layout()))),
+                    ("x", L::U64),
+                    ("y", L::U64),
+                ],
+            ),
+        );
+
+        let fields = [
+            "parent~>['derived_key'].x",
+            "parent~>['derived_key'].y",
+            "parent.id~>['derived_key'].id",
+            "parent~>['missing']",
+        ];
+
+        let mut outputs = Vec::with_capacity(fields.len());
+        for field in fields {
+            outputs.push(
+                extract(store.clone(), bytes.clone(), layout.clone(), field)
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        assert_json_snapshot!(outputs, @r###"
+        [
+          "111",
+          "222",
+          "0x0000000000000000000000000000000000000000000000000000000000005101",
+          null
+        ]
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_dynamic_field_names() {
         let parent = AccountAddress::from_str("0x4242").unwrap();
 
@@ -619,6 +694,46 @@ mod tests {
             let type_: TypeTag = type_.parse().unwrap();
             let wrapper_type = DynamicFieldInfo::dynamic_object_field_wrapper(type_);
             let expected = derive_dynamic_field_id(parent, &wrapper_type.into(), &bytes).unwrap();
+            assert_eq!(id, expected.into(), "mismatch for literal: {literal}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_derived_object_names() {
+        let parent = AccountAddress::from_str("0x4242").unwrap();
+
+        let obj_bytes = bcs::to_bytes(&0u8).unwrap();
+        let obj_layout = L::U8;
+
+        let cases: Vec<(&str, &str, Vec<u8>)> = vec![
+            (
+                "'hello'",
+                "0x1::string::String",
+                bcs::to_bytes(&"hello").unwrap(),
+            ),
+            ("42u64", "u64", bcs::to_bytes(&42u64).unwrap()),
+            (
+                "0x1::m::Key(99u32, 'test')",
+                "0x1::m::Key",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+        ];
+
+        for (literal, type_, bytes) in cases {
+            let id = derived_object_id(
+                MockStore::default(),
+                obj_bytes.clone(),
+                obj_layout.clone(),
+                parent,
+                literal,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+            let type_: TypeTag = type_.parse().unwrap();
+            let expected =
+                sui_types::derived_object::derive_object_id(parent, &type_, &bytes).unwrap();
             assert_eq!(id, expected.into(), "mismatch for literal: {literal}");
         }
     }
