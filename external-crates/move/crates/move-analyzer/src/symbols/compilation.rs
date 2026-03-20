@@ -410,7 +410,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     ]));
 
     let manifest_file = overlay_fs_root
-        .join(pkg_path.to_string_lossy().to_string())
+        .join(&pkg_path.to_string_lossy())
         .and_then(|p| p.join(MANIFEST_FILE_NAME))
         .and_then(|p| p.open_file());
 
