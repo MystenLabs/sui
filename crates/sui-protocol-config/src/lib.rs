@@ -4689,10 +4689,10 @@ impl ProtocolConfig {
                     // Enable new VM.
                     cfg.execution_version = Some(4);
                     cfg.feature_flags.new_vm_enabled = true;
-                    // Re-enable unpaid amplification deferral protection (devnet + testnet)
-                    if chain != Chain::Mainnet {
-                        cfg.feature_flags.defer_unpaid_amplification = true;
-                    }
+                    // Disabled for testing - comparing deferral vs no deferral
+                    // if chain != Chain::Mainnet {
+                    //     cfg.feature_flags.defer_unpaid_amplification = true;
+                    // }
                 }
                 // Use this template when making changes:
                 //
