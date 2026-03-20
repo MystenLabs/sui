@@ -474,210 +474,120 @@ impl StateRead for AuthorityState {
         // The global ordering is: [real[0], fake, real[1], real[2], ...]
         // The fake coin (representing address balance) is always at position 1.
         //
-        // We need to handle pagination correctly:
-        // - If cursor is default: return starting from position 0 (real[0], fake, ...)
-        // - If cursor == real[0]: return starting from position 1 (fake, real[1], ...)
-        // - If cursor == fake: return starting from position 2 (real[1], real[2], ...)
-        // - If cursor == real[k] (k >= 1): return starting from position k+2
+        // Pagination cases:
+        // - cursor is default: return starting from position 0 (real[0], fake, ...)
+        // - cursor == real[0]: return starting from position 1 (fake, real[1], ...)
+        // - cursor == fake: return starting from position 2 (real[1], real[2], ...)
+        // - cursor == real[k] (k >= 1): return starting from position k+2
+
+        fn to_sui_coin(key: CoinIndexKey2, info: CoinInfo) -> SuiCoin {
+            SuiCoin {
+                coin_type: key.coin_type,
+                coin_object_id: key.object_id,
+                version: info.version,
+                digest: info.digest,
+                balance: info.balance,
+                previous_transaction: info.previous_transaction,
+            }
+        }
 
         // Get fake coin info for the requested coin type.
-        let fake_coin_info: Option<(String, CoinIndexKey2, CoinInfo)> = if one_coin_type_only {
+        let fake_coin: Option<SuiCoin> = if one_coin_type_only {
             let balance_type_tag = sui_types::parse_sui_type_tag(&cursor.0)
                 .map_err(|e| anyhow::anyhow!("Invalid coin type: {} - {}", cursor.0, e))?;
             let balance_type = Balance::type_tag(balance_type_tag);
-            if let Some((obj_ref, balance, previous_transaction)) =
-                self.get_address_balance_coin_info(owner, balance_type)?
-            {
-                let key = CoinIndexKey2::new(owner, cursor.0.clone(), balance, obj_ref.0);
-                let info = CoinInfo {
+            self.get_address_balance_coin_info(owner, balance_type)?
+                .map(|(obj_ref, balance, previous_transaction)| SuiCoin {
+                    coin_type: cursor.0.clone(),
+                    coin_object_id: obj_ref.0,
                     version: obj_ref.1,
                     digest: obj_ref.2,
                     balance,
                     previous_transaction,
-                };
-                Some((cursor.0.clone(), key, info))
-            } else {
-                None
-            }
+                })
         } else {
             None
         };
 
-        // Check if cursor points to the fake coin.
-        let cursor_at_fake = fake_coin_info
+        let cursor_at_fake = fake_coin
             .as_ref()
-            .map(|(_, key, _)| cursor.2 == key.object_id)
+            .map(|c| cursor.2 == c.coin_object_id)
             .unwrap_or(false);
 
-        // Get the first real coin (with default cursor) to check if cursor == real[0].
-        let first_real_coin: Option<(CoinIndexKey2, CoinInfo)> = self
-            .get_owned_coins_iterator_with_cursor(
-                owner,
-                (cursor.0.clone(), 0, ObjectID::ZERO),
-                1,
-                one_coin_type_only,
-            )?
-            .next();
-
-        // Check if cursor matches the first real coin (meaning we just returned real[0]).
-        let cursor_at_first_real = first_real_coin
-            .as_ref()
-            .map(|(key, _)| cursor.2 == key.object_id)
-            .unwrap_or(false);
-
-        // Determine if we're past the fake coin slot (position 1).
-        // We're past it if:
-        // - cursor_at_fake is true (we just returned the fake coin), OR
-        // - cursor is for a real coin that's not the first one
-        let past_fake_slot = cursor_at_fake
-            || (cursor.2 != ObjectID::ZERO
-                && !cursor_at_first_real
-                && fake_coin_info.is_some()
-                && first_real_coin.is_some());
-
-        // Get real coins starting from the appropriate cursor.
-        // When cursor_at_fake, we need to continue from first_real_coin (to get real[1], real[2], ...).
-        let real_coin_cursor = if cursor_at_fake {
-            // Continue from first real coin to get the coins after it.
-            if let Some((first_key, _)) = &first_real_coin {
-                (
-                    first_key.coin_type.clone(),
-                    first_key.inverted_balance,
-                    first_key.object_id,
-                )
+        // Determine cursor position relative to fake coin slot.
+        // Only fetch first_real_coin when we have a non-zero cursor and need to check position.
+        let (cursor_at_first_real, past_fake_slot) =
+            if cursor.2 == ObjectID::ZERO || cursor_at_fake || fake_coin.is_none() {
+                (false, cursor_at_fake)
             } else {
-                cursor.clone()
-            }
+                // Cursor is non-zero, not at fake, and fake exists. Check if at first real coin.
+                let first_real = self
+                    .get_owned_coins_iterator_with_cursor(
+                        owner,
+                        (cursor.0.clone(), 0, ObjectID::ZERO),
+                        1,
+                        one_coin_type_only,
+                    )?
+                    .next();
+                let at_first = first_real
+                    .as_ref()
+                    .map(|(key, _)| cursor.2 == key.object_id)
+                    .unwrap_or(false);
+                // Past fake slot if we're at a real coin that's not the first one.
+                (at_first, !at_first && first_real.is_some())
+            };
+
+        // When cursor_at_fake, we need to skip real[0] and start from real[1].
+        // Do this by fetching from default cursor and skipping the first result.
+        let skip_first = cursor_at_fake;
+        let real_cursor = if cursor_at_fake {
+            (cursor.0.clone(), 0, ObjectID::ZERO)
         } else {
             cursor.clone()
         };
 
-        let real_coins: Vec<_> = self
+        let mut real_coins = self
             .get_owned_coins_iterator_with_cursor(
                 owner,
-                real_coin_cursor,
+                real_cursor,
                 limit + 1,
                 one_coin_type_only,
             )?
-            .collect();
+            .map(|(key, info)| to_sui_coin(key, info));
 
-        let mut result = vec![];
+        if skip_first {
+            real_coins.next(); // Skip real[0] when resuming after fake coin.
+        }
+
+        // Build result based on cursor position.
+        let mut result = Vec::with_capacity(limit);
 
         if past_fake_slot {
-            // We're past the fake coin slot, just return real coins.
-            for (key, coin) in real_coins.into_iter().take(limit) {
-                result.push(SuiCoin {
-                    coin_type: key.coin_type,
-                    coin_object_id: key.object_id,
-                    version: coin.version,
-                    digest: coin.digest,
-                    balance: coin.balance,
-                    previous_transaction: coin.previous_transaction,
-                });
-            }
+            // Past fake coin slot, return only real coins.
+            result.extend(real_coins.take(limit));
         } else if cursor_at_first_real {
-            // Cursor is at first real coin, so fake coin is next.
-            if let Some((coin_type, fake_key, fake_info)) = fake_coin_info {
-                result.push(SuiCoin {
-                    coin_type,
-                    coin_object_id: fake_key.object_id,
-                    version: fake_info.version,
-                    digest: fake_info.digest,
-                    balance: fake_info.balance,
-                    previous_transaction: fake_info.previous_transaction,
-                });
-
-                // Add real coins after the fake coin.
-                for (key, coin) in real_coins.into_iter() {
-                    if result.len() >= limit {
-                        break;
-                    }
-                    result.push(SuiCoin {
-                        coin_type: key.coin_type,
-                        coin_object_id: key.object_id,
-                        version: coin.version,
-                        digest: coin.digest,
-                        balance: coin.balance,
-                        previous_transaction: coin.previous_transaction,
-                    });
-                }
+            // Cursor at real[0], return [fake, real[1], ...].
+            if let Some(fake) = fake_coin {
+                result.push(fake);
+                result.extend(real_coins.take(limit - 1));
             } else {
-                // No fake coin, just return real coins.
-                for (key, coin) in real_coins.into_iter().take(limit) {
-                    result.push(SuiCoin {
-                        coin_type: key.coin_type,
-                        coin_object_id: key.object_id,
-                        version: coin.version,
-                        digest: coin.digest,
-                        balance: coin.balance,
-                        previous_transaction: coin.previous_transaction,
-                    });
-                }
+                result.extend(real_coins.take(limit));
             }
-        } else if let Some((coin_type, fake_key, fake_info)) = fake_coin_info {
-            // We're at the beginning (position 0). Return [real[0], fake, real[1], ...].
-            let mut real_iter = real_coins.into_iter();
-
-            // Add first real coin at position 0.
-            if let Some((key, coin)) = real_iter.next() {
-                result.push(SuiCoin {
-                    coin_type: key.coin_type,
-                    coin_object_id: key.object_id,
-                    version: coin.version,
-                    digest: coin.digest,
-                    balance: coin.balance,
-                    previous_transaction: coin.previous_transaction,
-                });
-
-                // Add fake coin at position 1.
+        } else if let Some(fake) = fake_coin {
+            // At beginning, return [real[0], fake, real[1], ...].
+            if let Some(first) = real_coins.next() {
+                result.push(first);
                 if result.len() < limit {
-                    result.push(SuiCoin {
-                        coin_type,
-                        coin_object_id: fake_key.object_id,
-                        version: fake_info.version,
-                        digest: fake_info.digest,
-                        balance: fake_info.balance,
-                        previous_transaction: fake_info.previous_transaction,
-                    });
+                    result.push(fake);
                 }
-
-                // Add remaining real coins.
-                for (key, coin) in real_iter {
-                    if result.len() >= limit {
-                        break;
-                    }
-                    result.push(SuiCoin {
-                        coin_type: key.coin_type,
-                        coin_object_id: key.object_id,
-                        version: coin.version,
-                        digest: coin.digest,
-                        balance: coin.balance,
-                        previous_transaction: coin.previous_transaction,
-                    });
-                }
+                result.extend(real_coins.take(limit.saturating_sub(result.len())));
             } else {
                 // No real coins, just return the fake coin.
-                result.push(SuiCoin {
-                    coin_type,
-                    coin_object_id: fake_key.object_id,
-                    version: fake_info.version,
-                    digest: fake_info.digest,
-                    balance: fake_info.balance,
-                    previous_transaction: fake_info.previous_transaction,
-                });
+                result.push(fake);
             }
         } else {
-            // No fake coin, just return real coins.
-            for (key, coin) in real_coins.into_iter().take(limit) {
-                result.push(SuiCoin {
-                    coin_type: key.coin_type,
-                    coin_object_id: key.object_id,
-                    version: coin.version,
-                    digest: coin.digest,
-                    balance: coin.balance,
-                    previous_transaction: coin.previous_transaction,
-                });
-            }
+            // No fake coin, return only real coins.
+            result.extend(real_coins.take(limit));
         }
 
         Ok(result)
