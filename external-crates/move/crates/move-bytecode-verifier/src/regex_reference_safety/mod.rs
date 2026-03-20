@@ -277,6 +277,13 @@ fn execute_inner(
         | Bytecode::CastU64
         | Bytecode::CastU128
         | Bytecode::CastU256
+        | Bytecode::CastI8
+        | Bytecode::CastI16
+        | Bytecode::CastI32
+        | Bytecode::CastI64
+        | Bytecode::CastI128
+        | Bytecode::CastI256
+        | Bytecode::Neg
         | Bytecode::Not => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_non_ref());
             verifier.push(AbstractValue::NonReference)?
@@ -298,6 +305,12 @@ fn execute_inner(
         | Bytecode::LdU64(_)
         | Bytecode::LdU128(_)
         | Bytecode::LdU256(_)
+        | Bytecode::LdI8(_)
+        | Bytecode::LdI16(_)
+        | Bytecode::LdI32(_)
+        | Bytecode::LdI64(_)
+        | Bytecode::LdI128(_)
+        | Bytecode::LdI256(_)
         | Bytecode::LdConst(_) => verifier.push(AbstractValue::NonReference)?,
 
         Bytecode::Add
