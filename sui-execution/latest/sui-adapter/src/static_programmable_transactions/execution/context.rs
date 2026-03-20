@@ -65,7 +65,7 @@ use sui_move_natives::object_runtime::{
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     TypeTag,
-    accumulator_event::{self, AccumulatorEvent},
+    accumulator_event::AccumulatorEvent,
     accumulator_root::{self, AccumulatorObjId},
     balance::Balance,
     base_types::{
@@ -77,7 +77,6 @@ use sui_types::{
     event::Event,
     execution::{ExecutionResults, ExecutionResultsV2},
     execution_status::{CommandArgumentError, ExecutionErrorKind, PackageUpgradeError},
-    gas, gas_coin,
     metrics::LimitsMetrics,
     move_package::{
         MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
@@ -191,13 +190,19 @@ pub struct InputObjectMetadata {
     pub type_: Type,
 }
 
+/// Metadata in the case that the GasCoin is transferred, either as an object to another recipient
+/// or as an address balance via `sui::coin::send_funds`. This is needed at the end to
+/// both refund the gas budget and set the correct location from which to charge gas.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum GasCoinTransfer {
+    /// Sent using the TransferObjects command
     TransferObjects,
+    /// Sent with the `sui::coin::send_funds` command
     SendFunds {
         /// Balance before destruction via send funds.
         /// In other words, the amount sent to the recipient.
         value: u64,
+        /// The recipient for `send_funds`.
         recipient: AccountAddress,
     },
 }
@@ -1721,6 +1726,11 @@ fn refund_max_gas_budget<OType>(
     Ok(())
 }
 
+/// Refunds the gas budget, overrides the charge location if transferred, and for ephemeral
+/// coins settles the net balance change back to the source address balance.
+/// Writes are always updated for refunding the gas budget.
+/// The ephemeral coin is removed from writes and created objects in the case that it was not
+/// transferred (left in its memory location at the end of the transaction).
 fn finish_gas_coin<OType>(
     gas_charger: &mut GasCharger,
     writes: &mut IndexMap<ObjectID, (Owner, OType, VMValue)>,
