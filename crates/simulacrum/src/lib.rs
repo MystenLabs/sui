@@ -264,9 +264,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         // Create sender signed data with dummy signatures
         let sender_signed_data = SenderSignedData::new(transaction_data, vec![sig.into()]);
 
-        // Create transaction and verify signatures
-        let verified_transaction = Transaction::new(sender_signed_data)
-            .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
+        // Create transaction and skip verifying signatures because it wouldn't match with the
+        // sender address' public key
+        let transaction = Transaction::new(sender_signed_data);
+        let verified_transaction = VerifiedTransaction::new_unchecked(transaction);
 
         self.execute_transaction_impl(verified_transaction)
     }

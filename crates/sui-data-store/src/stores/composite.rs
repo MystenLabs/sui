@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Composite store skeleton.
-
 use crate::{
     CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
     FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, StoreSummary, TransactionInfo,
     TransactionStore, TransactionStoreWriter,
 };
 use anyhow::{Error, Result};
-use std::io::Write;
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
@@ -17,8 +14,7 @@ use sui_types::{
     supported_protocol_versions::ProtocolConfig,
 };
 
-/// A router that delegates each capability to a dedicated backing chain.
-#[derive(Debug)]
+/// A store that routes each capability to a different backing chain.
 pub struct CompositeStore<Tx, Epoch, Obj, Ckpt> {
     transactions: Tx,
     epochs: Epoch,
@@ -36,26 +32,6 @@ impl<Tx, Epoch, Obj, Ckpt> CompositeStore<Tx, Epoch, Obj, Ckpt> {
             checkpoints,
         }
     }
-
-    /// Return the transaction chain.
-    pub fn transactions(&self) -> &Tx {
-        &self.transactions
-    }
-
-    /// Return the epoch chain.
-    pub fn epochs(&self) -> &Epoch {
-        &self.epochs
-    }
-
-    /// Return the object chain.
-    pub fn objects(&self) -> &Obj {
-        &self.objects
-    }
-
-    /// Return the checkpoint chain.
-    pub fn checkpoints(&self) -> &Ckpt {
-        &self.checkpoints
-    }
 }
 
 impl<Tx, Epoch, Obj, Ckpt> TransactionStore for CompositeStore<Tx, Epoch, Obj, Ckpt>
@@ -64,9 +40,9 @@ where
 {
     fn transaction_data_and_effects(
         &self,
-        _tx_digest: &str,
+        tx_digest: &str,
     ) -> Result<Option<TransactionInfo>, Error> {
-        todo!("composite transaction routing is not implemented in the skeleton")
+        self.transactions.transaction_data_and_effects(tx_digest)
     }
 }
 
@@ -76,10 +52,11 @@ where
 {
     fn write_transaction(
         &self,
-        _tx_digest: &str,
-        _transaction_info: TransactionInfo,
+        tx_digest: &str,
+        transaction_info: TransactionInfo,
     ) -> Result<(), Error> {
-        todo!("composite transaction writes are not implemented in the skeleton")
+        self.transactions
+            .write_transaction(tx_digest, transaction_info)
     }
 }
 
@@ -87,12 +64,12 @@ impl<Tx, Epoch, Obj, Ckpt> EpochStore for CompositeStore<Tx, Epoch, Obj, Ckpt>
 where
     Epoch: EpochStore,
 {
-    fn epoch_info(&self, _epoch: u64) -> Result<Option<EpochData>, Error> {
-        todo!("composite epoch routing is not implemented in the skeleton")
+    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error> {
+        self.epochs.epoch_info(epoch)
     }
 
-    fn protocol_config(&self, _epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
-        todo!("composite protocol-config routing is not implemented in the skeleton")
+    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
+        self.epochs.protocol_config(epoch)
     }
 }
 
@@ -100,8 +77,8 @@ impl<Tx, Epoch, Obj, Ckpt> EpochStoreWriter for CompositeStore<Tx, Epoch, Obj, C
 where
     Epoch: EpochStoreWriter,
 {
-    fn write_epoch_info(&self, _epoch: u64, _epoch_data: EpochData) -> Result<(), Error> {
-        todo!("composite epoch writes are not implemented in the skeleton")
+    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error> {
+        self.epochs.write_epoch_info(epoch, epoch_data)
     }
 }
 
@@ -109,8 +86,8 @@ impl<Tx, Epoch, Obj, Ckpt> ObjectStore for CompositeStore<Tx, Epoch, Obj, Ckpt>
 where
     Obj: ObjectStore,
 {
-    fn get_objects(&self, _keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
-        todo!("composite object routing is not implemented in the skeleton")
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
+        self.objects.get_objects(keys)
     }
 }
 
@@ -120,11 +97,11 @@ where
 {
     fn write_object(
         &self,
-        _key: &ObjectKey,
-        _object: Object,
-        _actual_version: u64,
+        key: &ObjectKey,
+        object: Object,
+        actual_version: u64,
     ) -> Result<(), Error> {
-        todo!("composite object writes are not implemented in the skeleton")
+        self.objects.write_object(key, object, actual_version)
     }
 }
 
@@ -134,27 +111,27 @@ where
 {
     fn get_checkpoint_by_sequence_number(
         &self,
-        _sequence: CheckpointSequenceNumber,
+        sequence: CheckpointSequenceNumber,
     ) -> Result<Option<FullCheckpointData>, Error> {
-        todo!("composite checkpoint routing is not implemented in the skeleton")
+        self.checkpoints.get_checkpoint_by_sequence_number(sequence)
     }
 
     fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
-        todo!("composite latest-checkpoint routing is not implemented in the skeleton")
+        self.checkpoints.get_latest_checkpoint()
     }
 
     fn get_sequence_by_checkpoint_digest(
         &self,
-        _digest: &CheckpointDigest,
+        digest: &CheckpointDigest,
     ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("composite checkpoint-digest routing is not implemented in the skeleton")
+        self.checkpoints.get_sequence_by_checkpoint_digest(digest)
     }
 
     fn get_sequence_by_contents_digest(
         &self,
-        _digest: &CheckpointContentsDigest,
+        digest: &CheckpointContentsDigest,
     ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("composite contents-digest routing is not implemented in the skeleton")
+        self.checkpoints.get_sequence_by_contents_digest(digest)
     }
 }
 
@@ -162,8 +139,8 @@ impl<Tx, Epoch, Obj, Ckpt> CheckpointStoreWriter for CompositeStore<Tx, Epoch, O
 where
     Ckpt: CheckpointStoreWriter,
 {
-    fn write_checkpoint(&self, _checkpoint: &FullCheckpointData) -> Result<(), Error> {
-        todo!("composite checkpoint writes are not implemented in the skeleton")
+    fn write_checkpoint(&self, checkpoint: &FullCheckpointData) -> Result<(), Error> {
+        self.checkpoints.write_checkpoint(checkpoint)
     }
 }
 
@@ -174,11 +151,15 @@ where
     Obj: StoreSummary,
     Ckpt: StoreSummary,
 {
-    fn summary<W: Write>(&self, writer: &mut W) -> Result<()> {
-        writeln!(writer, "CompositeStore")?;
+    fn summary<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
+        writeln!(writer, "CompositeStore summary")?;
+        writeln!(writer, "Transactions:")?;
         self.transactions.summary(writer)?;
+        writeln!(writer, "Epochs:")?;
         self.epochs.summary(writer)?;
+        writeln!(writer, "Objects:")?;
         self.objects.summary(writer)?;
+        writeln!(writer, "Checkpoints:")?;
         self.checkpoints.summary(writer)
     }
 }
