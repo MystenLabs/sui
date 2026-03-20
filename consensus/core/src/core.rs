@@ -163,7 +163,7 @@ impl Core {
             dag_state,
             proposer,
         }
-        .recover()
+        .recover_validator()
     }
 
     /// Creates a new Core instance for an observer node that only processes blocks.
@@ -191,8 +191,8 @@ impl Core {
             .build(),
         );
 
-        let last_proposed_block = dag_state.read().get_last_proposed_block();
-        let last_signaled_round = last_proposed_block.round();
+        // For the Observer nodes let's consider the last signaled round as the latest threshold clock round.
+        let last_signaled_round = dag_state.read().threshold_clock_round();
 
         // Create the ObserverProposer (no-op implementation)
         let proposer = Box::new(ObserverProposer::new());
@@ -209,16 +209,31 @@ impl Core {
             dag_state,
             proposer,
         }
-        .recover()
+        .recover_observer()
     }
 
-    fn recover(mut self) -> Self {
+    fn recover_observer(mut self) -> Self {
         let _s = self
             .context
             .metrics
             .node_metrics
             .scope_processing_time
-            .with_label_values(&["Core::recover"])
+            .with_label_values(&["Core::recover_observer"])
+            .start_timer();
+
+        // Try to commit, since they may not have run after the last storage write.
+        self.try_commit(vec![]).unwrap();
+
+        self
+    }
+
+    fn recover_validator(mut self) -> Self {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::recover_validator"])
             .start_timer();
 
         // Try to commit and propose, since they may not have run after the last storage write.
@@ -256,7 +271,7 @@ impl Core {
         self.try_signal_new_round();
 
         info!(
-            "Core recovery completed with last proposed block {:?}",
+            "Core recovery for validator completed with last proposed block {:?}",
             last_proposed_block
         );
 
@@ -504,9 +519,6 @@ impl Core {
     // When force is true, ignore if leader from the last round exists among ancestors and if
     // the minimum round delay has passed.
     fn try_propose(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
-        if !self.proposer.should_propose() {
-            return Ok(None);
-        }
         if let Some(extended_block) = self.proposer.try_new_block(force) {
             self.signals.new_block(extended_block.clone())?;
 

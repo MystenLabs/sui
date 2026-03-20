@@ -383,6 +383,10 @@ impl ValidatorProposer {
 
 impl Proposer for ValidatorProposer {
     fn try_new_block(&mut self, force: bool) -> Option<ExtendedBlock> {
+        if !self.should_propose() {
+            return None;
+        }
+
         let _s = self
             .context
             .metrics
