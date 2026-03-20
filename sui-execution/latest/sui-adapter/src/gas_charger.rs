@@ -42,12 +42,14 @@ pub mod checked {
     }
 
     /// Internal representation of how a transaction's gas is being paid.
-    /// `Unmetered` for for no payment (dev inspect and system transactions).
+    /// `Unmetered` for no payment (dev inspect and system transactions).
+    /// `Gasless` for metered-but-free transactions (gas is metered but not charged).
     /// `Smash` when one or more user-provided payment methods have been combined into a single
     /// source.
     #[derive(Debug)]
     enum PaymentMetadata {
         Unmetered,
+        Gasless,
         /// Contains the list of payments (coins and address balances) and additional metadata
         Smash(SmashMetadata),
     }
@@ -83,6 +85,7 @@ pub mod checked {
     #[derive(Debug)]
     enum PaymentKind_ {
         Unmetered,
+        Gasless,
         /// A non-empty map of gas coins or address balance withdrawals, keyed by location.
         /// The first entry is the smash target; all others are smashed into it.
         Smash(IndexMap<PaymentLocation, PaymentMethod>),
@@ -128,6 +131,7 @@ pub mod checked {
             let gas_model_version = protocol_config.gas_model_version();
             let payment = match payment_kind.0 {
                 PaymentKind_::Unmetered => PaymentMetadata::Unmetered,
+                PaymentKind_::Gasless => PaymentMetadata::Gasless,
                 PaymentKind_::Smash(mut payment_methods) => {
                     let (_, smash_target) = payment_methods.shift_remove_index(0).unwrap();
                     let mut metadata = SmashMetadata {
@@ -162,7 +166,9 @@ pub mod checked {
         //       Explore way to remove it.
         pub(crate) fn used_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
             match &self.payment {
-                PaymentMetadata::Unmetered => Either::Left(std::iter::empty()),
+                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => {
+                    Either::Left(std::iter::empty())
+                }
                 PaymentMetadata::Smash(metadata) => Either::Right(metadata.used_coins()),
             }
         }
@@ -188,7 +194,7 @@ pub mod checked {
         /// is used.
         pub fn gas_payment_amount(&self) -> Option<GasPayment> {
             match &self.payment {
-                PaymentMetadata::Unmetered => None,
+                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
                 PaymentMetadata::Smash(metadata) => Some(GasPayment {
                     location: metadata.smash_target.location(),
                     amount: metadata.total_smashed,
@@ -212,14 +218,6 @@ pub mod checked {
 
         pub fn is_unmetered(&self) -> bool {
             self.gas_status.is_unmetered()
-        }
-
-        pub fn is_address_balance(&self) -> bool {
-            self.payment_method.is_address_balance()
-        }
-
-        pub fn is_gasless(&self) -> bool {
-            self.gas_status.is_gasless()
         }
 
         pub fn move_gas_status(&self) -> &GasStatus {
@@ -247,8 +245,7 @@ pub mod checked {
         // are correct.
         fn smash_gas(&mut self, temporary_store: &mut TemporaryStore<'_>) {
             match &mut self.payment {
-                // nothing to smash
-                PaymentMetadata::Unmetered => (),
+                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => (),
                 PaymentMetadata::Smash(smash_metadata) => {
                     smash_metadata.smash_gas(&self.tx_digest, temporary_store);
                 }
@@ -329,6 +326,10 @@ pub mod checked {
             self.smash_gas(temporary_store);
         }
 
+        pub fn is_gasless(&self) -> bool {
+            matches!(&self.payment, PaymentMetadata::Gasless)
+        }
+
         /// Entry point for gas charging.
         /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of
         /// mutated objects
@@ -380,12 +381,12 @@ pub mod checked {
 
             let gas_payment_location = match &self.payment {
                 PaymentMetadata::Unmetered => {
-                    // unmetered, nothing to charge
                     return GasCostSummary::default();
                 }
-                PaymentMetadata::Smash(metadata) => metadata.gas_charge_location,
+                PaymentMetadata::Gasless => None,
+                PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
             };
-            if let PaymentLocation::Coin(_) = gas_payment_location {
+            if let Some(PaymentLocation::Coin(_)) = gas_payment_location {
                 #[skip_checked_arithmetic]
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
@@ -400,14 +401,20 @@ pub mod checked {
                     )
                 })
                 .unwrap_or(false)
-                && let PaymentLocation::AddressBalance(_) = gas_payment_location {
+                && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
                     // If we don't have enough balance to withdraw, don't charge for gas
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
             }
 
             self.compute_storage_and_rebate(temporary_store, execution_result);
+
             let cost_summary = self.gas_status.summary();
+
+            let Some(gas_payment_location) = gas_payment_location else {
+                return GasCostSummary::default(); // gasless
+            };
+
             let net_change = cost_summary.net_gas_usage();
 
             match gas_payment_location {
@@ -644,6 +651,10 @@ pub mod checked {
     impl PaymentKind {
         pub fn unmetered() -> Self {
             Self(PaymentKind_::Unmetered)
+        }
+
+        pub fn gasless() -> Self {
+            Self(PaymentKind_::Gasless)
         }
 
         pub fn smash(payment_methods: Vec<PaymentMethod>) -> Option<Self> {

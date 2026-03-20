@@ -402,7 +402,9 @@ mod checked {
         let gas_paid_from_address_balance = transaction.is_gas_paid_from_address_balance();
 
         let gas_status = if is_gasless {
-            SuiGasStatus::new_gasless(reference_gas_price, protocol_config)?
+            let rgp = reference_gas_price.max(1);
+            let compute_cap = protocol_config.gasless_max_computation_units() * rgp;
+            SuiGasStatus::new(compute_cap, rgp, reference_gas_price, protocol_config)?
         } else {
             SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?
         };

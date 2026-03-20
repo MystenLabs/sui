@@ -76,7 +76,7 @@ mod checked {
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
-        WriteAccumulatorStorageCost,
+        WriteAccumulatorStorageCost, is_gasless_transaction,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -87,9 +87,17 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
-    fn payment_kind(gas_data: &GasData, transaction_kind: &TransactionKind) -> PaymentKind {
+    fn payment_kind(
+        gas_data: &GasData,
+        transaction_kind: &TransactionKind,
+        protocol_config: &ProtocolConfig,
+    ) -> PaymentKind {
         if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
             PaymentKind::unmetered()
+        } else if protocol_config.enable_gasless()
+            && is_gasless_transaction(gas_data, transaction_kind)
+        {
+            PaymentKind::gasless()
         } else if gas_data.payment.is_empty() {
             PaymentKind::smash(vec![PaymentMethod::AddressBalance(
                 gas_data.owner,
@@ -173,7 +181,7 @@ mod checked {
 
         let mut gas_charger = GasCharger::new(
             transaction_digest,
-            payment_kind(&gas_data, &transaction_kind),
+            payment_kind(&gas_data, &transaction_kind, protocol_config),
             gas_status,
             &mut temporary_store,
             protocol_config,

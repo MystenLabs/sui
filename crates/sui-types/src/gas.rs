@@ -31,7 +31,6 @@ pub mod checked {
     #[enum_dispatch]
     pub trait SuiGasStatusAPI {
         fn is_unmetered(&self) -> bool;
-        fn is_gasless(&self) -> bool;
         fn move_gas_status(&self) -> &GasStatus;
         fn move_gas_status_mut(&mut self) -> &mut GasStatus;
         fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError>;
@@ -96,13 +95,6 @@ pub mod checked {
             Ok(Self::V2(SuiGasStatusV2::new_with_budget(
                 gas_budget,
                 gas_price,
-                reference_gas_price,
-                config,
-            )))
-        }
-
-        pub fn new_gasless(reference_gas_price: u64, config: &ProtocolConfig) -> SuiResult<Self> {
-            Ok(Self::V2(SuiGasStatusV2::new_gasless(
                 reference_gas_price,
                 config,
             )))
