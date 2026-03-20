@@ -437,10 +437,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            crate::authority_node::NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
             round_tracker,

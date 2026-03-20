@@ -1432,10 +1432,7 @@ mod tests {
         let authority_index = committee.to_authority_index(0).unwrap();
         let context = Arc::new(Context::new(
             0,
-            crate::authority_node::NodeType::Validator(
-                authority_index,
-                Box::new(keypairs[0].1.clone()),
-            ),
+            Some(authority_index),
             committee,
             parameters,
             protocol_config,

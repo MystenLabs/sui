@@ -10,7 +10,6 @@ use sui_protocol_config::ProtocolConfig;
 use tempfile::TempDir;
 use tokio::time::Instant;
 
-use crate::authority_node::NodeType;
 use crate::metrics::Metrics;
 use crate::metrics::test_metrics;
 
@@ -37,18 +36,20 @@ pub struct Context {
 impl Context {
     pub(crate) fn new(
         epoch_start_timestamp_ms: u64,
-        node_type: NodeType,
+        own_index: Option<AuthorityIndex>,
         committee: Committee,
         parameters: Parameters,
         protocol_config: ProtocolConfig,
         metrics: Arc<Metrics>,
         clock: Arc<Clock>,
     ) -> Self {
-        let own_index = if let NodeType::Validator(own_index, _) = node_type {
+        let own_index = if let Some(own_index) = own_index {
             own_index
         } else {
+            // If no index is provided, then this is an observer node. We assign a max index to it as a special value.
             AuthorityIndex::MAX
         };
+
         Self {
             epoch_start_timestamp_ms,
             own_index,
@@ -81,10 +82,7 @@ impl Context {
 
         let context = Context::new(
             0,
-            NodeType::Validator(
-                AuthorityIndex::new_for_test(0),
-                Box::new(keypairs[0].1.clone()),
-            ),
+            Some(AuthorityIndex::new_for_test(0)),
             committee,
             Parameters {
                 db_path: temp_dir.keep(),

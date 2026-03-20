@@ -7,6 +7,7 @@ use std::{
     vec,
 };
 
+use consensus_config::ProtocolKeyPair;
 #[cfg(test)]
 use consensus_config::{AuthorityIndex, Stake, local_committee_and_keys};
 use consensus_types::block::{BlockRef, Round};
@@ -26,7 +27,6 @@ use crate::{
 };
 use crate::{
     ancestor::AncestorStateManager,
-    authority_node::NodeType,
     block::{BlockAPI, ExtendedBlock, GENESIS_ROUND, Slot, VerifiedBlock},
     block_manager::BlockManager,
     commit::{
@@ -86,7 +86,7 @@ impl Core {
         block_manager: BlockManager,
         commit_observer: CommitObserver,
         signals: CoreSignals,
-        node_type: NodeType,
+        block_signer: ProtocolKeyPair,
         dag_state: Arc<RwLock<DagState>>,
         sync_last_known_own_block: bool,
         round_tracker: Arc<RwLock<RoundTracker>>,
@@ -134,12 +134,6 @@ impl Core {
         let mut ancestor_state_manager =
             AncestorStateManager::new(context.clone(), dag_state.clone());
         ancestor_state_manager.set_propagation_scores(propagation_scores);
-
-        // Extract the block signer from the node type
-        let block_signer = match node_type {
-            NodeType::Validator(_index, protocol_keypair) => *protocol_keypair,
-            NodeType::Observer => panic!("new_validator called with Observer node type"),
-        };
 
         // Create the ValidatorProposer
         let proposer = Some(Box::new(ValidatorProposer::new(
@@ -1012,7 +1006,7 @@ impl CoreTextFixture {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(own_index, Box::new(block_signer)),
+            block_signer,
             dag_state.clone(),
             sync_last_known_own_block,
             round_tracker.clone(),
@@ -1156,10 +1150,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
             round_tracker,
@@ -1299,10 +1290,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
             round_tracker,
@@ -1401,10 +1389,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
             round_tracker,
@@ -1653,10 +1638,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
             round_tracker,
@@ -1822,10 +1804,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
             round_tracker,
@@ -1904,10 +1883,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
             round_tracker,
@@ -2272,10 +2248,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
             round_tracker.clone(),
@@ -2574,10 +2547,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
             round_tracker,
@@ -2673,10 +2643,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             false,
             round_tracker.clone(),
@@ -3130,10 +3097,7 @@ mod test {
             block_manager,
             commit_observer,
             signals,
-            NodeType::Validator(
-                context.own_index,
-                Box::new(key_pairs.remove(context.own_index.value()).1),
-            ),
+            key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
             true,
             round_tracker,
