@@ -335,6 +335,12 @@ impl VMDispatchTables {
             TypeTag::U64 => Type::U64,
             TypeTag::U128 => Type::U128,
             TypeTag::U256 => Type::U256,
+            TypeTag::I8 => Type::I8,
+            TypeTag::I16 => Type::I16,
+            TypeTag::I32 => Type::I32,
+            TypeTag::I64 => Type::I64,
+            TypeTag::I128 => Type::I128,
+            TypeTag::I256 => Type::I256,
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
             TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt)?)),
@@ -424,6 +430,12 @@ impl VMDispatchTables {
             | Type::U64
             | Type::U128
             | Type::U256
+            | Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::I128
+            | Type::I256
             | Type::Address => Ok(AbilitySet::PRIMITIVES),
 
             // Technically unreachable but, no point in erroring if we don't have to
@@ -475,7 +487,13 @@ impl VMDispatchTables {
             | Type::TyParam(_)
             | Type::U16
             | Type::U32
-            | Type::U256 => None,
+            | Type::U256
+            | Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::I128
+            | Type::I256 => None,
             Type::Datatype(vtable_key) => {
                 let descriptor = self.resolve_type(vtable_key)?.to_ref();
                 Some(DatatypeInfo {
@@ -563,7 +581,13 @@ impl VMDispatchTables {
             | ArenaType::Signer
             | ArenaType::U16
             | ArenaType::U32
-            | ArenaType::U256 => DepthFormula::constant(1),
+            | ArenaType::U256
+            | ArenaType::I8
+            | ArenaType::I16
+            | ArenaType::I32
+            | ArenaType::I64
+            | ArenaType::I128
+            | ArenaType::I256 => DepthFormula::constant(1),
             // we should not see the reference here, we could instead give an invariant violation
             ArenaType::Vector(ty) | ArenaType::Reference(ty) | ArenaType::MutableReference(ty) => {
                 let mut inner = self.calculate_depth_of_type_and_cache(ty)?;
@@ -645,6 +669,12 @@ impl VMDispatchTables {
             Type::U64 => TypeTag::U64,
             Type::U128 => TypeTag::U128,
             Type::U256 => TypeTag::U256,
+            Type::I8 => TypeTag::I8,
+            Type::I16 => TypeTag::I16,
+            Type::I32 => TypeTag::I32,
+            Type::I64 => TypeTag::I64,
+            Type::I128 => TypeTag::I128,
+            Type::I256 => TypeTag::I256,
             Type::Address => TypeTag::Address,
             Type::Signer => TypeTag::Signer,
             Type::Vector(ty) => {
@@ -747,7 +777,15 @@ impl VMDispatchTables {
                 self.datatype_to_type_layout(gidx, ty_args, count, depth)?
                     .into_layout()
             }
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            Type::Reference(_)
+            | Type::MutableReference(_)
+            | Type::TyParam(_)
+            | Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::I128
+            | Type::I256 => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "no type layout for {:?}",
@@ -873,7 +911,15 @@ impl VMDispatchTables {
                 self.datatype_to_fully_annotated_layout(gidx, ty_args, count, depth)?
                     .into_layout()
             }
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            Type::Reference(_)
+            | Type::MutableReference(_)
+            | Type::TyParam(_)
+            | Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::I128
+            | Type::I256 => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "no type layout for {:?}",

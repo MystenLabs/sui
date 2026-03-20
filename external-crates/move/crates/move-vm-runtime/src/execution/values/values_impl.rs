@@ -19,6 +19,7 @@ use move_binary_format::{
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
+    i256,
     runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,
     vm_status::sub_status::NFE_VECTOR_ERROR_BASE,
@@ -53,6 +54,12 @@ pub enum Value {
     U64(u64),
     U128(Box<u128>),
     U256(Box<u256::U256>),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(Box<i128>),
+    I256(Box<i256::I256>),
     Bool(bool),
     Address(Box<AccountAddress>),
 
@@ -106,6 +113,12 @@ pub enum IntegerValue {
     U64(u64),
     U128(u128),
     U256(u256::U256),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    I256(i256::I256),
 }
 
 #[derive(Debug)]
@@ -309,6 +322,12 @@ impl Value {
             | Value::U64(_)
             | Value::U128(_)
             | Value::U256(_)
+            | Value::I8(_)
+            | Value::I16(_)
+            | Value::I32(_)
+            | Value::I64(_)
+            | Value::I128(_)
+            | Value::I256(_)
             | Value::Bool(_)
             | Value::Address(_)
             | Value::Struct(_)
@@ -332,6 +351,12 @@ impl Value {
             | Value::U64(_)
             | Value::U128(_)
             | Value::U256(_)
+            | Value::I8(_)
+            | Value::I16(_)
+            | Value::I32(_)
+            | Value::I64(_)
+            | Value::I128(_)
+            | Value::I256(_)
             | Value::Bool(_)
             | Value::Address(_)
             | Value::Struct(_)
@@ -502,6 +527,12 @@ impl Value {
             Self::U64(x) => Self::U64(*x),
             Self::U128(v) => Self::U128(Box::new(**v)),
             Self::U256(v) => Self::U256(Box::new(**v)),
+            Self::I8(x) => Self::I8(*x),
+            Self::I16(x) => Self::I16(*x),
+            Self::I32(x) => Self::I32(*x),
+            Self::I64(x) => Self::I64(*x),
+            Self::I128(v) => Self::I128(Box::new(**v)),
+            Self::I256(v) => Self::I256(Box::new(**v)),
             Self::Bool(x) => Self::Bool(*x),
             Self::Address(x) => Self::Address(Box::new(*x.clone())),
 
@@ -578,6 +609,11 @@ impl Value {
             Value::U64(value) => Ok(ConstantValue::U64(value)),
             Value::U128(value) => Ok(ConstantValue::U128(*value)),
             Value::U256(value) => Ok(ConstantValue::U256(*value)),
+            Value::I8(_) | Value::I16(_) | Value::I32(_) | Value::I64(_) | Value::I128(_)
+            | Value::I256(_) => Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "signed integer values not supported in constants"
+            )),
             Value::Bool(value) => Ok(ConstantValue::Bool(value)),
             Value::Address(value) => Ok(ConstantValue::Address(*value)),
 
@@ -724,6 +760,12 @@ impl Value {
             (Self::U64(v1), Self::U64(v2)) => Ok(v1 == v2),
             (Self::U128(v1), Self::U128(v2)) => Ok(v1 == v2),
             (Self::U256(v1), Self::U256(v2)) => Ok(v1 == v2),
+            (Self::I8(v1), Self::I8(v2)) => Ok(v1 == v2),
+            (Self::I16(v1), Self::I16(v2)) => Ok(v1 == v2),
+            (Self::I32(v1), Self::I32(v2)) => Ok(v1 == v2),
+            (Self::I64(v1), Self::I64(v2)) => Ok(v1 == v2),
+            (Self::I128(v1), Self::I128(v2)) => Ok(v1 == v2),
+            (Self::I256(v1), Self::I256(v2)) => Ok(v1 == v2),
             (Self::Bool(v1), Self::Bool(v2)) => Ok(v1 == v2),
             (Self::Address(v1), Self::Address(v2)) => Ok(v1 == v2),
             (Self::PrimVec(v1), Self::PrimVec(v2)) => Ok(v1.len() == v2.len()
@@ -1166,6 +1208,30 @@ impl Value {
         Value::U256(Box::new(x))
     }
 
+    pub fn i8(x: i8) -> Self {
+        Value::I8(x)
+    }
+
+    pub fn i16(x: i16) -> Self {
+        Value::I16(x)
+    }
+
+    pub fn i32(x: i32) -> Self {
+        Value::I32(x)
+    }
+
+    pub fn i64(x: i64) -> Self {
+        Value::I64(x)
+    }
+
+    pub fn i128(x: i128) -> Self {
+        Value::I128(Box::new(x))
+    }
+
+    pub fn i256(x: i256::I256) -> Self {
+        Value::I256(Box::new(x))
+    }
+
     pub fn bool(x: bool) -> Self {
         Value::Bool(x)
     }
@@ -1459,6 +1525,12 @@ impl VMValueCast<IntegerValue> for Value {
             Value::U64(x) => Ok(IntegerValue::U64(x)),
             Value::U128(x) => Ok(IntegerValue::U128(*x)),
             Value::U256(x) => Ok(IntegerValue::U256(*x)),
+            Value::I8(x) => Ok(IntegerValue::I8(x)),
+            Value::I16(x) => Ok(IntegerValue::I16(x)),
+            Value::I32(x) => Ok(IntegerValue::I32(x)),
+            Value::I64(x) => Ok(IntegerValue::I64(x)),
+            Value::I128(x) => Ok(IntegerValue::I128(*x)),
+            Value::I256(x) => Ok(IntegerValue::I256(*x)),
             v => Err(partial_vm_error!(
                 INTERNAL_TYPE_ERROR,
                 "cannot cast {:?} to integer",
@@ -1527,6 +1599,12 @@ impl_vm_value_cast_integer!(u32, U32, "cannot cast {:?} to u32");
 impl_vm_value_cast_integer!(u64, U64, "cannot cast {:?} to u64");
 impl_vm_value_cast_integer!(u128, U128, "cannot cast {:?} to u128");
 impl_vm_value_cast_integer!(u256::U256, U256, "cannot cast {:?} to u256");
+impl_vm_value_cast_integer!(i8, I8, "cannot cast {:?} to i8");
+impl_vm_value_cast_integer!(i16, I16, "cannot cast {:?} to i16");
+impl_vm_value_cast_integer!(i32, I32, "cannot cast {:?} to i32");
+impl_vm_value_cast_integer!(i64, I64, "cannot cast {:?} to i64");
+impl_vm_value_cast_integer!(i128, I128, "cannot cast {:?} to i128");
+impl_vm_value_cast_integer!(i256::I256, I256, "cannot cast {:?} to i256");
 
 impl IntegerValue {
     pub fn value_as<T>(self) -> PartialVMResult<T>
@@ -1562,6 +1640,12 @@ macro_rules! checked_arithmetic_op {
                 (U64(l), U64(r)) => u64::$op(l, r).map(IntegerValue::U64),
                 (U128(l), U128(r)) => u128::$op(l, r).map(IntegerValue::U128),
                 (U256(l), U256(r)) => u256::U256::$op(l, r).map(IntegerValue::U256),
+                (I8(l), I8(r)) => i8::$op(l, r).map(IntegerValue::I8),
+                (I16(l), I16(r)) => i16::$op(l, r).map(IntegerValue::I16),
+                (I32(l), I32(r)) => i32::$op(l, r).map(IntegerValue::I32),
+                (I64(l), I64(r)) => i64::$op(l, r).map(IntegerValue::I64),
+                (I128(l), I128(r)) => i128::$op(l, r).map(IntegerValue::I128),
+                (I256(l), I256(r)) => i256::I256::$op(l, r).map(IntegerValue::I256),
                 (l, r) => {
                     return Err(partial_vm_error!(INTERNAL_TYPE_ERROR, $error_msg, l, r));
                 }
@@ -1582,6 +1666,12 @@ macro_rules! simple_bitwise_op {
                 (U64(l), U64(r)) => IntegerValue::U64(l $op r),
                 (U128(l), U128(r)) => IntegerValue::U128(l $op r),
                 (U256(l), U256(r)) => IntegerValue::U256(l $op r),
+                (I8(l), I8(r)) => IntegerValue::I8(l $op r),
+                (I16(l), I16(r)) => IntegerValue::I16(l $op r),
+                (I32(l), I32(r)) => IntegerValue::I32(l $op r),
+                (I64(l), I64(r)) => IntegerValue::I64(l $op r),
+                (I128(l), I128(r)) => IntegerValue::I128(l $op r),
+                (I256(l), I256(r)) => IntegerValue::I256(l $op r),
                 (l, r) => {
                     return Err(partial_vm_error!(INTERNAL_TYPE_ERROR,$error_msg, l, r));
                 }
@@ -1626,6 +1716,37 @@ macro_rules! shift_op {
                     IntegerValue::U128(x.$op(n_bits)?)
                 }
                 U256(x) => IntegerValue::U256(x.$op(n_bits)?),
+                I8(x) => {
+                    if n_bits >= 8 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I8(x.$op(n_bits)?)
+                }
+                I16(x) => {
+                    if n_bits >= 16 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I16(x.$op(n_bits)?)
+                }
+                I32(x) => {
+                    if n_bits >= 32 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I32(x.$op(n_bits)?)
+                }
+                I64(x) => {
+                    if n_bits >= 64 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I64(x.$op(n_bits)?)
+                }
+                I128(x) => {
+                    if n_bits >= 128 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I128(x.$op(n_bits)?)
+                }
+                I256(x) => IntegerValue::I256(x.$op(n_bits)?),
             })
         }
     };
@@ -1642,6 +1763,12 @@ macro_rules! comparison_op {
                 (U64(l), U64(r)) => l $op r,
                 (U128(l), U128(r)) => l $op r,
                 (U256(l), U256(r)) => l $op r,
+                (I8(l), I8(r)) => l $op r,
+                (I16(l), I16(r)) => l $op r,
+                (I32(l), I32(r)) => l $op r,
+                (I64(l), I64(r)) => l $op r,
+                (I128(l), I128(r)) => l $op r,
+                (I256(l), I256(r)) => l $op r,
                 (l, r) => {
                     return Err(partial_vm_error!(INTERNAL_TYPE_ERROR, $error_msg, l, r));
                 }
@@ -1708,6 +1835,155 @@ macro_rules! cast_integer {
                         move_binary_format::checked_as!(x, $target_type)
                     }
                 }
+                I8(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i8({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I16(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i16({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I32(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i32({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I64(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i64({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I128(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i128({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I256(_) => Err(partial_vm_error!(
+                    ARITHMETIC_ERROR,
+                    "Cannot cast i256 to {}",
+                    stringify!($target_type)
+                )),
+            }
+        }
+    };
+}
+
+macro_rules! cast_signed_integer {
+    ($func_name:ident, $target_type:ty) => {
+        pub fn $func_name(self) -> PartialVMResult<$target_type> {
+            use IntegerValue::*;
+
+            match self {
+                U8(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u8({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U16(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u16({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U32(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u32({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U64(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u64({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U128(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u128({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U256(_) => Err(partial_vm_error!(
+                    ARITHMETIC_ERROR,
+                    "Cannot cast u256 to {}",
+                    stringify!($target_type)
+                )),
+                I8(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i8({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I16(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i16({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I32(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i32({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I64(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i64({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I128(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i128({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I256(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i256({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
             }
         }
     };
@@ -1760,6 +2036,75 @@ impl IntegerValue {
             U64(x) => Ok(u256::U256::from(x)),
             U128(x) => Ok(u256::U256::from(x)),
             U256(x) => Ok(x),
+            I8(_) | I16(_) | I32(_) | I64(_) | I128(_) | I256(_) => Err(partial_vm_error!(
+                ARITHMETIC_ERROR,
+                "Cannot cast signed integer to u256"
+            )),
+        }
+    }
+
+    cast_signed_integer!(cast_i8, i8);
+    cast_signed_integer!(cast_i16, i16);
+    cast_signed_integer!(cast_i32, i32);
+    cast_signed_integer!(cast_i64, i64);
+    cast_signed_integer!(cast_i128, i128);
+
+    pub fn cast_i256(self) -> PartialVMResult<i256::I256> {
+        use IntegerValue::*;
+        match self {
+            I8(x) => Ok(i256::I256::from(x)),
+            I16(x) => Ok(i256::I256::from(x)),
+            I32(x) => Ok(i256::I256::from(x)),
+            I64(x) => Ok(i256::I256::from(x)),
+            I128(x) => Ok(i256::I256::from(x)),
+            I256(x) => Ok(x),
+            U8(x) => Ok(i256::I256::from(x as i16)),
+            U16(x) => Ok(i256::I256::from(x as i32)),
+            U32(x) => Ok(i256::I256::from(x as i64)),
+            U64(x) => Ok(i256::I256::from(x as i128)),
+            U128(x) => {
+                if x > i128::MAX as u128 {
+                    Err(partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u128({}) to i256",
+                        x
+                    ))
+                } else {
+                    Ok(i256::I256::from(x as i128))
+                }
+            }
+            U256(_) => Err(partial_vm_error!(
+                ARITHMETIC_ERROR,
+                "Cannot cast u256 to i256"
+            )),
+        }
+    }
+
+    pub fn neg(self) -> PartialVMResult<Self> {
+        use IntegerValue::*;
+        match self {
+            I8(x) => x.checked_neg().map(IntegerValue::I8).ok_or_else(|| {
+                partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i8({})", x)
+            }),
+            I16(x) => x.checked_neg().map(IntegerValue::I16).ok_or_else(|| {
+                partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i16({})", x)
+            }),
+            I32(x) => x.checked_neg().map(IntegerValue::I32).ok_or_else(|| {
+                partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i32({})", x)
+            }),
+            I64(x) => x.checked_neg().map(IntegerValue::I64).ok_or_else(|| {
+                partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i64({})", x)
+            }),
+            I128(x) => x.checked_neg().map(IntegerValue::I128).ok_or_else(|| {
+                partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i128({})", x)
+            }),
+            I256(x) => x.checked_neg().map(IntegerValue::I256).ok_or_else(|| {
+                partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i256({})", x)
+            }),
+            U8(_) | U16(_) | U32(_) | U64(_) | U128(_) | U256(_) => Err(partial_vm_error!(
+                ARITHMETIC_ERROR,
+                "Cannot negate unsigned integer"
+            )),
         }
     }
 
@@ -1772,6 +2117,12 @@ impl IntegerValue {
             U64(x) => Value::u64(x),
             U128(x) => Value::u128(x),
             U256(x) => Value::u256(x),
+            I8(x) => Value::i8(x),
+            I16(x) => Value::i16(x),
+            I32(x) => Value::i32(x),
+            I64(x) => Value::i64(x),
+            I128(x) => Value::i128(x),
+            I256(x) => Value::i256(x),
         }
     }
 }
@@ -1920,6 +2271,12 @@ fn check_elem_layout(ty: &Type, v: &Value) -> PartialVMResult<()> {
         | Value::U64(_)
         | Value::U128(_)
         | Value::U256(_)
+        | Value::I8(_)
+        | Value::I16(_)
+        | Value::I32(_)
+        | Value::I64(_)
+        | Value::I128(_)
+        | Value::I256(_)
         | Value::Bool(_)
         | Value::Address(_)
         | Value::Struct(_)
@@ -2057,6 +2414,12 @@ impl VectorRef {
             | Value::U64(_)
             | Value::U128(_)
             | Value::U256(_)
+            | Value::I8(_)
+            | Value::I16(_)
+            | Value::I32(_)
+            | Value::I64(_)
+            | Value::I128(_)
+            | Value::I256(_)
             | Value::Bool(_)
             | Value::Address(_)
             | Value::Vec(_)
@@ -2180,7 +2543,15 @@ impl TryFrom<&Type> for VectorSpecialization {
             Type::Vector(_) | Type::Signer | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
                 VectorSpecialization::Container
             }
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::I128
+            | Type::I256
+            | Type::Reference(_)
+            | Type::MutableReference(_)
+            | Type::TyParam(_) => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "invalid type param for vector: {:?}",
@@ -2362,6 +2733,12 @@ impl GlobalValueImpl {
                 | Value::U64(_)
                 | Value::U128(_)
                 | Value::U256(_)
+                | Value::I8(_)
+                | Value::I16(_)
+                | Value::I32(_)
+                | Value::I64(_)
+                | Value::I128(_)
+                | Value::I256(_)
                 | Value::Bool(_)
                 | Value::Address(_)
                 | Value::Vec(_)
@@ -2441,6 +2818,12 @@ impl Display for Value {
             Value::U64(x) => write!(f, "U64({})", x),
             Value::U128(x) => write!(f, "U128({})", x),
             Value::U256(x) => write!(f, "U256({})", x),
+            Value::I8(x) => write!(f, "I8({})", x),
+            Value::I16(x) => write!(f, "I16({})", x),
+            Value::I32(x) => write!(f, "I32({})", x),
+            Value::I64(x) => write!(f, "I64({})", x),
+            Value::I128(x) => write!(f, "I128({})", x),
+            Value::I256(x) => write!(f, "I256({})", x),
             Value::Bool(x) => write!(f, "Bool({})", x),
             Value::Address(addr) => write!(f, "Address({})", addr.short_str_lossless()),
 
@@ -2624,6 +3007,30 @@ pub mod debug {
             Value::U64(x) => print_u64(buf, x),
             Value::U128(x) => print_u128(buf, x),
             Value::U256(x) => print_u256(buf, x),
+            Value::I8(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I16(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I32(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I64(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I128(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I256(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
             Value::Bool(x) => print_bool(buf, x),
             Value::Address(x) => print_address(buf, x),
             Value::Reference(r) => {
@@ -2770,6 +3177,12 @@ impl serde::Serialize for Value {
             Value::U64(x) => serializer.serialize_u64(*x),
             Value::U128(x) => serializer.serialize_u128(**x),
             Value::U256(x) => x.serialize(serializer),
+            Value::I8(x) => serializer.serialize_i8(*x),
+            Value::I16(x) => serializer.serialize_i16(*x),
+            Value::I32(x) => serializer.serialize_i32(*x),
+            Value::I64(x) => serializer.serialize_i64(*x),
+            Value::I128(x) => serializer.serialize_i128(**x),
+            Value::I256(x) => x.serialize(serializer),
             Value::Bool(x) => serializer.serialize_bool(*x),
             Value::Address(x) => x.serialize(serializer),
 
@@ -3227,6 +3640,8 @@ impl Value {
             S::Vector(inner) => L::Vector(Box::new(Self::constant_sig_token_to_layout(inner)?)),
             // Not yet supported
             S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
+            // Signed integers not yet supported in constants
+            S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => return None,
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) => return None,
         })
@@ -3297,6 +3712,12 @@ impl Value {
             Value::U64(val) => visitor.visit_u64(depth, *val),
             Value::U128(val) => visitor.visit_u128(depth, *val.as_ref()),
             Value::U256(val) => visitor.visit_u256(depth, *val.as_ref()),
+            Value::I8(val) => visitor.visit_u8(depth, *val as u8),
+            Value::I16(val) => visitor.visit_u16(depth, *val as u16),
+            Value::I32(val) => visitor.visit_u32(depth, *val as u32),
+            Value::I64(val) => visitor.visit_u64(depth, *val as u64),
+            Value::I128(val) => visitor.visit_u128(depth, *val.as_ref() as u128),
+            Value::I256(val) => visitor.visit_u256(depth, val.as_ref().to_u256_bits()),
             Value::Bool(val) => visitor.visit_bool(depth, *val),
             Value::Address(val) => visitor.visit_address(depth, **val),
             Value::Reference(r) => r.visit_impl(visitor, depth),
@@ -3379,6 +3800,12 @@ impl ValueView for IntegerValue {
             U64(val) => visitor.visit_u64(0, *val),
             U128(val) => visitor.visit_u128(0, *val),
             U256(val) => visitor.visit_u256(0, *val),
+            I8(val) => visitor.visit_u8(0, *val as u8),
+            I16(val) => visitor.visit_u16(0, *val as u16),
+            I32(val) => visitor.visit_u32(0, *val as u32),
+            I64(val) => visitor.visit_u64(0, *val as u64),
+            I128(val) => visitor.visit_u128(0, *val as u128),
+            I256(val) => visitor.visit_u256(0, val.to_u256_bits()),
         }
     }
 }

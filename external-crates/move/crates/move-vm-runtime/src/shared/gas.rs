@@ -65,6 +65,20 @@ pub enum SimpleInstruction {
     CastU16,
     CastU32,
     CastU256,
+
+    LdI8,
+    LdI16,
+    LdI32,
+    LdI64,
+    LdI128,
+    LdI256,
+    CastI8,
+    CastI16,
+    CastI32,
+    CastI64,
+    CastI128,
+    CastI256,
+    Neg,
 }
 
 /// Trait that defines a generic gas meter interface, allowing clients of the Move VM to implement

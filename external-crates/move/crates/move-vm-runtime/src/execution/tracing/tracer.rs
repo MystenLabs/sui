@@ -945,7 +945,13 @@ impl VMTracer<'_> {
             | B::LdU256(_)
             | B::LdFalse
             | B::LdTrue
-            | B::LdConst(_) => {
+            | B::LdConst(_)
+            | B::LdI8(_)
+            | B::LdI16(_)
+            | B::LdI32(_)
+            | B::LdI64(_)
+            | B::LdI128(_)
+            | B::LdI256(_) => {
                 self.register_pre_effects(vec![]);
             }
             B::MutBorrowField(_)
@@ -975,7 +981,14 @@ impl VMTracer<'_> {
             | B::UnpackVariantGenericImmRef(_)
             | B::UnpackVariantGenericMutRef(_)
             | B::UnpackVariant(_)
-            | B::UnpackVariantGeneric(_) => {
+            | B::UnpackVariantGeneric(_)
+            | B::CastI8
+            | B::CastI16
+            | B::CastI32
+            | B::CastI64
+            | B::CastI128
+            | B::CastI256
+            | B::Neg => {
                 self.register_pre_effects(popn(1)?);
             }
             B::Add
@@ -1102,6 +1115,12 @@ impl VMTracer<'_> {
             | B::LdU64(_)
             | B::LdU128(_)
             | B::LdU256(_)
+            | B::LdI8(_)
+            | B::LdI16(_)
+            | B::LdI32(_)
+            | B::LdI64(_)
+            | B::LdI128(_)
+            | B::LdI256(_)
             | B::LdFalse
             | B::LdTrue
             | B::LdConst(_)) => {
@@ -1112,6 +1131,12 @@ impl VMTracer<'_> {
                     B::LdU64(_) => AnnotatedTypeLayout::U64,
                     B::LdU128(_) => AnnotatedTypeLayout::U128,
                     B::LdU256(_) => AnnotatedTypeLayout::U256,
+                    B::LdI8(_) => AnnotatedTypeLayout::U8,
+                    B::LdI16(_) => AnnotatedTypeLayout::U16,
+                    B::LdI32(_) => AnnotatedTypeLayout::U32,
+                    B::LdI64(_) => AnnotatedTypeLayout::U64,
+                    B::LdI128(_) => AnnotatedTypeLayout::U128,
+                    B::LdI256(_) => AnnotatedTypeLayout::U256,
                     B::LdTrue => AnnotatedTypeLayout::Bool,
                     B::LdFalse => AnnotatedTypeLayout::Bool,
                     B::LdConst(const_ptr) => vtables
@@ -1147,7 +1172,19 @@ impl VMTracer<'_> {
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
-            i @ (B::CastU8 | B::CastU16 | B::CastU32 | B::CastU64 | B::CastU128 | B::CastU256) => {
+            i @ (B::CastU8
+            | B::CastU16
+            | B::CastU32
+            | B::CastU64
+            | B::CastU128
+            | B::CastU256
+            | B::CastI8
+            | B::CastI16
+            | B::CastI32
+            | B::CastI64
+            | B::CastI128
+            | B::CastI256
+            | B::Neg) => {
                 let layout = match i {
                     B::CastU8 => AnnotatedTypeLayout::U8,
                     B::CastU16 => AnnotatedTypeLayout::U16,
@@ -1155,6 +1192,12 @@ impl VMTracer<'_> {
                     B::CastU64 => AnnotatedTypeLayout::U64,
                     B::CastU128 => AnnotatedTypeLayout::U128,
                     B::CastU256 => AnnotatedTypeLayout::U256,
+                    B::CastI8 => AnnotatedTypeLayout::U8,
+                    B::CastI16 => AnnotatedTypeLayout::U16,
+                    B::CastI32 => AnnotatedTypeLayout::U32,
+                    B::CastI64 => AnnotatedTypeLayout::U64,
+                    B::CastI128 => AnnotatedTypeLayout::U128,
+                    B::CastI256 | B::Neg => AnnotatedTypeLayout::U256,
                     _ => unreachable!(),
                 };
                 let annot_layout = StackType {
