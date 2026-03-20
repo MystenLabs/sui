@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Read-through store skeleton.
+//! Write-through store skeleton.
 
 use crate::{
     CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
@@ -17,15 +17,15 @@ use sui_types::{
     supported_protocol_versions::ProtocolConfig,
 };
 
-/// Read-through cache over a primary and secondary store.
+/// Write-through cache over a primary and secondary store.
 #[derive(Debug)]
-pub struct ReadThroughStore<P, S> {
+pub struct WriteThroughStore<P, S> {
     primary: P,
     secondary: S,
 }
 
-impl<P, S> ReadThroughStore<P, S> {
-    /// Create a new read-through store.
+impl<P, S> WriteThroughStore<P, S> {
+    /// Create a new write-through store.
     pub fn new(primary: P, secondary: S) -> Self {
         Self { primary, secondary }
     }
@@ -41,7 +41,7 @@ impl<P, S> ReadThroughStore<P, S> {
     }
 }
 
-impl<P, S> TransactionStore for ReadThroughStore<P, S>
+impl<P, S> TransactionStore for WriteThroughStore<P, S>
 where
     P: TransactionStoreWriter,
     S: TransactionStore,
@@ -50,62 +50,62 @@ where
         &self,
         _tx_digest: &str,
     ) -> Result<Option<TransactionInfo>, Error> {
-        todo!("read-through transaction reads are not implemented in the skeleton")
+        todo!("write-through transaction reads are not implemented in the skeleton")
     }
 }
 
-impl<P, S> TransactionStoreWriter for ReadThroughStore<P, S>
+impl<P, S> TransactionStoreWriter for WriteThroughStore<P, S>
 where
     P: TransactionStoreWriter,
-    S: TransactionStore,
+    S: TransactionStoreWriter,
 {
     fn write_transaction(
         &self,
         _tx_digest: &str,
         _transaction_info: TransactionInfo,
     ) -> Result<(), Error> {
-        todo!("read-through transaction writes are not implemented in the skeleton")
+        todo!("write-through transaction writes are not implemented in the skeleton")
     }
 }
 
-impl<P, S> EpochStore for ReadThroughStore<P, S>
+impl<P, S> EpochStore for WriteThroughStore<P, S>
 where
     P: EpochStoreWriter,
     S: EpochStore,
 {
     fn epoch_info(&self, _epoch: u64) -> Result<Option<EpochData>, Error> {
-        todo!("read-through epoch reads are not implemented in the skeleton")
+        todo!("write-through epoch reads are not implemented in the skeleton")
     }
 
     fn protocol_config(&self, _epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
-        todo!("read-through protocol-config reads are not implemented in the skeleton")
+        todo!("write-through protocol-config reads are not implemented in the skeleton")
     }
 }
 
-impl<P, S> EpochStoreWriter for ReadThroughStore<P, S>
+impl<P, S> EpochStoreWriter for WriteThroughStore<P, S>
 where
     P: EpochStoreWriter,
-    S: EpochStore,
+    S: EpochStoreWriter,
 {
     fn write_epoch_info(&self, _epoch: u64, _epoch_data: EpochData) -> Result<(), Error> {
-        todo!("read-through epoch writes are not implemented in the skeleton")
+        todo!("write-through epoch writes are not implemented in the skeleton")
     }
 }
 
-impl<P, S> ObjectStore for ReadThroughStore<P, S>
+impl<P, S> ObjectStore for WriteThroughStore<P, S>
 where
     P: ObjectStoreWriter,
     S: ObjectStore,
 {
     fn get_objects(&self, _keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
-        todo!("read-through object reads are not implemented in the skeleton")
+        todo!("write-through object reads are not implemented in the skeleton")
     }
 }
 
-impl<P, S> ObjectStoreWriter for ReadThroughStore<P, S>
+impl<P, S> ObjectStoreWriter for WriteThroughStore<P, S>
 where
     P: ObjectStoreWriter,
-    S: ObjectStore,
+    S: ObjectStoreWriter,
 {
     fn write_object(
         &self,
@@ -113,11 +113,11 @@ where
         _object: Object,
         _actual_version: u64,
     ) -> Result<(), Error> {
-        todo!("read-through object writes are not implemented in the skeleton")
+        todo!("write-through object writes are not implemented in the skeleton")
     }
 }
 
-impl<P, S> CheckpointStore for ReadThroughStore<P, S>
+impl<P, S> CheckpointStore for WriteThroughStore<P, S>
 where
     P: CheckpointStoreWriter,
     S: CheckpointStore,
@@ -126,54 +126,54 @@ where
         &self,
         _sequence: CheckpointSequenceNumber,
     ) -> Result<Option<FullCheckpointData>, Error> {
-        todo!("read-through checkpoint reads are not implemented in the skeleton")
+        todo!("write-through checkpoint reads are not implemented in the skeleton")
     }
 
     fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
-        todo!("read-through latest-checkpoint lookup is not implemented in the skeleton")
+        todo!("write-through latest-checkpoint lookup is not implemented in the skeleton")
     }
 
     fn get_sequence_by_checkpoint_digest(
         &self,
         _digest: &CheckpointDigest,
     ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("read-through checkpoint-digest lookups are not implemented in the skeleton")
+        todo!("write-through checkpoint-digest lookups are not implemented in the skeleton")
     }
 
     fn get_sequence_by_contents_digest(
         &self,
         _digest: &CheckpointContentsDigest,
     ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("read-through contents-digest lookups are not implemented in the skeleton")
+        todo!("write-through contents-digest lookups are not implemented in the skeleton")
     }
 }
 
-impl<P, S> CheckpointStoreWriter for ReadThroughStore<P, S>
+impl<P, S> CheckpointStoreWriter for WriteThroughStore<P, S>
 where
     P: CheckpointStoreWriter,
-    S: CheckpointStore,
+    S: CheckpointStoreWriter,
 {
     fn write_checkpoint(&self, _checkpoint: &FullCheckpointData) -> Result<(), Error> {
-        todo!("read-through checkpoint writes are not implemented in the skeleton")
+        todo!("write-through checkpoint writes are not implemented in the skeleton")
     }
 }
 
-impl<P, S> SetupStore for ReadThroughStore<P, S>
+impl<P, S> SetupStore for WriteThroughStore<P, S>
 where
     P: SetupStore,
 {
     fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, Error> {
-        todo!("read-through setup is not implemented in the skeleton")
+        todo!("write-through setup is not implemented in the skeleton")
     }
 }
 
-impl<P, S> StoreSummary for ReadThroughStore<P, S>
+impl<P, S> StoreSummary for WriteThroughStore<P, S>
 where
     P: StoreSummary,
     S: StoreSummary,
 {
     fn summary<W: Write>(&self, writer: &mut W) -> Result<()> {
-        writeln!(writer, "ReadThroughStore")?;
+        writeln!(writer, "WriteThroughStore")?;
         self.primary.summary(writer)?;
         self.secondary.summary(writer)
     }

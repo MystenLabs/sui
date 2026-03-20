@@ -19,27 +19,32 @@
 //! - [`stores::FileSystemStore`] - Persistent local disk cache
 //! - [`stores::InMemoryStore`] - Unbounded in-memory cache
 //! - [`stores::LruMemoryStore`] - Bounded LRU cache
-//! - [`stores::ReadThroughStore`] - Composable two-tier caching pattern
 //!
 //! ## Composition
 //!
-//! Use `ReadThroughStore<Primary, Secondary>` to compose cache layers:
-//! - `ReadThroughStore<LruMemoryStore, DataStore>` - LRU + remote
-//! - `ReadThroughStore<InMemoryStore, FileSystemStore>` - Memory + disk
-//!   (e.g., for testing in CI with pre-populated disk cache)
+//! Use the composition primitives from [`stores`] to assemble capability-specific
+//! cache chains:
+//! - [`stores::ReadThroughStore`] - cache over read-only source
+//! - [`stores::WriteThroughStore`] - hot cache over writable backing store
+//! - [`stores::CompositeStore`] - route each capability to a different chain
 
 mod gql_queries;
 pub mod node;
 pub mod stores;
 
-// Re-export commonly used types
 pub use node::Node;
 
 use anyhow::{Error, Result};
-use std::io::Write;
+use std::{io::Write, ops::Deref, sync::Arc};
 use sui_types::{
-    base_types::ObjectID, effects::TransactionEffects, object::Object,
-    supported_protocol_versions::ProtocolConfig, transaction::TransactionData,
+    base_types::ObjectID,
+    digests::{CheckpointContentsDigest, CheckpointDigest},
+    effects::TransactionEffects,
+    full_checkpoint_content::Checkpoint as CheckpointData,
+    messages_checkpoint::CheckpointSequenceNumber,
+    object::Object,
+    supported_protocol_versions::ProtocolConfig,
+    transaction::TransactionData,
 };
 
 // ============================================================================
@@ -125,6 +130,33 @@ pub trait ObjectStore {
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error>;
 }
 
+/// Canonical checkpoint payload used by checkpoint store APIs.
+pub type FullCheckpointData = CheckpointData;
+
+/// Retrieve checkpoint data and indexes.
+pub trait CheckpointStore {
+    /// Return a full checkpoint payload by sequence number.
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> Result<Option<FullCheckpointData>, Error>;
+
+    /// Return the latest checkpoint known to this store.
+    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error>;
+
+    /// Resolve a checkpoint digest to a sequence number.
+    fn get_sequence_by_checkpoint_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error>;
+
+    /// Resolve a checkpoint contents digest to a sequence number.
+    fn get_sequence_by_contents_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error>;
+}
+
 // ============================================================================
 // Set up trait
 // ============================================================================
@@ -188,6 +220,12 @@ pub trait ObjectStoreWriter: ObjectStore {
     ) -> Result<(), Error>;
 }
 
+/// Write-back trait for checkpoint data.
+pub trait CheckpointStoreWriter: CheckpointStore {
+    /// Persist a full checkpoint payload.
+    fn write_checkpoint(&self, checkpoint: &FullCheckpointData) -> Result<(), Error>;
+}
+
 // ============================================================================
 // Store summary reporting
 // ============================================================================
@@ -220,3 +258,108 @@ impl<T> ReadWriteDataStore for T where
     T: ReadDataStore + TransactionStoreWriter + EpochStoreWriter + ObjectStoreWriter
 {
 }
+
+macro_rules! impl_store_for_deref {
+    ($wrapper:ty) => {
+        impl<T: TransactionStore + ?Sized> TransactionStore for $wrapper {
+            fn transaction_data_and_effects(
+                &self,
+                tx_digest: &str,
+            ) -> Result<Option<TransactionInfo>, Error> {
+                Deref::deref(self).transaction_data_and_effects(tx_digest)
+            }
+        }
+
+        impl<T: TransactionStoreWriter + ?Sized> TransactionStoreWriter for $wrapper {
+            fn write_transaction(
+                &self,
+                tx_digest: &str,
+                transaction_info: TransactionInfo,
+            ) -> Result<(), Error> {
+                Deref::deref(self).write_transaction(tx_digest, transaction_info)
+            }
+        }
+
+        impl<T: EpochStore + ?Sized> EpochStore for $wrapper {
+            fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error> {
+                Deref::deref(self).epoch_info(epoch)
+            }
+
+            fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
+                Deref::deref(self).protocol_config(epoch)
+            }
+        }
+
+        impl<T: EpochStoreWriter + ?Sized> EpochStoreWriter for $wrapper {
+            fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error> {
+                Deref::deref(self).write_epoch_info(epoch, epoch_data)
+            }
+        }
+
+        impl<T: ObjectStore + ?Sized> ObjectStore for $wrapper {
+            fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
+                Deref::deref(self).get_objects(keys)
+            }
+        }
+
+        impl<T: ObjectStoreWriter + ?Sized> ObjectStoreWriter for $wrapper {
+            fn write_object(
+                &self,
+                key: &ObjectKey,
+                object: Object,
+                actual_version: u64,
+            ) -> Result<(), Error> {
+                Deref::deref(self).write_object(key, object, actual_version)
+            }
+        }
+
+        impl<T: CheckpointStore + ?Sized> CheckpointStore for $wrapper {
+            fn get_checkpoint_by_sequence_number(
+                &self,
+                sequence: CheckpointSequenceNumber,
+            ) -> Result<Option<FullCheckpointData>, Error> {
+                Deref::deref(self).get_checkpoint_by_sequence_number(sequence)
+            }
+
+            fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+                Deref::deref(self).get_latest_checkpoint()
+            }
+
+            fn get_sequence_by_checkpoint_digest(
+                &self,
+                digest: &CheckpointDigest,
+            ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+                Deref::deref(self).get_sequence_by_checkpoint_digest(digest)
+            }
+
+            fn get_sequence_by_contents_digest(
+                &self,
+                digest: &CheckpointContentsDigest,
+            ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+                Deref::deref(self).get_sequence_by_contents_digest(digest)
+            }
+        }
+
+        impl<T: CheckpointStoreWriter + ?Sized> CheckpointStoreWriter for $wrapper {
+            fn write_checkpoint(&self, checkpoint: &FullCheckpointData) -> Result<(), Error> {
+                Deref::deref(self).write_checkpoint(checkpoint)
+            }
+        }
+
+        impl<T: SetupStore + ?Sized> SetupStore for $wrapper {
+            fn setup(&self, chain_id: Option<String>) -> Result<Option<String>, Error> {
+                Deref::deref(self).setup(chain_id)
+            }
+        }
+
+        impl<T: StoreSummary + ?Sized> StoreSummary for $wrapper {
+            fn summary<W: Write>(&self, writer: &mut W) -> Result<()> {
+                Deref::deref(self).summary(writer)
+            }
+        }
+    };
+}
+
+impl_store_for_deref!(&T);
+impl_store_for_deref!(Box<T>);
+impl_store_for_deref!(Arc<T>);
