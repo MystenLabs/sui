@@ -498,7 +498,7 @@ fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
     #[allow(clippy::assertions_on_constants)]
     const PRE_MAX_VERSION: u32 = {
         assert!(
-            VERSION_MAX == 7,
+            VERSION_MAX == 8,
             "Need to update this code if the version changes"
         );
         VERSION_MAX - 1
@@ -700,6 +700,12 @@ fn compile_type(
         Type_::U64 => SignatureToken::U64,
         Type_::U128 => SignatureToken::U128,
         Type_::U256 => SignatureToken::U256,
+        Type_::I8 => SignatureToken::I8,
+        Type_::I16 => SignatureToken::I16,
+        Type_::I32 => SignatureToken::I32,
+        Type_::I64 => SignatureToken::I64,
+        Type_::I128 => SignatureToken::I128,
+        Type_::I256 => SignatureToken::I256,
         Type_::Bool => SignatureToken::Bool,
         Type_::Vector(inner_type) => SignatureToken::Vector(Box::new(compile_type(
             context,
@@ -1708,6 +1714,9 @@ fn type_to_constant_type_layout(ty: Type) -> Result<MoveTypeLayout> {
         Type_::U64 => MoveTypeLayout::U64,
         Type_::U128 => MoveTypeLayout::U128,
         Type_::U256 => MoveTypeLayout::U256,
+        Type_::I8 | Type_::I16 | Type_::I32 | Type_::I64 | Type_::I128 | Type_::I256 => {
+            bail!("Signed integer types are not supported in constant type layouts")
+        }
         Type_::Bool => MoveTypeLayout::Bool,
         Type_::Vector(inner_type) => {
             MoveTypeLayout::Vector(Box::new(type_to_constant_type_layout(*inner_type)?))
@@ -1831,6 +1840,19 @@ fn compile_bytecode(
         IRBytecode_::CastU64 => Bytecode::CastU64,
         IRBytecode_::CastU128 => Bytecode::CastU128,
         IRBytecode_::CastU256 => Bytecode::CastU256,
+        IRBytecode_::LdI8(v) => Bytecode::LdI8(v),
+        IRBytecode_::LdI16(v) => Bytecode::LdI16(v),
+        IRBytecode_::LdI32(v) => Bytecode::LdI32(v),
+        IRBytecode_::LdI64(v) => Bytecode::LdI64(v),
+        IRBytecode_::LdI128(v) => Bytecode::LdI128(Box::new(v)),
+        IRBytecode_::LdI256(v) => Bytecode::LdI256(Box::new(v)),
+        IRBytecode_::CastI8 => Bytecode::CastI8,
+        IRBytecode_::CastI16 => Bytecode::CastI16,
+        IRBytecode_::CastI32 => Bytecode::CastI32,
+        IRBytecode_::CastI64 => Bytecode::CastI64,
+        IRBytecode_::CastI128 => Bytecode::CastI128,
+        IRBytecode_::CastI256 => Bytecode::CastI256,
+        IRBytecode_::Neg => Bytecode::Neg,
         IRBytecode_::LdTrue => Bytecode::LdTrue,
         IRBytecode_::LdFalse => Bytecode::LdFalse,
         IRBytecode_::LdConst(ty, v) => {
