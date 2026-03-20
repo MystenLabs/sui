@@ -869,9 +869,10 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for 
         None
     }
 
-    fn get_struct_layout(
+    fn get_struct_layout_with_overlay(
         &self,
         _: &move_core_types::language_storage::StructTag,
+        _overlay: &sui_types::full_checkpoint_content::ObjectSet,
     ) -> sui_types::storage::error::Result<Option<move_core_types::annotated_value::MoveTypeLayout>>
     {
         Ok(None)

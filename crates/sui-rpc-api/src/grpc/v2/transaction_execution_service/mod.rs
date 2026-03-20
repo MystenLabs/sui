@@ -127,10 +127,8 @@ pub async fn execute_transaction(
     } = executor.execute_transaction(request, None).await?;
 
     let executed_transaction = {
-        let events = read_mask
-            .subtree(ExecutedTransaction::EVENTS_FIELD)
-            .and_then(|mask| events.map(|events| service.render_events_to_proto(&events, &mask)));
-
+        // Build the objects set first so we can use it for event JSON rendering.
+        // This allows resolving types from packages that were just published in this transaction.
         let objects = {
             let mut objects = sui_types::full_checkpoint_content::ObjectSet::default();
             for o in input_objects
@@ -142,6 +140,12 @@ pub async fn execute_transaction(
             }
             objects
         };
+
+        let events = read_mask
+            .subtree(ExecutedTransaction::EVENTS_FIELD)
+            .and_then(|mask| {
+                events.map(|events| service.render_events_to_proto(&events, &mask, &objects))
+            });
 
         let balance_changes = if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
             derive_balance_changes_2(&effects, &objects)
@@ -186,7 +190,7 @@ pub async fn execute_transaction(
                 ObjectSet::default().with_objects(
                     objects
                         .iter()
-                        .map(|o| service.render_object_to_proto(o, &mask))
+                        .map(|o| service.render_object_to_proto(o, &mask, &objects))
                         .collect(),
                 )
             });
