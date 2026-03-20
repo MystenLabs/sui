@@ -81,6 +81,52 @@ async fn test_rpc_get_object_returns_fake_coin() {
 }
 
 #[sim_test]
+async fn test_rpc_get_coins_no_fake_coin_when_address_balance_is_zero() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    // Test that no fake coin is returned when the address balance is zero.
+
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    // Don't fund address balance - it should be zero
+
+    // Query the RPC endpoint for coins
+    let params = rpc_params![
+        sender,
+        Option::<String>::None,
+        Option::<String>::None,
+        Option::<usize>::None
+    ];
+    let coins: CoinPage = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("suix_getCoins", params)
+        .await
+        .unwrap();
+
+    // All coins should be real coins (no fake coin)
+    // The fake coin would have a special digest with the COIN_RESERVATION_MAGIC
+    for coin in &coins.data {
+        assert!(
+            !sui_types::coin_reservation::ParsedDigest::is_coin_reservation_digest(&coin.digest),
+            "Found fake coin when address balance is zero"
+        );
+    }
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
 async fn test_rpc_get_coins_includes_fake_coin_at_position_1() {
     if has_mainnet_protocol_config_override() {
         return;
