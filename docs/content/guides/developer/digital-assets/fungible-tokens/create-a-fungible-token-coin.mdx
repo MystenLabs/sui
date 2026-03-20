@@ -1,0 +1,30 @@
+---
+title: "Create Fungible Tokens: Coin Standard"
+description: Learn how to create currencies and mint coins and tokens on the Sui network.
+keywords: [ mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry ]
+---
+
+## Fungible tokens: Coin standard
+
+The Coin standard defines fungible tokens that have `key + store` abilities. Coin supports wrapping and public transfers. It uses the [`sui::coin`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md) module. Coin refers to a **single object wrapper for a fungible asset**.
+
+The `Coin<T>` type represents open-loop fungible tokens. Coins are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Coin<T>`. The `sui::coin` module exposes an interface over `Coin<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Coin<T>` is interchangeable with any other unit of `T`, much like how traditional fiat currencies operate.
+
+Fungible tokens created using the Coin standard are referred to as **coins**.
+
+When you create a coin using the `coin::create_currency` function, the publisher of the smart contract that creates the coin receives a `TreasuryCap` object. The Coin standard uses `CoinMetadata` to define the coin's metadata.
+
+### When to use Coin
+
+Use the Coin standard if you are:
+
+- Working with legacy code or maintaining an existing coin that was created with the `sui::coin` module
+
+- Creating a coin that does not require advanced supply tracking or regulatory features
+
+- Familiar with the `CoinMetadata<T>` object for metadata storage
+
+[Learn more about using Coin](/standards/coin).
+
+
+https://github.com/jessiemongeon1/sui/blob/main/examples/move/coin/sources/my_coin.move

@@ -61,8 +61,19 @@ Use the Currency standard if you are:
 
 [Learn more about using Currency](/standards/currency).
 
+## Permissioned assets 
+
+The Permissioned Asset Standard (PAS) 
+
+
+
 ## Fungible tokens: Closed-Loop Token standard
 
+:::caution 
+
+The Permissioned Asset Standard (PAS) provides a new and improved alternative to the Closed-Loop Token (CLT) standard. It is recommended to use PAS in place of CLT.
+
+:::
 The Closed-Loop Token standard creates a fungible token that only has the `key` ability. Closed-loop tokens cannot be wrapped, stored as a dynamic field, or freely transferred (unless a custom policy allows it). Due to this restriction, tokens created with this standard **can only be owned by an account** and cannot be stored in an application. However, [they can be spent](/standards/closed-loop-token/spending.mdx). The standard uses the [`sui::token` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/token.md).
 
 Fungible tokens created using the Closed-Loop Token standard are referred to as **tokens**.
