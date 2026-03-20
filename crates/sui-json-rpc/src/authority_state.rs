@@ -585,10 +585,16 @@ impl StateRead for AuthorityState {
             }
         }
 
-        // If no real coins exist but fake coins do, return the fake coins.
-        if result.is_empty() && cursor.2 == ObjectID::ZERO {
-            for fake in fake_coins.into_values().take(limit) {
-                result.push(fake);
+        // Emit any fake coins for types that had no real coins.
+        // Only do this on the first page (cursor at start) to avoid duplicates.
+        if cursor.2 == ObjectID::ZERO {
+            for (coin_type, fake) in fake_coins {
+                if result.len() >= limit {
+                    break;
+                }
+                if !fake_emitted.get(&coin_type).copied().unwrap_or(false) {
+                    result.push(fake);
+                }
             }
         }
 

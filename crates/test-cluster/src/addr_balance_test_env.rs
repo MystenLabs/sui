@@ -536,6 +536,181 @@ impl TestEnv {
 
         (package_id, coin_type)
     }
+
+    /// Transfer a SUI coin from funder to recipient.
+    pub async fn transfer_sui_coin(
+        &mut self,
+        funder: SuiAddress,
+        recipient: SuiAddress,
+        amount: u64,
+    ) {
+        let tx = self
+            .tx_builder(funder)
+            .transfer_sui(Some(amount), recipient)
+            .build();
+        let (digest, effects) = self.exec_tx_directly(tx).await.unwrap();
+        assert!(
+            effects.status().is_ok(),
+            "Transfer should succeed: {:?}",
+            effects.status()
+        );
+        self.cluster.wait_for_tx_settlement(&[digest]).await;
+    }
+
+    /// Fund the recipient's address balance using funder's coins.
+    pub async fn fund_address_balance_for_recipient(
+        &mut self,
+        funder: SuiAddress,
+        recipient: SuiAddress,
+        amount: u64,
+    ) {
+        let gas = self.gas_objects[&funder][0];
+        let tx = TestTransactionBuilder::new(funder, gas, self.rgp)
+            .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(amount, recipient)])
+            .build();
+        let (digest, effects) = self.exec_tx_directly(tx).await.unwrap();
+        assert!(
+            effects.status().is_ok(),
+            "Fund address balance should succeed: {:?}",
+            effects.status()
+        );
+        self.cluster.wait_for_tx_settlement(&[digest]).await;
+    }
+
+    /// Publish trusted_coin and set up coins for a recipient.
+    /// Creates `real_coins` real coins and optionally funds address balance.
+    pub async fn publish_trusted_coin_and_setup(
+        &mut self,
+        funder: SuiAddress,
+        recipient: SuiAddress,
+        config: &crate::addr_balance_test_env::CoinTypeConfig,
+        coin_amount: u64,
+    ) -> (ObjectID, TypeTag) {
+        let test_tx_builder = self.tx_builder(funder);
+
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.pop();
+        path.extend(["sui-e2e-tests", "tests", "rpc", "data", "trusted_coin"]);
+        let coin_publish = test_tx_builder.publish_async(path).await.build();
+
+        let (_, effects) = self.exec_tx_directly(coin_publish).await.unwrap();
+
+        // Find the treasury cap
+        let mut treasury_cap = None;
+        for (obj_ref, owner) in effects.created() {
+            if owner.is_address_owned() {
+                let object = self
+                    .cluster
+                    .fullnode_handle
+                    .sui_node
+                    .with_async(
+                        |node| async move { node.state().get_object(&obj_ref.0).await.unwrap() },
+                    )
+                    .await;
+                if object.type_().unwrap().name().as_str() == "TreasuryCap" {
+                    treasury_cap = Some(obj_ref);
+                    break;
+                }
+            }
+        }
+        let mut treasury_cap = treasury_cap.expect("Treasury cap not found");
+
+        let package_id = effects.published_packages().into_iter().next().unwrap();
+        let coin_type: TypeTag = format!("{}::trusted_coin::TRUSTED_COIN", package_id)
+            .parse()
+            .unwrap();
+
+        // Mint and transfer real coins to recipient
+        for _ in 0..config.real_coins {
+            let mint_tx = self
+                .tx_builder(funder)
+                .move_call(
+                    package_id,
+                    "trusted_coin",
+                    "mint",
+                    vec![
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap)),
+                        CallArg::Pure(bcs::to_bytes(&coin_amount).unwrap()),
+                    ],
+                )
+                .build();
+            let (_, mint_effects) = self.exec_tx_directly(mint_tx).await.unwrap();
+
+            let minted_coin = mint_effects
+                .created()
+                .iter()
+                .find(|(_, owner)| owner.is_address_owned())
+                .unwrap()
+                .0;
+
+            // Update treasury cap ref
+            treasury_cap = mint_effects
+                .mutated()
+                .iter()
+                .map(|(obj_ref, _)| *obj_ref)
+                .find(|obj_ref| obj_ref.0 == treasury_cap.0)
+                .unwrap();
+
+            // Transfer coin to recipient
+            let transfer_tx = self
+                .tx_builder(funder)
+                .transfer(FullObjectRef::from_fastpath_ref(minted_coin), recipient)
+                .build();
+            self.exec_tx_directly(transfer_tx).await.unwrap();
+        }
+
+        // Fund address balance if configured
+        if config.has_address_balance {
+            let mint_tx = self
+                .tx_builder(funder)
+                .move_call(
+                    package_id,
+                    "trusted_coin",
+                    "mint",
+                    vec![
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap)),
+                        CallArg::Pure(bcs::to_bytes(&coin_amount).unwrap()),
+                    ],
+                )
+                .build();
+            let (_, mint_effects) = self.exec_tx_directly(mint_tx).await.unwrap();
+
+            let minted_coin = mint_effects
+                .created()
+                .iter()
+                .find(|(_, owner)| owner.is_address_owned())
+                .unwrap()
+                .0;
+
+            // Transfer to recipient's address balance
+            let send_tx = self
+                .tx_builder(funder)
+                .transfer_funds_to_address_balance(
+                    FundSource::Coin(minted_coin),
+                    vec![(coin_amount, recipient)],
+                    coin_type.clone(),
+                )
+                .build();
+            let (digest, send_effects) = self.exec_tx_directly(send_tx).await.unwrap();
+            assert!(
+                send_effects.status().is_ok(),
+                "Transfer to address balance should succeed: {:?}",
+                send_effects.status()
+            );
+            self.cluster.wait_for_tx_settlement(&[digest]).await;
+        }
+
+        (package_id, coin_type)
+    }
+}
+
+/// Configuration for a single coin type in a test scenario.
+#[derive(Clone, Debug)]
+pub struct CoinTypeConfig {
+    /// Number of real coins to create for this type.
+    pub real_coins: usize,
+    /// Whether to create an address balance (fake coin) for this type.
+    pub has_address_balance: bool,
 }
 
 pub fn get_sui_accumulator_object_id(sender: SuiAddress) -> ObjectID {
