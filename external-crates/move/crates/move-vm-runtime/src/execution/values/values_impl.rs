@@ -3451,6 +3451,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             L::U256 => u256::U256::deserialize(deserializer).map(Value::u256),
             L::Address => AccountAddress::deserialize(deserializer).map(Value::address),
             L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
+            L::I8 => i8::deserialize(deserializer).map(Value::i8),
+            L::I16 => i16::deserialize(deserializer).map(Value::i16),
+            L::I32 => i32::deserialize(deserializer).map(Value::i32),
+            L::I64 => i64::deserialize(deserializer).map(Value::i64),
+            L::I128 => i128::deserialize(deserializer).map(Value::i128),
+            L::I256 => i256::I256::deserialize(deserializer).map(Value::i256),
 
             L::Struct(struct_layout) => Ok(SeedWrapper {
                 layout: struct_layout.as_ref(),
@@ -4125,7 +4131,13 @@ impl Value {
                         | L::Address
                         | L::U16
                         | L::U32
-                        | L::U256),
+                        | L::U256
+                        | L::I8
+                        | L::I16
+                        | L::I32
+                        | L::I64
+                        | L::I128
+                        | L::I256),
                         vec,
                     ) => {
                         return Err(partial_vm_error!(

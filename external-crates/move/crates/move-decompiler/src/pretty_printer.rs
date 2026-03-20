@@ -573,6 +573,12 @@ fn value(v: &Value) -> Doc {
                 D::text(",").concat(D::space()),
             ))
             .concat(D::text("]")),
+        Value::I8(i) => D::text(i.to_string()).concat(D::text("i8")),
+        Value::I16(i) => D::text(i.to_string()).concat(D::text("i16")),
+        Value::I32(i) => D::text(i.to_string()).concat(D::text("i32")),
+        Value::I64(i) => D::text(i.to_string()).concat(D::text("i64")),
+        Value::I128(i) => D::text(i.to_string()).concat(D::text("i128")),
+        Value::I256(i) => D::text(i.to_string()).concat(D::text("i256")),
         Value::Struct(_) | Value::Signer(_) | Value::Variant(_) => unreachable!(),
     }
 }

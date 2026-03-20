@@ -732,6 +732,42 @@ mod testing {
                 }
                 write!(out, "{}", STRUCT_END).map_err(fmt_error_to_partial_vm_error)?;
             }
+            A::MoveValue::I8(i) => {
+                write!(out, "{}", i).map_err(fmt_error_to_partial_vm_error)?;
+                if include_int_types {
+                    write!(out, "i8").map_err(fmt_error_to_partial_vm_error)?;
+                }
+            }
+            A::MoveValue::I16(i) => {
+                write!(out, "{}", i).map_err(fmt_error_to_partial_vm_error)?;
+                if include_int_types {
+                    write!(out, "i16").map_err(fmt_error_to_partial_vm_error)?;
+                }
+            }
+            A::MoveValue::I32(i) => {
+                write!(out, "{}", i).map_err(fmt_error_to_partial_vm_error)?;
+                if include_int_types {
+                    write!(out, "i32").map_err(fmt_error_to_partial_vm_error)?;
+                }
+            }
+            A::MoveValue::I64(i) => {
+                write!(out, "{}", i).map_err(fmt_error_to_partial_vm_error)?;
+                if include_int_types {
+                    write!(out, "i64").map_err(fmt_error_to_partial_vm_error)?;
+                }
+            }
+            A::MoveValue::I128(i) => {
+                write!(out, "{}", i).map_err(fmt_error_to_partial_vm_error)?;
+                if include_int_types {
+                    write!(out, "i128").map_err(fmt_error_to_partial_vm_error)?;
+                }
+            }
+            A::MoveValue::I256(i) => {
+                write!(out, "{}", i).map_err(fmt_error_to_partial_vm_error)?;
+                if include_int_types {
+                    write!(out, "i256").map_err(fmt_error_to_partial_vm_error)?;
+                }
+            }
         }
 
         Ok(())
