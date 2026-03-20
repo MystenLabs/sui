@@ -170,7 +170,6 @@ pub struct PipelineLayer {
     pub epoch_start: ConcurrentLayer,
     pub epoch_end: ConcurrentLayer,
     pub protocol_configs: ConcurrentLayer,
-    pub epoch_legacy: ConcurrentLayer,
     pub packages: ConcurrentLayer,
     pub packages_by_id: ConcurrentLayer,
     pub packages_by_checkpoint: ConcurrentLayer,

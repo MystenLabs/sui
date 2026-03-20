@@ -6,11 +6,9 @@
 use anyhow::Result;
 use bytes::Bytes;
 use sui_types::committee::EpochId;
-use sui_types::storage::EpochInfo;
 use sui_types::sui_system_state::SuiSystemState;
 
 use crate::EpochData;
-use crate::tables::DEFAULT_COLUMN;
 
 pub const NAME: &str = "epochs";
 
@@ -47,11 +45,6 @@ pub fn encode_key(epoch_id: EpochId) -> Vec<u8> {
 
 pub fn encode_key_upper_bound() -> Bytes {
     Bytes::from(u64::MAX.to_be_bytes().to_vec())
-}
-
-/// Encode full epoch info (legacy format).
-pub fn encode(epoch: &EpochInfo) -> Result<[(&'static str, Bytes); 1]> {
-    Ok([(DEFAULT_COLUMN, Bytes::from(bcs::to_bytes(epoch)?))])
 }
 
 /// Encode epoch start data to individual columns.

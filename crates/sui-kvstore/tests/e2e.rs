@@ -64,7 +64,7 @@ const TABLES: &[&str] = &[
     sui_kvstore::tables::transactions::NAME,
     sui_kvstore::tables::checkpoints::NAME,
     sui_kvstore::tables::checkpoints_by_digest::NAME,
-    sui_kvstore::tables::watermark_alt_legacy::NAME,
+    sui_kvstore::tables::watermarks::NAME,
     sui_kvstore::tables::epochs::NAME,
     sui_kvstore::tables::protocol_configs::NAME,
     sui_kvstore::tables::packages::NAME,

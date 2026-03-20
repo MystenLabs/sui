@@ -47,7 +47,7 @@ struct Args {
     #[arg(long)]
     chain: Chain,
 
-    /// Enable writing legacy data: watermark \[0\] row, epoch DEFAULT_COLUMN, and transaction tx column
+    /// Enable writing legacy data: deprecated combined transaction tx column
     #[arg(long)]
     write_legacy_data: bool,
 
