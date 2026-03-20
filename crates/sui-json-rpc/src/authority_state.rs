@@ -602,13 +602,14 @@ impl StateRead for AuthorityState {
             }
 
             // Handle cursor_at_first_real: emit fake coin first for this type.
-            if cursor_at_first_real && !seen_first_of_type && coin_type == real_cursor.0 {
-                if let Some(fake) = fake_coins.get(&coin_type) {
-                    if result.len() < limit {
-                        result.push(fake.clone());
-                        fake_emitted_for_type = true;
-                    }
-                }
+            if cursor_at_first_real
+                && !seen_first_of_type
+                && coin_type == real_cursor.0
+                && let Some(fake) = fake_coins.get(&coin_type)
+                && result.len() < limit
+            {
+                result.push(fake.clone());
+                fake_emitted_for_type = true;
             }
 
             // Emit the real coin.
@@ -619,11 +620,11 @@ impl StateRead for AuthorityState {
             // After emitting first real coin of a type, emit the fake coin.
             if !seen_first_of_type && !fake_emitted_for_type {
                 seen_first_of_type = true;
-                if let Some(fake) = fake_coins.get(&coin_type) {
-                    if result.len() < limit {
-                        result.push(fake.clone());
-                        fake_emitted_for_type = true;
-                    }
+                if let Some(fake) = fake_coins.get(&coin_type)
+                    && result.len() < limit
+                {
+                    result.push(fake.clone());
+                    fake_emitted_for_type = true;
                 }
             } else {
                 seen_first_of_type = true;
