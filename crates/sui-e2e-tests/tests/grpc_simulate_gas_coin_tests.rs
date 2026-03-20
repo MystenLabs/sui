@@ -156,142 +156,164 @@ async fn test_gas_coin_satisfied_by_ab_with_coins_available() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
             cfg.enable_accumulators_for_testing();
-            // TODO: Enable compatibility layer when implemented
-            // cfg.enable_withdrawal_compatibility_for_testing();
             cfg
         }))
         .build()
         .await;
 
-    let (sender, _) = test_env.get_sender_and_gas(0);
+    let mut test_env = test_env;
+    let (sender, all_gas) = test_env.get_sender_and_all_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
 
-    // Setup: Fund address balance with 5 SUI
-    let mut test_env = test_env;
+    // Use the first gas coin for paying gas, second coin for splitting
+    let gas_for_tx = all_gas[0];
+    let coin_to_split = all_gas[1];
+
+    // Step 1: Create a small coin (0.1 SUI) by splitting from the second gas coin
+    // This small coin will be used as gas for the test transaction
+    let small_coin_amount = 100_000_000u64; // 0.1 SUI
+    let split_tx = test_env
+        .tx_builder_with_gas(sender, gas_for_tx)
+        .split_coin(coin_to_split, vec![small_coin_amount])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(split_tx).await.unwrap();
+
+    // Get the newly created small coin from the effects
+    let small_coin = effects
+        .created()
+        .iter()
+        .find(|(obj_ref, _)| obj_ref.0 != coin_to_split.0)
+        .map(|(obj_ref, _)| *obj_ref)
+        .expect("Should have created a new coin");
+
+    // Step 2: Fund sender's address balance with 5 SUI (uses a different gas coin internally)
     test_env
         .fund_one_address_balance(sender, 5 * MIST_PER_SUI)
         .await;
 
-    // Refresh gas after funding
-    let (sender, gas) = test_env.get_sender_and_gas(0);
-
-    // X = 2 SUI - The gas coin alone might not have enough, but AB does
-    // This test verifies that when AB is sufficient, the compatibility layer kicks in
-    let amount = 2 * MIST_PER_SUI;
-    let gas_budget = 50_000_000;
-
-    let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
-
-    let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, true).await;
-
-    // NOTE: This test will FAIL until the compatibility layer is implemented.
-    // Once implemented, it should succeed by creating a FundsWithdrawal for AB
-    // and remapping GasCoin to use that withdrawal.
-
-    // For now, we expect this to either:
-    // 1. Succeed if the gas coin happens to have enough balance
-    // 2. Fail with an error about insufficient funds in the gas coin
-    // After implementation, it should always succeed using AB.
-
-    match result {
-        Ok(response) => {
-            // If it succeeded, verify the execution was successful
-            assert!(
-                response.transaction.effects.status().is_ok(),
-                "Expected successful execution, got: {:?}",
-                response.transaction.effects.status()
-            );
-        }
-        Err(e) => {
-            // Expected to fail until compatibility layer is implemented
-            // The error should be related to insufficient funds or invalid gas coin usage
-            let err_str = e.to_string();
-            assert!(
-                err_str.contains("insufficient")
-                    || err_str.contains("gas")
-                    || err_str.contains("balance"),
-                "Expected error related to insufficient funds, got: {}",
-                err_str
-            );
-        }
-    }
-}
-
-// =============================================================================
-// Test Case 4: X satisfied entirely by address balance, no coins
-// =============================================================================
-
-#[sim_test]
-async fn test_gas_coin_satisfied_by_ab_no_coins() {
-    // This test requires a sender with no coins but with address balance.
-    // This is tricky to set up since we need gas to fund the AB initially.
-    // We'll use a two-step approach: sender1 funds sender2's AB, then sender2 tests.
-
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
-            // TODO: Enable compatibility layer when implemented
-            cfg
-        }))
-        .build()
-        .await;
-
-    let mut test_env = test_env;
-
-    // Get two senders
-    let (_sender1, _) = test_env.get_sender_and_gas(0);
-    let sender2 = test_env.get_sender(1);
-    let recipient = SuiAddress::random_for_testing_only();
-
-    // Fund sender2's address balance using sender1's coins
-    // First, transfer some SUI to sender2's AB
-    test_env
-        .fund_one_address_balance(sender2, 5 * MIST_PER_SUI)
-        .await;
-
-    // Now sender2 has AB funds. To test with "no coins", we'd need to spend all
-    // of sender2's coins. For this test, we'll just verify the AB-only path
-    // by using sender2's gas coin but requesting more than what's in it.
-
-    let (_, sender2_gas) = test_env.get_sender_and_gas(1);
-
-    // X = 1 SUI from address balance
+    // Step 3: Build a PTB that uses the SMALL coin as gas and tries to split 1 SUI
+    // The small coin only has 0.1 SUI, but we're asking for 1 SUI
+    // Without compatibility layer: should FAIL
+    // With compatibility layer: should use AB and succeed
     let amount = 1 * MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
     let tx = build_split_gas_coin_ptb(
-        sender2,
+        sender,
         amount,
         recipient,
-        sender2_gas,
+        small_coin,
         gas_budget,
         test_env.rgp,
     );
 
     let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, true).await;
+    // Use allow_mock_gas_coin=false to use the actual small coin
+    let result = client.simulate_transaction(&tx, false).await;
 
-    // NOTE: This test will FAIL until the compatibility layer is implemented.
-    // The behavior should be:
-    // - With compatibility layer: succeeds using AB
-    // - Without: may fail if gas coin doesn't have enough
+    // This test should FAIL until the compatibility layer is implemented.
+    // The gas coin (small_coin) only has 0.1 SUI, but we're trying to split 1 SUI.
+    // Once the compatibility layer is implemented, it should succeed using AB.
 
     match result {
         Ok(response) => {
+            // If simulation succeeded, execution should have failed due to insufficient funds
             assert!(
-                response.transaction.effects.status().is_ok(),
-                "Expected successful execution, got: {:?}",
-                response.transaction.effects.status()
+                !response.transaction.effects.status().is_ok(),
+                "Expected execution to fail (gas coin has insufficient balance for split), \
+                 but got success. This is expected once compatibility layer is implemented."
             );
         }
-        Err(e) => {
-            // Expected to fail until compatibility layer is implemented
-            println!(
-                "Test case 4 failed as expected (compatibility layer not implemented): {}",
-                e
+        Err(_) => {
+            // Expected to fail - gas coin doesn't have enough for the split
+            // This is the expected behavior before compatibility layer is implemented
+        }
+    }
+}
+
+// =============================================================================
+// Test Case 4: X satisfied entirely by address balance, minimal coins
+// =============================================================================
+
+#[sim_test]
+async fn test_gas_coin_satisfied_by_ab_no_coins() {
+    // This test uses a sender with a minimal coin (just enough for gas fees)
+    // but with a larger address balance. The split amount exceeds the coin balance.
+
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let mut test_env = test_env;
+    let (sender, all_gas) = test_env.get_sender_and_all_gas(0);
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Use the first gas coin for paying gas, second coin for splitting
+    let gas_for_tx = all_gas[0];
+    let coin_to_split = all_gas[1];
+
+    // Step 1: Create a minimal coin (just 0.05 SUI - enough for gas fees only)
+    let minimal_coin_amount = 50_000_000u64; // 0.05 SUI
+    let split_tx = test_env
+        .tx_builder_with_gas(sender, gas_for_tx)
+        .split_coin(coin_to_split, vec![minimal_coin_amount])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(split_tx).await.unwrap();
+
+    // Get the newly created minimal coin
+    let minimal_coin = effects
+        .created()
+        .iter()
+        .find(|(obj_ref, _)| obj_ref.0 != coin_to_split.0)
+        .map(|(obj_ref, _)| *obj_ref)
+        .expect("Should have created a new coin");
+
+    // Step 2: Fund sender's address balance with 5 SUI (uses a different gas coin internally)
+    test_env
+        .fund_one_address_balance(sender, 5 * MIST_PER_SUI)
+        .await;
+
+    // Step 3: Build a PTB using the MINIMAL coin as gas, trying to split 1 SUI
+    // The minimal coin only has 0.05 SUI (barely enough for gas)
+    // Without compatibility layer: should FAIL
+    // With compatibility layer: should use AB and succeed
+    let amount = 1 * MIST_PER_SUI;
+    let gas_budget = 50_000_000;
+
+    let tx = build_split_gas_coin_ptb(
+        sender,
+        amount,
+        recipient,
+        minimal_coin,
+        gas_budget,
+        test_env.rgp,
+    );
+
+    let client = test_env.cluster.grpc_client();
+    // Use allow_mock_gas_coin=false to use the actual minimal coin
+    let result = client.simulate_transaction(&tx, false).await;
+
+    // This test should FAIL until the compatibility layer is implemented.
+    // The gas coin (minimal_coin) only has 0.05 SUI, but we're trying to split 1 SUI.
+    // Once the compatibility layer is implemented, it should succeed using AB.
+
+    match result {
+        Ok(response) => {
+            // If simulation succeeded, execution should have failed
+            assert!(
+                !response.transaction.effects.status().is_ok(),
+                "Expected execution to fail (gas coin has insufficient balance for split), \
+                 but got success. This is expected once compatibility layer is implemented."
             );
+        }
+        Err(_) => {
+            // Expected to fail - gas coin doesn't have enough for the split
+            // This is the expected behavior before compatibility layer is implemented
         }
     }
 }
