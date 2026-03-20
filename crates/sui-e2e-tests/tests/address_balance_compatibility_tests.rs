@@ -1178,7 +1178,7 @@ async fn test_rpc_get_object_returns_fake_coin() {
     let response: SuiObjectResponse = test_env
         .cluster
         .fullnode_handle
-        .grpc_client
+        .rpc_client
         .request("sui_getObject", params)
         .await
         .unwrap();
@@ -1229,7 +1229,7 @@ async fn test_rpc_get_coins_includes_fake_coin_at_position_1() {
     let initial_coins: CoinPage = test_env
         .cluster
         .fullnode_handle
-        .grpc_client
+        .rpc_client
         .request("suix_getCoins", params)
         .await
         .unwrap();
@@ -1255,7 +1255,7 @@ async fn test_rpc_get_coins_includes_fake_coin_at_position_1() {
     let coins: CoinPage = test_env
         .cluster
         .fullnode_handle
-        .grpc_client
+        .rpc_client
         .request("suix_getCoins", params)
         .await
         .unwrap();
@@ -1321,7 +1321,7 @@ async fn test_rpc_get_coins_pagination_handles_fake_coin() {
     let page1: CoinPage = test_env
         .cluster
         .fullnode_handle
-        .grpc_client
+        .rpc_client
         .request("suix_getCoins", params)
         .await
         .unwrap();
@@ -1338,7 +1338,7 @@ async fn test_rpc_get_coins_pagination_handles_fake_coin() {
         let page2: CoinPage = test_env
             .cluster
             .fullnode_handle
-            .grpc_client
+            .rpc_client
             .request("suix_getCoins", params)
             .await
             .unwrap();
@@ -1381,7 +1381,7 @@ async fn test_rpc_get_balance_includes_address_balance() {
     let initial_balance: RpcBalance = test_env
         .cluster
         .fullnode_handle
-        .grpc_client
+        .rpc_client
         .request("suix_getBalance", params)
         .await
         .unwrap();
@@ -1398,7 +1398,7 @@ async fn test_rpc_get_balance_includes_address_balance() {
     let updated_balance: RpcBalance = test_env
         .cluster
         .fullnode_handle
-        .grpc_client
+        .rpc_client
         .request("suix_getBalance", params)
         .await
         .unwrap();
@@ -1476,7 +1476,7 @@ async fn test_rpc_get_coins_pagination_consistency() {
             let page: CoinPage = test_env
                 .cluster
                 .fullnode_handle
-                .grpc_client
+                .rpc_client
                 .request("suix_getCoins", params)
                 .await
                 .unwrap();
