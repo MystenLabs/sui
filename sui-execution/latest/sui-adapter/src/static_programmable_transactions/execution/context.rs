@@ -1769,7 +1769,15 @@ fn finish_gas_coin<OType>(
 
     // If the gas coin was not ephemeral, then we are done.
     let address = match gas_payment.location {
-        PaymentLocation::Coin(_) => return Ok(()),
+        PaymentLocation::Coin(_) => {
+            // small sanity check
+            assert!(
+                !matches!(gas_coin_transfer, Some(GasCoinTransfer::SendFunds { .. }))
+                    || deleted_object_ids.contains(&gas_id),
+                "send_funds transfer implies the coin should be deleted"
+            );
+            return Ok(());
+        }
         PaymentLocation::AddressBalance(address) => address,
     };
 

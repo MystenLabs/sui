@@ -128,6 +128,13 @@ impl ExecutionResultsV2 {
             .extend(new_results.created_object_ids);
         self.deleted_object_ids
             .extend(new_results.deleted_object_ids);
+        // An object written before the merge (e.g., gas coin written by smash_gas) may be
+        // deleted by the new results (e.g., send_funds destroying the gas coin during PTB
+        // execution). Remove such stale entries so the object is not double-counted by the
+        // SUI conservation check.
+        for id in &self.deleted_object_ids {
+            self.written_objects.remove(id);
+        }
         self.user_events.extend(new_results.user_events);
         self.accumulator_events
             .extend(new_results.accumulator_events);

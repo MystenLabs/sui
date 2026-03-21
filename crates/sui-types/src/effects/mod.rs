@@ -253,9 +253,10 @@ impl TransactionEffects {
 
     /// Return an iterator of mutated objects, but excluding the gas object.
     pub fn mutated_excluding_gas(&self) -> Vec<(ObjectRef, Owner)> {
+        let gas_id = self.gas_object().0 .0;
         self.mutated()
             .into_iter()
-            .filter(|o| o != &self.gas_object())
+            .filter(|o| o.0 .0 != gas_id)
             .collect()
     }
 
@@ -354,6 +355,9 @@ pub trait TransactionEffectsAPI {
 
     fn accumulator_events(&self) -> Vec<AccumulatorEvent>;
 
+    /// Returns the gas object ref and owner. When the gas object was deleted (e.g. send_funds
+    /// consuming the gas coin), the object ID is preserved but the version, digest, and owner
+    /// are dummy values.
     // TODO: We should consider having this function to return Option.
     // When the gas object is not available (i.e. system transaction), we currently return
     // dummy object ref and owner. This is not ideal.
