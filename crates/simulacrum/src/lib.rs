@@ -999,7 +999,7 @@ mod tests {
         assert_eq!(
             (transfer_amount as i64 - gas_paid) as u64,
             store::SimulatorStore::get_object(sim.store(), &gas_id)
-                .and_then(|object| GasCoin::try_from(object).ok())
+                .and_then(|object| GasCoin::try_from(&object).ok())
                 .unwrap()
                 .value()
         );
