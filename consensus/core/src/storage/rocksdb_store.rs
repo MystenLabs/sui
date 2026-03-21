@@ -9,8 +9,8 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
 use sui_macros::fail_point;
+use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
 use typed_store::{
     DBMapUtils, Map as _,
     metrics::SamplingInterval,

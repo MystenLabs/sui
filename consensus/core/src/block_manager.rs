@@ -760,7 +760,7 @@ mod tests {
         // We set the gc depth to 4
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(4);
+            .set_gc_depth_for_testing(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -849,7 +849,7 @@ mod tests {
         // We set the gc depth to 4
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(4);
+            .set_gc_depth_for_testing(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -894,7 +894,7 @@ mod tests {
         let (mut context, _key_pairs) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(10);
+            .set_gc_depth_for_testing(10);
 
         let context = Arc::new(context);
 
@@ -943,7 +943,7 @@ mod tests {
         let (mut context, _key_pairs) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(gc_depth);
+            .set_gc_depth_for_testing(gc_depth);
 
         let context = Arc::new(context);
 
@@ -1021,7 +1021,7 @@ mod tests {
         // We set the gc depth to 4
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(4);
+            .set_gc_depth_for_testing(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));

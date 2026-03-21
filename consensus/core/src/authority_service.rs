@@ -15,8 +15,8 @@ use consensus_types::block::{BlockRef, Round};
 use futures::{Stream, StreamExt, ready, stream, task};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
-use rand::seq::SliceRandom as _;
 use sui_macros::fail_point_async;
+use rand::seq::SliceRandom as _;
 use tap::TapFallible;
 use tokio::sync::broadcast;
 use tokio_util::sync::ReusableBoxFuture;
@@ -281,7 +281,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
         // The block is verified and current, so record own votes on the block
         // before sending the block to Core.
-        if self.context.protocol_config.mysticeti_fastpath() {
+        if self.context.protocol_config.fastpath_enabled() {
             self.transaction_certifier
                 .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
         }

@@ -1551,7 +1551,7 @@ mod test {
         context.parameters.dag_state_cached_rounds = 10;
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(3);
+            .set_gc_depth_for_testing(3);
         let context = Arc::new(context);
 
         let store = Arc::new(MemStore::new());
@@ -1793,7 +1793,7 @@ mod test {
         let (mut context, _) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+            .set_gc_depth_for_testing(GC_DEPTH);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
 
         let context = Arc::new(context);
@@ -1926,7 +1926,7 @@ mod test {
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+            .set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
 
@@ -2297,7 +2297,7 @@ mod test {
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+            .set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -2434,7 +2434,7 @@ mod test {
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+            .set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());

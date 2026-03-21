@@ -7,8 +7,8 @@ mod consensus_tests {
     use std::{sync::Arc, time::Duration};
 
     use consensus_config::{
-        Authority, AuthorityIndex, AuthorityKeyPair, Committee, Epoch, NetworkKeyPair,
-        ProtocolKeyPair, Stake,
+        Authority, AuthorityIdentifier, AuthorityIndex, Committee, ConsensusProtocolConfig, Epoch,
+        NetworkKeyPair, ProtocolKeyPair, Stake,
     };
     use consensus_core::NoopTransactionVerifier;
     use consensus_core::{BlockAPI, BlockStatus, TransactionVerifier, ValidationError};
@@ -20,7 +20,6 @@ mod consensus_tests {
     use rand::{Rng, SeedableRng as _, rngs::StdRng};
     use sui_config::local_ip_utils;
     use sui_macros::sim_test;
-    use sui_protocol_config::ProtocolConfig;
     use sui_simulator::{
         SimConfig,
         configs::{bimodal_latency_ms, env_config, uniform_latency_ms},
@@ -51,14 +50,10 @@ mod consensus_tests {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_gc_depth_for_testing(3);
-            config
-        });
-
         const NUM_OF_AUTHORITIES: usize = 10;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(3);
 
         let mut authorities = Vec::with_capacity(committee.size());
         let mut transaction_clients = Vec::with_capacity(committee.size());
@@ -136,18 +131,14 @@ mod consensus_tests {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_gc_depth_for_testing(3);
-            config
-        });
-
         const NUM_OF_AUTHORITIES: usize = 10;
         const REJECTION_PROBABILITY: f64 = 0.1;
         const NUM_TRANSACTIONS: u16 = 10000;
         const MAX_TRANSACTIONS_BATCH_SIZE: u16 = 8;
 
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(3);
 
         let mut authorities = Vec::with_capacity(committee.size());
         let mut transaction_clients = Vec::with_capacity(committee.size());
@@ -342,14 +333,17 @@ mod consensus_tests {
         let mut key_pairs = vec![];
         let mut rng = StdRng::from_seed([0; 32]);
         for (i, stake) in authorities_stake.into_iter().enumerate() {
-            let authority_keypair = AuthorityKeyPair::generate(&mut rng);
+            let authority_keypair =
+                fastcrypto::bls12381::min_sig::BLS12381KeyPair::generate(&mut rng);
             let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
             let network_keypair = NetworkKeyPair::generate(&mut rng);
             authorities.push(Authority {
                 stake,
                 address: get_available_local_address(),
                 hostname: format!("test_host_{i}").to_string(),
-                authority_key: authority_keypair.public(),
+                authority_identifier: AuthorityIdentifier::from_bytes(
+                    authority_keypair.public().as_bytes(),
+                ),
                 protocol_key: protocol_keypair.public(),
                 network_key: network_keypair.public(),
             });

@@ -495,7 +495,7 @@ pub(crate) fn load_committed_subdag_from_store(
         commit.reference(),
         context
             .protocol_config
-            .consensus_always_accept_system_transactions(),
+            .always_accept_system_transactions(),
     );
 
     subdag.reputation_scores_desc = reputation_scores_desc;

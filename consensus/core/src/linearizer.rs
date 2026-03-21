@@ -116,7 +116,7 @@ impl Linearizer {
             commit.reference(),
             self.context
                 .protocol_config
-                .consensus_always_accept_system_transactions(),
+                .always_accept_system_transactions(),
         );
 
         (sub_dag, commit)
@@ -551,7 +551,7 @@ mod tests {
         let (mut context, _keys) = Context::new_for_test(num_authorities);
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+            .set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
         let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -663,7 +663,7 @@ mod tests {
         let (mut context, _keys) = Context::new_for_test(num_authorities);
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+            .set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
         let dag_state = Arc::new(RwLock::new(DagState::new(

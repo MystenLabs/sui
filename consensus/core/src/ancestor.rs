@@ -87,7 +87,7 @@ impl AncestorStateManager {
         // schedule to identify bad nodes.
         let excluded_nodes_stake_threshold_percentage = 2 * context
             .protocol_config
-            .consensus_bad_nodes_stake_threshold()
+            .bad_nodes_stake_threshold()
             / 3;
 
         let excluded_nodes_stake_threshold = (excluded_nodes_stake_threshold_percentage
@@ -353,7 +353,7 @@ mod test {
         let (mut context, _key_pairs) = Context::new_for_test(5);
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
