@@ -22,11 +22,7 @@ impl Default for ConsensusProtocolConfig {
         Self {
             protocol_version: 0,
             max_transaction_size_bytes: 256 * 1024,
-            max_transactions_in_block_bytes: if cfg!(msim) {
-                256 * 1024
-            } else {
-                512 * 1024
-            },
+            max_transactions_in_block_bytes: if cfg!(msim) { 256 * 1024 } else { 512 * 1024 },
             max_num_transactions_in_block: if cfg!(msim) { 8 } else { 512 },
             gc_depth: 0,
             fastpath_enabled: false,
@@ -68,11 +64,7 @@ impl ConsensusProtocolConfig {
         Self {
             protocol_version: u64::MAX,
             max_transaction_size_bytes: 256 * 1024,
-            max_transactions_in_block_bytes: if cfg!(msim) {
-                256 * 1024
-            } else {
-                512 * 1024
-            },
+            max_transactions_in_block_bytes: if cfg!(msim) { 256 * 1024 } else { 512 * 1024 },
             max_num_transactions_in_block: if cfg!(msim) { 8 } else { 512 },
             gc_depth: if cfg!(msim) { 6 } else { 60 },
             fastpath_enabled: true,

@@ -28,8 +28,7 @@ pub fn local_committee_and_keys_with_test_options(
     let mut key_pairs = vec![];
     let mut rng = StdRng::from_seed([0; 32]);
     for (i, stake) in authorities_stake.into_iter().enumerate() {
-        let authority_keypair =
-            fastcrypto::bls12381::min_sig::BLS12381KeyPair::generate(&mut rng);
+        let authority_keypair = fastcrypto::bls12381::min_sig::BLS12381KeyPair::generate(&mut rng);
         let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
         let network_keypair = NetworkKeyPair::generate(&mut rng);
         authorities.push(Authority {

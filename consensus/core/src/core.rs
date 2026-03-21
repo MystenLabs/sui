@@ -130,10 +130,7 @@ impl Core {
         round_tracker: Arc<RwLock<RoundTracker>>,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
-        let number_of_leaders = context
-            .protocol_config
-            .num_leaders_per_round()
-            .unwrap_or(1);
+        let number_of_leaders = context.protocol_config.num_leaders_per_round().unwrap_or(1);
         let committer = UniversalCommitterBuilder::new(
             context.clone(),
             leader_schedule.clone(),
@@ -1975,9 +1972,7 @@ mod test {
         let (mut context, mut key_pairs) = Context::new_for_test(4);
         const GC_DEPTH: u32 = 2;
 
-        context
-            .protocol_config
-            .set_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
 
@@ -2123,9 +2118,7 @@ mod test {
         let (mut context, mut key_pairs) = Context::new_for_test(4);
         const GC_DEPTH: u32 = 2;
 
-        context
-            .protocol_config
-            .set_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
 
@@ -3482,9 +3475,7 @@ mod test {
         telemetry_subscribers::init_for_testing();
 
         let (mut context, mut key_pairs) = Context::new_for_test(5);
-        context
-            .protocol_config
-            .set_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
         let context = Arc::new(context.with_parameters(Parameters {
             sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()

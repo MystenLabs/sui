@@ -3,6 +3,7 @@
 
 use std::{sync::Arc, time::Instant};
 
+use consensus_config::ConsensusProtocolConfig;
 use consensus_config::{
     AuthorityIndex, Committee, NetworkKeyPair, NetworkPublicKey, Parameters, ProtocolKeyPair,
 };
@@ -12,7 +13,6 @@ use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
-use consensus_config::ConsensusProtocolConfig;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 

@@ -243,9 +243,7 @@ impl LeaderSwapTable {
         commit_index: CommitIndex,
         reputation_scores: ReputationScores,
     ) -> Self {
-        let swap_stake_threshold = context
-            .protocol_config
-            .bad_nodes_stake_threshold();
+        let swap_stake_threshold = context.protocol_config.bad_nodes_stake_threshold();
         Self::new_inner(
             context,
             swap_stake_threshold,
