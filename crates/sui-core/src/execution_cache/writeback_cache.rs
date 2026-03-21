@@ -58,6 +58,7 @@ use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
+use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
@@ -1060,7 +1061,7 @@ impl WritebackCache {
 
         let _metrics_guard =
             mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs::flush");
-        for outputs in all_outputs.iter() {
+        all_outputs.par_iter().with_min_len(16).for_each(|outputs| {
             let tx_digest = outputs.transaction.digest();
             assert!(
                 self.dirty
@@ -1069,7 +1070,7 @@ impl WritebackCache {
                     .is_some()
             );
             self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, outputs);
-        }
+        });
 
         let num_outputs = all_outputs.len() as u64;
         let num_commits = self
