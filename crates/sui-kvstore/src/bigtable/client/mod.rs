@@ -1,25 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod auth_channel;
+mod channel_pool;
+
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::RwLock;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::EpochData;
 use anyhow::Context as _;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use gcp_auth::Token;
 use gcp_auth::TokenProvider;
-use http::HeaderValue;
-use http::Request;
-use http::Response;
 use prometheus::Registry;
 use sui_types::base_types::EpochId;
 use sui_types::base_types::ObjectID;
@@ -28,13 +23,17 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
-use tonic::body::Body;
-use tonic::codegen::Service;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 
+use auth_channel::AuthChannel;
+use channel_pool::ChannelPool;
+use channel_pool::ChannelPrimer;
+pub use channel_pool::PoolConfig;
+
 use crate::CheckpointData;
+use crate::EpochData;
 use crate::KeyValueStoreReader;
 use crate::PackageData;
 use crate::ProtocolConfigData;
@@ -43,6 +42,7 @@ use crate::TransactionEventsData;
 use crate::Watermark;
 use crate::bigtable::metrics::KvMetrics;
 use crate::bigtable::proto::bigtable::v2::MutateRowsRequest;
+use crate::bigtable::proto::bigtable::v2::PingAndWarmRequest;
 use crate::bigtable::proto::bigtable::v2::ReadRowsRequest;
 use crate::bigtable::proto::bigtable::v2::RequestStats;
 use crate::bigtable::proto::bigtable::v2::RowFilter;
@@ -62,11 +62,6 @@ const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
 // TODO: Add per-method timeouts (e.g. separate write vs read) via tonic::Request::set_timeout().
 const DEFAULT_CHANNEL_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Default number of gRPC channels in the pool. Each channel is an independent HTTP/2
-/// connection, allowing concurrent RPCs to spread across multiple TCP sockets instead
-/// of multiplexing on a single one. Matches the Google java-bigtable client default.
-const DEFAULT_CHANNEL_POOL_SIZE: usize = 10;
-
 /// Error returned when a batch write has per-entry failures.
 /// Contains the keys and error details for each failed mutation.
 #[derive(Debug)]
@@ -81,41 +76,64 @@ pub struct MutationError {
     pub message: String,
 }
 
+struct BigtablePrimer {
+    instance_name: String,
+    policy: String,
+    token_provider: Option<Arc<dyn TokenProvider>>,
+}
+
+impl ChannelPrimer for BigtablePrimer {
+    fn prime<'a>(
+        &'a self,
+        channel: &'a Channel,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            let auth_channel = AuthChannel::new(
+                channel.clone(),
+                self.policy.clone(),
+                self.token_provider.clone(),
+            );
+            let mut client = BigtableInternalClient::new(auth_channel);
+            client
+                .ping_and_warm(PingAndWarmRequest {
+                    name: self.instance_name.clone(),
+                    app_profile_id: String::new(),
+                })
+                .await?;
+            Ok(())
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct BigTableClient {
     table_prefix: String,
-    client: BigtableInternalClient<AuthChannel>,
+    client: BigtableInternalClient<AuthChannel<ChannelPool>>,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
     app_profile_id: Option<String>,
 }
 
-#[derive(Clone)]
-struct AuthChannel {
-    channel: Channel,
-    policy: String,
-    token_provider: Option<Arc<dyn TokenProvider>>,
-    token: Arc<RwLock<Option<Arc<Token>>>>,
-}
-
 impl BigTableClient {
     pub async fn new_local(host: String, instance_id: String) -> Result<Self> {
-        Self::new_for_host(host, instance_id, "local")
+        Self::new_for_host(host, instance_id, "local").await
     }
 
     /// Create a client connected to a specific host.
     /// Used internally and for testing with mock servers.
-    pub(crate) fn new_for_host(
+    pub(crate) async fn new_for_host(
         host: String,
         instance_id: String,
         client_name: &str,
     ) -> Result<Self> {
-        let auth_channel = AuthChannel {
-            channel: Channel::from_shared(format!("http://{host}"))?.connect_lazy(),
-            policy: "https://www.googleapis.com/auth/bigtable.data".to_string(),
-            token_provider: None,
-            token: Arc::new(RwLock::new(None)),
-        };
+        let endpoint = Channel::from_shared(format!("http://{host}"))?;
+        let pool =
+            ChannelPool::new_connected(endpoint, PoolConfig::singleton(), None, None).await?;
+        let auth_channel = AuthChannel::new(
+            pool,
+            "https://www.googleapis.com/auth/bigtable.data".to_string(),
+            None,
+        );
         Ok(Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
@@ -134,7 +152,7 @@ impl BigTableClient {
         client_name: String,
         registry: Option<&Registry>,
         app_profile_id: Option<String>,
-        channel_pool_size: Option<usize>,
+        pool_config: PoolConfig,
     ) -> Result<Self> {
         Self::new_remote_with_credentials(
             instance_id,
@@ -145,7 +163,7 @@ impl BigTableClient {
             client_name,
             registry,
             app_profile_id,
-            channel_pool_size,
+            pool_config,
             None,
         )
         .await
@@ -160,12 +178,10 @@ impl BigTableClient {
         client_name: String,
         registry: Option<&Registry>,
         app_profile_id: Option<String>,
-        channel_pool_size: Option<usize>,
+        pool_config: PoolConfig,
         credentials_path: Option<String>,
     ) -> Result<Self> {
-        let pool_size = channel_pool_size
-            .unwrap_or(DEFAULT_CHANNEL_POOL_SIZE)
-            .max(1);
+        let config = pool_config;
         let policy = if is_read_only {
             "https://www.googleapis.com/auth/bigtable.data.readonly"
         } else {
@@ -176,10 +192,11 @@ impl BigTableClient {
             None => gcp_auth::provider().await?,
         };
         let tls_config = ClientTlsConfig::new()
-            .ca_certificate(Certificate::from_pem(include_bytes!("./proto/google.pem")))
+            .ca_certificate(Certificate::from_pem(include_bytes!("../proto/google.pem")))
             .domain_name("bigtable.googleapis.com");
         let mut endpoint = Channel::from_static("https://bigtable.googleapis.com")
-            .http2_keep_alive_interval(Duration::from_secs(60))
+            .http2_keep_alive_interval(Duration::from_secs(30))
+            .keep_alive_timeout(Duration::from_secs(10))
             .keep_alive_while_idle(true)
             .tls_config(tls_config)?;
         endpoint = endpoint.timeout(timeout.unwrap_or(DEFAULT_CHANNEL_TIMEOUT));
@@ -187,26 +204,16 @@ impl BigTableClient {
             Some(p) => p,
             None => token_provider.project_id().await?.to_string(),
         };
-        let table_prefix = format!("projects/{}/instances/{}/tables/", project_id, instance_id);
-        let channel = if pool_size > 1 {
-            let (channel, tx) = Channel::balance_channel::<usize>(64);
-            for i in 0..pool_size {
-                tx.try_send(tonic::transport::channel::Change::Insert(
-                    i,
-                    endpoint.clone(),
-                ))
-                .expect("channel balancer dropped");
-            }
-            channel
-        } else {
-            endpoint.connect_lazy()
-        };
-        let auth_channel = AuthChannel {
-            channel,
+        let instance_name = format!("projects/{}/instances/{}/", project_id, instance_id);
+        let table_prefix = format!("{}tables/", instance_name);
+        let primer = BigtablePrimer {
+            instance_name,
             policy: policy.to_string(),
-            token_provider: Some(token_provider),
-            token: Arc::new(RwLock::new(None)),
+            token_provider: Some(token_provider.clone()),
         };
+        let pool =
+            ChannelPool::new_connected(endpoint, config, Some(Box::new(primer)), registry).await?;
+        let auth_channel = AuthChannel::new(pool, policy.to_string(), Some(token_provider));
         let client = BigtableInternalClient::new(auth_channel).max_decoding_message_size(
             max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
         );
@@ -220,53 +227,20 @@ impl BigTableClient {
     }
 
     /// Get the pipeline watermark from the watermarks table.
-    /// Falls back to the legacy `[0]` row if the pipeline-specific row is missing.
-    // TODO(migration): Remove legacy fallback once all pipelines have their own watermarks.
     pub async fn get_pipeline_watermark(&mut self, pipeline: &str) -> Result<Option<Watermark>> {
         let pipeline_key = tables::watermarks::encode_key(pipeline);
-        let legacy_key = vec![0u8];
 
         let rows = self
-            .multi_get(
-                tables::watermark_alt_legacy::NAME,
-                vec![pipeline_key.clone(), legacy_key.clone()],
-                None,
-            )
+            .multi_get(tables::watermarks::NAME, vec![pipeline_key.clone()], None)
             .await?;
-
-        let mut pipeline_wm = None;
-        let mut legacy_checkpoint = None;
 
         for (key, row) in rows {
             if key.as_ref() == pipeline_key.as_slice() {
-                pipeline_wm = Some(tables::watermarks::decode(&row)?);
-            } else if key.as_ref() == legacy_key.as_slice()
-                && let Some((_, value_bytes)) = row.last()
-            {
-                let next = u64::from_be_bytes(value_bytes.as_ref().try_into()?);
-                if next > 0 {
-                    legacy_checkpoint = Some(next - 1);
-                }
+                return Ok(Some(tables::watermarks::decode(&row)?));
             }
         }
 
-        if let Some(wm) = pipeline_wm {
-            return Ok(Some(wm));
-        }
-
-        // Don't fall back to legacy watermark when legacy mode is disabled.
-        // This prevents tasked backfill pipelines from inheriting the main
-        // pipeline's watermark from the legacy [0] row.
-        if !crate::write_legacy_data() {
-            return Ok(None);
-        }
-
-        Ok(legacy_checkpoint.map(|cp| Watermark {
-            epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: cp,
-            tx_hi: 0,
-            timestamp_ms_hi_inclusive: 0,
-        }))
+        Ok(None)
     }
 
     /// Set the pipeline watermark in the watermarks table.
@@ -728,9 +702,7 @@ impl KeyValueStoreReader for BigTableClient {
             .map(|name| tables::watermarks::encode_key(name))
             .collect();
 
-        let rows = self
-            .multi_get(tables::watermark_alt_legacy::NAME, keys, None)
-            .await?;
+        let rows = self.multi_get(tables::watermarks::NAME, keys, None).await?;
 
         if rows.len() != pipelines.len() {
             return Ok(None);
@@ -1035,56 +1007,5 @@ impl KeyValueStoreReader for BigTableClient {
             }
         }
         Ok(results)
-    }
-}
-
-impl Service<Request<Body>> for AuthChannel {
-    type Response = Response<Body>;
-    type Error = Box<dyn std::error::Error + Send + Sync>;
-    #[allow(clippy::type_complexity)]
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.channel.poll_ready(cx).map_err(Into::into)
-    }
-
-    fn call(&mut self, mut request: Request<Body>) -> Self::Future {
-        let cloned_channel = self.channel.clone();
-        let cloned_token = self.token.clone();
-        let mut inner = std::mem::replace(&mut self.channel, cloned_channel);
-        let policy = self.policy.clone();
-        let token_provider = self.token_provider.clone();
-
-        let mut auth_token = None;
-        if token_provider.is_some() {
-            let guard = self.token.read().expect("failed to acquire a read lock");
-            if let Some(token) = &*guard
-                && !token.has_expired()
-            {
-                auth_token = Some(token.clone());
-            }
-        }
-
-        Box::pin(async move {
-            if let Some(ref provider) = token_provider {
-                let token = match auth_token {
-                    None => {
-                        let new_token = provider.token(&[policy.as_ref()]).await?;
-                        let mut guard = cloned_token.write().unwrap();
-                        *guard = Some(new_token.clone());
-                        new_token
-                    }
-                    Some(token) => token,
-                };
-                let token_string = token.as_str().parse::<String>()?;
-                let header =
-                    HeaderValue::from_str(format!("Bearer {}", token_string.as_str()).as_str())?;
-                request.headers_mut().insert("authorization", header);
-            }
-            // enable reverse scan
-            let header = HeaderValue::from_static("CAE=");
-            request.headers_mut().insert("bigtable-features", header);
-            Ok(inner.call(request).await?)
-        })
     }
 }

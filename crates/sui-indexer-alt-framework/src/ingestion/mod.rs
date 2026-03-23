@@ -19,12 +19,12 @@ pub use crate::config::ConcurrencyConfig as IngestConcurrencyConfig;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
+use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::ingestion::ingestion_client::IngestionClient;
 use crate::ingestion::ingestion_client::IngestionClientArgs;
 use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
-use crate::types::full_checkpoint_content::Checkpoint;
 
 mod broadcaster;
 pub(crate) mod decode;
@@ -81,7 +81,7 @@ pub struct IngestionService {
     streaming_client: Option<GrpcStreamingClient>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
+    subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
     metrics: Arc<IngestionMetrics>,
 }
 
@@ -157,7 +157,7 @@ impl IngestionService {
     pub fn subscribe(
         &mut self,
     ) -> (
-        mpsc::Receiver<Arc<Checkpoint>>,
+        mpsc::Receiver<Arc<CheckpointEnvelope>>,
         mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
         let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
@@ -284,16 +284,16 @@ mod tests {
 
     async fn test_subscriber(
         stop_after: usize,
-        mut rx: mpsc::Receiver<Arc<Checkpoint>>,
+        mut rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
     ) -> TaskGuard<Vec<u64>> {
         TaskGuard::new(tokio::spawn(async move {
             let mut seqs = vec![];
             for _ in 0..stop_after {
-                let Some(checkpoint) = rx.recv().await else {
+                let Some(checkpoint_envelope) = rx.recv().await else {
                     break;
                 };
 
-                seqs.push(checkpoint.summary.sequence_number);
+                seqs.push(checkpoint_envelope.checkpoint.summary.sequence_number);
             }
 
             seqs
@@ -433,9 +433,9 @@ mod tests {
 
         // This subscriber will take its sweet time processing checkpoints.
         let (mut laggard, _) = ingestion_service.subscribe();
-        async fn unblock(laggard: &mut mpsc::Receiver<Arc<Checkpoint>>) -> u64 {
-            let checkpoint = laggard.recv().await.unwrap();
-            checkpoint.summary.sequence_number
+        async fn unblock(laggard: &mut mpsc::Receiver<Arc<CheckpointEnvelope>>) -> u64 {
+            let checkpoint_envelope = laggard.recv().await.unwrap();
+            checkpoint_envelope.checkpoint.summary.sequence_number
         }
 
         let (rx, _) = ingestion_service.subscribe();

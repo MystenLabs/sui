@@ -43,6 +43,7 @@ use once_cell::sync::Lazy;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde::Deserialize;
 use serde_json::Value;
+use simulacrum::SimulatorStore;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fmt::{self, Write};
@@ -2874,7 +2875,7 @@ async fn init_sim_executor(
 
     // Get the actual object values from the simulator
     for (name, (addr, kp)) in account_kps {
-        let o = sim.store_dyn().owned_objects(addr).next().unwrap();
+        let o = sim.store().owned_objects(addr).next().unwrap();
         objects.push(o.clone());
         account_objects.insert(name.clone(), o.id());
 
@@ -2888,7 +2889,7 @@ async fn init_sim_executor(
         );
     }
     let o = sim
-        .store_dyn()
+        .store()
         .owned_objects(default_account_kp.0)
         .next()
         .unwrap();
@@ -2900,7 +2901,7 @@ async fn init_sim_executor(
     objects.push(o.clone());
 
     for (i, (addr, key_pair_wrapper)) in addr_keys.into_iter().enumerate() {
-        let o = sim.store_dyn().owned_objects(addr).next().unwrap();
+        let o = sim.store().owned_objects(addr).next().unwrap();
         let validator_account = TestAccount {
             address: addr,
             key_pair: key_pair_wrapper.account_key_pair,

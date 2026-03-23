@@ -9,6 +9,8 @@ use move_compiler::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
+use std::path::PathBuf;
+use url::Url;
 
 /// Produces module ident string of the form pkg::module to be used as a map key
 /// It's important that these are consistent between parsing AST and typed AST.
@@ -75,6 +77,18 @@ pub fn lsp_position_to_loc(
     let line_offset = pos.line;
     let char_offset = pos.character;
     files.line_char_offset_to_loc_opt(file_hash, line_offset, char_offset)
+}
+
+/// Converts a file URI to a canonicalized PathBuf. Falls back to the raw
+/// `to_file_path()` result if canonicalization fails (e.g., file not yet on disk).
+pub fn canonical_path_from_uri(uri: &Url) -> Option<PathBuf> {
+    let path = uri.to_file_path().ok()?;
+    Some(canonicalize_path(path))
+}
+
+/// Canonicalize a PathBuf, falling back to the original if canonicalization fails.
+pub fn canonicalize_path(path: PathBuf) -> PathBuf {
+    dunce::canonicalize(&path).unwrap_or(path)
 }
 
 /// Some functions defined in a module need to be ignored.

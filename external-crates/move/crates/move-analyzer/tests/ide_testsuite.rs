@@ -22,6 +22,7 @@ use move_analyzer::{
         requests::{def_info_doc_string, maybe_convert_for_guard},
         use_def::UseDefMap,
     },
+    utils::canonicalize_path,
 };
 use move_command_line_common::testing::insta_assert;
 use move_compiler::{editions::Flavor, linters::LintLevel};
@@ -625,7 +626,7 @@ fn use_def_test_suite<F: MoveFlavor>(
         let mut fpath = project_path.clone();
 
         fpath.push(format!("sources/{file}"));
-        let cpath = dunce::canonicalize(&fpath).unwrap();
+        let cpath = canonicalize_path(fpath.clone());
 
         if symbols_opt.is_none() {
             // We do incremental compilation only for the first file in the test suite.
@@ -696,7 +697,7 @@ fn auto_completion_test_suite<F: MoveFlavor>(
         let mut fpath = project_path.clone();
 
         fpath.push(format!("sources/{file}"));
-        let cpath = dunce::canonicalize(&fpath).unwrap();
+        let cpath = canonicalize_path(fpath.clone());
 
         for (idx, test) in tests.iter().enumerate() {
             // Each test gets fresh symbols via explicit cache and cursor position
@@ -748,7 +749,7 @@ fn auto_import_test_suite<F: MoveFlavor>(
         let mut fpath = project_path.clone();
 
         fpath.push(format!("sources/{file}"));
-        let cpath = dunce::canonicalize(&fpath).unwrap();
+        let cpath = canonicalize_path(fpath.clone());
 
         for (idx, test) in tests.iter().enumerate() {
             // Each test gets fresh symbols via explicit cache and cursor position
@@ -797,7 +798,7 @@ fn cursor_test_suite<F: MoveFlavor>(
         let mut fpath = project_path.clone();
 
         fpath.push(format!("sources/{file}"));
-        let cpath = dunce::canonicalize(&fpath).unwrap();
+        let cpath = canonicalize_path(fpath.clone());
         for (idx, test) in tests.iter().enumerate() {
             test.test(idx, compiled_pkg_info.clone(), &mut symbols, writer, &cpath)?;
         }
@@ -838,7 +839,7 @@ fn hint_test_suite<F: MoveFlavor>(
         let mut fpath = project_path.clone();
 
         fpath.push(format!("sources/{file}"));
-        let cpath = dunce::canonicalize(&fpath).unwrap();
+        let cpath = canonicalize_path(fpath.clone());
 
         for (idx, test) in tests.iter().enumerate() {
             test.test(idx, &symbols, writer, &cpath)?;
@@ -880,7 +881,7 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor>(
         let mut fpath = project_path.clone();
 
         fpath.push(format!("sources/{file}"));
-        let cpath = dunce::canonicalize(&fpath).unwrap();
+        let cpath = canonicalize_path(fpath.clone());
 
         for (idx, test) in tests.iter().enumerate() {
             test.test(idx, &mut compiled_pkg_info, &mut symbols, writer, &cpath)?;
@@ -920,7 +921,7 @@ fn references_test_suite<F: MoveFlavor>(
 
         let mut fpath = project_path.clone();
         fpath.push(format!("sources/{file}"));
-        let cpath = dunce::canonicalize(&fpath).unwrap();
+        let cpath = canonicalize_path(fpath.clone());
 
         let mod_symbols = symbols
             .file_use_defs

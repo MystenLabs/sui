@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: set protocol version once it's no longer the max
-//# init --accounts A --addresses test=0x0 --simulator
+//# init --accounts A --addresses test=0x0 --simulator --protocol-version 118
 
 //# publish --sender A
 module test::mod {

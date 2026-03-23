@@ -14,6 +14,7 @@ use crate::{
         self, Symbols, compilation::CachedPackages, cursor::CursorContext,
         runner::SymbolicatorRunner,
     },
+    utils::canonical_path_from_uri,
 };
 
 use lsp_server::{Message, Request, Response};
@@ -88,12 +89,8 @@ pub fn on_completion_request<F: MoveFlavor>(
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
         .expect("could not deserialize completion request");
 
-    let path = parameters
-        .text_document_position
-        .text_document
-        .uri
-        .to_file_path()
-        .unwrap();
+    let path =
+        canonical_path_from_uri(&parameters.text_document_position.text_document.uri).unwrap();
 
     let mut pos = parameters.text_document_position.position;
     if pos.character != 0 {

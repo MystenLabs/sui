@@ -83,7 +83,6 @@ pub fn encode(
 }
 
 pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
-    let mut transaction_legacy: Option<Transaction> = None;
     let mut tx_data: Option<sui_types::transaction::TransactionData> = None;
     let mut tx_signatures: Option<Vec<GenericSignature>> = None;
 
@@ -94,7 +93,6 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
 
     for (column, value) in row {
         match column.as_ref() {
-            b"tx" => transaction_legacy = Some(bcs::from_bytes(value)?),
             b"td" => tx_data = Some(bcs::from_bytes(value)?),
             b"sg" => tx_signatures = Some(bcs::from_bytes(value)?),
             b"ef" => effects = Some(bcs::from_bytes(value)?),
@@ -105,12 +103,11 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
         }
     }
 
-    let transaction = match (tx_data, tx_signatures) {
-        (Some(data), Some(sigs)) => {
-            let sender_signed_data = SenderSignedData::new(data, sigs);
-            Transaction::new(sender_signed_data)
-        }
-        _ => transaction_legacy.context("transaction field is missing")?,
+    let transaction = {
+        let data = tx_data.context("transaction data field is missing")?;
+        let sigs = tx_signatures.context("transaction signatures field is missing")?;
+        let sender_signed_data = SenderSignedData::new(data, sigs);
+        Transaction::new(sender_signed_data)
     };
 
     Ok(TransactionData {

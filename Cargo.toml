@@ -299,7 +299,7 @@ async-trait = "0.1.61"
 atomic_float = "0.1"
 aws-config = { version = "1.8", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = "1.101"
-aws-sdk-kms = "1.97"
+aws-sdk-kms = { version = "1.97", default-features = false, features = ["rt-tokio"] }
 axum = { version = "0.8", default-features = false, features = [
   "macros",
   "tokio",
@@ -595,7 +595,7 @@ ureq = "2.9.1"
 url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
 walkdir = "2.5.0"
-webpki = { version = "0.103", package = "rustls-webpki", features = [
+webpki = { version = "0.103.10", package = "rustls-webpki", features = [
   "alloc",
   "std",
   "ring",

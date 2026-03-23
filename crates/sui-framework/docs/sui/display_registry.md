@@ -21,6 +21,7 @@ title: Module `sui::display_registry`
 -  [Function `system_migration`](#sui_display_registry_system_migration)
 -  [Function `migrate_v1_to_v2`](#sui_display_registry_migrate_v1_to_v2)
 -  [Function `destroy_system_migration_cap`](#sui_display_registry_destroy_system_migration_cap)
+-  [Function `transfer_migration_cap`](#sui_display_registry_transfer_migration_cap)
 -  [Function `delete_legacy`](#sui_display_registry_delete_legacy)
 -  [Function `fields`](#sui_display_registry_fields)
 -  [Function `cap_id`](#sui_display_registry_cap_id)
@@ -601,6 +602,30 @@ Destroy the <code><a href="../sui/display_registry.md#sui_display_registry_Syste
 <pre><code><b>entry</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_destroy_system_migration_cap">destroy_system_migration_cap</a>(cap: <a href="../sui/display_registry.md#sui_display_registry_SystemMigrationCap">SystemMigrationCap</a>) {
     <b>let</b> <a href="../sui/display_registry.md#sui_display_registry_SystemMigrationCap">SystemMigrationCap</a> { id } = cap;
     id.delete();
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_display_registry_transfer_migration_cap"></a>
+
+## Function `transfer_migration_cap`
+
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_transfer_migration_cap">transfer_migration_cap</a>(cap: <a href="../sui/display_registry.md#sui_display_registry_SystemMigrationCap">sui::display_registry::SystemMigrationCap</a>, recipient: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/display_registry.md#sui_display_registry_transfer_migration_cap">transfer_migration_cap</a>(cap: <a href="../sui/display_registry.md#sui_display_registry_SystemMigrationCap">SystemMigrationCap</a>, recipient: <b>address</b>) {
+    <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(cap, recipient);
 }
 </code></pre>
 

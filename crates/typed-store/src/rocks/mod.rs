@@ -415,6 +415,15 @@ impl Database {
     }
 
     #[cfg(tidehunter)]
+    pub fn force_rebuild_control_region(&self) -> anyhow::Result<()> {
+        if let Storage::TideHunter(db) = &self.storage {
+            db.force_rebuild_control_region()
+                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+        }
+        Ok(())
+    }
+
+    #[cfg(tidehunter)]
     pub fn drop_cells_in_range(
         &self,
         ks: KeySpace,

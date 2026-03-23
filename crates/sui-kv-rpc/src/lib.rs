@@ -3,6 +3,7 @@
 
 use prometheus::Registry;
 use std::sync::Arc;
+pub use sui_kvstore::PoolConfig;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
 use sui_rpc_api::ServerVersion;
@@ -33,6 +34,7 @@ impl KvRpcServer {
         server_version: Option<ServerVersion>,
         registry: &Registry,
         credentials_path: Option<String>,
+        pool_config: PoolConfig,
     ) -> anyhow::Result<Self> {
         let mut client = BigTableClient::new_remote_with_credentials(
             instance_id,
@@ -43,7 +45,7 @@ impl KvRpcServer {
             "sui-kv-rpc".to_string(),
             Some(registry),
             app_profile_id,
-            Some(1),
+            pool_config,
             credentials_path,
         )
         .await?;

@@ -1050,6 +1050,13 @@ pub async fn download_formal_snapshot(
     )
     .await?;
 
+    // After a large backfill, rebuild the tidehunter control region to reclaim disk space
+    // and reduce startup time. No-op when compiled without tidehunter.
+    #[cfg(tidehunter)]
+    perpetual_db
+        .force_rebuild_control_region()
+        .expect("Failed to rebuild tidehunter control region after snapshot restore");
+
     let new_path = path.parent().unwrap().join("live");
     if new_path.exists() {
         fs::remove_dir_all(new_path.clone())?;
