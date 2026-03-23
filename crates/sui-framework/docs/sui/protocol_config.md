@@ -33,8 +33,8 @@ We should never need to expose this to user packages.
 ### Arguments
 
 * <code>feature_flag_name</code> - The name of the feature flag as bytes (e.g., b"enable_vdf")
-- It is expected to be a valid UTF-8 string
-- The flag should exist in the protocol config
+  - It is expected to be a valid UTF-8 string
+  - The flag should exist in the protocol config
 
 
 <a name="@Returns_1"></a>
@@ -53,7 +53,7 @@ We should never need to expose this to user packages.
 use sui::protocol_config;
 
 if (protocol_config::is_feature_enabled(b"enable_accumulators")) {
-// Accumulators are available
+    // Accumulators are available
 };
 ```
 

@@ -1099,12 +1099,12 @@ Called at epoch boundaries to process the pending stake.
 ## Function `withdraw_rewards`
 
 This function does the following:
-1. Calculates the total amount of SUI (including principal and rewards) that the provided pool tokens represent
-at the current exchange rate.
-2. Using the above number and the given <code>principal_withdraw_amount</code>, calculates the rewards portion of the
-stake we should withdraw.
-3. Withdraws the rewards portion from the rewards pool at the current exchange rate. We only withdraw the rewards
-portion because the principal portion was already taken out of the staker's self custodied StakedSui.
+    1. Calculates the total amount of SUI (including principal and rewards) that the provided pool tokens represent
+       at the current exchange rate.
+    2. Using the above number and the given <code>principal_withdraw_amount</code>, calculates the rewards portion of the
+       stake we should withdraw.
+    3. Withdraws the rewards portion from the rewards pool at the current exchange rate. We only withdraw the rewards
+       portion because the principal portion was already taken out of the staker's self custodied StakedSui.
 
 
 <pre><code><b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_withdraw_rewards">withdraw_rewards</a>(pool: &<b>mut</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">sui_system::staking_pool::StakingPool</a>, principal_withdraw_amount: u64, pool_token_withdraw_amount: u64, epoch: u64): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;

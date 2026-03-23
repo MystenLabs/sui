@@ -7,24 +7,24 @@ creates and sends a custom MoveEvent as a part of the effects
 certificate of the transaction.
 
 Every MoveEvent has the following properties:
-- sender
-- type signature (<code>T</code>)
-- event data (the value of <code>T</code>)
-- timestamp (local to a node)
-- transaction digest
+ - sender
+ - type signature (<code>T</code>)
+ - event data (the value of <code>T</code>)
+ - timestamp (local to a node)
+ - transaction digest
 
 Example:
 ```
 module my::marketplace {
-use sui::event;
-/* ... */
-struct ItemPurchased has copy, drop {
-item_id: ID, buyer: address
-}
-entry fun buy(/* .... */) {
-/* ... */
-event::emit(ItemPurchased { item_id: ..., buyer: .... })
-}
+   use sui::event;
+   /* ... */
+   struct ItemPurchased has copy, drop {
+     item_id: ID, buyer: address
+   }
+   entry fun buy(/* .... */) {
+      /* ... */
+      event::emit(ItemPurchased { item_id: ..., buyer: .... })
+   }
 }
 ```
 
