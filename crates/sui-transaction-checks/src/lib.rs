@@ -460,13 +460,15 @@ mod checked {
         // When coin reservations are enabled, allow empty objects if gas is paid from
         // address balance or entirely from coin reservations (the gas coin is materialized
         // from the address balance, so no input objects are needed).
+        let gas_only_contains_coin_reservations = !transaction.gas().is_empty()
+            && transaction
+                .gas()
+                .iter()
+                .all(|obj_ref| ParsedDigest::is_coin_reservation_digest(&obj_ref.2));
+
         let allow_empty_objects = protocol_config.enable_coin_reservation_obj_refs()
             && (transaction.is_gas_paid_from_address_balance()
-                || (!transaction.gas().is_empty()
-                    && transaction
-                        .gas()
-                        .iter()
-                        .all(|obj_ref| ParsedDigest::is_coin_reservation_digest(&obj_ref.2))));
+                || gas_only_contains_coin_reservations);
         if !transaction.is_genesis_tx() && objects.is_empty() && !allow_empty_objects {
             return Err(UserInputError::ObjectInputArityViolation);
         }

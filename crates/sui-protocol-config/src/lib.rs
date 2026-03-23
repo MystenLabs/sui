@@ -2181,7 +2181,7 @@ impl ProtocolConfig {
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
-        self.feature_flags.enable_coin_reservation_obj_refs
+        self.new_vm_enabled() && self.feature_flags.enable_coin_reservation_obj_refs
     }
 
     pub fn create_root_accumulator_object(&self) -> bool {
