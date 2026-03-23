@@ -35,6 +35,15 @@ If all chains evaluate to null, the entire format string evaluates to `null`.
 
 A chain navigates into an object's data. It starts from either the root object or a literal value, then follows a sequence of accessors.
 
+If you omit the root, the chain starts from the object currently being displayed. You can also
+refer to that root object explicitly with `$self`.
+
+```
+{name}                  — equivalent to {$self.name}
+{$self}                 — the root object itself
+{$self.id}              — explicit access from the root object
+```
+
 ### Field access
 
 Access named fields with dot notation:
@@ -104,6 +113,7 @@ Literals can appear as expression roots or as dynamic field name keys.
 
 | **Syntax** | **Type** | **Example** |
 |--------|------|---------|
+| `$self` | Current object | `{$self.id}` |
 | `true` or `false` | `bool` | `{true}` |
 | `42u8` | `u8` | `{255u8}` |
 | `1000u16` | `u16` | `{1000u16}` |
@@ -373,7 +383,9 @@ accessor ::= '.' IDENT
            | '->' '[' chain ']'
            | '=>' '[' chain ']'
 
-literal  ::= address | bool | number | string | vector | struct | enum
+literal  ::= self | address | bool | number | string | vector | struct | enum
+
+self     ::= '$' 'self'
 
 address  ::= '@' (NUM_DEC | NUM_HEX)
 bool     ::= 'true' | 'false'

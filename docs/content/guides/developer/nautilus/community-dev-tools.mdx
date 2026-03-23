@@ -9,7 +9,7 @@ The following are community-contributed developer tools designed to enhance work
 
 :::caution
 
-These tools are developed and maintained by community members and do not come with any security guarantees. Do your own due diligence if you decide to use these in a production environment.
+These tools are developed and maintained by Sui community members. Do your own due diligence for security, performance, and other guarantees if you decide to use these in a production environment.
 
 :::
 
@@ -21,9 +21,9 @@ To use Nautilus, you can either manage AWS Nitro Enclaves yourself or use Marlin
 
 Marlin Oyster handles deterministic enclave builds, provisioning, and attestation. You deploy enclave-powered apps with only a Docker image, Oyster CLI, and Sui. No direct AWS interaction is required. Marlin Oyster preserves all cryptographic guarantees, including hardware-backed Nitro security, reproducible enclave measurements (Platform Configuration Registers (PCRs)), and trust-minimized execution.
 
-It transforms Trusted Execution Environment (TEE) access into a transparent and decentralized marketplace. A Sui Move contract enables you to submit jobs, pay with stablecoins, and expose workloads to Oyster operators. Builds are deterministic, meaning enclave integrity and identity are fully verifiable.
+It transforms Trusted Execution Environment (TEE) access into a transparent and decentralized marketplace. An abstracted Sui Move contract enables you to submit jobs, pay with stablecoins, and expose workloads to Oyster operators. Builds are deterministic, meaning enclave integrity and identity are fully verifiable.
 
-You can learn more about Marlin Oyster and Nautilus on the [Marlin blog](https://blog.marlin.org/scaling-confidential-compute-on-sui-nautilus-and-marlin-oyster-integration), or learn more about Marlin in the [Marlin documentation](https://docs.marlin.org/oyster/introduction-to-marlin/).
+You can learn more about Marlin Oyster and Nautilus in [Marlin docs](https://docs.marlin.org/oyster/build-cvm/guides/sui-oyster/).
 
 ### How it works
 
@@ -48,12 +48,12 @@ You can learn more in the project [README](https://github.com/marlinprotocol/sui
 
 ## Nautilus-Ops
 
-Nautilus-Ops is a command-line tool you can use to build and deploy enclave images, register attestations on chain, and verify enclave signatures.
+Nautilus-Ops is a command-line tool you can use to build and deploy enclave images, register enclaves on chain, and verify enclave signatures.
 
 [Learn more on the project GitHub](https://github.com/Ashwin-3cS/nautilus-ops).
 
 ## nautilus-ts
 
-nautilus-ts is a TypeScript framework for building apps inside AWS Nitro Enclaves using SDKs such as `@mysten/sui` and `@mysten/seal`. The framework handles VSOCK networking, NSM attestation, traffic forwarding, and key management.
+nautilus-ts is a TypeScript framework for building Nautilus apps inside AWS Nitro Enclaves using SDKs such as `@mysten/sui` and `@mysten/seal`. The framework handles VSOCK networking, NSM attestation, traffic forwarding, and key management.
 
 [Learn more on the project GitHub](https://github.com/unconfirmedlabs/nautilus-ts).

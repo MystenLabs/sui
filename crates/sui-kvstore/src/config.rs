@@ -1,11 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::{self as framework};
+use tracing::warn;
+
+use crate::bigtable::client::PoolConfig;
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
@@ -18,12 +23,79 @@ pub struct IndexerConfig {
     /// Default per-pipeline rate limit (rows per second).
     /// Individual pipelines can override via their `ConcurrentLayer`.
     pub max_rows_per_second: Option<u64>,
-    /// Number of gRPC channels in the Bigtable connection pool (default: 10).
-    /// A good rule of thumb is to target ~25 concurrent RPCs per channel, so
-    /// ceil(sum of write_concurrency across all pipelines / 25).
+    /// Deprecated: use `bigtable-pool` section instead. If set, overrides
+    /// `bigtable-pool.initial-pool-size`. Will be removed in a future release.
     pub bigtable_connection_pool_size: Option<usize>,
     /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000).
     pub bigtable_channel_timeout_ms: Option<u64>,
+    /// Bigtable connection pool configuration.
+    pub bigtable_pool: BigtablePoolLayer,
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+pub struct BigtablePoolLayer {
+    /// Number of channels to create at startup (default: 10).
+    pub initial_pool_size: Option<usize>,
+    /// Minimum number of channels the pool will maintain (default: 1).
+    pub min_pool_size: Option<usize>,
+    /// Maximum number of channels the pool can scale to (default: 200).
+    pub max_pool_size: Option<usize>,
+    /// Average load per channel below which the pool considers scaling down (default: 5).
+    pub min_rpcs_per_channel: Option<usize>,
+    /// Average load per channel above which the pool scales up (default: 50).
+    pub max_rpcs_per_channel: Option<usize>,
+    /// Maximum channels to remove in a single scale-down operation (default: 2).
+    pub max_resize_delta: Option<usize>,
+    /// Consecutive low-load observations required before scaling down (default: 3).
+    pub downscale_threshold: Option<usize>,
+    /// Milliseconds between maintenance cycles (resize + refresh) (default: 60000).
+    pub maintenance_interval_ms: Option<u64>,
+    /// Channel age in milliseconds before it is eligible for refresh (default: 2700000 = 45 min).
+    pub refresh_age_ms: Option<u64>,
+    /// Random jitter in milliseconds added to refresh age (default: 300000 = 5 min).
+    pub refresh_jitter_ms: Option<u64>,
+}
+
+impl BigtablePoolLayer {
+    pub fn finish(self, deprecated_pool_size: Option<usize>) -> PoolConfig {
+        if deprecated_pool_size.is_some() {
+            warn!(
+                "bigtable-connection-pool-size is deprecated; \
+                 use the [bigtable-pool] section instead"
+            );
+        }
+
+        let base = PoolConfig::default();
+        PoolConfig {
+            initial_pool_size: self
+                .initial_pool_size
+                .or(deprecated_pool_size)
+                .unwrap_or(base.initial_pool_size),
+            min_pool_size: self.min_pool_size.unwrap_or(base.min_pool_size),
+            max_pool_size: self.max_pool_size.unwrap_or(base.max_pool_size),
+            min_rpcs_per_channel: self
+                .min_rpcs_per_channel
+                .unwrap_or(base.min_rpcs_per_channel),
+            max_rpcs_per_channel: self
+                .max_rpcs_per_channel
+                .unwrap_or(base.max_rpcs_per_channel),
+            max_resize_delta: self.max_resize_delta.unwrap_or(base.max_resize_delta),
+            downscale_threshold: self.downscale_threshold.unwrap_or(base.downscale_threshold),
+            maintenance_interval: self
+                .maintenance_interval_ms
+                .map(Duration::from_millis)
+                .unwrap_or(base.maintenance_interval),
+            refresh_age: self
+                .refresh_age_ms
+                .map(Duration::from_millis)
+                .unwrap_or(base.refresh_age),
+            refresh_jitter: self
+                .refresh_jitter_ms
+                .map(Duration::from_millis)
+                .unwrap_or(base.refresh_jitter),
+        }
+    }
 }
 
 #[DefaultConfig]

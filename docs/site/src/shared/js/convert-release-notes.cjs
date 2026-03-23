@@ -11,6 +11,9 @@ const docsDir = '../../docs';
 const releaseNotesDir = '../../release-notes/';
 const outputReleaseNotesPath = '../../docs/content/references/release-notes.mdx';
 
+const MAX_PAGE_CHARS = 49500;
+const GITHUB_RELEASES_URL = 'https://github.com/MystenLabs/sui/releases';
+
 const excludeDirs = ['node_modules', '.git', 'build', 'dist', '.docusaurus'];
 
 function shouldExcludeDir(dirName) {
@@ -221,6 +224,60 @@ function fetchGitHubReleases() {
   });
 }
 
+// Truncate the final content to stay under the character limit
+function truncateContent(content, maxChars) {
+  const truncationNotice = `\n\n---\n\n:::info\n\nThis page has been truncated to stay within size limits. View the complete release history on [GitHub Releases](${GITHUB_RELEASES_URL}).\n\n:::\n`;
+
+  if (content.length + truncationNotice.length <= maxChars) {
+    return content;
+  }
+
+  console.log(`⚠️ Content is ${content.length} chars, truncating to stay under ${maxChars}...`);
+
+  const availableChars = maxChars - truncationNotice.length;
+
+  // Find a safe truncation point at a release boundary (## heading)
+  const lines = content.split('\n');
+  let truncated = '';
+  let lastReleaseBoundary = '';
+
+  for (const line of lines) {
+    const candidate = truncated + line + '\n';
+
+    if (candidate.length > availableChars) {
+      break;
+    }
+
+    truncated = candidate;
+
+    // Mark safe cut points at release version headings (## lines)
+    if (line.match(/^## /)) {
+      // Cut just before this heading to keep complete releases only
+      const idx = truncated.lastIndexOf(line);
+      if (idx > 0) {
+        lastReleaseBoundary = truncated.substring(0, idx).trimEnd();
+      }
+    }
+  }
+
+  // Use the last clean release boundary, or fall back to raw truncation
+  let result = lastReleaseBoundary || truncated.trimEnd();
+
+  // Close any unclosed <details> tags
+  const detailsOpens = (result.match(/<details>/g) || []).length;
+  const detailsCloses = (result.match(/<\/details>/g) || []).length;
+  const unclosedDetails = detailsOpens - detailsCloses;
+  if (unclosedDetails > 0) {
+    result += '\n' + '</details>\n'.repeat(unclosedDetails);
+  }
+
+  result += truncationNotice;
+
+  console.log(`✅ Truncated from ${content.length} to ${result.length} chars`);
+
+  return result;
+}
+
 async function consolidateReleaseNotes() {
   const localNotesByVersion = new Map();
 
@@ -415,6 +472,9 @@ ${localNote.content}
       consolidatedContent += '---\n\n';
     });
 
+    // Truncate if the page exceeds the character limit
+    consolidatedContent = truncateContent(consolidatedContent, MAX_PAGE_CHARS);
+
     const outputDir = path.dirname(outputReleaseNotesPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -422,6 +482,7 @@ ${localNote.content}
 
     fs.writeFileSync(outputReleaseNotesPath, consolidatedContent, 'utf8');
     console.log(`✓ Consolidated ${allReleaseNotes.length} release notes into: ${outputReleaseNotesPath}`);
+    console.log(`  Final file size: ${consolidatedContent.length} chars`);
   } catch (error) {
     console.error('⚠️ Error fetching GitHub releases:', error.message);
   }

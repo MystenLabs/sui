@@ -6,6 +6,7 @@ use axum::{
     http::HeaderMap,
     response::{IntoResponse, Response},
 };
+use sui_sdk_types::Digest;
 
 use crate::RpcService;
 use sui_rpc::headers::{
@@ -20,7 +21,10 @@ pub async fn append_info_headers(
 ) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
 
-    if let Ok(chain_id) = state.chain_id().to_string().try_into() {
+    if let Ok(chain_id) = Digest::new(state.chain_id().as_bytes().to_owned())
+        .to_string()
+        .try_into()
+    {
         headers.insert(X_SUI_CHAIN_ID, chain_id);
     }
 

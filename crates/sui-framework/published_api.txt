@@ -2998,6 +2998,9 @@ migrate_v1_to_v2
 destroy_system_migration_cap
 	entry fun
 	0x2::display_registry
+transfer_migration_cap
+	entry fun
+	0x2::display_registry
 delete_legacy
 	public fun
 	0x2::display_registry

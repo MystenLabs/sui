@@ -1885,4 +1885,61 @@ mod test {
             .tables()
             .check_databases_equal(sync_indexes.tables());
     }
+
+    /// Finds the most recent protocol version that uses an older execution version
+    /// than the max protocol version.
+    fn find_previous_execution_version_protocol() -> Option<u64> {
+        let max_ver = ProtocolVersion::max().as_u64();
+        let max_config = ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        let max_exec_ver = max_config.execution_version_as_option().unwrap_or(0);
+
+        for v in (1..max_ver).rev() {
+            let config = ProtocolConfig::get_for_version(ProtocolVersion::new(v), Chain::Unknown);
+            let exec_ver = config.execution_version_as_option().unwrap_or(0);
+            if exec_ver < max_exec_ver {
+                return Some(v);
+            }
+        }
+        None
+    }
+
+    /// Smoke test that runs simulated load (including the composite workload) at
+    /// the most recent protocol version with an older execution version. Catches
+    /// bugs where shared code changes behavior unconditionally but only the latest
+    /// execution adapter compensates.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_previous_execution_version() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let target_version = find_previous_execution_version_protocol()
+            .expect("no protocol version found with an older execution version");
+        info!(
+            "Smoke testing at protocol version {} (execution version {})",
+            target_version,
+            ProtocolConfig::get_for_version(ProtocolVersion::new(target_version), Chain::Unknown)
+                .execution_version_as_option()
+                .unwrap_or(0),
+        );
+
+        let init_framework =
+            sui_framework_snapshot::load_bytecode_snapshot(target_version).unwrap();
+        let test_cluster = init_test_cluster_builder(2, 10_000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_submit_delay_step_override_millis(3000)
+            .with_num_unpruned_validators(1)
+            .with_protocol_version(ProtocolVersion::new(target_version))
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                target_version,
+                target_version,
+            ))
+            .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
+            .build()
+            .await
+            .into();
+        test_simulated_load(test_cluster, 30).await;
+    }
 }

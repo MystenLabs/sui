@@ -15932,6 +15932,7 @@ name = "sui-kvstore"
 version = "1.69.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-trait",
  "base64 0.21.7",
  "bcs",
@@ -15945,6 +15946,7 @@ dependencies = [
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
+ "rand 0.8.5",
  "rustls 0.23.31",
  "serde",
  "sui-default-config",

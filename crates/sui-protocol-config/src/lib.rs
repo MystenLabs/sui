@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 118;
+const MAX_PROTOCOL_VERSION: u64 = 119;
 
 // Record history of protocol version allocations here:
 //
@@ -305,7 +305,8 @@ const MAX_PROTOCOL_VERSION: u64 = 118;
 //              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
 // Version 117: Update Sui System metadata handling.
-// Version 118: Enable the new VM.
+// Version 118: Adds `transfer_migration_cap` to display registry
+// Version 119: Enable the new VM.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4688,7 +4689,8 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_display_registry = true;
                 }
                 117 => {}
-                118 => {
+                118 => {}
+                119 => {
                     // Enable new VM.
                     cfg.execution_version = Some(4);
                     cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = false;

@@ -14,6 +14,7 @@ use tracing::info;
 
 use crate::Task;
 use crate::config::ConcurrencyConfig;
+use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::Processor;
@@ -26,7 +27,6 @@ use crate::pipeline::concurrent::pruner::pruner;
 use crate::pipeline::concurrent::reader_watermark::reader_watermark;
 use crate::pipeline::processor::processor;
 use crate::store::Store;
-use crate::types::full_checkpoint_content::Checkpoint;
 
 mod collector;
 mod commit_watermark;
@@ -238,7 +238,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     config: ConcurrentConfig,
     store: H::Store,
     task: Option<Task>,
-    checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
+    checkpoint_rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     info!(
@@ -345,6 +345,7 @@ mod tests {
     use std::time::Duration;
 
     use prometheus::Registry;
+    use sui_types::digests::CheckpointDigest;
     use tokio::sync::mpsc;
     use tokio::time::timeout;
 
@@ -441,7 +442,7 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        checkpoint_tx: mpsc::Sender<Arc<Checkpoint>>,
+        checkpoint_tx: mpsc::Sender<Arc<CheckpointEnvelope>>,
         #[allow(unused)]
         pipeline: Service,
     }
@@ -469,14 +470,17 @@ mod tests {
         }
 
         async fn send_checkpoint(&self, checkpoint: u64) -> anyhow::Result<()> {
-            let checkpoint = Arc::new(
-                TestCheckpointBuilder::new(checkpoint)
-                    .with_epoch(1)
-                    .with_network_total_transactions(checkpoint * 2)
-                    .with_timestamp_ms(1000000000 + checkpoint * 1000)
-                    .build_checkpoint(),
-            );
-            self.checkpoint_tx.send(checkpoint).await?;
+            let checkpoint_envelope = Arc::new(CheckpointEnvelope {
+                checkpoint: Arc::new(
+                    TestCheckpointBuilder::new(checkpoint)
+                        .with_epoch(1)
+                        .with_network_total_transactions(checkpoint * 2)
+                        .with_timestamp_ms(1000000000 + checkpoint * 1000)
+                        .build_checkpoint(),
+                ),
+                chain_id: CheckpointDigest::new([1; 32]).into(),
+            });
+            self.checkpoint_tx.send(checkpoint_envelope).await?;
             Ok(())
         }
 

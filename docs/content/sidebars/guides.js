@@ -290,6 +290,10 @@ const guides = [
       id: 'guides/developer/wallets/index',
     },
     items: [
+      `guides/developer/wallets/what-is-a-wallet`,
+      `guides/developer/wallets/slush`,
+      `guides/developer/wallets/self-custody`,
+      `guides/developer/wallets/zk-login-wallets`,
       'guides/developer/wallets/suilink'
     ],
   },
@@ -361,6 +365,7 @@ const guides = [
       'guides/developer/app-examples/e2e-counter',
       'guides/developer/app-examples/client-tssdk',
       'guides/developer/app-examples/trustless-swap',
+	  'guides/developer/app-examples/trustless-swap-frontend',
       'guides/developer/app-examples/coin-flip',
       'guides/developer/app-examples/reviews-rating',
       'guides/developer/app-examples/blackjack',
