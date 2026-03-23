@@ -58,7 +58,7 @@ impl ConsensusProtocolConfig {
         }
     }
 
-    /// Returns a config matching `ProtocolConfig::get_for_max_version_UNSAFE()`
+    /// Returns a config with all features enabled and reasonable defaults
     /// for use in tests.
     pub fn for_testing() -> Self {
         Self {
