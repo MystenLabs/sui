@@ -157,11 +157,7 @@ impl BenchmarkSetup {
                     let mut builder = ProgrammableTransactionBuilder::new();
                     let coin_args: Vec<_> = batch
                         .iter()
-                        .map(|coin| {
-                            builder
-                                .obj(ObjectArg::ImmOrOwnedObject(*coin))
-                                .unwrap()
-                        })
+                        .map(|coin| builder.obj(ObjectArg::ImmOrOwnedObject(*coin)).unwrap())
                         .collect();
                     builder.command(Command::MergeCoins(Argument::GasCoin, coin_args));
                     let pt = builder.finish();
