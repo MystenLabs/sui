@@ -544,13 +544,44 @@ impl StateRead for AuthorityState {
         )?;
 
         // Track which types have had their fake coin emitted.
-        // For cursor's type: if cursor is non-zero and not at fake, we're past the fake slot.
         let mut fake_emitted: HashMap<String, bool> = HashMap::new();
+
+        // If cursor is a real coin, check if we're past the fake coin slot.
+        // The fake coin is at position 1 (after first real). So if cursor is the
+        // first real coin, fake hasn't been emitted. If cursor is any later real
+        // coin, fake was already emitted.
+        let mut emit_fake_before_reals = false;
         if cursor.2 != ObjectID::ZERO && !cursor_at_fake && fake_coins.contains_key(&cursor.0) {
-            fake_emitted.insert(cursor.0.clone(), true);
+            // Check if cursor is the first real coin by querying from the start
+            let first_real_id = self
+                .get_owned_coins_iterator_with_cursor(
+                    owner,
+                    (cursor.0.clone(), 0, ObjectID::ZERO),
+                    1,
+                    one_coin_type_only,
+                )?
+                .next()
+                .map(|(k, _)| k.object_id);
+
+            if first_real_id == Some(cursor.2) {
+                // Cursor is at first real coin, fake should be emitted next
+                emit_fake_before_reals = true;
+            } else {
+                // Cursor is past first real coin, fake was already emitted
+                fake_emitted.insert(cursor.0.clone(), true);
+            }
         }
 
         let mut result = Vec::with_capacity(limit);
+
+        // If cursor is at first real coin, emit fake before continuing with more reals
+        if emit_fake_before_reals {
+            if let Some(fake) = fake_coins.get(&cursor.0) {
+                result.push(fake.clone());
+                fake_emitted.insert(cursor.0.clone(), true);
+            }
+        }
+
         let mut seen_first_real: HashMap<String, bool> = HashMap::new();
         let mut skipped_first = false;
 

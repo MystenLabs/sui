@@ -158,6 +158,66 @@ fn count_real_and_fake(coins: &CoinPage) -> ExpectedCounts {
     }
 }
 
+/// Verify pagination returns same results regardless of page size.
+async fn verify_pagination_consistency(
+    test_env: &TestEnv,
+    owner: SuiAddress,
+    coin_type: Option<&str>,
+) {
+    // Fetch all at once
+    let all_ids = fetch_all_coin_ids(test_env, owner, coin_type, 100).await;
+
+    // Fetch with page size 1
+    let paginated_1 = fetch_all_coin_ids(test_env, owner, coin_type, 1).await;
+    assert_eq!(
+        all_ids, paginated_1,
+        "Pagination with page_size=1 should match all-at-once for coin_type={:?}",
+        coin_type
+    );
+
+    // Fetch with page size 2
+    let paginated_2 = fetch_all_coin_ids(test_env, owner, coin_type, 2).await;
+    assert_eq!(
+        all_ids, paginated_2,
+        "Pagination with page_size=2 should match all-at-once for coin_type={:?}",
+        coin_type
+    );
+}
+
+/// Fetch all coin IDs using getCoins with pagination.
+async fn fetch_all_coin_ids(
+    test_env: &TestEnv,
+    owner: SuiAddress,
+    coin_type: Option<&str>,
+    page_size: usize,
+) -> Vec<ObjectID> {
+    let mut all_ids = vec![];
+    let mut cursor: Option<String> = None;
+
+    loop {
+        let params = rpc_params![owner, coin_type, cursor.clone(), Some(page_size)];
+        let page: CoinPage = test_env
+            .cluster
+            .fullnode_handle
+            .rpc_client
+            .request("suix_getCoins", params)
+            .await
+            .unwrap();
+
+        for coin in &page.data {
+            all_ids.push(coin.coin_object_id);
+        }
+
+        if page.has_next_page {
+            cursor = page.next_cursor;
+        } else {
+            break;
+        }
+    }
+
+    all_ids
+}
+
 /// Verify fake coin ordering: fake coins should be at position 1 within each type,
 /// or at position 0 if no real coins exist for that type.
 fn verify_fake_coin_ordering(coins: &CoinPage) {
@@ -358,6 +418,14 @@ async fn run_scenario(scenario: TestScenario) {
         .await
         .unwrap();
     verify_fake_coin_ordering(&coins);
+
+    // Verify pagination consistency for SUI
+    verify_pagination_consistency(&test_env, recipient, None).await;
+
+    // Verify pagination consistency for custom coin type (if present)
+    if let Some(coin_type) = custom_type.as_ref() {
+        verify_pagination_consistency(&test_env, recipient, Some(coin_type)).await;
+    }
 }
 
 // =============================================================================
