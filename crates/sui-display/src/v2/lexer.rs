@@ -40,6 +40,8 @@ pub(crate) enum Token {
     Arrow,
     /// '=>'
     AArrow,
+    /// '~>'
+    TArrow,
     /// '@'
     At,
     /// ':'
@@ -153,6 +155,8 @@ impl<'s> Lexer<'s> {
             b'-' if bytes.get(1) == Some(&b'>') => self.take(ws, T::Arrow, 2),
 
             b'=' if bytes.get(1) == Some(&b'>') => self.take(ws, T::AArrow, 2),
+
+            b'~' if bytes.get(1) == Some(&b'>') => self.take(ws, T::TArrow, 2),
 
             b'@' => self.take(ws, T::At, 1),
 
@@ -311,6 +315,7 @@ impl fmt::Display for OwnedLexeme {
         match self {
             L(_, T::Arrow, _, _) => write!(f, "'->'"),
             L(_, T::AArrow, _, _) => write!(f, "'=>'"),
+            L(_, T::TArrow, _, _) => write!(f, "'~>'"),
             L(_, T::At, _, _) => write!(f, "'@'"),
             L(_, T::Colon, _, _) => write!(f, "':'"),
             L(_, T::CColon, _, _) => write!(f, "'::'"),
@@ -361,6 +366,7 @@ impl fmt::Display for Token {
         match self {
             T::Arrow => write!(f, "'->'"),
             T::AArrow => write!(f, "'=>'"),
+            T::TArrow => write!(f, "'~>'"),
             T::At => write!(f, "'@'"),
             T::Colon => write!(f, "':'"),
             T::CColon => write!(f, "'::'"),
@@ -623,11 +629,12 @@ mod tests {
         "###);
     }
 
-    // Display supports three kinds of index -- `foo[i]`, `bar->[j]`, and `baz=>[k]`, representing
-    // vector/VecMap, dynamic field, and dynamic object field access respectively.
+    // Display supports four kinds of index -- `foo[i]`, `bar->[j]`, `baz=>[k]`, and
+    // `qux~>[m]`, representing vector/VecMap, dynamic field, dynamic object field, and derived
+    // object access respectively.
     #[test]
     fn test_indices() {
-        assert_snapshot!(text(r#"foo {bar[baz].qux=>[quy]->[quz]}"#), @r###"
+        assert_snapshot!(text(r#"foo {bar[baz].qux=>[quy]->[quz]~>[quux]}"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LBrace, 4, "{")
         L(false, Ident, 5, "bar")
@@ -644,7 +651,11 @@ mod tests {
         L(false, LBracket, 26, "[")
         L(false, Ident, 27, "quz")
         L(false, RBracket, 30, "]")
-        L(false, RBrace, 31, "}")
+        L(false, TArrow, 31, "~>")
+        L(false, LBracket, 33, "[")
+        L(false, Ident, 34, "quux")
+        L(false, RBracket, 38, "]")
+        L(false, RBrace, 39, "}")
         "###);
     }
 

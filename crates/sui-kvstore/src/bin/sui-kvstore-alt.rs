@@ -47,7 +47,7 @@ struct Args {
     #[arg(long)]
     chain: Chain,
 
-    /// Enable writing legacy data: watermark \[0\] row, epoch DEFAULT_COLUMN, and transaction tx column
+    /// Enable writing legacy data: deprecated combined transaction tx column
     #[arg(long)]
     write_legacy_data: bool,
 
@@ -92,6 +92,11 @@ async fn main() -> Result<()> {
         .bigtable_channel_timeout_ms
         .map(Duration::from_millis);
 
+    let pool_config = config
+        .bigtable_pool
+        .clone()
+        .finish(config.bigtable_connection_pool_size);
+
     let client = BigTableClient::new_remote(
         args.instance_id,
         args.bigtable_project,
@@ -101,7 +106,7 @@ async fn main() -> Result<()> {
         "sui-kvstore-alt".to_string(),
         None,
         args.app_profile_id,
-        config.bigtable_connection_pool_size,
+        pool_config,
     )
     .await?;
 

@@ -118,6 +118,7 @@ feature_flags:
   enable_authenticated_event_streams: true
   enable_address_balance_gas_payments: true
   address_balance_gas_check_rgp_at_signing: true
+  address_balance_gas_reject_gas_coin_arg: true
   enable_multi_epoch_transaction_expiration: true
   relax_valid_during_for_owned_inputs: true
   enable_ptb_execution_v2: true
@@ -158,7 +159,6 @@ feature_flags:
   validator_metadata_verify_v2: true
   randomize_checkpoint_tx_limit_in_tests: true
   gasless_transaction_drop_safety: true
-  merge_randomness_into_checkpoint: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -444,7 +444,7 @@ vector_destroy_empty_base_cost: 52
 vector_swap_base_cost: 52
 debug_print_base_cost: 52
 debug_print_stack_trace_base_cost: 52
-execution_version: 4
+execution_version: 3
 consensus_bad_nodes_stake_threshold: 30
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1

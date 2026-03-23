@@ -2,17 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::annotated_value as A;
-use move_core_types::annotated_visitor as AV;
 use prost_types::Struct;
 use prost_types::Value;
 use prost_types::value::Kind;
 
-use crate::object::option_visitor as OV;
 use crate::object::rpc_visitor as RV;
 
-/// This is the maximum depth of a proto message
-/// The maximum depth of a proto message is 100. Given this value may be nested itself somewhere
-/// we'll conservitively cap this to ~80% of that.
+/// This is the maximum depth of a proto message.
+/// The maximum depth of a proto message is 100. Given this value may be nested itself somewhere,
+/// we'll conservatively cap this to ~80% of that.
 const MAX_DEPTH: usize = 80;
 
 pub struct ProtoVisitor {
@@ -20,163 +18,139 @@ pub struct ProtoVisitor {
     bound: usize,
 }
 
-pub struct ProtoWriter<'b> {
-    bound: &'b mut usize,
-    depth: usize,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error(transparent)]
-    Visitor(#[from] AV::Error),
-
-    #[error("Deserialized value too large")]
-    OutOfBudget,
-
-    #[error("Exceeded maximum depth")]
-    TooNested,
-
-    #[error("Unexpected type")]
-    UnexpectedType,
-}
-
 impl ProtoVisitor {
     pub fn new(bound: usize) -> Self {
         Self { bound }
     }
 
-    /// Deserialize `bytes` as a `MoveValue` with layout `layout`. Can fail if the bytes do not
-    /// represent a value with this layout, or if the deserialized value exceeds the field/type size
-    /// budget.
+    /// Deserialize `bytes` as a `MoveValue` with layout `layout`.
     pub fn deserialize_value(
         mut self,
         bytes: &[u8],
         layout: &A::MoveTypeLayout,
-    ) -> Result<Value, Error> {
+    ) -> Result<Value, RV::Error> {
         A::MoveValue::visit_deserialize(
             bytes,
             layout,
-            &mut RV::RpcVisitor::new(ProtoWriter {
-                bound: &mut self.bound,
-                depth: 0,
-            }),
+            &mut RV::RpcVisitor::<Value, _>::new(RV::LocalMeter::new(&mut self.bound, MAX_DEPTH)),
         )
     }
 }
 
-impl ProtoWriter<'_> {
-    fn debit(&mut self, size: usize) -> Result<(), Error> {
-        if *self.bound < size {
-            Err(Error::OutOfBudget)
-        } else {
-            *self.bound -= size;
-            Ok(())
-        }
-    }
-
-    fn debit_value(&mut self) -> Result<(), Error> {
-        self.debit(size_of::<Value>())
-    }
-
-    fn debit_str(&mut self, s: &str) -> Result<(), Error> {
-        self.debit(s.len())
-    }
-
-    fn debit_string_value(&mut self, s: &str) -> Result<(), Error> {
-        self.debit_str(s)?;
-        self.debit_value()
-    }
-}
-
-impl<'b> RV::Writer for ProtoWriter<'b> {
-    type Value = Value;
-    type Error = Error;
-
+impl RV::Format for Value {
     type Vec = Vec<Value>;
     type Map = Struct;
 
-    type Nested<'a>
-        = ProtoWriter<'a>
-    where
-        Self: 'a;
+    fn is_null(&self) -> bool {
+        matches!(self.kind, Some(Kind::NullValue(_)))
+    }
 
-    fn nest(&mut self) -> Result<Self::Nested<'_>, Self::Error> {
-        if self.depth >= MAX_DEPTH {
-            Err(Error::TooNested)
+    fn is_bool(&self) -> bool {
+        self.as_bool().is_some()
+    }
+
+    fn is_number(&self) -> bool {
+        matches!(self.kind, Some(Kind::NumberValue(_)))
+    }
+
+    fn is_string(&self) -> bool {
+        self.as_string().is_some()
+    }
+
+    fn is_array(&self) -> bool {
+        self.as_array().is_some()
+    }
+
+    fn is_object(&self) -> bool {
+        self.as_object().is_some()
+    }
+
+    fn as_bool(&self) -> Option<bool> {
+        if let Some(Kind::BoolValue(b)) = &self.kind {
+            Some(*b)
         } else {
-            Ok(ProtoWriter {
-                bound: self.bound,
-                depth: self.depth + 1,
-            })
+            None
         }
     }
 
-    fn write_null(&mut self) -> Result<Self::Value, Self::Error> {
-        self.debit_value()?;
+    fn as_string(&self) -> Option<&str> {
+        if let Some(Kind::StringValue(value)) = &self.kind {
+            Some(value)
+        } else {
+            None
+        }
+    }
+
+    fn as_array(&self) -> Option<&Self::Vec> {
+        if let Some(Kind::ListValue(value)) = &self.kind {
+            Some(&value.values)
+        } else {
+            None
+        }
+    }
+
+    fn as_object(&self) -> Option<&Self::Map> {
+        if let Some(Kind::StructValue(value)) = &self.kind {
+            Some(value)
+        } else {
+            None
+        }
+    }
+
+    fn null<M: RV::Meter>(meter: &mut M) -> Result<Self, RV::MeterError> {
+        meter.charge(std::mem::size_of::<Value>())?;
         Ok(Kind::NullValue(0).into())
     }
 
-    fn write_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error> {
-        self.debit_value()?;
-        Ok(Kind::BoolValue(value).into())
+    fn bool<M: RV::Meter>(meter: &mut M, value: bool) -> Result<Self, RV::MeterError> {
+        meter.charge(std::mem::size_of::<Value>())?;
+        Ok(Self::from(value))
     }
 
-    fn write_number(&mut self, value: u32) -> Result<Self::Value, Self::Error> {
-        self.debit_value()?;
-        Ok(Value::from(value))
+    fn number<M: RV::Meter>(meter: &mut M, value: u32) -> Result<Self, RV::MeterError> {
+        meter.charge(std::mem::size_of::<Value>())?;
+        Ok(Self::from(value))
     }
 
-    fn write_str(&mut self, value: String) -> Result<Self::Value, Self::Error> {
-        self.debit_string_value(&value)?;
-        Ok(Kind::StringValue(value).into())
+    fn string<M: RV::Meter>(meter: &mut M, value: String) -> Result<Self, RV::MeterError> {
+        meter.charge(std::mem::size_of::<Value>() + value.len())?;
+        Ok(Self::from(value))
     }
 
-    fn write_vec(&mut self, value: Self::Vec) -> Result<Self::Value, Self::Error> {
-        self.debit_value()?;
-        Ok(Value::from(value))
+    fn vec<M: RV::Meter>(meter: &mut M, value: Self::Vec) -> Result<Self, RV::MeterError> {
+        meter.charge(std::mem::size_of::<Value>())?;
+        Ok(Self::from(value))
     }
 
-    fn write_map(&mut self, value: Self::Map) -> Result<Self::Value, Self::Error> {
-        self.debit_value()?;
-        Ok(Value::from(Kind::StructValue(value)))
+    fn map<M: RV::Meter>(meter: &mut M, value: Self::Map) -> Result<Self, RV::MeterError> {
+        meter.charge(std::mem::size_of::<Value>())?;
+        Ok(Self::from(Kind::StructValue(value)))
     }
 
-    fn vec_push_element(
-        &mut self,
+    fn vec_push_element<M: RV::Meter>(
+        _meter: &mut M,
         vec: &mut Self::Vec,
-        val: Self::Value,
-    ) -> Result<(), Self::Error> {
-        vec.push(val);
+        value: Self,
+    ) -> Result<(), RV::MeterError> {
+        vec.push(value);
         Ok(())
     }
 
-    fn map_push_field(
-        &mut self,
+    fn map_push_field<M: RV::Meter>(
+        meter: &mut M,
         map: &mut Self::Map,
         key: String,
-        val: Self::Value,
-    ) -> Result<(), Self::Error> {
-        self.debit_str(&key)?;
-        map.fields.insert(key, val);
+        value: Self,
+    ) -> Result<(), RV::MeterError> {
+        meter.charge(key.len())?;
+        map.fields.insert(key, value);
         Ok(())
-    }
-}
-
-impl From<RV::Error> for Error {
-    fn from(RV::Error: RV::Error) -> Self {
-        Error::UnexpectedType
-    }
-}
-
-impl From<OV::Error> for Error {
-    fn from(OV::Error: OV::Error) -> Self {
-        Error::UnexpectedType
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::*;
+    use crate::object::rpc_visitor::proto::*;
 
     use crate::object::bounded_visitor::tests::layout_;
     use crate::object::bounded_visitor::tests::serialize;
@@ -253,7 +227,6 @@ pub(crate) mod tests {
 
         assert_eq!(expected, proto_value_to_json_value(deser));
 
-        // One deeper
         layout = layout_("0x0::foo::Bar", vec![("f", layout)]);
         value = value_("0x0::foo::Bar", vec![("f", value)]);
 
@@ -270,7 +243,7 @@ pub(crate) mod tests {
     fn proto_value_to_json_value(proto: Value) -> serde_json::Value {
         match proto.kind {
             Some(Kind::NullValue(_)) | None => serde_json::Value::Null,
-            // Move doesn't support floats so for these tests can do a convert to u32
+            // Move doesn't support floats, so these tests can safely convert numbers back to u32.
             Some(Kind::NumberValue(n)) => serde_json::Value::from(n as u32),
             Some(Kind::StringValue(s)) => serde_json::Value::from(s),
             Some(Kind::BoolValue(b)) => serde_json::Value::from(b),

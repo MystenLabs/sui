@@ -1,6 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod format;
+pub mod json;
+mod meter;
+pub mod proto;
+
+pub use format::Format;
+pub use meter::LocalMeter;
+pub use meter::Meter;
+pub use meter::MeterError;
+pub use meter::Unmetered;
+
+use std::marker::PhantomData;
+
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_visitor as AV;
 use move_core_types::language_storage::TypeTag;
@@ -15,94 +28,50 @@ use crate::id::ID;
 use crate::id::UID;
 use crate::object::option_visitor as OV;
 
-/// A trait for serializing Move values into some nested structured representation that supports
-/// `null`, `bool`, numbers, strings, vectors, and maps (e.g. JSON or Protobuf).
-///
-/// Writers are allowed to fail, e.g. to limit resource usage.
-pub trait Writer {
-    type Value;
-    type Error: std::error::Error
-        + From<Error>
-        + From<OV::Error>
-        + From<AV::Error>
-        + Send
-        + Sync
-        + 'static;
-
-    type Vec: Default;
-    type Map: Default;
-
-    type Nested<'a>: Writer<Value = Self::Value, Error = Self::Error, Vec = Self::Vec, Map = Self::Map>
-    where
-        Self: 'a;
-
-    /// Produce a new writer for writing into nested contexts (e.g. fields of structs or enum
-    /// variants, or elements of vectors).
-    fn nest(&mut self) -> Result<Self::Nested<'_>, Self::Error>;
-
-    /// Write a `null` value.
-    fn write_null(&mut self) -> Result<Self::Value, Self::Error>;
-
-    /// Write a `true` or `false` value.
-    fn write_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error>;
-
-    /// Write a numeric value that fits in a `u32`.
-    fn write_number(&mut self, value: u32) -> Result<Self::Value, Self::Error>;
-
-    /// Write a string value.
-    fn write_str(&mut self, value: String) -> Result<Self::Value, Self::Error>;
-
-    /// Write a completed vector.
-    fn write_vec(&mut self, value: Self::Vec) -> Result<Self::Value, Self::Error>;
-
-    /// Write a completed key-value map.
-    fn write_map(&mut self, value: Self::Map) -> Result<Self::Value, Self::Error>;
-
-    /// Add an element to a vector.
-    fn vec_push_element(
-        &mut self,
-        vec: &mut Self::Vec,
-        val: Self::Value,
-    ) -> Result<(), Self::Error>;
-
-    /// Add a key-value pair to a map.
-    fn map_push_field(
-        &mut self,
-        map: &mut Self::Map,
-        key: String,
-        val: Self::Value,
-    ) -> Result<(), Self::Error>;
-}
-
 /// A visitor that serializes Move values into some representation appropriate for RPC outputs.
 ///
-/// The `W: Writer` type parameter determines the output format and how resource limits are
-/// enforced.
-pub struct RpcVisitor<W: Writer> {
-    writer: W,
+/// The `F: Format` type parameter determines the output format and charging semantics, while the
+/// `M: Meter` type parameter determines how budgets are tracked.
+pub struct RpcVisitor<F: Format, M: Meter> {
+    meter: M,
+    phantom: PhantomData<fn() -> F>,
 }
 
 #[derive(thiserror::Error, Debug)]
-#[error("Unexpected type")]
-pub struct Error;
+pub enum Error {
+    #[error(transparent)]
+    Visitor(#[from] AV::Error),
 
-impl<W: Writer> RpcVisitor<W> {
-    /// Create a new RPC visitor that writes into the given writer.
-    pub fn new(writer: W) -> Self {
-        Self { writer }
+    #[error(transparent)]
+    Option(#[from] OV::Error),
+
+    #[error(transparent)]
+    Meter(#[from] MeterError),
+
+    #[error("Unexpected type")]
+    UnexpectedType,
+}
+
+impl<F: Format, M: Meter> RpcVisitor<F, M> {
+    /// Create a new RPC visitor that writes into the chosen format with the given meter.
+    pub fn new(meter: M) -> Self {
+        Self {
+            meter,
+            phantom: PhantomData,
+        }
     }
 }
 
-impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
-    type Value = <W as Writer>::Value;
-    type Error = <W as Writer>::Error;
+impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
+    type Value = F;
+    type Error = Error;
 
     fn visit_u8(
         &mut self,
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: u8,
     ) -> Result<Self::Value, Self::Error> {
-        self.writer.write_number(value as u32)
+        Ok(F::number(&mut self.meter, value as u32)?)
     }
 
     fn visit_u16(
@@ -110,7 +79,7 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: u16,
     ) -> Result<Self::Value, Self::Error> {
-        self.writer.write_number(value as u32)
+        Ok(F::number(&mut self.meter, value as u32)?)
     }
 
     fn visit_u32(
@@ -118,7 +87,7 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: u32,
     ) -> Result<Self::Value, Self::Error> {
-        self.writer.write_number(value)
+        Ok(F::number(&mut self.meter, value)?)
     }
 
     fn visit_u64(
@@ -126,7 +95,7 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: u64,
     ) -> Result<Self::Value, Self::Error> {
-        self.writer.write_str(value.to_string())
+        Ok(F::string(&mut self.meter, value.to_string())?)
     }
 
     fn visit_u128(
@@ -134,7 +103,7 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: u128,
     ) -> Result<Self::Value, Self::Error> {
-        self.writer.write_str(value.to_string())
+        Ok(F::string(&mut self.meter, value.to_string())?)
     }
 
     fn visit_u256(
@@ -142,7 +111,7 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: U256,
     ) -> Result<Self::Value, Self::Error> {
-        self.writer.write_str(value.to_string())
+        Ok(F::string(&mut self.meter, value.to_string())?)
     }
 
     fn visit_bool(
@@ -150,7 +119,7 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: bool,
     ) -> Result<Self::Value, Self::Error> {
-        self.writer.write_bool(value)
+        Ok(F::bool(&mut self.meter, value)?)
     }
 
     fn visit_address(
@@ -158,7 +127,7 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
-        self.writer.write_str(value.to_canonical_string(true))
+        Ok(F::string(&mut self.meter, value.to_canonical_string(true))?)
     }
 
     fn visit_signer(
@@ -166,7 +135,7 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
-        self.writer.write_str(value.to_canonical_string(true))
+        Ok(F::string(&mut self.meter, value.to_canonical_string(true))?)
     }
 
     fn visit_vector(
@@ -174,30 +143,31 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         driver: &mut AV::VecDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         if driver.element_layout().is_type(&TypeTag::U8) {
-            // Base64 encode arbitrary bytes
-            use base64::{Engine, engine::general_purpose::STANDARD};
+            use base64::Engine;
+            use base64::engine::general_purpose::STANDARD;
 
+            // Base64 encode arbitrary bytes
             if let Some(bytes) = driver
                 .bytes()
                 .get(driver.position()..(driver.position() + driver.len() as usize))
             {
                 let b64 = STANDARD.encode(bytes);
-                self.writer.write_str(b64)
+                Ok(F::string(&mut self.meter, b64)?)
             } else {
                 Err(AV::Error::UnexpectedEof.into())
             }
         } else {
-            let mut elems = W::Vec::default();
-            {
-                let nested = self.writer.nest()?;
-                let mut visitor = RpcVisitor { writer: nested };
+            let mut elems = F::Vec::default();
 
+            {
+                let nested = self.meter.nest()?;
+                let mut visitor = RpcVisitor::new(nested);
                 while let Some(elem) = driver.next_element(&mut visitor)? {
-                    visitor.writer.vec_push_element(&mut elems, elem)?;
+                    F::vec_push_element(&mut visitor.meter, &mut elems, elem)?;
                 }
             }
 
-            self.writer.write_vec(elems)
+            Ok(F::vec(&mut self.meter, elems)?)
         }
     }
 
@@ -220,8 +190,8 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
 
             // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
             let bytes = &driver.bytes()[lo..hi];
-            let s: String = bcs::from_bytes(bytes).map_err(|_| Error)?;
-            self.writer.write_str(s)
+            let s: String = bcs::from_bytes(bytes).map_err(|_| Error::UnexpectedType)?;
+            Ok(F::string(&mut self.meter, s)?)
         } else if layout == &UID::layout() || layout == &ID::layout() {
             // 0x2::object::UID or 0x2::object::ID
 
@@ -232,16 +202,16 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
             // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
             let bytes = &driver.bytes()[lo..hi];
             let id = AccountAddress::from_bytes(bytes)
-                .map_err(|_| Error)?
+                .map_err(|_| Error::UnexpectedType)?
                 .to_canonical_string(true);
 
-            self.writer.write_str(id)
+            Ok(F::string(&mut self.meter, id)?)
         } else if (&ty.address, ty.module.as_ref(), ty.name.as_ref()) == RESOLVED_STD_OPTION {
             // 0x1::option::Option
 
             match OV::OptionVisitor(self).visit_struct(driver)? {
                 Some(value) => Ok(value),
-                None => self.writer.write_null(),
+                None => Ok(F::null(&mut self.meter)?),
             }
         } else if Balance::is_balance_layout(layout) {
             // 0x2::balance::Balance
@@ -253,25 +223,25 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
             // HACK: Bypassing the layout to deserialize its bytes as a Rust type.
             let bytes = &driver.bytes()[lo..hi];
             let balance = bcs::from_bytes::<u64>(bytes)
-                .map_err(|_| Error)?
+                .map_err(|_| Error::UnexpectedType)?
                 .to_string();
 
-            self.writer.write_str(balance)
+            Ok(F::string(&mut self.meter, balance)?)
         } else {
             // Arbitrary structs
 
-            let mut map = W::Map::default();
-            {
-                let nested = self.writer.nest()?;
-                let mut visitor = RpcVisitor { writer: nested };
+            let mut map = F::Map::default();
 
+            {
+                let nested = self.meter.nest()?;
+                let mut visitor = RpcVisitor::<F, _>::new(nested);
                 while let Some((field, elem)) = driver.next_field(&mut visitor)? {
                     let name = field.name.to_string();
-                    visitor.writer.map_push_field(&mut map, name, elem)?;
+                    F::map_push_field(&mut visitor.meter, &mut map, name, elem)?;
                 }
             }
 
-            self.writer.write_map(map)
+            Ok(F::map(&mut self.meter, map)?)
         }
     }
 
@@ -279,21 +249,21 @@ impl<'b, 'l, W: Writer> AV::Visitor<'b, 'l> for RpcVisitor<W> {
         &mut self,
         driver: &mut AV::VariantDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
-        let mut map = W::Map::default();
+        let mut map = F::Map::default();
         {
-            let mut nested = self.writer.nest()?;
+            let mut nested_meter = self.meter.nest()?;
 
-            let variant = nested.write_str(driver.variant_name().to_string())?;
-            nested.map_push_field(&mut map, "@variant".to_owned(), variant)?;
+            let variant = F::string(&mut nested_meter, driver.variant_name().to_string())?;
+            F::map_push_field(&mut nested_meter, &mut map, "@variant".to_owned(), variant)?;
 
-            let mut visitor = RpcVisitor { writer: nested };
+            let mut visitor = RpcVisitor::<F, _>::new(nested_meter);
             while let Some((field, elem)) = driver.next_field(&mut visitor)? {
                 let name = field.name.to_string();
-                visitor.writer.map_push_field(&mut map, name, elem)?;
+                F::map_push_field(&mut visitor.meter, &mut map, name, elem)?;
             }
         }
 
-        self.writer.write_map(map)
+        Ok(F::map(&mut self.meter, map)?)
     }
 }
 
@@ -330,89 +300,9 @@ mod tests {
         };
     }
 
-    struct JsonWriter;
-
-    #[derive(thiserror::Error, Debug)]
-    enum Error {
-        #[error(transparent)]
-        Visitor(#[from] AV::Error),
-
-        #[error("Unexpected type")]
-        UnexpectedType,
-    }
-
-    impl Writer for JsonWriter {
-        type Value = Value;
-        type Error = Error;
-
-        type Vec = Vec<Value>;
-        type Map = serde_json::Map<String, Value>;
-
-        type Nested<'a> = Self;
-
-        fn nest(&mut self) -> Result<Self::Nested<'_>, Self::Error> {
-            Ok(JsonWriter)
-        }
-
-        fn write_null(&mut self) -> Result<Self::Value, Self::Error> {
-            Ok(Value::Null)
-        }
-
-        fn write_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error> {
-            Ok(Value::Bool(value))
-        }
-
-        fn write_number(&mut self, value: u32) -> Result<Self::Value, Self::Error> {
-            Ok(Value::Number(value.into()))
-        }
-
-        fn write_str(&mut self, value: String) -> Result<Self::Value, Self::Error> {
-            Ok(Value::String(value))
-        }
-
-        fn write_vec(&mut self, value: Self::Vec) -> Result<Self::Value, Self::Error> {
-            Ok(Value::Array(value))
-        }
-
-        fn write_map(&mut self, value: Self::Map) -> Result<Self::Value, Self::Error> {
-            Ok(Value::Object(value))
-        }
-
-        fn vec_push_element(
-            &mut self,
-            vec: &mut Self::Vec,
-            value: Self::Value,
-        ) -> Result<(), Self::Error> {
-            vec.push(value);
-            Ok(())
-        }
-
-        fn map_push_field(
-            &mut self,
-            map: &mut Self::Map,
-            key: String,
-            val: Self::Value,
-        ) -> Result<(), Self::Error> {
-            map.insert(key, val);
-            Ok(())
-        }
-    }
-
-    impl From<OV::Error> for Error {
-        fn from(OV::Error: OV::Error) -> Self {
-            Error::UnexpectedType
-        }
-    }
-
-    impl From<super::Error> for Error {
-        fn from(super::Error: super::Error) -> Self {
-            Error::UnexpectedType
-        }
-    }
-
     fn json<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Value {
         let bcs = bcs::to_bytes(&data).unwrap();
-        let mut visitor = RpcVisitor::new(JsonWriter);
+        let mut visitor = RpcVisitor::new(Unmetered);
         A::MoveValue::visit_deserialize(&bcs, &layout, &mut visitor).unwrap()
     }
 

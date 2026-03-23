@@ -298,6 +298,41 @@ impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
     }
 }
 
+/// A BackingPackageStore that overlays objects on top of a backing store.
+/// This allows resolving packages from a set of objects (e.g., output objects from a transaction)
+/// before falling back to the backing store.
+pub struct OverlayBackingPackageStore<'a, S> {
+    overlay: &'a ObjectSet,
+    backing: S,
+}
+
+impl<'a, S> OverlayBackingPackageStore<'a, S> {
+    pub fn new(overlay: &'a ObjectSet, backing: S) -> Self {
+        Self { overlay, backing }
+    }
+}
+
+impl<S: BackingPackageStore> BackingPackageStore for OverlayBackingPackageStore<'_, S> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        // First check the overlay for the object
+        for obj in self.overlay.iter() {
+            if &obj.id() == package_id {
+                // Found in overlay - check if it's a package
+                fp_ensure!(
+                    obj.is_package(),
+                    SuiErrorKind::BadObjectType {
+                        error: format!("Package expected, Move object found: {package_id}"),
+                    }
+                    .into()
+                );
+                return Ok(Some(PackageObject::new(obj.clone())));
+            }
+        }
+        // Not in overlay, fall back to the backing store
+        self.backing.get_package_object(package_id)
+    }
+}
+
 pub fn load_package_object_from_object_store(
     store: &impl ObjectStore,
     package_id: &ObjectID,

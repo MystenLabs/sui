@@ -13,6 +13,7 @@ use crate::{
         mod_extensions::collect_extensions_info,
         use_def::{UseDefMap, UseLoc},
     },
+    utils::canonicalize_path,
 };
 
 use anyhow::Result;
@@ -410,7 +411,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     ]));
 
     let manifest_file = overlay_fs_root
-        .join(pkg_path.to_string_lossy())
+        .join(&pkg_path.to_string_lossy())
         .and_then(|p| p.join(MANIFEST_FILE_NAME))
         .and_then(|p| p.open_file());
 
@@ -690,7 +691,27 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         // (both dependency and user-space) to ensure function bodies are preserved
                         let mut all_files = files_to_compile.clone();
                         all_files.extend(caching_result.get_all_files_to_compile_fully());
-                        Some(all_files)
+                        // Compiler uses VFS paths created by joining canonicalized paths
+                        // to the VFS root. We are dealing with canonicalized paths here as well
+                        // as the compiler, so we need to convert them to VFS path format the same
+                        // way to make sure that the compiler will recognize them.
+                        let vfs_files: BTreeSet<PathBuf> = all_files
+                            .iter()
+                            .filter_map(|p| {
+                                let lossy = p.to_string_lossy();
+                                match overlay_fs_root.join(&*lossy) {
+                                    Ok(vfs_path) => Some(PathBuf::from(vfs_path.as_str())),
+                                    Err(e) => {
+                                        eprintln!(
+                                            "Could not create virtual file system path for {}: {}",
+                                            lossy, e
+                                        );
+                                        None
+                                    }
+                                }
+                            })
+                            .collect();
+                        Some(vfs_files)
                     })
                     .run::<PASS_PARSER>()?;
                 let compiler = match compilation_result {
@@ -996,9 +1017,9 @@ fn compute_mapped_files<F: MoveFlavor>(
         for f in get_sources(rpkg.path(), build_config).unwrap() {
             let is_dep = !rpkg.is_root();
             // dunce does a better job of canonicalization on Windows
-            let fname = dunce::canonicalize(f.as_str())
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| f.to_string());
+            let fname = canonicalize_path(PathBuf::from(f.as_str()))
+                .to_string_lossy()
+                .to_string();
             let mut contents = String::new();
             // there is a fair number of unwraps here but if we can't read the files
             // that by all accounts should be in the file system, then there is not much

@@ -299,8 +299,24 @@ impl fmt::Display for ExpectedSet {
 }
 
 impl From<RV::Error> for FormatError {
-    fn from(RV::Error: RV::Error) -> Self {
-        FormatError::Bcs(bcs::Error::Custom("unexpected type".to_string()))
+    fn from(error: RV::Error) -> Self {
+        match error {
+            RV::Error::Visitor(err) => err.into(),
+            RV::Error::Option(err) => err.into(),
+            RV::Error::Meter(err) => err.into(),
+            RV::Error::UnexpectedType => {
+                FormatError::Bcs(bcs::Error::Custom("unexpected type".to_string()))
+            }
+        }
+    }
+}
+
+impl From<RV::MeterError> for FormatError {
+    fn from(error: RV::MeterError) -> Self {
+        match error {
+            RV::MeterError::TooBig => FormatError::TooBig,
+            RV::MeterError::TooDeep => FormatError::TooDeep,
+        }
     }
 }
 

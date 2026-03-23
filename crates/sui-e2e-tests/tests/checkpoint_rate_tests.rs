@@ -19,7 +19,8 @@ async fn test_checkpoint_rate() {
         .build()
         .await;
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // Checkpoint execution can be bursty during startup, so wait for steady state.
+    tokio::time::sleep(Duration::from_secs(30)).await;
 
     let start_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
         node.state()

@@ -18,6 +18,7 @@ use tracing::info;
 use async_trait::async_trait;
 
 use crate::config::ConcurrencyConfig;
+use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::IndexedCheckpoint;
@@ -61,7 +62,7 @@ pub trait Processor: Send + Sync + 'static {
 /// channel.
 pub(super) fn processor<P: Processor>(
     processor: Arc<P>,
-    rx: mpsc::Receiver<Arc<Checkpoint>>,
+    rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     concurrency: ConcurrencyConfig,
@@ -78,7 +79,7 @@ pub(super) fn processor<P: Processor>(
         match ReceiverStream::new(rx)
             .try_for_each_send_spawned(
                 concurrency.into(),
-                |checkpoint| {
+                |checkpoint_envelope| {
                     let metrics = metrics.clone();
                     let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                     let processor = processor.clone();
@@ -103,6 +104,7 @@ pub(super) fn processor<P: Processor>(
                             ..Default::default()
                         };
 
+                        let checkpoint = checkpoint_envelope.checkpoint.clone();
                         let checkpoint_sequence_number = checkpoint.summary.sequence_number;
                         let retry_metrics = metrics.clone();
                         let values = backoff::future::retry_notify(
@@ -198,6 +200,7 @@ mod tests {
     use std::time::Duration;
 
     use anyhow::ensure;
+    use sui_types::digests::ChainIdentifier;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use tokio::sync::mpsc;
     use tokio::time::timeout;
@@ -233,20 +236,26 @@ mod tests {
     #[tokio::test]
     async fn test_processor_process_checkpoints() {
         // Build two checkpoints using the test builder
-        let checkpoint1: Arc<Checkpoint> = Arc::new(
-            TestCheckpointBuilder::new(1)
-                .with_epoch(2)
-                .with_network_total_transactions(5)
-                .with_timestamp_ms(1000000001)
-                .build_checkpoint(),
-        );
-        let checkpoint2: Arc<Checkpoint> = Arc::new(
-            TestCheckpointBuilder::new(2)
-                .with_epoch(2)
-                .with_network_total_transactions(10)
-                .with_timestamp_ms(1000000002)
-                .build_checkpoint(),
-        );
+        let checkpoint_envelope_1 = Arc::new(CheckpointEnvelope {
+            checkpoint: Arc::new(
+                TestCheckpointBuilder::new(1)
+                    .with_epoch(2)
+                    .with_network_total_transactions(5)
+                    .with_timestamp_ms(1000000001)
+                    .build_checkpoint(),
+            ),
+            chain_id: ChainIdentifier::default(),
+        });
+        let checkpoint_envelope_2 = Arc::new(CheckpointEnvelope {
+            checkpoint: Arc::new(
+                TestCheckpointBuilder::new(2)
+                    .with_epoch(2)
+                    .with_network_total_transactions(10)
+                    .with_timestamp_ms(1000000002)
+                    .build_checkpoint(),
+            ),
+            chain_id: ChainIdentifier::default(),
+        });
 
         // Set up the processor, channels, and metrics
         let processor = Arc::new(DataPipeline);
@@ -264,8 +273,8 @@ mod tests {
         );
 
         // Send both checkpoints
-        data_tx.send(checkpoint1.clone()).await.unwrap();
-        data_tx.send(checkpoint2.clone()).await.unwrap();
+        data_tx.send(checkpoint_envelope_1).await.unwrap();
+        data_tx.send(checkpoint_envelope_2).await.unwrap();
 
         // Receive and verify first checkpoint
         let indexed1 = indexed_rx
@@ -303,10 +312,14 @@ mod tests {
     #[tokio::test]
     async fn test_processor_does_not_process_checkpoint_after_cancellation() {
         // Build two checkpoints using the test builder
-        let checkpoint1: Arc<Checkpoint> =
-            Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
-        let checkpoint2: Arc<Checkpoint> =
-            Arc::new(TestCheckpointBuilder::new(2).build_checkpoint());
+        let checkpoint_envelope_1 = Arc::new(CheckpointEnvelope {
+            checkpoint: Arc::new(TestCheckpointBuilder::new(1).build_checkpoint()),
+            chain_id: ChainIdentifier::default(),
+        });
+        let checkpoint_envelope_2 = Arc::new(CheckpointEnvelope {
+            checkpoint: Arc::new(TestCheckpointBuilder::new(2).build_checkpoint()),
+            chain_id: ChainIdentifier::default(),
+        });
 
         // Set up the processor, channels, and metrics
         let processor = Arc::new(DataPipeline);
@@ -324,7 +337,7 @@ mod tests {
         );
 
         // Send first checkpoint.
-        data_tx.send(checkpoint1.clone()).await.unwrap();
+        data_tx.send(checkpoint_envelope_1).await.unwrap();
 
         // Receive and verify first checkpoint
         let indexed1 = indexed_rx
@@ -338,7 +351,7 @@ mod tests {
 
         // Sending second checkpoint after shutdown should fail, because the data_rx channel is
         // closed.
-        data_tx.send(checkpoint2.clone()).await.unwrap_err();
+        data_tx.send(checkpoint_envelope_2).await.unwrap_err();
 
         // Indexed channel is closed, and indexed_rx receives the last None result.
         let next_result = indexed_rx.recv().await;
@@ -373,10 +386,14 @@ mod tests {
         }
 
         // Set up test data
-        let checkpoint1: Arc<Checkpoint> =
-            Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
-        let checkpoint2: Arc<Checkpoint> =
-            Arc::new(TestCheckpointBuilder::new(2).build_checkpoint());
+        let checkpoint1 = Arc::new(CheckpointEnvelope {
+            checkpoint: Arc::new(TestCheckpointBuilder::new(1).build_checkpoint()),
+            chain_id: ChainIdentifier::default(),
+        });
+        let checkpoint2 = Arc::new(CheckpointEnvelope {
+            checkpoint: Arc::new(TestCheckpointBuilder::new(2).build_checkpoint()),
+            chain_id: ChainIdentifier::default(),
+        });
 
         let attempt_count = Arc::new(AtomicU32::new(0));
         let processor = Arc::new(RetryTestPipeline {
@@ -450,8 +467,13 @@ mod tests {
         }
 
         // Set up test data
-        let checkpoints: Vec<Arc<Checkpoint>> = (0..5)
-            .map(|i| Arc::new(TestCheckpointBuilder::new(i).build_checkpoint()))
+        let checkpoints: Vec<Arc<CheckpointEnvelope>> = (0..5)
+            .map(|i| {
+                Arc::new(CheckpointEnvelope {
+                    checkpoint: Arc::new(TestCheckpointBuilder::new(i).build_checkpoint()),
+                    chain_id: ChainIdentifier::default(),
+                })
+            })
             .collect();
 
         // Set up channels and metrics

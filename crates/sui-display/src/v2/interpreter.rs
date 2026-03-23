@@ -187,6 +187,16 @@ impl<S: V::Store> Interpreter<S> {
                     root = VV::Slice(value_slice);
                 }
 
+                (VV::Address(a), A::Derived(i)) => {
+                    let id = i.derive_object_id(a)?.into();
+                    let Some(slice) = self.object(id).await? else {
+                        return Ok(None);
+                    };
+
+                    accessors.pop();
+                    root = VV::Slice(slice);
+                }
+
                 // Fetch a single byte from a byte array, as long as the accessor evaluates to a
                 // numeric index.
                 (VV::Bytes(bs), accessor) => {
@@ -278,6 +288,7 @@ impl<S: V::Store> Interpreter<S> {
             PA::Index(chain) => Box::pin(self.eval_chain(chain)).await?.map(VA::Index),
             PA::DFIndex(chain) => Box::pin(self.eval_chain(chain)).await?.map(VA::DFIndex),
             PA::DOFIndex(chain) => Box::pin(self.eval_chain(chain)).await?.map(VA::DOFIndex),
+            PA::Derived(chain) => Box::pin(self.eval_chain(chain)).await?.map(VA::Derived),
         })
     }
 

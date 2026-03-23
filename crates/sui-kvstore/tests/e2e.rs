@@ -33,7 +33,6 @@ use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
-use sui_kvstore::set_write_legacy_data;
 use sui_protocol_config::Chain;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
@@ -65,7 +64,7 @@ const TABLES: &[&str] = &[
     sui_kvstore::tables::transactions::NAME,
     sui_kvstore::tables::checkpoints::NAME,
     sui_kvstore::tables::checkpoints_by_digest::NAME,
-    sui_kvstore::tables::watermark_alt_legacy::NAME,
+    sui_kvstore::tables::watermarks::NAME,
     sui_kvstore::tables::epochs::NAME,
     sui_kvstore::tables::protocol_configs::NAME,
     sui_kvstore::tables::packages::NAME,
@@ -291,8 +290,6 @@ struct TestHarness {
 impl TestHarness {
     async fn new() -> Result<Self> {
         require_bigtable_emulator();
-        set_write_legacy_data(true);
-
         let emulator_future = async {
             let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
                 .await
