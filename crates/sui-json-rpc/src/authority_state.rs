@@ -575,11 +575,9 @@ impl StateRead for AuthorityState {
         let mut result = Vec::with_capacity(limit);
 
         // If cursor is at first real coin, emit fake before continuing with more reals
-        if emit_fake_before_reals {
-            if let Some(fake) = fake_coins.get(&cursor.0) {
-                result.push(fake.clone());
-                fake_emitted.insert(cursor.0.clone(), true);
-            }
+        if emit_fake_before_reals && let Some(fake) = fake_coins.get(&cursor.0) {
+            result.push(fake.clone());
+            fake_emitted.insert(cursor.0.clone(), true);
         }
 
         let mut seen_first_real: HashMap<String, bool> = HashMap::new();
