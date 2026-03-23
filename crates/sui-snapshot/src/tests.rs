@@ -118,6 +118,7 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         MultiProgress::new(),
         false, // skip_reset_local_store
         3,     // max_retries
+        8,     // num_parallel_chunks
     )
     .await?;
     let restored_perpetual_db = Arc::new(AuthorityPerpetualTables::open(
@@ -178,6 +179,7 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         MultiProgress::new(),
         false, // skip_reset_local_store
         3,     // max_retries
+        8,     // num_parallel_chunks
     )
     .await?;
     let restored_perpetual_db = Arc::new(AuthorityPerpetualTables::open(
@@ -309,6 +311,7 @@ async fn test_snapshot_restore_from_archive() -> Result<(), anyhow::Error> {
         MultiProgress::new(),
         false, // skip_reset_local_store
         3,     // max_retries
+        8,     // num_parallel_chunks
     )
     .await?;
     let restored_perpetual_db = Arc::new(AuthorityPerpetualTables::open(

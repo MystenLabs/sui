@@ -52,6 +52,7 @@ pub struct StateSnapshotReaderV1 {
     object_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
     m: MultiProgress,
     concurrency: usize,
+    num_parallel_chunks: usize,
     max_retries: usize,
     remote_epoch_prefix: Path,
 }
@@ -128,6 +129,7 @@ impl StateSnapshotReaderV1 {
         m: MultiProgress,
         skip_reset_local_store: bool,
         max_retries: usize,
+        num_parallel_chunks: usize,
     ) -> Result<Self> {
         let remote_object_store = if remote_store_config.no_sign_request {
             remote_store_config.make_http()?
@@ -287,6 +289,7 @@ impl StateSnapshotReaderV1 {
             object_files,
             m,
             concurrency: download_concurrency.get(),
+            num_parallel_chunks,
             max_retries,
             remote_epoch_prefix,
         })
@@ -485,6 +488,7 @@ impl StateSnapshotReaderV1 {
     ) -> Result<(), anyhow::Error> {
         let epoch_dir = self.remote_epoch_prefix.clone();
         let concurrency = self.concurrency;
+        let num_parallel_chunks = self.num_parallel_chunks;
         let remote_object_store = self.remote_object_store.clone();
         let input_files: Vec<_> = self
             .object_files
@@ -549,6 +553,7 @@ impl StateSnapshotReaderV1 {
                                 perpetual_db,
                                 objects,
                                 &sha3_digest,
+                                num_parallel_chunks,
                             )
                             .await?;
                             downloaded_bytes.fetch_add(bytes_len, Ordering::Relaxed);

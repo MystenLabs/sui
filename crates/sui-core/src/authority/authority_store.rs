@@ -640,6 +640,7 @@ impl AuthorityStore {
         perpetual_db: Arc<AuthorityPerpetualTables>,
         objects: Vec<LiveObject>,
         expected_sha3_digest: &[u8; 32],
+        num_parallel_chunks: usize,
     ) -> SuiResult<()> {
         // Verify SHA3 over the full object set before inserting.
         let mut hasher = Sha3_256::default();
@@ -655,8 +656,7 @@ impl AuthorityStore {
             return Err(SuiError::from("Sha does not match"));
         }
 
-        const NUM_PARALLEL_CHUNKS: usize = 8;
-        let chunk_size = ((objects.len() + NUM_PARALLEL_CHUNKS - 1) / NUM_PARALLEL_CHUNKS).max(1);
+        let chunk_size = ((objects.len() + num_parallel_chunks - 1) / num_parallel_chunks).max(1);
         let mut remaining = objects;
         let mut handles = Vec::new();
         while !remaining.is_empty() {
