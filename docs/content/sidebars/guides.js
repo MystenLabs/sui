@@ -207,7 +207,6 @@ const guides = [
           'guides/developer/digital-assets/fungible-tokens/create-a-fungible-token',
           'guides/developer/digital-assets/fungible-tokens/regulated-tokens',
           'guides/developer/digital-assets/fungible-tokens/token-vesting-strategies',
-          'guides/developer/digital-assets/fungible-tokens/integrating-with-stablecoins',
         ],
       },
       {

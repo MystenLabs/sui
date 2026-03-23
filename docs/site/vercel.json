@@ -3065,7 +3065,7 @@
     },
     {
       "source": "/concepts/transactions/coin-mgt",
-      "destination": "/concepts/coin-mgt"
+      "destination": "/guides/developer/digital-assets/fungible-tokens/create-a-fungible-token-coin"
     },
     {
       "source": "/concepts/transactions",
@@ -3341,6 +3341,7 @@
     { "source": "/guides/developer/wallets.md", "destination": "/guides/developer/wallets", "permanent": true },
     { "source": "/guides/operator.md", "destination": "/guides/operator", "permanent": true },
     { "source": "/guides/suiplay0x1.md", "destination": "/guides/suiplay0x1", "permanent": true },
+    { "source": "/concepts/coin-mgt", "destination": "/guides/developer/digital-assets/fungible-tokens/create-a-fungible-token-coin", "permanent": true },
     { "source": "/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature.md", "destination": "/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature", "permanent": true }
   ],
   "rewrites": [

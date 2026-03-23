@@ -9,6 +9,8 @@ The Coin standard uses the [`sui::coin`](https://github.com/MystenLabs/sui/blob/
 
 The `Coin<T>` type represents open-loop fungible tokens, denominated by their type parameter `T`, which is also associated with metadata that applies to all instances of `Coin<T>`. The `sui::coin` module exposes an interface over `Coin<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Coin<T>` is interchangeable with any other unit of `T`, similar to how traditional fiat currencies operate.
 
+The network's native coin, SUI, uses the Coin standard.
+
 ## Use the Coin standard
 
 To create a coin, you must define the metadata, create the currency, and mint the initial supply.
@@ -55,7 +57,7 @@ Mint the initial supply of your coin:
 
 ## Managing coins
 
-Sui supports two ways to hold fungible assets: **address balances** and **coin objects**. Address balances are the recommended default for most use cases. Coin objects remain available for scenarios that require explicit object-level control.
+Sui supports two ways to hold fungible assets: address balances and coin objects. Address balances are the recommended default for most use cases. Coin objects remain available for scenarios that require explicit object-level control.
 
 ## Address balances
 
@@ -70,7 +72,7 @@ Key advantages of address balances:
 
 The TypeScript SDK (v2+) uses address balances by default. When you use `coinWithBalance`, the SDK draws from address balances first and falls back to coin objects only when needed. For gas payment, pass an empty array to `setGasPayment` to pay from your address balance.
 
-See [Address Balances Migration Guide](/concepts/coin-mgt/address-balances.mdx) for the full reference on using address balances, including withdrawal patterns, gas payment, sponsored transactions, and balance queries.
+See [Address Balances Migration Guide](/guides/developer/digital-assets/address-management/migrate-address-balances.mdx) for the full reference on using address balances, including withdrawal patterns, gas payment, sponsored transactions, and balance queries.
 
 ## Coin objects
 
@@ -84,11 +86,13 @@ Coin objects are useful when you need to:
 
 Because coin objects are owned objects, they enable highly parallel transaction execution. Each coin is an independent object with its own version, so transactions that touch different coins can execute concurrently without contention.
 
+For explicit coin manipulation within a PTB, use the `mergeCoins` command to combine multiple coin objects into one, and `splitCoins` to break a coin into smaller pieces. These operations are inexpensive but require you to know your coin distribution and transaction needs.
+
 ### Accumulating coin objects
 
 It is common to accumulate many coin objects over time, especially if you receive frequent transfers. Some scenarios require merging coins into a single object. For example, if no single coin holds enough value to cover a transaction, you must merge coins first.
 
-You can convert coin objects into an address balance at any time by calling `coin::send_funds` with your own address as the recipient. See [Converting Existing Coins to Address Balances](/concepts/coin-mgt/address-balances.mdx#converting-existing-coins-to-address-balances) for instructions.
+You can convert coin objects into an address balance at any time by calling `coin::send_funds` with your own address as the recipient. See [Converting Existing Coins to Address Balances](/guides/developer/digital-assets/address-management/migrate-address-balances.mdx#converting-existing-coins-to-address-balances) for instructions.
 
 ## Gas smashing
 
@@ -106,14 +110,6 @@ If you use address balance gas payment (by passing an empty gas payment array), 
 
 See [Gas Smashing](/guides/developer/transactions/gas-smashing.mdx) for more details.
 
-## Non-SUI coin types
-
-Address balances work for any coin type, not just SUI. You can send and withdraw non-SUI coins through `send_funds` and `redeem_funds` the same way you do with SUI.
-
-Many existing Move contracts still accept `Coin<T>` as a function argument. If you hold funds as an address balance and need to call such a contract, withdraw from your address balance and redeem to a `Coin<T>` within your programmable transaction block (PTB). The `coinWithBalance` intent in the TypeScript SDK handles this automatically.
-
-For explicit coin manipulation within a PTB, use the `mergeCoins` command to combine multiple coin objects into one, and `splitCoins` to break a coin into smaller pieces. These operations are inexpensive but require you to know your coin distribution and transaction needs.
-
 ## Concurrency
 
 Address balances significantly reduce concurrency challenges for most use cases. Because address balance gas payments do not require owned object inputs, you can build and sign multiple transactions without worrying about object version conflicts or locking.
@@ -123,12 +119,6 @@ Address balances significantly reduce concurrency challenges for most use cases.
 If your transactions use coin objects (or any other owned objects) as inputs, the original concurrency constraints apply. Each owned object has a version, and the system locks it when you sign a transaction. This lock prevents using the same object in another transaction until the first one executes. Attempting to sign multiple transactions with the same owned object can result in equivocation, which makes the object unusable until the end of the epoch.
 
 When you require heavy concurrency with coin objects, split a coin into as many coins as the number of transactions you plan to execute concurrently. Alternatively, provide different coins (through gas smashing) to each transaction. The set of coins used across concurrent transactions must have no overlap.
-
-:::info
-
-Concurrency in transaction execution is not the only performance consideration. Discovering and fetching objects, and dry running transactions, each require round trips to a full node. These round trips can affect performance significantly in high-throughput scenarios.
-
-:::
 
 ### Recommended approach
 
