@@ -10,11 +10,11 @@ public struct APositionalStruct(u64) has copy, drop, store;
 #[ext(some_random_ext_annotation)]
 /// Doc comment on a struct
 public struct ANamedStruct has copy, drop, store {
-    /// Doc comment on a field
-    a: u64,
-    b: APositionalStruct,
+	/// Doc comment on a field
+	a: u64,
+	b: APositionalStruct,
 }
 
 public fun f<Type1, OtherType>(_x: Type1, _y: OtherType) {
-    abort
+	abort
 }

@@ -4,5 +4,5 @@
 module modern::modern;
 
 public fun modern() {
-  legacy_dep::legacy_dep::legacy_dep();
+	legacy_dep::legacy_dep::legacy_dep();
 }

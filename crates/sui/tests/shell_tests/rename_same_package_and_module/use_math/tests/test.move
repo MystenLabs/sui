@@ -6,6 +6,6 @@ module use_math::testing;
 
 #[test]
 fun use_test() {
-    std::debug::print(&math_a::math::a());
-    std::debug::print(&math_b::math::a());
+	std::debug::print(&math_a::math::a());
+	std::debug::print(&math_b::math::a());
 }

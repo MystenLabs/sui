@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module invalid::invalid {
-    public entry fun main() {}
-}
+module invalid::invalid;
+
+public fun main() {}
