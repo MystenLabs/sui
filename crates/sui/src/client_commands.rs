@@ -87,8 +87,9 @@ use sui_types::{
     signature::GenericSignature,
     sui_sdk_types_conversions::type_tag_sdk_to_core,
     transaction::{
-        Command, InputObjectKind, ObjectArg, SenderSignedData, SharedObjectMutability, Transaction,
-        TransactionData, TransactionDataAPI, TransactionKind,
+        Argument, Command, FundsWithdrawalArg, GasData, InputObjectKind, ObjectArg,
+        SenderSignedData, SharedObjectMutability, Transaction, TransactionData, TransactionDataAPI,
+        TransactionExpiration, TransactionKind,
     },
 };
 
@@ -369,6 +370,34 @@ pub enum SuiClientCommands {
         /// The recipient address (or its alias if it's an address in the keystore).
         #[clap(long)]
         recipient: KeyIdentity,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
+    },
+
+    /// Send funds to an address balance using the `sui::coin::send_funds` API.
+    /// This sends funds to the recipient's address balance (not as a coin object).
+    #[clap(name = "send-funds")]
+    SendFunds {
+        /// The recipient address (or its alias if it's an address in the keystore).
+        #[clap(long)]
+        to: KeyIdentity,
+
+        /// The amount to send (in MIST).
+        #[clap(long)]
+        amount: u64,
+
+        /// The coin type to send (e.g., "0x2::sui::SUI"). Defaults to SUI.
+        #[clap(long, value_parser = parse_sui_type_tag)]
+        coin_type: Option<TypeTag>,
+
+        /// If set, draws all funds (including gas payment) from the sender's address balances.
+        /// This creates a fully stateless transaction with no owned object inputs.
+        #[clap(long)]
+        stateless: bool,
 
         #[clap(flatten)]
         gas_data: GasDataArgs,
@@ -1328,6 +1357,79 @@ impl SuiClientCommands {
                     processing,
                 )
                 .await?
+            }
+
+            SuiClientCommands::SendFunds {
+                to,
+                amount,
+                coin_type,
+                stateless,
+                gas_data,
+                processing,
+            } => {
+                let recipient = context.get_identity_address(Some(to))?;
+                let signer = context.active_address()?;
+                let _ = context.cache_chain_id().await?;
+
+                let coin_type_tag = coin_type.unwrap_or_else(|| {
+                    TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid")
+                });
+
+                let mut builder = ProgrammableTransactionBuilder::new();
+
+                if stateless {
+                    let withdrawal_arg =
+                        FundsWithdrawalArg::balance_from_sender(amount, coin_type_tag.clone());
+                    let withdrawal_input = builder.funds_withdrawal(withdrawal_arg)?;
+
+                    let balance_result = builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::from_str("balance")?,
+                        Identifier::from_str("redeem_funds")?,
+                        vec![coin_type_tag.clone()],
+                        vec![withdrawal_input],
+                    );
+
+                    let recipient_arg = builder.pure(recipient)?;
+                    builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::from_str("balance")?,
+                        Identifier::from_str("send_funds")?,
+                        vec![coin_type_tag],
+                        vec![balance_result, recipient_arg],
+                    );
+
+                    let tx_kind = TransactionKind::programmable(builder.finish());
+
+                    dry_run_or_execute_or_serialize_with_address_balance_gas(
+                        signer, tx_kind, context, gas_data, processing,
+                    )
+                    .await?
+                } else {
+                    let amount_arg = builder.pure(amount)?;
+                    let coin_arg =
+                        builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
+                    let recipient_arg = builder.pure(recipient)?;
+                    builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::from_str("coin")?,
+                        Identifier::from_str("send_funds")?,
+                        vec![coin_type_tag],
+                        vec![coin_arg, recipient_arg],
+                    );
+
+                    let tx_kind = TransactionKind::programmable(builder.finish());
+
+                    dry_run_or_execute_or_serialize(
+                        signer,
+                        tx_kind,
+                        context,
+                        vec![],
+                        gas_data,
+                        processing,
+                    )
+                    .await?
+                }
             }
 
             SuiClientCommands::Objects { address } => {
@@ -3088,6 +3190,51 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     gas_data: GasDataArgs,
     processing: TxProcessingArgs,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
+    dry_run_or_execute_or_serialize_impl(
+        signer,
+        tx_kind,
+        context,
+        gas_payment,
+        gas_data,
+        processing,
+        false,
+    )
+    .await
+}
+
+/// Dry run, execute, or serialize a transaction with address balance gas support.
+///
+/// When `use_address_balance_gas` is true, the transaction uses the sender's address balance
+/// for gas payment instead of selecting a gas coin. This requires adding a ValidDuring
+/// expiration for replay protection.
+pub(crate) async fn dry_run_or_execute_or_serialize_with_address_balance_gas(
+    signer: SuiAddress,
+    tx_kind: TransactionKind,
+    context: &mut WalletContext,
+    gas_data: GasDataArgs,
+    processing: TxProcessingArgs,
+) -> Result<SuiClientCommandResult, anyhow::Error> {
+    dry_run_or_execute_or_serialize_impl(
+        signer,
+        tx_kind,
+        context,
+        vec![],
+        gas_data,
+        processing,
+        true,
+    )
+    .await
+}
+
+async fn dry_run_or_execute_or_serialize_impl(
+    signer: SuiAddress,
+    tx_kind: TransactionKind,
+    context: &mut WalletContext,
+    gas_payment: Vec<ObjectRef>,
+    gas_data: GasDataArgs,
+    processing: TxProcessingArgs,
+    use_address_balance_gas: bool,
+) -> Result<SuiClientCommandResult, anyhow::Error> {
     let GasDataArgs {
         gas_budget,
         gas_price,
@@ -3163,8 +3310,21 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         }
     };
 
-    let gas_payment = if !gas_payment.is_empty() {
-        gas_payment
+    let (gas_payment, expiration) = if use_address_balance_gas {
+        let current_epoch = context.get_current_epoch().await?;
+        let chain_id = context.get_chain_identifier().await?;
+
+        let expiration = TransactionExpiration::ValidDuring {
+            min_epoch: Some(current_epoch),
+            max_epoch: Some(current_epoch.saturating_add(1)),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: chain_id,
+            nonce: rand::random(),
+        };
+        (vec![], expiration)
+    } else if !gas_payment.is_empty() {
+        (gas_payment, TransactionExpiration::None)
     } else {
         let input_objects: Vec<_> = tx_kind
             .input_objects()?
@@ -3186,17 +3346,21 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             )
             .await?;
 
-        vec![gas_payment]
+        (vec![gas_payment], TransactionExpiration::None)
     };
 
     debug!("Preparing transaction data");
-    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
+    let gas_owner = gas_sponsor.unwrap_or(signer);
+    let tx_data = TransactionData::new_with_gas_data_and_expiration(
         tx_kind,
         signer,
-        gas_payment,
-        gas_budget,
-        gas_price,
-        gas_sponsor.unwrap_or(signer),
+        GasData {
+            payment: gas_payment,
+            owner: gas_owner,
+            price: gas_price,
+            budget: gas_budget,
+        },
+        expiration,
     );
     debug!("Finished preparing transaction data");
 

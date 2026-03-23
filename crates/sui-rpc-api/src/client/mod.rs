@@ -430,6 +430,21 @@ impl Client {
         Ok(response.epoch().reference_gas_price())
     }
 
+    pub async fn get_current_epoch(&self) -> Result<u64> {
+        let request =
+            proto::GetEpochRequest::default().with_read_mask(FieldMask::from_paths(["epoch"]));
+
+        let response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        Ok(response.epoch().epoch())
+    }
+
     /// Wait for a transaction to be available in the ledger AND indexed (equivalent to WaitForLocalExecution)
     pub async fn wait_for_transaction(
         &self,
