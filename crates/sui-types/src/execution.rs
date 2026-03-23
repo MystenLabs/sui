@@ -122,19 +122,39 @@ impl ExecutionResultsV2 {
     }
 
     pub fn merge_results(&mut self, new_results: Self) {
+        // An object written before the merge (e.g., gas coin written by smash_gas) may be
+        // deleted by the new results (e.g., send_funds destroying the gas coin during PTB
+        // execution). Remove such stale entries.
+        for id in &new_results.deleted_object_ids {
+            self.written_objects.remove(id);
+            // additional hardening
+            self.created_object_ids.remove(id);
+        }
+        // While not possible currently, we should ensure that any object previously marked as
+        // deleted that is now marked as written
+        for id in new_results.written_objects.keys() {
+            self.deleted_object_ids.remove(id);
+        }
+
         self.written_objects.extend(new_results.written_objects);
         self.modified_objects.extend(new_results.modified_objects);
         self.created_object_ids
             .extend(new_results.created_object_ids);
         self.deleted_object_ids
             .extend(new_results.deleted_object_ids);
-        // An object written before the merge (e.g., gas coin written by smash_gas) may be
-        // deleted by the new results (e.g., send_funds destroying the gas coin during PTB
-        // execution). Remove such stale entries so the object is not double-counted by the
-        // SUI conservation check.
-        for id in &self.deleted_object_ids {
-            self.written_objects.remove(id);
-        }
+
+        // debug assert that deleted is disjoint with created and written
+        debug_assert!(
+            self.deleted_object_ids
+                .is_disjoint(&self.created_object_ids),
+            "Deleted object IDs should be disjoint with created object IDs"
+        );
+        debug_assert!(
+            self.written_objects
+                .keys()
+                .all(|id| !self.deleted_object_ids.contains(id)),
+            "Deleted object IDs should be disjoint with written object IDs"
+        );
         self.user_events.extend(new_results.user_events);
         self.accumulator_events
             .extend(new_results.accumulator_events);
