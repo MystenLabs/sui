@@ -3667,8 +3667,7 @@
     },
     {
       "source": "/concepts/transactions/coin-mgt",
-      "destination": "/concepts/coin-mgt",
-      "permanent": true
+      "destination": "/guides/developer/digital-assets/fungible-tokens/create-a-fungible-token-coin"
     },
     {
       "source": "/concepts/transactions",

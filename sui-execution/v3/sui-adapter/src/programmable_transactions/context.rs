@@ -1574,7 +1574,11 @@ mod checked {
         if protocol_config.enable_coin_deny_list_v2() {
             for object in written_objects.values() {
                 let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
-                let owner = object.owner.get_address_owner_address();
+                let owner = if protocol_config.use_coin_party_owner() {
+                    object.owner.get_owner_address()
+                } else {
+                    object.owner.get_address_owner_address()
+                };
                 if let (Some(ty), Ok(owner)) = (coin_type, owner) {
                     receiving_funds_type_and_owners
                         .entry(ty)

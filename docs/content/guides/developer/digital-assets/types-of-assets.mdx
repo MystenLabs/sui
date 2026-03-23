@@ -1,17 +1,17 @@
 ---
+title: Types of Assets
 draft: true
-title: Types of Tokens
-description: Sui provides a variety of token standards with different features for multiple usage patterns.
-keywords: [ coin, currency, closed-loop, currency standard, coin standard, closed-loop token standard, non-fungible token, fungible token, nft ]
+description: Sui provides a variety of asset standards with different features for multiple usage patterns.
+keywords: [ coin, currency, address balances, permissioned assets, pas, balances, closed-loop, currency standard, coin standard, closed-loop token standard, non-fungible token, fungible token, nft ]
 ---
 
-On Sui, there are a variety of fungible and non-fungible token standards, each with their own defined usage patterns and capabilities. Choosing the correct standard for your use case is important to enable the correct set of features in your application. 
+On Sui, there are a variety of fungible, non-fungible, and other types of asset standards, each with their own defined usage patterns and capabilities. Choosing the correct standard for your use case is important to enable the correct set of features in your application. 
 
 ## Fungible tokens: Coin standard
 
-The Coin standard defines fungible tokens that have `key + store` abilities. Coin supports wrapping and public transfers. It uses the [`sui::coin`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md) module. Coin refers to a **single object wrapper for a fungible asset**.
+The Coin standard defines fungible tokens that have `key` and `store` abilities. Coin supports wrapping and public transfers. It uses the [`sui::coin`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin.md) module. Coin refers to a **single object wrapper for a fungible asset**.
 
-The `Coin<T>` type represents open-loop fungible tokens. Coins are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Coin<T>`. The `sui::coin` module exposes an interface over `Coin<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Coin<T>` is interchangeable with any other unit of `T`, much like how traditional fiat currencies operate.
+The `Coin<T>` type represents open-loop fungible tokens. Coins are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Coin<T>`. 
 
 Fungible tokens created using the Coin standard are referred to as **coins**.
 
@@ -29,11 +29,17 @@ Use the Coin standard if you are:
 
 [Learn more about using Coin](/standards/coin).
 
+### Address balances 
+
+Address balances tie fungible assets to a Sui address using directly. It replaces the UTXO-style `Coin<T>` model, where balances are calculated by summing all `Coin<T>` objects owned by an address. With the address balance functionality, each Sui address can have one address-owned balance for each currency they own, with the total balance being the sum of all `Coin<T>` objects plus the address balance. `Coin<T>` and address balances can exist together, however address balances provide several advantages over using `Coin<T>` alone. 
+
+For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
+
 ## Fungible tokens: Currency standard
 
 The Currency standard is an example of an open-loop system. It supports free-flowing, [wrappable](/guides/developer/objects/object-ownership/wrapped.mdx), [freely transferable](/guides/developer/objects/transfers/custom-rules.mdx) fungible assets that you can store in any application. It uses the [`sui::coin_registry`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin_registry.md) module and the `Currency` object for metadata. **Currency** refers to the object that is created in Coin Registry, which describes the currency properties and setup.
 
-The `Currency<T>` type represents open-loop fungible tokens (see `Token<T>` for closed-loop tokens). Currencies are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Currency<T>`. The `sui::coin_registry` module exposes an interface over `Currency<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Currency<T>` is interchangeable with any other unit of `T`, much like how traditional fiat currencies operate.
+The `Currency<T>` type represents open-loop fungible tokens. Currencies are denominated by their type parameter, `T`, which is also associated with metadata like name, symbol, and decimal precision that applies to all instances of `Currency<T>`. 
 
 Fungible tokens created using the Currency standard are referred to as **coins**.
 
@@ -42,6 +48,20 @@ You can create coins with the Currency standard using `coin_registry::new_curren
 - **Standard creation** (`coin_registry::new_currency`): Recommended for most cases. You can call this method any time after the coin type is published.
 
 - **One-Time Witness creation** (`coin_registry::new_currency_with_otw`): Uses a One-Time Witness for uniqueness proof. Requires a two-step publish and finalize process.
+
+:::tip
+
+The Coin and Currency standards are both used to create fungible tokens. However, they use different creation methods and store metadata in a different type of object. 
+
+Coin creates tokens using `coin::create_currency` while Currency uses `sui::coin_registry`.
+
+Coin uses `CoinMetadata` while Currency uses `Currency`. 
+
+Fungible tokens created on Sui using the Coin or Currency standard are referred to as _coins_. 
+
+For fungible tokens created on Sui using the [Closed-Loop Token standard](/standards/closed-loop-token.mdx), the documentation uses the term _tokens_. In practice, the terms for both these objects are often interchangeable.
+
+:::
 
 ### Coin Registry 
 
@@ -61,7 +81,29 @@ Use the Currency standard if you are:
 
 [Learn more about using Currency](/standards/currency).
 
+## Permissioned assets 
+
+:::caution
+
+Permissioned Asset Standard is currently available on Testnet. It is not yet live on Mainnet.
+
+:::
+
+The Permissioned Asset Standard (PAS) enables asset ownership through Account objects. Account objects can hold assets and enforce transfer controls and compliance checks. Accounts can only hold one asset, independent of its types, and the asset can only move between Accounts through hot potato requests that must be approved and resolved in the same programmable transaction block (PTB).
+
+PAS uses Sui [Address Balances](/guides/developer/address-balances-migration). PAS balances are managed by PAS on behalf of the wallet address. They are held in a derived Account object, however, transfers always target the wallet address, not the Account address. 
+
+PAS assets are stored in Sui objects and can be queried using the same data access methods as any other address-owned data. 
+
+[Learn more about Permissioned Asset Standard](/standards/pas/pas-architecture).
+
 ## Fungible tokens: Closed-Loop Token standard
+
+:::caution 
+
+The Permissioned Asset Standard (PAS) provides a new and improved alternative to the Closed-Loop Token (CLT) standard. It is recommended to use PAS in place of CLT.
+
+:::
 
 The Closed-Loop Token standard creates a fungible token that only has the `key` ability. Closed-loop tokens cannot be wrapped, stored as a dynamic field, or freely transferred (unless a custom policy allows it). Due to this restriction, tokens created with this standard **can only be owned by an account** and cannot be stored in an application. However, [they can be spent](/standards/closed-loop-token/spending.mdx). The standard uses the [`sui::token` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/token.md).
 
