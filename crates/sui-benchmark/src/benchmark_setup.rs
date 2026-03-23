@@ -14,7 +14,7 @@ use std::thread::JoinHandle;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::TransactionData;
+use sui_types::transaction::{Argument, Command, ObjectArg, TransactionData};
 use tokio::runtime::Builder;
 use tokio::sync::{Barrier, oneshot};
 use tracing::info;
@@ -139,43 +139,58 @@ impl BenchmarkSetup {
                     total_balance,
                 );
 
-                let primary_ref = primary_gas_obj.compute_object_reference();
+                let mut primary_ref = primary_gas_obj.compute_object_reference();
                 let coins_to_merge: Vec<_> = gas_objects
                     .iter()
                     .filter(|(_, obj)| obj.id() != primary_gas_obj.id())
                     .map(|(_, obj)| obj.compute_object_reference())
                     .collect();
 
-                let mut builder = ProgrammableTransactionBuilder::new();
-                builder.merge_coins(primary_ref, coins_to_merge)?;
-                let pt = builder.finish();
-
                 let system_state = execution_proxy.get_latest_system_state_object().await?;
                 let gas_price = system_state.reference_gas_price;
-                let data = TransactionData::new_programmable(
-                    primary_gas_account,
-                    vec![primary_ref],
-                    pt,
-                    50 * sui_types::gas_coin::MIST_PER_SUI,
-                    gas_price,
-                );
 
-                let tx = sui_types::transaction::Transaction::from_data_and_signer(
-                    data,
-                    vec![&*keypair],
-                );
-                let (_, effects) = execution_proxy.execute_transaction_block(tx).await;
-                let effects = effects?;
+                // Batch merges to stay within the max_arguments protocol
+                // limit (512). Each batch merges up to 500 coins into the
+                // gas coin, then re-fetches the updated gas object ref.
+                const MERGE_BATCH_SIZE: usize = 500;
+                for batch in coins_to_merge.chunks(MERGE_BATCH_SIZE) {
+                    let mut builder = ProgrammableTransactionBuilder::new();
+                    let coin_args: Vec<_> = batch
+                        .iter()
+                        .map(|coin| {
+                            builder
+                                .obj(ObjectArg::ImmOrOwnedObject(*coin))
+                                .unwrap()
+                        })
+                        .collect();
+                    builder.command(Command::MergeCoins(Argument::GasCoin, coin_args));
+                    let pt = builder.finish();
 
-                let merged_ref = effects.gas_object().0;
+                    let data = TransactionData::new_programmable(
+                        primary_gas_account,
+                        vec![primary_ref],
+                        pt,
+                        50 * sui_types::gas_coin::MIST_PER_SUI,
+                        gas_price,
+                    );
+
+                    let tx = sui_types::transaction::Transaction::from_data_and_signer(
+                        data,
+                        vec![&*keypair],
+                    );
+                    let (_, effects) = execution_proxy.execute_transaction_block(tx).await;
+                    let effects = effects?;
+                    primary_ref = effects.gas_object().0;
+                }
+
                 info!(
-                    "Merged {} coins into {}: new balance = {}",
+                    "Merged {} coins into {}: total balance = {}",
                     gas_objects.len(),
-                    merged_ref.0,
+                    primary_ref.0,
                     total_balance,
                 );
 
-                (merged_ref, primary_gas_account, keypair)
+                (primary_ref, primary_gas_account, keypair)
             } else {
                 let (balance, _) = &gas_objects[0];
                 info!(
