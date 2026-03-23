@@ -2213,7 +2213,7 @@ pub fn finish(
     // Deny-list v2 checks
     for object in written_objects.values() {
         let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
-        let owner = object.owner.get_address_owner_address();
+        let owner = object.owner.get_owner_address();
         if let (Some(ty), Ok(owner)) = (coin_type, owner) {
             receiving_funds_type_and_owners
                 .entry(ty)

@@ -1030,6 +1030,10 @@ struct FeatureFlags {
     // When split-checkpoints enabled, merge randomness and non-randomness schedulables together.
     #[serde(skip_serializing_if = "is_false")]
     merge_randomness_into_checkpoint: bool,
+
+    // If true, use coin party owner information.
+    #[serde(skip_serializing_if = "is_false")]
+    use_coin_party_owner: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2674,6 +2678,10 @@ impl ProtocolConfig {
 
     pub fn merge_randomness_into_checkpoint(&self) -> bool {
         self.feature_flags.merge_randomness_into_checkpoint
+    }
+
+    pub fn use_coin_party_owner(&self) -> bool {
+        self.feature_flags.use_coin_party_owner
     }
 }
 
@@ -4689,7 +4697,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_display_registry = true;
                 }
                 117 => {}
-                118 => {}
+                118 => {
+                    cfg.feature_flags.use_coin_party_owner = true;
+                }
                 119 => {
                     // Enable new VM.
                     cfg.execution_version = Some(4);
