@@ -44,6 +44,14 @@ impl TestScenario {
         }
     }
 
+    /// Calculate expected counts for getCoins (custom coin type).
+    fn expected_custom_counts(&self) -> Option<ExpectedCounts> {
+        self.custom_coin.as_ref().map(|custom| ExpectedCounts {
+            real_coins: custom.real_coins,
+            fake_coins: if custom.has_address_balance { 1 } else { 0 },
+        })
+    }
+
     /// Calculate expected counts for getAllCoins (all types).
     fn expected_all_counts(&self, base_sui_coins: usize) -> ExpectedCounts {
         let mut real = base_sui_coins + self.sui.real_coins;
@@ -100,11 +108,15 @@ async fn setup_scenario(
     (recipient, custom_coin_type)
 }
 
-/// Query getCoins and return counts of real and fake coins.
-async fn get_coins_counts(test_env: &TestEnv, owner: SuiAddress) -> ExpectedCounts {
+/// Query getCoins for a specific coin type and return counts of real and fake coins.
+async fn get_coins_counts(
+    test_env: &TestEnv,
+    owner: SuiAddress,
+    coin_type: Option<&str>,
+) -> ExpectedCounts {
     let params = rpc_params![
         owner,
-        Option::<String>::None,
+        coin_type,
         Option::<String>::None,
         Option::<usize>::None
     ];
@@ -301,19 +313,31 @@ async fn run_scenario(scenario: TestScenario) {
         .build()
         .await;
 
-    let (recipient, _custom_type) = setup_scenario(&mut test_env, &scenario).await;
+    let (recipient, custom_type) = setup_scenario(&mut test_env, &scenario).await;
 
     // For a fresh recipient, base SUI coins = 0 (unless we transferred some)
     let base_sui_coins = 0;
 
-    // Test getCoins (SUI only)
-    let sui_counts = get_coins_counts(&test_env, recipient).await;
+    // Test getCoins for SUI
+    let sui_counts = get_coins_counts(&test_env, recipient, None).await;
     let expected_sui = scenario.expected_sui_counts(base_sui_coins);
     assert_eq!(
         sui_counts, expected_sui,
-        "getCoins mismatch for scenario {:?}",
+        "getCoins(SUI) mismatch for scenario {:?}",
         scenario
     );
+
+    // Test getCoins for custom coin type (if present)
+    if let (Some(coin_type), Some(expected_custom)) =
+        (custom_type.as_ref(), scenario.expected_custom_counts())
+    {
+        let custom_counts = get_coins_counts(&test_env, recipient, Some(coin_type)).await;
+        assert_eq!(
+            custom_counts, expected_custom,
+            "getCoins(custom) mismatch for scenario {:?}",
+            scenario
+        );
+    }
 
     // Test getAllCoins (all types)
     let all_counts = get_all_coins_counts(&test_env, recipient).await;
@@ -389,7 +413,8 @@ async fn test_pagination_no_duplicate_fake_coins() {
     }
 
     // Verify we got exactly one fake coin
-    let fake_count = all_coin_ids.len() - get_coins_counts(&test_env, sender).await.real_coins;
+    let fake_count =
+        all_coin_ids.len() - get_coins_counts(&test_env, sender, None).await.real_coins;
     assert_eq!(fake_count, 1, "Should have exactly one fake coin");
 }
 
