@@ -394,18 +394,19 @@ async fn test_combined_ab_and_coins_needed() {
     let (sender, _) = test_env.get_sender_and_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
 
-    // Fund sender's address balance with 5 SUI
+    // Fund sender's address balance with 10 SUI
     test_env
-        .fund_one_address_balance(sender, 5 * MIST_PER_SUI)
+        .fund_one_address_balance(sender, 10 * MIST_PER_SUI)
         .await;
 
     let (sender, gas) = test_env.get_sender_and_gas(0);
 
     // Request amount that requires BOTH coins and AB:
-    // - Genesis coin has ~30M SUI
-    // - AB has 5 SUI
-    // - Request 30M + 3 SUI = requires combining both
-    let amount = 30_000_000 * MIST_PER_SUI + 3 * MIST_PER_SUI;
+    // - Genesis coin starts with 30M SUI
+    // - After funding 10 SUI to AB: coin has ~29,999,989 SUI (10 SUI transferred + gas)
+    // - AB has 10 SUI
+    // - Request 29,999,995 SUI - requires coin (~29,999,989) + ~6 SUI from AB
+    let amount = 29_999_995 * MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
     let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);

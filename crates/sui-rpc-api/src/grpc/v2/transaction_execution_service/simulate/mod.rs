@@ -153,6 +153,13 @@ pub fn simulate_transaction(
         }
     }
 
+    // When gas payment is provided but the sender has address balance and uses GasCoin,
+    // we need to prepend a coin reservation to give access to the combined balance.
+    // This is done regardless of do_gas_selection since it affects transaction semantics.
+    if !transaction.gas_data().payment.is_empty() && checks.enabled() {
+        maybe_prepend_coin_reservation(service, &mut transaction)?;
+    }
+
     let allow_mock_gas_coin = checks.disabled() || !request.do_gas_selection();
 
     let SimulateTransactionResult {
@@ -359,6 +366,101 @@ fn round_up_to_nearest(value: u64, step: u64) -> u64 {
     } else {
         value.saturating_add(step - remainder)
     }
+}
+
+/// When gas payment is already provided, check if we need to prepend a coin reservation.
+/// This is needed when the sender has address balance AND the transaction uses GasCoin.
+fn maybe_prepend_coin_reservation(
+    service: &RpcService,
+    transaction: &mut sui_types::transaction::TransactionData,
+) -> Result<()> {
+    use sui_types::accumulator_root::AccumulatorValue;
+    use sui_types::balance::Balance;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
+    use sui_types::gas_coin::GAS;
+    use sui_types::transaction::Command;
+    use sui_types::transaction::Reservation;
+    use sui_types::transaction::TransactionDataAPI;
+    use sui_types::transaction::TransactionExpiration;
+    use sui_types::transaction::WithdrawalTypeArg;
+
+    let reader = &service.reader;
+    let owner = transaction.gas_data().owner;
+
+    let gas_coin_used = transaction
+        .kind()
+        .iter_commands()
+        .any(Command::is_gas_coin_used);
+
+    // Only proceed if GasCoin is used
+    if !gas_coin_used {
+        return Ok(());
+    }
+
+    let address_balance = reader
+        .lookup_address_balance(owner, GAS::type_())
+        .map(|balance| {
+            let reserved_sui = transaction
+                .get_funds_withdrawals()
+                .into_iter()
+                .filter_map(|w| {
+                    if w.owner_for_withdrawal(&*transaction) != owner {
+                        return None;
+                    }
+                    let WithdrawalTypeArg::Balance(coin_type) = &w.type_arg;
+                    if !GAS::is_gas_type(coin_type) {
+                        return None;
+                    }
+                    match w.reservation {
+                        Reservation::MaxAmountU64(value) => Some(value),
+                    }
+                })
+                .sum::<u64>();
+            balance.saturating_sub(reserved_sui)
+        });
+
+    // Only proceed if there's positive address balance
+    let Some(ab_value) = address_balance else {
+        return Ok(());
+    };
+    if ab_value == 0 {
+        return Ok(());
+    }
+
+    // Create coin reservation
+    let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+
+    let accumulator_obj_id =
+        AccumulatorValue::get_field_id(owner, &Balance::type_tag(GAS::type_tag())).map_err(
+            |e| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("Failed to get accumulator object ID: {e}"),
+                )
+            },
+        )?;
+
+    let reservation =
+        ParsedObjectRefWithdrawal::new(*accumulator_obj_id.inner(), current_epoch, ab_value);
+    let coin_reservation = reservation.encode(SequenceNumber::new(), service.chain_id);
+
+    // Prepend coin reservation to existing payment
+    let mut new_payment = vec![coin_reservation];
+    new_payment.extend(transaction.gas_data().payment.clone());
+    transaction.gas_data_mut().payment = new_payment;
+
+    // Set expiration for AB usage
+    *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
+        min_epoch: Some(current_epoch),
+        max_epoch: Some(current_epoch.saturating_add(1)),
+        min_timestamp: None,
+        max_timestamp: None,
+        chain: service.chain_id,
+        nonce: rand::random(),
+    };
+
+    Ok(())
 }
 
 fn select_gas(
