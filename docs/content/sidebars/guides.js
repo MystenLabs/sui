@@ -195,7 +195,7 @@ const guides = [
       id: 'guides/developer/digital-assets/index',
     },
     items: [
-      'guides/developer/digital-assets/types-of-tokens',
+      'guides/developer/digital-assets/types-of-assets',
       {
         type: 'category',
         label: 'Fungible Tokens',
