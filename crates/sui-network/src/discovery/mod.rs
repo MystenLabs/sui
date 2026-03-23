@@ -605,26 +605,24 @@ impl DiscoveryEventLoop {
                     .peer_addresses
                     .get(&peer_id)
                     .is_some_and(|s| s.contains_key(&AddressSource::Discovery))
-            {
-                if let Some(addrs) = state
+                && let Some(addrs) = state
                     .known_peers_v2
                     .get(&peer_id)
                     .and_then(|info| match info.data() {
                         VersionedNodeInfo::V2(v2) => Some(v2.p2p_addresses()),
                         _ => None,
                     })
-                {
-                    let anemo_addrs: Vec<_> = addrs
-                        .iter()
-                        .filter_map(|a| a.to_anemo_address().ok())
-                        .collect();
-                    if !anemo_addrs.is_empty() {
-                        state
-                            .peer_addresses
-                            .entry(peer_id)
-                            .or_default()
-                            .insert(AddressSource::Discovery, anemo_addrs);
-                    }
+            {
+                let anemo_addrs: Vec<_> = addrs
+                    .iter()
+                    .filter_map(|a| a.to_anemo_address().ok())
+                    .collect();
+                if !anemo_addrs.is_empty() {
+                    state
+                        .peer_addresses
+                        .entry(peer_id)
+                        .or_default()
+                        .insert(AddressSource::Discovery, anemo_addrs);
                 }
             }
         }
