@@ -2,7 +2,6 @@
 
 > Comprehensive reference for Sui blockchain development, including Move smart contract programming, Sui framework concepts, frontend integration, and fullstack application architecture. Designed for efficient retrieval and grounding by large language models.
 
-
 ## Move
 
 - [Move Language Reference](https://move-book.com/llms.txt)
@@ -78,6 +77,8 @@
 - [Plinko](https://docs.sui.io/guides/developer/app-examples/plinko.md)
 - [Reviews Rating](https://docs.sui.io/guides/developer/app-examples/reviews-rating.md)
 - [Tic Tac Toe](https://docs.sui.io/guides/developer/app-examples/tic-tac-toe.md)
+- [Trustless Swap
+    Frontend](https://docs.sui.io/guides/developer/app-examples/trustless-swap-frontend.md)
 - [Trustless Swap](https://docs.sui.io/guides/developer/app-examples/trustless-swap.md)
 - [Weather Oracle](https://docs.sui.io/guides/developer/app-examples/weather-oracle.md)
 
@@ -124,9 +125,9 @@
 - [Move Best Practices](https://docs.sui.io/guides/developer/move-best-practices.md)
 
 ### Guides/Developer/Nautilus
+- [Community Dev Tools](https://docs.sui.io/guides/developer/nautilus/community-dev-tools.md)
 - [Customize Nautilus](https://docs.sui.io/guides/developer/nautilus/customize-nautilus.md)
 - [Nautilus Index](https://docs.sui.io/guides/developer/nautilus/index.md)
-- [Marlin](https://docs.sui.io/guides/developer/nautilus/marlin.md)
 - [Nautilus Design](https://docs.sui.io/guides/developer/nautilus/nautilus-design.md)
 - [Nautilus Overview](https://docs.sui.io/guides/developer/nautilus/nautilus-overview.md)
 - [Seal](https://docs.sui.io/guides/developer/nautilus/seal.md)
@@ -176,6 +177,7 @@
 - [Packages Index](https://docs.sui.io/guides/developer/packages/index.md)
 - [Move Package
     Management](https://docs.sui.io/guides/developer/packages/move-package-management.md)
+- [Openzeppelin](https://docs.sui.io/guides/developer/packages/openzeppelin.md)
 - [Package Overview](https://docs.sui.io/guides/developer/packages/package-overview.md)
 - [Upgrade](https://docs.sui.io/guides/developer/packages/upgrade.md)
 
@@ -940,6 +942,10 @@
 - [Display Preview](https://docs.sui.io/standards/display/display-preview.md)
 - [Kiosk Apps](https://docs.sui.io/standards/kiosk-apps.md)
 - [Kiosk](https://docs.sui.io/standards/kiosk.md)
+- [Integrating Pas](https://docs.sui.io/standards/pas/integrating-pas.md)
+- [Pas Architecture](https://docs.sui.io/standards/pas/pas-architecture.md)
+- [Pas Workflows](https://docs.sui.io/standards/pas/pas-workflows.md)
+- [Querying Assets](https://docs.sui.io/standards/pas/querying-assets.md)
 - [Payment Kit](https://docs.sui.io/standards/payment-kit.md)
 - [Sagat](https://docs.sui.io/standards/sagat.md)
 - [Wallet Standard](https://docs.sui.io/standards/wallet-standard.md)
