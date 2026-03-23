@@ -415,7 +415,19 @@ impl IngestionClient {
             .total_ingested_objects
             .inc_by(data.object_set.len() as u64);
 
-        let chain_id = *self.get_or_init_chain_id(checkpoint).await?;
+        let chain_id = *self
+            .chain_id
+            .get_or_try_init(async || {
+                // Avoid an extra call to the ingestion client if we just read checkpoint 0 because
+                // the chain_id is this checkpoint's digest.
+                let chain_id = if checkpoint == 0 {
+                    ChainIdentifier::from(*data.summary.digest())
+                } else {
+                    self.get_chain_id(checkpoint).await?
+                };
+                Ok::<_, IngestionError>(chain_id)
+            })
+            .await?;
 
         Ok(CheckpointEnvelope {
             checkpoint: Arc::new(data),
@@ -423,47 +435,41 @@ impl IngestionClient {
         })
     }
 
-    async fn get_or_init_chain_id(&self, checkpoint: u64) -> IngestionResult<&ChainIdentifier> {
-        let chain_id_client = self.client.clone();
-        let chain_id = self
-            .chain_id
-            .get_or_try_init(|| {
-                let request = move || {
-                    let client = chain_id_client.clone();
-                    async move {
-                        let chain_id = with_slow_future_monitor(
-                            client.chain_id(),
-                            SLOW_OPERATION_WARNING_THRESHOLD,
-                            /* on_threshold_exceeded =*/
-                            || {
-                                warn!(
-                                    checkpoint,
-                                    threshold_ms = SLOW_OPERATION_WARNING_THRESHOLD.as_millis(),
-                                    "Slow chain_id operation detected"
-                                );
-                            },
-                        )
-                        .await
-                        .map_err(|err| {
-                            let reason = "chain_id";
-                            warn!(reason, "Retrying due to error: {err}");
-                            backoff::Error::transient(FetchError(checkpoint, err))
-                        })?;
+    async fn get_chain_id(&self, checkpoint: u64) -> IngestionResult<ChainIdentifier> {
+        let request = move || {
+            let client = self.client.clone();
+            async move {
+                let chain_id = with_slow_future_monitor(
+                    client.chain_id(),
+                    SLOW_OPERATION_WARNING_THRESHOLD,
+                    /* on_threshold_exceeded =*/
+                    || {
+                        warn!(
+                            checkpoint,
+                            threshold_ms = SLOW_OPERATION_WARNING_THRESHOLD.as_millis(),
+                            "Slow chain_id operation detected"
+                        );
+                    },
+                )
+                .await
+                .map_err(|err| {
+                    let reason = "chain_id";
+                    warn!(reason, "Retrying due to error: {err}");
+                    backoff::Error::transient(FetchError(checkpoint, err))
+                })?;
 
-                        Ok::<ChainIdentifier, backoff::Error<IngestionError>>(chain_id)
-                    }
-                };
+                Ok::<ChainIdentifier, backoff::Error<IngestionError>>(chain_id)
+            }
+        };
 
-                // Keep backing off until we are waiting for the max interval, but don't give up.
-                let backoff = ExponentialBackoff {
-                    max_interval: MAX_TRANSIENT_RETRY_INTERVAL,
-                    max_elapsed_time: None,
-                    ..Default::default()
-                };
+        // Keep backing off until we are waiting for the max interval, but don't give up.
+        let backoff = ExponentialBackoff {
+            max_interval: MAX_TRANSIENT_RETRY_INTERVAL,
+            max_elapsed_time: None,
+            ..Default::default()
+        };
 
-                backoff::future::retry(backoff, request)
-            })
-            .await?;
+        let chain_id = backoff::future::retry(backoff, request).await?;
         Ok(chain_id)
     }
 }
@@ -740,5 +746,31 @@ mod tests {
             .with_label_values(&["mock_permanent_error"])
             .get();
         assert_eq!(errors, 1);
+    }
+
+    async fn test_checkpoint_chain_id(checkpoint: u64) -> ChainIdentifier {
+        let (client, mock) = setup_test();
+
+        for checkpoint in 0..=1 {
+            let checkpoint_data =
+                CheckpointData::Raw(Bytes::from(test_checkpoint_data(checkpoint)));
+            mock.checkpoints.insert(checkpoint, checkpoint_data);
+        }
+
+        client.checkpoint(checkpoint).await.unwrap().chain_id
+    }
+
+    #[tokio::test]
+    async fn test_chain_id_checkpoint_0() {
+        let chain_id = test_checkpoint_chain_id(0).await;
+        // chain_id comes from checkpoint 0's digest
+        assert_ne!(chain_id, MockIngestionClient::mock_chain_id());
+    }
+
+    #[tokio::test]
+    async fn test_chain_id_checkpoint_1() {
+        let chain_id = test_checkpoint_chain_id(1).await;
+        // chain_id comes from calling MockIngestionClient::chain_id
+        assert_eq!(chain_id, MockIngestionClient::mock_chain_id());
     }
 }
