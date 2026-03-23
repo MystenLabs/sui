@@ -169,14 +169,13 @@ public(package) fun request_add_validator_candidate(
     validator: Validator,
     ctx: &mut TxContext,
 ) {
-    // The next assertions are not critical for the protocol, but they are here to catch problematic configs earlier.
-    assert!(
-        !self.is_duplicate_with_active_validator(&validator)
-            && !self.is_duplicate_with_pending_validator(&validator),
-        EDuplicateValidator,
-    );
     let validator_address = validator.sui_address();
     assert!(!self.validator_candidates.contains(validator_address), EAlreadyValidatorCandidate);
+
+    // The next assertions are not critical for the protocol, but they are here
+    // to catch problematic configs earlier.
+    assert!(!self.is_duplicate_with_active_validator(&validator), EDuplicateValidator);
+    assert!(!self.is_duplicate_with_pending_validator(&validator), EDuplicateValidator);
 
     assert!(validator.is_preactive(), EValidatorNotCandidate);
     // Add validator to the candidates mapping and the pool id mappings so that users can start
@@ -260,11 +259,8 @@ public(package) fun assert_no_pending_or_active_duplicates(
     validator: &Validator,
 ) {
     // Validator here must be active or pending, and thus must be identified as duplicate exactly once.
-    assert!(
-        count_duplicates_vec(&self.active_validators, validator) +
-            count_duplicates_tablevec(&self.pending_active_validators, validator) == 1,
-        EDuplicateValidator,
-    );
+    assert!(!self.is_duplicate_with_active_validator(validator), EDuplicateValidator);
+    assert!(!self.is_duplicate_with_pending_validator(validator), EDuplicateValidator);
 }
 
 /// Called by `sui_system`, to remove a validator.
@@ -715,34 +711,23 @@ public(package) fun is_active_validator_by_sui_address(
 /// Checks whether `new_validator` is duplicate with any currently active validators.
 /// It differs from `is_active_validator_by_sui_address` in that the former checks
 /// only the sui address but this function looks at more metadata.
-fun is_duplicate_with_active_validator(self: &ValidatorSet, new_validator: &Validator): bool {
-    is_duplicate_validator(&self.active_validators, new_validator)
-}
-
-public(package) fun is_duplicate_validator(
-    validators: &vector<Validator>,
-    new_validator: &Validator,
-): bool {
-    count_duplicates_vec(validators, new_validator) > 0
-}
-
-fun count_duplicates_vec(validators: &vector<Validator>, validator: &Validator): u64 {
-    validators.count!(|v| v.is_duplicate(validator))
+fun is_duplicate_with_active_validator(self: &ValidatorSet, search: &Validator): bool {
+    self
+        .active_validators
+        .any!(|v| v.sui_address() != search.sui_address() && v.is_duplicate(search))
 }
 
 /// Checks whether `new_validator` is duplicate with any currently pending validators.
-fun is_duplicate_with_pending_validator(self: &ValidatorSet, new_validator: &Validator): bool {
-    count_duplicates_tablevec(&self.pending_active_validators, new_validator) > 0
-}
-
-fun count_duplicates_tablevec(validators: &TableVec<Validator>, validator: &Validator): u64 {
-    let mut result = 0;
-    validators.length().do!(|i| {
-        if (validators[i].is_duplicate(validator)) {
-            result = result + 1;
-        };
-    });
-    result
+fun is_duplicate_with_pending_validator(self: &ValidatorSet, search: &Validator): bool {
+    'search: {
+        self.pending_active_validators.length().do!(|i| {
+            let v = &self.pending_active_validators[i];
+            if (v.sui_address() != search.sui_address() && v.is_duplicate(search)) {
+                return 'search true
+            };
+        });
+        false
+    }
 }
 
 /// Get mutable reference to either a candidate or an active validator by address.
