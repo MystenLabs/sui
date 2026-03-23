@@ -73,6 +73,10 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
             cfg.enable_accumulators_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
             cfg
         }))
         .build()
@@ -126,6 +130,19 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
         "First gas payment should be a coin reservation, got digest: {:?}",
         first_payment.2
     );
+
+    // Execute the simulated transaction to verify it's valid
+    let simulated_tx = &response.transaction.transaction;
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(simulated_tx)
+        .await
+        .expect("Simulated transaction should execute successfully");
+    assert!(
+        effects.status().is_ok(),
+        "Executed transaction should succeed, got: {:?}",
+        effects.status()
+    );
 }
 
 // =============================================================================
@@ -139,6 +156,8 @@ async fn test_has_ab_has_coins_no_gas_coin() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
             cfg.enable_accumulators_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
             cfg
         }))
         .build()
@@ -177,6 +196,19 @@ async fn test_has_ab_has_coins_no_gas_coin() {
 
     // When GasCoin is not used, prefer AB if sufficient, else coins.
     // No coin reservation needed since user doesn't need access to combined balance.
+
+    // Execute the simulated transaction to verify it's valid
+    let simulated_tx = &response.transaction.transaction;
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(simulated_tx)
+        .await
+        .expect("Simulated transaction should execute successfully");
+    assert!(
+        effects.status().is_ok(),
+        "Executed transaction should succeed, got: {:?}",
+        effects.status()
+    );
 }
 
 // =============================================================================
@@ -193,6 +225,8 @@ async fn test_has_ab_no_coins() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
             cfg.enable_accumulators_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
             cfg
         }))
         .build()
@@ -224,6 +258,26 @@ async fn test_has_ab_no_coins() {
         "Expected simulation to succeed, got: {:?}",
         result.err()
     );
+
+    let response = result.unwrap();
+    assert!(
+        response.transaction.effects.status().is_ok(),
+        "Expected successful execution, got: {:?}",
+        response.transaction.effects.status()
+    );
+
+    // Execute the simulated transaction to verify it's valid
+    let simulated_tx = &response.transaction.transaction;
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(simulated_tx)
+        .await
+        .expect("Simulated transaction should execute successfully");
+    assert!(
+        effects.status().is_ok(),
+        "Executed transaction should succeed, got: {:?}",
+        effects.status()
+    );
 }
 
 // =============================================================================
@@ -237,6 +291,8 @@ async fn test_no_ab_has_coins() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
             cfg.enable_accumulators_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
             cfg
         }))
         .build()
@@ -280,6 +336,19 @@ async fn test_no_ab_has_coins() {
             i
         );
     }
+
+    // Execute the simulated transaction to verify it's valid
+    let simulated_tx = &response.transaction.transaction;
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(simulated_tx)
+        .await
+        .expect("Simulated transaction should execute successfully");
+    assert!(
+        effects.status().is_ok(),
+        "Executed transaction should succeed, got: {:?}",
+        effects.status()
+    );
 }
 
 // =============================================================================
@@ -292,6 +361,8 @@ async fn test_insufficient_funds() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
             cfg.enable_accumulators_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
             cfg
         }))
         .build()
@@ -372,6 +443,19 @@ async fn test_protocol_config_disabled() {
         "Expected successful execution, got: {:?}",
         response.transaction.effects.status()
     );
+
+    // Execute the simulated transaction to verify it's valid
+    let simulated_tx = &response.transaction.transaction;
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(simulated_tx)
+        .await
+        .expect("Simulated transaction should execute successfully");
+    assert!(
+        effects.status().is_ok(),
+        "Executed transaction should succeed, got: {:?}",
+        effects.status()
+    );
 }
 
 // =============================================================================
@@ -385,6 +469,8 @@ async fn test_combined_ab_and_coins_needed() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
             cfg.enable_accumulators_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
             cfg
         }))
         .build()
@@ -438,5 +524,18 @@ async fn test_combined_ab_and_coins_needed() {
     assert!(
         ParsedDigest::is_coin_reservation_digest(&first_payment.2),
         "First gas payment should be a coin reservation when combining AB + coins"
+    );
+
+    // Execute the simulated transaction to verify it's valid
+    let simulated_tx = &response.transaction.transaction;
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(simulated_tx)
+        .await
+        .expect("Simulated transaction should execute successfully");
+    assert!(
+        effects.status().is_ok(),
+        "Executed transaction should succeed, got: {:?}",
+        effects.status()
     );
 }
