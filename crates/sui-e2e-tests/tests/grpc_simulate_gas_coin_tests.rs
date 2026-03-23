@@ -16,9 +16,10 @@
 use sui_macros::sim_test;
 use sui_types::{
     base_types::SuiAddress,
+    coin_reservation::ParsedDigest,
     effects::TransactionEffectsAPI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Argument, TransactionData},
+    transaction::{Argument, TransactionData, TransactionDataAPI},
 };
 use test_cluster::addr_balance_test_env::TestEnvBuilder;
 
@@ -81,16 +82,16 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
     let (sender, _) = test_env.get_sender_and_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
 
-    // Fund sender's address balance with 5 SUI
+    // Fund sender's address balance with 10 SUI - sufficient on its own
     test_env
-        .fund_one_address_balance(sender, 5 * MIST_PER_SUI)
+        .fund_one_address_balance(sender, 10 * MIST_PER_SUI)
         .await;
 
     // Refresh gas after funding
     let (sender, gas) = test_env.get_sender_and_gas(0);
 
-    // Build PTB that uses GasCoin
-    let amount = 1 * MIST_PER_SUI;
+    // Request 5 SUI - both AB (10 SUI) and coins (~30M SUI) can cover this independently
+    let amount = 5 * MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
     let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
@@ -111,7 +112,20 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
         response.transaction.effects.status()
     );
 
-    // TODO: Verify coin reservation is FIRST in gas payment once implemented
+    // Verify coin reservation is FIRST in gas payment
+    let gas_payment = response.transaction.transaction.gas_data().payment.clone();
+    assert!(
+        !gas_payment.is_empty(),
+        "Gas payment should not be empty when coins exist"
+    );
+
+    // First element should be a coin reservation (identified by magic in digest)
+    let first_payment = &gas_payment[0];
+    assert!(
+        ParsedDigest::is_coin_reservation_digest(&first_payment.2),
+        "First gas payment should be a coin reservation, got digest: {:?}",
+        first_payment.2
+    );
 }
 
 // =============================================================================
@@ -255,6 +269,17 @@ async fn test_no_ab_has_coins() {
     );
 
     // Verify no coin reservation was used (traditional coin payment)
+    let gas_payment = response.transaction.transaction.gas_data().payment.clone();
+    assert!(!gas_payment.is_empty(), "Gas payment should not be empty");
+
+    // No element should be a coin reservation
+    for (i, payment) in gas_payment.iter().enumerate() {
+        assert!(
+            !ParsedDigest::is_coin_reservation_digest(&payment.2),
+            "Gas payment[{}] should NOT be a coin reservation when no AB exists",
+            i
+        );
+    }
 }
 
 // =============================================================================
@@ -390,25 +415,27 @@ async fn test_combined_ab_and_coins_needed() {
 
     // This should succeed when the compat layer is implemented,
     // combining coins + AB via coin reservation.
-    // Until then, it may fail due to insufficient funds from coins alone.
-    match result {
-        Ok(response) => {
-            if response.transaction.effects.status().is_ok() {
-                // Success - compat layer combined both sources
-            } else {
-                // Expected to fail until compat layer is implemented
-                println!(
-                    "Combined funds test execution status: {:?}",
-                    response.transaction.effects.status()
-                );
-            }
-        }
-        Err(e) => {
-            // Expected to fail until compat layer is implemented
-            println!(
-                "Combined funds test simulation error (expected until impl): {}",
-                e
-            );
-        }
-    }
+    assert!(
+        result.is_ok(),
+        "Expected simulation to succeed with combined AB + coins, got: {:?}",
+        result.err()
+    );
+
+    let response = result.unwrap();
+    assert!(
+        response.transaction.effects.status().is_ok(),
+        "Expected successful execution with combined funds, got: {:?}",
+        response.transaction.effects.status()
+    );
+
+    // Verify coin reservation is used to combine both sources
+    let gas_payment = response.transaction.transaction.gas_data().payment.clone();
+    assert!(!gas_payment.is_empty(), "Gas payment should not be empty");
+
+    // First element should be a coin reservation
+    let first_payment = &gas_payment[0];
+    assert!(
+        ParsedDigest::is_coin_reservation_digest(&first_payment.2),
+        "First gas payment should be a coin reservation when combining AB + coins"
+    );
 }
