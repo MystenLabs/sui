@@ -15,6 +15,7 @@ use crate::{
     jit::{execution::ast::*, optimization::ast as input},
     natives::functions::NativeFunctions,
     shared::{
+        check_type_depth,
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
@@ -1646,6 +1647,16 @@ fn make_arena_type(
     module: &CompiledModule,
     tok: &SignatureToken,
 ) -> PartialVMResult<ArenaType> {
+    make_arena_type_impl(context, module, tok, 0)
+}
+
+fn make_arena_type_impl(
+    context: &PackageContext,
+    module: &CompiledModule,
+    tok: &SignatureToken,
+    depth: usize,
+) -> PartialVMResult<ArenaType> {
+    check_type_depth(depth)?;
     let res = match tok {
         SignatureToken::Bool => ArenaType::Bool,
         SignatureToken::U8 => ArenaType::U8,
@@ -1657,15 +1668,20 @@ fn make_arena_type(
         SignatureToken::Address => ArenaType::Address,
         SignatureToken::Signer => ArenaType::Signer,
         SignatureToken::TypeParameter(idx) => ArenaType::TyParam(*idx),
-        SignatureToken::Vector(inner_tok) => {
-            ArenaType::Vector(context.arena_box(make_arena_type(context, module, inner_tok)?)?)
+        SignatureToken::Vector(inner_tok) => ArenaType::Vector(context.arena_box(
+            make_arena_type_impl(context, module, inner_tok, depth.safe_add(1)?)?,
+        )?),
+        SignatureToken::Reference(inner_tok) => ArenaType::Reference(context.arena_box(
+            make_arena_type_impl(context, module, inner_tok, depth.safe_add(1)?)?,
+        )?),
+        SignatureToken::MutableReference(inner_tok) => {
+            ArenaType::MutableReference(context.arena_box(make_arena_type_impl(
+                context,
+                module,
+                inner_tok,
+                depth.safe_add(1)?,
+            )?)?)
         }
-        SignatureToken::Reference(inner_tok) => {
-            ArenaType::Reference(context.arena_box(make_arena_type(context, module, inner_tok)?)?)
-        }
-        SignatureToken::MutableReference(inner_tok) => ArenaType::MutableReference(
-            context.arena_box(make_arena_type(context, module, inner_tok)?)?,
-        ),
         SignatureToken::Datatype(sh_idx) => {
             let datatype_handle = module.datatype_handle_at(*sh_idx);
             let datatype_name = context
@@ -1684,7 +1700,7 @@ fn make_arena_type(
             let (sh_idx, tys) = &**inst;
             let type_parameters: Vec<_> = tys
                 .iter()
-                .map(|tok| make_arena_type(context, module, tok))
+                .map(|tok| make_arena_type_impl(context, module, tok, depth.safe_add(1)?))
                 .collect::<PartialVMResult<_>>()?;
             let type_parameters = context.arena_vec(type_parameters.into_iter())?;
             let datatype_handle = module.datatype_handle_at(*sh_idx);

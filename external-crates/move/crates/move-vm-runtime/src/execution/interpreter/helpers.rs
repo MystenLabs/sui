@@ -46,7 +46,7 @@ pub fn instantiate_single_type(ty: &ArenaType, ty_args: &[Type]) -> PartialVMRes
     if !ty_args.is_empty() {
         ty.subst(ty_args)
     } else {
-        Ok(ty.to_type())
+        ty.to_type()
     }
 }
 

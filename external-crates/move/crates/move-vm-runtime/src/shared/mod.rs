@@ -1,7 +1,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::shared::constants::TYPE_DEPTH_MAX;
+use move_binary_format::{errors::PartialVMResult, partial_vm_error};
 use std::{collections::HashMap, hash::Hash};
+
+/// Check that the current type traversal depth does not exceed `TYPE_DEPTH_MAX`.
+pub fn check_type_depth(depth: usize) -> PartialVMResult<()> {
+    if depth > TYPE_DEPTH_MAX {
+        return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
+    }
+    Ok(())
+}
 
 pub mod binary_cache;
 pub mod constants;

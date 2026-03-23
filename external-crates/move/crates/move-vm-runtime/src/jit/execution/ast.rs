@@ -12,7 +12,7 @@ use crate::{
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
-        constants::TYPE_DEPTH_MAX,
+        check_type_depth,
         safe_ops::SafeArithmetic as _,
         types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
@@ -981,8 +981,13 @@ impl VariantInstantiation {
 
 impl ArenaType {
     /// Convert to a runtime type by performing a deep copy
-    pub fn to_type(&self) -> Type {
-        match self {
+    pub fn to_type(&self) -> PartialVMResult<Type> {
+        self.to_type_impl(0)
+    }
+
+    fn to_type_impl(&self, depth: usize) -> PartialVMResult<Type> {
+        check_type_depth(depth)?;
+        Ok(match self {
             ArenaType::TyParam(idx) => Type::TyParam(*idx),
             ArenaType::Bool => Type::Bool,
             ArenaType::U8 => Type::U8,
@@ -993,16 +998,23 @@ impl ArenaType {
             ArenaType::U256 => Type::U256,
             ArenaType::Address => Type::Address,
             ArenaType::Signer => Type::Signer,
-            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type())),
-            ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type())),
-            ArenaType::MutableReference(ty) => Type::MutableReference(Box::new(ty.to_type())),
+            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type_impl(depth.safe_add(1)?)?)),
+            ArenaType::Reference(ty) => {
+                Type::Reference(Box::new(ty.to_type_impl(depth.safe_add(1)?)?))
+            }
+            ArenaType::MutableReference(ty) => {
+                Type::MutableReference(Box::new(ty.to_type_impl(depth.safe_add(1)?)?))
+            }
             ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
             ArenaType::DatatypeInstantiation(def_inst) => {
                 let (def_idx, instantiation) = &**def_inst;
-                let inst = instantiation.iter().map(|ty| ty.to_type()).collect();
+                let inst = instantiation
+                    .iter()
+                    .map(|ty| ty.to_type_impl(depth.safe_add(1)?))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
                 Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
             }
-        }
+        })
     }
 }
 
@@ -1078,34 +1090,49 @@ impl Type {
     ///
     /// This kept only for legacy reasons.
     /// New applications should not use this.
-    ///
+    pub fn size(&self) -> PartialVMResult<AbstractMemorySize> {
+        self.size_impl(0)
+    }
+
     /// SAFETY: Addition over `AbstractMemorySize` is saturating and so this is safe against
     /// overflow. See the implementation of [`Add`] for [`AbstractMemorySize`] in the
     /// [`move_core_types::gas_algebra`] module for more details on this and why this is safe.
     #[allow(clippy::arithmetic_side_effects)]
-    pub fn size(&self) -> AbstractMemorySize {
+    fn size_impl(&self, depth: usize) -> PartialVMResult<AbstractMemorySize> {
         use Type::*;
 
-        match self {
+        check_type_depth(depth)?;
+        Ok(match self {
             TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => {
                 Self::LEGACY_BASE_MEMORY_SIZE
             }
             Vector(ty) | Reference(ty) | MutableReference(ty) => {
-                Self::LEGACY_BASE_MEMORY_SIZE + ty.size()
+                Self::LEGACY_BASE_MEMORY_SIZE + ty.size_impl(depth.safe_add(1)?)?
             }
             Datatype(_) => Self::LEGACY_BASE_MEMORY_SIZE,
             DatatypeInstantiation(inst) => {
                 let (_, tys) = &**inst;
-                tys.iter()
-                    .fold(Self::LEGACY_BASE_MEMORY_SIZE, |acc, ty| acc + ty.size())
+                let mut acc = Self::LEGACY_BASE_MEMORY_SIZE;
+                for ty in tys {
+                    acc += ty.size_impl(depth.safe_add(1)?)?;
+                }
+                acc
             }
-        }
+        })
     }
 
     pub fn from_const_signature(constant_signature: &SignatureToken) -> PartialVMResult<Self> {
+        Self::from_const_signature_impl(constant_signature, 0)
+    }
+
+    fn from_const_signature_impl(
+        constant_signature: &SignatureToken,
+        depth: usize,
+    ) -> PartialVMResult<Self> {
         use SignatureToken as S;
         use Type as L;
 
+        check_type_depth(depth)?;
         Ok(match constant_signature {
             S::Bool => L::Bool,
             S::U8 => L::U8,
@@ -1115,7 +1142,10 @@ impl Type {
             S::U128 => L::U128,
             S::U256 => L::U256,
             S::Address => L::Address,
-            S::Vector(inner) => L::Vector(Box::new(Self::from_const_signature(inner)?)),
+            S::Vector(inner) => L::Vector(Box::new(Self::from_const_signature_impl(
+                inner,
+                depth.safe_add(1)?,
+            )?)),
             // Not yet supported
             S::Datatype(_) | S::DatatypeInstantiation(_) => {
                 return Err(partial_vm_error!(
@@ -1229,9 +1259,7 @@ macro_rules! impl_deep_subst {
             where
                 F: Fn(u16, usize) -> PartialVMResult<Type> + Copy,
             {
-                if depth > TYPE_DEPTH_MAX {
-                    return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
-                }
+                check_type_depth(depth)?;
                 let res = match self {
                     $ty::TyParam(idx) => subst(*idx, depth)?,
                     $ty::Bool => Type::Bool,

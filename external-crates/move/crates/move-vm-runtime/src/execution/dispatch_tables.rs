@@ -14,6 +14,7 @@ use crate::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Package, Type, TypeNodeCount, TypeSubst,
     },
     shared::{
+        check_type_depth,
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
             VALUE_DEPTH_MAX,
@@ -327,6 +328,11 @@ impl VMDispatchTables {
     // NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
     // fail.
     pub(crate) fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
+        self.load_type_impl(type_tag, 0)
+    }
+
+    fn load_type_impl(&self, type_tag: &TypeTag, depth: usize) -> VMResult<Type> {
+        check_type_depth(depth).map_err(|e| e.finish(Location::Undefined))?;
         Ok(match type_tag {
             TypeTag::Bool => Type::Bool,
             TypeTag::U8 => Type::U8,
@@ -337,7 +343,14 @@ impl VMDispatchTables {
             TypeTag::U256 => Type::U256,
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
-            TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt)?)),
+            TypeTag::Vector(tt) => Type::Vector(Box::new(
+                self.load_type_impl(
+                    tt,
+                    depth
+                        .safe_add(1)
+                        .map_err(|e| e.finish(Location::Undefined))?,
+                )?,
+            )),
             // NB: Note that this tag is slightly misnamed and used for all Datatypes.
             TypeTag::Struct(struct_tag) => {
                 let defining_id = struct_tag.address;
@@ -386,7 +399,14 @@ impl VMDispatchTables {
                 } else {
                     let mut type_params = vec![];
                     for ty_param in &struct_tag.type_params {
-                        type_params.push(self.load_type(ty_param)?);
+                        type_params.push(
+                            self.load_type_impl(
+                                ty_param,
+                                depth
+                                    .safe_add(1)
+                                    .map_err(|e| e.finish(Location::Undefined))?,
+                            )?,
+                        );
                     }
                     self.verify_ty_args(datatype.type_param_constraints(), &type_params)
                         .map_err(|e| e.finish(Location::Package(defining_id)))?;
@@ -416,6 +436,11 @@ impl VMDispatchTables {
     }
 
     pub(crate) fn abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {
+        self.abilities_impl(ty, 0)
+    }
+
+    fn abilities_impl(&self, ty: &Type, depth: usize) -> PartialVMResult<AbilitySet> {
+        check_type_depth(depth)?;
         match ty {
             Type::Bool
             | Type::U8
@@ -438,7 +463,7 @@ impl VMDispatchTables {
             Type::Vector(ty) => AbilitySet::polymorphic_abilities(
                 AbilitySet::VECTOR,
                 vec![false],
-                vec![self.abilities(ty)?],
+                vec![self.abilities_impl(ty, depth.safe_add(1)?)?],
             ),
             Type::Datatype(idx) => Ok(*self.resolve_type(idx)?.to_ref().abilities()),
             Type::DatatypeInstantiation(inst) => {
@@ -450,7 +475,7 @@ impl VMDispatchTables {
                     .map(|param| param.is_phantom);
                 let type_argument_abilities = type_args
                     .iter()
-                    .map(|arg| self.abilities(arg))
+                    .map(|arg| self.abilities_impl(arg, depth.safe_add(1)?))
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 AbilitySet::polymorphic_abilities(
                     *datatype_type.abilities(),
@@ -512,14 +537,15 @@ impl VMDispatchTables {
         &mut self,
         datatype_name: &VirtualTableKey,
     ) -> PartialVMResult<DepthFormula> {
-        let depth_formula = self.calculate_depth_of_datatype_and_cache(datatype_name)?;
-        Ok(depth_formula)
+        self.calculate_depth_of_datatype_and_cache(datatype_name, 0)
     }
 
     fn calculate_depth_of_datatype_and_cache(
         &mut self,
         datatype_name: &VirtualTableKey,
+        depth: usize,
     ) -> PartialVMResult<DepthFormula> {
+        check_type_depth(depth)?;
         // If we've already computed this datatypes depth, no more work remains to be done.
         if let Some(form) = self.cached_type_depth(datatype_name) {
             return Ok(form.clone());
@@ -532,12 +558,16 @@ impl VMDispatchTables {
                 .variants
                 .iter()
                 .flat_map(|variant_type| variant_type.fields.iter())
-                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type))
+                .map(|field_type| {
+                    self.calculate_depth_of_type_and_cache(field_type, depth.safe_add(1)?)
+                })
                 .collect::<PartialVMResult<Vec<_>>>()?,
             Datatype::Struct(struct_type) => struct_type
                 .fields
                 .iter()
-                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type))
+                .map(|field_type| {
+                    self.calculate_depth_of_type_and_cache(field_type, depth.safe_add(1)?)
+                })
                 .collect::<PartialVMResult<Vec<_>>>()?,
         };
         let mut formula = DepthFormula::normalize(formulas);
@@ -553,7 +583,9 @@ impl VMDispatchTables {
     fn calculate_depth_of_type_and_cache(
         &mut self,
         ty: &ArenaType,
+        depth: usize,
     ) -> PartialVMResult<DepthFormula> {
+        check_type_depth(depth)?;
         Ok(match ty {
             ArenaType::Bool
             | ArenaType::U8
@@ -566,14 +598,15 @@ impl VMDispatchTables {
             | ArenaType::U256 => DepthFormula::constant(1),
             // we should not see the reference here, we could instead give an invariant violation
             ArenaType::Vector(ty) | ArenaType::Reference(ty) | ArenaType::MutableReference(ty) => {
-                let mut inner = self.calculate_depth_of_type_and_cache(ty)?;
+                let mut inner = self.calculate_depth_of_type_and_cache(ty, depth.safe_add(1)?)?;
                 // add 1 for the vector itself
                 inner.add(1);
                 inner
             }
             ArenaType::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
             ArenaType::Datatype(datatype_key) => {
-                let datatype_formula = self.calculate_depth_of_datatype_and_cache(datatype_key)?;
+                let datatype_formula =
+                    self.calculate_depth_of_datatype_and_cache(datatype_key, depth.safe_add(1)?)?;
                 debug_assert!(datatype_formula.terms.is_empty());
                 datatype_formula
             }
@@ -584,10 +617,14 @@ impl VMDispatchTables {
                     .enumerate()
                     .map(|(idx, ty)| {
                         let var = checked_as!(idx, TypeParameterIndex)?;
-                        Ok((var, self.calculate_depth_of_type_and_cache(ty)?))
+                        Ok((
+                            var,
+                            self.calculate_depth_of_type_and_cache(ty, depth.safe_add(1)?)?,
+                        ))
                     })
                     .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
-                let datatype_formula = self.calculate_depth_of_datatype_and_cache(cache_idx)?;
+                let datatype_formula =
+                    self.calculate_depth_of_datatype_and_cache(cache_idx, depth.safe_add(1)?)?;
 
                 datatype_formula.subst(ty_arg_map)?
             }
@@ -598,15 +635,17 @@ impl VMDispatchTables {
     // Type Translation Helpers
     // -------------------------------------------
 
-    fn datatype_to_type_tag(
+    fn datatype_to_type_tag_impl(
         &self,
         datatype_name: &VirtualTableKey,
         ty_args: &[Type],
         tag_type: DatatypeTagType,
+        depth: usize,
     ) -> PartialVMResult<StructTag> {
+        check_type_depth(depth)?;
         let type_params = ty_args
             .iter()
-            .map(|ty| self.type_to_type_tag_impl(ty, tag_type))
+            .map(|ty| self.type_to_type_tag_impl(ty, tag_type, depth.safe_add(1)?))
             .collect::<PartialVMResult<Vec<_>>>()?;
         let datatype = self.resolve_type(datatype_name)?.to_ref();
 
@@ -636,7 +675,9 @@ impl VMDispatchTables {
         &self,
         ty: &Type,
         tag_type: DatatypeTagType,
+        depth: usize,
     ) -> PartialVMResult<TypeTag> {
+        check_type_depth(depth)?;
         Ok(match ty {
             Type::Bool => TypeTag::Bool,
             Type::U8 => TypeTag::U8,
@@ -647,17 +688,25 @@ impl VMDispatchTables {
             Type::U256 => TypeTag::U256,
             Type::Address => TypeTag::Address,
             Type::Signer => TypeTag::Signer,
-            Type::Vector(ty) => {
-                TypeTag::Vector(Box::new(self.type_to_type_tag_impl(ty, tag_type)?))
-            }
-            Type::Datatype(gidx) => {
-                TypeTag::Struct(Box::new(self.datatype_to_type_tag(gidx, &[], tag_type)?))
-            }
+            Type::Vector(ty) => TypeTag::Vector(Box::new(self.type_to_type_tag_impl(
+                ty,
+                tag_type,
+                depth.safe_add(1)?,
+            )?)),
+            Type::Datatype(gidx) => TypeTag::Struct(Box::new(self.datatype_to_type_tag_impl(
+                gidx,
+                &[],
+                tag_type,
+                depth.safe_add(1)?,
+            )?)),
             Type::DatatypeInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                TypeTag::Struct(Box::new(
-                    self.datatype_to_type_tag(gidx, ty_args, tag_type)?,
-                ))
+                TypeTag::Struct(Box::new(self.datatype_to_type_tag_impl(
+                    gidx,
+                    ty_args,
+                    tag_type,
+                    depth.safe_add(1)?,
+                )?))
             }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(partial_vm_error!(
@@ -759,7 +808,7 @@ impl VMDispatchTables {
         Ok(result)
     }
 
-    fn datatype_to_fully_annotated_layout(
+    fn datatype_to_fully_annotated_layout_impl(
         &self,
         datatype_name: &VirtualTableKey,
         ty_args: &[Type],
@@ -768,7 +817,7 @@ impl VMDispatchTables {
     ) -> PartialVMResult<annotated_value::MoveDatatypeLayout> {
         let ty = self.resolve_type(datatype_name)?.to_ref();
         let struct_tag =
-            self.datatype_to_type_tag(datatype_name, ty_args, DatatypeTagType::Defining)?;
+            self.datatype_to_type_tag_impl(datatype_name, ty_args, DatatypeTagType::Defining, 0)?;
         self.check_count_and_depth(count, &depth)?;
 
         let type_layout = match ty.datatype_info.inner_ref() {
@@ -866,11 +915,11 @@ impl VMDispatchTables {
                 self.type_to_fully_annotated_layout_impl(ty, count, depth.safe_add(1)?)?,
             )),
             Type::Datatype(gidx) => self
-                .datatype_to_fully_annotated_layout(gidx, &[], count, depth)?
+                .datatype_to_fully_annotated_layout_impl(gidx, &[], count, depth)?
                 .into_layout(),
             Type::DatatypeInstantiation(inst) => {
                 let (gidx, ty_args) = &**inst;
-                self.datatype_to_fully_annotated_layout(gidx, ty_args, count, depth)?
+                self.datatype_to_fully_annotated_layout_impl(gidx, ty_args, count, depth)?
                     .into_layout()
             }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
@@ -886,11 +935,11 @@ impl VMDispatchTables {
     }
 
     pub(crate) fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.type_to_type_tag_impl(ty, DatatypeTagType::Defining)
+        self.type_to_type_tag_impl(ty, DatatypeTagType::Defining, 0)
     }
 
     pub(crate) fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.type_to_type_tag_impl(ty, DatatypeTagType::Runtime)
+        self.type_to_type_tag_impl(ty, DatatypeTagType::Runtime, 0)
     }
 
     pub(crate) fn type_to_type_layout(
@@ -905,7 +954,7 @@ impl VMDispatchTables {
         &self,
         ty: &ArenaType,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
-        self.type_to_fully_annotated_layout(&ty.to_type())
+        self.type_to_fully_annotated_layout(&ty.to_type()?)
     }
 
     pub(crate) fn type_to_fully_annotated_layout(
