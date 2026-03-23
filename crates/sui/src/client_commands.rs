@@ -386,9 +386,18 @@ pub enum SuiClientCommands {
         #[clap(long)]
         to: KeyIdentity,
 
-        /// The amount to send (in MIST).
-        #[clap(long)]
-        amount: u64,
+        /// The amount to send (in MIST). Required unless --all-coins is specified.
+        #[clap(
+            long,
+            conflicts_with = "all_coins",
+            required_unless_present = "all_coins"
+        )]
+        amount: Option<u64>,
+
+        /// Send all coins of the specified type to the recipient's address balance.
+        /// Conflicts with --amount and --stateless.
+        #[clap(long, conflicts_with_all = ["amount", "stateless"])]
+        all_coins: bool,
 
         /// The coin type to send (e.g., "0x2::sui::SUI"). Defaults to SUI.
         #[clap(long, value_parser = parse_sui_type_tag)]
@@ -396,7 +405,8 @@ pub enum SuiClientCommands {
 
         /// If set, draws all funds (including gas payment) from the sender's address balances.
         /// This creates a fully stateless transaction with no owned object inputs.
-        #[clap(long)]
+        /// Conflicts with --all-coins.
+        #[clap(long, conflicts_with = "all_coins")]
         stateless: bool,
 
         #[clap(flatten)]
@@ -1362,6 +1372,7 @@ impl SuiClientCommands {
             SuiClientCommands::SendFunds {
                 to,
                 amount,
+                all_coins,
                 coin_type,
                 stateless,
                 gas_data,
@@ -1378,20 +1389,24 @@ impl SuiClientCommands {
 
                 let is_sui = coin_type_tag.to_canonical_string(true) == SUI_COIN_TYPE;
 
-                let use_address_balance = if stateless {
-                    true
-                } else {
-                    let coin_struct_tag: StructTag = format!(
-                        "0x2::coin::Coin<{}>",
-                        coin_type_tag.to_canonical_string(true)
-                    )
-                    .parse()
-                    .expect("valid struct tag");
-                    let balance_info = client.get_balance(signer, &coin_struct_tag).await?;
-                    let coin_balance = balance_info.coin_balance();
-                    let address_balance = balance_info.address_balance();
+                let coin_struct_tag: StructTag = format!(
+                    "0x2::coin::Coin<{}>",
+                    coin_type_tag.to_canonical_string(true)
+                )
+                .parse()
+                .expect("valid struct tag");
+                let balance_info = client.get_balance(signer, &coin_struct_tag).await?;
+                let coin_balance = balance_info.coin_balance();
+                let address_balance = balance_info.address_balance();
 
-                    if coin_balance >= amount {
+                let (amount, use_address_balance) = if all_coins {
+                    // --all-coins uses all coin balance (cannot be combined with --stateless)
+                    ensure!(coin_balance > 0, "No coins available to send");
+                    (coin_balance, false)
+                } else if let Some(amount) = amount {
+                    let use_address_balance = if stateless {
+                        true
+                    } else if coin_balance >= amount {
                         false
                     } else if address_balance >= amount {
                         true
@@ -1403,7 +1418,10 @@ impl SuiClientCommands {
                             coin_balance,
                             address_balance
                         );
-                    }
+                    };
+                    (amount, use_address_balance)
+                } else {
+                    bail!("Either --amount or --all-coins must be specified");
                 };
 
                 let mut builder = ProgrammableTransactionBuilder::new();
