@@ -186,23 +186,15 @@ fn execute_command<Mode: ExecutionMode>(
                         .cloned(),
                 )
             }
-            let mut arguments: Vec<CtxValue> = context.arguments(arguments)?;
+            let arguments: Vec<CtxValue> = context.arguments(arguments)?;
             if is_gas_coin_send_funds {
                 assert_invariant!(arguments.len() == 2, "coin::send_funds should have 2 args");
-                let value = {
-                    let coin = arguments.remove(0);
-                    let (coin, value) = coin.owned_coin_value()?;
-                    arguments.insert(0, coin);
-                    value
-                };
                 let recipient = arguments.last().unwrap().to_address()?;
-                context
-                    .record_gas_coin_transfer(GasCoinTransfer::SendFunds { value, recipient })?;
+                context.record_gas_coin_transfer(GasCoinTransfer::SendFunds { recipient })?;
             }
             let res = context.vm_move_call(function, arguments, trace_builder_opt);
             trace_utils::trace_move_call_end(trace_builder_opt);
-            let result = res?;
-            result
+            res?
         }
         T::Command__::TransferObjects(objects, recipient) => {
             // Check if any object is the gas coin moved by value before consuming

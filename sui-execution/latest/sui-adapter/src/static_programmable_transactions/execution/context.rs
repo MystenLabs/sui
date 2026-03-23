@@ -50,10 +50,7 @@ use move_vm_runtime::{
 use mysten_common::debug_fatal;
 use nonempty::nonempty;
 use quick_cache::unsync::Cache as QCache;
-use serde::{
-    Deserialize,
-    de::{self, DeserializeSeed},
-};
+use serde::{Deserialize, de::DeserializeSeed};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
@@ -202,9 +199,6 @@ pub(crate) enum GasCoinTransfer {
     TransferObjects,
     /// Sent with the `sui::coin::send_funds` command
     SendFunds {
-        /// Balance before destruction via send funds.
-        /// In other words, the amount sent to the recipient.
-        value: u64,
         /// The recipient for `send_funds`.
         recipient: AccountAddress,
     },
@@ -1531,13 +1525,6 @@ impl CtxValue {
             ty,
             values.into_iter().map(|v| v.0).collect(),
         )?))
-    }
-
-    pub fn owned_coin_value(self) -> Result<(CtxValue, u64), ExecutionError> {
-        let mut local = Locals::new(vec![Some(self.0)])?;
-        let value = local.local(0)?.borrow()?.coin_ref_value()?;
-        let coin = CtxValue(local.local(0)?.move_()?);
-        Ok((coin, value))
     }
 
     pub fn coin_ref_value(self) -> Result<u64, ExecutionError> {
