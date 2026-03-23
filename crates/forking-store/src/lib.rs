@@ -26,7 +26,7 @@
 //! cache chains:
 //! - [`stores::ReadThroughStore`] - cache over read-only source
 //! - [`stores::WriteThroughStore`] - hot cache over writable backing store
-//! - [`stores::CompositeStore`] - route each capability to a different chain
+//! - [`stores::ForkingStore`] - route each capability to a different chain
 
 mod gql_queries;
 pub mod node;

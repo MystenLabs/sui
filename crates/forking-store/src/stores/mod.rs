@@ -6,7 +6,7 @@
 //! This module provides various store implementations for caching and retrieving
 //! Sui blockchain data.
 
-mod composite;
+mod forking;
 mod filesystem;
 mod graphql;
 mod in_memory;
@@ -14,7 +14,7 @@ mod in_memory_lru;
 mod read_through;
 mod write_through;
 
-pub use composite::CompositeStore;
+pub use forking::ForkingStore;
 pub use filesystem::{
     CHECKPOINT_CONTENTS_DIGEST_INDEX_FILE, CHECKPOINT_DIGEST_INDEX_FILE, CHECKPOINT_DIR,
     CHECKPOINT_FILE_EXTENSION, CHECKPOINT_LATEST_FILE, CHECKPOINT_VERSIONS_FILE, DATA_STORE_DIR,

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Composite store skeleton.
+//! Forking store skeleton.
 
 use crate::{
     CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
@@ -17,17 +17,17 @@ use sui_types::{
     supported_protocol_versions::ProtocolConfig,
 };
 
-/// A router that delegates each capability to a dedicated backing chain.
+/// A router that delegates each capability to a dedicated store.
 #[derive(Debug)]
-pub struct CompositeStore<Tx, Epoch, Obj, Ckpt> {
+pub struct ForkingStore<Tx, Epoch, Obj, Ckpt> {
     transactions: Tx,
     epochs: Epoch,
     objects: Obj,
     checkpoints: Ckpt,
 }
 
-impl<Tx, Epoch, Obj, Ckpt> CompositeStore<Tx, Epoch, Obj, Ckpt> {
-    /// Create a new composite store.
+impl<Tx, Epoch, Obj, Ckpt> ForkingStore<Tx, Epoch, Obj, Ckpt> {
+    /// Create a new forking store.
     pub fn new(transactions: Tx, epochs: Epoch, objects: Obj, checkpoints: Ckpt) -> Self {
         Self {
             transactions,
@@ -37,28 +37,28 @@ impl<Tx, Epoch, Obj, Ckpt> CompositeStore<Tx, Epoch, Obj, Ckpt> {
         }
     }
 
-    /// Return the transaction chain.
+    /// Return the transaction store.
     pub fn transactions(&self) -> &Tx {
         &self.transactions
     }
 
-    /// Return the epoch chain.
+    /// Return the epoch store.
     pub fn epochs(&self) -> &Epoch {
         &self.epochs
     }
 
-    /// Return the object chain.
+    /// Return the object store.
     pub fn objects(&self) -> &Obj {
         &self.objects
     }
 
-    /// Return the checkpoint chain.
+    /// Return the checkpoint store.
     pub fn checkpoints(&self) -> &Ckpt {
         &self.checkpoints
     }
 }
 
-impl<Tx, Epoch, Obj, Ckpt> TransactionStore for CompositeStore<Tx, Epoch, Obj, Ckpt>
+impl<Tx, Epoch, Obj, Ckpt> TransactionStore for ForkingStore<Tx, Epoch, Obj, Ckpt>
 where
     Tx: TransactionStore,
 {
@@ -66,11 +66,11 @@ where
         &self,
         _tx_digest: &str,
     ) -> Result<Option<TransactionInfo>, Error> {
-        todo!("composite transaction routing is not implemented in the skeleton")
+        todo!("forking transaction routing is not implemented in the skeleton")
     }
 }
 
-impl<Tx, Epoch, Obj, Ckpt> TransactionStoreWriter for CompositeStore<Tx, Epoch, Obj, Ckpt>
+impl<Tx, Epoch, Obj, Ckpt> TransactionStoreWriter for ForkingStore<Tx, Epoch, Obj, Ckpt>
 where
     Tx: TransactionStoreWriter,
 {
@@ -79,42 +79,42 @@ where
         _tx_digest: &str,
         _transaction_info: TransactionInfo,
     ) -> Result<(), Error> {
-        todo!("composite transaction writes are not implemented in the skeleton")
+        todo!("forking transaction writes are not implemented in the skeleton")
     }
 }
 
-impl<Tx, Epoch, Obj, Ckpt> EpochStore for CompositeStore<Tx, Epoch, Obj, Ckpt>
+impl<Tx, Epoch, Obj, Ckpt> EpochStore for ForkingStore<Tx, Epoch, Obj, Ckpt>
 where
     Epoch: EpochStore,
 {
     fn epoch_info(&self, _epoch: u64) -> Result<Option<EpochData>, Error> {
-        todo!("composite epoch routing is not implemented in the skeleton")
+        todo!("forking epoch routing is not implemented in the skeleton")
     }
 
     fn protocol_config(&self, _epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
-        todo!("composite protocol-config routing is not implemented in the skeleton")
+        todo!("forking protocol-config routing is not implemented in the skeleton")
     }
 }
 
-impl<Tx, Epoch, Obj, Ckpt> EpochStoreWriter for CompositeStore<Tx, Epoch, Obj, Ckpt>
+impl<Tx, Epoch, Obj, Ckpt> EpochStoreWriter for ForkingStore<Tx, Epoch, Obj, Ckpt>
 where
     Epoch: EpochStoreWriter,
 {
     fn write_epoch_info(&self, _epoch: u64, _epoch_data: EpochData) -> Result<(), Error> {
-        todo!("composite epoch writes are not implemented in the skeleton")
+        todo!("forking epoch writes are not implemented in the skeleton")
     }
 }
 
-impl<Tx, Epoch, Obj, Ckpt> ObjectStore for CompositeStore<Tx, Epoch, Obj, Ckpt>
+impl<Tx, Epoch, Obj, Ckpt> ObjectStore for ForkingStore<Tx, Epoch, Obj, Ckpt>
 where
     Obj: ObjectStore,
 {
     fn get_objects(&self, _keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
-        todo!("composite object routing is not implemented in the skeleton")
+        todo!("forking object routing is not implemented in the skeleton")
     }
 }
 
-impl<Tx, Epoch, Obj, Ckpt> ObjectStoreWriter for CompositeStore<Tx, Epoch, Obj, Ckpt>
+impl<Tx, Epoch, Obj, Ckpt> ObjectStoreWriter for ForkingStore<Tx, Epoch, Obj, Ckpt>
 where
     Obj: ObjectStoreWriter,
 {
@@ -124,11 +124,11 @@ where
         _object: Object,
         _actual_version: u64,
     ) -> Result<(), Error> {
-        todo!("composite object writes are not implemented in the skeleton")
+        todo!("forking object writes are not implemented in the skeleton")
     }
 }
 
-impl<Tx, Epoch, Obj, Ckpt> CheckpointStore for CompositeStore<Tx, Epoch, Obj, Ckpt>
+impl<Tx, Epoch, Obj, Ckpt> CheckpointStore for ForkingStore<Tx, Epoch, Obj, Ckpt>
 where
     Ckpt: CheckpointStore,
 {
@@ -136,38 +136,38 @@ where
         &self,
         _sequence: CheckpointSequenceNumber,
     ) -> Result<Option<FullCheckpointData>, Error> {
-        todo!("composite checkpoint routing is not implemented in the skeleton")
+        todo!("forking checkpoint routing is not implemented in the skeleton")
     }
 
     fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
-        todo!("composite latest-checkpoint routing is not implemented in the skeleton")
+        todo!("forking latest-checkpoint routing is not implemented in the skeleton")
     }
 
     fn get_sequence_by_checkpoint_digest(
         &self,
         _digest: &CheckpointDigest,
     ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("composite checkpoint-digest routing is not implemented in the skeleton")
+        todo!("forking checkpoint-digest routing is not implemented in the skeleton")
     }
 
     fn get_sequence_by_contents_digest(
         &self,
         _digest: &CheckpointContentsDigest,
     ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("composite contents-digest routing is not implemented in the skeleton")
+        todo!("forking contents-digest routing is not implemented in the skeleton")
     }
 }
 
-impl<Tx, Epoch, Obj, Ckpt> CheckpointStoreWriter for CompositeStore<Tx, Epoch, Obj, Ckpt>
+impl<Tx, Epoch, Obj, Ckpt> CheckpointStoreWriter for ForkingStore<Tx, Epoch, Obj, Ckpt>
 where
     Ckpt: CheckpointStoreWriter,
 {
     fn write_checkpoint(&self, _checkpoint: &FullCheckpointData) -> Result<(), Error> {
-        todo!("composite checkpoint writes are not implemented in the skeleton")
+        todo!("forking checkpoint writes are not implemented in the skeleton")
     }
 }
 
-impl<Tx, Epoch, Obj, Ckpt> StoreSummary for CompositeStore<Tx, Epoch, Obj, Ckpt>
+impl<Tx, Epoch, Obj, Ckpt> StoreSummary for ForkingStore<Tx, Epoch, Obj, Ckpt>
 where
     Tx: StoreSummary,
     Epoch: StoreSummary,
@@ -175,7 +175,7 @@ where
     Ckpt: StoreSummary,
 {
     fn summary<W: Write>(&self, writer: &mut W) -> Result<()> {
-        writeln!(writer, "CompositeStore")?;
+        writeln!(writer, "ForkingStore")?;
         self.transactions.summary(writer)?;
         self.epochs.summary(writer)?;
         self.objects.summary(writer)?;

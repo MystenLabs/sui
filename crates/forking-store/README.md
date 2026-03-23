@@ -26,7 +26,7 @@ transaction/epoch/object capability set.
 | `LruMemoryStore` | Bounded LRU cache | Yes | Yes |
 | `ReadThroughStore` | Read-through cache over a source | Yes | Primary only |
 | `WriteThroughStore` | Hot cache over a writable backing store | Yes | Yes |
-| `CompositeStore` | Routes each capability to a different chain | Yes | Yes |
+| `ForkingStore` | Routes each capability to a different chain | Yes | Yes |
 
 ## Composition Primitives
 
@@ -38,7 +38,7 @@ transaction/epoch/object capability set.
 - Reads `Primary` first, falls back to `Secondary`, and caches successful misses into `Primary`.
 - Direct writes update `Secondary` first, then `Primary`.
 
-`CompositeStore<Tx, Epoch, Obj, Ckpt>`
+`ForkingStore<Tx, Epoch, Obj, Ckpt>`
 - Routes each capability to its dedicated chain.
 - It is a router, not a search-order combinator.
 
@@ -48,7 +48,7 @@ transaction/epoch/object capability set.
 use sui_data_store::{
     Node,
     stores::{
-        CompositeStore, DataStore, FileSystemStore, InMemoryStore, ReadThroughStore,
+        ForkingStore, DataStore, FileSystemStore, InMemoryStore, ReadThroughStore,
         WriteThroughStore,
     },
 };
@@ -68,7 +68,7 @@ let transactions = hot_mem_fs;
 let epochs = /* another chain or the same chain */;
 let objects = /* e.g. WriteThroughStore<InMemoryStore, ReadThroughStore<FileSystemStore, DataStore>> */;
 let checkpoints = /* another chain or the same chain */;
-let store = CompositeStore::new(transactions, epochs, objects, checkpoints);
+let store = ForkingStore::new(transactions, epochs, objects, checkpoints);
 ```
 
 ## Version Queries
