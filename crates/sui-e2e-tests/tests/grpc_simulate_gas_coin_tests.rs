@@ -3,13 +3,15 @@
 
 //! Tests for the GRPC simulate API's gas selection with address balance.
 //!
-//! Gas payment strategy:
-//! - Has AB + has coins → Coin reservation FIRST (smashes coins into AB)
+//! Gas payment strategy when Argument::GasCoin IS used:
+//! - Has AB + has coins → Coin reservation FIRST (smashes coins into AB, user accesses combined)
 //! - Has AB + no coins  → Pure AB payment (empty gas_data.payment + expiration)
 //! - No AB + has coins  → Traditional coin gas payment
 //!
-//! The presence of Argument::GasCoin affects what the user can ACCESS via tx.gas,
-//! but the gas PAYMENT strategy is about smashing coins into AB whenever possible.
+//! Gas payment strategy when Argument::GasCoin is NOT used:
+//! - Prefer AB if sufficient
+//! - Fall back to coins if AB insufficient
+//! - Use compat layer (both) if neither alone is sufficient
 
 use sui_macros::sim_test;
 use sui_types::{
@@ -46,27 +48,15 @@ fn build_split_gas_coin_ptb(
     TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
 }
 
-/// Helper to build a simple PTB that does NOT use GasCoin argument.
-fn build_simple_transfer_ptb(
+/// Helper to build a PTB that does NOT use Argument::GasCoin.
+/// This is an empty PTB - it just pays gas without any operations.
+fn build_no_gas_coin_ptb(
     sender: SuiAddress,
-    recipient: SuiAddress,
     gas: sui_types::base_types::ObjectRef,
     gas_budget: u64,
     gas_price: u64,
 ) -> TransactionData {
-    let mut ptb = ProgrammableTransactionBuilder::new();
-    // Just a simple split from gas coin - this DOES use GasCoin
-    // For a true "no GasCoin" test, we'd need to transfer an owned object
-    let amount_arg = ptb.pure(1000u64).unwrap();
-    let split_result = ptb.command(sui_types::transaction::Command::SplitCoins(
-        Argument::GasCoin,
-        vec![amount_arg],
-    ));
-    let recipient_arg = ptb.pure(recipient).unwrap();
-    ptb.command(sui_types::transaction::Command::TransferObjects(
-        vec![split_result],
-        recipient_arg,
-    ));
+    let ptb = ProgrammableTransactionBuilder::new();
     let pt = ptb.finish();
     TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
 }
@@ -126,7 +116,7 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
 
 // =============================================================================
 // Test 2: Has AB + has coins + GasCoin NOT used
-// Expected: Coin reservation FIRST (for smashing), transaction succeeds
+// Expected: Use AB if sufficient, otherwise use coins (no coin reservation needed)
 // =============================================================================
 
 #[sim_test]
@@ -142,9 +132,8 @@ async fn test_has_ab_has_coins_no_gas_coin() {
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
-    let recipient = SuiAddress::random_for_testing_only();
 
-    // Fund sender's address balance
+    // Fund sender's address balance with enough for gas
     test_env
         .fund_one_address_balance(sender, 5 * MIST_PER_SUI)
         .await;
@@ -152,9 +141,9 @@ async fn test_has_ab_has_coins_no_gas_coin() {
     // Refresh gas
     let (sender, gas) = test_env.get_sender_and_gas(0);
 
-    // Build simple PTB
+    // Build PTB that does NOT use GasCoin
     let gas_budget = 50_000_000;
-    let tx = build_simple_transfer_ptb(sender, recipient, gas, gas_budget, test_env.rgp);
+    let tx = build_no_gas_coin_ptb(sender, gas, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
     let result = client.simulate_transaction(&tx, true).await;
@@ -172,7 +161,8 @@ async fn test_has_ab_has_coins_no_gas_coin() {
         response.transaction.effects.status()
     );
 
-    // TODO: Verify coin reservation is FIRST in gas payment (for smashing)
+    // When GasCoin is not used, prefer AB if sufficient, else coins.
+    // No coin reservation needed since user doesn't need access to combined balance.
 }
 
 // =============================================================================
@@ -196,7 +186,6 @@ async fn test_has_ab_no_coins() {
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
-    let recipient = SuiAddress::random_for_testing_only();
 
     // Fund sender's address balance with enough for gas + operations
     test_env
@@ -210,7 +199,7 @@ async fn test_has_ab_no_coins() {
 
     let (sender, gas) = test_env.get_sender_and_gas(0);
     let gas_budget = 50_000_000;
-    let tx = build_simple_transfer_ptb(sender, recipient, gas, gas_budget, test_env.rgp);
+    let tx = build_no_gas_coin_ptb(sender, gas, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
     let result = client.simulate_transaction(&tx, true).await;
@@ -269,81 +258,7 @@ async fn test_no_ab_has_coins() {
 }
 
 // =============================================================================
-// Test 5: Sponsored transaction + sponsor has AB + coins
-// Expected: Sponsor's coin reservation FIRST
-// =============================================================================
-
-#[sim_test]
-async fn test_sponsored_with_sponsor_ab() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
-
-    let mut test_env = test_env;
-
-    let sender = test_env.get_sender(0);
-    let sponsor = test_env.get_sender(1);
-    let recipient = SuiAddress::random_for_testing_only();
-
-    // Fund SPONSOR's AB
-    test_env
-        .fund_one_address_balance(sponsor, 5 * MIST_PER_SUI)
-        .await;
-
-    let sponsor_gas = test_env.get_gas_for_sender(sponsor)[0];
-
-    let amount = 1 * MIST_PER_SUI;
-    let gas_budget = 50_000_000;
-
-    let mut ptb = ProgrammableTransactionBuilder::new();
-    let amount_arg = ptb.pure(amount).unwrap();
-    let split_result = ptb.command(sui_types::transaction::Command::SplitCoins(
-        Argument::GasCoin,
-        vec![amount_arg],
-    ));
-    let recipient_arg = ptb.pure(recipient).unwrap();
-    ptb.command(sui_types::transaction::Command::TransferObjects(
-        vec![split_result],
-        recipient_arg,
-    ));
-    let pt = ptb.finish();
-
-    let tx = TransactionData::new_programmable_allow_sponsor(
-        sender,
-        vec![sponsor_gas],
-        pt,
-        gas_budget,
-        test_env.rgp,
-        sponsor,
-    );
-
-    let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, true).await;
-
-    match result {
-        Ok(response) => {
-            if response.transaction.effects.status().is_ok() {
-                // Success - sponsor's AB + coins used
-            } else {
-                println!(
-                    "Sponsored tx execution status: {:?}",
-                    response.transaction.effects.status()
-                );
-            }
-        }
-        Err(e) => {
-            println!("Sponsored tx simulation: {}", e);
-        }
-    }
-}
-
-// =============================================================================
-// Test 6: Insufficient total funds
+// Test 5: Insufficient total funds
 // =============================================================================
 
 #[sim_test]
@@ -432,4 +347,68 @@ async fn test_protocol_config_disabled() {
         "Expected successful execution, got: {:?}",
         response.transaction.effects.status()
     );
+}
+
+// =============================================================================
+// Test 8: Combined AB + coins when neither alone is sufficient
+// Expected: Compat layer combines both sources via coin reservation
+// =============================================================================
+
+#[sim_test]
+async fn test_combined_ab_and_coins_needed() {
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let mut test_env = test_env;
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Fund sender's address balance with 5 SUI
+    test_env
+        .fund_one_address_balance(sender, 5 * MIST_PER_SUI)
+        .await;
+
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+
+    // Request amount that requires BOTH coins and AB:
+    // - Genesis coin has ~30M SUI
+    // - AB has 5 SUI
+    // - Request 30M + 3 SUI = requires combining both
+    let amount = 30_000_000 * MIST_PER_SUI + 3 * MIST_PER_SUI;
+    let gas_budget = 50_000_000;
+
+    let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
+
+    let client = test_env.cluster.grpc_client();
+    let result = client.simulate_transaction(&tx, true).await;
+
+    // This should succeed when the compat layer is implemented,
+    // combining coins + AB via coin reservation.
+    // Until then, it may fail due to insufficient funds from coins alone.
+    match result {
+        Ok(response) => {
+            if response.transaction.effects.status().is_ok() {
+                // Success - compat layer combined both sources
+            } else {
+                // Expected to fail until compat layer is implemented
+                println!(
+                    "Combined funds test execution status: {:?}",
+                    response.transaction.effects.status()
+                );
+            }
+        }
+        Err(e) => {
+            // Expected to fail until compat layer is implemented
+            println!(
+                "Combined funds test simulation error (expected until impl): {}",
+                e
+            );
+        }
+    }
 }

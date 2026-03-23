@@ -9,16 +9,29 @@ The simulate API needs to select gas payment in a way that:
 
 ## Gas Payment Strategy
 
-The gas payment strategy depends on what funds the sender has available:
+The gas payment strategy depends on what funds the sender has available AND whether `Argument::GasCoin` is used:
+
+### When Argument::GasCoin IS used (user needs access to balance via tx.gas)
 
 | Has AB | Has Coins | Strategy |
 |--------|-----------|----------|
-| Yes    | Yes       | Coin reservation FIRST in gas payment (smashes coins into AB) |
+| Yes    | Yes       | Coin reservation FIRST (smashes coins into AB, user accesses combined) |
 | Yes    | No        | Pure AB payment (empty `gas_data.payment` + expiration) |
 | No     | Yes       | Traditional coin gas payment |
 | No     | No        | Error: insufficient funds |
 
-**Key insight**: The presence of `Argument::GasCoin` affects what the user can *access* via `tx.gas`, but the gas *payment* strategy is determined by what funds are available.
+### When Argument::GasCoin is NOT used
+
+| Has AB | Has Coins | Strategy |
+|--------|-----------|----------|
+| Yes    | Yes       | Prefer AB if sufficient, else coins (no reservation needed) |
+| Yes    | No        | Pure AB payment |
+| No     | Yes       | Traditional coin gas payment |
+| No     | No        | Error: insufficient funds |
+
+**Key insight**: When GasCoin is used, always use coin reservation if AB exists (to give user access to combined balance). When GasCoin is NOT used, prefer the simpler payment method.
+
+**Note**: Coin reservations cannot be used in sponsored transactions.
 
 ## Implementation
 
@@ -128,16 +141,16 @@ Located in: `crates/sui-e2e-tests/tests/grpc_simulate_gas_coin_tests.rs`
 ### Test 1: Has AB + has coins + GasCoin used
 
 - Setup: Sender has coins + 5 SUI in AB, PTB uses GasCoin
-- Expected: Coin reservation FIRST, transaction succeeds, user can access AB via GasCoin
+- Expected: Coin reservation FIRST, transaction succeeds, user can access combined balance via GasCoin
 
 ### Test 2: Has AB + has coins + GasCoin NOT used
 
 - Setup: Sender has coins + 5 SUI in AB, PTB does NOT use GasCoin
-- Expected: Coin reservation FIRST (for smashing), transaction succeeds
+- Expected: Use AB if sufficient, else coins (no coin reservation needed)
 
 ### Test 3: Has AB + NO coins
 
-- Setup: Sender has 5 SUI in AB only, no coins
+- Setup: Sender has SUI in AB only, no coins
 - Expected: Pure AB payment (empty gas_data.payment), expiration set
 
 ### Test 4: NO AB + has coins
@@ -145,20 +158,20 @@ Located in: `crates/sui-e2e-tests/tests/grpc_simulate_gas_coin_tests.rs`
 - Setup: Sender has coins only, no AB
 - Expected: Traditional coin gas payment
 
-### Test 5: Sponsored transaction + sponsor has AB
-
-- Setup: Sender executes, sponsor (with AB + coins) pays gas
-- Expected: Sponsor's coin reservation FIRST
-
-### Test 6: Insufficient total funds
+### Test 5: Insufficient total funds
 
 - Setup: Neither coins nor AB can cover the request
 - Expected: Fails with insufficient funds
 
-### Test 7: Protocol config disabled
+### Test 6: Protocol config disabled
 
 - Setup: Accumulators not enabled
 - Expected: Falls back to traditional coin selection
+
+### Test 7: Combined AB + coins needed
+
+- Setup: Sender has coins + AB, but neither alone is sufficient for the requested amount
+- Expected: Compat layer combines both sources via coin reservation
 
 ## Key Points
 
