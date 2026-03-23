@@ -465,6 +465,9 @@ async fn test_protocol_config_disabled() {
 
 #[sim_test]
 async fn test_combined_ab_and_coins_needed() {
+    use sui_test_transaction_builder::TestTransactionBuilder;
+    use sui_types::crypto::{AccountKeyPair, SuiKeyPair, get_key_pair};
+
     let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
@@ -477,31 +480,76 @@ async fn test_combined_ab_and_coins_needed() {
         .await;
 
     let mut test_env = test_env;
-    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    // Create a new account with limited funds to demonstrate the combined scenario
+    let (limited_sender, keypair): (SuiAddress, AccountKeyPair) = get_key_pair();
+    let keypair = SuiKeyPair::Ed25519(keypair);
     let recipient = SuiAddress::random_for_testing_only();
 
-    // Fund sender's address balance with 10 SUI
-    test_env
-        .fund_one_address_balance(sender, 10 * MIST_PER_SUI)
-        .await;
+    // Add the new account to the wallet so we can sign transactions
+    test_env.cluster.wallet.add_account(None, keypair).await;
 
-    let (sender, gas) = test_env.get_sender_and_gas(0);
+    // Use genesis account to transfer 10 SUI coin to limited_sender
+    let (genesis_sender, genesis_gas) = test_env.get_sender_and_gas(0);
+    let coin_amount = 10 * MIST_PER_SUI;
+    let transfer_tx = TestTransactionBuilder::new(genesis_sender, genesis_gas, test_env.rgp)
+        .transfer_sui(Some(coin_amount), limited_sender)
+        .build();
+    let (_, effects) = test_env
+        .exec_tx_directly(transfer_tx)
+        .await
+        .expect("Transfer should succeed");
+    assert!(effects.status().is_ok());
 
-    // Request amount that requires BOTH coins and AB:
-    // - Genesis coin starts with 30M SUI
-    // - After funding 10 SUI to AB: coin has ~29,999,989 SUI (10 SUI transferred + gas)
-    // - AB has 10 SUI
-    // - Request 29,999,995 SUI - requires coin (~29,999,989) + ~6 SUI from AB
-    let amount = 29_999_995 * MIST_PER_SUI;
+    // Find the coin that was created for limited_sender
+    let created_coin = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| {
+            matches!(owner, sui_types::object::Owner::AddressOwner(addr) if *addr == limited_sender)
+        })
+        .map(|(obj_ref, _)| *obj_ref)
+        .expect("Should have created a coin for limited_sender");
+
+    // Fund limited_sender's address balance with 5 SUI (from genesis account)
+    let (genesis_sender, genesis_gas) = test_env.get_sender_and_gas(0);
+    let ab_amount = 5 * MIST_PER_SUI;
+    let fund_ab_tx = TestTransactionBuilder::new(genesis_sender, genesis_gas, test_env.rgp)
+        .transfer_sui_to_address_balance(
+            sui_test_transaction_builder::FundSource::coin(genesis_gas),
+            vec![(ab_amount, limited_sender)],
+        )
+        .build();
+    let (_, effects) = test_env
+        .exec_tx_directly(fund_ab_tx)
+        .await
+        .expect("Fund AB should succeed");
+    assert!(effects.status().is_ok());
+
+    // Now limited_sender has:
+    // - Coin: 10 SUI
+    // - AB: 5 SUI
+    // - Total: 15 SUI
+    //
+    // Request 12 SUI - this requires BOTH sources:
+    // - Coin alone (10 SUI) is insufficient
+    // - AB alone (5 SUI) is insufficient
+    // - Combined (15 SUI) is sufficient
+    let request_amount = 12 * MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
-    let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
+    let tx = build_split_gas_coin_ptb(
+        limited_sender,
+        request_amount,
+        recipient,
+        created_coin,
+        gas_budget,
+        test_env.rgp,
+    );
 
     let client = test_env.cluster.grpc_client();
     let result = client.simulate_transaction(&tx, true).await;
 
-    // This should succeed when the compat layer is implemented,
-    // combining coins + AB via coin reservation.
     assert!(
         result.is_ok(),
         "Expected simulation to succeed with combined AB + coins, got: {:?}",
@@ -519,7 +567,7 @@ async fn test_combined_ab_and_coins_needed() {
     let gas_payment = response.transaction.transaction.gas_data().payment.clone();
     assert!(!gas_payment.is_empty(), "Gas payment should not be empty");
 
-    // First element should be a coin reservation
+    // First element should be a coin reservation (AB contribution)
     let first_payment = &gas_payment[0];
     assert!(
         ParsedDigest::is_coin_reservation_digest(&first_payment.2),
