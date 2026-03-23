@@ -4,8 +4,8 @@
 //! GraphQL-backed store skeleton.
 
 use crate::{
-    CheckpointStore, EpochData, EpochStore, FullCheckpointData, ObjectKey, ObjectStore,
-    SetupStore, StoreSummary, TransactionInfo, TransactionStore, node::Node,
+    CheckpointStore, EpochData, EpochStore, FullCheckpointData, ObjectKey, ObjectStore, SetupStore,
+    StoreSummary, TransactionInfo, TransactionStore, node::Node,
 };
 use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
