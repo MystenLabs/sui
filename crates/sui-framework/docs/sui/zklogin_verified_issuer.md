@@ -194,9 +194,9 @@ Aborts with <code><a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verifie
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_verify_zklogin_issuer">verify_zklogin_issuer</a>(address_seed: u256, <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>: String, ctx: &<b>mut</b> TxContext) {
     <b>let</b> sender = ctx.sender();
     <b>assert</b>!(<a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_check_zklogin_issuer">check_zklogin_issuer</a>(sender, address_seed, &<a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>), <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_EInvalidProof">EInvalidProof</a>);
-    <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(
+    transfer::transfer(
         <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_VerifiedIssuer">VerifiedIssuer</a> {
-            id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+            id: object::new(ctx),
             <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_owner">owner</a>: sender,
             <a href="../sui/zklogin_verified_issuer.md#sui_zklogin_verified_issuer_issuer">issuer</a>,
         },

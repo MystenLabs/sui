@@ -265,9 +265,9 @@ Create a new Display<T> object with a set of fields.
 ): <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt; {
     <b>let</b> len = <a href="../sui/display.md#sui_display_fields">fields</a>.length();
     <b>assert</b>!(len == values.length(), <a href="../sui/display.md#sui_display_EVecLengthMismatch">EVecLengthMismatch</a>);
-    <b>let</b> <b>mut</b> <a href="../sui/display.md#sui_display">display</a> = <a href="../sui/display.md#sui_display_new">new</a>&lt;T&gt;(pub, ctx);
-    <a href="../sui/display.md#sui_display_fields">fields</a>.zip_do!(values, |field, value| <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display.md#sui_display_add_internal">add_internal</a>(field, value));
-    <a href="../sui/display.md#sui_display">display</a>
+    <b>let</b> <b>mut</b> display = <a href="../sui/display.md#sui_display_new">new</a>&lt;T&gt;(pub, ctx);
+    <a href="../sui/display.md#sui_display_fields">fields</a>.zip_do!(values, |field, value| display.<a href="../sui/display.md#sui_display_add_internal">add_internal</a>(field, value));
+    display
 }
 </code></pre>
 
@@ -292,7 +292,7 @@ Create a new empty Display<T> object and keep it.
 
 
 <pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/display.md#sui_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
-    <a href="../sui/transfer.md#sui_transfer_public_transfer">transfer::public_transfer</a>(<a href="../sui/display.md#sui_display_new">new</a>&lt;T&gt;(pub, ctx), ctx.sender())
+    transfer::public_transfer(<a href="../sui/display.md#sui_display_new">new</a>&lt;T&gt;(pub, ctx), ctx.sender())
 }
 </code></pre>
 
@@ -307,7 +307,7 @@ Create a new empty Display<T> object and keep it.
 Manually bump the version and emit an event with the updated version's contents.
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/display.md#sui_display_update_version">update_version</a>&lt;T: key&gt;(<a href="../sui/display.md#sui_display">display</a>: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/display.md#sui_display_update_version">update_version</a>&lt;T: key&gt;(display: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -316,12 +316,12 @@ Manually bump the version and emit an event with the updated version's contents.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/display.md#sui_display_update_version">update_version</a>&lt;T: key&gt;(<a href="../sui/display.md#sui_display">display</a>: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt;) {
-    <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display.md#sui_display_version">version</a> = <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display.md#sui_display_version">version</a> + 1;
-    <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/display.md#sui_display_VersionUpdated">VersionUpdated</a>&lt;T&gt; {
-        <a href="../sui/display.md#sui_display_version">version</a>: <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display.md#sui_display_version">version</a>,
-        <a href="../sui/display.md#sui_display_fields">fields</a>: *&<a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display.md#sui_display_fields">fields</a>,
-        id: <a href="../sui/display.md#sui_display">display</a>.id.to_inner(),
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/display.md#sui_display_update_version">update_version</a>&lt;T: key&gt;(display: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt;) {
+    display.<a href="../sui/display.md#sui_display_version">version</a> = display.<a href="../sui/display.md#sui_display_version">version</a> + 1;
+    event::emit(<a href="../sui/display.md#sui_display_VersionUpdated">VersionUpdated</a>&lt;T&gt; {
+        <a href="../sui/display.md#sui_display_version">version</a>: display.<a href="../sui/display.md#sui_display_version">version</a>,
+        <a href="../sui/display.md#sui_display_fields">fields</a>: *&display.<a href="../sui/display.md#sui_display_fields">fields</a>,
+        id: display.id.to_inner(),
     })
 }
 </code></pre>
@@ -520,7 +520,7 @@ Read the <code><a href="../sui/display.md#sui_display_fields">fields</a></code> 
 Allow destroying legacy display objects.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/display.md#sui_display_destroy">destroy</a>&lt;T: key&gt;(<a href="../sui/display.md#sui_display">display</a>: <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/display.md#sui_display_destroy">destroy</a>&lt;T: key&gt;(display: <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -529,8 +529,8 @@ Allow destroying legacy display objects.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/display.md#sui_display_destroy">destroy</a>&lt;T: key&gt;(<a href="../sui/display.md#sui_display">display</a>: <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt;) {
-    <b>let</b> <a href="../sui/display.md#sui_display_Display">Display</a> { id, .. } = <a href="../sui/display.md#sui_display">display</a>;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/display.md#sui_display_destroy">destroy</a>&lt;T: key&gt;(display: <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt;) {
+    <b>let</b> <a href="../sui/display.md#sui_display_Display">Display</a> { id, .. } = display;
     id.delete();
 }
 </code></pre>
@@ -556,13 +556,13 @@ Internal function to create a new <code><a href="../sui/display.md#sui_display_D
 
 
 <pre><code><b>fun</b> <a href="../sui/display.md#sui_display_create_internal">create_internal</a>&lt;T: key&gt;(ctx: &<b>mut</b> TxContext): <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt; {
-    <b>let</b> uid = <a href="../sui/object.md#sui_object_new">object::new</a>(ctx);
-    <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/display.md#sui_display_DisplayCreated">DisplayCreated</a>&lt;T&gt; {
+    <b>let</b> uid = object::new(ctx);
+    event::emit(<a href="../sui/display.md#sui_display_DisplayCreated">DisplayCreated</a>&lt;T&gt; {
         id: uid.to_inner(),
     });
     <a href="../sui/display.md#sui_display_Display">Display</a> {
         id: uid,
-        <a href="../sui/display.md#sui_display_fields">fields</a>: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
+        <a href="../sui/display.md#sui_display_fields">fields</a>: vec_map::empty(),
         <a href="../sui/display.md#sui_display_version">version</a>: 0,
     }
 }
@@ -579,7 +579,7 @@ Internal function to create a new <code><a href="../sui/display.md#sui_display_D
 Private method for inserting fields without security checks.
 
 
-<pre><code><b>fun</b> <a href="../sui/display.md#sui_display_add_internal">add_internal</a>&lt;T: key&gt;(<a href="../sui/display.md#sui_display">display</a>: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>, value: <a href="../std/string.md#std_string_String">std::string::String</a>)
+<pre><code><b>fun</b> <a href="../sui/display.md#sui_display_add_internal">add_internal</a>&lt;T: key&gt;(display: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">sui::display::Display</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>, value: <a href="../std/string.md#std_string_String">std::string::String</a>)
 </code></pre>
 
 
@@ -588,8 +588,8 @@ Private method for inserting fields without security checks.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/display.md#sui_display_add_internal">add_internal</a>&lt;T: key&gt;(<a href="../sui/display.md#sui_display">display</a>: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
-    <a href="../sui/display.md#sui_display">display</a>.<a href="../sui/display.md#sui_display_fields">fields</a>.insert(name, value)
+<pre><code><b>fun</b> <a href="../sui/display.md#sui_display_add_internal">add_internal</a>&lt;T: key&gt;(display: &<b>mut</b> <a href="../sui/display.md#sui_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
+    display.<a href="../sui/display.md#sui_display_fields">fields</a>.insert(name, value)
 }
 </code></pre>
 

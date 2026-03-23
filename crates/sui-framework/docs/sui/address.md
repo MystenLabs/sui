@@ -150,7 +150,7 @@ Convert <code>a</code> into BCS-encoded bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_to_bytes">to_bytes</a>(a: <b>address</b>): vector&lt;u8&gt; {
-    <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&a)
+    bcs::to_bytes(&a)
 }
 </code></pre>
 
@@ -175,7 +175,7 @@ Convert <code>a</code> to a hex-encoded ASCII string
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_to_ascii_string">to_ascii_string</a>(a: <b>address</b>): ascii::String {
-    <a href="../sui/hex.md#sui_hex_encode">hex::encode</a>(<a href="../sui/address.md#sui_address_to_bytes">to_bytes</a>(a)).<a href="../sui/address.md#sui_address_to_ascii_string">to_ascii_string</a>()
+    hex::encode(<a href="../sui/address.md#sui_address_to_bytes">to_bytes</a>(a)).<a href="../sui/address.md#sui_address_to_ascii_string">to_ascii_string</a>()
 }
 </code></pre>
 

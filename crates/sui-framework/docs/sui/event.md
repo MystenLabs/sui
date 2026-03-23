@@ -70,7 +70,7 @@ The type <code>T</code> is the main way to index the event, and can contain
 phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(MyEvent&lt;<b>phantom</b> T&gt;)</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit">emit</a>&lt;T: <b>copy</b>, drop&gt;(<a href="../sui/event.md#sui_event">event</a>: T)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit">emit</a>&lt;T: <b>copy</b>, drop&gt;(event: T)
 </code></pre>
 
 
@@ -79,7 +79,7 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit">emit</a>&lt;T: <b>copy</b> + drop&gt;(<a href="../sui/event.md#sui_event">event</a>: T);
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit">emit</a>&lt;T: <b>copy</b> + drop&gt;(event: T);
 </code></pre>
 
 
@@ -97,7 +97,7 @@ defines the event type <code>T</code>.
 Only the package that defines the type <code>T</code> can emit authenticated events to this stream.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated">emit_authenticated</a>&lt;T: <b>copy</b>, drop&gt;(<a href="../sui/event.md#sui_event">event</a>: T)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated">emit_authenticated</a>&lt;T: <b>copy</b>, drop&gt;(event: T)
 </code></pre>
 
 
@@ -106,10 +106,10 @@ Only the package that defines the type <code>T</code> can emit authenticated eve
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated">emit_authenticated</a>&lt;T: <b>copy</b> + drop&gt;(<a href="../sui/event.md#sui_event">event</a>: T) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated">emit_authenticated</a>&lt;T: <b>copy</b> + drop&gt;(event: T) {
     <b>let</b> stream_id = type_name::original_id&lt;T&gt;();
-    <b>let</b> accumulator_addr = <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">accumulator::accumulator_address</a>&lt;EventStreamHead&gt;(stream_id);
-    <a href="../sui/event.md#sui_event_emit_authenticated_impl">emit_authenticated_impl</a>&lt;EventStreamHead, T&gt;(accumulator_addr, stream_id, <a href="../sui/event.md#sui_event">event</a>);
+    <b>let</b> accumulator_addr = accumulator::accumulator_address&lt;EventStreamHead&gt;(stream_id);
+    <a href="../sui/event.md#sui_event_emit_authenticated_impl">emit_authenticated_impl</a>&lt;EventStreamHead, T&gt;(accumulator_addr, stream_id, event);
 }
 </code></pre>
 
@@ -123,7 +123,7 @@ Only the package that defines the type <code>T</code> can emit authenticated eve
 
 
 
-<pre><code><b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated_impl">emit_authenticated_impl</a>&lt;StreamHeadT, T: <b>copy</b>, drop&gt;(accumulator_id: <b>address</b>, stream: <b>address</b>, <a href="../sui/event.md#sui_event">event</a>: T)
+<pre><code><b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated_impl">emit_authenticated_impl</a>&lt;StreamHeadT, T: <b>copy</b>, drop&gt;(accumulator_id: <b>address</b>, stream: <b>address</b>, event: T)
 </code></pre>
 
 
@@ -135,7 +135,7 @@ Only the package that defines the type <code>T</code> can emit authenticated eve
 <pre><code><b>native</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated_impl">emit_authenticated_impl</a>&lt;StreamHeadT, T: <b>copy</b> + drop&gt;(
     accumulator_id: <b>address</b>,
     stream: <b>address</b>,
-    <a href="../sui/event.md#sui_event">event</a>: T,
+    event: T,
 );
 </code></pre>
 

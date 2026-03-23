@@ -138,7 +138,7 @@ and actions performed on it must be confirmed in a matching <code><a href="../su
 <dd>
 </dd>
 <dt>
-<code><a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;</code>
+<code>balance: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;</code>
 </dt>
 <dd>
  The Balance of the <code><a href="../sui/token.md#sui_token_Token">Token</a></code>.
@@ -258,7 +258,7 @@ or <code><a href="../sui/token.md#sui_token_confirm_request_mut">confirm_request
 </dt>
 <dd>
  Name of the Action to look up in the Policy. Name can be one of the
- default actions: <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code>, <code><a href="../sui/token.md#sui_token_spend">spend</a></code>, <code><a href="../sui/token.md#sui_token_to_coin">to_coin</a></code>, <code><a href="../sui/token.md#sui_token_from_coin">from_coin</a></code> or a
+ default actions: <code><a href="../sui/token.md#sui_token_transfer">transfer</a></code>, <code><a href="../sui/token.md#sui_token_spend">spend</a></code>, <code><a href="../sui/token.md#sui_token_to_coin">to_coin</a></code>, <code><a href="../sui/token.md#sui_token_from_coin">from_coin</a></code> or a
  custom action.
 </dd>
 <dt>
@@ -277,7 +277,7 @@ or <code><a href="../sui/token.md#sui_token_confirm_request_mut">confirm_request
 <code><a href="../sui/token.md#sui_token_recipient">recipient</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;</code>
 </dt>
 <dd>
- Recipient is only available in <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> action.
+ Recipient is only available in <code><a href="../sui/token.md#sui_token_transfer">transfer</a></code> action.
 </dd>
 <dt>
 <code><a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;</code>
@@ -463,7 +463,7 @@ A Tag for the <code><a href="../sui/token.md#sui_token_spend">spend</a></code> a
 
 <a name="sui_token_TRANSFER"></a>
 
-A Tag for the <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> action.
+A Tag for the <code><a href="../sui/token.md#sui_token_transfer">transfer</a></code> action.
 
 
 <pre><code><b>const</b> <a href="../sui/token.md#sui_token_TRANSFER">TRANSFER</a>: vector&lt;u8&gt; = vector[116, 114, 97, 110, 115, 102, 101, 114];
@@ -516,13 +516,13 @@ hence it is safe to use it for authorization.
     ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a>&lt;T&gt;) {
     <b>let</b> policy = <a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a> {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-        <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>: <a href="../sui/balance.md#sui_balance_zero">balance::zero</a>(),
-        <a href="../sui/token.md#sui_token_rules">rules</a>: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
+        id: object::new(ctx),
+        <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>: balance::zero(),
+        <a href="../sui/token.md#sui_token_rules">rules</a>: vec_map::empty(),
     };
     <b>let</b> cap = <a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a> {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-        `<b>for</b>`: <a href="../sui/object.md#sui_object_id">object::id</a>(&policy),
+        id: object::new(ctx),
+        `<b>for</b>`: object::id(&policy),
     };
     (policy, cap)
 }
@@ -550,11 +550,11 @@ shared after initialization.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_share_policy">share_policy</a>&lt;T&gt;(policy: <a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;) {
-    <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/token.md#sui_token_TokenPolicyCreated">TokenPolicyCreated</a>&lt;T&gt; {
-        id: <a href="../sui/object.md#sui_object_id">object::id</a>(&policy),
+    event::emit(<a href="../sui/token.md#sui_token_TokenPolicyCreated">TokenPolicyCreated</a>&lt;T&gt; {
+        id: object::id(&policy),
         is_mutable: <b>true</b>,
     });
-    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(policy)
+    transfer::share_object(policy)
 }
 </code></pre>
 
@@ -571,7 +571,7 @@ Transfer a <code><a href="../sui/token.md#sui_token_Token">Token</a></code> to a
 to be used in verification.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>&lt;T&gt;(t: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_recipient">recipient</a>: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_transfer">transfer</a>&lt;T&gt;(t: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_recipient">recipient</a>: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;
 </code></pre>
 
 
@@ -580,9 +580,9 @@ to be used in verification.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>&lt;T&gt;(t: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_recipient">recipient</a>: <b>address</b>, ctx: &<b>mut</b> TxContext): <a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt; {
-    <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = t.<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_value">value</a>();
-    <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(t, <a href="../sui/token.md#sui_token_recipient">recipient</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_transfer">transfer</a>&lt;T&gt;(t: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_recipient">recipient</a>: <b>address</b>, ctx: &<b>mut</b> TxContext): <a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt; {
+    <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = t.balance.<a href="../sui/token.md#sui_token_value">value</a>();
+    transfer::transfer(t, <a href="../sui/token.md#sui_token_recipient">recipient</a>);
     <a href="../sui/token.md#sui_token_new_request">new_request</a>(
         <a href="../sui/token.md#sui_token_transfer_action">transfer_action</a>(),
         <a href="../sui/token.md#sui_token_amount">amount</a>,
@@ -619,13 +619,13 @@ request and join the spent balance with the <code><a href="../sui/token.md#sui_t
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_spend">spend</a>&lt;T&gt;(t: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext): <a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt; {
-    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, <a href="../sui/balance.md#sui_balance">balance</a> } = t;
+    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, balance } = t;
     id.delete();
     <a href="../sui/token.md#sui_token_new_request">new_request</a>(
         <a href="../sui/token.md#sui_token_spend_action">spend_action</a>(),
-        <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_value">value</a>(),
+        balance.<a href="../sui/token.md#sui_token_value">value</a>(),
         option::none(),
-        option::some(<a href="../sui/balance.md#sui_balance">balance</a>),
+        option::some(balance),
         ctx,
     )
 }
@@ -653,11 +653,11 @@ Convert <code><a href="../sui/token.md#sui_token_Token">Token</a></code> into an
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_to_coin">to_coin</a>&lt;T&gt;(t: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext): (Coin&lt;T&gt;, <a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt;) {
-    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, <a href="../sui/balance.md#sui_balance">balance</a> } = t;
-    <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_value">value</a>();
+    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, balance } = t;
+    <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = balance.<a href="../sui/token.md#sui_token_value">value</a>();
     id.delete();
     (
-        <a href="../sui/balance.md#sui_balance">balance</a>.into_coin(ctx),
+        balance.into_coin(ctx),
         <a href="../sui/token.md#sui_token_new_request">new_request</a>(
             <a href="../sui/token.md#sui_token_to_coin_action">to_coin_action</a>(),
             <a href="../sui/token.md#sui_token_amount">amount</a>,
@@ -681,7 +681,7 @@ Convert an open <code>Coin</code> into a <code><a href="../sui/token.md#sui_toke
 the "from_coin" action.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_from_coin">from_coin</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_from_coin">from_coin</a>&lt;T&gt;(coin: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_ActionRequest">sui::token::ActionRequest</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -690,14 +690,14 @@ the "from_coin" action.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_from_coin">from_coin</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: Coin&lt;T&gt;, ctx: &<b>mut</b> TxContext): (<a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt;) {
-    <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = <a href="../sui/coin.md#sui_coin">coin</a>.<a href="../sui/token.md#sui_token_value">value</a>();
-    <b>let</b> <a href="../sui/token.md#sui_token">token</a> = <a href="../sui/token.md#sui_token_Token">Token</a> {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-        <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/coin.md#sui_coin">coin</a>.into_balance(),
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_from_coin">from_coin</a>&lt;T&gt;(coin: Coin&lt;T&gt;, ctx: &<b>mut</b> TxContext): (<a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt;) {
+    <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = coin.<a href="../sui/token.md#sui_token_value">value</a>();
+    <b>let</b> token = <a href="../sui/token.md#sui_token_Token">Token</a> {
+        id: object::new(ctx),
+        balance: coin.into_balance(),
     };
     (
-        <a href="../sui/token.md#sui_token">token</a>,
+        token,
         <a href="../sui/token.md#sui_token_new_request">new_request</a>(
             <a href="../sui/token.md#sui_token_from_coin_action">from_coin_action</a>(),
             <a href="../sui/token.md#sui_token_amount">amount</a>,
@@ -720,7 +720,7 @@ the "from_coin" action.
 Join two <code><a href="../sui/token.md#sui_token_Token">Token</a></code>s into one, always available.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_join">join</a>&lt;T&gt;(<a href="../sui/token.md#sui_token">token</a>: &<b>mut</b> <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, another: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_join">join</a>&lt;T&gt;(token: &<b>mut</b> <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, another: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -729,9 +729,9 @@ Join two <code><a href="../sui/token.md#sui_token_Token">Token</a></code>s into 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_join">join</a>&lt;T&gt;(<a href="../sui/token.md#sui_token">token</a>: &<b>mut</b> <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, another: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;) {
-    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, <a href="../sui/balance.md#sui_balance">balance</a> } = another;
-    <a href="../sui/token.md#sui_token">token</a>.<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_join">join</a>(<a href="../sui/balance.md#sui_balance">balance</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_join">join</a>&lt;T&gt;(token: &<b>mut</b> <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, another: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;) {
+    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, balance } = another;
+    token.balance.<a href="../sui/token.md#sui_token_join">join</a>(balance);
     id.delete();
 }
 </code></pre>
@@ -745,10 +745,10 @@ Join two <code><a href="../sui/token.md#sui_token_Token">Token</a></code>s into 
 ## Function `split`
 
 Split a <code><a href="../sui/token.md#sui_token_Token">Token</a></code> with <code><a href="../sui/token.md#sui_token_amount">amount</a></code>.
-Aborts if the <code><a href="../sui/token.md#sui_token_Token">Token</a>.<a href="../sui/balance.md#sui_balance">balance</a></code> is lower than <code><a href="../sui/token.md#sui_token_amount">amount</a></code>.
+Aborts if the <code><a href="../sui/token.md#sui_token_Token">Token</a>.balance</code> is lower than <code><a href="../sui/token.md#sui_token_amount">amount</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_split">split</a>&lt;T&gt;(<a href="../sui/token.md#sui_token">token</a>: &<b>mut</b> <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_amount">amount</a>: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_split">split</a>&lt;T&gt;(token: &<b>mut</b> <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_amount">amount</a>: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;
 </code></pre>
 
 
@@ -757,11 +757,11 @@ Aborts if the <code><a href="../sui/token.md#sui_token_Token">Token</a>.<a href=
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_split">split</a>&lt;T&gt;(<a href="../sui/token.md#sui_token">token</a>: &<b>mut</b> <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_amount">amount</a>: u64, ctx: &<b>mut</b> TxContext): <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt; {
-    <b>assert</b>!(<a href="../sui/token.md#sui_token">token</a>.<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_value">value</a>() &gt;= <a href="../sui/token.md#sui_token_amount">amount</a>, <a href="../sui/token.md#sui_token_EBalanceTooLow">EBalanceTooLow</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_split">split</a>&lt;T&gt;(token: &<b>mut</b> <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_amount">amount</a>: u64, ctx: &<b>mut</b> TxContext): <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt; {
+    <b>assert</b>!(token.balance.<a href="../sui/token.md#sui_token_value">value</a>() &gt;= <a href="../sui/token.md#sui_token_amount">amount</a>, <a href="../sui/token.md#sui_token_EBalanceTooLow">EBalanceTooLow</a>);
     <a href="../sui/token.md#sui_token_Token">Token</a> {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-        <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/token.md#sui_token">token</a>.<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_split">split</a>(<a href="../sui/token.md#sui_token_amount">amount</a>),
+        id: object::new(ctx),
+        balance: token.balance.<a href="../sui/token.md#sui_token_split">split</a>(<a href="../sui/token.md#sui_token_amount">amount</a>),
     }
 }
 </code></pre>
@@ -788,8 +788,8 @@ Create a zero <code><a href="../sui/token.md#sui_token_Token">Token</a></code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_zero">zero</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt; {
     <a href="../sui/token.md#sui_token_Token">Token</a> {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-        <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_zero">balance::zero</a>(),
+        id: object::new(ctx),
+        balance: balance::zero(),
     }
 }
 </code></pre>
@@ -803,10 +803,10 @@ Create a zero <code><a href="../sui/token.md#sui_token_Token">Token</a></code>.
 ## Function `destroy_zero`
 
 Destroy an empty <code><a href="../sui/token.md#sui_token_Token">Token</a></code>, fails if the balance is non-zero.
-Aborts if the <code><a href="../sui/token.md#sui_token_Token">Token</a>.<a href="../sui/balance.md#sui_balance">balance</a></code> is not zero.
+Aborts if the <code><a href="../sui/token.md#sui_token_Token">Token</a>.balance</code> is not zero.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_destroy_zero">destroy_zero</a>&lt;T&gt;(<a href="../sui/token.md#sui_token">token</a>: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_destroy_zero">destroy_zero</a>&lt;T&gt;(token: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -815,10 +815,10 @@ Aborts if the <code><a href="../sui/token.md#sui_token_Token">Token</a>.<a href=
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_destroy_zero">destroy_zero</a>&lt;T&gt;(<a href="../sui/token.md#sui_token">token</a>: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;) {
-    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, <a href="../sui/balance.md#sui_balance">balance</a> } = <a href="../sui/token.md#sui_token">token</a>;
-    <b>assert</b>!(<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_value">value</a>() == 0, <a href="../sui/token.md#sui_token_ENotZero">ENotZero</a>);
-    <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_destroy_zero">destroy_zero</a>();
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_destroy_zero">destroy_zero</a>&lt;T&gt;(token: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;) {
+    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, balance } = token;
+    <b>assert</b>!(balance.<a href="../sui/token.md#sui_token_value">value</a>() == 0, <a href="../sui/token.md#sui_token_ENotZero">ENotZero</a>);
+    balance.<a href="../sui/token.md#sui_token_destroy_zero">destroy_zero</a>();
     id.delete();
 }
 </code></pre>
@@ -834,7 +834,7 @@ Aborts if the <code><a href="../sui/token.md#sui_token_Token">Token</a>.<a href=
 Transfer the <code><a href="../sui/token.md#sui_token_Token">Token</a></code> to the transaction sender.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_keep">keep</a>&lt;T&gt;(<a href="../sui/token.md#sui_token">token</a>: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_keep">keep</a>&lt;T&gt;(token: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -843,8 +843,8 @@ Transfer the <code><a href="../sui/token.md#sui_token_Token">Token</a></code> to
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_keep">keep</a>&lt;T&gt;(<a href="../sui/token.md#sui_token">token</a>: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext) {
-    <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(<a href="../sui/token.md#sui_token">token</a>, ctx.<a href="../sui/token.md#sui_token_sender">sender</a>())
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_keep">keep</a>&lt;T&gt;(token: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext) {
+    transfer::transfer(token, ctx.<a href="../sui/token.md#sui_token_sender">sender</a>())
 }
 </code></pre>
 
@@ -882,7 +882,7 @@ Publicly available method to allow for custom actions.
         <a href="../sui/token.md#sui_token_recipient">recipient</a>,
         <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>,
         <a href="../sui/token.md#sui_token_sender">sender</a>: ctx.<a href="../sui/token.md#sui_token_sender">sender</a>(),
-        <a href="../sui/token.md#sui_token_approvals">approvals</a>: <a href="../sui/vec_set.md#sui_vec_set_empty">vec_set::empty</a>(),
+        <a href="../sui/token.md#sui_token_approvals">approvals</a>: vec_set::empty(),
     }
 }
 </code></pre>
@@ -1121,7 +1121,7 @@ Rule itself. Configuration is stored per <code>Rule</code> and not per <code>Rul
 the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a></code> owner.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_add_rule_config">add_rule_config</a>&lt;T, Rule: drop, Config: store&gt;(_rule: Rule, self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, <a href="../sui/config.md#sui_config">config</a>: Config, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_add_rule_config">add_rule_config</a>&lt;T, Rule: drop, Config: store&gt;(_rule: Rule, self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">sui::token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">sui::token::TokenPolicyCap</a>&lt;T&gt;, config: Config, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1134,11 +1134,11 @@ the <code><a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a></code>
     _rule: Rule,
     self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;,
     cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a>&lt;T&gt;,
-    <a href="../sui/config.md#sui_config">config</a>: Config,
+    config: Config,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
-    df::add(&<b>mut</b> self.id, <a href="../sui/token.md#sui_token_key">key</a>&lt;Rule&gt;(), <a href="../sui/config.md#sui_config">config</a>)
+    <b>assert</b>!(object::id(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
+    df::add(&<b>mut</b> self.id, <a href="../sui/token.md#sui_token_key">key</a>&lt;Rule&gt;(), config)
 }
 </code></pre>
 
@@ -1207,7 +1207,7 @@ Aborts if:
     cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a>&lt;T&gt;,
 ): &<b>mut</b> Config {
     <b>assert</b>!(<a href="../sui/token.md#sui_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(self), <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>);
-    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(object::id(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
     df::borrow_mut(&<b>mut</b> self.id, <a href="../sui/token.md#sui_token_key">key</a>&lt;Rule&gt;())
 }
 </code></pre>
@@ -1247,7 +1247,7 @@ Aborts if:
     _ctx: &<b>mut</b> TxContext,
 ): Config {
     <b>assert</b>!(<a href="../sui/token.md#sui_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(self), <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>);
-    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(object::id(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
     df::remove(&<b>mut</b> self.id, <a href="../sui/token.md#sui_token_key">key</a>&lt;Rule&gt;())
 }
 </code></pre>
@@ -1333,8 +1333,8 @@ Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPoli
     <a href="../sui/token.md#sui_token_action">action</a>: String,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
-    self.<a href="../sui/token.md#sui_token_rules">rules</a>.insert(<a href="../sui/token.md#sui_token_action">action</a>, <a href="../sui/vec_set.md#sui_vec_set_empty">vec_set::empty</a>());
+    <b>assert</b>!(object::id(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
+    self.<a href="../sui/token.md#sui_token_rules">rules</a>.insert(<a href="../sui/token.md#sui_token_action">action</a>, vec_set::empty());
 }
 </code></pre>
 
@@ -1367,7 +1367,7 @@ Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPoli
     <a href="../sui/token.md#sui_token_action">action</a>: String,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(object::id(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
     self.<a href="../sui/token.md#sui_token_rules">rules</a>.remove(&<a href="../sui/token.md#sui_token_action">action</a>);
 }
 </code></pre>
@@ -1400,7 +1400,7 @@ Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPoli
     <a href="../sui/token.md#sui_token_action">action</a>: String,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(object::id(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
     <b>if</b> (!self.<a href="../sui/token.md#sui_token_rules">rules</a>.contains(&<a href="../sui/token.md#sui_token_action">action</a>)) {
         <a href="../sui/token.md#sui_token_allow">allow</a>(self, cap, <a href="../sui/token.md#sui_token_action">action</a>, ctx);
     };
@@ -1437,7 +1437,7 @@ Aborts if the <code><a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPoli
     <a href="../sui/token.md#sui_token_action">action</a>: String,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
+    <b>assert</b>!(object::id(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
     self.<a href="../sui/token.md#sui_token_rules">rules</a>.get_mut(&<a href="../sui/token.md#sui_token_action">action</a>).remove(&type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
@@ -1463,8 +1463,8 @@ Mint a <code><a href="../sui/token.md#sui_token_Token">Token</a></code> with a g
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_mint">mint</a>&lt;T&gt;(cap: &<b>mut</b> TreasuryCap&lt;T&gt;, <a href="../sui/token.md#sui_token_amount">amount</a>: u64, ctx: &<b>mut</b> TxContext): <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt; {
-    <b>let</b> <a href="../sui/balance.md#sui_balance">balance</a> = cap.supply_mut().increase_supply(<a href="../sui/token.md#sui_token_amount">amount</a>);
-    <a href="../sui/token.md#sui_token_Token">Token</a> { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx), <a href="../sui/balance.md#sui_balance">balance</a> }
+    <b>let</b> balance = cap.supply_mut().increase_supply(<a href="../sui/token.md#sui_token_amount">amount</a>);
+    <a href="../sui/token.md#sui_token_Token">Token</a> { id: object::new(ctx), balance }
 }
 </code></pre>
 
@@ -1479,7 +1479,7 @@ Mint a <code><a href="../sui/token.md#sui_token_Token">Token</a></code> with a g
 Burn a <code><a href="../sui/token.md#sui_token_Token">Token</a></code> using the <code>TreasuryCap</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/token.md#sui_token">token</a>: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, token: <a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -1488,9 +1488,9 @@ Burn a <code><a href="../sui/token.md#sui_token_Token">Token</a></code> using th
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> TreasuryCap&lt;T&gt;, <a href="../sui/token.md#sui_token">token</a>: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;) {
-    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, <a href="../sui/balance.md#sui_balance">balance</a> } = <a href="../sui/token.md#sui_token">token</a>;
-    cap.supply_mut().decrease_supply(<a href="../sui/balance.md#sui_balance">balance</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> TreasuryCap&lt;T&gt;, token: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;) {
+    <b>let</b> <a href="../sui/token.md#sui_token_Token">Token</a> { id, balance } = token;
+    cap.supply_mut().decrease_supply(balance);
     id.delete();
 }
 </code></pre>
@@ -1522,8 +1522,8 @@ action is only available to the <code>TreasuryCap</code> owner.
     _ctx: &<b>mut</b> TxContext,
 ): u64 {
     <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.<a href="../sui/token.md#sui_token_value">value</a>();
-    <b>let</b> <a href="../sui/balance.md#sui_balance">balance</a> = self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.<a href="../sui/token.md#sui_token_split">split</a>(<a href="../sui/token.md#sui_token_amount">amount</a>);
-    cap.supply_mut().decrease_supply(<a href="../sui/balance.md#sui_balance">balance</a>)
+    <b>let</b> balance = self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.<a href="../sui/token.md#sui_token_split">split</a>(<a href="../sui/token.md#sui_token_amount">amount</a>);
+    cap.supply_mut().decrease_supply(balance)
 }
 </code></pre>
 
@@ -1610,7 +1610,7 @@ Returns the <code><a href="../sui/token.md#sui_token_spent_balance">spent_balanc
 
 ## Function `value`
 
-Returns the <code><a href="../sui/balance.md#sui_balance">balance</a></code> of the <code><a href="../sui/token.md#sui_token_Token">Token</a></code>.
+Returns the <code>balance</code> of the <code><a href="../sui/token.md#sui_token_Token">Token</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_value">value</a>&lt;T&gt;(t: &<a href="../sui/token.md#sui_token_Token">sui::token::Token</a>&lt;T&gt;): u64
@@ -1623,7 +1623,7 @@ Returns the <code><a href="../sui/balance.md#sui_balance">balance</a></code> of 
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_value">value</a>&lt;T&gt;(t: &<a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;): u64 {
-    t.<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_value">value</a>()
+    t.balance.<a href="../sui/token.md#sui_token_value">value</a>()
 }
 </code></pre>
 
@@ -1872,7 +1872,7 @@ Burned balance of the <code><a href="../sui/token.md#sui_token_ActionRequest">Ac
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_spent">spent</a>&lt;T&gt;(self: &<a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt;): Option&lt;u64&gt; {
     <b>if</b> (self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.is_some()) {
-        option::some(self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.<a href="../sui/borrow.md#sui_borrow">borrow</a>().<a href="../sui/token.md#sui_token_value">value</a>())
+        option::some(self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.borrow().<a href="../sui/token.md#sui_token_value">value</a>())
     } <b>else</b> {
         option::none()
     }

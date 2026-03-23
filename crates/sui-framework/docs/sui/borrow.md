@@ -156,7 +156,7 @@ Borrow the <code>T</code> from the <code><a href="../sui/borrow.md#sui_borrow_Re
 hot potato.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;T: key, store&gt;(self: &<b>mut</b> <a href="../sui/borrow.md#sui_borrow_Referent">sui::borrow::Referent</a>&lt;T&gt;): (T, <a href="../sui/borrow.md#sui_borrow_Borrow">sui::borrow::Borrow</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow_borrow">borrow</a>&lt;T: key, store&gt;(self: &<b>mut</b> <a href="../sui/borrow.md#sui_borrow_Referent">sui::borrow::Referent</a>&lt;T&gt;): (T, <a href="../sui/borrow.md#sui_borrow_Borrow">sui::borrow::Borrow</a>)
 </code></pre>
 
 
@@ -165,9 +165,9 @@ hot potato.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="../sui/borrow.md#sui_borrow_Referent">Referent</a>&lt;T&gt;): (T, <a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow_borrow">borrow</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="../sui/borrow.md#sui_borrow_Referent">Referent</a>&lt;T&gt;): (T, <a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a>) {
     <b>let</b> value = self.value.extract();
-    <b>let</b> id = <a href="../sui/object.md#sui_object_id">object::id</a>(&value);
+    <b>let</b> id = object::id(&value);
     (
         value,
         <a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a> {
@@ -189,7 +189,7 @@ hot potato.
 Put an object and the <code><a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a></code> hot potato back.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow_put_back">put_back</a>&lt;T: key, store&gt;(self: &<b>mut</b> <a href="../sui/borrow.md#sui_borrow_Referent">sui::borrow::Referent</a>&lt;T&gt;, value: T, <a href="../sui/borrow.md#sui_borrow">borrow</a>: <a href="../sui/borrow.md#sui_borrow_Borrow">sui::borrow::Borrow</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow_put_back">put_back</a>&lt;T: key, store&gt;(self: &<b>mut</b> <a href="../sui/borrow.md#sui_borrow_Referent">sui::borrow::Referent</a>&lt;T&gt;, value: T, <a href="../sui/borrow.md#sui_borrow_borrow">borrow</a>: <a href="../sui/borrow.md#sui_borrow_Borrow">sui::borrow::Borrow</a>)
 </code></pre>
 
 
@@ -198,9 +198,9 @@ Put an object and the <code><a href="../sui/borrow.md#sui_borrow_Borrow">Borrow<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow_put_back">put_back</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="../sui/borrow.md#sui_borrow_Referent">Referent</a>&lt;T&gt;, value: T, <a href="../sui/borrow.md#sui_borrow">borrow</a>: <a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a>) {
-    <b>let</b> <a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a> { ref, obj } = <a href="../sui/borrow.md#sui_borrow">borrow</a>;
-    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(&value) == obj, <a href="../sui/borrow.md#sui_borrow_EWrongValue">EWrongValue</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow_put_back">put_back</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="../sui/borrow.md#sui_borrow_Referent">Referent</a>&lt;T&gt;, value: T, <a href="../sui/borrow.md#sui_borrow_borrow">borrow</a>: <a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a>) {
+    <b>let</b> <a href="../sui/borrow.md#sui_borrow_Borrow">Borrow</a> { ref, obj } = <a href="../sui/borrow.md#sui_borrow_borrow">borrow</a>;
+    <b>assert</b>!(object::id(&value) == obj, <a href="../sui/borrow.md#sui_borrow_EWrongValue">EWrongValue</a>);
     <b>assert</b>!(self.id == ref, <a href="../sui/borrow.md#sui_borrow_EWrongBorrow">EWrongBorrow</a>);
     self.value.fill(value);
 }

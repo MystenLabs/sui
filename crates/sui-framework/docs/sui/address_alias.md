@@ -141,7 +141,7 @@ Internal key used for derivation of AddressAliases object addresses.
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/address_alias.md#sui_address_alias_ENotSystemAddress">ENotSystemAddress</a>: vector&lt;u8&gt; = b"Only the system can <a href="../sui/address_alias.md#sui_address_alias_create">create</a> the alias state <a href="../sui/object.md#sui_object">object</a>.";
+<b>const</b> <a href="../sui/address_alias.md#sui_address_alias_ENotSystemAddress">ENotSystemAddress</a>: vector&lt;u8&gt; = b"Only the system can <a href="../sui/address_alias.md#sui_address_alias_create">create</a> the alias state object.";
 </code></pre>
 
 
@@ -225,10 +225,10 @@ Can only be called by genesis or change_epoch transactions.
 <pre><code><b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_create">create</a>(ctx: &TxContext) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/address_alias.md#sui_address_alias_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> self = <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">AddressAliasState</a> {
-        id: <a href="../sui/object.md#sui_object_address_alias_state">object::address_alias_state</a>(),
+        id: object::address_alias_state(),
         version: <a href="../sui/address_alias.md#sui_address_alias_CURRENT_VERSION">CURRENT_VERSION</a>,
     };
-    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(self);
+    transfer::share_object(self);
 }
 </code></pre>
 
@@ -257,15 +257,15 @@ object can be used to change the set of allowed aliases after enabling.
 
 <pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_enable">enable</a>(address_alias_state: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">AddressAliasState</a>, ctx: &TxContext) {
     <b>assert</b>!(
-        !<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&address_alias_state.id, <a href="../sui/address_alias.md#sui_address_alias_AliasKey">AliasKey</a>(ctx.sender())),
+        !derived_object::exists(&address_alias_state.id, <a href="../sui/address_alias.md#sui_address_alias_AliasKey">AliasKey</a>(ctx.sender())),
         <a href="../sui/address_alias.md#sui_address_alias_EAliasAlreadyExists">EAliasAlreadyExists</a>,
     );
-    <a href="../sui/transfer.md#sui_transfer_party_transfer">transfer::party_transfer</a>(
+    transfer::party_transfer(
         <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a> {
-            id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> address_alias_state.id, <a href="../sui/address_alias.md#sui_address_alias_AliasKey">AliasKey</a>(ctx.sender())),
-            aliases: <a href="../sui/vec_set.md#sui_vec_set_singleton">vec_set::singleton</a>(ctx.sender()),
+            id: derived_object::claim(&<b>mut</b> address_alias_state.id, <a href="../sui/address_alias.md#sui_address_alias_AliasKey">AliasKey</a>(ctx.sender())),
+            aliases: vec_set::singleton(ctx.sender()),
         },
-        <a href="../sui/party.md#sui_party_single_owner">party::single_owner</a>(ctx.sender()),
+        party::single_owner(ctx.sender()),
     );
 }
 </code></pre>
@@ -318,7 +318,7 @@ Overwrites the aliases for the sender's address with the given set.
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_replace_all">replace_all</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a>, new_aliases: vector&lt;<b>address</b>&gt;) {
-    <b>let</b> new_aliases = <a href="../sui/vec_set.md#sui_vec_set_from_keys">vec_set::from_keys</a>(new_aliases);
+    <b>let</b> new_aliases = vec_set::from_keys(new_aliases);
     <b>assert</b>!(new_aliases.length() &gt; 0, <a href="../sui/address_alias.md#sui_address_alias_ECannotRemoveLastAlias">ECannotRemoveLastAlias</a>);
     <b>assert</b>!(new_aliases.length() &lt;= <a href="../sui/address_alias.md#sui_address_alias_MAX_ALIASES">MAX_ALIASES</a>, <a href="../sui/address_alias.md#sui_address_alias_ETooManyAliases">ETooManyAliases</a>);
     aliases.aliases = new_aliases;

@@ -61,7 +61,7 @@ An object ID. This is used to reference Sui Objects.
 This is *not* guaranteed to be globally unique--anyone can create an <code><a href="../sui/object.md#sui_object_ID">ID</a></code> from a <code><a href="../sui/object.md#sui_object_UID">UID</a></code> or
 from an object, and ID's can be freely copied and dropped.
 Here, the values are not globally unique because there can be multiple values of type <code><a href="../sui/object.md#sui_object_ID">ID</a></code>
-with the same underlying bytes. For example, <code><a href="../sui/object.md#sui_object_id">object::id</a>(&obj)</code> can be called as many times
+with the same underlying bytes. For example, <code>object::id(&obj)</code> can be called as many times
 as you want for a given <code>obj</code>, and each <code><a href="../sui/object.md#sui_object_ID">ID</a></code> value will be identical.
 
 
@@ -249,7 +249,7 @@ Get the raw bytes of a <code><a href="../sui/object.md#sui_object_ID">ID</a></co
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/object.md#sui_object_id_to_bytes">id_to_bytes</a>(<a href="../sui/object.md#sui_object_id">id</a>: &<a href="../sui/object.md#sui_object_ID">ID</a>): vector&lt;u8&gt; {
-    <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&<a href="../sui/object.md#sui_object_id">id</a>.bytes)
+    bcs::to_bytes(&<a href="../sui/object.md#sui_object_id">id</a>.bytes)
 }
 </code></pre>
 
@@ -299,7 +299,7 @@ Make an <code><a href="../sui/object.md#sui_object_ID">ID</a></code> from raw by
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/object.md#sui_object_id_from_bytes">id_from_bytes</a>(bytes: vector&lt;u8&gt;): <a href="../sui/object.md#sui_object_ID">ID</a> {
-    <a href="../sui/address.md#sui_address_from_bytes">address::from_bytes</a>(bytes).to_id()
+    address::from_bytes(bytes).to_id()
 }
 </code></pre>
 
@@ -366,10 +366,10 @@ This should only be called once from <code>sui_system</code>.
 ## Function `clock`
 
 Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>Clock</code> object.
-This should only be called once from <code><a href="../sui/clock.md#sui_clock">clock</a></code>.
+This should only be called once from <code><a href="../sui/object.md#sui_object_clock">clock</a></code>.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/clock.md#sui_clock">clock</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_clock">clock</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -378,7 +378,7 @@ This should only be called once from <code><a href="../sui/clock.md#sui_clock">c
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/clock.md#sui_clock">clock</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_clock">clock</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_CLOCK_OBJECT_ID">SUI_CLOCK_OBJECT_ID</a> },
     }
@@ -394,10 +394,10 @@ This should only be called once from <code><a href="../sui/clock.md#sui_clock">c
 ## Function `authenticator_state`
 
 Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>AuthenticatorState</code> object.
-This should only be called once from <code><a href="../sui/authenticator_state.md#sui_authenticator_state">authenticator_state</a></code>.
+This should only be called once from <code><a href="../sui/object.md#sui_object_authenticator_state">authenticator_state</a></code>.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state">authenticator_state</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_authenticator_state">authenticator_state</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -406,7 +406,7 @@ This should only be called once from <code><a href="../sui/authenticator_state.m
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state">authenticator_state</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_authenticator_state">authenticator_state</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_AUTHENTICATOR_STATE_ID">SUI_AUTHENTICATOR_STATE_ID</a> },
     }
@@ -422,10 +422,10 @@ This should only be called once from <code><a href="../sui/authenticator_state.m
 ## Function `randomness_state`
 
 Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>Random</code> object.
-This should only be called once from <code><a href="../sui/random.md#sui_random">random</a></code>.
+This should only be called once from <code>random</code>.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_randomness_state">randomness_state</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_randomness_state">randomness_state</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -434,7 +434,7 @@ This should only be called once from <code><a href="../sui/random.md#sui_random"
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_randomness_state">randomness_state</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_randomness_state">randomness_state</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_RANDOM_ID">SUI_RANDOM_ID</a> },
     }
@@ -450,10 +450,10 @@ This should only be called once from <code><a href="../sui/random.md#sui_random"
 ## Function `sui_deny_list_object_id`
 
 Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>DenyList</code> object.
-This should only be called once from <code><a href="../sui/deny_list.md#sui_deny_list">deny_list</a></code>.
+This should only be called once from <code>deny_list</code>.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -462,7 +462,7 @@ This should only be called once from <code><a href="../sui/deny_list.md#sui_deny
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_DENY_LIST_OBJECT_ID">SUI_DENY_LIST_OBJECT_ID</a> },
     }
@@ -479,7 +479,7 @@ This should only be called once from <code><a href="../sui/deny_list.md#sui_deny
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_accumulator_root_object_id">sui_accumulator_root_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_accumulator_root_object_id">sui_accumulator_root_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -488,7 +488,7 @@ This should only be called once from <code><a href="../sui/deny_list.md#sui_deny
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_accumulator_root_object_id">sui_accumulator_root_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_accumulator_root_object_id">sui_accumulator_root_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_ACCUMULATOR_ROOT_OBJECT_ID">SUI_ACCUMULATOR_ROOT_OBJECT_ID</a> },
     }
@@ -505,7 +505,7 @@ This should only be called once from <code><a href="../sui/deny_list.md#sui_deny
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_accumulator_root_address">sui_accumulator_root_address</a>(): <b>address</b>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_accumulator_root_address">sui_accumulator_root_address</a>(): <b>address</b>
 </code></pre>
 
 
@@ -514,7 +514,7 @@ This should only be called once from <code><a href="../sui/deny_list.md#sui_deny
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_accumulator_root_address">sui_accumulator_root_address</a>(): <b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_accumulator_root_address">sui_accumulator_root_address</a>(): <b>address</b> {
     <a href="../sui/object.md#sui_object_SUI_ACCUMULATOR_ROOT_OBJECT_ID">SUI_ACCUMULATOR_ROOT_OBJECT_ID</a>
 }
 </code></pre>
@@ -528,10 +528,10 @@ This should only be called once from <code><a href="../sui/deny_list.md#sui_deny
 ## Function `sui_coin_registry_object_id`
 
 Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>CoinRegistry</code> object.
-This should only be called once from <code><a href="../sui/coin_registry.md#sui_coin_registry">coin_registry</a></code>.
+This should only be called once from <code>coin_registry</code>.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_object_id">sui_coin_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_object_id">sui_coin_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -540,7 +540,7 @@ This should only be called once from <code><a href="../sui/coin_registry.md#sui_
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_object_id">sui_coin_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_object_id">sui_coin_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_COIN_REGISTRY_OBJECT_ID">SUI_COIN_REGISTRY_OBJECT_ID</a> },
     }
@@ -557,7 +557,7 @@ This should only be called once from <code><a href="../sui/coin_registry.md#sui_
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_address">sui_coin_registry_address</a>(): <b>address</b>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_address">sui_coin_registry_address</a>(): <b>address</b>
 </code></pre>
 
 
@@ -566,7 +566,7 @@ This should only be called once from <code><a href="../sui/coin_registry.md#sui_
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_address">sui_coin_registry_address</a>(): <b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_coin_registry_address">sui_coin_registry_address</a>(): <b>address</b> {
     <a href="../sui/object.md#sui_object_SUI_COIN_REGISTRY_OBJECT_ID">SUI_COIN_REGISTRY_OBJECT_ID</a>
 }
 </code></pre>
@@ -580,10 +580,10 @@ This should only be called once from <code><a href="../sui/coin_registry.md#sui_
 ## Function `sui_display_registry_object_id`
 
 Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>DisplayRegistry</code> object.
-This should only be called once from <code><a href="../sui/display_registry.md#sui_display_registry">display_registry</a></code>.
+This should only be called once from <code>display_registry</code>.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_object_id">sui_display_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_object_id">sui_display_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -592,7 +592,7 @@ This should only be called once from <code><a href="../sui/display_registry.md#s
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_object_id">sui_display_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_object_id">sui_display_registry_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_DISPLAY_REGISTRY_OBJECT_ID">SUI_DISPLAY_REGISTRY_OBJECT_ID</a> },
     }
@@ -609,7 +609,7 @@ This should only be called once from <code><a href="../sui/display_registry.md#s
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_address">sui_display_registry_address</a>(): <b>address</b>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_address">sui_display_registry_address</a>(): <b>address</b>
 </code></pre>
 
 
@@ -618,7 +618,7 @@ This should only be called once from <code><a href="../sui/display_registry.md#s
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_address">sui_display_registry_address</a>(): <b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_sui_display_registry_address">sui_display_registry_address</a>(): <b>address</b> {
     <a href="../sui/object.md#sui_object_SUI_DISPLAY_REGISTRY_OBJECT_ID">SUI_DISPLAY_REGISTRY_OBJECT_ID</a>
 }
 </code></pre>
@@ -660,10 +660,10 @@ This should only be called once from <code><a href="../sui/object.md#sui_object_
 ## Function `address_alias_state`
 
 Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>AddressAliasState</code> object.
-This should only be called once from <code><a href="../sui/address_alias.md#sui_address_alias">address_alias</a></code>.
+This should only be called once from <code>address_alias</code>.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_address_alias_state">address_alias_state</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_address_alias_state">address_alias_state</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -672,7 +672,7 @@ This should only be called once from <code><a href="../sui/address_alias.md#sui_
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_address_alias_state">address_alias_state</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_address_alias_state">address_alias_state</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_ADDRESS_ALIAS_STATE_ID">SUI_ADDRESS_ALIAS_STATE_ID</a> },
     }
@@ -750,7 +750,7 @@ Get the raw bytes of a <code><a href="../sui/object.md#sui_object_UID">UID</a></
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/object.md#sui_object_uid_to_bytes">uid_to_bytes</a>(uid: &<a href="../sui/object.md#sui_object_UID">UID</a>): vector&lt;u8&gt; {
-    <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&uid.<a href="../sui/object.md#sui_object_id">id</a>.bytes)
+    bcs::to_bytes(&uid.<a href="../sui/object.md#sui_object_id">id</a>.bytes)
 }
 </code></pre>
 
@@ -908,7 +908,7 @@ Get the raw bytes for the underlying <code><a href="../sui/object.md#sui_object_
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/object.md#sui_object_id_bytes">id_bytes</a>&lt;T: key&gt;(obj: &T): vector&lt;u8&gt; {
-    <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&<a href="../sui/object.md#sui_object_borrow_uid">borrow_uid</a>(obj).<a href="../sui/object.md#sui_object_id">id</a>)
+    bcs::to_bytes(&<a href="../sui/object.md#sui_object_borrow_uid">borrow_uid</a>(obj).<a href="../sui/object.md#sui_object_id">id</a>)
 }
 </code></pre>
 
@@ -975,7 +975,7 @@ restrictable in the object's module.
 Generate a new UID specifically used for creating a UID from a hash
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -984,7 +984,7 @@ Generate a new UID specifically used for creating a UID from a hash
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/object.md#sui_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_record_new_uid">record_new_uid</a>(bytes);
     <a href="../sui/object.md#sui_object_UID">UID</a> { <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes } }
 }

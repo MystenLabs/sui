@@ -55,7 +55,7 @@ title: Module `sui::ecvrf`
 Verify a proof for a Ristretto ECVRF. Returns true if the proof is valid and corresponds to the given output. May abort with <code><a href="../sui/ecvrf.md#sui_ecvrf_EInvalidHashLength">EInvalidHashLength</a></code>, <code><a href="../sui/ecvrf.md#sui_ecvrf_EInvalidPublicKeyEncoding">EInvalidPublicKeyEncoding</a></code> or <code><a href="../sui/ecvrf.md#sui_ecvrf_EInvalidProofEncoding">EInvalidProofEncoding</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/ecvrf.md#sui_ecvrf_ecvrf_verify">ecvrf_verify</a>(<a href="../sui/hash.md#sui_hash">hash</a>: &vector&lt;u8&gt;, alpha_string: &vector&lt;u8&gt;, public_key: &vector&lt;u8&gt;, proof: &vector&lt;u8&gt;): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/ecvrf.md#sui_ecvrf_ecvrf_verify">ecvrf_verify</a>(hash: &vector&lt;u8&gt;, alpha_string: &vector&lt;u8&gt;, public_key: &vector&lt;u8&gt;, proof: &vector&lt;u8&gt;): bool
 </code></pre>
 
 
@@ -65,7 +65,7 @@ Verify a proof for a Ristretto ECVRF. Returns true if the proof is valid and cor
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../sui/ecvrf.md#sui_ecvrf_ecvrf_verify">ecvrf_verify</a>(
-    <a href="../sui/hash.md#sui_hash">hash</a>: &vector&lt;u8&gt;,
+    hash: &vector&lt;u8&gt;,
     alpha_string: &vector&lt;u8&gt;,
     public_key: &vector&lt;u8&gt;,
     proof: &vector&lt;u8&gt;,

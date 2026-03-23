@@ -9,7 +9,7 @@ A Kiosk Extension is a module that implements any functionality on top of
 the <code>Kiosk</code> without discarding nor blocking the base. Given that <code>Kiosk</code>
 itself is a trading primitive, most of the extensions are expected to be
 related to trading. However, there's no limit to what can be built using the
-<code><a href="../sui/kiosk_extension.md#sui_kiosk_extension">kiosk_extension</a></code> module, as it gives certain benefits such as using <code>Kiosk</code>
+<code>kiosk_extension</code> module, as it gives certain benefits such as using <code>Kiosk</code>
 as the storage for any type of data / assets.
 
 
@@ -48,7 +48,7 @@ default trading functionality.
 - Trading functionality can utilize the <code>PurchaseCap</code> to build a custom
 logic around the purchase flow. However, it should be carefully managed to
 prevent asset locking.
-- <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension">kiosk_extension</a></code> is a friend module to <code><a href="../sui/kiosk.md#sui_kiosk">kiosk</a></code> and has access to its
+- <code>kiosk_extension</code> is a friend module to <code>kiosk</code> and has access to its
 internal functions (such as <code>place_internal</code> and <code>lock_internal</code> to
 implement custom authorization scheme for <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code> and <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> respectively).
 
@@ -285,7 +285,7 @@ permissions in the custom <code><a href="../sui/kiosk_extension.md#sui_kiosk_ext
         self.uid_mut_as_owner(cap),
         <a href="../sui/kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {},
         <a href="../sui/kiosk_extension.md#sui_kiosk_extension_Extension">Extension</a> {
-            <a href="../sui/kiosk_extension.md#sui_kiosk_extension_storage">storage</a>: <a href="../sui/bag.md#sui_bag_new">bag::new</a>(ctx),
+            <a href="../sui/kiosk_extension.md#sui_kiosk_extension_storage">storage</a>: bag::new(ctx),
             permissions,
             <a href="../sui/kiosk_extension.md#sui_kiosk_extension_is_enabled">is_enabled</a>: <b>true</b>,
         },

@@ -161,8 +161,8 @@ to cause an overflow.
 
 <pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_create">create</a>(ctx: &TxContext) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/accumulator.md#sui_accumulator_ENotSystemAddress">ENotSystemAddress</a>);
-    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a> {
-        id: <a href="../sui/object.md#sui_object_sui_accumulator_root_object_id">object::sui_accumulator_root_object_id</a>(),
+    transfer::share_object(<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a> {
+        id: object::sui_accumulator_root_object_id(),
     })
 }
 </code></pre>
@@ -177,7 +177,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_id">root_id</a>(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>): &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_id">root_id</a>(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>): &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -186,7 +186,7 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_id">root_id</a>(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>): &UID {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_id">root_id</a>(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>): &UID {
     &accumulator_root.id
 }
 </code></pre>
@@ -201,7 +201,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_id_mut">root_id_mut</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>): &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_id_mut">root_id_mut</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>): &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -210,7 +210,7 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_id_mut">root_id_mut</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>): &<b>mut</b> UID {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_id_mut">root_id_mut</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>): &<b>mut</b> UID {
     &<b>mut</b> accumulator_root.id
 }
 </code></pre>
@@ -225,7 +225,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_u128_exists">accumulator_u128_exists</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, <b>address</b>: <b>address</b>): bool
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_u128_exists">accumulator_u128_exists</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, <b>address</b>: <b>address</b>): bool
 </code></pre>
 
 
@@ -234,7 +234,7 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_u128_exists">accumulator_u128_exists</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>, <b>address</b>: <b>address</b>): bool {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_u128_exists">accumulator_u128_exists</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>, <b>address</b>: <b>address</b>): bool {
     root.has_accumulator&lt;T, <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>&gt;(<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;T&gt; { <b>address</b> })
 }
 </code></pre>
@@ -249,7 +249,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_u128_read">accumulator_u128_read</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, <b>address</b>: <b>address</b>): u128
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_u128_read">accumulator_u128_read</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, <b>address</b>: <b>address</b>): u128
 </code></pre>
 
 
@@ -258,9 +258,9 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_u128_read">accumulator_u128_read</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>, <b>address</b>: <b>address</b>): u128 {
-    <b>let</b> <a href="../sui/accumulator.md#sui_accumulator">accumulator</a> = root.borrow_accumulator&lt;T, <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>&gt;(<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;T&gt; { <b>address</b> });
-    <a href="../sui/accumulator.md#sui_accumulator">accumulator</a>.value
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_u128_read">accumulator_u128_read</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>, <b>address</b>: <b>address</b>): u128 {
+    <b>let</b> accumulator = root.borrow_accumulator&lt;T, <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>&gt;(<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;T&gt; { <b>address</b> });
+    accumulator.value
 }
 </code></pre>
 
@@ -274,7 +274,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_create_u128">create_u128</a>(value: u128): <a href="../sui/accumulator.md#sui_accumulator_U128">sui::accumulator::U128</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_create_u128">create_u128</a>(value: u128): <a href="../sui/accumulator.md#sui_accumulator_U128">sui::accumulator::U128</a>
 </code></pre>
 
 
@@ -283,7 +283,7 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_create_u128">create_u128</a>(value: u128): <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_create_u128">create_u128</a>(value: u128): <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a> {
     <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a> { value }
 }
 </code></pre>
@@ -298,7 +298,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_destroy_u128">destroy_u128</a>(u128: <a href="../sui/accumulator.md#sui_accumulator_U128">sui::accumulator::U128</a>)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_destroy_u128">destroy_u128</a>(u128: <a href="../sui/accumulator.md#sui_accumulator_U128">sui::accumulator::U128</a>)
 </code></pre>
 
 
@@ -307,7 +307,7 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_destroy_u128">destroy_u128</a>(u128: <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_destroy_u128">destroy_u128</a>(u128: <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>) {
     <b>let</b> <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a> { value: _ } = u128;
 }
 </code></pre>
@@ -322,7 +322,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_update_u128">update_u128</a>(u128: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_U128">sui::accumulator::U128</a>, merge: u128, split: u128)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_update_u128">update_u128</a>(u128: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_U128">sui::accumulator::U128</a>, merge: u128, split: u128)
 </code></pre>
 
 
@@ -331,7 +331,7 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_update_u128">update_u128</a>(u128: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>, merge: u128, split: u128) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_update_u128">update_u128</a>(u128: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>, merge: u128, split: u128) {
     u128.value = u128.value + merge - split;
 }
 </code></pre>
@@ -346,7 +346,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_is_zero_u128">is_zero_u128</a>(u128: &<a href="../sui/accumulator.md#sui_accumulator_U128">sui::accumulator::U128</a>): bool
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_is_zero_u128">is_zero_u128</a>(u128: &<a href="../sui/accumulator.md#sui_accumulator_U128">sui::accumulator::U128</a>): bool
 </code></pre>
 
 
@@ -355,7 +355,7 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_is_zero_u128">is_zero_u128</a>(u128: &<a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>): bool {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_is_zero_u128">is_zero_u128</a>(u128: &<a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>): bool {
     u128.value == 0
 }
 </code></pre>
@@ -370,7 +370,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_key">accumulator_key</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;T&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_key">accumulator_key</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;T&gt;
 </code></pre>
 
 
@@ -379,7 +379,7 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_key">accumulator_key</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;T&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_key">accumulator_key</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;T&gt; {
     <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a> { <b>address</b> }
 }
 </code></pre>
@@ -394,7 +394,7 @@ to cause an overflow.
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">accumulator_address</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <b>address</b>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">accumulator_address</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <b>address</b>
 </code></pre>
 
 
@@ -403,9 +403,9 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">accumulator_address</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">accumulator_address</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <b>address</b> {
     <b>let</b> key = <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;T&gt; { <b>address</b> };
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">dynamic_field::hash_type_and_key</a>(sui_accumulator_root_address(), key)
+    dynamic_field::hash_type_and_key(sui_accumulator_root_address(), key)
 }
 </code></pre>
 
@@ -420,7 +420,7 @@ to cause an overflow.
 Balance object methods
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_has_accumulator">root_has_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): bool
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_has_accumulator">root_has_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): bool
 </code></pre>
 
 
@@ -429,11 +429,11 @@ Balance object methods
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_has_accumulator">root_has_accumulator</a>&lt;K, V: store&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_has_accumulator">root_has_accumulator</a>&lt;K, V: store&gt;(
     accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>,
     name: <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;,
 ): bool {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">dynamic_field::exists_with_type</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&accumulator_root.id, name)
+    dynamic_field::exists_with_type&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&accumulator_root.id, name)
 }
 </code></pre>
 
@@ -447,7 +447,7 @@ Balance object methods
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_add_accumulator">root_add_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;, value: V)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_add_accumulator">root_add_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;, value: V)
 </code></pre>
 
 
@@ -456,12 +456,12 @@ Balance object methods
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_add_accumulator">root_add_accumulator</a>&lt;K, V: store&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_add_accumulator">root_add_accumulator</a>&lt;K, V: store&gt;(
     accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>,
     name: <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;,
     value: V,
 ) {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> accumulator_root.id, name, value);
+    dynamic_field::add(&<b>mut</b> accumulator_root.id, name, value);
 }
 </code></pre>
 
@@ -475,7 +475,7 @@ Balance object methods
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator_mut">root_borrow_accumulator_mut</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): &<b>mut</b> V
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator_mut">root_borrow_accumulator_mut</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): &<b>mut</b> V
 </code></pre>
 
 
@@ -484,11 +484,11 @@ Balance object methods
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator_mut">root_borrow_accumulator_mut</a>&lt;K, V: store&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator_mut">root_borrow_accumulator_mut</a>&lt;K, V: store&gt;(
     accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>,
     name: <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;,
 ): &<b>mut</b> V {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&<b>mut</b> accumulator_root.id, name)
+    dynamic_field::borrow_mut&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&<b>mut</b> accumulator_root.id, name)
 }
 </code></pre>
 
@@ -502,7 +502,7 @@ Balance object methods
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator">root_borrow_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): &V
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator">root_borrow_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): &V
 </code></pre>
 
 
@@ -511,11 +511,11 @@ Balance object methods
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator">root_borrow_accumulator</a>&lt;K, V: store&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator">root_borrow_accumulator</a>&lt;K, V: store&gt;(
     accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>,
     name: <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;,
 ): &V {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow">dynamic_field::borrow</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&accumulator_root.id, name)
+    dynamic_field::borrow&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&accumulator_root.id, name)
 }
 </code></pre>
 
@@ -529,7 +529,7 @@ Balance object methods
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_remove_accumulator">root_remove_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): V
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_remove_accumulator">root_remove_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): V
 </code></pre>
 
 
@@ -538,11 +538,11 @@ Balance object methods
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_remove_accumulator">root_remove_accumulator</a>&lt;K, V: store&gt;(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_remove_accumulator">root_remove_accumulator</a>&lt;K, V: store&gt;(
     accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>,
     name: <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;,
 ): V {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_remove">dynamic_field::remove</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&<b>mut</b> accumulator_root.id, name)
+    dynamic_field::remove&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&<b>mut</b> accumulator_root.id, name)
 }
 </code></pre>
 
@@ -556,7 +556,7 @@ Balance object methods
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_emit_deposit_event">emit_deposit_event</a>&lt;T&gt;(<a href="../sui/accumulator.md#sui_accumulator">accumulator</a>: <b>address</b>, recipient: <b>address</b>, amount: u64)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_emit_deposit_event">emit_deposit_event</a>&lt;T&gt;(accumulator: <b>address</b>, recipient: <b>address</b>, amount: u64)
 </code></pre>
 
 
@@ -565,8 +565,8 @@ Balance object methods
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_emit_deposit_event">emit_deposit_event</a>&lt;T&gt;(
-    <a href="../sui/accumulator.md#sui_accumulator">accumulator</a>: <b>address</b>,
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_emit_deposit_event">emit_deposit_event</a>&lt;T&gt;(
+    accumulator: <b>address</b>,
     recipient: <b>address</b>,
     amount: u64,
 );
@@ -582,7 +582,7 @@ Balance object methods
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_emit_withdraw_event">emit_withdraw_event</a>&lt;T&gt;(<a href="../sui/accumulator.md#sui_accumulator">accumulator</a>: <b>address</b>, owner: <b>address</b>, amount: u64)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_emit_withdraw_event">emit_withdraw_event</a>&lt;T&gt;(accumulator: <b>address</b>, owner: <b>address</b>, amount: u64)
 </code></pre>
 
 
@@ -591,8 +591,8 @@ Balance object methods
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_emit_withdraw_event">emit_withdraw_event</a>&lt;T&gt;(
-    <a href="../sui/accumulator.md#sui_accumulator">accumulator</a>: <b>address</b>,
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_emit_withdraw_event">emit_withdraw_event</a>&lt;T&gt;(
+    accumulator: <b>address</b>,
     owner: <b>address</b>,
     amount: u64,
 );

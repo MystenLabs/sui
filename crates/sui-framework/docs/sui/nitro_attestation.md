@@ -191,7 +191,7 @@ Returns the parsed NitroAttestationDocument after verifying the attestation,
 may abort with errors described above.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_load_nitro_attestation">load_nitro_attestation</a>(attestation: vector&lt;u8&gt;, <a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): <a href="../sui/nitro_attestation.md#sui_nitro_attestation_NitroAttestationDocument">sui::nitro_attestation::NitroAttestationDocument</a>
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_load_nitro_attestation">load_nitro_attestation</a>(attestation: vector&lt;u8&gt;, clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): <a href="../sui/nitro_attestation.md#sui_nitro_attestation_NitroAttestationDocument">sui::nitro_attestation::NitroAttestationDocument</a>
 </code></pre>
 
 
@@ -200,8 +200,8 @@ may abort with errors described above.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_load_nitro_attestation">load_nitro_attestation</a>(attestation: vector&lt;u8&gt;, <a href="../sui/clock.md#sui_clock">clock</a>: &Clock): <a href="../sui/nitro_attestation.md#sui_nitro_attestation_NitroAttestationDocument">NitroAttestationDocument</a> {
-    <a href="../sui/nitro_attestation.md#sui_nitro_attestation_load_nitro_attestation_internal">load_nitro_attestation_internal</a>(&attestation, <a href="../sui/clock.md#sui_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../sui/clock.md#sui_clock">clock</a>))
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_load_nitro_attestation">load_nitro_attestation</a>(attestation: vector&lt;u8&gt;, clock: &Clock): <a href="../sui/nitro_attestation.md#sui_nitro_attestation_NitroAttestationDocument">NitroAttestationDocument</a> {
+    <a href="../sui/nitro_attestation.md#sui_nitro_attestation_load_nitro_attestation_internal">load_nitro_attestation_internal</a>(&attestation, clock::timestamp_ms(clock))
 }
 </code></pre>
 

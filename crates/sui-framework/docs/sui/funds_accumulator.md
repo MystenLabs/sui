@@ -240,7 +240,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_redeem">redeem</a>&lt;T: store&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;, _: <a href="../std/internal.md#std_internal_Permit">std::internal::Permit</a>&lt;T&gt;): T
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_redeem">redeem</a>&lt;T: store&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;, _: <a href="../std/internal.md#std_internal_Permit">std::internal::Permit</a>&lt;T&gt;): T
 </code></pre>
 
 
@@ -249,7 +249,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_redeem">redeem</a>&lt;T: store&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;, _: internal::Permit&lt;T&gt;): T {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_redeem">redeem</a>&lt;T: store&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;, _: internal::Permit&lt;T&gt;): T {
     <b>let</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a> { owner, limit: value } = withdrawal;
     <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_impl">withdraw_impl</a>(owner, value)
 }
@@ -265,7 +265,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_object">withdraw_from_object</a>&lt;T: store&gt;(obj: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_object">withdraw_from_object</a>&lt;T: store&gt;(obj: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;
 </code></pre>
 
 
@@ -274,7 +274,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_object">withdraw_from_object</a>&lt;T: store&gt;(obj: &<b>mut</b> UID, limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_object">withdraw_from_object</a>&lt;T: store&gt;(obj: &<b>mut</b> UID, limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt; {
     <b>assert</b>!(
         <a href="../sui/protocol_config.md#sui_protocol_config_is_feature_enabled">sui::protocol_config::is_feature_enabled</a>(b"enable_object_funds_withdraw"),
         <a href="../sui/funds_accumulator.md#sui_funds_accumulator_EObjectFundsWithdrawNotEnabled">EObjectFundsWithdrawNotEnabled</a>,
@@ -294,7 +294,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_impl">add_impl</a>&lt;T: store&gt;(value: T, recipient: <b>address</b>)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_impl">add_impl</a>&lt;T: store&gt;(value: T, recipient: <b>address</b>)
 </code></pre>
 
 
@@ -303,9 +303,9 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_impl">add_impl</a>&lt;T: store&gt;(value: T, recipient: <b>address</b>) {
-    <b>let</b> <a href="../sui/accumulator.md#sui_accumulator">accumulator</a> = <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">sui::accumulator::accumulator_address</a>&lt;T&gt;(recipient);
-    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_to_accumulator_address">add_to_accumulator_address</a>&lt;T&gt;(<a href="../sui/accumulator.md#sui_accumulator">accumulator</a>, recipient, value)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_impl">add_impl</a>&lt;T: store&gt;(value: T, recipient: <b>address</b>) {
+    <b>let</b> accumulator = <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">sui::accumulator::accumulator_address</a>&lt;T&gt;(recipient);
+    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_to_accumulator_address">add_to_accumulator_address</a>&lt;T&gt;(accumulator, recipient, value)
 }
 </code></pre>
 
@@ -329,8 +329,8 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 
 <pre><code><b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_impl">withdraw_impl</a>&lt;T: store&gt;(owner: <b>address</b>, value: u256): T {
-    <b>let</b> <a href="../sui/accumulator.md#sui_accumulator">accumulator</a> = <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">sui::accumulator::accumulator_address</a>&lt;T&gt;(owner);
-    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_accumulator_address">withdraw_from_accumulator_address</a>&lt;T&gt;(<a href="../sui/accumulator.md#sui_accumulator">accumulator</a>, owner, value)
+    <b>let</b> accumulator = <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">sui::accumulator::accumulator_address</a>&lt;T&gt;(owner);
+    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_accumulator_address">withdraw_from_accumulator_address</a>&lt;T&gt;(accumulator, owner, value)
 }
 </code></pre>
 
@@ -344,7 +344,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 
 
-<pre><code><b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_to_accumulator_address">add_to_accumulator_address</a>&lt;T: store&gt;(<a href="../sui/accumulator.md#sui_accumulator">accumulator</a>: <b>address</b>, recipient: <b>address</b>, value: T)
+<pre><code><b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_to_accumulator_address">add_to_accumulator_address</a>&lt;T: store&gt;(accumulator: <b>address</b>, recipient: <b>address</b>, value: T)
 </code></pre>
 
 
@@ -353,7 +353,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_to_accumulator_address">add_to_accumulator_address</a>&lt;T: store&gt;(<a href="../sui/accumulator.md#sui_accumulator">accumulator</a>: <b>address</b>, recipient: <b>address</b>, value: T);
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_to_accumulator_address">add_to_accumulator_address</a>&lt;T: store&gt;(accumulator: <b>address</b>, recipient: <b>address</b>, value: T);
 </code></pre>
 
 
@@ -366,7 +366,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 
 
-<pre><code><b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_accumulator_address">withdraw_from_accumulator_address</a>&lt;T: store&gt;(<a href="../sui/accumulator.md#sui_accumulator">accumulator</a>: <b>address</b>, owner: <b>address</b>, value: u256): T
+<pre><code><b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_accumulator_address">withdraw_from_accumulator_address</a>&lt;T: store&gt;(accumulator: <b>address</b>, owner: <b>address</b>, value: u256): T
 </code></pre>
 
 
@@ -376,7 +376,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_accumulator_address">withdraw_from_accumulator_address</a>&lt;T: store&gt;(
-    <a href="../sui/accumulator.md#sui_accumulator">accumulator</a>: <b>address</b>,
+    accumulator: <b>address</b>,
     owner: <b>address</b>,
     value: u256,
 ): T;
@@ -392,7 +392,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_create_withdrawal">create_withdrawal</a>&lt;T: store&gt;(owner: <b>address</b>, limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_create_withdrawal">create_withdrawal</a>&lt;T: store&gt;(owner: <b>address</b>, limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;
 </code></pre>
 
 
@@ -401,7 +401,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_create_withdrawal">create_withdrawal</a>&lt;T: store&gt;(owner: <b>address</b>, limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_create_withdrawal">create_withdrawal</a>&lt;T: store&gt;(owner: <b>address</b>, limit: u256): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt; {
     <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a> { owner, limit }
 }
 </code></pre>

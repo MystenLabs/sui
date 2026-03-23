@@ -206,7 +206,7 @@ A <code><a href="../sui/groth16.md#sui_groth16_ProofPoints">ProofPoints</a></cod
 Return the <code><a href="../sui/groth16.md#sui_groth16_Curve">Curve</a></code> value indicating that the BLS12-381 construction should be used in a given function.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bls12381.md#sui_bls12381">bls12381</a>(): <a href="../sui/groth16.md#sui_groth16_Curve">sui::groth16::Curve</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/groth16.md#sui_groth16_bls12381">bls12381</a>(): <a href="../sui/groth16.md#sui_groth16_Curve">sui::groth16::Curve</a>
 </code></pre>
 
 
@@ -215,7 +215,7 @@ Return the <code><a href="../sui/groth16.md#sui_groth16_Curve">Curve</a></code> 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bls12381.md#sui_bls12381">bls12381</a>(): <a href="../sui/groth16.md#sui_groth16_Curve">Curve</a> { <a href="../sui/groth16.md#sui_groth16_Curve">Curve</a> { id: 0 } }
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/groth16.md#sui_groth16_bls12381">bls12381</a>(): <a href="../sui/groth16.md#sui_groth16_Curve">Curve</a> { <a href="../sui/groth16.md#sui_groth16_Curve">Curve</a> { id: 0 } }
 </code></pre>
 
 
@@ -367,7 +367,7 @@ Creates a Groth16 <code><a href="../sui/groth16.md#sui_groth16_ProofPoints">Proo
 
 ## Function `prepare_verifying_key`
 
-@param curve: What elliptic curve construction to use. See <code><a href="../sui/bls12381.md#sui_bls12381">bls12381</a></code> and <code><a href="../sui/groth16.md#sui_groth16_bn254">bn254</a></code>.
+@param curve: What elliptic curve construction to use. See <code><a href="../sui/groth16.md#sui_groth16_bls12381">bls12381</a></code> and <code><a href="../sui/groth16.md#sui_groth16_bn254">bn254</a></code>.
 @param verifying_key: An Arkworks canonical compressed serialization of a verifying key.
 
 Returns four vectors of bytes representing the four components of a prepared verifying key.
@@ -423,7 +423,7 @@ Native functions that flattens the inputs into an array and passes to the Rust n
 
 ## Function `verify_groth16_proof`
 
-@param curve: What elliptic curve construction to use. See the <code><a href="../sui/bls12381.md#sui_bls12381">bls12381</a></code> and <code><a href="../sui/groth16.md#sui_groth16_bn254">bn254</a></code> functions.
+@param curve: What elliptic curve construction to use. See the <code><a href="../sui/groth16.md#sui_groth16_bls12381">bls12381</a></code> and <code><a href="../sui/groth16.md#sui_groth16_bn254">bn254</a></code> functions.
 @param prepared_verifying_key: Consists of four vectors of bytes representing the four components of a prepared verifying key.
 @param public_proof_inputs: Represent inputs that are public.
 @param proof_points: Represent three proof points.
