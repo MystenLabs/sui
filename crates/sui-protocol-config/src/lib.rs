@@ -306,6 +306,7 @@ const MAX_PROTOCOL_VERSION: u64 = 118;
 // Version 116: Enable Display Registry.
 // Version 117: Update Sui System metadata handling.
 // Version 118: Adds `transfer_migration_cap` to display registry
+//              Use coin party owner information.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1025,6 +1026,10 @@ struct FeatureFlags {
     // If true, mark the gas coin as uninitialized in drop safety when there is no gas coin.
     #[serde(skip_serializing_if = "is_false")]
     gasless_transaction_drop_safety: bool,
+
+    // If true, use coin party owner information.
+    #[serde(skip_serializing_if = "is_false")]
+    use_coin_party_owner: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2661,6 +2666,10 @@ impl ProtocolConfig {
 
     pub fn gasless_transaction_drop_safety(&self) -> bool {
         self.feature_flags.gasless_transaction_drop_safety
+    }
+
+    pub fn use_coin_party_owner(&self) -> bool {
+        self.feature_flags.use_coin_party_owner
     }
 }
 
@@ -4676,7 +4685,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_display_registry = true;
                 }
                 117 => {}
-                118 => {}
+                118 => {
+                    cfg.feature_flags.use_coin_party_owner = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
