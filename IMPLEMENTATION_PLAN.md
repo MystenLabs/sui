@@ -20,6 +20,7 @@
 - [x] For stateless: build PTB using address balance withdrawal + balance::redeem_funds + balance::send_funds
 - [x] For coins: build PTB using SplitCoins + coin::send_funds
 - [x] Wire up with dry_run_or_execute_or_serialize
+- [x] Auto-select between coins and address balance based on availability
 
 ### 6. Add TransactionData helper
 - [x] Add `new_with_gas_data_and_expiration` to support setting expiration

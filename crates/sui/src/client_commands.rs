@@ -1370,14 +1370,45 @@ impl SuiClientCommands {
                 let recipient = context.get_identity_address(Some(to))?;
                 let signer = context.active_address()?;
                 let _ = context.cache_chain_id().await?;
+                let client = context.grpc_client()?;
 
                 let coin_type_tag = coin_type.unwrap_or_else(|| {
                     TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid")
                 });
 
+                let is_sui = coin_type_tag.to_canonical_string(true) == SUI_COIN_TYPE;
+
+                let use_address_balance = if stateless {
+                    true
+                } else {
+                    let coin_struct_tag: StructTag = format!(
+                        "0x2::coin::Coin<{}>",
+                        coin_type_tag.to_canonical_string(true)
+                    )
+                    .parse()
+                    .expect("valid struct tag");
+                    let balance_info = client.get_balance(signer, &coin_struct_tag).await?;
+                    let coin_balance = balance_info.coin_balance();
+                    let address_balance = balance_info.address_balance();
+
+                    if coin_balance >= amount {
+                        false
+                    } else if address_balance >= amount {
+                        true
+                    } else {
+                        bail!(
+                            "Insufficient balance to send {} MIST. \
+                            Coin balance: {}, Address balance: {}",
+                            amount,
+                            coin_balance,
+                            address_balance
+                        );
+                    }
+                };
+
                 let mut builder = ProgrammableTransactionBuilder::new();
 
-                if stateless {
+                if use_address_balance {
                     let withdrawal_arg =
                         FundsWithdrawalArg::balance_from_sender(amount, coin_type_tag.clone());
                     let withdrawal_input = builder.funds_withdrawal(withdrawal_arg)?;
@@ -1401,11 +1432,28 @@ impl SuiClientCommands {
 
                     let tx_kind = TransactionKind::programmable(builder.finish());
 
-                    dry_run_or_execute_or_serialize_with_address_balance_gas(
-                        signer, tx_kind, context, gas_data, processing,
-                    )
-                    .await?
+                    if stateless {
+                        dry_run_or_execute_or_serialize_with_address_balance_gas(
+                            signer, tx_kind, context, gas_data, processing,
+                        )
+                        .await?
+                    } else {
+                        dry_run_or_execute_or_serialize(
+                            signer,
+                            tx_kind,
+                            context,
+                            vec![],
+                            gas_data,
+                            processing,
+                        )
+                        .await?
+                    }
                 } else {
+                    ensure!(
+                        is_sui,
+                        "Non-SUI coin transfers using coins require explicit coin selection. \
+                        Use --stateless to transfer from address balance instead."
+                    );
                     let amount_arg = builder.pure(amount)?;
                     let coin_arg =
                         builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
