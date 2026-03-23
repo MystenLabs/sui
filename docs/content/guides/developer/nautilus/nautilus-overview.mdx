@@ -3,11 +3,11 @@ title: What is Nautilus?
 description: Nautilus is a verifiable off-chain compute layer on Sui.
 ---
 
-Nautilus is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/guides/developer/nautilus/marlin) while preserving trust on-chain through smart contract-based verification.
+Nautilus is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/guides/developer/nautilus/community-dev-tools) while preserving trust on-chain through smart contract-based verification.
 
 Nautilus supports hybrid decentralized applications that require private data handling, complex computations, or integration with external (Web2) systems. The framework ensures computations are tamper-resistant, isolated, and cryptographically verifiable.
 
-It currently supports self-managed [AWS Nitro Enclave TEEs](https://aws.amazon.com/ec2/nitro/nitro-enclaves/) and Dockerized deployments through [Marlin](/guides/developer/nautilus/marlin). You can verify AWS-signed enclave attestations on-chain using Sui smart contracts written in Move. Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the reproducible build template.
+It currently supports self-managed [AWS Nitro Enclave TEEs](https://aws.amazon.com/ec2/nitro/nitro-enclaves/) and Dockerized deployments through [Marlin](/guides/developer/nautilus/community-dev-tools). You can verify AWS-signed enclave attestations on-chain using Sui smart contracts written in Move. Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the reproducible build template.
 
 ## Features
 
@@ -26,7 +26,7 @@ A Nautilus application consists of 2 components:
 
 ## How it works
 
-- Deploy the off-chain server to a self-managed TEE, such as AWS Nitro Enclaves, or use [Marlin Oyster](/guides/developer/nautilus/marlin) to deploy Dockerized Nautilus apps.
+- Deploy the off-chain server to a self-managed TEE, such as AWS Nitro Enclaves, or use [Marlin Oyster](/guides/developer/nautilus/community-dev-tools) to deploy Dockerized Nautilus apps.
 
 :::danger
 
