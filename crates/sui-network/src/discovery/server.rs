@@ -40,6 +40,7 @@ pub(super) struct Server {
 }
 
 impl Server {
+    #[allow(clippy::result_large_err)]
     fn is_requester_trusted(&self, peer_id: Option<&PeerId>) -> Result<bool, anemo::rpc::Status> {
         let Some(peer_id) = peer_id else {
             return Ok(false);
