@@ -5933,7 +5933,7 @@ dependencies = [
  "cynic",
  "cynic-codegen",
  "fastcrypto",
- "lru 0.10.0",
+ "lru 0.10.1",
  "prost 0.14.1",
  "reqwest",
  "serde",
