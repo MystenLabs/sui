@@ -656,7 +656,7 @@ impl AuthorityStore {
             return Err(SuiError::from("Sha does not match"));
         }
 
-        let chunk_size = ((objects.len() + num_parallel_chunks - 1) / num_parallel_chunks).max(1);
+        let chunk_size = objects.len().div_ceil(num_parallel_chunks).max(1);
         let mut remaining = objects;
         let mut handles = Vec::new();
         while !remaining.is_empty() {
