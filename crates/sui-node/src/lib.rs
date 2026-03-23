@@ -1606,6 +1606,10 @@ impl SuiNode {
         self.state.clone()
     }
 
+    pub fn connection_monitor_status(&self) -> &Arc<ConnectionMonitorStatus> {
+        &self.connection_monitor_status
+    }
+
     // Only used for testing because of how epoch store is loaded.
     pub fn reference_gas_price_for_testing(&self) -> Result<u64, anyhow::Error> {
         self.state.reference_gas_price_for_testing()
@@ -2319,12 +2323,15 @@ impl SpawnOnce {
     }
 }
 
-/// Updates trusted peer addresses in the p2p network.
+/// Updates trusted peer addresses in the p2p network (for nodes configured as validators).
 fn update_peer_addresses(
     config: &NodeConfig,
     endpoint_manager: &EndpointManager,
     epoch_start_state: &EpochStartSystemState,
 ) {
+    if config.consensus_config().is_none() {
+        return;
+    }
     for (peer_id, address) in
         epoch_start_state.get_validator_as_p2p_peers(config.protocol_public_key())
     {
