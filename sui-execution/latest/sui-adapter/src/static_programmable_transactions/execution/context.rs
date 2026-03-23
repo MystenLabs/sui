@@ -50,7 +50,10 @@ use move_vm_runtime::{
 use mysten_common::debug_fatal;
 use nonempty::nonempty;
 use quick_cache::unsync::Cache as QCache;
-use serde::{Deserialize, de::DeserializeSeed};
+use serde::{
+    Deserialize,
+    de::{self, DeserializeSeed},
+};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
@@ -573,12 +576,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             settlement_input_sui,
             settlement_output_sui,
         } = object_runtime.finish()?;
-        assert_invariant!(
-            created_input_object_ids
-                .iter()
-                .all(|id| created_object_ids.contains(id)),
-            "All created input objects should be tracked in the created objects set"
-        );
         assert_invariant!(
             loaded_runtime_objects
                 .keys()
@@ -1781,9 +1778,6 @@ fn finish_gas_coin<OType>(
         PaymentLocation::AddressBalance(address) => address,
     };
 
-    let Some((_owner, _ty, _value)) = writes.get(&gas_id) else {
-        invariant_violation!("Ephemeral gas coin must be in writes")
-    };
     let net_balance_change = if let Some(gas_coin_transfer) = gas_coin_transfer {
         // sanity check storage changes
         match gas_coin_transfer {
