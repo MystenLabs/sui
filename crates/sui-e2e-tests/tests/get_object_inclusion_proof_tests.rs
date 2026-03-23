@@ -43,9 +43,7 @@ async fn test_feature_flag_disabled() {
         .build()
         .await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some(ObjectID::random().to_string());
@@ -70,9 +68,7 @@ async fn test_missing_object_id() {
         .build()
         .await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = None;
@@ -94,9 +90,7 @@ async fn test_empty_object_id() {
         .build()
         .await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some("".to_string());
@@ -118,9 +112,7 @@ async fn test_invalid_object_id_format() {
         .build()
         .await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some("invalid_object_id".to_string());
@@ -144,9 +136,7 @@ async fn test_missing_checkpoint() {
 
     let object_id = get_test_object(&test_cluster).await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some(object_id.to_string());
@@ -170,9 +160,7 @@ async fn test_checkpoint_not_yet_indexed() {
 
     let object_id = get_test_object(&test_cluster).await;
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some(object_id.to_string());
@@ -199,9 +187,7 @@ async fn test_object_not_found_in_checkpoint() {
 
     let non_existent_object_id = ObjectID::random();
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some(non_existent_object_id.to_string());
@@ -228,9 +214,7 @@ async fn test_valid_request() {
     let state = test_cluster.fullnode_handle.sui_node.state();
     let latest_checkpoint = state.get_latest_checkpoint_sequence_number().unwrap();
 
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
     let mut found_checkpoint = None;
     for checkpoint_seq in 0..=latest_checkpoint {

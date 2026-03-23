@@ -16,9 +16,7 @@ async fn test_get_struct_datatype() {
         .build()
         .await;
 
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetDatatypeRequest::default();
     request.package_id = Some("0x3".to_string());
@@ -38,9 +36,7 @@ async fn test_get_datatype_not_found() {
         .build()
         .await;
 
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     // Test non-existent datatype
     let mut request = GetDatatypeRequest::default();
@@ -64,9 +60,7 @@ async fn test_get_datatype_invalid_package() {
         .build()
         .await;
 
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     // Test invalid package ID
     let mut request = GetDatatypeRequest::default();
@@ -86,9 +80,7 @@ async fn test_get_datatype_module_not_found() {
         .build()
         .await;
 
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     // Test non-existent module
     let mut request = GetDatatypeRequest::default();
@@ -108,9 +100,7 @@ async fn test_get_datatype_missing_package_id() {
         .build()
         .await;
 
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetDatatypeRequest::default();
     request.package_id = None;
@@ -129,9 +119,7 @@ async fn test_get_datatype_missing_module_name() {
         .build()
         .await;
 
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetDatatypeRequest::default();
     request.package_id = Some("0x3".to_string());
@@ -150,9 +138,7 @@ async fn test_get_datatype_missing_name() {
         .build()
         .await;
 
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetDatatypeRequest::default();
     request.package_id = Some("0x3".to_string());
