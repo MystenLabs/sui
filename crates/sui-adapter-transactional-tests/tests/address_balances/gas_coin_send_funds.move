@@ -29,8 +29,17 @@
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 
 
+//# programmable --sender B --inputs @B --address-balance-gas --gas-budget 10000000
+// Send ephemeral gas coin to self via send_funds
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+
+//# create-checkpoint
+
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+
+
 //# programmable --sender B --inputs @C --address-balance-gas --gas-budget 10000000
-// Send ephemeral gas coin to A via send_funds
+// Send ephemeral gas coin to another address via send_funds
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
 
 //# create-checkpoint
@@ -48,7 +57,7 @@
 
 //# view-object 0,2
 
-//# view-object 14,0
+//# view-object 17,0
 
 //# create-checkpoint
 
@@ -64,7 +73,7 @@
 
 //# view-object 0,2
 
-//# view-object 20,0
+//# view-object 23,0
 
 //# create-checkpoint
 
