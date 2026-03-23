@@ -1893,7 +1893,7 @@ impl AuthorityState {
     /// Helper function that handles transaction rewriting for coin reservations and executes
     /// the transaction to effects. Returns the execution results along with the command offset
     /// used for rewriting failure command indices.
-    fn execute_transaction_with_rewriting(
+    fn execute_transaction_to_effects(
         &self,
         executor: &dyn Executor,
         store: &dyn BackingStore,
@@ -1916,7 +1916,7 @@ impl AuthorityState {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        let compat_args = rewrite_transaction_for_coin_reservations(
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
             self.chain_identifier,
             &*self.coin_reservation_resolver,
             sender,
@@ -1936,7 +1936,7 @@ impl AuthorityState {
                 gas_data,
                 gas_status,
                 kind,
-                compat_args,
+                rewritten_inputs,
                 signer,
                 tx_digest,
                 &mut None,
@@ -2021,7 +2021,7 @@ impl AuthorityState {
 
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
-            .execute_transaction_with_rewriting(
+            .execute_transaction_to_effects(
                 &**epoch_store.executor(),
                 &tracking_store,
                 protocol_config,
@@ -2356,7 +2356,7 @@ impl AuthorityState {
         };
 
         let (inner_temp_store, _, effects, _timings, execution_error) = self
-            .execute_transaction_with_rewriting(
+            .execute_transaction_to_effects(
                 executor.as_ref(),
                 self.get_backing_store().as_ref(),
                 protocol_config,
@@ -2596,7 +2596,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             kind,
-            None, // compat_args - not needed for dev_inspect
+            None, // rewritten_inputs - not needed for dev_inspect
             signer,
             tx_digest,
             dev_inspect,
@@ -2632,7 +2632,7 @@ impl AuthorityState {
                     cloned_gas,
                     retry_gas_status,
                     cloned_kind,
-                    None, // compat_args
+                    None, // rewritten_inputs
                     signer,
                     tx_digest,
                     dev_inspect,
@@ -2886,7 +2886,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             transaction_kind,
-            None, // compat_args - not needed for dev_inspect
+            None, // rewritten_inputs - not needed for dev_inspect
             sender,
             transaction_digest,
             skip_checks,

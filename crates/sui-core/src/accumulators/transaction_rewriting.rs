@@ -9,7 +9,7 @@ use sui_types::transaction::{CallArg, ObjectArg, ProgrammableTransaction, Transa
 /// Rewrites coin reservation inputs (fake coins encoded as masked ObjectRefs) into
 /// FundsWithdrawalArgs so the executor can resolve them as balance withdrawals.
 ///
-/// Returns `Some(compat_args)` if any inputs were rewritten, where each bool indicates whether
+/// Returns `Some(rewritten_inputs)` if any inputs were rewritten, where each bool indicates whether
 /// the corresponding input was converted from a coin reservation. Returns `None` if nothing
 /// was rewritten.
 pub fn rewrite_transaction_for_coin_reservations(
@@ -41,12 +41,12 @@ fn rewrite_programmable_transaction_for_coin_reservations(
         return None;
     }
 
-    let mut compat_args = Vec::with_capacity(pt.inputs.len());
+    let mut rewritten_inputs = Vec::with_capacity(pt.inputs.len());
     for input in pt.inputs.iter_mut() {
         if let CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) = input
             && let Some(parsed) = ParsedObjectRefWithdrawal::parse(object_ref, chain_identifier)
         {
-            compat_args.push(true);
+            rewritten_inputs.push(true);
 
             // unwrap: This cannot fail because:
             // 1. Coin reservations are validated in `process_funds_withdrawals_for_signing` before
@@ -59,9 +59,9 @@ fn rewrite_programmable_transaction_for_coin_reservations(
                 .unwrap();
             *input = CallArg::FundsWithdrawal(withdraw);
         } else {
-            compat_args.push(false);
+            rewritten_inputs.push(false);
         }
     }
 
-    Some(compat_args)
+    Some(rewritten_inputs)
 }
