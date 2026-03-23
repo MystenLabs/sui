@@ -7,7 +7,9 @@
 //! No GQL type escapes this module. From here we return structures defined in this crate
 //! or bcs encoded data of runtime structures.
 //!
-//! This module is private to the `DataStore` and packcaged in its own module for convenience.
+//! This module is private to the `DataStore` and packaged in its own module for convenience.
+
+#![allow(unused)]
 
 use crate::{EpochData, stores::DataStore};
 use anyhow::{Context, Error, anyhow};
