@@ -253,10 +253,10 @@ impl TransactionEffects {
 
     /// Return an iterator of mutated objects, but excluding the gas object.
     pub fn mutated_excluding_gas(&self) -> Vec<(ObjectRef, Owner)> {
-        let gas_id = self.gas_object().0 .0;
+        let gas_id = self.gas_object().0.0;
         self.mutated()
             .into_iter()
-            .filter(|o| o.0 .0 != gas_id)
+            .filter(|o| o.0.0 != gas_id)
             .collect()
     }
 
