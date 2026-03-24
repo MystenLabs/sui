@@ -3328,7 +3328,7 @@ async fn test_simulate_address_funds_sufficient() {
     let result = test_env
         .cluster
         .grpc_client()
-        .simulate_transaction(&tx, false)
+        .simulate_transaction(&tx, false, false)
         .await
         .unwrap();
     assert!(result.transaction.effects.status().is_ok());
@@ -3356,7 +3356,7 @@ async fn test_simulate_address_funds_insufficient() {
     let result = test_env
         .cluster
         .grpc_client()
-        .simulate_transaction(&tx, false)
+        .simulate_transaction(&tx, false, false)
         .await;
     assert!(result.is_err());
 }
@@ -3388,7 +3388,7 @@ async fn test_simulate_object_funds_sufficient() {
     let result = test_env
         .cluster
         .grpc_client()
-        .simulate_transaction(&tx, false)
+        .simulate_transaction(&tx, false, false)
         .await
         .unwrap();
     assert!(result.transaction.effects.status().is_ok());
@@ -3421,7 +3421,7 @@ async fn test_simulate_object_funds_insufficient() {
     let result = test_env
         .cluster
         .grpc_client()
-        .simulate_transaction(&tx, false)
+        .simulate_transaction(&tx, false, false)
         .await
         .unwrap();
     assert!(
@@ -3740,7 +3740,7 @@ async fn test_simulate_overflowing_funds_withdrawal_returns_error() {
     let result = test_env
         .cluster
         .grpc_client()
-        .simulate_transaction(&tx, false)
+        .simulate_transaction(&tx, false, false)
         .await;
     assert!(result.is_err());
 }
@@ -3775,7 +3775,7 @@ async fn test_two_large_reservations_overflow() {
     let result = test_env
         .cluster
         .grpc_client()
-        .simulate_transaction(&tx, false)
+        .simulate_transaction(&tx, false, false)
         .await;
     assert!(result.is_err());
 }

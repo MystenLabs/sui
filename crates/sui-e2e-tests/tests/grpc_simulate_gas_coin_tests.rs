@@ -18,12 +18,11 @@ use sui_types::{
     base_types::SuiAddress,
     coin_reservation::ParsedDigest,
     effects::TransactionEffectsAPI,
+    gas_coin::MIST_PER_SUI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Argument, TransactionData, TransactionDataAPI},
 };
 use test_cluster::addr_balance_test_env::TestEnvBuilder;
-
-const MIST_PER_SUI: u64 = 1_000_000_000;
 
 /// Helper to build a PTB that splits X MIST from GasCoin and transfers to recipient.
 fn build_split_gas_coin_ptb(
@@ -72,9 +71,6 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
     let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
             cfg.enable_coin_reservation_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg
@@ -87,9 +83,8 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
     let recipient = SuiAddress::random_for_testing_only();
 
     // Fund sender's address balance with 10 SUI - sufficient on its own
-    test_env
-        .fund_one_address_balance(sender, 10 * MIST_PER_SUI)
-        .await;
+    let ab_amount = 10 * MIST_PER_SUI;
+    test_env.fund_one_address_balance(sender, ab_amount).await;
 
     // Refresh gas after funding
     let (sender, gas) = test_env.get_sender_and_gas(0);
@@ -101,7 +96,7 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
     let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, true).await;
+    let result = client.simulate_transaction(&tx, true, true).await;
 
     assert!(
         result.is_ok(),
@@ -131,6 +126,15 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
         first_payment.2
     );
 
+    // Verify the entire address balance is reserved, not just the gas budget
+    let parsed_digest = ParsedDigest::try_from(first_payment.2)
+        .expect("Should be able to parse coin reservation digest");
+    assert_eq!(
+        parsed_digest.reservation_amount(),
+        ab_amount,
+        "Coin reservation should reserve the entire address balance"
+    );
+
     // Execute the simulated transaction to verify it's valid
     let simulated_tx = &response.transaction.transaction;
     let (_, effects) = test_env
@@ -155,7 +159,6 @@ async fn test_has_ab_has_coins_no_gas_coin() {
     let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
             cfg.enable_coin_reservation_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg
@@ -166,49 +169,93 @@ async fn test_has_ab_has_coins_no_gas_coin() {
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
 
-    // Fund sender's address balance with enough for gas
-    test_env
-        .fund_one_address_balance(sender, 5 * MIST_PER_SUI)
-        .await;
+    // Fund sender's address balance - enough for a small gas budget but not a large one
+    let ab_amount = 1 * MIST_PER_SUI;
+    test_env.fund_one_address_balance(sender, ab_amount).await;
 
     // Refresh gas
     let (sender, gas) = test_env.get_sender_and_gas(0);
-
-    // Build PTB that does NOT use GasCoin
-    let gas_budget = 50_000_000;
-    let tx = build_no_gas_coin_ptb(sender, gas, gas_budget, test_env.rgp);
-
     let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, true).await;
 
+    // Case 1: Small budget that can be satisfied by AB alone
+    // When GasCoin is not used, AB is preferred if sufficient
+    let small_budget = 50_000_000; // 0.05 SUI - easily covered by 1 SUI AB
+    let tx_small = build_no_gas_coin_ptb(sender, gas, small_budget, test_env.rgp);
+
+    let result = client.simulate_transaction(&tx_small, true, true).await;
     assert!(
         result.is_ok(),
-        "Expected simulation to succeed, got: {:?}",
+        "Expected simulation to succeed with AB alone, got: {:?}",
         result.err()
     );
 
     let response = result.unwrap();
     assert!(
         response.transaction.effects.status().is_ok(),
-        "Expected successful execution, got: {:?}",
+        "Expected successful execution with AB alone, got: {:?}",
         response.transaction.effects.status()
     );
 
-    // When GasCoin is not used, prefer AB if sufficient, else coins.
-    // No coin reservation needed since user doesn't need access to combined balance.
+    // Verify no coin reservation was used (AB alone is sufficient, GasCoin not used)
+    let gas_payment = response.transaction.transaction.gas_data().payment.clone();
+    for (i, payment) in gas_payment.iter().enumerate() {
+        assert!(
+            !ParsedDigest::is_coin_reservation_digest(&payment.2),
+            "Gas payment[{}] should NOT be a coin reservation when GasCoin not used",
+            i
+        );
+    }
 
-    // Execute the simulated transaction to verify it's valid
+    // Execute to verify validity
     let simulated_tx = &response.transaction.transaction;
     let (_, effects) = test_env
         .cluster
         .sign_and_execute_transaction_directly(simulated_tx)
         .await
         .expect("Simulated transaction should execute successfully");
+    assert!(effects.status().is_ok());
+
+    // Update gas objects after execution
+    test_env.update_all_gas().await;
+
+    // Case 2: Large budget that requires coins (AB alone insufficient)
+    // Get fresh gas after first execution
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let large_budget = 5 * MIST_PER_SUI; // 5 SUI - exceeds 1 SUI AB
+    let tx_large = build_no_gas_coin_ptb(sender, gas, large_budget, test_env.rgp);
+
+    let result = client.simulate_transaction(&tx_large, true, true).await;
     assert!(
-        effects.status().is_ok(),
-        "Executed transaction should succeed, got: {:?}",
-        effects.status()
+        result.is_ok(),
+        "Expected simulation to succeed with coins, got: {:?}",
+        result.err()
     );
+
+    let response = result.unwrap();
+    assert!(
+        response.transaction.effects.status().is_ok(),
+        "Expected successful execution with coins, got: {:?}",
+        response.transaction.effects.status()
+    );
+
+    // Verify no coin reservation (GasCoin not used, so no need to combine)
+    let gas_payment = response.transaction.transaction.gas_data().payment.clone();
+    for (i, payment) in gas_payment.iter().enumerate() {
+        assert!(
+            !ParsedDigest::is_coin_reservation_digest(&payment.2),
+            "Gas payment[{}] should NOT be a coin reservation when GasCoin not used",
+            i
+        );
+    }
+
+    // Execute to verify validity
+    let simulated_tx = &response.transaction.transaction;
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(simulated_tx)
+        .await
+        .expect("Simulated transaction should execute successfully");
+    assert!(effects.status().is_ok());
 }
 
 // =============================================================================
@@ -218,13 +265,12 @@ async fn test_has_ab_has_coins_no_gas_coin() {
 
 #[sim_test]
 async fn test_has_ab_no_coins() {
-    // This test is tricky: we need a sender with AB but no coins.
-    // We'll use address balance gas to achieve this.
+    use sui_test_transaction_builder::TestTransactionBuilder;
+    use sui_types::transaction::TransactionExpiration;
 
     let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
             cfg.enable_coin_reservation_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg
@@ -233,37 +279,101 @@ async fn test_has_ab_no_coins() {
         .await;
 
     let mut test_env = test_env;
-    let (sender, _) = test_env.get_sender_and_gas(0);
 
-    // Fund sender's address balance with enough for gas + operations
+    // Use an existing genesis account (sender1) so its AB is known to the fullnode reader.
+    // Transfer all of sender1's coins to sender2, so sender1 only has AB.
+    let (sender1, _) = test_env.get_sender_and_gas(0);
+    let (sender2, _) = test_env.get_sender_and_gas(1);
+    let ab_amount = 10 * MIST_PER_SUI;
+
+    // Fund sender1's address balance
+    test_env.fund_one_address_balance(sender1, ab_amount).await;
+
+    // Get all coins for sender1 and transfer them to sender2
+    let (_, all_gas) = test_env.get_sender_and_all_gas(0);
+    let mut transfer_digests = Vec::new();
+    for coin in all_gas {
+        let transfer_tx = TestTransactionBuilder::new(sender1, coin, test_env.rgp)
+            .transfer_sui(None, sender2) // Transfer entire coin
+            .build();
+        let tx = test_env.cluster.wallet.sign_transaction(&transfer_tx).await;
+        let executed = test_env.cluster.execute_transaction(tx).await;
+        assert!(executed.effects.status().is_ok(), "Transfer should succeed");
+        transfer_digests.push(*executed.effects.transaction_digest());
+    }
+    // Wait for all transfers to settle in the RPC service
     test_env
-        .fund_one_address_balance(sender, 10 * MIST_PER_SUI)
+        .cluster
+        .wait_for_tx_settlement(&transfer_digests)
         .await;
 
-    // For a true "no coins" test, we'd need to spend all coins first.
-    // For now, this test verifies the setup works. The actual "pure AB"
-    // behavior will be tested once implementation allows simulating
-    // with address balance gas directly.
+    // Refresh gas objects
+    test_env.update_all_gas().await;
 
-    let (sender, gas) = test_env.get_sender_and_gas(0);
-    let gas_budget = 50_000_000;
-    let tx = build_no_gas_coin_ptb(sender, gas, gas_budget, test_env.rgp);
+    // Verify sender1 has no coins
+    let sender1_coins = test_env
+        .gas_objects
+        .get(&sender1)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        sender1_coins.is_empty(),
+        "sender1 should have no coins, has: {:?}",
+        sender1_coins
+    );
+
+    // Verify sender1 has AB
+    let ab_balance = test_env.get_sui_balance_ab(sender1);
+    assert!(
+        ab_balance > 0,
+        "sender1 should have address balance, got: {}",
+        ab_balance
+    );
+
+    // Now sender1 has:
+    // - Coins: NONE (all transferred to sender2)
+    // - AB: 10 SUI
+    //
+    // Build a transaction that does NOT use GasCoin (empty PTB)
+    // This should use pure AB payment with ValidDuring expiration
+
+    // Build transaction with empty gas payment - the simulate API should perform
+    // gas selection and discover we can use pure AB payment
+    let gas_budget = 50_000_000; // 0.05 SUI
+    let ptb = ProgrammableTransactionBuilder::new();
+    let pt = ptb.finish();
+    let tx = TransactionData::new_programmable(sender1, vec![], pt, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, true).await;
+    let result = client.simulate_transaction(&tx, true, true).await;
 
-    // Should succeed - has funds available
     assert!(
         result.is_ok(),
-        "Expected simulation to succeed, got: {:?}",
+        "Expected simulation to succeed with pure AB payment, got: {:?}",
         result.err()
     );
 
     let response = result.unwrap();
     assert!(
         response.transaction.effects.status().is_ok(),
-        "Expected successful execution, got: {:?}",
+        "Expected successful execution with pure AB payment, got: {:?}",
         response.transaction.effects.status()
+    );
+
+    // Verify pure AB payment: gas_data.payment should be empty
+    let gas_payment = response.transaction.transaction.gas_data().payment.clone();
+    assert!(
+        gas_payment.is_empty(),
+        "Gas payment should be empty for pure AB payment, got: {:?}",
+        gas_payment
+    );
+
+    // Verify expiration is set (ValidDuring for pure AB payment)
+    let expiration = response.transaction.transaction.expiration();
+    assert!(
+        matches!(expiration, TransactionExpiration::ValidDuring { .. }),
+        "Expected ValidDuring expiration for pure AB payment, got: {:?}",
+        expiration
     );
 
     // Execute the simulated transaction to verify it's valid
@@ -290,7 +400,6 @@ async fn test_no_ab_has_coins() {
     let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
             cfg.enable_coin_reservation_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg
@@ -309,7 +418,7 @@ async fn test_no_ab_has_coins() {
     let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, true).await;
+    let result = client.simulate_transaction(&tx, true, true).await;
 
     assert!(
         result.is_ok(),
@@ -360,7 +469,6 @@ async fn test_insufficient_funds() {
     let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
             cfg.enable_coin_reservation_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg
@@ -386,7 +494,7 @@ async fn test_insufficient_funds() {
     let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, false).await;
+    let result = client.simulate_transaction(&tx, false, false).await;
 
     match result {
         Ok(response) => {
@@ -429,7 +537,7 @@ async fn test_protocol_config_disabled() {
     let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, true).await;
+    let result = client.simulate_transaction(&tx, true, true).await;
 
     assert!(
         result.is_ok(),
@@ -471,7 +579,6 @@ async fn test_combined_ab_and_coins_needed() {
     let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
             cfg.enable_coin_reservation_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg
@@ -548,7 +655,7 @@ async fn test_combined_ab_and_coins_needed() {
     );
 
     let client = test_env.cluster.grpc_client();
-    let result = client.simulate_transaction(&tx, true).await;
+    let result = client.simulate_transaction(&tx, true, true).await;
 
     assert!(
         result.is_ok(),

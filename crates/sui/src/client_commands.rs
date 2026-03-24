@@ -3180,7 +3180,7 @@ pub async fn execute_dry_run(
     );
     debug!("Executing dry run");
     let response = client
-        .simulate_transaction(&tx_data, true)
+        .simulate_transaction(&tx_data, true, true)
         .await
         .context("Dry run failed")?;
     debug!("Finished executing dry run");
@@ -3527,7 +3527,11 @@ async fn execute_dev_inspect(
     );
 
     let result = client
-        .simulate_transaction(&tx, !skip_checks.unwrap_or(false))
+        .simulate_transaction(
+            &tx,
+            !skip_checks.unwrap_or(false),
+            !skip_checks.unwrap_or(false),
+        )
         .await?;
     Ok(SuiClientCommandResult::DevInspect(result))
 }

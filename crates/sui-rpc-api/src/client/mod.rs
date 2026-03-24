@@ -283,6 +283,7 @@ impl Client {
         &self,
         tx: &TransactionData,
         checks: bool,
+        do_gas_selection: bool,
     ) -> Result<SimulateTransactionResponse> {
         let mut request = proto::SimulateTransactionRequest::default();
         request.set_checks(if checks {
@@ -290,6 +291,7 @@ impl Client {
         } else {
             proto::simulate_transaction_request::TransactionChecks::Disabled
         });
+        request.set_do_gas_selection(do_gas_selection);
         request.set_transaction(
             proto::Transaction::default()
                 .with_bcs(proto::Bcs::serialize(&tx).map_err(|e| Status::from_error(e.into()))?),
