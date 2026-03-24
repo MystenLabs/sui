@@ -523,6 +523,7 @@ async fn test_indexer_e2e() -> Result<()> {
         .batch_get_transactions(BatchGetTransactionsRequest {
             digests: tx_digests.iter().map(ToString::to_string).collect(),
             read_mask: Some(FieldMask::from_paths(["balance_changes"])),
+            ..Default::default()
         })
         .await
         .context("batch_get_transactions RPC failed")?
