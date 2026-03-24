@@ -67,39 +67,30 @@ impl Handler for ObjVersions {
             .await?)
     }
 
-    /// An entry in `obj_versions` can only be pruned if it is superseded by a newer version. When
-    /// pruning is enabled, for some `reader_lo` checkpoint, the single latest version of each
-    /// object at or below that checkpoint is preserved.
+    /// Prunes rows in `obj_versions` that are superseded by newer versions, so that exactly one
+    /// version per object remains at or below the `reader_lo` checkpoint.
     ///
-    /// For example, an object modified at checkpoint 0 remains the latest object version when
-    /// queried at `reader_lo`. If the object is later modified at checkpoint X, the version at
-    /// checkpoint 0 can be pruned, and the object at checkpoint X is the new latest version for
-    /// `reader_lo`, until it is also superseded.
+    /// The pruner operates on chunks `[from, to_exclusive)` where `from >= pruner_hi` and
+    /// `to_exclusive <= reader_lo`. Chunks may run concurrently and complete out of order.
     ///
-    /// To avoid incurring additional database footprint, pruning for some range `[from >=
-    /// pruner_hi, to_exclusive <= reader_lo)` is as follows:
-    /// 1) All intermediate versions of an object within `[from, to_exclusive)` can be immediately
-    ///    pruned, resulting in at most one surviving entry representing the object's latest state
-    ///    at `to_exclusive`.
+    /// The pruning algorithm consists of 4 phases:
     ///
-    /// 2) Those local latest object versions can be pruned if superseded by any single extant
-    ///    version in `(to_exclusive, reader_lo]`. At the end of this step, each pruner chunk has a
-    ///    subset of the latest versions at `reader_lo`. Any object will show up at most once across
-    ///    the full `[pruner_hi, reader_lo)` range.
+    /// 1. Reduces object modifications within the chunk to the single latest version per object
+    ///    below `to_exclusive`.
+    /// 2. Deletes the local latest versions from phase 1 that are superseded by any newer version
+    ///    in `[to_exclusive, reader_lo]`. Each chunk must be responsible for pruning superseded
+    ///    entries within its own range. Left unhandled, these local latests would accumulate as
+    ///    stragglers. On the other hand, if future chunks are allowed to prune into previous
+    ///    chunks, predecessor versions become orphaned as the intermediate link is lost. At the end
+    ///    of phase 2, at most one version per object remains in any given chunk representing the
+    ///    latest version at `reader_lo`.
+    /// 3. Any entries that remain after phase 2 represent the latest version at `reader_lo`, and
+    ///    are used as reference to delete the immediate predecessor strictly below `pruner_hi`.
+    /// 4. Prune wrapped or deleted objects to prevent any orphaned entries.
     ///
-    /// 3) For every object remaining from step 2, delete its predecessor `< pruner_hi` — there must
-    ///    be at most one such predecessor.
     ///
-    /// An object either has one or more entries in `[pruner_hi, reader_lo]` (note the inclusive
-    /// upper bound on `reader_lo`) that reduce to a single latest version `<= reader_lo`, or has no
-    /// entries. In the former case, this remaining entry replaces its predecessor `< pruner_hi`. In
-    /// the latter, the entry `< pruner_hi` remains the latest version at `reader_lo`.
-    ///
-    /// Chunks can be pruned concurrently. Even if out-of-order completion shifts which entry is the
-    /// local latest in a given `[from, to_exclusive)` chunk, step 2 checks against any newer
-    /// version in `(to_exclusive, reader_lo]`. The true latest version of an object, either at or
-    /// less than `reader_lo`, is never deleted because no newer version exists to trigger deletion.
-    /// Any other local latest is superseded by some version in that range.
+    /// The true latest version of an object at `reader_lo` can never be deleted, because no newer
+    /// version exists to trigger its removal in phase 2.
     async fn prune<'a>(
         &self,
         from: u64,
@@ -132,34 +123,33 @@ impl Handler for ObjVersions {
           .await?;
 
 
-        // Computes the latest version and modification count of each object in
-        // [from, to_exclusive] using GROUP BY. The count is used to skip phase 1
-        // lookups for single-version objects (cnt = 1), which have no intermediates
-        // to delete — avoiding costly random index probes on cold pages.
+        // `all_in_range` computes the number of times each object was modified within `[from,
+        // to_exclusive]` and the latest version of each object at `to_exclusive`. The count is
+        // later used in phase 1 to filter out objects with a single modification (cnt = 1). These
+        // have no intermediates to delete, so we can avoid doing unnecessary lookups against the
+        // main `obj_versions` table.
         //
-        // Phase 1: Remove intermediate versions in [from, to_exclusive).
-        // Only objects with cnt > 1 are probed, since single-version objects
-        // are guaranteed to have no intermediates.
+        // `phase1` removes intermediate versions in [from, to_exclusive). Only objects with cnt > 1
+        // are probed, since single-version objects are guaranteed to have no intermediates. Objects
+        // modified exactly at `to_exclusive` are excluded, as they are handled by the chunk
+        // covering `[from=to_exclusive, future)`.
         //
-        // local_latest: The subset of all_in_range whose latest version falls
-        // strictly within [from, to_exclusive). Objects whose latest is at to_exclusive are
-        // excluded: phase 1 already pruned all their intermediate versions, and the entry at
-        // to_exclusive itself must never be deleted (it may be the true latest at reader_lo).
-        // This set drives phases 2-4 and ensures each object's pruning work happens in
-        // exactly one chunk, avoiding redundant deletes across concurrent pruner tasks.
+        // At the end of phase 1, `local_latest` captures the single latest modification of each
+        // object strictly within `[from, to_exclusive)`. This set drives phases 2-4 and ensures
+        // each object's pruning work happens in exactly one chunk, avoiding redundant deletes
+        // across concurrent pruner tasks.
         //
-        // Phase 2: Delete local latests superseded by a newer version in
-        // [to_exclusive, reader_lo].
+        // `phase2` deletes local latests superseded by a newer version in [to_exclusive,
+        // reader_lo].
         //
-        // Phase 3: For non-superseded local latests, delete the most recent predecessor
-        // below pruner_hi. Superseded objects (returned by phase 2) are excluded — their
-        // predecessor will be cleaned up by the chunk holding the superseding version.
+        // `phase3` deletes the immediate predecessor of the surviving local latests if they are
+        // strictly below `pruner_hi`.
         //
-        // Phase 4: Delete local latests representing wrapped or deleted objects (NULL digest).
+        // `phase4` deletes local latests representing wrapped or deleted objects (NULL digest).
         // Runs last so that phase 3 can still use wrapped entries to locate predecessors.
         //
-        // The final SELECT unions all RETURNING rows so that execute() returns the total
-        // number of deleted rows.
+        // The final SELECT unions all RETURNING rows so that execute() returns the total number of
+        // deleted rows.
         let rows_deleted = query!(
             r#"
             WITH
