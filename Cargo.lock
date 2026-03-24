@@ -3770,6 +3770,7 @@ dependencies = [
  "rand 0.8.5",
  "sui-config",
  "sui-macros",
+ "sui-protocol-config",
  "sui-simulator",
  "telemetry-subscribers",
  "tempfile",
