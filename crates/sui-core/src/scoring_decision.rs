@@ -178,10 +178,10 @@ mod tests {
             .authorities()
             .map(|(_i, authority)| {
                 let bytes: [u8; 96] = authority
-                    .authority_identifier
+                    .authority_name
                     .to_bytes()
                     .try_into()
-                    .expect("Authority identifier should be 96 bytes");
+                    .expect("Authority name should be 96 bytes");
                 (AuthorityPublicKeyBytes::new(bytes), 1)
             })
             .collect::<Vec<_>>();

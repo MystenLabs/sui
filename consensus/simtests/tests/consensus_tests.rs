@@ -7,7 +7,7 @@ mod consensus_tests {
     use std::{sync::Arc, time::Duration};
 
     use consensus_config::{
-        Authority, AuthorityIdentifier, AuthorityIndex, Committee, ConsensusProtocolConfig, Epoch,
+        Authority, AuthorityName, AuthorityIndex, Committee, ConsensusProtocolConfig, Epoch,
         NetworkKeyPair, ProtocolKeyPair, Stake,
     };
     use consensus_core::NoopTransactionVerifier;
@@ -342,7 +342,7 @@ mod consensus_tests {
                 stake,
                 address: get_available_local_address(),
                 hostname: format!("test_host_{i}").to_string(),
-                authority_identifier: AuthorityIdentifier::from_bytes(
+                authority_name: AuthorityName::from_bytes(
                     authority_keypair.public().as_bytes(),
                 ),
                 protocol_key: protocol_keypair.public(),

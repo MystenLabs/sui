@@ -186,7 +186,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
                 // TODO(mysticeti): Add EpochStartValidatorInfoV2 with new field for mysticeti address.
                 address: validator.narwhal_primary_address.clone(),
                 hostname: validator.hostname.clone(),
-                authority_identifier: consensus_config::AuthorityIdentifier::from_bytes(
+                authority_name: consensus_config::AuthorityName::from_bytes(
                     validator.protocol_pubkey.as_ref(),
                 ),
                 protocol_key: consensus_config::ProtocolPublicKey::new(
@@ -200,14 +200,14 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
 
         // Sort the authorities by their protocol (public) key in ascending order, same as the order
         // in the Sui committee returned from get_sui_committee().
-        authorities.sort_by(|a1, a2| a1.authority_identifier.cmp(&a2.authority_identifier));
+        authorities.sort_by(|a1, a2| a1.authority_name.cmp(&a2.authority_name));
 
         for ((i, mysticeti_authority), sui_authority_name) in authorities
             .iter()
             .enumerate()
             .zip(self.get_sui_committee().names())
         {
-            if sui_authority_name.0 != mysticeti_authority.authority_identifier.to_bytes() {
+            if sui_authority_name.0 != mysticeti_authority.authority_name.to_bytes() {
                 error!(
                     "Mismatched authority order between Sui and Mysticeti! Index {}, Mysticeti authority {:?}\nSui authority name {}",
                     i, mysticeti_authority, sui_authority_name
@@ -347,7 +347,7 @@ mod test {
                 .unwrap();
 
             assert_eq!(
-                consensus_authority.authority_identifier.to_bytes(),
+                consensus_authority.authority_name.to_bytes(),
                 sui_authority_name.0,
                 "Mysten & SUI committee member of same index correspond to different public key"
             );

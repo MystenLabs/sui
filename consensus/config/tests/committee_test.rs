@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use consensus_config::{
-    Authority, AuthorityIdentifier, Committee, NetworkKeyPair, ProtocolKeyPair, Stake,
+    Authority, AuthorityName, Committee, NetworkKeyPair, ProtocolKeyPair, Stake,
 };
 use fastcrypto::traits::{KeyPair as _, ToFromBytes as _};
 use insta::assert_yaml_snapshot;
@@ -26,7 +26,7 @@ fn committee_snapshot_matches() {
             stake: i as Stake,
             address: Multiaddr::empty(),
             hostname: "test_host".to_string(),
-            authority_identifier: AuthorityIdentifier::from_bytes(
+            authority_name: AuthorityName::from_bytes(
                 authority_keypair.public().as_bytes(),
             ),
             protocol_key: protocol_keypair.public(),

@@ -133,21 +133,21 @@ impl ProtocolKeySignature {
     }
 }
 
-/// Authority identifier is a raw bytes identity for an authority.
-/// It is only used for identity sanity checks and not for cryptographic verification.
-/// The bytes originate from the authority's BLS12381 public key on the Sui side.
-pub const AUTHORITY_IDENTIFIER_LENGTH: usize = 96;
+/// Authority name is a raw bytes identity for an authority, matching `AuthorityName`
+/// on the Sui side. It is only used for identity sanity checks and not for cryptographic
+/// verification. The bytes originate from the authority's BLS12381 public key.
+pub const AUTHORITY_NAME_LENGTH: usize = 96;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AuthorityIdentifier([u8; AUTHORITY_IDENTIFIER_LENGTH]);
+pub struct AuthorityName([u8; AUTHORITY_NAME_LENGTH]);
 
-impl AuthorityIdentifier {
-    pub fn new(bytes: [u8; AUTHORITY_IDENTIFIER_LENGTH]) -> Self {
+impl AuthorityName {
+    pub fn new(bytes: [u8; AUTHORITY_NAME_LENGTH]) -> Self {
         Self(bytes)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
-        let mut arr = [0u8; AUTHORITY_IDENTIFIER_LENGTH];
+        let mut arr = [0u8; AUTHORITY_NAME_LENGTH];
         arr.copy_from_slice(bytes);
         Self(arr)
     }
@@ -157,13 +157,13 @@ impl AuthorityIdentifier {
     }
 }
 
-impl std::fmt::Debug for AuthorityIdentifier {
+impl std::fmt::Debug for AuthorityName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AuthorityIdentifier({})", Base64::encode(self.0))
+        write!(f, "AuthorityName({})", Base64::encode(self.0))
     }
 }
 
-impl Serialize for AuthorityIdentifier {
+impl Serialize for AuthorityName {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
             serializer.serialize_str(&Base64::encode(self.0))
@@ -173,20 +173,20 @@ impl Serialize for AuthorityIdentifier {
     }
 }
 
-impl<'de> Deserialize<'de> for AuthorityIdentifier {
+impl<'de> Deserialize<'de> for AuthorityName {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
             let bytes = Base64::decode(&s).map_err(serde::de::Error::custom)?;
-            let arr: [u8; AUTHORITY_IDENTIFIER_LENGTH] = bytes
+            let arr: [u8; AUTHORITY_NAME_LENGTH] = bytes
                 .try_into()
-                .map_err(|_| serde::de::Error::custom("invalid authority identifier length"))?;
+                .map_err(|_| serde::de::Error::custom("invalid authority name length"))?;
             Ok(Self(arr))
         } else {
             let bytes = <Vec<u8>>::deserialize(deserializer)?;
-            let arr: [u8; AUTHORITY_IDENTIFIER_LENGTH] = bytes
+            let arr: [u8; AUTHORITY_NAME_LENGTH] = bytes
                 .try_into()
-                .map_err(|_| serde::de::Error::custom("invalid authority identifier length"))?;
+                .map_err(|_| serde::de::Error::custom("invalid authority name length"))?;
             Ok(Self(arr))
         }
     }
