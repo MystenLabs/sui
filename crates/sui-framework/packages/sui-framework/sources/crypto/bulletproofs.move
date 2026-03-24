@@ -17,7 +17,7 @@ const EUnsupportedVersion: u64 = 5;
 /// Currently, the only supported version is 0 which corresponds to the original Bulletproofs construction (https://eprint.iacr.org/2017/1066.pdf).
 /// In the future, we may add support for newer versions of Bulletproofs, such as Bulletproofs+ or Bulletproofs++.
 public fun verify_range_proof_ristretto255(proof: &vector<u8>, bits: u8, commitments: &vector<Element<ristretto255::Point>>, version: u8): bool {
-    match version {
+    match (version) {
         0 => verify_bulletproof_ristretto255_internal(proof, bits, &commitments.map_ref!(|c| *c.bytes())),
         _ => abort EUnsupportedVersion,
     }
