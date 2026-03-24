@@ -70,6 +70,7 @@ pub trait Executor {
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
+        _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
