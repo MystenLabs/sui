@@ -556,6 +556,47 @@ async fn test_indexer_e2e() -> Result<()> {
         );
     }
 
+    // -- Unchanged loaded runtime objects --
+    let ulro_response = harness
+        .grpc_client
+        .ledger_client()
+        .batch_get_transactions({
+            let mut req = BatchGetTransactionsRequest::default();
+            req.digests = tx_digests.iter().map(ToString::to_string).collect();
+            req.read_mask = Some(FieldMask::from_paths([
+                "effects.unchanged_loaded_runtime_objects",
+            ]));
+            req
+        })
+        .await
+        .context("batch_get_transactions RPC failed for unchanged_loaded")?
+        .into_inner();
+
+    assert_eq!(ulro_response.transactions.len(), tx_digests.len());
+    for ((digest, indexed), grpc_result) in tx_digests
+        .iter()
+        .zip(transactions.iter())
+        .zip(ulro_response.transactions.into_iter())
+    {
+        let grpc_transaction = grpc_result.to_result().unwrap_or_else(|status| {
+            panic!("batch_get_transactions failed for {digest}: {status:?}")
+        });
+
+        let grpc_ulro = grpc_transaction
+            .effects
+            .map(|e| e.unchanged_loaded_runtime_objects)
+            .unwrap_or_default();
+        let expected_ulro: Vec<_> = indexed
+            .unchanged_loaded_runtime_objects
+            .iter()
+            .map(Into::into)
+            .collect();
+        assert_eq!(
+            grpc_ulro, expected_ulro,
+            "unchanged_loaded_runtime_objects mismatch for transaction {digest}"
+        );
+    }
+
     // -- Checkpoint lookup --
     let checkpoint_numbers: Vec<_> = transactions
         .iter()
