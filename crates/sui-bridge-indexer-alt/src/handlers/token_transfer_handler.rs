@@ -96,7 +96,11 @@ impl Processor for TokenTransferHandler {
                         .with_label_values(&["sui_to_eth", "true"])
                         .inc_by(tx.effects.gas_cost_summary().net_gas_usage() as u64);
 
-                    (event.source_chain, event.seq_num, TokenTransferStatus::Deposited)
+                    (
+                        event.source_chain,
+                        event.seq_num,
+                        TokenTransferStatus::Deposited,
+                    )
                 } else if self.deposited_event_v2_type == ev.type_ {
                     info!("Observed Sui V2 Deposit {:?}", ev);
                     let event: MoveTokenDepositedEventV2 = bcs::from_bytes(&ev.contents)?;
@@ -119,7 +123,11 @@ impl Processor for TokenTransferHandler {
                         .with_label_values(&["sui_to_eth", "true"])
                         .inc_by(tx.effects.gas_cost_summary().net_gas_usage() as u64);
 
-                    (event.source_chain, event.seq_num, TokenTransferStatus::Deposited)
+                    (
+                        event.source_chain,
+                        event.seq_num,
+                        TokenTransferStatus::Deposited,
+                    )
                 } else if self.approved_event_type == ev.type_ {
                     info!("Observed Sui Approval {:?}", ev);
                     let event: MoveTokenTransferApproved = bcs::from_bytes(&ev.contents)?;
