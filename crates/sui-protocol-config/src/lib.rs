@@ -1730,6 +1730,9 @@ pub struct ProtocolConfig {
     group_ops_ristretto_scalar_div_cost: Option<u64>,
     group_ops_ristretto_point_div_cost: Option<u64>,
 
+    bulletproofs_ristretto255_verify_base_cost: Option<u64>,
+    bulletproofs_ristretto255_verify_cost_per_bit: Option<u64>,
+
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
@@ -3207,6 +3210,9 @@ impl ProtocolConfig {
             group_ops_ristretto_point_mul_cost: None,
             group_ops_ristretto_scalar_div_cost: None,
             group_ops_ristretto_point_div_cost: None,
+
+            bulletproofs_ristretto255_verify_base_cost: None,
+            bulletproofs_ristretto255_verify_cost_per_bit: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -4795,6 +4801,13 @@ impl ProtocolConfig {
                     }
                     cfg.transfer_receive_object_cost_per_byte = Some(1);
                     cfg.transfer_receive_object_type_cost_per_byte = Some(2);
+
+                    // Enable bulletproofs range proofs on devnet
+                    cfg.bulletproofs_ristretto255_verify_base_cost = Some(100);
+                    cfg.bulletproofs_ristretto255_verify_cost_per_bit = Some(1000);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_ristretto255_group_ops = true;
+                    }
                 }
                 120 => {
                     cfg.feature_flags.disallow_jump_orphans = true;

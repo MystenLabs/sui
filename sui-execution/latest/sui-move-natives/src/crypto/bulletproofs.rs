@@ -18,7 +18,6 @@ use move_vm_runtime::{native_charge_gas_early_exit, pop_arg};
 use rand::thread_rng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use crate::crypto::group_ops::NOT_SUPPORTED_ERROR;
 use crate::object_runtime::ObjectRuntime;
 
 pub const NOT_SUPPORTED: u64 = 0;
