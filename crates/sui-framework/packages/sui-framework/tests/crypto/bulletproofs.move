@@ -52,7 +52,6 @@ fun test_bulletproof_invalid_range() {
     verify_range_proof_ristretto255(&proof, 42, &vector[commitment], 0);
 }
 
-
 #[test]
 #[expected_failure(abort_code = sui::bulletproofs::EInvalidBatchSize)]
 fun test_bulletproof_invalid_batch_size() {
@@ -61,4 +60,3 @@ fun test_bulletproof_invalid_batch_size() {
     let commitment = ristretto255::g_from_bytes(x"c026d2b1790b3391f991ad4a2ad62e3ae5db6da3eeb2280aa83bd6018fe3967b");
     verify_range_proof_ristretto255(&proof, 42, &vector[commitment, commitment, commitment], 0);
 }
-
