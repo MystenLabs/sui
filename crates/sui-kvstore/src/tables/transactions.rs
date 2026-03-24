@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn decode_preserves_balance_changes() {
+    fn encode_decode_round_trip() {
         let transaction = test_transaction();
         let effects = TestEffectsBuilder::new(transaction.data()).build();
         let balance_change = BalanceChange {
@@ -189,31 +189,6 @@ mod tests {
             coin_type: TypeTag::U64,
             amount: 42,
         };
-
-        let encoded = encode(
-            &transaction,
-            &effects,
-            &None,
-            7,
-            42,
-            std::slice::from_ref(&balance_change),
-            &[],
-        )
-        .expect("encoding should succeed");
-        let row: Vec<(Bytes, Bytes)> = encoded
-            .into_iter()
-            .map(|(column, value)| (Bytes::from_static(column.as_bytes()), value))
-            .collect();
-
-        let decoded = decode(&row).expect("decoding should succeed");
-
-        assert_eq!(decoded.balance_changes, vec![balance_change]);
-    }
-
-    #[test]
-    fn decode_preserves_unchanged_loaded_runtime_objects() {
-        let transaction = test_transaction();
-        let effects = TestEffectsBuilder::new(transaction.data()).build();
         let obj_key = ObjectKey(ObjectID::random(), 3.into());
 
         let encoded = encode(
@@ -222,7 +197,7 @@ mod tests {
             &None,
             7,
             42,
-            &[],
+            std::slice::from_ref(&balance_change),
             std::slice::from_ref(&obj_key),
         )
         .expect("encoding should succeed");
@@ -233,6 +208,7 @@ mod tests {
 
         let decoded = decode(&row).expect("decoding should succeed");
 
+        assert_eq!(decoded.balance_changes, vec![balance_change]);
         assert_eq!(decoded.unchanged_loaded_runtime_objects, vec![obj_key]);
     }
 }
