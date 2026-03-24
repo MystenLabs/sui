@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod bls12381;
+pub mod bulletproofs;
 pub mod ecdsa_k1;
 pub mod ecdsa_r1;
 pub mod ecvrf;
