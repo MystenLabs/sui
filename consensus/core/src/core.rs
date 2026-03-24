@@ -287,13 +287,6 @@ impl Core {
             // Read commit index once for the entire batch to avoid repeated lock acquisitions.
             let commit_index = self.dag_state.read().last_commit_index();
             for block in &accepted_blocks {
-                tracing::info!(
-                    "{} Core accepted round {}, author {} at timestamp: {}",
-                    self.context.own_index,
-                    block.round(),
-                    block.author(),
-                    block.timestamp_ms()
-                );
                 self.signals.new_accepted_block(block.clone(), commit_index);
             }
         }
