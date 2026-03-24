@@ -477,7 +477,7 @@ public(package) fun advance_epoch(
 
     // At this point, self.active_validators are updated for next epoch.
     // Now we process the staged validator metadata.
-    self.effectuate_staged_metadata();
+    self.active_validators.do_mut!(|v| v.effectuate_staged_metadata());
 }
 
 /// This function does the following:
@@ -589,23 +589,13 @@ fun update_validator_positions_and_calculate_total_stake(
             // return validator object to the candidate pool. want to do this directly instead of
             // calling request_add_validator_candidate because staking_pool_mappings already has an
             // entry for this validator, and the duplicate checks are redundant
-            self
-                .validator_candidates
-                .add(
-                    validator.sui_address(),
-                    validator.wrap_v1(ctx),
-                );
+            self.validator_candidates.add(validator.sui_address(), validator.wrap_v1(ctx));
             total_removed_stake = total_removed_stake + validator_stake;
         }
     });
 
     // new total stake is the initial total minus the amount removed via validators we kicked out
     initial_total_stake - total_removed_stake
-}
-
-/// Effectuate pending next epoch metadata if they are staged.
-fun effectuate_staged_metadata(self: &mut ValidatorSet) {
-    self.active_validators.do_mut!(|v| v.effectuate_staged_metadata());
 }
 
 /// Called by `sui_system` to derive reference gas price for the new epoch.
