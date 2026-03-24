@@ -133,10 +133,17 @@ fn transaction_to_response(
     }
 
     if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
-        let effects = TransactionEffects::merge_from(
+        let mut effects = TransactionEffects::merge_from(
             &sui_sdk_types::TransactionEffects::try_from(source.effects)?,
             &submask,
         );
+        if submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD.name) {
+            effects.unchanged_loaded_runtime_objects = source
+                .unchanged_loaded_runtime_objects
+                .iter()
+                .map(Into::into)
+                .collect();
+        }
         // TODO: add support for object_types in the KV store
         message.effects = Some(effects);
     }
