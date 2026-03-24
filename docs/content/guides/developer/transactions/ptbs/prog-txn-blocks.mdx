@@ -143,9 +143,13 @@ Shared objects have restrictions on by value usage to ensure they remain shared 
 
 #### Move call rules
 
-PTBs can call any `public` function and any `entry` function, whether private (`entry fun f()`), `public(package)` or public package (`public(package) entry fun f()`). Non-entry private and `public(package)` functions cannot be called from PTBs. Note that in this way, there is no reason to add `entry` to a `public` function.
+PTBs can call any `public` function and any `entry` function, whether private (`entry fun f()`), or `public(package)` (`public(package) entry fun f()`). Non-entry private and `public(package)` functions cannot be called from PTBs. Note that in this way, there is no reason to add `entry` to a `public` function.
 
-Previously, `entry` functions had signature restrictions that limited their parameter and return types compared to `public` functions. These restrictions have been removed--`entry` functions can now have the same signature as any `public` function!
+:::info 
+
+Previously, `entry` functions had signature restrictions that limited their parameter and return types compared to `public` functions. These restrictions have been removed. `entry` functions can now have the same signature as any `public` function.
+
+:::
 
 **Return types:**
 Move calls cannot return references (`&T` or `&mut T`). However, this restriction will be lifted in the future.
@@ -153,22 +157,22 @@ Move calls cannot return references (`&T` or `&mut T`). However, this restrictio
 **Private generics:**
 Some framework functions have type parameters that can only be instantiated with types defined in the same module. Since PTBs are not modules, they cannot supply these types and therefore cannot call these functions directly. For example, certain `sui::transfer` functions like `transfer` and `share_object` require a type defined in the calling module, and as such cannot be called from a PTB. Instead, use the `public_transfer` and `public_share_object` variants.
 
-**TxContext handling:**
-`TxContext` parameters (`&TxContext` or `&mut TxContext`) are automatically injected by the runtime--callers do not supply them. `TxContext` can appear at any position in the parameter list, and a function can have multiple `TxContext` parameters as long as they are immutable (`&TxContext`). These parameters are not counted toward the user-supplied argument count for indexing purposes.
+**`TxContext` handling:**
+`TxContext` parameters (`&TxContext` or `&mut TxContext`) are automatically injected by the runtime; callers do not supply them. `TxContext` can appear at any position in the parameter list, and a function can have multiple `TxContext` parameters as long as they are immutable (`&TxContext`). These parameters are not counted toward the user-supplied argument count for indexing purposes.
 
 #### Non-public entry function restrictions {#non-public-entry-function-restrictions}
 
-A non-public `entry` function is a function declared with `entry` that is NOT `public`--either private (`entry fun f()`) or `public(package)` (`public(package) entry fun f()`). These functions can be called directly in PTBs but not from other packages.
+A non-public `entry` function is a function declared with `entry` that is **not** `public`. It is either private (`entry fun f()`) or `public(package)` (`public(package) entry fun f()`). These functions can be called directly in PTBs but not from other packages.
 
-Non-public `entry` functions have a single restriction: their arguments cannot be in a "hot" clique when the function is called. This restriction ensures that arguments to non-public `entry` functions are not entangled with outstanding [hot potato](https://move-book.com/programmability/hot-potato-pattern) values that could force behavior after the function executes.
+Non-public `entry` functions have a single restriction: their arguments cannot be in a "hot" clique (see below) when the function is called. This restriction ensures that arguments to non-public `entry` functions are not entangled with outstanding [hot potato](https://move-book.com/programmability/hot-potato-pattern) values that could force behavior after the function executes.
 
 **Hot potato values**
 
-A value is a _hot potato_ if its type has neither the `drop` nor the `store` ability. Hot potato values must be consumed (moved by value) before the transaction completes; they cannot be silently dropped or stored.
+A value is a hot potato if its type has neither the `drop` nor the `store` ability. Hot potato values must be consumed (moved by value) before the transaction completes; they cannot be silently dropped or stored.
 
 **Cliques**
 
-The system tracks which values are entangled using _cliques_:
+The system tracks which values are entangled using cliques:
 
 - Each PTB input starts in its own clique with a hot count of 0.
 - When values are used together as arguments in a command, their cliques merge. The hot counts add together.
@@ -176,7 +180,7 @@ The system tracks which values are entangled using _cliques_:
 - Moving (consuming) a hot potato decrements its clique's hot count.
 - Before a non-public `entry` call, the merged clique of its arguments must have a hot count of 0.
 
-A non-public `entry` function _can_ consume hot potato values — they just must be the last hot values in their clique. The hot count check happens after arguments are consumed but before the function is verified.
+A non-public `entry` function can consume hot potato values, but they must be the last hot values in their clique. The hot count check happens after arguments are consumed but before the function is verified.
 
 **Shared objects consumed by value**
 
@@ -252,23 +256,23 @@ Even though the `Coin` created in command 1 was not directly involved in the fla
 
 #### Pure value type checking
 
-Pure values are not type checked until they are used. The first time a pure value appears as an argument expecting type `T`, the system checks that `T` is a valid pure type (see the [Inputs section](/guides/developer/transactions/ptbs/inputs-and-results)) and that the bytes deserialize to `T`. Each distinct type creates a separate typed copy of the bytes--so the same pure input can be used at multiple types as long as the bytes are valid for each. For example, you can use the same bytes as an ASCII string `std::ascii::String` and as a UTF-8 string `std::string::String`. Each typed copy is treated as its own input, so mutations affect only that type's value, not all values created from the same bytes.
+Pure values are not type checked until they are used. The first time a pure value appears as an argument expecting type `T`, the system checks that `T` is a valid pure type (see the [Inputs section](/guides/developer/transactions/ptbs/inputs-and-results)) and that the bytes deserialize to `T`. Each distinct type creates a separate typed copy of the bytes, so the same pure input can be used at multiple types as long as the bytes are valid for each. For example, you can use the same bytes as an ASCII string `std::ascii::String` and as a UTF-8 string `std::string::String`. Each typed copy is treated as its own input, so mutations affect only that type's value, not all values created from the same bytes.
 
 #### Publish and Upgrade rules
 
-Both commands embed their module bytes and dependency IDs directly in the command structure--these are not PTB `Argument` values.
+Both commands embed their module bytes and dependency IDs directly in the command structure, however, these are not PTB `Argument` values.
 
 **Publish:**
 
 - Returns a single `sui::package::UpgradeCap`.
 - After the package is staged, the runtime calls each module's `init` function (if present) in module order. `init` receives `&mut TxContext` and optionally a one-time witness. Additional `init` arguments are not yet supported but are planned.
-- The package is available to `init` functions during execution--it is staged before they run.
+- The package is available to `init` functions during execution. It is staged before they run.
 
 **Upgrade:**
 
 - Takes exactly one PTB argument: a `sui::package::UpgradeTicket` (by value).
 - Returns a single `sui::package::UpgradeReceipt`.
-- Does _not_ call `init` functions--newly added modules in an upgrade cannot have `init` functions. This restriction will be lifted in a future release.
+- Does not call `init` functions. Newly added modules in an upgrade cannot have `init` functions. This restriction will be lifted in a future release.
 - The module digest and package ID in the ticket must match exactly.
 - The upgrade policy (compatible, additive, dep-only) is enforced from the ticket.
 

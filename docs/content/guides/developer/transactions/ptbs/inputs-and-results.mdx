@@ -42,7 +42,7 @@ Each transaction command produces an array of values. The array can be empty. Th
 
 - `SplitCoins`: Produces one or more coins from a single coin. The type of each coin is `sui::coin::Coin<T>` where the specific coin type `T` matches the coin being split.
 
-- `Publish`: Returns a single `sui::package::UpgradeCap`. Module bytes and dependency IDs are embedded in the command structure--they are not `Argument` values. After the package is staged, `init` functions run for each module in order.
+- `Publish`: Returns a single `sui::package::UpgradeCap`. Module bytes and dependency IDs are embedded in the command structure; they are not `Argument` values. After the package is staged, `init` functions run for each module in order.
 
 - `Upgrade`: Takes exactly one `Argument`: a `sui::package::UpgradeTicket` (by value). Returns a single `sui::package::UpgradeReceipt`. Module bytes and dependency IDs are embedded in the command, not supplied as `Argument` values. Does not call `init` functions.
 
