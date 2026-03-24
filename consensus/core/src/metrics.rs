@@ -490,7 +490,7 @@ impl NodeMetrics {
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
-                &["authority", "source", "error"],
+                &["authority", "source", "error", "node_type"],
                 registry,
             ).unwrap(),
             certifier_block_latency: register_histogram_vec_with_registry!(
