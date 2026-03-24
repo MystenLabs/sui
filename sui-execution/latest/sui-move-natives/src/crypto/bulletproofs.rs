@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::object_runtime::ObjectRuntime;
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::bulletproofs::{Range, RangeProof};
 use fastcrypto::error::FastCryptoError::InvalidInput;
@@ -18,7 +19,6 @@ use move_vm_runtime::{native_charge_gas_early_exit, pop_arg};
 use rand::thread_rng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use crate::object_runtime::ObjectRuntime;
 
 pub const NOT_SUPPORTED: u64 = 0;
 pub const INVALID_PROOF: u64 = 1;
