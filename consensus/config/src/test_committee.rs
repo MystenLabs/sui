@@ -7,9 +7,7 @@ use fastcrypto::traits::{KeyPair as _, ToFromBytes as _};
 use mysten_network::Multiaddr;
 use rand::{SeedableRng as _, rngs::StdRng};
 
-use crate::{
-    Authority, AuthorityName, Committee, Epoch, NetworkKeyPair, ProtocolKeyPair, Stake,
-};
+use crate::{Authority, AuthorityName, Committee, Epoch, NetworkKeyPair, ProtocolKeyPair, Stake};
 
 /// Creates a committee for local testing, and the corresponding key pairs for the authorities.
 pub fn local_committee_and_keys(
@@ -39,9 +37,7 @@ pub fn local_committee_and_keys_with_test_options(
                 "/ip4/127.0.0.1/udp/8081".parse().unwrap()
             },
             hostname: format!("test_host_{i}").to_string(),
-            authority_name: AuthorityName::from_bytes(
-                authority_keypair.public().as_bytes(),
-            ),
+            authority_name: AuthorityName::from_bytes(authority_keypair.public().as_bytes()),
             protocol_key: protocol_keypair.public(),
             network_key: network_keypair.public(),
         });

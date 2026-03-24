@@ -695,7 +695,7 @@ where
             voted_blocks.push((verified_block, reject_txn_votes));
         }
 
-        if context.protocol_config.fastpath_enabled() {
+        if context.protocol_config.transaction_voting_enabled() {
             transaction_certifier.add_voted_blocks(voted_blocks);
         }
 

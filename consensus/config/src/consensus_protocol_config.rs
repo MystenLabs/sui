@@ -11,7 +11,7 @@ pub struct ConsensusProtocolConfig {
     max_transactions_in_block_bytes: u64,
     max_num_transactions_in_block: u64,
     gc_depth: u32,
-    fastpath_enabled: bool,
+    transaction_voting_enabled: bool,
     num_leaders_per_round: Option<usize>,
     bad_nodes_stake_threshold: u64,
     always_accept_system_transactions: bool,
@@ -25,7 +25,7 @@ impl Default for ConsensusProtocolConfig {
             max_transactions_in_block_bytes: if cfg!(msim) { 256 * 1024 } else { 512 * 1024 },
             max_num_transactions_in_block: if cfg!(msim) { 8 } else { 512 },
             gc_depth: 0,
-            fastpath_enabled: false,
+            transaction_voting_enabled: false,
             num_leaders_per_round: None,
             bad_nodes_stake_threshold: 0,
             always_accept_system_transactions: false,
@@ -40,7 +40,7 @@ impl ConsensusProtocolConfig {
         max_transactions_in_block_bytes: u64,
         max_num_transactions_in_block: u64,
         gc_depth: u32,
-        fastpath_enabled: bool,
+        transaction_voting_enabled: bool,
         num_leaders_per_round: Option<usize>,
         bad_nodes_stake_threshold: u64,
         always_accept_system_transactions: bool,
@@ -51,7 +51,7 @@ impl ConsensusProtocolConfig {
             max_transactions_in_block_bytes,
             max_num_transactions_in_block,
             gc_depth,
-            fastpath_enabled,
+            transaction_voting_enabled,
             num_leaders_per_round,
             bad_nodes_stake_threshold,
             always_accept_system_transactions,
@@ -67,7 +67,7 @@ impl ConsensusProtocolConfig {
             max_transactions_in_block_bytes: if cfg!(msim) { 256 * 1024 } else { 512 * 1024 },
             max_num_transactions_in_block: if cfg!(msim) { 8 } else { 512 },
             gc_depth: if cfg!(msim) { 6 } else { 60 },
-            fastpath_enabled: true,
+            transaction_voting_enabled: true,
             num_leaders_per_round: Some(1),
             bad_nodes_stake_threshold: 30,
             always_accept_system_transactions: true,
@@ -96,8 +96,8 @@ impl ConsensusProtocolConfig {
         self.gc_depth
     }
 
-    pub fn fastpath_enabled(&self) -> bool {
-        self.fastpath_enabled
+    pub fn transaction_voting_enabled(&self) -> bool {
+        self.transaction_voting_enabled
     }
 
     pub fn num_leaders_per_round(&self) -> Option<usize> {
@@ -118,8 +118,8 @@ impl ConsensusProtocolConfig {
         self.gc_depth = val;
     }
 
-    pub fn set_fastpath_enabled_for_testing(&mut self, val: bool) {
-        self.fastpath_enabled = val;
+    pub fn set_transaction_voting_enabled_for_testing(&mut self, val: bool) {
+        self.transaction_voting_enabled = val;
     }
 
     pub fn set_max_transaction_size_bytes_for_testing(&mut self, val: u64) {

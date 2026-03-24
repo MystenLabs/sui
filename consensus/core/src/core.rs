@@ -621,7 +621,7 @@ impl Core {
             .write()
             .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
 
-        let transaction_votes = if self.context.protocol_config.fastpath_enabled() {
+        let transaction_votes = if self.context.protocol_config.transaction_voting_enabled() {
             let new_causal_history = {
                 let mut dag_state = self.dag_state.write();
                 ancestors
@@ -635,7 +635,7 @@ impl Core {
         };
 
         // Create the block and insert to storage.
-        let block = if self.context.protocol_config.fastpath_enabled() {
+        let block = if self.context.protocol_config.transaction_voting_enabled() {
             Block::V2(BlockV2::new(
                 self.context.committee.epoch(),
                 clock_round,
@@ -699,7 +699,7 @@ impl Core {
         // The block must be added to transaction certifier before it is broadcasted or added to DagState.
         // Update proposed state of blocks in local DAG.
         // TODO(fastpath): move this logic and the logic afterwards to proposed block handler.
-        if self.context.protocol_config.fastpath_enabled() {
+        if self.context.protocol_config.transaction_voting_enabled() {
             self.transaction_certifier
                 .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
             self.dag_state

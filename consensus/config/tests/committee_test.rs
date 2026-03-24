@@ -26,9 +26,7 @@ fn committee_snapshot_matches() {
             stake: i as Stake,
             address: Multiaddr::empty(),
             hostname: "test_host".to_string(),
-            authority_name: AuthorityName::from_bytes(
-                authority_keypair.public().as_bytes(),
-            ),
+            authority_name: AuthorityName::from_bytes(authority_keypair.public().as_bytes()),
             protocol_key: protocol_keypair.public(),
             network_key: network_keypair.public(),
         });
