@@ -1331,6 +1331,30 @@ fn compile_expression(
                 push_instr!(exp.loc, Bytecode::LdU256(Box::new(i)));
                 function_frame.push()?;
             }
+            CopyableVal_::I8(i) => {
+                push_instr!(exp.loc, Bytecode::LdI8(i));
+                function_frame.push()?;
+            }
+            CopyableVal_::I16(i) => {
+                push_instr!(exp.loc, Bytecode::LdI16(i));
+                function_frame.push()?;
+            }
+            CopyableVal_::I32(i) => {
+                push_instr!(exp.loc, Bytecode::LdI32(i));
+                function_frame.push()?;
+            }
+            CopyableVal_::I64(i) => {
+                push_instr!(exp.loc, Bytecode::LdI64(i));
+                function_frame.push()?;
+            }
+            CopyableVal_::I128(i) => {
+                push_instr!(exp.loc, Bytecode::LdI128(Box::new(i)));
+                function_frame.push()?;
+            }
+            CopyableVal_::I256(i) => {
+                push_instr!(exp.loc, Bytecode::LdI256(Box::new(i)));
+                function_frame.push()?;
+            }
             CopyableVal_::ByteArray(buf) => {
                 let vec_value = MoveValue::vector_u8(buf);
                 let ty = MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8));
@@ -1672,6 +1696,41 @@ fn compile_call(
                 }
                 Builtin::ToU256 => {
                     push_instr!(call.loc, Bytecode::CastU256);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI8 => {
+                    push_instr!(call.loc, Bytecode::CastI8);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI16 => {
+                    push_instr!(call.loc, Bytecode::CastI16);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI32 => {
+                    push_instr!(call.loc, Bytecode::CastI32);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI64 => {
+                    push_instr!(call.loc, Bytecode::CastI64);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI128 => {
+                    push_instr!(call.loc, Bytecode::CastI128);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI256 => {
+                    push_instr!(call.loc, Bytecode::CastI256);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::Neg => {
+                    push_instr!(call.loc, Bytecode::Neg);
                     function_frame.pop()?;
                     function_frame.push()?;
                 }

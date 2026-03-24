@@ -440,6 +440,20 @@ pub enum Builtin {
     ToU128,
     /// Cast an integer into u256.
     ToU256,
+    /// Cast an integer into i8.
+    ToI8,
+    /// Cast an integer into i16.
+    ToI16,
+    /// Cast an integer into i32.
+    ToI32,
+    /// Cast an integer into i64.
+    ToI64,
+    /// Cast an integer into i128.
+    ToI128,
+    /// Cast an integer into i256.
+    ToI256,
+    /// Negate an integer.
+    Neg,
 }
 
 /// Enum for different function calls
@@ -547,6 +561,18 @@ pub enum CopyableVal_ {
     U128(u128),
     /// An unsigned 256-bit integer
     U256(move_core_types::u256::U256),
+    /// A signed 8-bit integer
+    I8(i8),
+    /// A signed 16-bit integer
+    I16(i16),
+    /// A signed 32-bit integer
+    I32(i32),
+    /// A signed 64-bit integer
+    I64(i64),
+    /// A signed 128-bit integer
+    I128(i128),
+    /// A signed 256-bit integer
+    I256(move_core_types::i256::I256),
     /// true or false
     Bool(bool),
     /// `b"<bytes>"`
@@ -1503,6 +1529,13 @@ impl fmt::Display for Builtin {
             Builtin::ToU64 => write!(f, "to_u64"),
             Builtin::ToU128 => write!(f, "to_u128"),
             Builtin::ToU256 => write!(f, "to_u256"),
+            Builtin::ToI8 => write!(f, "to_i8"),
+            Builtin::ToI16 => write!(f, "to_i16"),
+            Builtin::ToI32 => write!(f, "to_i32"),
+            Builtin::ToI64 => write!(f, "to_i64"),
+            Builtin::ToI128 => write!(f, "to_i128"),
+            Builtin::ToI256 => write!(f, "to_i256"),
+            Builtin::Neg => write!(f, "neg"),
         }
     }
 }
@@ -1632,6 +1665,12 @@ impl fmt::Display for CopyableVal_ {
             CopyableVal_::U64(v) => write!(f, "{}", v),
             CopyableVal_::U128(v) => write!(f, "{}u128", v),
             CopyableVal_::U256(v) => write!(f, "{}u256", v),
+            CopyableVal_::I8(v) => write!(f, "{}i8", v),
+            CopyableVal_::I16(v) => write!(f, "{}i16", v),
+            CopyableVal_::I32(v) => write!(f, "{}i32", v),
+            CopyableVal_::I64(v) => write!(f, "{}i64", v),
+            CopyableVal_::I128(v) => write!(f, "{}i128", v),
+            CopyableVal_::I256(v) => write!(f, "{}i256", v),
             CopyableVal_::Bool(v) => write!(f, "{}", v),
             CopyableVal_::ByteArray(v) => write!(f, "0b{}", hex::encode(v)),
             CopyableVal_::Address(v) => write!(f, "0x{}", hex::encode(v)),

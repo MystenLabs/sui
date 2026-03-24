@@ -18,6 +18,12 @@ pub enum Tok {
     U64Value,
     U128Value,
     U256Value,
+    I8Value,
+    I16Value,
+    I32Value,
+    I64Value,
+    I128Value,
+    I256Value,
     NameValue,
     NameBeginTyValue,
     DotNameValue,
@@ -61,6 +67,13 @@ pub enum Tok {
     ToU64,
     ToU128,
     ToU256,
+    ToI8,
+    ToI16,
+    ToI32,
+    ToI64,
+    ToI128,
+    ToI256,
+    Neg,
     Import,
     Jump,
     JumpIf,
@@ -392,6 +405,18 @@ fn get_decimal_number(text: &str) -> (Tok, usize) {
         (Tok::U128Value, len + 4)
     } else if rest.starts_with("u256") {
         (Tok::U256Value, len + 4)
+    } else if rest.starts_with("i8") {
+        (Tok::I8Value, len + 2)
+    } else if rest.starts_with("i16") {
+        (Tok::I16Value, len + 3)
+    } else if rest.starts_with("i32") {
+        (Tok::I32Value, len + 3)
+    } else if rest.starts_with("i64") {
+        (Tok::I64Value, len + 3)
+    } else if rest.starts_with("i128") {
+        (Tok::I128Value, len + 4)
+    } else if rest.starts_with("i256") {
+        (Tok::I256Value, len + 4)
     } else {
         (Tok::U64Value, len)
     }
@@ -430,6 +455,13 @@ fn get_name_token(name: &str) -> Tok {
         "to_u64" => Tok::ToU64,
         "to_u128" => Tok::ToU128,
         "to_u256" => Tok::ToU256,
+        "to_i8" => Tok::ToI8,
+        "to_i16" => Tok::ToI16,
+        "to_i32" => Tok::ToI32,
+        "to_i64" => Tok::ToI64,
+        "to_i128" => Tok::ToI128,
+        "to_i256" => Tok::ToI256,
+        "neg" => Tok::Neg,
         "import" => Tok::Import,
         "jump" => Tok::Jump,
         "jump_if" => Tok::JumpIf,
