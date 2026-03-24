@@ -88,7 +88,7 @@ pub fn verify_bulletproof_ristretto255(
 
     // The performance depends is linear in length times range bits
     let total_bits = length * range_bits as u64;
-    if !length.is_power_of_two() || total_bits > MAX_TOTAL_BITS {
+    if length == 0 || !length.is_power_of_two() || total_bits > MAX_TOTAL_BITS {
         return Ok(NativeResult::err(context.gas_used(), INVALID_BATCH_SIZE));
     }
 
