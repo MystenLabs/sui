@@ -929,7 +929,7 @@
     "source": "/guides/developer/nautilus/marlin.md",
     "destination": "/guides/developer/nautilus/community-dev-tools.md",
     "permanent": true
-    }
+    },
     {
       "source": "/guides/developer/advanced/custom-indexer",
       "destination": "/guides/developer/accessing-data/custom-indexer",
