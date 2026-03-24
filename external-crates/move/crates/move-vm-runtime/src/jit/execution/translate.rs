@@ -15,7 +15,7 @@ use crate::{
     jit::{execution::ast::*, optimization::ast as input},
     natives::functions::NativeFunctions,
     shared::{
-        check_type_depth,
+        TypeSize,
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
@@ -1647,75 +1647,71 @@ fn make_arena_type(
     module: &CompiledModule,
     tok: &SignatureToken,
 ) -> PartialVMResult<ArenaType> {
-    make_arena_type_impl(context, module, tok, 0)
+    make_arena_type_impl(context, module, tok, &mut TypeSize::for_type_traversal())
 }
 
 fn make_arena_type_impl(
     context: &PackageContext,
     module: &CompiledModule,
     tok: &SignatureToken,
-    depth: usize,
+    type_size: &mut TypeSize,
 ) -> PartialVMResult<ArenaType> {
-    check_type_depth(depth)?;
-    let res = match tok {
-        SignatureToken::Bool => ArenaType::Bool,
-        SignatureToken::U8 => ArenaType::U8,
-        SignatureToken::U16 => ArenaType::U16,
-        SignatureToken::U32 => ArenaType::U32,
-        SignatureToken::U64 => ArenaType::U64,
-        SignatureToken::U128 => ArenaType::U128,
-        SignatureToken::U256 => ArenaType::U256,
-        SignatureToken::Address => ArenaType::Address,
-        SignatureToken::Signer => ArenaType::Signer,
-        SignatureToken::TypeParameter(idx) => ArenaType::TyParam(*idx),
-        SignatureToken::Vector(inner_tok) => ArenaType::Vector(context.arena_box(
-            make_arena_type_impl(context, module, inner_tok, depth.safe_add(1)?)?,
-        )?),
-        SignatureToken::Reference(inner_tok) => ArenaType::Reference(context.arena_box(
-            make_arena_type_impl(context, module, inner_tok, depth.safe_add(1)?)?,
-        )?),
-        SignatureToken::MutableReference(inner_tok) => {
-            ArenaType::MutableReference(context.arena_box(make_arena_type_impl(
-                context,
-                module,
-                inner_tok,
-                depth.safe_add(1)?,
-            )?)?)
-        }
-        SignatureToken::Datatype(sh_idx) => {
-            let datatype_handle = module.datatype_handle_at(*sh_idx);
-            let datatype_name = context
-                .interner
-                .intern_ident_str(module.identifier_at(datatype_handle.name));
-            let module_handle = module.module_handle_at(datatype_handle.module);
-            let original_address = module.address_identifier_at(module_handle.address);
-            let module_name = context
-                .interner
-                .intern_ident_str(module.identifier_at(module_handle.name));
-            let cache_idx =
-                VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
-            ArenaType::Datatype(cache_idx)
-        }
-        SignatureToken::DatatypeInstantiation(inst) => {
-            let (sh_idx, tys) = &**inst;
-            let type_parameters: Vec<_> = tys
-                .iter()
-                .map(|tok| make_arena_type_impl(context, module, tok, depth.safe_add(1)?))
-                .collect::<PartialVMResult<_>>()?;
-            let type_parameters = context.arena_vec(type_parameters.into_iter())?;
-            let datatype_handle = module.datatype_handle_at(*sh_idx);
-            let datatype_name = context
-                .interner
-                .intern_ident_str(module.identifier_at(datatype_handle.name));
-            let module_handle = module.module_handle_at(datatype_handle.module);
-            let original_address = module.address_identifier_at(module_handle.address);
-            let module_name = context
-                .interner
-                .intern_ident_str(module.identifier_at(module_handle.name));
-            let cache_idx =
-                VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
-            ArenaType::DatatypeInstantiation(context.arena_box((cache_idx, type_parameters))?)
-        }
-    };
-    Ok(res)
+    type_size.enter_type(|type_size| {
+        let res = match tok {
+            SignatureToken::Bool => ArenaType::Bool,
+            SignatureToken::U8 => ArenaType::U8,
+            SignatureToken::U16 => ArenaType::U16,
+            SignatureToken::U32 => ArenaType::U32,
+            SignatureToken::U64 => ArenaType::U64,
+            SignatureToken::U128 => ArenaType::U128,
+            SignatureToken::U256 => ArenaType::U256,
+            SignatureToken::Address => ArenaType::Address,
+            SignatureToken::Signer => ArenaType::Signer,
+            SignatureToken::TypeParameter(idx) => ArenaType::TyParam(*idx),
+            SignatureToken::Vector(inner_tok) => ArenaType::Vector(
+                context.arena_box(make_arena_type_impl(context, module, inner_tok, type_size)?)?,
+            ),
+            SignatureToken::Reference(inner_tok) => ArenaType::Reference(
+                context.arena_box(make_arena_type_impl(context, module, inner_tok, type_size)?)?,
+            ),
+            SignatureToken::MutableReference(inner_tok) => ArenaType::MutableReference(
+                context.arena_box(make_arena_type_impl(context, module, inner_tok, type_size)?)?,
+            ),
+            SignatureToken::Datatype(sh_idx) => {
+                let datatype_handle = module.datatype_handle_at(*sh_idx);
+                let datatype_name = context
+                    .interner
+                    .intern_ident_str(module.identifier_at(datatype_handle.name));
+                let module_handle = module.module_handle_at(datatype_handle.module);
+                let original_address = module.address_identifier_at(module_handle.address);
+                let module_name = context
+                    .interner
+                    .intern_ident_str(module.identifier_at(module_handle.name));
+                let cache_idx =
+                    VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
+                ArenaType::Datatype(cache_idx)
+            }
+            SignatureToken::DatatypeInstantiation(inst) => {
+                let (sh_idx, tys) = &**inst;
+                let type_parameters: Vec<_> = tys
+                    .iter()
+                    .map(|tok| make_arena_type_impl(context, module, tok, type_size))
+                    .collect::<PartialVMResult<_>>()?;
+                let type_parameters = context.arena_vec(type_parameters.into_iter())?;
+                let datatype_handle = module.datatype_handle_at(*sh_idx);
+                let datatype_name = context
+                    .interner
+                    .intern_ident_str(module.identifier_at(datatype_handle.name));
+                let module_handle = module.module_handle_at(datatype_handle.module);
+                let original_address = module.address_identifier_at(module_handle.address);
+                let module_name = context
+                    .interner
+                    .intern_ident_str(module.identifier_at(module_handle.name));
+                let cache_idx =
+                    VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
+                ArenaType::DatatypeInstantiation(context.arena_box((cache_idx, type_parameters))?)
+            }
+        };
+        Ok(res)
+    })
 }
