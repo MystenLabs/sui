@@ -7,6 +7,7 @@ use crate::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
     annotated_value::{MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
+    i256::I256,
     identifier::IdentStr,
     u256::U256,
 };
@@ -81,6 +82,66 @@ macro_rules! visitor_default {
             &mut self,
             _: &$crate::annotated_visitor::ValueDriver<'_, $b, $l>,
             _: U256,
+        ) -> Result<Self::Value, Self::Error> {
+            $default
+        }
+    };
+
+    (i8<$b:lifetime, $l:lifetime> = $default:expr) => {
+        fn visit_i8(
+            &mut self,
+            _: &$crate::annotated_visitor::ValueDriver<'_, $b, $l>,
+            _: i8,
+        ) -> Result<Self::Value, Self::Error> {
+            $default
+        }
+    };
+
+    (i16<$b:lifetime, $l:lifetime> = $default:expr) => {
+        fn visit_i16(
+            &mut self,
+            _: &$crate::annotated_visitor::ValueDriver<'_, $b, $l>,
+            _: i16,
+        ) -> Result<Self::Value, Self::Error> {
+            $default
+        }
+    };
+
+    (i32<$b:lifetime, $l:lifetime> = $default:expr) => {
+        fn visit_i32(
+            &mut self,
+            _: &$crate::annotated_visitor::ValueDriver<'_, $b, $l>,
+            _: i32,
+        ) -> Result<Self::Value, Self::Error> {
+            $default
+        }
+    };
+
+    (i64<$b:lifetime, $l:lifetime> = $default:expr) => {
+        fn visit_i64(
+            &mut self,
+            _: &$crate::annotated_visitor::ValueDriver<'_, $b, $l>,
+            _: i64,
+        ) -> Result<Self::Value, Self::Error> {
+            $default
+        }
+    };
+
+    (i128<$b:lifetime, $l:lifetime> = $default:expr) => {
+        fn visit_i128(
+            &mut self,
+            _: &$crate::annotated_visitor::ValueDriver<'_, $b, $l>,
+            _: i128,
+        ) -> Result<Self::Value, Self::Error> {
+            $default
+        }
+    };
+
+    (i256<$b:lifetime, $l:lifetime> = $default:expr) => {
+        fn visit_i256(
+            &mut self,
+            _: &$crate::annotated_visitor::ValueDriver<'_, $b, $l>,
+            _: $crate::i256::I256,
         ) -> Result<Self::Value, Self::Error> {
             $default
         }
@@ -204,6 +265,42 @@ pub trait Visitor<'b, 'l> {
         value: U256,
     ) -> Result<Self::Value, Self::Error>;
 
+    fn visit_i8(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i8,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_i16(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i16,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_i32(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i32,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_i64(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i64,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_i128(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i128,
+    ) -> Result<Self::Value, Self::Error>;
+
+    fn visit_i256(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: I256,
+    ) -> Result<Self::Value, Self::Error>;
+
     fn visit_bool(
         &mut self,
         driver: &ValueDriver<'_, 'b, 'l>,
@@ -298,6 +395,54 @@ pub trait Traversal<'b, 'l> {
         &mut self,
         _driver: &ValueDriver<'_, 'b, 'l>,
         _value: U256,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn traverse_i8(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: i8,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn traverse_i16(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: i16,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn traverse_i32(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: i32,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn traverse_i64(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: i64,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn traverse_i128(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: i128,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn traverse_i256(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        _value: I256,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -399,6 +544,54 @@ impl<'b, 'l, T: Traversal<'b, 'l> + ?Sized> Visitor<'b, 'l> for T {
         value: U256,
     ) -> Result<Self::Value, Self::Error> {
         self.traverse_u256(driver, value)
+    }
+
+    fn visit_i8(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i8,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_i8(driver, value)
+    }
+
+    fn visit_i16(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i16,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_i16(driver, value)
+    }
+
+    fn visit_i32(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i32,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_i32(driver, value)
+    }
+
+    fn visit_i64(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i64,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_i64(driver, value)
+    }
+
+    fn visit_i128(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: i128,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_i128(driver, value)
+    }
+
+    fn visit_i256(
+        &mut self,
+        driver: &ValueDriver<'_, 'b, 'l>,
+        value: I256,
+    ) -> Result<Self::Value, Self::Error> {
+        self.traverse_i256(driver, value)
     }
 
     fn visit_bool(
@@ -503,9 +696,6 @@ pub enum Error {
 
     #[error("no layout available for value")]
     NoValueLayout,
-
-    #[error("signed integer layouts are not yet supported in visitor")]
-    UnsupportedSignedIntLayout,
 }
 
 /// The null traversal implements `Traversal` and `Visitor` but without doing anything (does not
@@ -894,8 +1084,34 @@ pub(crate) fn visit_value<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
             visitor.visit_signer(&driver, v)
         }
 
-        L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => {
-            Err(Error::UnsupportedSignedIntLayout.into())
+        L::I8 => {
+            let v = i8::from_le_bytes(driver.read_exact()?);
+            visitor.visit_i8(&driver, v)
+        }
+
+        L::I16 => {
+            let v = i16::from_le_bytes(driver.read_exact()?);
+            visitor.visit_i16(&driver, v)
+        }
+
+        L::I32 => {
+            let v = i32::from_le_bytes(driver.read_exact()?);
+            visitor.visit_i32(&driver, v)
+        }
+
+        L::I64 => {
+            let v = i64::from_le_bytes(driver.read_exact()?);
+            visitor.visit_i64(&driver, v)
+        }
+
+        L::I128 => {
+            let v = i128::from_le_bytes(driver.read_exact()?);
+            visitor.visit_i128(&driver, v)
+        }
+
+        L::I256 => {
+            let v = I256::from_le_bytes(&driver.read_exact()?);
+            visitor.visit_i256(&driver, v)
         }
 
         L::Vector(l) => visit_vector(driver, l.as_ref(), visitor),
