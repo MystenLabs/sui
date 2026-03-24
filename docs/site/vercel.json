@@ -917,9 +917,19 @@
     },
     {
       "source": "/guides/developer/sui-101/coin-mgt",
-      "destination": "/concepts/transactions/coin-mgt",
+      "destination": "/concepts",
       "permanent": true
     },
+    {
+      "source": "/concepts/coin-mgt",
+      "destination": "/concepts",
+      "permanent": true
+    },
+    {
+    "source": "/guides/developer/nautilus/marlin.md",
+    "destination": "/guides/developer/nautilus/community-dev-tools.md",
+    "permanent": true
+    }
     {
       "source": "/guides/developer/advanced/custom-indexer",
       "destination": "/guides/developer/accessing-data/custom-indexer",
@@ -3667,7 +3677,7 @@
     },
     {
       "source": "/concepts/transactions/coin-mgt",
-      "destination": "/guides/developer/digital-assets/fungible-tokens/create-a-fungible-token-coin"
+      "destination": "/concepts"
     },
     {
       "source": "/concepts/transactions",
@@ -4016,7 +4026,7 @@
     },
     {
       "source": "/guides/developer/nautilus/marlin",
-      "destination": "/guides/developer/nautilus/community-dev-toolsk",
+      "destination": "/guides/developer/nautilus/community-dev-tools",
       "permanent": true
     },
     {
