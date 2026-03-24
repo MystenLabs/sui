@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
 ---
 processed 14 tasks
 
@@ -37,7 +38,7 @@ task 5, line 49:
 //# run test::large_balance::send_large_balance --args object(2,0) @A 18446744073709551615 --sender A
 mutated: object(0,0), object(2,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Merge)
+accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Merge, 18446744073709551615)
 gas summary: computation_cost: 1000000, storage_cost: 2432000,  storage_rebate: 2407680, non_refundable_storage_fee: 24320
 
 task 6, lines 51-53:
@@ -48,7 +49,7 @@ task 7, line 54:
 //# run test::large_balance::send_large_balance --args object(2,1) @A 18446744073709551615 --sender A
 mutated: object(0,0), object(2,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Merge)
+accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Merge, 18446744073709551615)
 gas summary: computation_cost: 1000000, storage_cost: 2432000,  storage_rebate: 2407680, non_refundable_storage_fee: 24320
 
 task 8, lines 56-58:
@@ -61,7 +62,7 @@ task 9, lines 59-61:
 //> 1: sui::balance::send_funds<test::large_balance::MARKER>(Result(0), Input(1));
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Split), (object(9,0), B, sui::balance::Balance<test::large_balance::MARKER>, Merge)
+accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Split, 18446744073709551615), (object(9,0), B, sui::balance::Balance<test::large_balance::MARKER>, Merge, 18446744073709551615)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 10, lines 63-65:
@@ -74,7 +75,7 @@ task 11, lines 66-68:
 //> 1: sui::balance::send_funds<test::large_balance::MARKER>(Result(0), Input(1));
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Split), (object(9,0), B, sui::balance::Balance<test::large_balance::MARKER>, Merge)
+accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Split, 18446744073709551615), (object(9,0), B, sui::balance::Balance<test::large_balance::MARKER>, Merge, 18446744073709551615)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 12, lines 70-72:

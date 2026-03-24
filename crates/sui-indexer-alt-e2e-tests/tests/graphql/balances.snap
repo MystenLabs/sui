@@ -34,7 +34,7 @@ task 3, lines 46-48:
 created: object(3,0)
 mutated: object(0,0), object(1,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-accumulators_written: (object(3,1), A, sui::balance::Balance<T::test::TEST>, Merge)
+accumulators_written: (object(3,1), A, sui::balance::Balance<T::test::TEST>, Merge, 1000000)
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 4, line 50:

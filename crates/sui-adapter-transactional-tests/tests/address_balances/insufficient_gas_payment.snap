@@ -14,7 +14,7 @@ task 1, lines 10-15:
 //> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
 // create first small coin for testing (0.1 SUI)
 mutated: object(0,0)
-accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 200000000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 16-20:

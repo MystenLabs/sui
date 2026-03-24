@@ -1,0 +1,59 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-36:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6277600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 38-39:
+//# run test::events::emit_auth --sender A --args 42
+events: Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("AuthEvent"), type_params: [] }, contents: [42, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0])
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 41-45:
+//# programmable --sender A --inputs 0u64 3u64 999u64
+// Multi-command PTB: 3 regular events then 1 authenticated event.
+// Expected event_indices:[3] (the authenticated event is the 4th event globally).
+//> 0: test::events::emit_regular_multiple(Input(0), Input(1));
+//> 1: test::events::emit_auth(Input(2));
+events: Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("AuthEvent"), type_params: [] }, contents: [231, 3, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[3])
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 47-57:
+//# programmable --sender A --inputs 0u64 5u64 100u64 10u64 2u64 200u64
+// Multi-command PTB with interleaved regular and authenticated events.
+// Command 0: 5 regular events (global indices 0-4)
+// Command 1: 1 authenticated event (global index 5)
+// Command 2: 2 regular events (global indices 6-7)
+// Command 3: 1 authenticated event (global index 8)
+// Expected event_indices:[5, 8].
+//> 0: test::events::emit_regular_multiple(Input(0), Input(1));
+//> 1: test::events::emit_auth(Input(2));
+//> 2: test::events::emit_regular_multiple(Input(3), Input(4));
+//> 3: test::events::emit_auth(Input(5));
+events: Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [4, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("AuthEvent"), type_params: [] }, contents: [100, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [11, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("AuthEvent"), type_params: [] }, contents: [200, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[5, 8])
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 59:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, line 61:
+//# view-object 2,0 --hide-contents
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
+Version: 2
+Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
