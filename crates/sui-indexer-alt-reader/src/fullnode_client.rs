@@ -13,7 +13,9 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
+use tonic::transport::ClientTlsConfig;
 use tracing::instrument;
+use url::Url;
 
 use crate::metrics::FullnodeClientMetrics;
 
@@ -21,7 +23,7 @@ use crate::metrics::FullnodeClientMetrics;
 pub struct FullnodeArgs {
     /// gRPC URL for full node operations such as executeTransaction and simulateTransaction.
     #[clap(long)]
-    pub fullnode_rpc_url: Option<String>,
+    pub fullnode_rpc_url: Option<Url>,
 }
 
 /// A client for executing and simulating transactions via the full node gRPC service.
@@ -50,10 +52,16 @@ impl FullnodeClient {
         registry: &Registry,
     ) -> Result<Self, Error> {
         let execution_client = if let Some(url) = &args.fullnode_rpc_url {
-            let channel = Channel::from_shared(url.clone())
-                .context("Failed to create channel for gRPC endpoint")?
-                .connect_lazy();
+            let mut endpoint = Channel::from_shared(url.to_string())
+                .context("Failed to create channel for gRPC endpoint")?;
 
+            if url.scheme() == "https" {
+                endpoint = endpoint
+                    .tls_config(ClientTlsConfig::new().with_native_roots())
+                    .context("Failed to configure TLS for gRPC endpoint")?;
+            }
+
+            let channel = endpoint.connect_lazy();
             Some(TransactionExecutionServiceClient::new(channel))
         } else {
             None
@@ -196,5 +204,46 @@ impl FullnodeClient {
         }
 
         response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn fn_client(url: Option<&str>) -> Result<FullnodeClient, Error> {
+        let args = FullnodeArgs {
+            fullnode_rpc_url: url.map(|u| Url::parse(u).unwrap()),
+        };
+        let registry = Registry::new();
+        FullnodeClient::new(None, args, &registry).await
+    }
+
+    #[tokio::test]
+    async fn no_url_means_not_configured() {
+        let client = fn_client(None).await.unwrap();
+        assert!(client.execution_client.is_none());
+    }
+
+    #[tokio::test]
+    async fn http_url_creates_client() {
+        assert!(
+            fn_client(Some("http://localhost:9000"))
+                .await
+                .unwrap()
+                .execution_client
+                .is_some()
+        );
+    }
+
+    #[tokio::test]
+    async fn https_url_creates_client() {
+        assert!(
+            fn_client(Some("https://fn.example.com"))
+                .await
+                .unwrap()
+                .execution_client
+                .is_some()
+        );
     }
 }
