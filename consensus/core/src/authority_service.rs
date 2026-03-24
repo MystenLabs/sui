@@ -180,6 +180,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     peer_hostname.as_str(),
                     "handle_send_block",
                     "UnexpectedAuthority",
+                    "validator",
                 ])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
@@ -196,7 +197,12 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[peer_hostname.as_str(), "handle_send_block", e.name()])
+                    .with_label_values(&[
+                        peer_hostname.as_str(),
+                        "handle_send_block",
+                        e.name(),
+                        "validator",
+                    ])
                     .inc();
                 info!("Invalid block from {}: {}", peer, e);
             })?;
