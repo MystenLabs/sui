@@ -917,7 +917,7 @@
     },
     {
       "source": "/guides/developer/sui-101/coin-mgt",
-      "destination": "/concepts/transactions/coin-mgt",
+      "destination": "/concepts",
       "permanent": true
     },
     {
@@ -3667,7 +3667,7 @@
     },
     {
       "source": "/concepts/transactions/coin-mgt",
-      "destination": "/guides/developer/digital-assets/fungible-tokens/create-a-fungible-token-coin"
+      "destination": "/concepts"
     },
     {
       "source": "/concepts/transactions",
@@ -4016,7 +4016,7 @@
     },
     {
       "source": "/guides/developer/nautilus/marlin",
-      "destination": "/guides/developer/nautilus/community-dev-toolsk",
+      "destination": "/guides/developer/nautilus/community-dev-tools",
       "permanent": true
     },
     {
