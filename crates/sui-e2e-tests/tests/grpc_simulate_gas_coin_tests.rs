@@ -170,7 +170,7 @@ async fn test_has_ab_has_coins_no_gas_coin() {
     let (sender, _) = test_env.get_sender_and_gas(0);
 
     // Fund sender's address balance - enough for a small gas budget but not a large one
-    let ab_amount = 1 * MIST_PER_SUI;
+    let ab_amount = MIST_PER_SUI;
     test_env.fund_one_address_balance(sender, ab_amount).await;
 
     // Refresh gas
@@ -412,7 +412,7 @@ async fn test_no_ab_has_coins() {
 
     // NO address balance funding - sender only has coins
 
-    let amount = 1 * MIST_PER_SUI;
+    let amount = MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
     let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
@@ -482,7 +482,7 @@ async fn test_insufficient_funds() {
 
     // Fund AB with 1 SUI
     test_env
-        .fund_one_address_balance(sender, 1 * MIST_PER_SUI)
+        .fund_one_address_balance(sender, MIST_PER_SUI)
         .await;
 
     let (sender, gas) = test_env.get_sender_and_gas(0);
@@ -531,7 +531,7 @@ async fn test_protocol_config_disabled() {
     let (sender, gas) = test_env.get_sender_and_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
 
-    let amount = 1 * MIST_PER_SUI;
+    let amount = MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
     let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
