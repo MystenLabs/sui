@@ -448,9 +448,11 @@ public(package) fun advance_epoch(
         ctx,
     );
 
-    adjust_stake_and_gas_price(&mut self.active_validators);
+    // Process the pending stake changes for each validator.
+    self.active_validators.do_mut!(|v| v.adjust_stake_and_gas_price());
 
-    process_pending_stakes_and_withdraws(&mut self.active_validators, ctx);
+    // Process all active validators' pending stake deposits and withdraws.
+    self.active_validators.do_mut!(|v| v.process_pending_stakes_and_withdraws(ctx));
 
     // Emit events after we have processed all the rewards distribution and pending stakes.
     emit_validator_epoch_events(
@@ -756,16 +758,15 @@ fun find_validator_from_table_vec(
     validators: &TableVec<Validator>,
     validator_address: address,
 ): Option<u64> {
-    let length = validators.length();
-    let mut i = 0;
-    while (i < length) {
-        let v = &validators[i];
-        if (v.sui_address() == validator_address) {
-            return option::some(i)
-        };
-        i = i + 1;
-    };
-    option::none()
+    'search: {
+        validators.length().do!(|i| {
+            if (validators[i].sui_address() == validator_address) {
+                return 'search option::some(i)
+            };
+        });
+
+        option::none()
+    }
 }
 
 /// Given a vector of validator addresses, return their indices in the validator set.
@@ -774,12 +775,9 @@ fun get_validator_indices(
     validators: &vector<Validator>,
     validator_addresses: &vector<address>,
 ): vector<u64> {
-    let mut res = vector[];
-    validator_addresses.do_ref!(|addr| {
-        let idx = find_validator(validators, *addr).destroy_or!(abort ENotAValidator);
-        res.push_back(idx);
-    });
-    res
+    validator_addresses.map_ref!(|addr| {
+        find_validator(validators, *addr).destroy_or!(abort ENotAValidator)
+    })
 }
 
 // === Validator Accessors ===
@@ -930,7 +928,11 @@ fun process_pending_removals(
     validator_report_records: &mut VecMap<address, VecSet<address>>,
     ctx: &mut TxContext,
 ) {
-    sort_removal_list(&mut self.pending_removals);
+    // Pending removals needs to be sorted in ASC order. So we maintain the
+    // indexes after each validator's removal.
+    self.pending_removals.insertion_sort_by!(|a, b| *a <= *b);
+
+    // Drain pending removals and process validator's departure.
     self.pending_removals.length().do!(|_| {
         let index = self.pending_removals.pop_back();
         let validator = self.active_validators.remove(index);
@@ -973,12 +975,7 @@ fun process_validator_departure(
     // Deactivate the validator and its staking pool
     let removed_stake = validator.total_stake();
     validator.deactivate(new_epoch);
-    self
-        .inactive_validators
-        .add(
-            validator_pool_id,
-            validator.wrap_v1(ctx),
-        );
+    self.inactive_validators.add(validator_pool_id, validator.wrap_v1(ctx));
     removed_stake
 }
 
@@ -1005,40 +1002,11 @@ fun clean_report_records_leaving_validator(
     });
 }
 
-/// Sort all the pending removal indexes.
-fun sort_removal_list(withdraw_list: &mut vector<u64>) {
-    let length = withdraw_list.length();
-    let mut i = 1;
-    while (i < length) {
-        let cur = withdraw_list[i];
-        let mut j = i;
-        while (j > 0) {
-            j = j - 1;
-            if (withdraw_list[j] > cur) {
-                withdraw_list.swap(j, j + 1);
-            } else {
-                break
-            };
-        };
-        i = i + 1;
-    };
-}
-
-/// Process all active validators' pending stake deposits and withdraws.
-fun process_pending_stakes_and_withdraws(validators: &mut vector<Validator>, ctx: &TxContext) {
-    validators.do_mut!(|v| v.process_pending_stakes_and_withdraws(ctx))
-}
-
 /// Calculate the total active validator stake.
 public(package) fun calculate_total_stakes(validators: &vector<Validator>): u64 {
     let mut stake = 0;
     validators.do_ref!(|v| stake = stake + v.total_stake());
     stake
-}
-
-/// Process the pending stake changes for each validator.
-fun adjust_stake_and_gas_price(validators: &mut vector<Validator>) {
-    validators.do_mut!(|v| v.adjust_stake_and_gas_price())
 }
 
 /// Compute both the individual reward adjustments and total reward adjustment for staking rewards
