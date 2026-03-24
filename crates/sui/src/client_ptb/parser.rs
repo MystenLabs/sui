@@ -49,6 +49,7 @@ struct ProgramParsingState {
     gas_price: Option<Spanned<u64>>,
     gas_sponsor: Option<Spanned<NumericalAddress>>,
     sender: Option<Spanned<NumericalAddress>>,
+    use_address_balance_gas: bool,
 }
 
 macro_rules! mvr_ident {
@@ -82,6 +83,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 gas_budget: None,
                 gas_price: None,
                 gas_sponsor: None,
+                use_address_balance_gas: false,
                 sender: None,
             },
         })
@@ -132,6 +134,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 L(T::Command, A::DEV_INSPECT) => flag!(dev_inspect_set),
                 L(T::Command, A::PREVIEW) => flag!(preview_set),
                 L(T::Command, A::WARN_SHADOWS) => flag!(warn_shadows_set),
+                L(T::Command, A::USE_ADDRESS_BALANCE_GAS) => flag!(use_address_balance_gas),
                 L(T::Command, A::GAS_COIN) => {
                     let coins = try_!(self.parse_gas_coins());
                     self.state.gas_object_ids = Some(coins);
@@ -262,6 +265,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     gas_sponsor: self.state.gas_sponsor,
                     mvr_names: self.state.mvr_names_with_span,
                     sender: self.state.sender,
+                    use_address_balance_gas: self.state.use_address_balance_gas,
                 },
             ))
         } else {

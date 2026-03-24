@@ -212,6 +212,7 @@ impl PTB {
             gas_sponsor: program_metadata
                 .gas_sponsor
                 .map(|x| x.value.into_inner().into()),
+            use_address_balance_gas: program_metadata.use_address_balance_gas,
         };
 
         let processing = TxProcessingArgs {
@@ -387,6 +388,12 @@ pub fn ptb_description() -> clap::Command {
             --"gas-sponsor" <ADDRESS>
             "An optional gas sponsor for this PTB. If not specified, the sender is used as the gas \
             sponsor."
+        ))
+        .arg(arg!(
+            --"use-address-balance-gas"
+            "Use address balance to pay for gas instead of a gas coin object. \
+            When set, the transaction uses an empty gas payment vector and signals validators to \
+            deduct gas from the sender's address balance. Cannot be combined with --gas-coin or --gas-sponsor."
         ))
         .arg(arg!(
             --"make-move-vec" <MAKE_MOVE_VEC>
