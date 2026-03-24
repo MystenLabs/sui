@@ -19,8 +19,8 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_types::{
-    base_types::ObjectID, effects::TransactionEffectsAPI, error::SuiObjectResponseError,
-    object::ObjectRead, storage::ReadStore, transaction::TransactionData,
+    base_types::ObjectID, digests::TransactionDigest, effects::TransactionEffectsAPI,
+    error::SuiObjectResponseError, object::ObjectRead, transaction::TransactionData,
     transaction_driver_types::ExecuteTransactionRequestType,
 };
 use tracing::info;
@@ -51,6 +51,20 @@ pub trait ForkingApi {
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> Result<SuiObjectResponse, ErrorObjectOwned>;
+
+    #[method(name = "sui_multiGetObjects")]
+    async fn multi_get_objects(
+        &self,
+        object_ids: Vec<ObjectID>,
+        options: Option<SuiObjectDataOptions>,
+    ) -> Result<Vec<SuiObjectResponse>, ErrorObjectOwned>;
+
+    #[method(name = "sui_getTransactionBlock")]
+    async fn get_transaction_block(
+        &self,
+        digest: TransactionDigest,
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> Result<SuiTransactionBlockResponse, ErrorObjectOwned>;
 
     #[method(name = "sui_getChainIdentifier")]
     async fn get_chain_identifier(&self) -> Result<String, ErrorObjectOwned>;
@@ -131,6 +145,70 @@ impl ForkingApiServer for ForkingApiImpl {
                 SuiObjectResponseError::NotExists { object_id },
             )),
         }
+    }
+
+    async fn multi_get_objects(
+        &self,
+        object_ids: Vec<ObjectID>,
+        options: Option<SuiObjectDataOptions>,
+    ) -> Result<Vec<SuiObjectResponse>, ErrorObjectOwned> {
+        let options = options.unwrap_or_default();
+        let sim = self.context.simulacrum.read().await;
+        let store = sim.store();
+
+        object_ids
+            .into_iter()
+            .map(|object_id| {
+                let object: Option<sui_types::object::Object> =
+                    sui_types::storage::ObjectStore::get_object(store, &object_id);
+                match object {
+                    Some(obj) => {
+                        let object_ref = obj.compute_object_reference();
+                        let object_read = ObjectRead::Exists(object_ref, obj, None);
+                        SuiObjectResponse::try_from((object_read, options.clone()))
+                            .map_err(|e| internal_error(format!("Failed to convert object: {e}")))
+                    }
+                    None => Ok(SuiObjectResponse::new_with_error(
+                        SuiObjectResponseError::NotExists { object_id },
+                    )),
+                }
+            })
+            .collect()
+    }
+
+    async fn get_transaction_block(
+        &self,
+        digest: TransactionDigest,
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> Result<SuiTransactionBlockResponse, ErrorObjectOwned> {
+        use sui_types::storage::ReadStore;
+
+        let options = options.unwrap_or_default();
+        let sim = self.context.simulacrum.read().await;
+        let store = sim.store();
+
+        let effects = store
+            .get_transaction_effects(&digest)
+            .ok_or_else(|| internal_error(format!("Transaction {digest} not found")))?;
+
+        let mut response = SuiTransactionBlockResponse::default();
+        response.digest = digest;
+
+        if options.show_effects {
+            response.effects = Some(effects.clone().try_into().map_err(
+                |e: sui_types::error::SuiError| {
+                    internal_error(format!("Failed to convert effects: {e}"))
+                },
+            )?);
+        }
+
+        // The SDK polls until checkpoint is Some. In sui-forking, execute_transaction
+        // creates a checkpoint immediately, so if effects exist the tx is checkpointed.
+        if let Some(cp) = store.get_highest_checkpint() {
+            response.checkpoint = Some(cp.sequence_number);
+        }
+
+        Ok(response)
     }
 
     async fn get_chain_identifier(&self) -> Result<String, ErrorObjectOwned> {
