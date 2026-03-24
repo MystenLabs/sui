@@ -44,7 +44,6 @@ use crate::metrics::RpcMetrics;
 use crate::metrics::middleware::MetricsLayer;
 use crate::timeout::TimeoutLayer;
 
-mod address_balance_coins;
 pub mod api;
 pub mod args;
 pub mod config;

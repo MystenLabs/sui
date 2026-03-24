@@ -57,18 +57,16 @@ impl Key {
         })
     }
 
-    /// Encode a key for comparison with cursors. This is used by the JSON-RPC layer
-    /// to determine if an address balance coin should be included in pagination results.
-    pub fn encode_key(
-        kind: OwnerKind,
+    pub fn encode_coin_key(
+        owner: &Owner,
         type_: StructTag,
-        balance: Option<u64>,
+        balance: u64,
         object_id: ObjectID,
     ) -> Vec<u8> {
         let key = Key {
-            kind,
+            kind: OwnerKind::from_owner(owner),
             type_,
-            balance,
+            balance: Some(!balance),
             object_id,
         };
         crate::db::key::encode(&key)

@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::dataloader::DataLoader;
-use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
@@ -17,10 +16,8 @@ use sui_indexer_alt_reader::package_resolver::DbPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
-use sui_indexer_alt_schema::schema::kv_epoch_starts;
 use sui_indexer_alt_schema::schema::kv_genesis;
 use sui_package_resolver::Resolver;
-use sui_types::committee::EpochId;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
 use url::Url;
@@ -56,8 +53,7 @@ pub(crate) struct Context {
     /// Access to the RPC's configuration.
     config: Arc<RpcConfig>,
 
-    /// The chain identifier (derived from the genesis checkpoint digest), used for masking
-    /// address balance coin object IDs.
+    /// The chain identifier, derived from the genesis checkpoint digest.
     chain_identifier: ChainIdentifier,
 }
 
@@ -118,7 +114,8 @@ impl Context {
 
             let bytes: [u8; 32] = genesis_digest_bytes
                 .try_into()
-                .map_err(|_| anyhow::anyhow!("Invalid genesis digest length"))?;
+                .ok()
+                .context("Invalid genesis digest length")?;
 
             ChainIdentifier::from(CheckpointDigest::new(bytes))
         };
@@ -171,26 +168,9 @@ impl Context {
         self.config.as_ref()
     }
 
-    /// The chain identifier, derived from the genesis checkpoint digest.
+    /// The chain identifier.
     pub(crate) fn chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
     }
 
-    /// Query the latest epoch from the database.
-    pub(crate) async fn current_epoch(&self) -> Result<EpochId, anyhow::Error> {
-        use kv_epoch_starts::dsl as e;
-
-        let mut conn = self
-            .pg_reader
-            .connect()
-            .await
-            .context("Failed to connect to the database")?;
-
-        let epoch: i64 = conn
-            .first(e::kv_epoch_starts.select(e::epoch).order(e::epoch.desc()))
-            .await
-            .context("Failed to fetch the current epoch")?;
-
-        Ok(epoch as EpochId)
-    }
 }

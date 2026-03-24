@@ -9,7 +9,7 @@ use prometheus::Registry;
 use serde::Deserialize;
 use serde_json::json;
 use sui_indexer_alt_consistent_store::ObjectByOwnerKey;
-use sui_indexer_alt_consistent_store::OwnerKind;
+use sui_types::object::Owner;
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -630,10 +630,10 @@ async fn test_pagination_ab_coin_as_cursor() {
 
     // Construct cursor from the AB coin's encoded key
     // and check that it is equal to the returned next_cursor
-    let ab_key = ObjectByOwnerKey::encode_key(
-        OwnerKind::AddressOwner(recipient),
+    let ab_key = ObjectByOwnerKey::encode_coin_key(
+        &Owner::AddressOwner(recipient),
         sui_types::coin::Coin::type_(GAS::type_tag()),
-        Some(!ab_coin.balance),
+        ab_coin.balance,
         ab_coin.coin_object_id,
     );
     let ab_cursor = Base64::encode(bcs::to_bytes(&ab_key).unwrap());

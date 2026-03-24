@@ -64,10 +64,9 @@ mod metrics;
 pub mod restore;
 mod rpc;
 pub(crate) mod schema;
-
-// Re-export specific types for JSON-RPC pagination
-pub use schema::object_by_owner::{Key as ObjectByOwnerKey, OwnerKind};
 mod store;
+
+pub use schema::object_by_owner::Key as ObjectByOwnerKey;
 
 /// Set-up and run the Indexer and RPC service, using the provided arguments (expected to be
 /// extracted from the command-line).

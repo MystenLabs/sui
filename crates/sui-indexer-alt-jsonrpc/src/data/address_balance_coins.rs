@@ -23,7 +23,7 @@ use crate::data::load_live;
 ///
 /// Returns `None` if the accumulator object doesn't exist (e.g. the address has never received
 /// this coin type as an address balance).
-pub(crate) async fn get_address_balance_coin_info(
+pub(crate) async fn load_address_balance_coin(
     ctx: &Context,
     owner: SuiAddress,
     coin_type: TypeTag,
@@ -44,7 +44,7 @@ pub(crate) async fn get_address_balance_coin_info(
 
     let accumulator_version = accumulator_obj.version();
     let previous_transaction = accumulator_obj.previous_transaction;
-    let epoch = ctx.current_epoch().await?;
+    let epoch = super::current_epoch(ctx).await?;
     let chain_identifier = ctx.chain_identifier();
 
     let object_ref: ObjectRef =
