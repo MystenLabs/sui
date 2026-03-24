@@ -191,13 +191,13 @@ task 18, lines 83-86:
 //# publish --sender A --upgradeable
 created: object(18,0), object(18,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 19, lines 88-91:
 //# upgrade --sender A --package P --upgrade-capability 18,1
 created: object(19,0)
 mutated: object(0,0), object(18,1)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 20, line 93:
 //# create-checkpoint
@@ -210,9 +210,9 @@ Response: {
   "id": 6,
   "result": {
     "data": {
-      "objectId": "0x3550aaf666e20ade5eb18965d37ff140897df85b11d9818769b4becc514ab7b0",
+      "objectId": "0x69fc3ef04e047931a329b3f7e95d22a3067aaba33c6c564508c962fd499e9cb6",
       "version": "1",
-      "digest": "GVE3QzALtS68Rqg6mk66bcqhTvYu47yEM5S4WdAWszWW",
+      "digest": "G4WRPJoBp5TZ259KVnuB6NScDHLCrByjvvpF3qFa27YZ",
       "type": "package"
     }
   }
@@ -225,9 +225,9 @@ Response: {
   "id": 7,
   "result": {
     "data": {
-      "objectId": "0x8c06e6c51e9d14e9b8fb2e3645635937e5a6f77552631757f2d84e97b4d02e0b",
+      "objectId": "0x7e7ec0a0f7a34c09835a13c1b16a1a7e86d0c6a9f63520f2704cd5f6b871365b",
       "version": "2",
-      "digest": "C2MA2T3kVu7cGU9gEaah4KqAAsazayzpo6ymy4mbrXJa",
+      "digest": "3UrAFHVPvdtQGv4VgEDDCW1N2KXxP3f78WFXkXBj4qLf",
       "type": "package"
     }
   }

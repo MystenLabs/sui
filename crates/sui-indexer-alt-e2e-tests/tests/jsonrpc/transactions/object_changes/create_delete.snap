@@ -10,7 +10,7 @@ task 1, lines 9-23:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 4772800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4788000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 25-27:
 //# programmable --sender A --inputs @A
@@ -37,7 +37,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "digest": "5sCHgq6dzaaYFXNXVmSZije7dmjspBKvohYAHSnzSd4b",
+    "digest": "8Ky4uhGSKmKEYaML3ot21Lboo227QX9yqhrVb9cmqtdP",
     "objectChanges": [
       {
         "type": "created",
@@ -45,10 +45,10 @@ Response: {
         "owner": {
           "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
         },
-        "objectType": "0xc28ca99b776843766ecded5bc24a082dd085dfcae2c14e5678149715ee770b8e::M::O",
-        "objectId": "0x5dadcc006db57c1d2b9bda13aa97e0cedc977950dcd3a43d3fdf00cd491d11bd",
+        "objectType": "0xfef5d3b34a3628f1ebb9eaedb689ad44908716c56f03733940a350b7dec69e5a::M::O",
+        "objectId": "0x9c19c2ef91ba603ee8fb874cffea7636504d936d8b81adf0089fd1e01f22e3ab",
         "version": "2",
-        "digest": "7Pgte2a2SkusFSzjbXNPLQcR4h88befht9BpE8zEUH5T"
+        "digest": "HNdobL19Sfpw5mvexRyb7TaC1VHpTccvxSdYouWN4GwF"
       },
       {
         "type": "mutated",
@@ -60,7 +60,7 @@ Response: {
         "objectId": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
         "version": "2",
         "previousVersion": "1",
-        "digest": "GercQREfqm3fnG8qPitgtXDbuZbdGi8gMFEEhEzZFk3R"
+        "digest": "5Tqq3RiTVjscmQQAP8vKjDrPCqsfy1JZHrECPH19vPst"
       }
     ],
     "timestampMs": "0",
@@ -74,13 +74,13 @@ Response: {
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "digest": "6oJuzq6D6P7cvXqWdvM97Q1JR56pfypwJmkdkfZ5i8Qj",
+    "digest": "HVeyWQhjHggzyuEGSfzeGTLz8ED1Z9bxLnjnwqNHnRWn",
     "objectChanges": [
       {
         "type": "deleted",
         "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-        "objectType": "0xc28ca99b776843766ecded5bc24a082dd085dfcae2c14e5678149715ee770b8e::M::O",
-        "objectId": "0x5dadcc006db57c1d2b9bda13aa97e0cedc977950dcd3a43d3fdf00cd491d11bd",
+        "objectType": "0xfef5d3b34a3628f1ebb9eaedb689ad44908716c56f03733940a350b7dec69e5a::M::O",
+        "objectId": "0x9c19c2ef91ba603ee8fb874cffea7636504d936d8b81adf0089fd1e01f22e3ab",
         "version": "3"
       },
       {
@@ -93,7 +93,7 @@ Response: {
         "objectId": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
         "version": "3",
         "previousVersion": "2",
-        "digest": "AF2x3J4MeDEkrQoXH7mL4iTwJF5ZqDoUsjx99jTP8fmV"
+        "digest": "2E8uHFtxD73RQwnyoTH2tr288wEXSyMqypydwxgyKypX"
       }
     ],
     "timestampMs": "0",

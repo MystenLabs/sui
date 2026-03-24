@@ -10,7 +10,7 @@ task 1, lines 6-15:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 4962800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4970400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 17-18:
 //# programmable --sender A --inputs @A
@@ -45,7 +45,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "type": {
-            "repr": "0x6822b9c3f6384583d4b0bbbf84470401856f196201f06a0e4b891cc7b7dee13f::M::Foo",
+            "repr": "0x99c9504d33b5a68efbd4fe33e2a1ba880371b43f8b0061ee014f6676b5ffbe78::M::Foo",
             "abilities": [
               "KEY"
             ]

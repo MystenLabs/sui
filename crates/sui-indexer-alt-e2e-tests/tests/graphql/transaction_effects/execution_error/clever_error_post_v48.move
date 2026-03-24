@@ -3,7 +3,7 @@
 
 //# init --protocol-version 48 --accounts A --addresses test=0x0 --simulator
 
-//# publish --sender A --upgradeable
+//# publish --sender A --upgradeable --file-format 6
 module test::clever_error_post_v48 {
     #[error]
     const ESimpleError: vector<u8> = b"Clever error from v1";
@@ -13,7 +13,7 @@ module test::clever_error_post_v48 {
     }
 }
 
-//# upgrade --package test --upgrade-capability 1,1 --sender A
+//# upgrade --package test --upgrade-capability 1,1 --sender A --file-format 6
 module test::clever_error_post_v48 {
     #[error]
     const ESimpleError: vector<u8> = b"Clever error from v2";

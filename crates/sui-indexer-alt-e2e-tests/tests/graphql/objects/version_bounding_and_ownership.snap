@@ -64,13 +64,13 @@ task 8, lines 54-57:
 //# publish --upgradeable --sender A
 created: object(8,0), object(8,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 9, lines 59-62:
 //# upgrade --package P0 --upgrade-capability 8,1 --sender A
 created: object(9,0)
 mutated: object(0,0), object(8,1)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 10, line 64:
 //# create-checkpoint
@@ -1297,19 +1297,19 @@ Response: {
             "nodes": [
               {
                 "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
                   "asMovePackage": {
                     "objects": null
                   }
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
                 }
               }
             ]
@@ -1333,7 +1333,7 @@ Response: {
         "effects",
         "objectChanges",
         "nodes",
-        0,
+        2,
         "outputState",
         "asMovePackage",
         "objects"
@@ -1356,19 +1356,19 @@ Response: {
             "nodes": [
               {
                 "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
                   "asMovePackage": {
                     "balances": null
                   }
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
                 }
               }
             ]
@@ -1392,7 +1392,7 @@ Response: {
         "effects",
         "objectChanges",
         "nodes",
-        0,
+        2,
         "outputState",
         "asMovePackage",
         "balances"
@@ -1415,19 +1415,19 @@ Response: {
             "nodes": [
               {
                 "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
                   "asMovePackage": {
                     "balance": null
                   }
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
                 }
               }
             ]
@@ -1451,7 +1451,7 @@ Response: {
         "effects",
         "objectChanges",
         "nodes",
-        0,
+        2,
         "outputState",
         "asMovePackage",
         "balance"
@@ -1474,19 +1474,19 @@ Response: {
             "nodes": [
               {
                 "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
                   "asMovePackage": {
                     "multiGetBalances": null
                   }
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
                 }
               }
             ]
@@ -1510,7 +1510,7 @@ Response: {
         "effects",
         "objectChanges",
         "nodes",
-        0,
+        2,
         "outputState",
         "asMovePackage",
         "multiGetBalances"
@@ -2108,7 +2108,7 @@ Response: {
                 "contents": {
                   "json": {
                     "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                    "balance": "299999979432280"
+                    "balance": "299999979417080"
                   }
                 },
                 "objects": {
@@ -2167,8 +2167,8 @@ Response: {
               {
                 "contents": {
                   "json": {
-                    "id": "0xb14b4e61a84a433ccb4de7785036ddfc21bb00f2f39dd2e64b1e954b6d93a6a6",
-                    "package": "0x44ffe160f28805ed84e3e88857f004b4505f49f58f4166409bd3b7f0d89ed7c6",
+                    "id": "0x157eb4804b3a6a3f856efd91a08324068a937f36ccb1d15e96fabe31c638a5cf",
+                    "package": "0xb9374d3b546be85540bbd87aa194c46f93aebb141a83b3e4aaf9abefe3f880ea",
                     "version": "2",
                     "policy": 0
                   }

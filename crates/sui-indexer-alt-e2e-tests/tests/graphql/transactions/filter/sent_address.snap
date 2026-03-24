@@ -10,7 +10,7 @@ task 1, lines 6-25:
 //# publish
 created: object(1,0)
 mutated: object(0,3)
-gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5586000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 27:
 //# run Test::M1::create --sender A --args 0 @A
@@ -51,11 +51,11 @@ Response: {
         {
           "cursor": "Mg==",
           "node": {
-            "digest": "6YcViTTenkbrbzw37seNLCw3A22FoUTRrqZ1zJtybArE",
+            "digest": "B8A5DJR8xXFYxNHbPf1aKVAmAhrLLXg8ayTd8e3tLZxV",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "Drt3orwnaRWS1sb1kYq2YhVcYiau5stFCMSEMt2G62vn"
+                "digest": "7dVYBpiGxe2egFTbRgAJVMLYvfGt89rjHpNm9A5V98GJ"
               }
             }
           }
@@ -73,11 +73,11 @@ Response: {
         {
           "cursor": "NQ==",
           "node": {
-            "digest": "E3gchUeC65Xsc6hUjCEQcVLrvYTJFF4TFqtnmgkqcEk6",
+            "digest": "4jVeqiaxmA3pLVPHjdj5yrx8QgYGjieu4Xdn3XyJaxdS",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 3,
-                "digest": "9VkoMCRYJ8uUukmUmBPLQjYJsFGkmmrDJTMzc4drc8EJ"
+                "digest": "5JyHFGmqPJDLQ87oaEkGeNEqReaMhnGfA17TeSWvjyb9"
               }
             }
           }

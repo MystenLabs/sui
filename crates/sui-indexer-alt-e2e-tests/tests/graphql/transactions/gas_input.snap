@@ -10,7 +10,7 @@ task 1, lines 6-25:
 //# publish
 created: object(1,0), object(1,1)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 6976800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6992000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 26-30:
 //# programmable --sender A --inputs object(1,0)
@@ -90,11 +90,11 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0x658007625a13d3c9c8919cbb2a2107e32ecf4be20d3edaebf476052786d04f3e",
+              "address": "0x215d3d383d0cf09d512e8ac1ea3df4fd783071ff7451c83f502ec5fd79cb68be",
               "version": 4
             },
             {
-              "address": "0xa05b80c8e78ab88c683e302cfa38ac2c3171f7388f5598a190310e06a7476466",
+              "address": "0x40cc0a82e96c32c503043269e7037df96b2608faec8c77d6cae7ba4998649794",
               "version": 4
             }
           ]
@@ -118,7 +118,7 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0x658007625a13d3c9c8919cbb2a2107e32ecf4be20d3edaebf476052786d04f3e",
+              "address": "0x215d3d383d0cf09d512e8ac1ea3df4fd783071ff7451c83f502ec5fd79cb68be",
               "version": 4
             }
           ]
@@ -142,7 +142,7 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0xa05b80c8e78ab88c683e302cfa38ac2c3171f7388f5598a190310e06a7476466",
+              "address": "0x40cc0a82e96c32c503043269e7037df96b2608faec8c77d6cae7ba4998649794",
               "version": 4
             }
           ]

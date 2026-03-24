@@ -10,7 +10,7 @@ task 1, lines 6-16:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 4628400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 18-20:
 //# programmable --sender A --inputs 42 @A
@@ -63,17 +63,17 @@ task 7, lines 32-48:
 Response: {
   "data": {
     "a": {
-      "objectBcs": "AAAG5WZiCNRCF6loqhlsXiYx3y1DatzWWa3k5q9s0n9naQFNAVQAAQIAAAAAAAAAKEzespQFHqeg19e5gjN+jkQphZ9H4cDGTV5yaz6fi2F2KgAAAAAAAAAA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4gMbd90vjHe52PZD6mYpnvUFloS60sig4MvvVLLHYEHjXQXRMAAAAAAA=="
+      "objectBcs": "AADrNAyu2v9YlhH0wTLlRRzPpWIUAk5iifQ6gZXCZNRpVgFNAVQAAQIAAAAAAAAAKEd2LuW/xzp2I/1ICFnjp+62iyzwUO994UXEMiB95i/MKgAAAAAAAAAA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4gmsxbI98sFq3S8kWK/i2KEPbtFi3BkHJys/bl+D8r0O3QXRMAAAAAAA=="
     },
     "b": {
-      "objectBcs": "AAAG5WZiCNRCF6loqhlsXiYx3y1DatzWWa3k5q9s0n9naQFNAVQAAQMAAAAAAAAAKJEVnvZ1lJmyczvS3xo7RsqdgtOMXfhl4wP5hLIPDCp+KwAAAAAAAAAA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4gx/33htR2yduYgImhOWv4c1RmbSUsf3W01tAUOzRprQXQXRMAAAAAAA=="
+      "objectBcs": "AADrNAyu2v9YlhH0wTLlRRzPpWIUAk5iifQ6gZXCZNRpVgFNAVQAAQMAAAAAAAAAKF9fZtIX1643s3I7Zi8vT2vSyy+267AKRLPs2Aj9C0McKwAAAAAAAAAA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4giaj3YNFtZpurqYM0RVKWp1xG21Hdd3+JH3JyyWh2oiHQXRMAAAAAAA=="
     },
     "multiGetObjects": [
       {
-        "objectBcs": "AAAG5WZiCNRCF6loqhlsXiYx3y1DatzWWa3k5q9s0n9naQFNAVQAAQIAAAAAAAAAKEzespQFHqeg19e5gjN+jkQphZ9H4cDGTV5yaz6fi2F2KgAAAAAAAAAA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4gMbd90vjHe52PZD6mYpnvUFloS60sig4MvvVLLHYEHjXQXRMAAAAAAA=="
+        "objectBcs": "AADrNAyu2v9YlhH0wTLlRRzPpWIUAk5iifQ6gZXCZNRpVgFNAVQAAQIAAAAAAAAAKEd2LuW/xzp2I/1ICFnjp+62iyzwUO994UXEMiB95i/MKgAAAAAAAAAA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4gmsxbI98sFq3S8kWK/i2KEPbtFi3BkHJys/bl+D8r0O3QXRMAAAAAAA=="
       },
       {
-        "objectBcs": "AAAG5WZiCNRCF6loqhlsXiYx3y1DatzWWa3k5q9s0n9naQFNAVQAAQMAAAAAAAAAKJEVnvZ1lJmyczvS3xo7RsqdgtOMXfhl4wP5hLIPDCp+KwAAAAAAAAAA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4gx/33htR2yduYgImhOWv4c1RmbSUsf3W01tAUOzRprQXQXRMAAAAAAA=="
+        "objectBcs": "AADrNAyu2v9YlhH0wTLlRRzPpWIUAk5iifQ6gZXCZNRpVgFNAVQAAQMAAAAAAAAAKF9fZtIX1643s3I7Zi8vT2vSyy+267AKRLPs2Aj9C0McKwAAAAAAAAAA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4giaj3YNFtZpurqYM0RVKWp1xG21Hdd3+JH3JyyWh2oiHQXRMAAAAAAA=="
       }
     ]
   }

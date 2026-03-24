@@ -10,7 +10,7 @@ task 1, lines 6-32:
 //# publish --sender A
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6384000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 34-36:
 //# programmable --sender A --inputs @A
@@ -42,7 +42,7 @@ Response: {
           "missingFormatted": null,
           "extracted": {
             "json": {
-              "id": "0xc216dfd7f50e774f029dc99c3031df39c04451dbb51e40dde501db48400b4f69",
+              "id": "0x3b6d6f800e8221fac3fdd66a4673eed29a67bfe77cfa048b6d5b0ed6f7e38a71",
               "x": "111",
               "y": "222"
             }
