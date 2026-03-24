@@ -43,10 +43,6 @@ module test::not_allowed {
 // Reject: TransferObjects is not a MoveCall
 //> TransferObjects([Gas], Input(0));
 
-//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0
-// Reject: SplitCoins is not a MoveCall
-//> SplitCoins(Gas, [Gas]);
-
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(1000)
 // Reject: coin::from_balance is not a whitelisted gasless function
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
@@ -85,6 +81,12 @@ module test::not_allowed {
 //> 0: sui::balance::redeem_funds<test::not_allowed::NOT_ALLOWED>(Input(0));
 //> 1: sui::balance::send_funds<test::not_allowed::NOT_ALLOWED>(Result(0), Input(1));
 
-//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(1,1)
-// Reject: object inputs are not allowed
-//> 0: sui::coin::value<test::usdc::USDC>(Input(0));
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(500) @B
+// Reject: non-framework package
+//> 0: test::usdc::USDC(Input(0));
+
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(500) @B
+// Reject: mix of allowed and disallowed commands
+//> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
+//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
+//> TransferObjects([Gas], Input(1));

@@ -408,7 +408,28 @@ pub mod checked {
             let cost_summary = self.gas_status.summary();
 
             let Some(gas_payment_location) = gas_payment_location else {
-                return GasCostSummary::default(); // gasless
+                // Gasless: sender pays nothing.
+                assert!(
+                    matches!(self.payment, PaymentMetadata::Gasless),
+                    "Only gasless transactions should reach this point without a payment location"
+                );
+                if execution_result.is_err() {
+                    return GasCostSummary::default();
+                }
+                // Any storage rebate from destroyed input coins is absorbed as
+                // network fees, not returned to sender.
+                let storage_cost = cost_summary.storage_cost;
+                assert!(
+                    storage_cost == 0,
+                    "Gasless transaction must not incur storage cost, got {storage_cost}"
+                );
+                let sender_rebate = cost_summary.storage_rebate;
+                return GasCostSummary {
+                    computation_cost: sender_rebate,
+                    storage_cost: 0,
+                    storage_rebate: sender_rebate,
+                    non_refundable_storage_fee: cost_summary.non_refundable_storage_fee,
+                };
             };
 
             let net_change = cost_summary.net_gas_usage();

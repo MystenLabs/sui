@@ -22,6 +22,7 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
     gas_coin::GAS,
+    object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ChildObjectResolver,
     transaction::{
@@ -235,19 +236,122 @@ impl TestEnv {
     }
 
     pub async fn setup_custom_coin(&mut self) -> (SuiAddress, TypeTag) {
+        let (publisher, package_id, _) = self.publish_coins_package().await;
+        let coin_a_type: TypeTag = format!("{}::coin_a::COIN_A", package_id).parse().unwrap();
+        (publisher, coin_a_type)
+    }
+
+    /// Publish the coins package and return (publisher, package_id, coin_type, treasury_cap_ref).
+    /// The MINTABLE_COIN TreasuryCap is unfrozen so new Coin objects can be minted.
+    pub async fn setup_mintable_coin(&mut self) -> (SuiAddress, ObjectID, TypeTag, ObjectRef) {
+        let (publisher, package_id, effects) = self.publish_coins_package().await;
+        let coin_type: TypeTag = format!("{}::mintable_coin::MINTABLE_COIN", package_id)
+            .parse()
+            .unwrap();
+        let treasury_cap_ref = self.find_created_treasury_cap(&effects).await;
+        (publisher, package_id, coin_type, treasury_cap_ref)
+    }
+
+    /// Publish the coins test package and return (publisher, package_id, effects).
+    async fn publish_coins_package(&mut self) -> (SuiAddress, ObjectID, TransactionEffects) {
         let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.extend(["..", "sui-e2e-tests", "tests", "data", "coins"]);
-        let publisher = self
+        let (publisher, gas) = self
             .cluster
             .wallet
             .get_one_gas_object()
             .await
             .unwrap()
+            .unwrap();
+        let tx = TestTransactionBuilder::new(publisher, gas, self.rgp)
+            .publish_async(path)
+            .await
+            .build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+        assert!(
+            effects.status().is_ok(),
+            "Publish failed: {:?}",
+            effects.status()
+        );
+        let package_id = self.find_created_package(&effects).await;
+        (publisher, package_id, effects)
+    }
+
+    async fn find_created_package(&self, effects: &TransactionEffects) -> ObjectID {
+        for (obj_ref, owner) in effects.created() {
+            if owner.is_immutable()
+                && let Some(obj) = self
+                    .cluster
+                    .get_object_from_fullnode_store(&obj_ref.0)
+                    .await
+                && obj.is_package()
+            {
+                return obj_ref.0;
+            }
+        }
+        panic!("Package should exist among created objects");
+    }
+
+    async fn find_created_treasury_cap(&self, effects: &TransactionEffects) -> ObjectRef {
+        for (obj_ref, owner) in effects.created() {
+            if matches!(owner, Owner::AddressOwner(_))
+                && let Some(obj) = self
+                    .cluster
+                    .get_object_from_fullnode_store(&obj_ref.0)
+                    .await
+                && obj
+                    .data
+                    .try_as_move()
+                    .is_some_and(|m| m.type_().is_treasury_cap())
+            {
+                return obj_ref;
+            }
+        }
+        panic!("TreasuryCap should exist among created objects");
+    }
+
+    /// Mint a `Coin<T>` of the given amount to the recipient using the `TreasuryCap`.
+    /// Returns the updated `TreasuryCap` ref and the new `Coin` object ref.
+    pub async fn mint_coin(
+        &mut self,
+        publisher: SuiAddress,
+        package_id: ObjectID,
+        treasury_cap_ref: ObjectRef,
+        amount: u64,
+        recipient: SuiAddress,
+    ) -> (ObjectRef, ObjectRef) {
+        let tx = self
+            .tx_builder(publisher)
+            .move_call(
+                package_id,
+                "mintable_coin",
+                "mint_and_transfer",
+                vec![
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap_ref)),
+                    CallArg::Pure(bcs::to_bytes(&amount).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&recipient).unwrap()),
+                ],
+            )
+            .build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+        assert!(
+            effects.status().is_ok(),
+            "Mint failed: {:?}",
+            effects.status()
+        );
+        let new_treasury_cap_ref = effects
+            .mutated()
+            .into_iter()
+            .find(|(obj_ref, _)| obj_ref.0 == treasury_cap_ref.0)
             .unwrap()
             .0;
-        let package_id = self.setup_test_package(path).await;
-        let coin_a_type: TypeTag = format!("{}::coin_a::COIN_A", package_id).parse().unwrap();
-        (publisher, coin_a_type)
+        let coin_ref = effects
+            .created()
+            .into_iter()
+            .find(|(_, owner)| matches!(owner, Owner::AddressOwner(addr) if *addr == recipient))
+            .unwrap()
+            .0;
+        (new_treasury_cap_ref, coin_ref)
     }
 
     pub fn encode_coin_reservation(

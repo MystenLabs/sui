@@ -236,6 +236,10 @@ mod checked {
         check_objects(transaction, input_objects, protocol_config)?;
         check_replay_protection(transaction, input_objects)?;
 
+        if protocol_config.enable_gasless() && transaction.is_gasless_transaction() {
+            check_gasless_object_inputs(input_objects, protocol_config)?;
+        }
+
         Ok(gas_status)
     }
 
@@ -670,6 +674,49 @@ mod checked {
                 }
             }
         };
+        Ok(())
+    }
+
+    /// Verify that all Move object inputs in a gasless transaction are Coin<T>
+    /// where T is in the allowlist.
+    fn check_gasless_object_inputs(
+        input_objects: &InputObjects,
+        protocol_config: &ProtocolConfig,
+    ) -> UserInputResult<()> {
+        let allowed_token_types =
+            sui_types::transaction::parse_gasless_allowed_token_types(protocol_config);
+
+        for obj_read in input_objects.iter() {
+            let Some(object) = obj_read.as_object() else {
+                continue;
+            };
+            if object.is_package() {
+                continue;
+            }
+            match object.owner() {
+                Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => (),
+                Owner::Immutable | Owner::Shared { .. } | Owner::ObjectOwner(_) => {
+                    return Err(UserInputError::Unsupported(
+                        "Gasless transactions only support owned object inputs".to_string(),
+                    ));
+                }
+            }
+            // Every non-package Move object input must be Coin<T> with T allowlisted
+            let coin_type = object.coin_type_maybe().ok_or_else(|| {
+                UserInputError::Unsupported(
+                    "Gasless transactions can only use Coin<T> object inputs, \
+                     but found a non-Coin object"
+                        .to_string(),
+                )
+            })?;
+            fp_ensure!(
+                allowed_token_types.contains(&coin_type),
+                UserInputError::Unsupported(
+                    "Gasless transactions only support allowlisted types for Coin inputs"
+                        .to_string()
+                )
+            );
+        }
         Ok(())
     }
 

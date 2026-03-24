@@ -564,9 +564,29 @@ impl<'backing> TemporaryStore<'backing> {
             .fold(0, |sum, obj| sum + obj.object_size_for_gas_metering())
     }
 
-    pub fn has_non_accumulator_writes(&self) -> bool {
-        !self.execution_results.written_objects.is_empty()
-            || !self.execution_results.deleted_object_ids.is_empty()
+    /// Validates gasless post-execution invariants:
+    /// - No new objects were created or existing objects mutated (written_objects is empty)
+    /// - The set of deleted objects exactly equals the set of input Coin objects
+    pub fn check_gasless_execution_requirements(&self) -> Result<(), String> {
+        if !self.execution_results.written_objects.is_empty() {
+            return Err("Gasless transactions cannot create or mutate objects".to_string());
+        }
+
+        let input_coin_ids: BTreeSet<ObjectID> = self
+            .input_objects
+            .iter()
+            .filter(|(_, obj)| obj.coin_type_maybe().is_some())
+            .map(|(id, _)| *id)
+            .collect();
+        if self.execution_results.deleted_object_ids != input_coin_ids {
+            return Err(format!(
+                "Gasless transaction must destroy exactly its input Coins. \
+                 Expected: {input_coin_ids:?}, deleted: {:?}",
+                self.execution_results.deleted_object_ids
+            ));
+        }
+
+        Ok(())
     }
 
     /// If there are unmetered storage rebate (due to system transaction), we put them into

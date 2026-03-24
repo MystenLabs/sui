@@ -432,8 +432,13 @@ mod checked {
             Ok((r, t)) => (Ok(r), t),
             Err((e, t)) => (Err(e), t),
         };
-        if is_gasless && result.is_ok() && temporary_store.has_non_accumulator_writes() {
-            result = Err(ExecutionError::from(ExecutionErrorKind::InsufficientGas).into());
+        if is_gasless
+            && result.is_ok()
+            && let Err(msg) = temporary_store.check_gasless_execution_requirements()
+        {
+            result = Err(
+                ExecutionError::new_with_source(ExecutionErrorKind::InsufficientGas, msg).into(),
+            );
         }
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
