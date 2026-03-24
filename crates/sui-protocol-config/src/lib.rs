@@ -591,6 +591,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_ristretto255_group_ops: bool,
 
+    // Enable native functions for group operations.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_bulletproofs_range_proofs: bool,
+
     // Enable nitro attestation.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation: bool,
@@ -2279,6 +2283,10 @@ impl ProtocolConfig {
 
     pub fn enable_ristretto255_group_ops(&self) -> bool {
         self.feature_flags.enable_ristretto255_group_ops
+    }
+
+    pub fn enable_bulletproofs_range_proofs(&self) -> bool {
+        self.feature_flags.enable_bulletproofs_range_proofs
     }
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {

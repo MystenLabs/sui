@@ -18,11 +18,14 @@ use move_vm_runtime::{native_charge_gas_early_exit, pop_arg};
 use rand::thread_rng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
+use crate::crypto::group_ops::NOT_SUPPORTED_ERROR;
+use crate::object_runtime::ObjectRuntime;
 
-pub const INVALID_PROOF: u64 = 0;
-pub const INVALID_COMMITMENT: u64 = 1;
-pub const INVALID_RANGE: u64 = 2;
-pub const INVALID_BATCH_SIZE: u64 = 3;
+pub const NOT_SUPPORTED: u64 = 0;
+pub const INVALID_PROOF: u64 = 1;
+pub const INVALID_COMMITMENT: u64 = 2;
+pub const INVALID_RANGE: u64 = 3;
+pub const INVALID_BATCH_SIZE: u64 = 4;
 
 /// Upper bound for batch size * range in bits
 pub const MAX_TOTAL_BITS: u64 = 256;
@@ -34,6 +37,12 @@ pub struct BulletproofsCostParams {
     pub bulletproofs_ristretto255_verify_cost_per_bit: Option<InternalGas>,
 }
 
+fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .enable_bulletproofs_range_proofs())
+}
+
 pub fn verify_bulletproof_ristretto255(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -41,6 +50,10 @@ pub fn verify_bulletproof_ristretto255(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 3);
+
+    if !is_supported(context)? {
+        return Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED));
+    }
 
     // Load the cost parameters from the protocol config
     let cost_parameters = get_extension!(context, NativesCostTable)?
