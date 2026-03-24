@@ -3762,6 +3762,7 @@ dependencies = [
  "consensus-config",
  "consensus-core",
  "consensus-types",
+ "fastcrypto",
  "mysten-metrics",
  "mysten-network",
  "parking_lot 0.12.3",

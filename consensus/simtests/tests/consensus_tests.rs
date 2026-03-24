@@ -11,6 +11,7 @@ mod consensus_tests {
         NetworkKeyPair, ProtocolKeyPair, Stake,
     };
     use consensus_core::NoopTransactionVerifier;
+    use fastcrypto::traits::{KeyPair as _, ToFromBytes as _};
     use consensus_core::{BlockAPI, BlockStatus, TransactionVerifier, ValidationError};
     use consensus_simtests::node::{AuthorityNode, Config};
     use consensus_types::block::{BlockRef, TransactionIndex};
