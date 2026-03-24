@@ -103,8 +103,10 @@ impl ForkingApiServer for ForkingApiImpl {
             .map_err(|e| internal_error(format!("Transaction execution failed: {e:?}")))?;
 
         let options = options.unwrap_or_default();
-        let mut response = SuiTransactionBlockResponse::default();
-        response.digest = *result.effects.transaction_digest();
+        let mut response = SuiTransactionBlockResponse {
+            digest: *result.effects.transaction_digest(),
+            ..Default::default()
+        };
 
         if options.show_effects {
             response.effects = Some(result.effects.try_into().map_err(
@@ -127,7 +129,12 @@ impl ForkingApiServer for ForkingApiImpl {
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> Result<SuiObjectResponse, ErrorObjectOwned> {
-        let options = options.unwrap_or_default();
+        let mut options = options.unwrap_or_default();
+        // We don't have Move layout resolution, so disable content/display
+        // which require it. BCS, type, and owner still work without layout.
+        options.show_content = false;
+        options.show_display = false;
+
         let sim = self.context.simulacrum.read().await;
         let store = sim.store();
 
@@ -152,7 +159,9 @@ impl ForkingApiServer for ForkingApiImpl {
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> Result<Vec<SuiObjectResponse>, ErrorObjectOwned> {
-        let options = options.unwrap_or_default();
+        let mut options = options.unwrap_or_default();
+        options.show_content = false;
+        options.show_display = false;
         let sim = self.context.simulacrum.read().await;
         let store = sim.store();
 
@@ -181,8 +190,6 @@ impl ForkingApiServer for ForkingApiImpl {
         digest: TransactionDigest,
         options: Option<SuiTransactionBlockResponseOptions>,
     ) -> Result<SuiTransactionBlockResponse, ErrorObjectOwned> {
-        use sui_types::storage::ReadStore;
-
         let options = options.unwrap_or_default();
         let sim = self.context.simulacrum.read().await;
         let store = sim.store();
@@ -191,8 +198,10 @@ impl ForkingApiServer for ForkingApiImpl {
             .get_transaction_effects(&digest)
             .ok_or_else(|| internal_error(format!("Transaction {digest} not found")))?;
 
-        let mut response = SuiTransactionBlockResponse::default();
-        response.digest = digest;
+        let mut response = SuiTransactionBlockResponse {
+            digest,
+            ..Default::default()
+        };
 
         if options.show_effects {
             response.effects = Some(effects.clone().try_into().map_err(
