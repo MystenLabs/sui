@@ -176,12 +176,14 @@ mod tests {
     use super::*;
     use sui_kvstore::TransactionData as KvTransactionData;
     use sui_rpc::proto::sui::rpc::v2::BalanceChange as ProtoBalanceChange;
+    use sui_rpc::proto::sui::rpc::v2::ObjectReference;
     use sui_types::TypeTag;
     use sui_types::balance_change::BalanceChange;
     use sui_types::base_types::{ObjectID, SuiAddress};
     use sui_types::effects::TestEffectsBuilder;
     use sui_types::object::Object;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::storage::ObjectKey;
     use sui_types::transaction::{
         SenderSignedData, Transaction, TransactionData as SuiTransactionData,
     };
@@ -229,6 +231,33 @@ mod tests {
         assert_eq!(
             response.balance_changes,
             vec![ProtoBalanceChange::from(balance_change)]
+        );
+    }
+
+    #[test]
+    fn transaction_to_response_returns_unchanged_loaded_runtime_objects_when_requested() {
+        let transaction = test_transaction();
+        let effects = TestEffectsBuilder::new(transaction.data()).build();
+        let obj_key = ObjectKey(ObjectID::random(), 3.into());
+        let source = KvTransactionData {
+            transaction,
+            effects,
+            events: None,
+            checkpoint_number: 7,
+            timestamp: 42,
+            balance_changes: vec![],
+            unchanged_loaded_runtime_objects: vec![obj_key],
+        };
+        let mask = FieldMaskTree::from(FieldMask::from_str(
+            "effects.unchanged_loaded_runtime_objects",
+        ));
+
+        let response = transaction_to_response(source, &mask).expect("render should succeed");
+
+        let effects = response.effects.expect("effects should be present");
+        assert_eq!(
+            effects.unchanged_loaded_runtime_objects,
+            vec![ObjectReference::from(&obj_key)]
         );
     }
 }
