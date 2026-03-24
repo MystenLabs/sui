@@ -520,10 +520,11 @@ async fn test_indexer_e2e() -> Result<()> {
     let batch_response = harness
         .grpc_client
         .ledger_client()
-        .batch_get_transactions(BatchGetTransactionsRequest {
-            digests: tx_digests.iter().map(ToString::to_string).collect(),
-            read_mask: Some(FieldMask::from_paths(["balance_changes"])),
-            ..Default::default()
+        .batch_get_transactions({
+            let mut req = BatchGetTransactionsRequest::default();
+            req.digests = tx_digests.iter().map(ToString::to_string).collect();
+            req.read_mask = Some(FieldMask::from_paths(["balance_changes"]));
+            req
         })
         .await
         .context("batch_get_transactions RPC failed")?
