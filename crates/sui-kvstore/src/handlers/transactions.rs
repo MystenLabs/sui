@@ -6,7 +6,6 @@ use std::sync::Arc;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::full_checkpoint_content::Checkpoint;
-use sui_types::transaction::Transaction;
 
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::handlers::BigTableProcessor;
@@ -28,13 +27,13 @@ impl Processor for TransactionsPipeline {
 
         for tx in &checkpoint.transactions {
             let balance_changes = derive_balance_changes_2(&tx.effects, &checkpoint.object_set);
-            let transaction =
-                Transaction::from_generic_sig_data(tx.transaction.clone(), tx.signatures.clone());
+            let digest = tx.transaction.digest();
 
             let entry = tables::make_entry(
-                tables::transactions::encode_key(transaction.digest()),
+                tables::transactions::encode_key(&digest),
                 tables::transactions::encode(
-                    &transaction,
+                    &tx.transaction,
+                    &tx.signatures,
                     &tx.effects,
                     &tx.events,
                     checkpoint_number,

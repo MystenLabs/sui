@@ -3,7 +3,8 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
-use sui_kvstore::{BigTableClient, KeyValueStoreReader, TransactionData};
+use sui_kvstore::tables::transactions::col;
+use sui_kvstore::{BigTableClient, TransactionData};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::{
@@ -52,7 +53,10 @@ pub async fn get_transaction(
 
     let read_mask = validate_read_mask(request.read_mask)?;
 
-    let mut response = client.get_transactions(&[transaction_digest]).await?;
+    let columns = transaction_columns(&read_mask);
+    let mut response = client
+        .get_transactions_filtered(&[transaction_digest], Some(&columns))
+        .await?;
     let transaction = response
         .pop()
         .ok_or(TransactionNotFoundError(transaction_digest.into()))?;
@@ -81,11 +85,12 @@ pub async fn batch_get_transactions(
         .iter()
         .map(|digest| TransactionDigest::from_str(digest))
         .collect::<Result<Vec<_>, _>>()?;
+    let columns = transaction_columns(&read_mask);
     let response: HashMap<_, _> = client
-        .get_transactions(&digests)
+        .get_transactions_filtered(&digests, Some(&columns))
         .await?
         .into_iter()
-        .map(|tx| (*tx.transaction.digest(), tx))
+        .map(|tx| (tx.digest, tx))
         .collect();
 
     let transactions = digests
@@ -111,19 +116,20 @@ fn transaction_to_response(
     let mut message = ExecutedTransaction::default();
 
     if mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
-        message.digest = Some(source.transaction.digest().to_string());
+        message.digest = Some(source.digest.to_string());
     }
 
-    if let Some(submask) = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD.name) {
-        let transaction =
-            sui_sdk_types::Transaction::try_from(source.transaction.transaction_data().clone())?;
+    if let Some(submask) = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
+        && let Some(tx_data) = &source.transaction_data
+    {
+        let transaction = sui_sdk_types::Transaction::try_from(tx_data.clone())?;
         message.transaction = Some(Transaction::merge_from(transaction, &submask));
     }
 
-    if let Some(submask) = mask.subtree(ExecutedTransaction::SIGNATURES_FIELD.name) {
-        message.signatures = source
-            .transaction
-            .tx_signatures()
+    if let Some(submask) = mask.subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
+        && let Some(sigs) = &source.signatures
+    {
+        message.signatures = sigs
             .iter()
             .map(|s| {
                 sui_sdk_types::UserSignature::try_from(s.clone())
@@ -132,9 +138,11 @@ fn transaction_to_response(
             .collect::<Result<_, _>>()?;
     }
 
-    if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
+    if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name)
+        && let Some(effects) = source.effects
+    {
         let mut effects = TransactionEffects::merge_from(
-            &sui_sdk_types::TransactionEffects::try_from(source.effects)?,
+            &sui_sdk_types::TransactionEffects::try_from(effects)?,
             &submask,
         );
         if submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD.name) {
@@ -171,6 +179,45 @@ fn transaction_to_response(
     Ok(message)
 }
 
+/// Compute the set of BigTable columns needed for the given read mask.
+/// Always includes `cn` and `ts` (small metadata).
+/// Only includes `td`, `sg`, `ef`, `ev`, `bc`, and `ul` when the corresponding fields
+/// are in the mask.
+fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
+    let mut columns = vec![col::CHECKPOINT_NUMBER, col::TIMESTAMP];
+
+    if mask
+        .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
+        .is_some()
+    {
+        columns.push(col::DATA);
+    }
+    if mask
+        .subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
+        .is_some()
+    {
+        columns.push(col::SIGNATURES);
+    }
+    if let Some(effects_submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
+        columns.push(col::EFFECTS);
+        if effects_submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD.name)
+        {
+            columns.push(col::UNCHANGED_LOADED);
+        }
+    }
+    if mask
+        .subtree(ExecutedTransaction::EVENTS_FIELD.name)
+        .is_some()
+    {
+        columns.push(col::EVENTS);
+    }
+    if mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
+        columns.push(col::BALANCE_CHANGES);
+    }
+
+    columns
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,7 +235,9 @@ mod tests {
         SenderSignedData, Transaction, TransactionData as SuiTransactionData,
     };
 
-    fn test_transaction() -> Transaction {
+    use sui_types::digests::TransactionDigest;
+
+    fn test_tx_data() -> (TransactionDigest, SuiTransactionData) {
         let sender = SuiAddress::random_for_testing_only();
         let gas = Object::immutable_with_id_for_testing(ObjectID::random());
         let pt = {
@@ -203,21 +252,25 @@ mod tests {
             1_000_000,
             1,
         );
-        Transaction::new(SenderSignedData::new(data, vec![]))
+        let tx = Transaction::new(SenderSignedData::new(data.clone(), vec![]));
+        (*tx.digest(), data)
     }
 
     #[test]
     fn transaction_to_response_returns_balance_changes_when_requested() {
-        let transaction = test_transaction();
-        let effects = TestEffectsBuilder::new(transaction.data()).build();
+        let (digest, tx_data) = test_tx_data();
+        let tx = Transaction::new(SenderSignedData::new(tx_data.clone(), vec![]));
+        let effects = TestEffectsBuilder::new(tx.data()).build();
         let balance_change = BalanceChange {
             address: SuiAddress::random_for_testing_only(),
             coin_type: TypeTag::U64,
             amount: 42,
         };
         let source = KvTransactionData {
-            transaction,
-            effects,
+            digest,
+            transaction_data: Some(tx_data),
+            signatures: Some(vec![]),
+            effects: Some(effects),
             events: None,
             checkpoint_number: 7,
             timestamp: 42,
@@ -236,12 +289,15 @@ mod tests {
 
     #[test]
     fn transaction_to_response_returns_unchanged_loaded_runtime_objects_when_requested() {
-        let transaction = test_transaction();
-        let effects = TestEffectsBuilder::new(transaction.data()).build();
+        let (digest, tx_data) = test_tx_data();
+        let tx = Transaction::new(SenderSignedData::new(tx_data.clone(), vec![]));
+        let effects = TestEffectsBuilder::new(tx.data()).build();
         let obj_key = ObjectKey(ObjectID::random(), 3.into());
         let source = KvTransactionData {
-            transaction,
-            effects,
+            digest,
+            transaction_data: Some(tx_data),
+            signatures: Some(vec![]),
+            effects: Some(effects),
             events: None,
             checkpoint_number: 7,
             timestamp: 42,

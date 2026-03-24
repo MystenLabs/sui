@@ -509,11 +509,42 @@ async fn test_indexer_e2e() -> Result<()> {
     for signed in &signed_txns {
         let indexed = transactions
             .iter()
-            .find(|td| td.transaction.digest() == signed.digest())
+            .find(|td| td.digest == *signed.digest())
             .unwrap_or_else(|| panic!("transaction {} not found in results", signed.digest()));
-        assert_eq!(indexed.transaction, *signed);
+        assert_eq!(indexed.transaction().unwrap(), *signed);
         assert!(indexed.checkpoint_number > 0);
         assert!(indexed.timestamp > 0);
+    }
+
+    // -- Column-filtered partial reads --
+    // Fetch with only effects + checkpoint columns — no td, sg, ev, or bc.
+    {
+        use sui_kvstore::tables::transactions::col;
+        let partial = harness
+            .bigtable_client()
+            .get_transactions_filtered(
+                &tx_digests,
+                Some(&[col::EFFECTS, col::CHECKPOINT_NUMBER, col::TIMESTAMP]),
+            )
+            .await?;
+        assert_eq!(partial.len(), tx_digests.len());
+        for tx in &partial {
+            // digest comes from the row key, always present
+            assert!(tx_digests.contains(&tx.digest));
+            // td was not fetched
+            assert!(tx.transaction_data.is_none(), "td should be absent");
+            // sg was not fetched
+            assert!(tx.signatures.is_none(), "sg should be absent");
+            // ef was fetched
+            assert!(tx.effects.is_some(), "ef should be present");
+            // ev was not fetched
+            assert!(tx.events.is_none(), "ev should be absent");
+            // bc was not fetched
+            assert!(tx.balance_changes.is_empty(), "bc should be empty");
+            // metadata always present
+            assert!(tx.checkpoint_number > 0);
+            assert!(tx.timestamp > 0);
+        }
     }
 
     // -- Balance changes parity with fullnode gRPC batch_get_transactions --
@@ -648,7 +679,9 @@ async fn test_indexer_e2e() -> Result<()> {
     // -- Objects lookup --
     let mut object_keys: Vec<ObjectKey> = Vec::new();
     for tx_data in &transactions {
-        for (obj_ref, _owner, _write_kind) in tx_data.effects.all_changed_objects() {
+        for (obj_ref, _owner, _write_kind) in
+            tx_data.effects.as_ref().unwrap().all_changed_objects()
+        {
             object_keys.push(ObjectKey(obj_ref.0, obj_ref.1));
         }
     }
@@ -673,7 +706,7 @@ async fn test_indexer_e2e() -> Result<()> {
         .get_transactions(&[publish_digest])
         .await?;
     let publish_tx_data = publish_txns.first().context("publish tx not found")?;
-    let created = publish_tx_data.effects.created();
+    let created = publish_tx_data.effects.as_ref().unwrap().created();
     let (package_ref, _) = created
         .iter()
         .find(|(_, owner)| *owner == Owner::Immutable)
