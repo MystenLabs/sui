@@ -172,5 +172,4 @@ impl Context {
     pub(crate) fn chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
     }
-
 }

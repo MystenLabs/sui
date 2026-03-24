@@ -31,9 +31,9 @@ use sui_types::gas_coin::GAS;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 
-use crate::data::address_balance_coins::load_address_balance_coin;
 use crate::api::rpc_module::RpcModule;
 use crate::context::Context;
+use crate::data::address_balance_coins::load_address_balance_coin;
 use crate::data::load_live;
 use crate::error::InternalContext;
 use crate::error::RpcError;
@@ -201,12 +201,11 @@ impl CoinsApiServer for Coins {
                 .is_none_or(|cursor| ab_token > cursor.0);
 
             if include_ab_coin {
-                let pos = coins
-                    .partition_point(|(c, _)| {
-                        c.balance > ab_coin.balance
-                            || (c.balance == ab_coin.balance
-                                && c.coin_object_id < ab_coin.coin_object_id)
-                    });
+                let pos = coins.partition_point(|(c, _)| {
+                    c.balance > ab_coin.balance
+                        || (c.balance == ab_coin.balance
+                            && c.coin_object_id < ab_coin.coin_object_id)
+                });
                 coins.insert(pos, (ab_coin, ab_token));
             }
         }
