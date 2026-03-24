@@ -53,8 +53,9 @@ pub(crate) struct Context {
     /// Access to the RPC's configuration.
     config: Arc<RpcConfig>,
 
-    /// The chain identifier, derived from the genesis checkpoint digest.
-    chain_identifier: ChainIdentifier,
+    /// The chain identifier, derived from the genesis checkpoint digest. This is `None` if no
+    /// database is configured.
+    chain_identifier: Option<ChainIdentifier>,
 }
 
 impl Context {
@@ -72,6 +73,7 @@ impl Context {
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
     ) -> Result<Self, anyhow::Error> {
+        let has_database = database_url.is_some();
         let pg_reader = PgReader::new(None, database_url, db_args, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
@@ -99,7 +101,7 @@ impl Context {
             ConsistentReader::new(Some("jsonrpc_consistent"), consistent_reader_args, registry)
                 .await?;
 
-        let chain_identifier = {
+        let chain_identifier = if has_database {
             use kv_genesis::dsl as g;
 
             let mut conn = pg_reader
@@ -117,7 +119,9 @@ impl Context {
                 .ok()
                 .context("Invalid genesis digest length")?;
 
-            ChainIdentifier::from(CheckpointDigest::new(bytes))
+            Some(ChainIdentifier::from(CheckpointDigest::new(bytes)))
+        } else {
+            None
         };
 
         Ok(Self {
@@ -169,7 +173,7 @@ impl Context {
     }
 
     /// The chain identifier.
-    pub(crate) fn chain_identifier(&self) -> ChainIdentifier {
+    pub(crate) fn chain_identifier(&self) -> Option<ChainIdentifier> {
         self.chain_identifier
     }
 }

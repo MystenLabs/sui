@@ -45,7 +45,9 @@ pub(crate) async fn load_address_balance_coin(
     let accumulator_version = accumulator_obj.version();
     let previous_transaction = accumulator_obj.previous_transaction;
     let epoch = super::current_epoch(ctx).await?;
-    let chain_identifier = ctx.chain_identifier();
+    let chain_identifier = ctx
+        .chain_identifier()
+        .context("Chain identifier not available (no database configured)")?;
 
     let object_ref: ObjectRef =
         ParsedObjectRefWithdrawal::new(*accumulator_id.inner(), epoch, address_balance)
@@ -74,7 +76,9 @@ pub(crate) async fn try_resolve_address_balance_object(
     ctx: &Context,
     object_id: ObjectID,
 ) -> Result<Option<Object>, anyhow::Error> {
-    let chain_identifier = ctx.chain_identifier();
+    let Some(chain_identifier) = ctx.chain_identifier() else {
+        return Ok(None);
+    };
     let unmasked_id = coin_reservation::mask_or_unmask_id(object_id, chain_identifier);
 
     let Some(accumulator_obj) = load_live(ctx, unmasked_id).await? else {
