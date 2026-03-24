@@ -148,6 +148,24 @@ pub fn create_jsonrpc_router(context: Context) -> anyhow::Result<Router> {
         .merge(server.into_rpc())
         .map_err(|e| anyhow::anyhow!("Failed to merge JSON-RPC module: {e}"))?;
 
+    // Register rpc.discover — required by SuiClientBuilder::build() to create a SuiClient.
+    // Returns a minimal OpenRPC spec with the version and registered method names.
+    let method_names: Vec<serde_json::Value> = module
+        .method_names()
+        .map(|name| serde_json::json!({ "name": name }))
+        .collect();
+    module
+        .register_method("rpc.discover", move |_, _, _| {
+            serde_json::json!({
+                "info": {
+                    "title": "Sui Forking JSON-RPC",
+                    "version": env!("CARGO_PKG_VERSION"),
+                },
+                "methods": method_names,
+            })
+        })
+        .map_err(|e| anyhow::anyhow!("Failed to register rpc.discover: {e}"))?;
+
     let (stop_handle, _server_handle) = jsonrpsee::server::stop_channel();
 
     let service = jsonrpsee::server::ServerBuilder::new()
