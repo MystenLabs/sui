@@ -10,8 +10,6 @@
 //! The heavy lifting is delegated to the shared `execution` module and the
 //! simulacrum — this module only handles JSON-RPC serialization.
 
-use std::sync::Arc;
-
 use axum::Router;
 use jsonrpsee::core::async_trait;
 use jsonrpsee::proc_macros::rpc;
@@ -21,11 +19,9 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_types::{
-    base_types::ObjectID,
-    effects::TransactionEffectsAPI,
-    quorum_driver_types::ExecuteTransactionRequestType,
-    storage::ReadStore,
-    transaction::TransactionData,
+    base_types::ObjectID, effects::TransactionEffectsAPI, error::SuiObjectResponseError,
+    object::ObjectRead, storage::ReadStore, transaction::TransactionData,
+    transaction_driver_types::ExecuteTransactionRequestType,
 };
 use tracing::info;
 
@@ -90,16 +86,18 @@ impl ForkingApiServer for ForkingApiImpl {
 
         let result = crate::execution::execute_transaction(&self.context, tx_data)
             .await
-            .map_err(|e| internal_error(format!("Transaction execution failed: {e}")))?;
+            .map_err(|e| internal_error(format!("Transaction execution failed: {e:?}")))?;
 
         let options = options.unwrap_or_default();
         let mut response = SuiTransactionBlockResponse::default();
         response.digest = *result.effects.transaction_digest();
 
         if options.show_effects {
-            response.effects = Some(result.effects.try_into().map_err(|e: anyhow::Error| {
-                internal_error(format!("Failed to convert effects: {e}"))
-            })?);
+            response.effects = Some(result.effects.try_into().map_err(
+                |e: sui_types::error::SuiError| {
+                    internal_error(format!("Failed to convert effects: {e}"))
+                },
+            )?);
         }
 
         Ok(response)
@@ -119,26 +117,18 @@ impl ForkingApiServer for ForkingApiImpl {
         let sim = self.context.simulacrum.read().await;
         let store = sim.store();
 
-        let object = store
-            .get_object(&object_id)
-            .map_err(|e| internal_error(format!("Failed to read object: {e}")))?;
+        let object: Option<sui_types::object::Object> =
+            sui_types::storage::ObjectStore::get_object(store, &object_id);
 
         match object {
             Some(obj) => {
-                let obj_data = sui_json_rpc_types::SuiObjectData::try_from_object_read(
-                    sui_types::object::ObjectRead::Exists(
-                        obj.compute_object_reference(),
-                        obj,
-                        None, // layout resolution not needed for BCS
-                    ),
-                    &options,
-                )
-                .map_err(|e| internal_error(format!("Failed to convert object: {e}")))?;
-
-                Ok(SuiObjectResponse::new_with_data(obj_data))
+                let object_ref = obj.compute_object_reference();
+                let object_read = ObjectRead::Exists(object_ref, obj, None);
+                SuiObjectResponse::try_from((object_read, options))
+                    .map_err(|e| internal_error(format!("Failed to convert object: {e}")))
             }
             None => Ok(SuiObjectResponse::new_with_error(
-                sui_json_rpc_types::SuiObjectResponseError::NotExists { object_id },
+                SuiObjectResponseError::NotExists { object_id },
             )),
         }
     }
@@ -150,17 +140,31 @@ impl ForkingApiServer for ForkingApiImpl {
 
 /// Creates an axum Router that serves JSON-RPC on POST `/`.
 pub fn create_jsonrpc_router(context: Context) -> anyhow::Result<Router> {
-    use jsonrpsee::server::RpcModule;
+    use jsonrpsee::RpcModule;
 
     let server = ForkingApiImpl { context };
     let mut module = RpcModule::new(());
-    module.merge(server.into_rpc()).map_err(|e| {
-        anyhow::anyhow!("Failed to merge JSON-RPC module: {e}")
-    })?;
+    module
+        .merge(server.into_rpc())
+        .map_err(|e| anyhow::anyhow!("Failed to merge JSON-RPC module: {e}"))?;
 
-    let service = jsonrpsee::server::ServerBuilder::default()
-        .build_from_tower(module)?;
+    let (stop_handle, _server_handle) = jsonrpsee::server::stop_channel();
 
-    // jsonrpsee tower service can be converted to an axum route
-    Ok(Router::new().fallback_service(service))
+    let service = jsonrpsee::server::ServerBuilder::new()
+        .http_only()
+        .to_service_builder()
+        .build(module, stop_handle);
+
+    // Use HandleError to convert the jsonrpsee service error type (BoxError)
+    // to an axum-compatible IntoResponse, then use it as a fallback.
+    let svc = axum::error_handling::HandleError::new(
+        service,
+        |err: Box<dyn std::error::Error + Send + Sync>| async move {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("JSON-RPC error: {err}"),
+            )
+        },
+    );
+    Ok(Router::new().fallback_service(svc))
 }

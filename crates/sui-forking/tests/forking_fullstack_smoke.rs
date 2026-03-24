@@ -108,8 +108,7 @@ async fn fork_e2e() -> Result<()> {
     assert_eq!(
         resumed_status.checkpoint, status_after.checkpoint,
         "resume should restore exact checkpoint: resumed={}, before_shutdown={}",
-        resumed_status.checkpoint,
-        status_after.checkpoint
+        resumed_status.checkpoint, status_after.checkpoint
     );
 
     resumed.shutdown().await?;

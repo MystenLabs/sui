@@ -8,9 +8,10 @@ use sui_rpc::field::{FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::{
-    transaction_execution_service_server::TransactionExecutionService, ExecuteTransactionRequest,
-    ExecuteTransactionResponse, ExecutedTransaction, SimulateTransactionRequest,
-    SimulateTransactionResponse, Transaction, TransactionEffects, TransactionEvents, UserSignature,
+    ExecuteTransactionRequest, ExecuteTransactionResponse, ExecutedTransaction,
+    SimulateTransactionRequest, SimulateTransactionResponse, Transaction, TransactionEffects,
+    TransactionEvents, UserSignature,
+    transaction_execution_service_server::TransactionExecutionService,
 };
 use sui_rpc_api::{ErrorReason, RpcError};
 use sui_types::effects::TransactionEffectsAPI;
