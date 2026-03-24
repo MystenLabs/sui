@@ -1140,7 +1140,10 @@ async fn run_bench_worker(
                         let proxy = worker.execution_proxy.clone_new();
                         let res = async move {
                             let (client_type, res) = if use_amplification {
-                                let num_validators = rand::thread_rng().gen_range(3..committee_size.max(4));
+                                // Cap at 5 validators to limit amplification traffic and reduce latency impact
+                                let max_validators = committee_size.min(5);
+                                let min_validators = 3.min(max_validators);
+                                let num_validators = rand::thread_rng().gen_range(min_validators..=max_validators);
                                 proxy.execute_transaction_block_with_amplification(tx.clone(), num_validators).await
                             } else {
                                 proxy.execute_transaction_block(tx.clone()).await
