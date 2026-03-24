@@ -153,6 +153,12 @@ impl<'d> RpcService<'d> {
         self
     }
 
+    /// Merge an additional axum router (e.g. for JSON-RPC routes) into this service.
+    pub(crate) fn merge_router(mut self, other: Router) -> Self {
+        self.router = self.router.merge(other);
+        self
+    }
+
     /// Run the RPC service. This binds the listener and exposes handlers for the RPC service.
     pub(crate) async fn run(self) -> anyhow::Result<Service> {
         let Self {

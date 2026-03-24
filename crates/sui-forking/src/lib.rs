@@ -9,6 +9,7 @@ mod context;
 mod execution;
 mod graphql;
 mod grpc;
+mod jsonrpc;
 mod network;
 mod seeds;
 mod server;

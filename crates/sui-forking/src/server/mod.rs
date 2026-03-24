@@ -242,13 +242,18 @@ async fn start_grpc_services(
     let ledger_service = ForkingLedgerService::new(context.clone());
     let state_service = ForkingStateService::new(context.clone());
     let tx_execution_service = ForkingTransactionExecutionService::new(context.clone());
+
+    // JSON-RPC server on the same port, for Sui SDK compatibility
+    let jsonrpc_router = crate::jsonrpc::create_jsonrpc_router(context.clone())?;
+
     let grpc = GrpcRpcService::new(grpc_args, version, registry)
         .await?
         .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
         .add_service(LedgerServiceServer::new(ledger_service))
         .add_service(SubscriptionServiceServer::new(subscription_service))
         .add_service(StateServiceServer::new(state_service))
-        .add_service(TransactionExecutionServiceServer::new(tx_execution_service));
+        .add_service(TransactionExecutionServiceServer::new(tx_execution_service))
+        .merge_router(jsonrpc_router);
     let handle = grpc.run().await?;
     Ok(handle)
 }
