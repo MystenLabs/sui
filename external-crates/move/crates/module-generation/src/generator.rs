@@ -137,6 +137,12 @@ impl<'a> ModuleGenerator<'a> {
             6 => Type_::U16,
             7 => Type_::U32,
             8 => Type_::U256,
+            9 => Type_::I8,
+            10 => Type_::I16,
+            11 => Type_::I32,
+            12 => Type_::I64,
+            13 => Type_::I128,
+            14 => Type_::I256,
             _ => {
                 let index = self.index(ty_param_context.len());
                 let ty_var = ty_param_context[index].value.clone();
