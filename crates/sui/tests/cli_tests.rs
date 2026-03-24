@@ -609,7 +609,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
 
     let effects = response.effects;
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().0.0, gas_obj_id);
+    assert_eq!(effects.gas_object().unwrap().0.0, gas_obj_id);
     let package = effects
         .created()
         .into_iter()
@@ -872,7 +872,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
             "Command failed: {:?}",
             response
         );
-        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
         response
             .effects
             .created()
@@ -1139,7 +1139,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     let obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
         response
             .effects
             .created()
@@ -1203,7 +1203,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     // Get Package ID and version
     let (expect_original_id, expect_version, _) =
         if let SuiClientCommandResult::TransactionBlock(response) = resp {
-            assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+            assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
             response
                 .get_new_package_obj()
                 .ok_or_else(|| anyhow::anyhow!("No package object response"))?
@@ -1276,7 +1276,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
         let x = response.effects;
         x.created()
     } else {
@@ -1385,7 +1385,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
         let x = response.effects;
         x.created()
     } else {
@@ -1511,7 +1511,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
         let x = response.effects;
         x.created()
     } else {
@@ -1637,7 +1637,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     .await?;
 
     let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
         let x = response.effects;
         x.created()
     } else {
@@ -1768,7 +1768,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds()
     resp.print(true);
 
     let obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
-        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
         response
             .effects
             .created()
@@ -2050,7 +2050,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let effects = response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().0.0, gas_obj_id);
+    assert_eq!(effects.gas_object().unwrap().0.0, gas_obj_id);
 
     // Now run the upgrade
     let resp = SuiClientCommands::Upgrade(UpgradeArgs {
@@ -2081,7 +2081,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let effects = response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().0.0, gas_obj_id);
+    assert_eq!(effects.gas_object().unwrap().0.0, gas_obj_id);
 
     let obj_ids = effects
         .created()
@@ -2144,7 +2144,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let effects = &publish_response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().0.0, gas_obj_id);
+    assert_eq!(effects.gas_object().unwrap().0.0, gas_obj_id);
 
     // Now run the upgrade
     let upgrade_response = SuiClientCommands::Upgrade(UpgradeArgs {
@@ -2175,7 +2175,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     // Get Upgraded Package ID and version
     let (expect_upgrade_latest_id, expect_upgrade_version, _) =
         if let SuiClientCommandResult::TransactionBlock(response) = upgrade_response {
-            assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+            assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
             response
                 .get_new_package_obj()
                 .ok_or_else(|| anyhow::anyhow!("No package object response"))?
@@ -2243,7 +2243,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
             "Command failed: {:?}",
             response
         );
-        assert_eq!(response.effects.gas_object().0.0, gas_obj_id);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, gas_obj_id);
         (
             response.effects.mutated().first().unwrap().0.0,
             response.effects.mutated().get(1).unwrap().0.0,
@@ -2587,7 +2587,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .await?;
     let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.effects.status().is_ok(), "Command failed: {:?}", r);
-        assert_eq!(r.effects.gas_object().0.0, gas);
+        assert_eq!(r.effects.gas_object().unwrap().0.0, gas);
         let object_id = r
             .effects
             .mutated_excluding_gas()
@@ -2684,7 +2684,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.effects.status().is_ok(), "Command failed: {:?}", r);
-        assert_eq!(r.effects.gas_object().0.0, gas);
+        assert_eq!(r.effects.gas_object().unwrap().0.0, gas);
         let updated_object_id = r
             .effects
             .mutated_excluding_gas()
@@ -3143,7 +3143,7 @@ fn assert_dry_run(dry_run: SuiClientCommandResult, object_id: ObjectID, command:
             "{command} dry run test effects is not success"
         );
         assert_eq!(
-            response.transaction.effects.gas_object().0.0,
+            response.transaction.effects.gas_object().unwrap().0.0,
             object_id,
             "{command} dry run test failed, gas object used is not the expected one"
         );
@@ -3224,7 +3224,10 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
 
     if let SuiClientCommandResult::DryRun(response) = pay_dry_run {
         assert!(response.transaction.effects.status().is_ok());
-        assert_ne!(response.transaction.effects.gas_object().0.0, object_id);
+        assert_ne!(
+            response.transaction.effects.gas_object().unwrap().0.0,
+            object_id
+        );
     } else {
         panic!("Pay dry run failed");
     }
@@ -3380,7 +3383,7 @@ async fn test_pay() -> Result<(), anyhow::Error> {
         // check tx status
         assert!(response.effects.status().is_ok());
         // check gas coin used
-        assert_eq!(response.effects.gas_object().0.0, object_id3);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, object_id3);
         let objs_refs = client.get_owned_objects(address2, None, None, None).await?;
         assert!(objs_refs.next_page_token.is_none());
         assert_eq!(objs_refs.items.len(), 1);
@@ -3432,7 +3435,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
     if let SuiClientCommandResult::TransactionBlock(response) = pay_sui {
         assert!(response.effects.status().is_ok());
         // check gas coin used
-        assert_eq!(response.effects.gas_object().0.0, object_id1);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, object_id1);
         let objs_refs = client.get_owned_objects(address2, None, None, None).await?;
         assert!(objs_refs.next_page_token.is_none());
         assert_eq!(objs_refs.items.len(), 1);
@@ -3481,7 +3484,7 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
         let objs_refs = client.get_owned_objects(address2, None, None, None).await?;
         assert!(objs_refs.next_page_token.is_none());
         assert_eq!(objs_refs.items.len(), 1);
-        assert_eq!(response.effects.gas_object().0.0, object_id1);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, object_id1);
     } else {
         panic!("PayAllSui test failed");
     }
@@ -3531,7 +3534,7 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     // we check if object1 is owned by address 2 and if the gas object used is object_id2
     if let SuiClientCommandResult::TransactionBlock(response) = transfer {
         assert!(response.effects.status().is_ok());
-        assert_eq!(response.effects.gas_object().0.0, object_id2);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, object_id2);
         let objs_refs = client.get_owned_objects(address2, None, None, None).await?;
         assert!(objs_refs.next_page_token.is_none());
         assert_eq!(objs_refs.items.len(), 1);
@@ -3569,7 +3572,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     // is correct
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
         assert!(response.effects.status().is_ok());
-        assert_eq!(response.effects.gas_object().0.0, object_id1);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, object_id1);
         let objs_refs = client.get_owned_objects(address2, None, None, None).await?;
         assert!(objs_refs.next_page_token.is_none());
         assert_eq!(objs_refs.items.len(), 1);
@@ -3593,7 +3596,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     .await?;
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
         assert!(response.effects.status().is_ok());
-        assert_eq!(response.effects.gas_object().0.0, object_id1);
+        assert_eq!(response.effects.gas_object().unwrap().0.0, object_id1);
         let objs_refs = client.get_owned_objects(address2, None, None, None).await?;
         assert!(objs_refs.next_page_token.is_none());
         assert_eq!(
@@ -3657,7 +3660,7 @@ async fn test_transfer_gas_smash() -> Result<(), anyhow::Error> {
     };
 
     assert!(response.effects.status().is_ok());
-    assert_eq!(response.effects.gas_object().0.0, object_id0);
+    assert_eq!(response.effects.gas_object().unwrap().0.0, object_id0);
     let objs_refs = client.get_owned_objects(address2, None, None, None).await?;
     assert!(objs_refs.next_page_token.is_none());
     assert_eq!(objs_refs.items.len(), 1);
@@ -3765,7 +3768,7 @@ async fn test_transfer_serialized_data() -> Result<(), anyhow::Error> {
     let effects = &response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().0.0, o[1]);
+    assert_eq!(effects.gas_object().unwrap().0.0, o[1]);
 
     let a1_objs = client.get_owned_objects(a[1], None, None, None).await?;
     assert!(a1_objs.next_page_token.is_none());
@@ -3822,7 +3825,7 @@ async fn test_transfer_serialized_kind() -> Result<(), anyhow::Error> {
     let effects = &response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().0.0, o[1]);
+    assert_eq!(effects.gas_object().unwrap().0.0, o[1]);
 
     let a1_objs = client.get_owned_objects(a[1], None, None, None).await?;
     assert!(a1_objs.next_page_token.is_none());
@@ -3859,7 +3862,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
     .unwrap();
     if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui_cmd {
         assert!(response.effects.status().is_ok());
-        let gas_used = response.effects.gas_object().0.0;
+        let gas_used = response.effects.gas_object().unwrap().0.0;
         assert_eq!(gas_used, object_id1);
         assert!(response.effects.gas_cost_summary().gas_used() <= gas_estimate.unwrap());
     } else {
@@ -3916,7 +3919,7 @@ async fn test_custom_sender() -> Result<(), anyhow::Error> {
     let effects = &response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().0.0, o[1]);
+    assert_eq!(effects.gas_object().unwrap().0.0, o[1]);
 
     let a1_objs = client.get_owned_objects(a[1], None, None, None).await?;
     assert!(a1_objs.next_page_token.is_none());
@@ -4023,7 +4026,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     let effects = response.effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.gas_object().0.0, gas_obj_id);
+    assert_eq!(effects.gas_object().unwrap().0.0, gas_obj_id);
     let package = effects
         .created()
         .into_iter()
@@ -4577,7 +4580,7 @@ async fn test_party_transfer() -> Result<(), anyhow::Error> {
     };
 
     assert!(response.effects.status().is_ok());
-    assert_eq!(response.effects.gas_object().0.0, object_id2);
+    assert_eq!(response.effects.gas_object().unwrap().0.0, object_id2);
 
     let object = client.get_object(object_id1).await?;
 

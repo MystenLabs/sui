@@ -83,11 +83,7 @@ Response: {
   "data": {
     "functionCallTransaction": {
       "gasEffects": {
-        "gasObject": {
-          "address": "0x0000000000000000000000000000000000000000000000000000000000000000",
-          "version": 0,
-          "digest": "11111111111111111111111111111111"
-        },
+        "gasObject": null,
         "gasSummary": {
           "computationCost": 0,
           "storageCost": 0,

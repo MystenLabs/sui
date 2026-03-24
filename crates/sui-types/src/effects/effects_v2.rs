@@ -437,9 +437,9 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
-    fn gas_object(&self) -> (ObjectRef, Owner) {
-        if let Some(gas_object_index) = self.gas_object_index {
-            let entry = &self.changed_objects[gas_object_index as usize];
+    fn gas_object(&self) -> Option<(ObjectRef, Owner)> {
+        self.gas_object_index.map(|index| {
+            let entry = &self.changed_objects[index as usize];
             match &entry.1.output_state {
                 ObjectOut::ObjectWrite((digest, owner)) => {
                     ((entry.0, self.lamport_version, *digest), owner.clone())
@@ -458,12 +458,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 }
                 _ => panic!("Gas object must be an ObjectWrite or Deleted in changed_objects"),
             }
-        } else {
-            (
-                (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
-                Owner::AddressOwner(SuiAddress::default()),
-            )
-        }
+        })
     }
 
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
@@ -754,9 +749,10 @@ impl TransactionEffectsV2 {
                 }
             }
         }
-        // Make sure that gas object exists in changed_objects.
-        let (_, owner) = self.gas_object();
-        assert!(matches!(owner, Owner::AddressOwner(_)));
+        // Make sure that gas object, if present, has an address owner.
+        if let Some((_, owner)) = self.gas_object() {
+            assert!(matches!(owner, Owner::AddressOwner(_)));
+        }
 
         for (id, _) in &self.unchanged_consensus_objects {
             assert!(

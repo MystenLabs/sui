@@ -2605,7 +2605,8 @@ async fn test_get_latest_parent_entry() {
     .unwrap();
     let (new_object_id2, seq2, _) = effects.created()[0].0;
 
-    let update_version = SequenceNumber::lamport_increment([seq1, seq2, effects.gas_object().0.1]);
+    let update_version =
+        SequenceNumber::lamport_increment([seq1, seq2, effects.gas_object().unwrap().0.1]);
 
     let effects = call_move(
         &authority_state,
@@ -2632,7 +2633,8 @@ async fn test_get_latest_parent_entry() {
     assert_eq!(obj_ref.0, new_object_id1);
     assert_eq!(obj_ref.1, update_version);
 
-    let delete_version = SequenceNumber::lamport_increment([obj_ref.1, effects.gas_object().0.1]);
+    let delete_version =
+        SequenceNumber::lamport_increment([obj_ref.1, effects.gas_object().unwrap().0.1]);
 
     let _effects = call_move(
         &authority_state,
@@ -3045,8 +3047,11 @@ async fn test_transfer_sui_no_amount() {
     // and got transferred. Also check on its version and new balance.
     assert!(effects.status().is_ok());
     assert!(effects.mutated_excluding_gas().is_empty());
-    assert!(gas_ref.1 < effects.gas_object().0.1);
-    assert_eq!(effects.gas_object().1, Owner::AddressOwner(recipient));
+    assert!(gas_ref.1 < effects.gas_object().unwrap().0.1);
+    assert_eq!(
+        effects.gas_object().unwrap().1,
+        Owner::AddressOwner(recipient)
+    );
     let new_balance =
         sui_types::gas::get_gas_balance(&authority_state.get_object(&gas_object_id).await.unwrap())
             .unwrap();
@@ -3091,8 +3096,8 @@ async fn test_transfer_sui_with_amount() {
         .await
         .unwrap();
     assert_eq!(sui_types::gas::get_gas_balance(&new_gas).unwrap(), 500);
-    assert!(gas_ref.1 < effects.gas_object().0.1);
-    assert_eq!(effects.gas_object().1, Owner::AddressOwner(sender));
+    assert!(gas_ref.1 < effects.gas_object().unwrap().0.1);
+    assert_eq!(effects.gas_object().unwrap().1, Owner::AddressOwner(sender));
     let new_balance =
         sui_types::gas::get_gas_balance(&authority_state.get_object(&gas_object_id).await.unwrap())
             .unwrap();
@@ -3192,7 +3197,7 @@ async fn test_clear_cache_reverts_wrap_move_call() {
             ident_str!("object_basics").to_owned(),
             ident_str!("wrap").to_owned(),
             vec![],
-            create_effects.gas_object().0,
+            create_effects.gas_object().unwrap().0,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_v0))],
             TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
             rgp,
@@ -3227,7 +3232,7 @@ async fn test_clear_cache_reverts_wrap_move_call() {
 
     // The gas is uncharged
     let gas = cache.get_object(&gas_object_id).unwrap();
-    assert_eq!(gas.version(), create_effects.gas_object().0.1);
+    assert_eq!(gas.version(), create_effects.gas_object().unwrap().0.1);
 }
 
 #[tokio::test]
@@ -3287,7 +3292,7 @@ async fn test_clear_cache_reverts_unwrap_move_call() {
             ident_str!("object_basics").to_owned(),
             ident_str!("unwrap").to_owned(),
             vec![],
-            wrap_effects.gas_object().0,
+            wrap_effects.gas_object().unwrap().0,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(wrapper_v0))],
             TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
             rgp,
@@ -3322,7 +3327,7 @@ async fn test_clear_cache_reverts_unwrap_move_call() {
 
     // The gas is uncharged
     let gas = cache.get_object(&gas_object_id).unwrap();
-    assert_eq!(gas.version(), wrap_effects.gas_object().0.1);
+    assert_eq!(gas.version(), wrap_effects.gas_object().unwrap().0.1);
 }
 
 #[tokio::test]
@@ -3389,7 +3394,7 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
             ident_str!("object_basics").to_owned(),
             function.to_owned(),
             vec![],
-            create_inner_effects.gas_object().0,
+            create_inner_effects.gas_object().unwrap().0,
             vec![
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v0)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
@@ -3551,7 +3556,7 @@ async fn test_clear_cache_removes_added_ofield() {
             ident_str!("object_basics").to_owned(),
             ident_str!("add_ofield").to_owned(),
             vec![],
-            create_inner_effects.gas_object().0,
+            create_inner_effects.gas_object().unwrap().0,
             vec![
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v0)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
@@ -3673,7 +3678,7 @@ async fn test_clear_cache_reverts_removed_ofield() {
             ident_str!("object_basics").to_owned(),
             ident_str!("remove_ofield").to_owned(),
             vec![],
-            add_effects.gas_object().0,
+            add_effects.gas_object().unwrap().0,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v1))],
             TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
             rgp,
@@ -5246,7 +5251,7 @@ async fn test_gas_smashing() {
             assert!(effects.status().is_err());
         }
         // gas object in effects is first coin in vector of coins
-        assert_eq!(gas_coin_ids[0], effects.gas_object().0.0);
+        assert_eq!(gas_coin_ids[0], effects.gas_object().unwrap().0.0);
         // object is created on success and gas at position 0 mutated
         let created = usize::from(success);
         assert_eq!(
@@ -5548,7 +5553,7 @@ async fn test_publish_transitive_dependencies_ok() {
         .1
         .into_data();
     let ((package_c_id, _, _), _) = txn_effects.created()[0];
-    let gas_ref = txn_effects.gas_object().0;
+    let gas_ref = txn_effects.gas_object().unwrap().0;
 
     // Publish `package B`
     let mut package_b_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -5584,7 +5589,7 @@ async fn test_publish_transitive_dependencies_ok() {
         .1
         .into_data();
     let ((package_b_id, _, _), _) = txn_effects.created()[0];
-    let gas_ref = txn_effects.gas_object().0;
+    let gas_ref = txn_effects.gas_object().unwrap().0;
 
     // Publish `package A`
     let mut package_a_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -5621,7 +5626,7 @@ async fn test_publish_transitive_dependencies_ok() {
         .1
         .into_data();
     let ((package_a_id, _, _), _) = txn_effects.created()[0];
-    let gas_ref = txn_effects.gas_object().0;
+    let gas_ref = txn_effects.gas_object().unwrap().0;
 
     // Publish `package root`
     let mut package_root_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

@@ -105,7 +105,7 @@ impl SingleValidator {
             .filter_map(|(oref, owner, _)| owner.is_immutable().then_some(oref))
             .next()
             .unwrap();
-        let updated_gas = effects.gas_object().0;
+        let updated_gas = effects.gas_object().unwrap().0;
         (package, updated_gas)
     }
 

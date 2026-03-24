@@ -54,7 +54,7 @@ async fn test_fixed_supply() {
     let (a, kp, fx) = coin_registry::publish(&mut cluster, "fixed_supply").await;
     let package = find::immutable(&fx).unwrap().0;
     let currency = find::address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
-    let gas = fx.gas_object().0;
+    let gas = fx.gas_object().unwrap().0;
 
     coin_registry::finalize(&mut cluster, a, &kp, package, "fixed", currency, gas).await;
     cluster.create_checkpoint().await;
@@ -78,7 +78,7 @@ async fn test_dynamic() {
     let mut cluster = FullCluster::new().await.unwrap();
     let (sender, kp, fx) = coin_registry::publish(&mut cluster, "dynamic").await;
     let package = find::immutable(&fx).unwrap().0;
-    let gas = fx.gas_object().0;
+    let gas = fx.gas_object().unwrap().0;
 
     // Create a dynamic currency
     let coin_type = StructTag {
@@ -111,7 +111,7 @@ async fn test_burn_only() {
     let (sender, kp, fx) = coin_registry::publish(&mut cluster, "burn_only").await;
     let package = find::immutable(&fx).unwrap().0;
     let currency = find::address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
-    let gas = fx.gas_object().0;
+    let gas = fx.gas_object().unwrap().0;
 
     coin_registry::finalize(&mut cluster, sender, &kp, package, "burn", currency, gas).await;
     cluster.create_checkpoint().await;
@@ -136,7 +136,7 @@ async fn test_unknown() {
     let (sender, kp, fx) = coin_registry::publish(&mut cluster, "unknown").await;
     let package = find::immutable(&fx).unwrap().0;
     let currency = find::address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
-    let gas = fx.gas_object().0;
+    let gas = fx.gas_object().unwrap().0;
 
     coin_registry::finalize(&mut cluster, sender, &kp, package, "unknown", currency, gas).await;
     cluster.create_checkpoint().await;
@@ -162,7 +162,7 @@ async fn test_legacy() {
 
     cluster.create_checkpoint().await;
     let outputs = query_owned_outputs(&cluster, sender).await;
-    let gas = fx.gas_object().0;
+    let gas = fx.gas_object().unwrap().0;
 
     let metadata = query_metadata(&cluster, &outputs.coin_type.to_canonical_string(true)).await;
     assert_debug_snapshot!(metadata, @r###"
@@ -194,7 +194,7 @@ async fn test_regulated() {
     let (a, kp, fx) = coin_registry::publish(&mut cluster, "regulated").await;
     let package = find::immutable(&fx).unwrap().0;
     let currency = find::address_owned_by(&fx, SUI_COIN_REGISTRY_ADDRESS.into()).unwrap();
-    let gas = fx.gas_object().0;
+    let gas = fx.gas_object().unwrap().0;
 
     coin_registry::finalize(&mut cluster, a, &kp, package, "regulated", currency, gas).await;
     cluster.create_checkpoint().await;

@@ -152,9 +152,9 @@ impl ExecutionEffects {
     pub fn gas_object(&self) -> (ObjectRef, Owner) {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
-                effects.data().gas_object()
+                effects.data().gas_object().unwrap()
             }
-            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.gas_object(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.gas_object().unwrap(),
         }
     }
 

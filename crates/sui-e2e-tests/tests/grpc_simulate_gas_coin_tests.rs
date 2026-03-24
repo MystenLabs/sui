@@ -644,7 +644,7 @@ async fn test_combined_ab_and_coins_needed() {
         .expect("Should have created a coin for limited_sender");
 
     // Fund limited_sender's address balance with 5 SUI (from genesis account)
-    let (genesis_sender, genesis_gas) = test_env.get_sender_and_gas(0);
+    let genesis_gas = test_env.get_gas_for_sender(genesis_sender)[0];
     let ab_amount = 5 * MIST_PER_SUI;
     let fund_ab_tx = TestTransactionBuilder::new(genesis_sender, genesis_gas, test_env.rgp)
         .transfer_sui_to_address_balance(

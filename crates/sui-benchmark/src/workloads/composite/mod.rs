@@ -75,7 +75,7 @@ fn authenticated_events_disabled(protocol_config: Option<&ProtocolConfig>) -> bo
 
 macro_rules! update_gas {
     ($gas:expr, $effects:expr) => {{
-        let new_gas_ref = $effects.gas_object().0;
+        let (new_gas_ref, _) = $effects.gas_object();
         if new_gas_ref.0 == ObjectID::ZERO {
             info!("No gas object, skipping update");
             return;
