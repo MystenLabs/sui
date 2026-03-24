@@ -102,7 +102,7 @@ async fn test_gasless_transfer_success() {
     let transfer_amount = 1000u64;
 
     let coin_type = setup_custom_coin(&mut test_env, &[(initial_funding, sender)]).await;
-    assert_eq!(test_env.get_sui_balance(sender), 0);
+    assert_eq!(test_env.get_sui_balance_ab(sender), 0);
 
     let tx = test_env.create_gasless_transaction(
         transfer_amount,
@@ -122,10 +122,13 @@ async fn test_gasless_transfer_success() {
     assert_zero_gas(effects.gas_cost_summary());
 
     assert_eq!(
-        test_env.get_balance(sender, coin_type.clone()),
+        test_env.get_balance_ab(sender, coin_type.clone()),
         initial_funding - transfer_amount
     );
-    assert_eq!(test_env.get_balance(recipient, coin_type), transfer_amount);
+    assert_eq!(
+        test_env.get_balance_ab(recipient, coin_type),
+        transfer_amount
+    );
 
     test_env.trigger_reconfiguration().await;
 }
@@ -143,7 +146,7 @@ async fn test_gasless_multi_recipient() {
     let remainder = total_amount - split_amount;
 
     let coin_type = setup_custom_coin(&mut test_env, &[(total_amount, sender)]).await;
-    assert_eq!(test_env.get_sui_balance(sender), 0);
+    assert_eq!(test_env.get_sui_balance_ab(sender), 0);
 
     let balance_type = TypeTag::Struct(Box::new(StructTag {
         address: *SUI_FRAMEWORK_PACKAGE_ID,
@@ -204,12 +207,12 @@ async fn test_gasless_multi_recipient() {
     );
     assert_zero_gas(effects.gas_cost_summary());
 
-    assert_eq!(test_env.get_balance(sender, coin_type.clone()), 0);
+    assert_eq!(test_env.get_balance_ab(sender, coin_type.clone()), 0);
     assert_eq!(
-        test_env.get_balance(recipient1, coin_type.clone()),
+        test_env.get_balance_ab(recipient1, coin_type.clone()),
         split_amount
     );
-    assert_eq!(test_env.get_balance(recipient2, coin_type), remainder);
+    assert_eq!(test_env.get_balance_ab(recipient2, coin_type), remainder);
 
     test_env.trigger_reconfiguration().await;
 }
@@ -228,7 +231,7 @@ async fn test_gasless_disabled_rejects_transaction() {
 
     let sender = test_env.get_sender(1);
     let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
-    assert_eq!(test_env.get_sui_balance(sender), 0);
+    assert_eq!(test_env.get_sui_balance_ab(sender), 0);
 
     let tx = test_env.create_gasless_transaction(1000, coin_type, sender, sender, 0, 0);
     let result = test_env.exec_tx_directly(tx).await;
@@ -346,7 +349,7 @@ async fn test_gasless_computation_cap() {
     let sender = test_env.get_sender(1);
     let recipient = test_env.get_sender(2);
     let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
-    assert_eq!(test_env.get_sui_balance(sender), 0);
+    assert_eq!(test_env.get_sui_balance_ab(sender), 0);
 
     let tx = test_env.create_gasless_transaction(100, coin_type, sender, recipient, 0, 0);
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
@@ -371,7 +374,7 @@ async fn test_gasless_drive_transaction() {
     let recipient = test_env.get_sender(2);
 
     let coin_type = setup_custom_coin(&mut test_env, &[(5000, sender)]).await;
-    assert_eq!(test_env.get_sui_balance(sender), 0);
+    assert_eq!(test_env.get_sui_balance_ab(sender), 0);
 
     let tx_data = test_env.create_gasless_transaction(1000, coin_type, sender, recipient, 0, 0);
     let signed_tx = test_env.cluster.wallet.sign_transaction(&tx_data).await;
@@ -439,11 +442,11 @@ async fn test_gasless_custom_coin_transfer() {
     let recipient = test_env.get_sender(2);
 
     let coin_type = setup_custom_coin(&mut test_env, &[(5000, sender), (3000, recipient)]).await;
-    assert_eq!(test_env.get_sui_balance(sender), 0);
+    assert_eq!(test_env.get_sui_balance_ab(sender), 0);
 
     let transfer_amount = 500u64;
-    let sender_before = test_env.get_balance(sender, coin_type.clone());
-    let recipient_before = test_env.get_balance(recipient, coin_type.clone());
+    let sender_before = test_env.get_balance_ab(sender, coin_type.clone());
+    let recipient_before = test_env.get_balance_ab(recipient, coin_type.clone());
     let tx = test_env.create_gasless_transaction(
         transfer_amount,
         coin_type.clone(),
@@ -461,8 +464,8 @@ async fn test_gasless_custom_coin_transfer() {
     );
     assert_zero_gas(effects.gas_cost_summary());
 
-    let sender_after = test_env.get_balance(sender, coin_type.clone());
-    let recipient_after = test_env.get_balance(recipient, coin_type);
+    let sender_after = test_env.get_balance_ab(sender, coin_type.clone());
+    let recipient_after = test_env.get_balance_ab(recipient, coin_type);
     assert_eq!(sender_after, sender_before - transfer_amount);
     assert_eq!(recipient_after, recipient_before + transfer_amount);
 

@@ -402,6 +402,7 @@ mod checked {
         let gas_paid_from_address_balance = transaction.is_gas_paid_from_address_balance();
 
         let gas_status = if is_gasless {
+            debug_assert_ne!(reference_gas_price, 0);
             let rgp = reference_gas_price.max(1);
             let compute_cap = protocol_config.gasless_max_computation_units() * rgp;
             SuiGasStatus::new(compute_cap, rgp, reference_gas_price, protocol_config)?
@@ -438,10 +439,16 @@ mod checked {
             (gas_objects, available_address_balance_gas)
         };
 
-        if gas_ownership_checks {
-            gas_status.check_gas_objects(&gas_objects)?;
+        if !is_gasless {
+            if gas_ownership_checks {
+                gas_status.check_gas_objects(&gas_objects)?;
+            }
+            gas_status.check_gas_balance(
+                &gas_objects,
+                gas_budget,
+                available_address_balance_gas,
+            )?;
         }
-        gas_status.check_gas_balance(&gas_objects, gas_budget, available_address_balance_gas)?;
         Ok(gas_status)
     }
 

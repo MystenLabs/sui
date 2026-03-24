@@ -326,10 +326,6 @@ pub mod checked {
             self.smash_gas(temporary_store);
         }
 
-        pub fn is_gasless(&self) -> bool {
-            matches!(&self.payment, PaymentMetadata::Gasless)
-        }
-
         /// Entry point for gas charging.
         /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of
         /// mutated objects

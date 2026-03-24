@@ -200,6 +200,8 @@ mod checked {
         );
         let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 
+        let is_gasless = protocol_config.enable_gasless()
+            && is_gasless_transaction(&gas_data, &transaction_kind);
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
         let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
@@ -215,6 +217,7 @@ mod checked {
             enable_expensive_checks,
             execution_params,
             trace_builder_opt,
+            is_gasless,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -354,6 +357,7 @@ mod checked {
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        is_gasless: bool,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, Mode::Error>,
@@ -428,10 +432,7 @@ mod checked {
             Ok((r, t)) => (Ok(r), t),
             Err((e, t)) => (Err(e), t),
         };
-        if gas_charger.is_gasless()
-            && result.is_ok()
-            && temporary_store.has_non_accumulator_writes()
-        {
+        if is_gasless && result.is_ok() && temporary_store.has_non_accumulator_writes() {
             debug_fatal!(
                 "gasless transaction produced non-accumulator writes — command validation should have prevented this"
             );

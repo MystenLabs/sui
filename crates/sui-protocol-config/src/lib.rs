@@ -1036,9 +1036,6 @@ struct FeatureFlags {
     use_coin_party_owner: bool,
 
     #[serde(skip_serializing_if = "is_false")]
-    new_vm_enabled: bool,
-
-    #[serde(skip_serializing_if = "is_false")]
     enable_gasless: bool,
 }
 
@@ -4730,7 +4727,6 @@ impl ProtocolConfig {
                     cfg.execution_version = Some(4);
                     cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = false;
                     cfg.feature_flags.merge_randomness_into_checkpoint = true;
-                    cfg.feature_flags.new_vm_enabled = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_gasless = true;
                         cfg.gasless_max_computation_units = Some(50_000);

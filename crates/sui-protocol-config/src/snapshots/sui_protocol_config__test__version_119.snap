@@ -160,7 +160,6 @@ feature_flags:
   gasless_transaction_drop_safety: true
   merge_randomness_into_checkpoint: true
   use_coin_party_owner: true
-  new_vm_enabled: true
   enable_gasless: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
