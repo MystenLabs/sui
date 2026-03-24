@@ -124,6 +124,11 @@ impl Context {
     pub fn is_validator(&self) -> bool {
         self.committee.is_valid_index(self.own_index)
     }
+
+    /// Returns true if this node is an observer (i.e., not part of the committee).
+    pub fn is_observer(&self) -> bool {
+        !self.is_validator()
+    }
 }
 
 /// A clock that allows to derive the current UNIX system timestamp while guaranteeing that timestamp
