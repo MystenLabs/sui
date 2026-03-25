@@ -6,7 +6,7 @@ use crate::{
     accumulator_event::AccumulatorEvent,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
-    error::SuiError,
+    error::{ExecutionError, SuiError},
     event::Event,
     is_system_package,
     object::{Data, Object, Owner},
@@ -121,7 +121,7 @@ impl ExecutionResultsV2 {
         self.accumulator_events.clear();
     }
 
-    pub fn merge_results(&mut self, new_results: Self) {
+    pub fn merge_results(&mut self, new_results: Self) -> Result<(), ExecutionError> {
         // An object written before the merge (e.g., gas coin written by smash_gas) may be
         // deleted by the new results (e.g., send_funds destroying the gas coin during PTB
         // execution). Remove such stale entries.
@@ -144,12 +144,12 @@ impl ExecutionResultsV2 {
             .extend(new_results.deleted_object_ids);
 
         // debug assert that deleted is disjoint with created and written
-        debug_assert!(
+        assert_invariant!(
             self.deleted_object_ids
                 .is_disjoint(&self.created_object_ids),
             "Deleted object IDs should be disjoint with created object IDs"
         );
-        debug_assert!(
+        assert_invariant!(
             self.written_objects
                 .keys()
                 .all(|id| !self.deleted_object_ids.contains(id)),
@@ -160,6 +160,7 @@ impl ExecutionResultsV2 {
             .extend(new_results.accumulator_events);
         self.settlement_input_sui += new_results.settlement_input_sui;
         self.settlement_output_sui += new_results.settlement_output_sui;
+        Ok(())
     }
 
     pub fn update_version_and_previous_tx(
