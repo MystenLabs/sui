@@ -210,6 +210,17 @@ impl SynchronizerHandle {
         }
         Ok(())
     }
+
+    #[cfg(test)]
+    /// Creates a mock synchronizer handle for testing
+    pub(crate) fn new_for_test() -> Arc<Self> {
+        use tokio::task::JoinSet;
+        let (tx, _rx) = channel("test_synchronizer", 1);
+        Arc::new(Self {
+            commands_sender: tx,
+            tasks: tokio::sync::Mutex::new(JoinSet::new()),
+        })
+    }
 }
 
 /// `Synchronizer` oversees live block synchronization, crucial for node progress. Live synchronization
@@ -694,17 +705,23 @@ where
             let (verified_block, reject_txn_votes) = block_verifier
                 .verify_and_vote(signed_block, serialized_block)
                 .tap_err(|e| {
-                    let peer_name = match &peer {
-                        PeerId::Validator(index) => {
-                            context.committee.authority(*index).hostname.clone()
-                        }
-                        PeerId::Observer(_) => "observer".to_string(),
+                    let (peer_name, peer_type) = match &peer {
+                        PeerId::Validator(index) => (
+                            context.committee.authority(*index).hostname.clone(),
+                            "validator",
+                        ),
+                        PeerId::Observer(_) => ("observer".to_string(), "observer"),
                     };
                     context
                         .metrics
                         .node_metrics
                         .invalid_blocks
-                        .with_label_values(&[peer_name.as_str(), "synchronizer", e.clone().name()])
+                        .with_label_values(&[
+                            peer_name.as_str(),
+                            "synchronizer",
+                            e.clone().name(),
+                            peer_type,
+                        ])
                         .inc();
                     info!("Invalid block received from {:?}: {}", peer, e);
                 })?;
@@ -831,7 +848,7 @@ where
                                 .metrics
                                 .node_metrics
                                 .invalid_blocks
-                                .with_label_values(&[hostname.as_str(), "synchronizer_own_block", err.clone().name()])
+                                .with_label_values(&[hostname.as_str(), "synchronizer_own_block", err.clone().name(), "validator"])
                                 .inc();
                             warn!("Invalid block received from {}: {}", authority_index, err);
                         })?;
