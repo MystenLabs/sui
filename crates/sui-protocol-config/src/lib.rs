@@ -5071,6 +5071,12 @@ impl ProtocolConfig {
         self.execution_version = Some(self.execution_version.map_or(4, |v| v.max(4)));
     }
 
+    pub fn disable_coin_reservation_for_testing(&mut self) {
+        self.feature_flags.enable_coin_reservation_obj_refs = false;
+        self.feature_flags
+            .convert_withdrawal_compatibility_ptb_arguments = false;
+    }
+
     pub fn create_root_accumulator_object_for_testing(&mut self) {
         self.feature_flags.create_root_accumulator_object = true;
     }
