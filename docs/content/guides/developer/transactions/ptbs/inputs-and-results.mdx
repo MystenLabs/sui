@@ -104,7 +104,7 @@ const hero = tx.moveCall({
    typeArguments: [],
 });
 
-//According to Move function new_sword, this moveCall will return an Object of Type Sword
+// According to Move function new_sword, this moveCall will return an Object of Type Sword
 const sword = tx.moveCall({
    target: `0x123::hero::new_sword`,
    arguments: [tx.pure.u64(10)],
