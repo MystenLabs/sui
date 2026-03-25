@@ -3,9 +3,9 @@
 
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
-use sui_types::storage::{FullObjectKey, ObjectKey};
 #[cfg(tidehunter)]
 use sui_types::storage::ConsensusObjectKey;
+use sui_types::storage::{FullObjectKey, ObjectKey};
 
 /// A key type for `object_per_epoch_marker_table_v2`.
 ///
