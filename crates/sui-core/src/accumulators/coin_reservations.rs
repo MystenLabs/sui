@@ -34,11 +34,9 @@ impl CachingCoinReservationResolver {
         &self,
         object_id: ObjectID,
     ) -> UserInputResult<(SuiAddress, TypeTag)> {
-        self.cache
-            .get_with(object_id, || {
-                self.inner.get_owner_and_type_for_object(object_id)
-            })
-            .clone()
+        self.cache.get_with(object_id, || {
+            self.inner.get_owner_and_type_for_object(object_id)
+        })
     }
 
     pub fn resolve_funds_withdrawal(
