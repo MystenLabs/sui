@@ -191,7 +191,9 @@ impl ObserverNetworkService for ObserverService {
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
 
-        // Schedule fetching missing ancestors from this peer in the background.
+        // TODO: Schedule fetching missing ancestors from this peer in the background.
+        // This requires the refactored synchronizer that supports PeerId (from the
+        // consensus-synchronizer-peers-pool branch). For now, just record metrics.
         if !missing_ancestors.is_empty() {
             self.context
                 .metrics
@@ -199,6 +201,11 @@ impl ObserverNetworkService for ObserverService {
                 .handler_received_block_missing_ancestors
                 .with_label_values(&[block_author_hostname])
                 .inc_by(missing_ancestors.len() as u64);
+
+            tracing::debug!(
+                "Block has {} missing ancestors that need to be fetched",
+                missing_ancestors.len()
+            );
         }
 
         Ok(())
