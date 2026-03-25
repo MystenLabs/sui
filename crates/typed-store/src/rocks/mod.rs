@@ -2057,18 +2057,21 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), std::i
         ..Default::default()
     };
     loop {
-        if !path.join("LOCK").exists() {
-            return std::fs::remove_dir_all(path);
-        }
-        match backoff.next_backoff() {
-            Some(duration) => tokio::time::sleep(duration).await,
-            None => {
-                warn!(
-                    "LOCK file present after timeout ({:?}), forcefully removing: {:?}",
-                    timeout, path
-                );
-                return std::fs::remove_dir_all(&path);
+        match TideHunterDb::drop_db(&path) {
+            Ok(()) => return Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                match backoff.next_backoff() {
+                    Some(duration) => tokio::time::sleep(duration).await,
+                    None => {
+                        warn!(
+                            "Database at {:?} is still locked after timeout ({:?})",
+                            path, timeout
+                        );
+                        return Err(err);
+                    }
+                }
             }
+            Err(err) => return Err(err),
         }
     }
 }
