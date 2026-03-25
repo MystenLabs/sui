@@ -121,19 +121,31 @@ impl ExecutionResultsV2 {
         self.accumulator_events.clear();
     }
 
-    pub fn merge_results(&mut self, new_results: Self) -> Result<(), ExecutionError> {
-        // An object written before the merge (e.g., gas coin written by smash_gas) may be
-        // deleted by the new results (e.g., send_funds destroying the gas coin during PTB
-        // execution). Remove such stale entries.
-        for id in &new_results.deleted_object_ids {
-            self.written_objects.remove(id);
-            // additional hardening
-            self.created_object_ids.remove(id);
-        }
-        // While not possible currently, we should ensure that any object previously marked as
-        // deleted is now marked only as written
-        for id in new_results.written_objects.keys() {
-            self.deleted_object_ids.remove(id);
+    /// If `consistent_merge` is true, the deletes and writes in `new_results` will update the
+    /// results any existing writes and deletes in `self` respectively. If false, it is assumed
+    /// that deletes and writes are disjoint.
+    /// If `invariant_checks` is true, the function will check for disjointness between deleted
+    /// and created/written objects.
+    pub fn merge_results(
+        &mut self,
+        new_results: Self,
+        consistent_merge: bool,
+        invariant_checks: bool,
+    ) -> Result<(), ExecutionError> {
+        if consistent_merge {
+            // An object written before the merge (e.g., gas coin written by smash_gas) may be
+            // deleted by the new results (e.g., send_funds destroying the gas coin during PTB
+            // execution). Remove such stale entries.
+            for id in &new_results.deleted_object_ids {
+                self.written_objects.remove(id);
+                // additional hardening
+                self.created_object_ids.remove(id);
+            }
+            // While not possible currently, we should ensure that any object previously marked as
+            // deleted is now marked only as written
+            for id in new_results.written_objects.keys() {
+                self.deleted_object_ids.remove(id);
+            }
         }
 
         self.written_objects.extend(new_results.written_objects);
@@ -143,18 +155,20 @@ impl ExecutionResultsV2 {
         self.deleted_object_ids
             .extend(new_results.deleted_object_ids);
 
-        // debug assert that deleted is disjoint with created and written
-        assert_invariant!(
-            self.deleted_object_ids
-                .is_disjoint(&self.created_object_ids),
-            "Deleted object IDs should be disjoint with created object IDs"
-        );
-        assert_invariant!(
-            self.written_objects
-                .keys()
-                .all(|id| !self.deleted_object_ids.contains(id)),
-            "Deleted object IDs should be disjoint with written object IDs"
-        );
+        if invariant_checks {
+            // debug assert that deleted is disjoint with created and written
+            assert_invariant!(
+                self.deleted_object_ids
+                    .is_disjoint(&self.created_object_ids),
+                "Deleted object IDs should be disjoint with created object IDs"
+            );
+            assert_invariant!(
+                self.written_objects
+                    .keys()
+                    .all(|id| !self.deleted_object_ids.contains(id)),
+                "Deleted object IDs should be disjoint with written object IDs"
+            );
+        }
         self.user_events.extend(new_results.user_events);
         self.accumulator_events
             .extend(new_results.accumulator_events);
