@@ -360,6 +360,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
                 let ty = env.gas_coin_type()?;
                 let (gas_metadata, gas_value) = match gas_payment.location {
                     PaymentLocation::AddressBalance(sui_address) => {
+                        assert_invariant!(
+                            env.protocol_config.enable_address_balance_gas_payments(),
+                            "Address balance gas payments must be enabled to have an address \
+                             balance payment location"
+                        );
                         let max_gas_in_balance = gas_charger.gas_budget();
                         assert_invariant!(
                             gas_payment.amount >= max_gas_in_balance,
@@ -455,6 +460,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         &mut self,
         transfer: GasCoinTransfer,
     ) -> Result<(), ExecutionError> {
+        // send funds transfer ==> accumulators/address balances are enabled
+        assert_invariant!(
+            !matches!(transfer, GasCoinTransfer::SendFunds { .. })
+                || self.env.protocol_config.enable_accumulators(),
+            "Gas coin transfers with send_funds are not allowed unless accumulators are enabled"
+        );
         if self.gas_coin_transfer.is_some() {
             invariant_violation!("Gas coin destination set more than once");
         }
@@ -2336,14 +2347,32 @@ pub fn finish(
     gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
     result?;
 
+    let created_object_ids: BTreeSet<ObjectID> = created_object_ids.into_iter().collect();
+    let deleted_object_ids: BTreeSet<ObjectID> = deleted_object_ids.into_iter().collect();
+    let modified_objects: BTreeSet<ObjectID> = loaded_runtime_objects
+        .into_iter()
+        .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
+        .collect();
+
+    assert_invariant!(
+        created_object_ids.is_disjoint(&deleted_object_ids),
+        "Created and deleted object sets should be disjoint"
+    );
+    assert_invariant!(
+        modified_objects.is_disjoint(&created_object_ids),
+        "Modified and created object sets should be disjoint"
+    );
+    assert_invariant!(
+        written_objects
+            .keys()
+            .all(|id| !deleted_object_ids.contains(id)),
+        "Written objects should not be deleted"
+    );
     Ok(ExecutionResults::V2(ExecutionResultsV2 {
         written_objects,
-        modified_objects: loaded_runtime_objects
-            .into_iter()
-            .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
-            .collect(),
-        created_object_ids: created_object_ids.into_iter().collect(),
-        deleted_object_ids: deleted_object_ids.into_iter().collect(),
+        modified_objects,
+        created_object_ids,
+        deleted_object_ids,
         user_events,
         accumulator_events,
         settlement_input_sui,
