@@ -20,8 +20,8 @@ use scoped_futures::ScopedFutureExt;
 use sui_indexer_alt_framework_store_traits::ConcurrentConnection;
 use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::SequentialConnection;
+use sui_indexer_alt_framework_store_traits::SequentialStore;
 use sui_indexer_alt_framework_store_traits::Store;
-use sui_indexer_alt_framework_store_traits::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
 use tracing::info;
 
@@ -409,7 +409,7 @@ impl<S: Store> Indexer<S> {
     }
 }
 
-impl<T: TransactionalStore> Indexer<T> {
+impl<T: SequentialStore> Indexer<T> {
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     ///

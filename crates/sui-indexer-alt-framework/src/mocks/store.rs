@@ -23,8 +23,8 @@ use crate::store::Connection;
 use crate::store::PrunerWatermark;
 use crate::store::ReaderWatermark;
 use crate::store::SequentialConnection;
+use crate::store::SequentialStore;
 use crate::store::Store;
-use crate::store::TransactionalStore;
 
 #[derive(Default, Clone)]
 pub struct MockWatermark {
@@ -336,7 +336,7 @@ impl Store for MockStore {
 }
 
 #[async_trait]
-impl TransactionalStore for MockStore {
+impl SequentialStore for MockStore {
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

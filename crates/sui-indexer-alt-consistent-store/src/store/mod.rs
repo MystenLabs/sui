@@ -134,7 +134,7 @@ impl<S: Send + Sync + 'static> store::Store for Store<S> {
 }
 
 #[async_trait::async_trait]
-impl<S: Send + Sync + 'static> store::TransactionalStore for Store<S> {
+impl<S: Send + Sync + 'static> store::SequentialStore for Store<S> {
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,
@@ -211,7 +211,7 @@ mod tests {
 
     use scoped_futures::ScopedFutureExt;
     use sui_indexer_alt_framework::store::Connection as _;
-    use sui_indexer_alt_framework::store::TransactionalStore;
+    use sui_indexer_alt_framework::store::SequentialStore;
     use tokio::time::error::Elapsed;
     use tokio::time::{self};
 

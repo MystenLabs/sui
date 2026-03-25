@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Analytics store implementation with TransactionalStore support.
+//! Analytics store implementation with SequentialStore support.
 //!
 //! This store supports two modes:
 //!
@@ -31,8 +31,8 @@ use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::store::Connection;
 use sui_indexer_alt_framework::store::SequentialConnection;
+use sui_indexer_alt_framework::store::SequentialStore;
 use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_framework::store::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_types::base_types::EpochId;
 use tokio::sync::mpsc;
@@ -606,7 +606,7 @@ impl Store for AnalyticsStore {
 }
 
 #[async_trait]
-impl TransactionalStore for AnalyticsStore {
+impl SequentialStore for AnalyticsStore {
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

@@ -22,7 +22,7 @@ use crate::pipeline::logging::WatermarkLogger;
 use crate::pipeline::sequential::Handler;
 use crate::pipeline::sequential::SequentialConfig;
 use crate::store::Connection;
-use crate::store::TransactionalStore;
+use crate::store::SequentialStore;
 
 /// The committer task gathers rows into batches and writes them to the database.
 ///
@@ -53,7 +53,7 @@ pub(super) fn committer<H>(
 ) -> Service
 where
     H: Handler + Send + Sync + 'static,
-    H::Store: TransactionalStore + 'static,
+    H::Store: SequentialStore + 'static,
 {
     Service::new().spawn_aborting(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the

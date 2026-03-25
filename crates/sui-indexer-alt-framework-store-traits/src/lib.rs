@@ -148,10 +148,10 @@ pub trait Store: Send + Sync + 'static + Clone {
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>>;
 }
 
-/// Extends the Store trait with transactional capabilities, to be used within the framework for
-/// atomic or transactional writes.
+/// Extension of [`Store`] for stores that support sequential pipeline operations, including
+/// transactional capabilities used within the framework for atomic or transactional writes.
 #[async_trait]
-pub trait TransactionalStore: Store {
+pub trait SequentialStore: Store {
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

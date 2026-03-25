@@ -17,8 +17,8 @@ use crate::pipeline::CommitterConfig;
 use crate::pipeline::Processor;
 use crate::pipeline::processor::processor;
 use crate::pipeline::sequential::committer::committer;
+use crate::store::SequentialStore;
 use crate::store::Store;
-use crate::store::TransactionalStore;
 
 mod committer;
 
@@ -41,7 +41,7 @@ mod committer;
 /// checkpoints that can be received before the next checkpoint.
 #[async_trait]
 pub trait Handler: Processor {
-    type Store: TransactionalStore;
+    type Store: SequentialStore;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;

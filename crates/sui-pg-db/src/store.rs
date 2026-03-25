@@ -255,7 +255,7 @@ impl store::Store for Db {
 }
 
 #[async_trait]
-impl store::TransactionalStore for Db {
+impl store::SequentialStore for Db {
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,
