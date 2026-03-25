@@ -108,25 +108,18 @@ pub mod checked {
             &self,
             gas_objs: &[&ObjectReadResult],
             gas_budget: u64,
+            available_address_balance_gas: u64,
         ) -> UserInputResult {
             match self {
-                Self::V2(status) => status.check_gas_balance(gas_objs, gas_budget),
+                Self::V2(status) => {
+                    status.check_gas_balance(gas_objs, gas_budget, available_address_balance_gas)
+                }
             }
         }
 
         pub fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult {
             match self {
                 Self::V2(status) => status.check_gas_objects(gas_objs),
-            }
-        }
-
-        pub fn check_gas_data(
-            &self,
-            gas_objs: &[&ObjectReadResult],
-            gas_budget: u64,
-        ) -> UserInputResult {
-            match self {
-                Self::V2(status) => status.check_gas_data(gas_objs, gas_budget),
             }
         }
 

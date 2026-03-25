@@ -10,7 +10,7 @@ task 1, lines 6-25:
 //# publish
 created: object(1,0)
 mutated: object(0,3)
-gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5586000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 27:
 //# run Test::M1::create --sender A --args 0 @A
@@ -59,7 +59,7 @@ task 10, lines 44-50:
 //> 4: sui::coin::into_balance<sui::sui::SUI>(Result(3));
 //> 5: sui::balance::send_funds<sui::sui::SUI>(Result(4), Input(2));
 mutated: object(0,0)
-accumulators_written: (object(10,0), B, sui::balance::Balance<sui::sui::SUI>, Merge), (object(10,1), C, sui::balance::Balance<sui::sui::SUI>, Merge)
+accumulators_written: (object(10,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 1000), (object(10,1), C, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 11, line 52:
@@ -93,11 +93,11 @@ Response: {
         {
           "cursor": "Mg==",
           "node": {
-            "digest": "6YcViTTenkbrbzw37seNLCw3A22FoUTRrqZ1zJtybArE",
+            "digest": "B8A5DJR8xXFYxNHbPf1aKVAmAhrLLXg8ayTd8e3tLZxV",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "Drt3orwnaRWS1sb1kYq2YhVcYiau5stFCMSEMt2G62vn"
+                "digest": "7dVYBpiGxe2egFTbRgAJVMLYvfGt89rjHpNm9A5V98GJ"
               }
             }
           }
@@ -105,11 +105,11 @@ Response: {
         {
           "cursor": "NQ==",
           "node": {
-            "digest": "8aBtSGuaq7s1vireu4e3QawJKopxtw63pKqf6nUyKTeJ",
+            "digest": "CmNJbSAQCFFK9igzxpGggiNwbzcxErdMZJDCxj6Jz7oP",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 3,
-                "digest": "7XBY62x5uNfbKUn5yWmgDqSgajVMMKmtHrJkyaFTN8Ym"
+                "digest": "7gn9DYxrUUBATK59yFEhToCd7DgfyNrvbmLyWgdnYPUN"
               }
             }
           }
@@ -117,11 +117,11 @@ Response: {
         {
           "cursor": "OA==",
           "node": {
-            "digest": "9pjLmiY3C7hfmj8wanGrTCSPJsZcLRGXXHLY2bUbUxSy",
+            "digest": "GGMih1c3nqtNpv96xsZLJzYRHgeZXg8ScBfAJDGR1fjK",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 5,
-                "digest": "9HiRZXPmynMbtqjYvukNUJSwws4Q6bHc7B71BAscfHZE"
+                "digest": "StG6dpd7HjLisK6DhuqPkP7ygTZrRLRctwB9wKsfDra"
               }
             }
           }
@@ -129,11 +129,11 @@ Response: {
         {
           "cursor": "MTA=",
           "node": {
-            "digest": "5D32ZPmspttk8tn6obb9ps7LZCJKipobQYvLXifRneiF",
+            "digest": "65aJczAiq3BmyK7ji1P3PnDa3hwS4HaLdGFRQ7QbEShA",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 6,
-                "digest": "2LubGgy2X8ojiCyYet81zMzwPzWHEPmL7thhXBwZxHKk"
+                "digest": "3By1MfczZTStz6thcqm4DfyPKcjA5jasRYtHsbwFGWYe"
               }
             }
           }
@@ -151,11 +151,11 @@ Response: {
         {
           "cursor": "OA==",
           "node": {
-            "digest": "9pjLmiY3C7hfmj8wanGrTCSPJsZcLRGXXHLY2bUbUxSy",
+            "digest": "GGMih1c3nqtNpv96xsZLJzYRHgeZXg8ScBfAJDGR1fjK",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 5,
-                "digest": "9HiRZXPmynMbtqjYvukNUJSwws4Q6bHc7B71BAscfHZE"
+                "digest": "StG6dpd7HjLisK6DhuqPkP7ygTZrRLRctwB9wKsfDra"
               }
             }
           }
@@ -185,11 +185,11 @@ Response: {
         {
           "cursor": "NQ==",
           "node": {
-            "digest": "8aBtSGuaq7s1vireu4e3QawJKopxtw63pKqf6nUyKTeJ",
+            "digest": "CmNJbSAQCFFK9igzxpGggiNwbzcxErdMZJDCxj6Jz7oP",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 3,
-                "digest": "7XBY62x5uNfbKUn5yWmgDqSgajVMMKmtHrJkyaFTN8Ym"
+                "digest": "7gn9DYxrUUBATK59yFEhToCd7DgfyNrvbmLyWgdnYPUN"
               }
             }
           }
@@ -197,11 +197,11 @@ Response: {
         {
           "cursor": "MTA=",
           "node": {
-            "digest": "5D32ZPmspttk8tn6obb9ps7LZCJKipobQYvLXifRneiF",
+            "digest": "65aJczAiq3BmyK7ji1P3PnDa3hwS4HaLdGFRQ7QbEShA",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 6,
-                "digest": "2LubGgy2X8ojiCyYet81zMzwPzWHEPmL7thhXBwZxHKk"
+                "digest": "3By1MfczZTStz6thcqm4DfyPKcjA5jasRYtHsbwFGWYe"
               }
             }
           }
@@ -231,11 +231,11 @@ Response: {
         {
           "cursor": "OA==",
           "node": {
-            "digest": "9pjLmiY3C7hfmj8wanGrTCSPJsZcLRGXXHLY2bUbUxSy",
+            "digest": "GGMih1c3nqtNpv96xsZLJzYRHgeZXg8ScBfAJDGR1fjK",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 5,
-                "digest": "9HiRZXPmynMbtqjYvukNUJSwws4Q6bHc7B71BAscfHZE"
+                "digest": "StG6dpd7HjLisK6DhuqPkP7ygTZrRLRctwB9wKsfDra"
               }
             }
           }
@@ -243,11 +243,11 @@ Response: {
         {
           "cursor": "MTA=",
           "node": {
-            "digest": "5D32ZPmspttk8tn6obb9ps7LZCJKipobQYvLXifRneiF",
+            "digest": "65aJczAiq3BmyK7ji1P3PnDa3hwS4HaLdGFRQ7QbEShA",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 6,
-                "digest": "2LubGgy2X8ojiCyYet81zMzwPzWHEPmL7thhXBwZxHKk"
+                "digest": "3By1MfczZTStz6thcqm4DfyPKcjA5jasRYtHsbwFGWYe"
               }
             }
           }

@@ -10,7 +10,7 @@ task 1, lines 6-56:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 8147200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 8215600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 58-60:
 //# programmable --sender A --inputs 1 @A
@@ -169,131 +169,131 @@ Response: {
           "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY"
         },
         {
-          "digest": "F483483ABLCYqg53ZUx2girAKdagJnLChQKfNekk5Mzi"
+          "digest": "EQvBdahyw8NgTwqVhM3PPcCXNksuh4EqEn35EsWXjNPu"
         },
         {
-          "digest": "7xSBTJ6mjuqNyex4qsq8PAL8824HQUJL7kuWrSYWrX6Q"
+          "digest": "AK2VAhBLawJTMEJkqha1iKGeoUvcdRfVjLZ4VaKGoSu1"
         },
         {
-          "digest": "FQxHHabcwArCvCvYbhjkNoD9RURDYwpXSMMrG1GSuBD8"
+          "digest": "3Veg4VmuXhwQVHaQtpbjEXx3cQNGmUJ6MKzxXnjBYYuW"
         },
         {
-          "digest": "8mhbdFWJDqsJsZrE5v69DWTJpwBPeHJUFyJVtku4NB8t"
+          "digest": "4wbtB52jFdEApPXV8rqTvGfcfUmZEYSDrLLnR4zFWHq5"
         },
         {
-          "digest": "E7VqqfznL6PsnfjWjFbEPzj1BDqG5pwefdfoLHMMX8hu"
+          "digest": "Dk8a4rsi2wv9C5NzvZM4RBmP1tpYprebmebML59sKhDg"
         },
         {
-          "digest": "GFtHa2ZNZB2ApRykQFhwK7hXZryk7Rvtrg69jtVKPAnr"
+          "digest": "E1cU1P1i3j4YrufvSzssRZns6oXAGVYhjTGLLDpAQhtG"
         },
         {
-          "digest": "8hYvUr6zUsZ2aQ1cBR2arjFB8Cwh32Gu6k921StVqdJs"
+          "digest": "HSyAcYfXBu75x58BCyfymEoAJoqtRWXQeb9hubMmX7qb"
         },
         {
-          "digest": "5cD2vN2Z1tDytXHKAe2Lf3KtKVNtr4S2NJnoLXSpJMhL"
+          "digest": "GRqm1Uk7dXpMHhMjbYPrWPe3B2ZzqX2L4MbEAvszTvbA"
         },
         {
-          "digest": "7PnrxJuFGsvhSjTGebhRVxC4qaA1fFLLnUDnW9h8L8PD"
+          "digest": "DeBNThwfGnMsZ1KSUYr34b3TCxMXbyS4Cmq64m5fJhC6"
         },
         {
-          "digest": "3iUcU15eb1UpGuh3bjs43Y9i3eCDvsPus4hqwfRMqkGX"
+          "digest": "EZCYe2y7GpZLPUErvZz5uSSHbeqG3JCSRpxNmD2kHF3P"
         },
         {
-          "digest": "6EgaCaUeT3b3yoQHLFcS7pcD5RFVPhEq8wJV2FuendvC"
+          "digest": "HU4bn4Hm4zCFyWsq5tSVFqh5jxD9r1MPv7fTkrvddL4Y"
         },
         {
-          "digest": "AL9L7Yo4Xk6TvKAbjgcrGET8FZxcmK4LJbqkFKgF7FwJ"
+          "digest": "88YJscTxBk1zJUiRZRphPraZxTzmcqeGdwvqxh2zKe3J"
         },
         {
-          "digest": "3Jm3amp4TnCzenq8upCmRVaJneVntXoEjzjAGxKa6AnJ"
+          "digest": "Ek2zLnLysbeHn9h3WGuctbK3v59E98qRgNfAmez64UiA"
         },
         {
-          "digest": "5TjtvGc1z88KWxRPEgn9ThNo6xinN6s9dj78rJiEgNSr"
+          "digest": "G8HLgXWfYNauy58QtniC5ThBAw8SSYCGV7SQYFj5hw6a"
         },
         {
-          "digest": "2b96n6HpnyaH31vxk3KmJEgCkpdKxNwGr1TQP5UFrzxr"
+          "digest": "Bwv938S1uRdx2DbN4j6E5unpEXxwH6TBySChjBW9Yiac"
         },
         {
-          "digest": "GvhTRJn4RuBkCahHyr2wkz5VbRNVV8TuKKkkGPke8oxE"
+          "digest": "FSm6928Kc6TstGkTq7jTK96PFre5U5AaGqYntVpQhTAa"
         },
         {
-          "digest": "AVpNDExXXpzK2K5dauw6Ju9C34KTZCrimtqn4aS8YA2k"
+          "digest": "FwW7pXKCBS6UCHPuSxVsNnncUvz91dWPd4PNs7hxXnnM"
         },
         {
-          "digest": "BBjuWFZJsyh1WHXaSFGPbnBxyuxEsTPhZRuvYpk8zHZ6"
+          "digest": "4ETgbAWCYJwh6BEbNRWbgJMYxZ2bha6tZB7Zs5aUy4kp"
         },
         {
-          "digest": "B4n3DLYnzdsUsAUnknpVyUjBfipFbJMagPE4NwBXaQ4u"
+          "digest": "HHKCcrdVABYUhHgb2Mh3UHCjTJJgS4q9xPm4NtMF6UwX"
         }
       ]
     },
     "affect2": {
       "nodes": [
         {
-          "digest": "7xSBTJ6mjuqNyex4qsq8PAL8824HQUJL7kuWrSYWrX6Q"
+          "digest": "AK2VAhBLawJTMEJkqha1iKGeoUvcdRfVjLZ4VaKGoSu1"
         },
         {
-          "digest": "GFtHa2ZNZB2ApRykQFhwK7hXZryk7Rvtrg69jtVKPAnr"
+          "digest": "E1cU1P1i3j4YrufvSzssRZns6oXAGVYhjTGLLDpAQhtG"
         },
         {
-          "digest": "5cD2vN2Z1tDytXHKAe2Lf3KtKVNtr4S2NJnoLXSpJMhL"
+          "digest": "GRqm1Uk7dXpMHhMjbYPrWPe3B2ZzqX2L4MbEAvszTvbA"
         },
         {
-          "digest": "3iUcU15eb1UpGuh3bjs43Y9i3eCDvsPus4hqwfRMqkGX"
+          "digest": "EZCYe2y7GpZLPUErvZz5uSSHbeqG3JCSRpxNmD2kHF3P"
         },
         {
-          "digest": "6EgaCaUeT3b3yoQHLFcS7pcD5RFVPhEq8wJV2FuendvC"
+          "digest": "HU4bn4Hm4zCFyWsq5tSVFqh5jxD9r1MPv7fTkrvddL4Y"
         },
         {
-          "digest": "5TjtvGc1z88KWxRPEgn9ThNo6xinN6s9dj78rJiEgNSr"
+          "digest": "G8HLgXWfYNauy58QtniC5ThBAw8SSYCGV7SQYFj5hw6a"
         },
         {
-          "digest": "2b96n6HpnyaH31vxk3KmJEgCkpdKxNwGr1TQP5UFrzxr"
+          "digest": "Bwv938S1uRdx2DbN4j6E5unpEXxwH6TBySChjBW9Yiac"
         }
       ]
     },
     "affect3": {
       "nodes": [
         {
-          "digest": "FQxHHabcwArCvCvYbhjkNoD9RURDYwpXSMMrG1GSuBD8"
+          "digest": "3Veg4VmuXhwQVHaQtpbjEXx3cQNGmUJ6MKzxXnjBYYuW"
         },
         {
-          "digest": "6EgaCaUeT3b3yoQHLFcS7pcD5RFVPhEq8wJV2FuendvC"
+          "digest": "HU4bn4Hm4zCFyWsq5tSVFqh5jxD9r1MPv7fTkrvddL4Y"
         },
         {
-          "digest": "5TjtvGc1z88KWxRPEgn9ThNo6xinN6s9dj78rJiEgNSr"
+          "digest": "G8HLgXWfYNauy58QtniC5ThBAw8SSYCGV7SQYFj5hw6a"
         },
         {
-          "digest": "GvhTRJn4RuBkCahHyr2wkz5VbRNVV8TuKKkkGPke8oxE"
+          "digest": "FSm6928Kc6TstGkTq7jTK96PFre5U5AaGqYntVpQhTAa"
         }
       ]
     },
     "affect4": {
       "nodes": [
         {
-          "digest": "8mhbdFWJDqsJsZrE5v69DWTJpwBPeHJUFyJVtku4NB8t"
+          "digest": "4wbtB52jFdEApPXV8rqTvGfcfUmZEYSDrLLnR4zFWHq5"
         },
         {
-          "digest": "3Jm3amp4TnCzenq8upCmRVaJneVntXoEjzjAGxKa6AnJ"
+          "digest": "Ek2zLnLysbeHn9h3WGuctbK3v59E98qRgNfAmez64UiA"
         },
         {
-          "digest": "AVpNDExXXpzK2K5dauw6Ju9C34KTZCrimtqn4aS8YA2k"
+          "digest": "FwW7pXKCBS6UCHPuSxVsNnncUvz91dWPd4PNs7hxXnnM"
         }
       ]
     },
     "affect5": {
       "nodes": [
         {
-          "digest": "E7VqqfznL6PsnfjWjFbEPzj1BDqG5pwefdfoLHMMX8hu"
+          "digest": "Dk8a4rsi2wv9C5NzvZM4RBmP1tpYprebmebML59sKhDg"
         },
         {
-          "digest": "BBjuWFZJsyh1WHXaSFGPbnBxyuxEsTPhZRuvYpk8zHZ6"
+          "digest": "4ETgbAWCYJwh6BEbNRWbgJMYxZ2bha6tZB7Zs5aUy4kp"
         },
         {
-          "digest": "B4n3DLYnzdsUsAUnknpVyUjBfipFbJMagPE4NwBXaQ4u"
+          "digest": "HHKCcrdVABYUhHgb2Mh3UHCjTJJgS4q9xPm4NtMF6UwX"
         },
         {
-          "digest": "6gWB8E4h3hxmvvHRNnWv1Vdp9WdDyVUG7oZ21gG7NQLR"
+          "digest": "48EwNWnzw6kdjq6NW1973SdtWnhDycfQETZ7cduEFqBQ"
         }
       ]
     },

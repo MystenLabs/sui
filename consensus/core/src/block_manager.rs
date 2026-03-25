@@ -758,9 +758,7 @@ mod tests {
         let (mut context, _key_pairs) = Context::new_for_test(4);
 
         // We set the gc depth to 4
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(4);
+        context.protocol_config.set_gc_depth_for_testing(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -847,9 +845,7 @@ mod tests {
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
         // We set the gc depth to 4
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(4);
+        context.protocol_config.set_gc_depth_for_testing(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -892,9 +888,7 @@ mod tests {
     async fn accept_blocks_unsuspend_children_blocks() {
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(10);
+        context.protocol_config.set_gc_depth_for_testing(10);
 
         let context = Arc::new(context);
 
@@ -941,9 +935,7 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(gc_depth);
+        context.protocol_config.set_gc_depth_for_testing(gc_depth);
 
         let context = Arc::new(context);
 
@@ -1019,9 +1011,7 @@ mod tests {
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
         // We set the gc depth to 4
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(4);
+        context.protocol_config.set_gc_depth_for_testing(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));

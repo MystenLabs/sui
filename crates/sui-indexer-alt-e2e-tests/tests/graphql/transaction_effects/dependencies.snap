@@ -10,7 +10,7 @@ task 1, lines 6-26:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 5548000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5563200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 27-32:
 //# programmable --sender A --inputs 100u64 @A
@@ -60,7 +60,7 @@ task 6, lines 58-75:
 Response: {
   "data": {
     "systemTransactionDependencies": {
-      "digest": "3sUDK6rMz1XeKVywbeUsMjL7er3RJPu4W5288LhFU9dL",
+      "digest": "GXZ1Ayn1WYc87qP3jXBhe41H9vTjUALwBdFT4iFDHR2P",
       "dependencies": {
         "pageInfo": {
           "hasNextPage": false,
@@ -68,14 +68,14 @@ Response: {
         },
         "nodes": [
           {
-            "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
-            "sender": null
-          },
-          {
-            "digest": "C1ZSjt7X14pTQZJ2eGruDe4mpdDFxDbyMPhfLaaTRLyz",
+            "digest": "3N3NAm6zjoR7BJKeL9V8xco7PtdvMW8SSuWMX1ijfHQz",
             "sender": {
               "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
             }
+          },
+          {
+            "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+            "sender": null
           }
         ]
       }
@@ -88,7 +88,7 @@ task 7, lines 77-101:
 Response: {
   "data": {
     "userTransactionDependencies": {
-      "digest": "5eQsg9EekGQCrsZ8KQLrxBempFzNvg1VDrqsMVcigMvF",
+      "digest": "Ek3cEriogebjrFCwW2kCUdqnT2PkSmc3xs3mW6HCrWh3",
       "dependencies": {
         "pageInfo": {
           "hasNextPage": false,
@@ -96,9 +96,9 @@ Response: {
         },
         "nodes": [
           {
-            "digest": "3sUDK6rMz1XeKVywbeUsMjL7er3RJPu4W5288LhFU9dL",
+            "digest": "3N3NAm6zjoR7BJKeL9V8xco7PtdvMW8SSuWMX1ijfHQz",
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
             },
             "gasInput": {
               "gasBudget": "5000000000",
@@ -109,9 +109,9 @@ Response: {
             }
           },
           {
-            "digest": "C1ZSjt7X14pTQZJ2eGruDe4mpdDFxDbyMPhfLaaTRLyz",
+            "digest": "GXZ1Ayn1WYc87qP3jXBhe41H9vTjUALwBdFT4iFDHR2P",
             "sender": {
-              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "gasInput": {
               "gasBudget": "5000000000",
@@ -132,7 +132,7 @@ task 8, lines 103-142:
 Response: {
   "data": {
     "paginationTest": {
-      "digest": "5eQsg9EekGQCrsZ8KQLrxBempFzNvg1VDrqsMVcigMvF",
+      "digest": "Ek3cEriogebjrFCwW2kCUdqnT2PkSmc3xs3mW6HCrWh3",
       "dependencies": {
         "pageInfo": {
           "hasNextPage": true,
@@ -142,9 +142,9 @@ Response: {
           {
             "cursor": "MA==",
             "node": {
-              "digest": "3sUDK6rMz1XeKVywbeUsMjL7er3RJPu4W5288LhFU9dL",
+              "digest": "3N3NAm6zjoR7BJKeL9V8xco7PtdvMW8SSuWMX1ijfHQz",
               "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
               }
             }
           }
@@ -152,7 +152,7 @@ Response: {
       }
     },
     "backwardPaginationTest": {
-      "digest": "5eQsg9EekGQCrsZ8KQLrxBempFzNvg1VDrqsMVcigMvF",
+      "digest": "Ek3cEriogebjrFCwW2kCUdqnT2PkSmc3xs3mW6HCrWh3",
       "dependencies": {
         "pageInfo": {
           "hasNextPage": false,
@@ -162,9 +162,9 @@ Response: {
           {
             "cursor": "MQ==",
             "node": {
-              "digest": "C1ZSjt7X14pTQZJ2eGruDe4mpdDFxDbyMPhfLaaTRLyz",
+              "digest": "GXZ1Ayn1WYc87qP3jXBhe41H9vTjUALwBdFT4iFDHR2P",
               "sender": {
-                "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
             }
           }

@@ -53,13 +53,13 @@ public entry fun receiver(parent: &mut PubA, x: sui::transfer::Receiving<PubB>) 
 //# view-object 2,2
 
 // fastpath_child_party_parent
-//# view-object 2,3
+//# view-object 2,5
 
 // party_child_party_parent
-//# view-object 2,4
+//# view-object 2,3
 
 // party_child_fastpath_parent
-//# view-object 2,5
+//# view-object 2,4
 
 
 // 1. Can receive a fastpath object from a fastpath parent.
@@ -69,13 +69,13 @@ public entry fun receiver(parent: &mut PubA, x: sui::transfer::Receiving<PubB>) 
 
 
 // 2. Can receive a fastpath object from a party parent.
-//# run ex::m::receiver --args object(2,1) receiving(2,3)
+//# run ex::m::receiver --args object(2,1) receiving(2,5)
 
-//# view-object 2,3
+//# view-object 2,5
 
 
 // 3. Cannot receive a party object from any parent type.
 
-//# run ex::m::receiver --args object(2,0) receiving(2,5)
+//# run ex::m::receiver --args object(2,0) receiving(2,4)
 
-//# run ex::m::receiver --args object(2,1) receiving(2,4)
+//# run ex::m::receiver --args object(2,1) receiving(2,3)

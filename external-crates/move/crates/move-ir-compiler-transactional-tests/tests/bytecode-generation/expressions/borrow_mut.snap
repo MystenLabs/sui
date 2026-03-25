@@ -5,7 +5,7 @@ processed 3 tasks
 
 task 0, lines 1-12:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 6.m {
 
 entry foo() {
@@ -27,7 +27,7 @@ B0:
 
 task 1, lines 14-25:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 3d.Foobar {
 
 struct FooCoin {
@@ -50,7 +50,7 @@ B0:
 
 task 2, lines 27-38:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 4d.Foobar {
 
 struct FooCoin<T> {

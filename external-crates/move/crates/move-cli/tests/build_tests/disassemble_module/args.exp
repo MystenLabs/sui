@@ -1,7 +1,7 @@
 Command `build`:
 BUILDING Test
 Command `disassemble --package Test --name m`:
-// Move bytecode v6
+// Move bytecode v7
 module 42.m {
 
 struct Zs {

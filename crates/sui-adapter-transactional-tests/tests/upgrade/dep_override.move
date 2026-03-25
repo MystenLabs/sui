@@ -102,9 +102,9 @@ module Test_V3::M1 {
 //> 0: Test_V2::M1::baz();
 //> 1: Test_V3::M1::baz();
 
-//# view-object 15,0
-
 //# view-object 15,1
+
+//# view-object 15,0
 
 
 // expected upgrade errors

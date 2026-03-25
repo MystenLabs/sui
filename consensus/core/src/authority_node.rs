@@ -3,6 +3,7 @@
 
 use std::{sync::Arc, time::Instant};
 
+use consensus_config::ConsensusProtocolConfig;
 use consensus_config::{
     AuthorityIndex, Committee, NetworkKeyPair, NetworkPublicKey, Parameters, ProtocolKeyPair,
 };
@@ -12,7 +13,6 @@ use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
-use sui_protocol_config::ProtocolConfig;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
@@ -58,7 +58,7 @@ impl ConsensusAuthority {
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
-        protocol_config: ProtocolConfig,
+        protocol_config: ConsensusProtocolConfig,
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
@@ -155,7 +155,7 @@ where
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
-        protocol_config: ProtocolConfig,
+        protocol_config: ConsensusProtocolConfig,
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
@@ -174,7 +174,7 @@ where
             "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
             own_index,
             own_hostname,
-            protocol_config.version,
+            protocol_config.protocol_version(),
             epoch_start_timestamp_ms,
             boot_counter,
             commit_consumer.replay_after_commit_index,
@@ -210,7 +210,7 @@ where
             .metrics
             .node_metrics
             .protocol_version
-            .set(context.protocol_config.version.as_u64() as i64);
+            .set(context.protocol_config.protocol_version() as i64);
 
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone());
@@ -498,7 +498,6 @@ mod tests {
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use prometheus::Registry;
     use rstest::rstest;
-    use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
     use tokio::time::{sleep, timeout};
     use typed_store::DBMetrics;
@@ -537,7 +536,7 @@ mod tests {
             own_index,
             committee,
             parameters,
-            ProtocolConfig::get_for_max_version_UNSAFE(),
+            ConsensusProtocolConfig::for_testing(),
             protocol_keypair,
             network_keypair,
             Arc::new(Clock::default()),
@@ -568,8 +567,8 @@ mod tests {
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(gc_depth);
 
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
             .map(|_| TempDir::new().unwrap())
@@ -669,7 +668,7 @@ mod tests {
         DBMetrics::init(RegistryService::new(db_registry));
 
         let (committee, keypairs) = local_committee_and_keys(0, vec![1; num_authorities]);
-        let protocol_config: ProtocolConfig = ProtocolConfig::get_for_max_version_UNSAFE();
+        let protocol_config = ConsensusProtocolConfig::for_testing();
 
         let temp_dirs = (0..num_authorities)
             .map(|_| TempDir::new().unwrap())
@@ -772,8 +771,8 @@ mod tests {
         let mut temp_dirs = BTreeMap::new();
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
-        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(gc_depth);
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
@@ -879,7 +878,7 @@ mod tests {
         keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
         network_type: NetworkType,
         boot_counter: u64,
-        protocol_config: ProtocolConfig,
+        protocol_config: ConsensusProtocolConfig,
     ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
         let registry = Registry::new();
 

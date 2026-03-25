@@ -226,6 +226,38 @@ impl BigTableClient {
         })
     }
 
+    /// Fetch transactions with an optional column filter for partial reads.
+    /// When `columns` is None, all columns are fetched. When Some, only the
+    /// specified column qualifiers are fetched (e.g. `&["td", "ef", "ts", "cn"]`).
+    pub async fn get_transactions_filtered(
+        &mut self,
+        transactions: &[TransactionDigest],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<TransactionData>> {
+        let keys = transactions
+            .iter()
+            .map(tables::transactions::encode_key)
+            .collect();
+        let filter = columns.map(|cols| {
+            let pattern = format!("^({})$", cols.join("|"));
+            RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+            }
+        });
+        let mut result = vec![];
+        for (key, row) in self
+            .multi_get(tables::transactions::NAME, keys, filter)
+            .await?
+        {
+            let digest = TransactionDigest::from(
+                <[u8; 32]>::try_from(key.as_ref())
+                    .context("invalid transaction digest key length")?,
+            );
+            result.push(tables::transactions::decode(digest, &row)?);
+        }
+        Ok(result)
+    }
+
     /// Get the pipeline watermark from the watermarks table.
     pub async fn get_pipeline_watermark(&mut self, pipeline: &str) -> Result<Option<Watermark>> {
         let pipeline_key = tables::watermarks::encode_key(pipeline);
@@ -643,18 +675,7 @@ impl KeyValueStoreReader for BigTableClient {
         &mut self,
         transactions: &[TransactionDigest],
     ) -> Result<Vec<TransactionData>> {
-        let keys = transactions
-            .iter()
-            .map(tables::transactions::encode_key)
-            .collect();
-        let mut result = vec![];
-        for (_, row) in self
-            .multi_get(tables::transactions::NAME, keys, None)
-            .await?
-        {
-            result.push(tables::transactions::decode(&row)?);
-        }
-        Ok(result)
+        self.get_transactions_filtered(transactions, None).await
     }
 
     async fn get_checkpoints(

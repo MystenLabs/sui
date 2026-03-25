@@ -5,7 +5,7 @@ processed 2 tasks
 
 task 0, lines 1-31:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 3d10.Example {
 
 struct Coin {
@@ -60,7 +60,7 @@ B0:
 
 task 1, lines 33-46:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 4d10.M {
 
 entry public f() {

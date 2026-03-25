@@ -11,6 +11,7 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
 };
 use move_trace_format::format::{MoveTraceReader, TraceEvent};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -62,7 +63,7 @@ pub struct TraceMap {
 /// Trait for types that consume Move VM trace events. Implementors only need to provide
 /// `record_instruction`; directory iteration, file reading, and trace event walking are
 /// provided as default methods.
-pub trait TraceConsumer: Default {
+pub trait TraceConsumer: Default + Send {
     fn record_instruction(
         &mut self,
         test_name: &str,
@@ -71,6 +72,8 @@ pub trait TraceConsumer: Default {
         func_name: Identifier,
         pc: u64,
     );
+
+    fn merge(self, other: Self) -> Self;
 
     fn ingest_trace<R: Read>(
         mut self,
@@ -102,21 +105,30 @@ pub trait TraceConsumer: Default {
         self
     }
 
-    fn ingest_trace_dir<P: AsRef<Path> + Debug>(mut self, dirname: P) -> Self {
-        for entry in std::fs::read_dir(&dirname).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if path.is_file() {
-                let file = File::open(&path)
+    fn ingest_trace_dir<P: AsRef<Path> + Debug>(self, dirname: P) -> Self {
+        let entries: Vec<_> = std::fs::read_dir(&dirname)
+            .unwrap()
+            .filter_map(|e| {
+                let path = e.unwrap().path();
+                path.is_file().then_some(path)
+            })
+            .collect();
+
+        entries
+            .par_iter()
+            .map(|path| {
+                let file = File::open(path)
                     .unwrap_or_else(|e| panic!("Unable to open trace file '{:?}': {}", path, e));
-                let move_trace_reader =
-                    MoveTraceReader::new(file).expect("Unable to read trace file");
-                let test_name = path.file_name().unwrap().to_str().unwrap();
-                let test_name = test_name.replace("__", "::");
-                self = self.ingest_trace(&test_name, move_trace_reader);
-            }
-        }
-        self
+                let reader = MoveTraceReader::new(file).expect("Unable to read trace file");
+                let test_name = path
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .replace("__", "::");
+                Self::default().ingest_trace(&test_name, reader)
+            })
+            .reduce(Self::default, Self::merge)
     }
 
     fn from_trace_dir<P: AsRef<Path> + Debug>(dirname: P) -> Self {
@@ -135,6 +147,28 @@ impl TraceConsumer for CoverageMap {
     ) {
         self.insert(test_name, module_addr, module_name, func_name, pc);
     }
+
+    fn merge(mut self, other: Self) -> Self {
+        for (exec_id, other_exec_map) in other.exec_maps {
+            let entry = self
+                .exec_maps
+                .entry(exec_id)
+                .or_insert_with(|| ExecCoverageMap::new(String::new()));
+            for ((addr, name), other_module_map) in other_exec_map.module_maps {
+                let module_entry = entry
+                    .module_maps
+                    .entry((addr, name.clone()))
+                    .or_insert_with(|| ModuleCoverageMap::new(addr, name));
+                for (func_name, func_map) in other_module_map.function_maps {
+                    let func_entry = module_entry.function_maps.entry(func_name).or_default();
+                    for (pc, count) in func_map {
+                        *func_entry.entry(pc).or_insert(0) += count;
+                    }
+                }
+            }
+        }
+        self
+    }
 }
 
 impl TraceConsumer for TraceMap {
@@ -147,6 +181,16 @@ impl TraceConsumer for TraceMap {
         pc: u64,
     ) {
         self.insert(test_name, module_addr, module_name, func_name, pc);
+    }
+
+    fn merge(mut self, other: Self) -> Self {
+        for (exec_id, other_entries) in other.exec_maps {
+            self.exec_maps
+                .entry(exec_id)
+                .or_default()
+                .extend(other_entries);
+        }
+        self
     }
 }
 

@@ -48,7 +48,7 @@ module std::AModule {
     }
 }
 Command `coverage bytecode --module AModule`:
-// Move bytecode v6
+// Move bytecode v7
 module 1.AModule {
 
 public double_except_three(x#0#0: u64): u64 {
@@ -75,7 +75,7 @@ Constants [
 }
 
 Command `disassemble --package MoveStdlib --name address`:
-// Move bytecode v6
+// Move bytecode v7
 module 1.address {
 
 public length(): u64 {

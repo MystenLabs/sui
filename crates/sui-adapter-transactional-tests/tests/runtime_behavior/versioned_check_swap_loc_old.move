@@ -3,7 +3,7 @@
 
 // test old behavior of invariant violation
 
-//# init --protocol-version 6 --addresses test=0x0
+//# init --protocol-version 6 --addresses test=0x0 --file-format 6
 
 //# publish
 module test::m {

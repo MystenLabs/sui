@@ -36,6 +36,7 @@ use sui_kvstore::PipelineLayer;
 use sui_protocol_config::Chain;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
@@ -508,11 +509,123 @@ async fn test_indexer_e2e() -> Result<()> {
     for signed in &signed_txns {
         let indexed = transactions
             .iter()
-            .find(|td| td.transaction.digest() == signed.digest())
+            .find(|td| td.digest == *signed.digest())
             .unwrap_or_else(|| panic!("transaction {} not found in results", signed.digest()));
-        assert_eq!(indexed.transaction, *signed);
+        assert_eq!(indexed.transaction().unwrap(), *signed);
         assert!(indexed.checkpoint_number > 0);
         assert!(indexed.timestamp > 0);
+    }
+
+    // -- Column-filtered partial reads --
+    // Fetch with only effects + checkpoint columns — no td, sg, ev, or bc.
+    {
+        use sui_kvstore::tables::transactions::col;
+        let partial = harness
+            .bigtable_client()
+            .get_transactions_filtered(
+                &tx_digests,
+                Some(&[col::EFFECTS, col::CHECKPOINT_NUMBER, col::TIMESTAMP]),
+            )
+            .await?;
+        assert_eq!(partial.len(), tx_digests.len());
+        for tx in &partial {
+            // digest comes from the row key, always present
+            assert!(tx_digests.contains(&tx.digest));
+            // td was not fetched
+            assert!(tx.transaction_data.is_none(), "td should be absent");
+            // sg was not fetched
+            assert!(tx.signatures.is_none(), "sg should be absent");
+            // ef was fetched
+            assert!(tx.effects.is_some(), "ef should be present");
+            // ev was not fetched
+            assert!(tx.events.is_none(), "ev should be absent");
+            // bc was not fetched
+            assert!(tx.balance_changes.is_empty(), "bc should be empty");
+            // metadata always present
+            assert!(tx.checkpoint_number > 0);
+            assert!(tx.timestamp > 0);
+        }
+    }
+
+    // -- Balance changes parity with fullnode gRPC batch_get_transactions --
+    let batch_response = harness
+        .grpc_client
+        .ledger_client()
+        .batch_get_transactions({
+            let mut req = BatchGetTransactionsRequest::default();
+            req.digests = tx_digests.iter().map(ToString::to_string).collect();
+            req.read_mask = Some(FieldMask::from_paths(["balance_changes"]));
+            req
+        })
+        .await
+        .context("batch_get_transactions RPC failed")?
+        .into_inner();
+
+    assert_eq!(batch_response.transactions.len(), tx_digests.len());
+    for ((digest, indexed), grpc_result) in tx_digests
+        .iter()
+        .zip(transactions.iter())
+        .zip(batch_response.transactions.into_iter())
+    {
+        let grpc_transaction = grpc_result.to_result().unwrap_or_else(|status| {
+            panic!("batch_get_transactions failed for {digest}: {status:?}")
+        });
+
+        assert!(
+            !indexed.balance_changes.is_empty(),
+            "indexed transaction {digest} should contain balance changes"
+        );
+        assert_eq!(
+            grpc_transaction.balance_changes,
+            indexed
+                .balance_changes
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect::<Vec<_>>(),
+            "balance_changes mismatch for transaction {digest}"
+        );
+    }
+
+    // -- Unchanged loaded runtime objects --
+    let ulro_response = harness
+        .grpc_client
+        .ledger_client()
+        .batch_get_transactions({
+            let mut req = BatchGetTransactionsRequest::default();
+            req.digests = tx_digests.iter().map(ToString::to_string).collect();
+            req.read_mask = Some(FieldMask::from_paths([
+                "effects.unchanged_loaded_runtime_objects",
+            ]));
+            req
+        })
+        .await
+        .context("batch_get_transactions RPC failed for unchanged_loaded")?
+        .into_inner();
+
+    assert_eq!(ulro_response.transactions.len(), tx_digests.len());
+    for ((digest, indexed), grpc_result) in tx_digests
+        .iter()
+        .zip(transactions.iter())
+        .zip(ulro_response.transactions.into_iter())
+    {
+        let grpc_transaction = grpc_result.to_result().unwrap_or_else(|status| {
+            panic!("batch_get_transactions failed for {digest}: {status:?}")
+        });
+
+        let grpc_ulro = grpc_transaction
+            .effects
+            .map(|e| e.unchanged_loaded_runtime_objects)
+            .unwrap_or_default();
+        let expected_ulro: Vec<_> = indexed
+            .unchanged_loaded_runtime_objects
+            .iter()
+            .map(Into::into)
+            .collect();
+        assert_eq!(
+            grpc_ulro, expected_ulro,
+            "unchanged_loaded_runtime_objects mismatch for transaction {digest}"
+        );
     }
 
     // -- Checkpoint lookup --
@@ -566,7 +679,9 @@ async fn test_indexer_e2e() -> Result<()> {
     // -- Objects lookup --
     let mut object_keys: Vec<ObjectKey> = Vec::new();
     for tx_data in &transactions {
-        for (obj_ref, _owner, _write_kind) in tx_data.effects.all_changed_objects() {
+        for (obj_ref, _owner, _write_kind) in
+            tx_data.effects.as_ref().unwrap().all_changed_objects()
+        {
             object_keys.push(ObjectKey(obj_ref.0, obj_ref.1));
         }
     }
@@ -591,7 +706,7 @@ async fn test_indexer_e2e() -> Result<()> {
         .get_transactions(&[publish_digest])
         .await?;
     let publish_tx_data = publish_txns.first().context("publish tx not found")?;
-    let created = publish_tx_data.effects.created();
+    let created = publish_tx_data.effects.as_ref().unwrap().created();
     let (package_ref, _) = created
         .iter()
         .find(|(_, owner)| *owner == Owner::Immutable)

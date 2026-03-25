@@ -10,7 +10,9 @@ use sui_bridge_indexer_alt::handlers::token_transfer_data_handler::TokenTransfer
 use sui_bridge_indexer_alt::handlers::token_transfer_handler::TokenTransferHandler;
 use sui_bridge_indexer_alt::metrics::BridgeIndexerMetrics;
 use sui_bridge_schema::MIGRATIONS;
-use sui_indexer_alt_framework::ingestion::{ClientArgs, ingestion_client::IngestionClientArgs};
+use sui_indexer_alt_framework::ingestion::{
+    ClientArgs, ingestion_client::IngestionClientArgs, streaming_client::StreamingClientArgs,
+};
 use sui_indexer_alt_framework::postgres::DbArgs;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_framework::{Indexer, IndexerArgs};
@@ -32,8 +34,10 @@ struct Args {
         default_value = "postgres://postgres:postgrespw@localhost:5432/bridge"
     )]
     database_url: Url,
-    #[clap(env, long, default_value = "https://checkpoints.mainnet.sui.io")]
-    remote_store_url: Url,
+    #[command(flatten)]
+    ingestion: IngestionClientArgs,
+    #[command(flatten)]
+    streaming: StreamingClientArgs,
 }
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -46,7 +50,8 @@ async fn main() -> Result<(), anyhow::Error> {
         indexer_args,
         metrics_address,
         database_url,
-        remote_store_url,
+        ingestion,
+        streaming,
     } = Args::parse();
 
     let is_bounded_job = indexer_args.last_checkpoint.is_some();
@@ -64,11 +69,8 @@ async fn main() -> Result<(), anyhow::Error> {
         db_args,
         indexer_args,
         ClientArgs {
-            ingestion: IngestionClientArgs {
-                remote_store_url: Some(remote_store_url),
-                ..Default::default()
-            },
-            ..Default::default()
+            ingestion,
+            streaming,
         },
         Default::default(),
         Some(&MIGRATIONS),

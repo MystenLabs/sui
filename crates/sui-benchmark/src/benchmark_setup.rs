@@ -13,6 +13,8 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{Argument, Command, ObjectArg, TransactionData};
 use tokio::runtime::Builder;
 use tokio::sync::{Barrier, oneshot};
 use tracing::info;
@@ -108,36 +110,95 @@ impl BenchmarkSetup {
 
         let current_gas = if opts.use_fullnode_for_execution {
             // Go through fullnode to get the current gas object.
-            let mut gas_objects = execution_proxy
+            let gas_objects = execution_proxy
                 .get_owned_objects(primary_gas_owner_addr.into())
                 .await?;
-            gas_objects.sort_by_key(|&(gas, _)| std::cmp::Reverse(gas));
 
-            // TODO: Merge all owned gas objects into one and use that as the primary gas object.
-            let (balance, primary_gas_obj) = gas_objects
+            let (_, primary_gas_obj) = gas_objects
                 .iter()
                 .max_by_key(|(balance, _)| balance)
                 .context(
                     "Failed to choose the gas object with the largest amount of gas".to_string(),
                 )?;
 
-            info!(
-                "Using primary gas id: {} with balance of {balance}",
-                primary_gas_obj.id()
-            );
-
             let primary_gas_account = primary_gas_obj.owner.get_owner_address()?;
-
             let keypair = Arc::new(get_ed25519_keypair_from_keystore(
                 keystore_path,
                 &primary_gas_account,
             )?);
 
-            (
-                primary_gas_obj.compute_object_reference(),
-                primary_gas_account,
-                keypair,
-            )
+            // Merge all owned gas coins into a single coin to prevent
+            // fragmentation exhaustion during long-running benchmark sessions.
+            // Without this, batch payment mode splits coins progressively
+            // until individual fragments drop below the gas budget threshold.
+            if gas_objects.len() > 1 {
+                let total_balance: u64 = gas_objects.iter().map(|(bal, _)| bal).sum();
+                info!(
+                    "Merging {} gas coins (total balance: {}) into one...",
+                    gas_objects.len(),
+                    total_balance,
+                );
+
+                let mut primary_ref = primary_gas_obj.compute_object_reference();
+                let coins_to_merge: Vec<_> = gas_objects
+                    .iter()
+                    .filter(|(_, obj)| obj.id() != primary_gas_obj.id())
+                    .map(|(_, obj)| obj.compute_object_reference())
+                    .collect();
+
+                let system_state = execution_proxy.get_latest_system_state_object().await?;
+                let gas_price = system_state.reference_gas_price;
+
+                // Batch merges to stay within the max_arguments protocol
+                // limit (512). Each batch merges up to 500 coins into the
+                // gas coin, then re-fetches the updated gas object ref.
+                const MERGE_BATCH_SIZE: usize = 500;
+                for batch in coins_to_merge.chunks(MERGE_BATCH_SIZE) {
+                    let mut builder = ProgrammableTransactionBuilder::new();
+                    let coin_args: Vec<_> = batch
+                        .iter()
+                        .map(|coin| builder.obj(ObjectArg::ImmOrOwnedObject(*coin)).unwrap())
+                        .collect();
+                    builder.command(Command::MergeCoins(Argument::GasCoin, coin_args));
+                    let pt = builder.finish();
+
+                    let data = TransactionData::new_programmable(
+                        primary_gas_account,
+                        vec![primary_ref],
+                        pt,
+                        50 * sui_types::gas_coin::MIST_PER_SUI,
+                        gas_price,
+                    );
+
+                    let tx = sui_types::transaction::Transaction::from_data_and_signer(
+                        data,
+                        vec![&*keypair],
+                    );
+                    let (_, effects) = execution_proxy.execute_transaction_block(tx).await;
+                    let effects = effects?;
+                    primary_ref = effects.gas_object().0;
+                }
+
+                info!(
+                    "Merged {} coins into {}: total balance = {}",
+                    gas_objects.len(),
+                    primary_ref.0,
+                    total_balance,
+                );
+
+                (primary_ref, primary_gas_account, keypair)
+            } else {
+                let (balance, _) = &gas_objects[0];
+                info!(
+                    "Using primary gas id: {} with balance of {balance}",
+                    primary_gas_obj.id()
+                );
+                (
+                    primary_gas_obj.compute_object_reference(),
+                    primary_gas_account,
+                    keypair,
+                )
+            }
         } else {
             // Go through local proxy to get the current gas object.
             let mut genesis_gas_objects = Vec::new();

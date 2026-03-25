@@ -3,6 +3,9 @@
 
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
+#[cfg(tidehunter)]
+use crate::authority::epoch_marker_key::EPOCH_MARKER_KEY_SIZE;
+use crate::authority::epoch_marker_key::EpochMarkerKey;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
@@ -10,7 +13,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::global_state_hash::GlobalStateHash;
-use sui_types::storage::{FullObjectKey, MarkerValue};
+use sui_types::storage::MarkerValue;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{
     DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
@@ -137,7 +140,7 @@ pub struct AuthorityPerpetualTables {
     /// objects that have been deleted. This table is meant to be pruned per-epoch, and all
     /// previous epochs other than the current epoch may be pruned safely.
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
-    pub(crate) object_per_epoch_marker_table_v2: DBMap<(EpochId, FullObjectKey), MarkerValue>,
+    pub(crate) object_per_epoch_marker_table_v2: DBMap<EpochMarkerKey, MarkerValue>,
 
     /// Tracks executed transaction digests across epochs.
     /// Used to support address balance gas payments feature.
@@ -383,13 +386,13 @@ impl AuthorityPerpetualTables {
             (
                 "object_per_epoch_marker_table_v2".to_string(),
                 ThConfig::new_with_config_indexing(
-                    KeyIndexing::VariableLength,
+                    KeyIndexing::fixed(EPOCH_MARKER_KEY_SIZE),
                     mutexes,
                     epoch_prefix_key,
                     apply_relocation_filter(
                         bloom_config.clone(),
                         pruner_watermark.clone(),
-                        |(epoch_id, _): (EpochId, FullObjectKey)| epoch_id,
+                        |k: EpochMarkerKey| k.0,
                         true,
                     ),
                 ),

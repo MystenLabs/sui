@@ -3,9 +3,10 @@
 
 use crate::execution_value::{RawValueType, Value};
 use move_core_types::language_storage::TypeTag;
-use sui_types::{
-    error::ExecutionError, execution::ExecutionResult, transaction::Argument, transfer::Receiving,
-};
+use std::marker::PhantomData;
+use sui_types::error::{ExecutionError, ExecutionErrorTrait};
+use sui_types::execution_status::ExecutionFailure;
+use sui_types::{execution::ExecutionResult, transaction::Argument, transfer::Receiving};
 
 pub type TransactionIndex = usize;
 
@@ -14,6 +15,8 @@ pub trait ExecutionMode {
     type ArgumentUpdates;
     /// the gathered results from batched executions
     type ExecutionResults;
+    /// The error type produced during execution
+    type Error: ExecutionErrorTrait;
 
     /// Controls the calling of arbitrary Move functions
     fn allow_arbitrary_function_calls() -> bool;
@@ -64,11 +67,15 @@ pub trait ExecutionMode {
 }
 
 #[derive(Copy, Clone)]
-pub struct Normal;
+pub struct Normal<E = ExecutionFailure>(PhantomData<fn() -> E>);
 
-impl ExecutionMode for Normal {
+impl<E> ExecutionMode for Normal<E>
+where
+    E: ExecutionErrorTrait,
+{
     type ArgumentUpdates = ();
     type ExecutionResults = ();
+    type Error = E;
 
     fn allow_arbitrary_function_calls() -> bool {
         false
@@ -132,6 +139,7 @@ pub struct Genesis;
 impl ExecutionMode for Genesis {
     type ArgumentUpdates = ();
     type ExecutionResults = ();
+    type Error = ExecutionError;
 
     fn allow_arbitrary_function_calls() -> bool {
         true
@@ -190,14 +198,18 @@ impl ExecutionMode for Genesis {
 }
 
 #[derive(Copy, Clone)]
-pub struct System;
+pub struct System<E = ExecutionError>(PhantomData<fn() -> E>);
 
 /// Execution mode for executing a system transaction, including the epoch change
 /// transaction and the consensus commit prologue. In this mode, we allow calls to
 /// any function bypassing visibility.
-impl ExecutionMode for System {
+impl<E> ExecutionMode for System<E>
+where
+    E: ExecutionErrorTrait,
+{
     type ArgumentUpdates = ();
     type ExecutionResults = ();
+    type Error = E;
 
     fn allow_arbitrary_function_calls() -> bool {
         // allows bypassing visibility for system calls
@@ -266,6 +278,7 @@ pub struct DevInspect<const SKIP_ALL_CHECKS: bool>;
 impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> {
     type ArgumentUpdates = Vec<(Argument, Vec<u8>, TypeTag)>;
     type ExecutionResults = Vec<ExecutionResult>;
+    type Error = ExecutionError;
 
     fn allow_arbitrary_function_calls() -> bool {
         SKIP_ALL_CHECKS

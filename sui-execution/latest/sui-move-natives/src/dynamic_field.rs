@@ -46,7 +46,7 @@ macro_rules! get_or_fetch_object {
         let child_ty = $ty_args.pop().unwrap();
         native_charge_gas_early_exit!(
             $context,
-            $ty_cost_per_byte * u64::from(child_ty.size()).into()
+            $ty_cost_per_byte * u64::from(child_ty.size()?).into()
         );
 
         assert!($ty_args.is_empty());
@@ -112,7 +112,7 @@ pub fn hash_type_and_key(
     let parent = pop_arg!(args, AccountAddress);
 
     // Get size info for costing for derivations, serializations, etc
-    let k_ty_size = u64::from(k_ty.size());
+    let k_ty_size = u64::from(k_ty.size()?);
     let k_value_size = u64::from(abstract_size(
         get_extension!(context, ObjectRuntime)?.protocol_config,
         &k,
@@ -210,7 +210,7 @@ pub fn add_child_object(
         .unwrap()
         .into();
     let child_ty = ty_args.pop().unwrap();
-    let child_type_size = u64::from(child_ty.size());
+    let child_type_size = u64::from(child_ty.size()?);
 
     native_charge_gas_early_exit!(
         context,
@@ -503,7 +503,7 @@ pub fn has_child_object_with_ty(
         context,
         dynamic_field_has_child_object_with_ty_cost_params
             .dynamic_field_has_child_object_with_ty_type_cost_per_byte
-            * u64::from(ty.size()).into()
+            * u64::from(ty.size()?).into()
     );
 
     let tag: StructTag = match context.type_to_type_tag(&ty)? {

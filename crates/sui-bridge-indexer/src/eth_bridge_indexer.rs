@@ -375,27 +375,70 @@ async fn loop_retrieve_and_process_log_range(
     let target_checkpoint = task.target_checkpoint;
     let mut all_logs = Vec::new();
     let mut current_start = starting_checkpoint;
+    // Tracks the current max block window per query; shrinks on RPC -32005 errors.
+    let mut query_range = MAX_LOG_QUERY_RANGE;
 
     while current_start <= target_checkpoint {
-        // Calculate the end of the current chunk
-        let current_end = (current_start + MAX_LOG_QUERY_RANGE - 1).min(target_checkpoint);
+        // Calculate the end of the current chunk using the current (possibly shrunk) range.
+        let current_end = (current_start + query_range - 1).min(target_checkpoint);
 
-        // Retry the request for the current chunk
-        let Ok(Ok(logs)) = retry_with_max_elapsed_time!(
-            client.get_raw_events_in_range(addresses.clone(), current_start, current_end),
-            Duration::from_secs(30000)
-        ) else {
-            panic!(
-                "Unable to get logs from provider for range {} to {}",
-                current_start, current_end
-            );
-        };
-
-        // Add the logs from this chunk to the total
-        all_logs.extend(logs);
-
-        // Update the start for the next chunk
-        current_start = current_end + 1;
+        match client
+            .get_raw_events_in_range(addresses.clone(), current_start, current_end)
+            .await
+        {
+            Ok(logs) => {
+                // Success — accumulate and advance the cursor.
+                all_logs.extend(logs);
+                current_start = current_end + 1;
+            }
+            Err(e) => {
+                let err_str = format!("{:?}", e);
+                if err_str.contains("query returned more than")
+                    || err_str.contains("-32005")
+                    || err_str.contains("32005")
+                {
+                    // RPC limit exceeded (-32005): halve the range and retry from the same start.
+                    // The next loop iteration will recompute current_end with the smaller range.
+                    let new_range = (query_range / 2).max(1);
+                    if new_range == query_range {
+                        // Already at minimum (1 block) and still getting -32005 — panic.
+                        panic!(
+                            "Block query range is already 1 but RPC still returns -32005 for \
+                             block {}. Cannot make progress.",
+                            current_start
+                        );
+                    }
+                    warn!(
+                        task_name,
+                        "RPC returned -32005 (too many results) for block range {}-{} \
+                         (window={}). Shrinking window to {} blocks and retrying.",
+                        current_start,
+                        current_end,
+                        query_range,
+                        new_range,
+                    );
+                    query_range = new_range;
+                    // Do NOT advance current_start — retry the same start with a smaller window.
+                } else {
+                    // Not a range-overflow error — fall back to standard backoff retry.
+                    let Ok(Ok(logs)) = retry_with_max_elapsed_time!(
+                        client.get_raw_events_in_range(
+                            addresses.clone(),
+                            current_start,
+                            current_end
+                        ),
+                        Duration::from_secs(30000)
+                    ) else {
+                        panic!(
+                            "Unable to get logs from provider for range {} to {}",
+                            current_start, current_end
+                        );
+                    };
+                    all_logs.extend(logs);
+                    current_start = current_end + 1;
+                }
+            }
+        }
     }
 
     process_logs(

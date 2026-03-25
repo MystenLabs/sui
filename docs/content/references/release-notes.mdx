@@ -9,6 +9,55 @@ title: 'Release Notes'
 ---
 
 
+## v1.68.0
+
+**🔶 Testnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/testnet-v1.68.0)*
+
+
+#### Sui Protocol Version in this release: `117`
+
+[#25827](https://github.com/MystenLabs/sui/pull/25827): metadata hardening in Sui System
+
+[#25674](https://github.com/MystenLabs/sui/pull/25674): Enables address aliases feature on mainnet.
+
+[#23710](https://github.com/MystenLabs/sui/pull/23710): Enables Display V2 (`0xd` system object is created)
+
+#### Nodes (Validators and Full nodes)
+
+[#25624](https://github.com/MystenLabs/sui/pull/25624): Fixes a potential fullnode panic when simulating a malformed transaction with invalid funds withdrawals.
+
+#### JSON-RPC
+
+[#25360](https://github.com/MystenLabs/sui/pull/25360): Adds support for Display Registry to JSONRPC: When `showDisplay` is set, the RPC will look for a `Display<T>` stored in the Display Registry and will use that as the source of truth for its type's format. This takes precedence over any Display v1 formats that exist for this type.
+
+#### GraphQL
+
+[#25479](https://github.com/MystenLabs/sui/pull/25479): Introduce `MoveValue.asVector` for paginating through vectors of Move Values.
+
+[#25657](https://github.com/MystenLabs/sui/pull/25657): Introduce a new union `SignatureScheme` for `UserSignature`
+
+[#25715](https://github.com/MystenLabs/sui/pull/25715): ZkLoginVerifyResult will not contain error anymore. Error will not be part of GraphQL response error
+
+[#25242](https://github.com/MystenLabs/sui/pull/25242): Adds support for Display Registry to GraphQL: `MoveValue.display` will look for a `Display<T>` stored in the Display Registry and will use that as the source of truth for its type's format. This takes precedence over any Display v1 formats that exist for this type.
+
+#### Indexing Framework
+
+[#25641](https://github.com/MystenLabs/sui/pull/25641): Processor concurrency (`fanout`) and ingestion concurrency (`ingest_concurrency`) now use adaptive concurrency control by default. Instead of a fixed number of workers, concurrency starts at 1 and scales automatically based on downstream channel backpressure — up to `num_cpus` for processors and up to 500 for ingestion.
+
+  **Breaking changes:**
+  - `Processor::FANOUT` trait constant has been removed. Processor concurrency is now configured via the `fanout` field on `ConcurrentConfig` / `SequentialConfig`, which accepts a `ConcurrencyConfig` enum instead of `usize`.
+  - `ingest_concurrency` in `IngestionConfig` changed from `usize` to `ConcurrencyConfig`.
+  - A new `processor_channel_size` field controls the channel between the processor and downstream stage (defaults to `num_cpus / 2`). This channel previously sized itself from `FANOUT + PIPELINE_BUFFER`.
+
+  **Migration:** To preserve previous fixed-concurrency behavior, set `fanout: Some(ConcurrencyConfig::Fixed { value: N })` or `ingest_concurrency: ConcurrencyConfig::Fixed { value: N }`. Otherwise, no changes are needed — the adaptive defaults should work well for most workloads.
+
+---
+##### Full Log: https://github.com/MystenLabs/sui/commits/testnet-v1.68.0
+
+
+---
+
+
 ## v1.67.3
 
 **✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.67.3)*
@@ -978,412 +1027,10 @@ clearer instructions for offline signing.
 
 ---
 
-
-## v1.51.5
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.51.5)*
-
-
-#### Sui Protocol Version in this release: `87`
-
-[#22244](https://github.com/MystenLabs/sui/pull/22244): Changes to using type tags in the object runtime. No user-visible impacts.
-
-[#22419](https://github.com/MystenLabs/sui/pull/22419): Adds an existing hardcoded bound to the protocol config for clarity.
-
-[#19439](https://github.com/MystenLabs/sui/pull/19439): Added epoch-stable sequence numbers for read-only per-epoch configs accessed in the transaction.
-
-[#22474](https://github.com/MystenLabs/sui/pull/22474): enables Party objects (and associated `party_transfer` functions) in testnet
-
-#### Nodes (Validators and Full nodes)
-
-[#21877](https://github.com/MystenLabs/sui/pull/21877): TLS is now required to connect to the validator gRPC interface.
-
-[#22540](https://github.com/MystenLabs/sui/pull/22540): The default bucket for state sync archive fallback now uses a requester pays policy. Update the sui node's state-archive-read-config section according to the [docs](https://docs.sui.io/guides/operator/archives)
-
-#### gRPC
-
-[#22241](https://github.com/MystenLabs/sui/pull/22241): Implementing GetBalance and ListBalances APIs for
-LiveDataService.
-
----------
-
-Co-authored-by: Brandon Williams &lt;brandon@mystenlabs.com&gt;
-
-[#21877](https://github.com/MystenLabs/sui/pull/21877): TLS is now required to connect to the validator gRPC interface.
-
-#### CLI
-
-[#22332](https://github.com/MystenLabs/sui/pull/22332): Update test names used for filtering in Move unit tests so the fully-qualified name is used to match against (i.e., `testing::a::test_name` instead of `a::test_name`). Also, add support for regexes to be used for test filtering rather than just substring matching.
-
-[#22303](https://github.com/MystenLabs/sui/pull/22303): Update the package summary generation to make it more portable.
-
-[#22350](https://github.com/MystenLabs/sui/pull/22350): Improved initial clone times for Move packages that are git dependencies.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.51.5
-
-
 ---
 
+:::info
 
-## v1.51.4
+This page has been truncated to stay within size limits. View the complete release history on [GitHub Releases](https://github.com/MystenLabs/sui/releases).
 
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.51.4)*
-
-
-#### Sui Protocol Version in this release: `87`
-
-[#22244](https://github.com/MystenLabs/sui/pull/22244): Changes to using type tags in the object runtime. No user-visible impacts.
-
-[#22419](https://github.com/MystenLabs/sui/pull/22419): Adds an existing hardcoded bound to the protocol config for clarity.
-
-[#19439](https://github.com/MystenLabs/sui/pull/19439): Added epoch-stable sequence numbers for read-only per-epoch configs accessed in the transaction.
-
-[#22474](https://github.com/MystenLabs/sui/pull/22474): enables Party objects (and associated `party_transfer` functions) in testnet
-
-#### Nodes (Validators and Full nodes)
-
-[#21877](https://github.com/MystenLabs/sui/pull/21877): TLS is now required to connect to the validator gRPC interface.
-
-[#22540](https://github.com/MystenLabs/sui/pull/22540): The default bucket for state sync archive fallback now uses a requester pays policy. Update sui node's state-archive-read-config section according to the [docs](https://docs.sui.io/guides/operator/archives)
-
-#### gRPC
-
-[#21877](https://github.com/MystenLabs/sui/pull/21877): TLS is now required to connect to the validator gRPC interface.
-
-#### CLI
-
-[#22332](https://github.com/MystenLabs/sui/pull/22332): Update test names used for filtering in Move unit tests so the fully-qualified name is used to match against (i.e., `testing::a::test_name` instead of `a::test_name`).  Also, add support for regexes to be used for test filtering rather than just substring matching.
-
-[#22303](https://github.com/MystenLabs/sui/pull/22303): Update the package summary generation to make it more portable.
-
-[#22350](https://github.com/MystenLabs/sui/pull/22350): Improved initial clone times for Move packages that are git dependencies.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.51.4
-
-
----
-
-
-## v1.50.1
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.50.1)*
-
-
-#### Sui Protocol Version in this release: `85`
-
-[#22173](https://github.com/MystenLabs/sui/pull/22173):
-Allow larger objects to be created by system
-transactions
-
-[#22353](https://github.com/MystenLabs/sui/pull/22353):
-Congestion control settings have been adjusted
-
-#### Nodes (Validators and Full nodes)
-
-[#22143](https://github.com/MystenLabs/sui/pull/22143):
-DoS protection is enabled in
-dryRun mode by default for validators
-
-#### gRPC
-
-[#21896](https://github.com/MystenLabs/sui/pull/21896):
-
-[#22197](https://github.com/MystenLabs/sui/pull/22197):
-Enables TLS on connections to validators over the gRPC
-interface.
-
-#### JSON-RPC
-
-[#21932](https://github.com/MystenLabs/sui/pull/21932):
-returns additional error information when an abort error
-occurs.
-
-#### CLI
-
-[#22166](https://github.com/MystenLabs/sui/pull/22166):
-Added the `-c` short flag for the `sui client upgrade`
-command to pass the upgrade capability.
-
-[#22139](https://github.com/MystenLabs/sui/pull/22139):
-Add default TLS to sui-tool with optional --no-tls flag
-
-[#22293](https://github.com/MystenLabs/sui/pull/22293):
-Added a new `--sender` argument for transactions to set the
-sender to a specific address.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.50.1
-
-
----
-
-
-## v1.49.2
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.49.2)*
-
-
-#### Sui Protocol Version in this release: `84`
-
-[#22081](https://github.com/MystenLabs/sui/pull/22081): Normalize all type inputs to be defining ID-based when converting from `TypeInput`s in the adapter.
-
-[#22113](https://github.com/MystenLabs/sui/pull/22113): Enables ExecutionTimeEstimate mode for congestion control on `mainnet`.
-
-[#22120](https://github.com/MystenLabs/sui/pull/22120): update Nitro attestation parsing logic and enable for `mainnet` in version `83`.
-
-[#22092](https://github.com/MystenLabs/sui/pull/22092): add a new feature flag that switches the object runtime to using TypeTags instead of VM runtime types.
-
-[#22258](https://github.com/MystenLabs/sui/pull/22258): upgrade to allow recovery of stolen funds in accordance with community vote
-
-#### Nodes (Validators and Full nodes)
-
-[#21955](https://github.com/MystenLabs/sui/pull/21955): Switches Sui archive mechanism for state sync from the existing format to the checkpoint data ingestion bucket. The `state-archive-read-config` section of the full node config needs to be updated to include the `ingestion-url` field. For possible bucket options, see: https://docs.sui.io/guides/developer/advanced/custom-indexer#remote-reader.
-
-#### CLI
-
-[#21983](https://github.com/MystenLabs/sui/pull/21983): Add `--client.env` flag to `client` and `move` subcommands to allow for selecting a specific environment for a single CLI command.
-
-#### Rust SDK
-
-[#21893](https://github.com/MystenLabs/sui/pull/21893): Added new `merge_coins` and `smash_coins` functions to `ProgrammableTransactionBuilder`
-
-[#21983](https://github.com/MystenLabs/sui/pull/21983): Update arguments to `WalletContext::new` so it only takes the path to the config. Additional configurations (timeout, max concurrent connections, etc) can then be set on the context after it has been created.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.49.2
-
-
----
-
-
-## v1.48.4
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.48.4)*
-
-
-#### Sui Protocol Version in this release: `83`
-
-[#22259](https://github.com/MystenLabs/sui/pull/22259): upgrade to allow recovery of stolen funds in accordance with a community vote
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.48.4
-
-
----
-
-
-## v1.48.2
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.48.2)*
-
-
-#### Sui Protocol Version in this release: `82`
-
-[#21760](https://github.com/MystenLabs/sui/pull/21760): version `82`, cleanup and minor patches to Sui System
-
-#### gRPC
-
-[#21837](https://github.com/MystenLabs/sui/pull/21837): Enables TLS on connections to validators over the gRPC interface.
-
-#### CLI
-
-[#20851](https://github.com/MystenLabs/sui/pull/20851): Change in generated Move trace representation to be compressed. Existing Move test traces will need to be regenerated in order to be used.
-
-[#21837](https://github.com/MystenLabs/sui/pull/21837): Enables TLS on connections to validators over the gRPC interface.
-
-[#21790](https://github.com/MystenLabs/sui/pull/21790): Compiler might generate slightly different errors as a result of the compilation process being more permissive with respect to parsing errors.
-
-[#21876](https://github.com/MystenLabs/sui/pull/21876): Bug fix
-
-[#21912](https://github.com/MystenLabs/sui/pull/21912): Added the `sui client remove-address` command to the CLI.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.48.2
-
-
----
-
-
-## v1.47.1
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.47.1)*
-
-
-#### Sui Protocol Version in this release: `81`
-
-[#21303](https://github.com/MystenLabs/sui/pull/21303): Implements SIP-39 in Sui System
-
-[#21704](https://github.com/MystenLabs/sui/pull/21704): Enable consensus median-based timestamp for mainnet in `v81`
-
-[#21802](https://github.com/MystenLabs/sui/pull/21802): Increase threshold for bad nodes that won't be considered leaders in consensus in `mainnet` `v47`
-
-#### JSON-RPC
-
-[#21605](https://github.com/MystenLabs/sui/pull/21605): internal minor log change, no impact on users
-
-[#21622](https://github.com/MystenLabs/sui/pull/21622): minor internal metrics & logging change, no user impact
-
-#### CLI
-
-[#21609](https://github.com/MystenLabs/sui/pull/21609): The `sui client ptb` now supports passing MVR name registered packages for package IDs and type tags.
-
-[#21685](https://github.com/MystenLabs/sui/pull/21685): Bug fix - transitive dependencies of externally resolved dependencies are fetched before reading
-
-[#21671](https://github.com/MystenLabs/sui/pull/21671): DeepBook is no longer included as an implicit dependency.
-
-[#21742](https://github.com/MystenLabs/sui/pull/21742): remove spurious error message for external resolvers
-
-[#21710](https://github.com/MystenLabs/sui/pull/21710): bug fix for `sui move disassemble` with implicit dependencies
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.47.1
-
-
----
-
-
-## v1.46.3
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.46.3)*
-
-
-#### Sui Protocol Version in this release: `80`
-
-[#21815](https://github.com/MystenLabs/sui/pull/21815): Adds a fix that bounds the size of PTB values
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.46.3
-
-
----
-
-
-## v1.46.2
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.46.2)*
-
-‼️# Private Release Notice‼️
-This release includes a private fix for an issue effecting fullnodes and validators. Changes will be made public once applied to mainnet after an epoch change tomorrow.
-
-Private Commit: `3c894a0ab474fca8d4880606f919ab9af91f4529`
-Private release install instructions: https://bit.ly/sui-private-release-install
-
-Do not use the attached binaries and download them from  https://sui-releases.s3-accelerate.amazonaws.com/3c894a0ab474fca8d4880606f919ab9af91f4529/sui-node instead until 4/10 after the epoch change
-
-
-#### Sui Protocol Version in this release: `79`
-
-[#21530](https://github.com/MystenLabs/sui/pull/21530): Enable consensus commit median based timestamp calculation for testnet.
-
-[#21562](https://github.com/MystenLabs/sui/pull/21562): v79 Increase threshold for bad nodes that won't be considered leaders in consensus in testnet
-
-[#21621](https://github.com/MystenLabs/sui/pull/21621): Enable consensus garbage collection and new linearizer logic in mainnet
-
-#### Nodes (Validators and Full nodes)
-
-[#21715](https://github.com/MystenLabs/sui/pull/21715): Fixes an issue that could cause end-of-epoch crash loops on validators.
-
-#### JSON-RPC
-
-[#21489](https://github.com/MystenLabs/sui/pull/21489): dependency change, should not have user-noticeable impact internal minor log change, no impact on users minor internal metrics & logging change, no user impact
-
-#### CLI
-
-[#21462](https://github.com/MystenLabs/sui/pull/21462): improved error response when publishing an empty package
-
-[#21633](https://github.com/MystenLabs/sui/pull/21633): Fixes Move Analyzer issues around macros. Move now supports type annotations on lambdas.
-
-[#21649](https://github.com/MystenLabs/sui/pull/21649): The `sui client ptb` now supports passing MVR name registered packages for package IDs and type tags.
-
-[#21693](https://github.com/MystenLabs/sui/pull/21693): package management bug fixes
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.46.2
-
-
----
-
-
-## v1.45.3
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.45.3)*
-
-
-#### Sui Protocol Version in this release: `78`
-
-[#21444](https://github.com/MystenLabs/sui/pull/21444): enable group ops uncompressed in `mainnet`.
-
-[#21420](https://github.com/MystenLabs/sui/pull/21420): Enable consensus garbage collection and new commit rule for `testnet`.
-
-[#21460](https://github.com/MystenLabs/sui/pull/21460): Add a new protocol version to support native transaction contexts and `sponsor`.
-
-[#21492](https://github.com/MystenLabs/sui/pull/21492): Enables new ExecutionTimeEstimate mode for congestion control in `testnet`.
-
-#### Nodes (Validators and Full nodes)
-
-[#21563](https://github.com/MystenLabs/sui/pull/21563): Upgrade to a new version required for validators. Fullnodes are unaffected.
-
-#### JSON-RPC
-
-[#21375](https://github.com/MystenLabs/sui/pull/21375): return error source information in dry run transactions
-
-[#21474](https://github.com/MystenLabs/sui/pull/21474): fixed a partition advance flakiness bug, no impact on the `JSON-RPC` interface
-
-#### GraphQL
-
-[#21474](https://github.com/MystenLabs/sui/pull/21474): fixed a partition advance flakiness bug, no impact on the GraphQL interface.
-
-#### CLI
-
-[#21204](https://github.com/MystenLabs/sui/pull/21204): Implicitly added dependencies on system packages (MoveStdLib, Sui, System, DeepBook, and Bridge) if they are not included in `Move.toml`.
-
-[#21491](https://github.com/MystenLabs/sui/pull/21491): Starting with `v1.45.0`, the `sui console` command is not available anymore.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.45.3
-
-
----
-
-
-## v1.44.3
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.44.3)*
-
-
-#### Sui Protocol Version in this release: `77`
-
-[#21108](https://github.com/MystenLabs/sui/pull/21108): upgrade protocol version to enable passkey for testnet
-
-[#21192](https://github.com/MystenLabs/sui/pull/21192): Changes to the Sui framework, deprecate Deepbook V2 with exception of cancel and withdrawal
-
-[#21364](https://github.com/MystenLabs/sui/pull/21364): Enable consensus garbage collection and new commit rule.
-
-[#18820](https://github.com/MystenLabs/sui/pull/18820): add feature flag to allow passkey inside `multisig`. Enable for devnet and testnet.
-
-[#21445](https://github.com/MystenLabs/sui/pull/21445): enable uncompressed group ops in mainnet for protocol version `77`
-
-[#21449](https://github.com/MystenLabs/sui/pull/21449): Enable consensus garbage collection and new commit rule for testnet.
-
-#### JSON-RPC
-
-[#21359](https://github.com/MystenLabs/sui/pull/21359): Ordering of enum variants in Move enum types are now returned in declaration order as opposed to lexicographic order.
-
-#### GraphQL
-
-[#21032](https://github.com/MystenLabs/sui/pull/21032): Removed the `objectKeys` field from `ObjectFilter` as per the previous deprecation notice. Use `multiGetObjects` instead to fetch multiple objects.
-
-#### CLI
-
-[#21211](https://github.com/MystenLabs/sui/pull/21211): `sui client publish/upgrade` will now by default remove dependencies that are not referenced in source code from being published on-chain.
-
-[#21331](https://github.com/MystenLabs/sui/pull/21331): Adds support to `sui client ptb` to create transactions with `sui::object::ID` values as pure inputs. ID inputs are specified like addresses (hexadecimal numbers with a leading `@`) and their type is inferred from usage.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.44.3
-
-
----
-
+:::
