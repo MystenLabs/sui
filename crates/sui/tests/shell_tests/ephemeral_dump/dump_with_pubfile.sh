@@ -10,29 +10,23 @@
 # dependency's original-id from the ephemeral pubfile appears in the compiled
 # bytecode.
 
-unredact() {
-  sed 's|\\|<BS>|g' | sed 's|/|<S>|g'
-}
-
-# Generate the ephemeral pubfile (local source paths must be absolute)
-dep_path=$(cd dep_pkg && pwd)
-main_path=$(cd main_pkg && pwd)
+# Generate the ephemeral pubfile (local source paths must be absolute and native to the OS, so
+# that Rust's std::fs::canonicalize can resolve them. `pwd -W` returns Windows-native paths on
+# MSYS2/Git Bash; on Unix it's unsupported, so we fall back to `pwd`.)
+dep_path=$(cd dep_pkg && pwd -W 2>/dev/null || pwd)
+main_path=$(cd main_pkg && pwd -W 2>/dev/null || pwd)
 cat Pub.template.toml \
   | sed "s|<DEP-PATH>|$dep_path|g" \
   | sed "s|<MAIN-PATH>|$main_path|g" \
   > Pub.localnet.toml
 
-cat Pub.localnet.toml | unredact
-
 # Build with --dump using the ephemeral pubfile
-RUST_LOG=debug sui move --client.config config.yaml \
-  build -p main_pkg --dump --pubfile-path Pub.localnet.toml -e testnet --no-tree-shaking 2>&1 | unredact > output.json
+sui move --client.config config.yaml \
+  build -p main_pkg --dump --pubfile-path Pub.localnet.toml -e testnet --no-tree-shaking > output.json
 
-cat output.json
-cat output.json | jq -r '.modules[0]' | base64 -d > main.mv
+# tr -d '\r' strips Windows carriage returns that jq may emit
+cat output.json | jq -r '.modules[0]' | tr -d '\r' | base64 -d > main.mv
 sui move disassemble main.mv > main.move
-
-cat main.move
 
 echo
 echo "=== decompiled bytecode should have main module at address 0 ==="

@@ -365,7 +365,15 @@ fn localpubs_to_publications<F: MoveFlavor>(
             metadata: local_pub.metadata.clone(),
         };
 
-        let old = result.insert(local_pub.source.clone(), new);
+        let mut source = local_pub.source.clone();
+        source.0.local = source.0.local.canonicalize().map_err(|err| {
+            PackageError::InvalidEphemeralFile {
+                file: source.0.local.clone(),
+                err,
+            }
+        })?;
+
+        let old = result.insert(source, new);
         if old.is_some() {
             let mut dep = local_pub.source.render_as_toml();
             // take off trailing newline

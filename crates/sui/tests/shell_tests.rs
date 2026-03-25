@@ -90,13 +90,8 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         std::fs::read_to_string(path)?,
         output.status.success(),
         output.status.code().unwrap_or(!0),
-        // Convert windows path outputs on the snapshot to regular linux ones.
-        String::from_utf8_lossy(&output.stdout)
-            .replace(r"\\", "/")
-            .replace(r"\", "/"),
-        String::from_utf8_lossy(&output.stderr)
-            .replace(r"\\", "/")
-            .replace(r"\", "/"),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
     );
 
     let result = result
@@ -109,6 +104,9 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
             "<SANDBOX_DIR>",
         )
         .replace(sandbox.to_string_lossy().as_ref(), "<SANDBOX_DIR>");
+
+    // Convert windows path outputs on the snapshot to regular linux ones.
+    let result = result.replace(r"\\", "/").replace(r"\", "/");
 
     insta_assert! {
         input_path: path,
