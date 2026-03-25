@@ -7,18 +7,11 @@
 //! creates the required tables, and tears everything down when done.
 //! Tests require `gcloud`, `cbt`, and the BigTable emulator on PATH.
 
-use std::io::BufRead;
-use std::path::PathBuf;
-use std::process::Child;
-use std::process::Command;
-use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use anyhow::bail;
 use futures::TryStreamExt;
-use futures::future::try_join_all;
 use prost_types::FieldMask;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -33,6 +26,10 @@ use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
+use sui_kvstore::testing::BigTableEmulator;
+use sui_kvstore::testing::INSTANCE_ID;
+use sui_kvstore::testing::create_tables;
+use sui_kvstore::testing::require_bigtable_emulator;
 use sui_protocol_config::Chain;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
@@ -55,171 +52,8 @@ use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
 use test_cluster::{TestCluster, TestClusterBuilder};
-use tokio::process::Command as TokioCommand;
 use tokio::time::interval;
 use url::Url;
-
-const INSTANCE_ID: &str = "bigtable_test_instance";
-const TABLES: &[&str] = &[
-    sui_kvstore::tables::objects::NAME,
-    sui_kvstore::tables::transactions::NAME,
-    sui_kvstore::tables::checkpoints::NAME,
-    sui_kvstore::tables::checkpoints_by_digest::NAME,
-    sui_kvstore::tables::watermarks::NAME,
-    sui_kvstore::tables::epochs::NAME,
-    sui_kvstore::tables::protocol_configs::NAME,
-    sui_kvstore::tables::packages::NAME,
-    sui_kvstore::tables::packages_by_id::NAME,
-    sui_kvstore::tables::packages_by_checkpoint::NAME,
-    sui_kvstore::tables::system_packages::NAME,
-];
-
-/// Resolve the path to `cbtemulator` relative to the gcloud SDK root.
-/// Works regardless of whether gcloud was installed via apt, brew, or the standalone installer.
-fn cbtemulator_path() -> PathBuf {
-    let output = Command::new("gcloud")
-        .args(["info", "--format=value(installation.sdk_root)"])
-        .output()
-        .expect("gcloud not found on PATH — install the Google Cloud SDK to run these tests");
-    assert!(output.status.success(), "failed to query gcloud sdk root");
-
-    let sdk_root = String::from_utf8(output.stdout)
-        .expect("non-utf8 gcloud sdk root")
-        .trim()
-        .to_string();
-
-    let path = PathBuf::from(sdk_root).join("platform/bigtable-emulator/cbtemulator");
-    assert!(
-        path.exists(),
-        "cbtemulator not found at {path:?} — run: gcloud components install bigtable"
-    );
-    path
-}
-
-fn require_bigtable_emulator() {
-    cbtemulator_path();
-    assert!(
-        Command::new("cbt").arg("-version").output().is_ok(),
-        "cbt not found on PATH — run: gcloud components install cbt"
-    );
-}
-
-/// A self-contained BigTable emulator process.
-/// Spawns the emulator on a random port.
-/// The emulator process is killed when this struct is dropped.
-struct BigTableEmulator {
-    child: Child,
-    host: String,
-    // Keep stdout open so the emulator doesn't get SIGPIPE and die.
-    _stdout_drain: std::thread::JoinHandle<()>,
-}
-
-impl BigTableEmulator {
-    fn start() -> Result<Self> {
-        let mut child = Command::new(cbtemulator_path())
-            .arg("-port=0")
-            .stderr(Stdio::null())
-            .stdout(Stdio::piped())
-            .spawn()
-            .context("Failed to spawn BigTable emulator")?;
-
-        let stdout = child.stdout.take().expect("stdout was piped");
-        let mut reader = std::io::BufReader::new(stdout);
-
-        let mut host = None;
-        let mut line_buf = String::new();
-        loop {
-            line_buf.clear();
-            let n = reader
-                .read_line(&mut line_buf)
-                .context("Failed to read emulator stderr")?;
-            if n == 0 {
-                break;
-            }
-            // cbtemulator prints: Cloud Bigtable emulator running on 127.0.0.1:PORT
-            if line_buf.contains("Cloud Bigtable emulator running on") {
-                if let Some(addr) = line_buf.rsplit("running on ").next() {
-                    let addr = addr.trim();
-                    if let Some(port) = addr.rsplit(':').next() {
-                        host = Some(format!("localhost:{port}"));
-                    }
-                }
-                break;
-            }
-        }
-
-        let host = host.context("Failed to parse emulator host:port from stdout")?;
-
-        // Drain remaining stdout in a background thread to prevent SIGPIPE.
-        let stdout_drain = std::thread::spawn(move || {
-            let _ = std::io::copy(&mut reader, &mut std::io::sink());
-        });
-
-        Ok(Self {
-            child,
-            host,
-            _stdout_drain: stdout_drain,
-        })
-    }
-
-    fn host(&self) -> &str {
-        &self.host
-    }
-}
-
-impl Drop for BigTableEmulator {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-/// Create all required BigTable tables in parallel using async subprocesses.
-async fn create_tables(host: &str, instance_id: &str) -> Result<()> {
-    let futures: Vec<_> = TABLES
-        .iter()
-        .map(|table| {
-            let host = host.to_string();
-            let instance_id = instance_id.to_string();
-            let table = *table;
-            async move {
-                let output = TokioCommand::new("cbt")
-                    .args(["-instance", &instance_id, "-project", "emulator"])
-                    .arg("createtable")
-                    .arg(table)
-                    .env("BIGTABLE_EMULATOR_HOST", &host)
-                    .output()
-                    .await
-                    .with_context(|| format!("Failed to run cbt createtable {table}"))?;
-                if !output.status.success() {
-                    bail!(
-                        "cbt createtable {table} failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
-
-                let output = TokioCommand::new("cbt")
-                    .args(["-instance", &instance_id, "-project", "emulator"])
-                    .args(["createfamily", table, "sui"])
-                    .env("BIGTABLE_EMULATOR_HOST", &host)
-                    .output()
-                    .await
-                    .with_context(|| format!("Failed to run cbt createfamily {table}"))?;
-                if !output.status.success() {
-                    bail!(
-                        "cbt createfamily {table} failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
-
-                Ok(())
-            }
-        })
-        .collect();
-
-    try_join_all(futures).await?;
-    Ok(())
-}
 
 /// Get all coin objects for an address using gRPC list_owned_objects.
 async fn get_all_coins(client: &mut GrpcClient, address: SuiAddress) -> Result<Vec<Object>> {

@@ -33,6 +33,7 @@ use sui_indexer_alt_consistent_store::start_service as start_consistent_store;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::postgres::schema::watermarks;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
 use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
@@ -46,10 +47,22 @@ use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+use sui_kv_rpc::KvRpcServer;
+use sui_kvstore::BigTableClient;
+use sui_kvstore::BigTableIndexer;
+use sui_kvstore::BigTableStore;
+use sui_kvstore::IndexerConfig as BtIndexerConfig;
+use sui_kvstore::IngestionConfig as BtIngestionConfig;
+use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::PipelineLayer;
+use sui_kvstore::testing::BigTableEmulator;
+use sui_kvstore::testing::INSTANCE_ID;
+use sui_kvstore::testing::create_tables;
 use sui_pg_db::Db;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
+use sui_protocol_config::Chain;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
@@ -103,6 +116,9 @@ pub struct OffchainCluster {
     /// The address the GraphQL server is listening on.
     graphql_listen_address: SocketAddr,
 
+    /// Read access to BigTable.
+    bigtable_client: BigTableClient,
+
     /// Read access to the temporary database.
     db: Db,
 
@@ -113,6 +129,10 @@ pub struct OffchainCluster {
     /// aborted) until the cluster is stopped.
     #[allow(unused)]
     services: Service,
+
+    /// Handle to the BigTable emulator process.
+    #[allow(unused)]
+    bigtable_emulator: BigTableEmulator,
 
     /// Hold on to the database so it doesn't get dropped until the cluster is stopped.
     #[allow(unused)]
@@ -211,18 +231,22 @@ impl FullCluster {
     /// contents.
     pub async fn create_checkpoint(&mut self) -> VerifiedCheckpoint {
         let checkpoint = self.executor.create_checkpoint();
+        let timeout = Duration::from_secs(100);
         let indexer = self
             .offchain
-            .wait_for_indexer(checkpoint.sequence_number, Duration::from_secs(100));
+            .wait_for_indexer(checkpoint.sequence_number, timeout);
         let consistent_store = self
             .offchain
-            .wait_for_consistent_store(checkpoint.sequence_number, Duration::from_secs(100));
+            .wait_for_consistent_store(checkpoint.sequence_number, timeout);
         let graphql = self
             .offchain
-            .wait_for_graphql(checkpoint.sequence_number, Duration::from_secs(100));
+            .wait_for_graphql(checkpoint.sequence_number, timeout);
+        let bigtable = self
+            .offchain
+            .wait_for_bigtable(checkpoint.sequence_number, timeout);
 
-        try_join!(indexer, consistent_store, graphql)
-            .expect("Timed out waiting for indexer and consistent store");
+        try_join!(indexer, consistent_store, graphql, bigtable)
+            .expect("Timed out waiting for off-chain services");
 
         checkpoint
     }
@@ -319,6 +343,9 @@ impl OffchainCluster {
         let graphql_port = get_available_port();
         let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
 
+        let kv_rpc_port = get_available_port();
+        let kv_rpc_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), kv_rpc_port);
+
         let database = TempDb::new().context("Failed to create database")?;
         let database_url = database.database().url();
 
@@ -362,7 +389,7 @@ impl OffchainCluster {
         let consistent_store = start_consistent_store(
             rocksdb_path,
             consistent_indexer_args,
-            client_args,
+            client_args.clone(),
             consistent_args,
             "0.0.0",
             consistent_config,
@@ -375,7 +402,19 @@ impl OffchainCluster {
             consistent_store_url: Some(
                 Url::parse(&format!("http://{consistent_listen_address}")).unwrap(),
             ),
-            consistent_store_statement_timeout_ms: None,
+            ..Default::default()
+        };
+
+        let (bigtable_client, bigtable_emulator, archival_service) =
+            start_archival(client_args.clone(), kv_rpc_address, registry).await?;
+
+        let graphql_kv_args = GraphQlKvArgs {
+            ledger_grpc_url: Some(
+                format!("http://{kv_rpc_address}")
+                    .parse()
+                    .expect("Failed to parse kv-rpc URI"),
+            ),
+            ..Default::default()
         };
 
         let jsonrpc = start_jsonrpc(
@@ -397,7 +436,7 @@ impl OffchainCluster {
             Some(database_url.clone()),
             fullnode_args,
             DbArgs::default(),
-            GraphQlKvArgs::default(),
+            graphql_kv_args,
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),
@@ -412,15 +451,18 @@ impl OffchainCluster {
         let services = indexer
             .merge(consistent_store)
             .merge(jsonrpc)
-            .merge(graphql);
+            .merge(graphql)
+            .merge(archival_service);
 
         Ok(Self {
             consistent_listen_address,
             jsonrpc_listen_address,
             graphql_listen_address,
+            bigtable_client,
             db,
             pipelines,
             services,
+            bigtable_emulator,
             database,
             dir,
         })
@@ -645,6 +687,30 @@ impl OffchainCluster {
         })
         .await
     }
+
+    /// Waits until the BigTable indexer has caught up to the given `checkpoint`, or the `timeout`
+    /// is reached (an error).
+    pub async fn wait_for_bigtable(
+        &self,
+        checkpoint: u64,
+        timeout: Duration,
+    ) -> Result<(), Elapsed> {
+        let mut client = self.bigtable_client.clone();
+        tokio::time::timeout(timeout, async move {
+            let mut interval = interval(Duration::from_millis(200));
+            loop {
+                interval.tick().await;
+                if client
+                    .get_watermark()
+                    .await
+                    .is_ok_and(|wm| wm.is_some_and(|wm| wm.checkpoint_hi_inclusive >= checkpoint))
+                {
+                    break;
+                }
+            }
+        })
+        .await
+    }
 }
 
 impl Default for OffchainClusterConfig {
@@ -721,4 +787,66 @@ pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Re
     let file_path = path.join(file_name);
     fs::write(file_path, compressed)?;
     Ok(())
+}
+
+/// Start the archival stack: BigTable emulator, BigTable indexer, and sui-kv-rpc.
+async fn start_archival(
+    client_args: ClientArgs,
+    kv_rpc_address: SocketAddr,
+    registry: &prometheus::Registry,
+) -> anyhow::Result<(BigTableClient, BigTableEmulator, Service)> {
+    let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
+        .await
+        .context("spawn_blocking panicked")?
+        .context("Failed to start BigTable emulator")?;
+
+    create_tables(emulator.host(), INSTANCE_ID)
+        .await
+        .context("Failed to create BigTable tables")?;
+
+    let bigtable_client =
+        BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.to_string())
+            .await
+            .context("Failed to create BigTable client")?;
+
+    let store = BigTableStore::new(
+        BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.to_string())
+            .await
+            .context("Failed to create BigTable client for indexer")?,
+    );
+    let bt_indexer = BigTableIndexer::new(
+        store,
+        IndexerArgs::default(),
+        client_args,
+        BtIngestionConfig::default(),
+        CommitterConfig::default(),
+        BtIndexerConfig::default(),
+        PipelineLayer::default(),
+        Chain::Unknown,
+        registry,
+    )
+    .await
+    .context("Failed to create BigTable indexer")?;
+
+    let bt_indexer_service = bt_indexer
+        .indexer
+        .run()
+        .await
+        .context("Failed to start BigTable indexer")?;
+
+    let kv_rpc_server = KvRpcServer::new_local(
+        emulator.host().to_string(),
+        INSTANCE_ID.to_string(),
+        None,
+        None,
+    )
+    .await
+    .context("Failed to create KvRpcServer")?;
+    let kv_rpc_service = kv_rpc_server
+        .start_service(kv_rpc_address, sui_kv_rpc::ServerConfig::default())
+        .await
+        .context("Failed to start kv-rpc server")?;
+
+    let service = bt_indexer_service.merge(kv_rpc_service);
+    Ok((bigtable_client, emulator, service))
 }

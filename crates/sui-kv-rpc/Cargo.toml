@@ -9,6 +9,7 @@ version.workspace = true
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+sui-futures.workspace = true
 bin-version.workspace = true
 clap.workspace = true
 prometheus.workspace = true
