@@ -40,7 +40,7 @@ use crate::store::SequentialStore;
 ///
 /// Upon successful write, the task sends its new watermark back to the ingestion service, to
 /// unblock its regulator.
-pub(super) fn committer<H>(
+pub(super) fn committer<H: Handler>(
     handler: Arc<H>,
     config: SequentialConfig,
     mut next_checkpoint: u64,
@@ -50,11 +50,7 @@ pub(super) fn committer<H>(
     metrics: Arc<IndexerMetrics>,
     min_eager_rows: usize,
     max_batch_checkpoints: usize,
-) -> Service
-where
-    H: Handler + Send + Sync + 'static,
-    H::Store: SequentialStore + 'static,
-{
+) -> Service {
     Service::new().spawn_aborting(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.

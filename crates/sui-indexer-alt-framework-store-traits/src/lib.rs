@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Utc;
@@ -43,8 +44,7 @@ pub trait Connection: Send {
     ) -> anyhow::Result<bool>;
 }
 
-/// Extension of [`Connection`] for concurrent pipeline watermark operations including
-/// initialization, reader/pruner watermark management, and pruning.
+/// Extension of [`Connection`] for concurrent pipeline watermark operations.
 #[async_trait]
 pub trait ConcurrentConnection: Connection {
     /// Returns the `InitWatermark` based on the existing watermark if it exists.
@@ -112,7 +112,7 @@ pub trait ConcurrentConnection: Connection {
     ) -> anyhow::Result<bool>;
 }
 
-/// Extension of [`Connection`] for sequential pipeline watermark operations.
+/// Extension of [`Connection`] for sequential pipeline operations.
 #[async_trait]
 pub trait SequentialConnection: Connection {
     /// Returns the `checkpoint_hi_inclusive` based on the existing watermark if it exists.
@@ -141,17 +141,44 @@ pub trait Store: Send + Sync + 'static + Clone {
     where
         Self: 'c;
 
+    async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>>;
+}
+
+/// Extension of [`Store`] for stores that support concurrent pipeline operations, including
+/// task-based pipeline watermark tracking.
+#[async_trait]
+pub trait ConcurrentStore: for<'c> Store<Connection<'c> = Self::ConcurrentConnection<'c>> {
+    type ConcurrentConnection<'c>: ConcurrentConnection
+    where
+        Self: 'c;
+
     /// Delimiter used to separate pipeline names from task identifiers when reading or writing the
     /// committer watermark.
     const DELIMITER: &'static str = "@";
 
-    async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>>;
+    async fn concurrent_connect<'c>(&'c self) -> anyhow::Result<Self::ConcurrentConnection<'c>> {
+        Ok(self
+            .connect()
+            .await
+            .context("Failed to establish concurrent connection to store")?)
+    }
 }
 
 /// Extension of [`Store`] for stores that support sequential pipeline operations, including
 /// transactional capabilities used within the framework for atomic or transactional writes.
 #[async_trait]
-pub trait SequentialStore: Store {
+pub trait SequentialStore: for<'c> Store<Connection<'c> = Self::SequentialConnection<'c>> {
+    type SequentialConnection<'c>: SequentialConnection
+    where
+        Self: 'c;
+
+    async fn sequential_connect<'c>(&'c self) -> anyhow::Result<Self::SequentialConnection<'c>> {
+        Ok(self
+            .connect()
+            .await
+            .context("Failed to establish sequential connection to store")?)
+    }
+
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,
@@ -254,8 +281,8 @@ impl PrunerWatermark {
 
 /// Check that the pipeline name does not contain the store's delimiter, and construct the string
 /// used for tracking a pipeline's watermarks in the store. This is either the pipeline name itself,
-/// or `{pipeline}{Store::DELIMITER}{task}` if a task name is provided.
-pub fn pipeline_task<S: Store>(
+/// or `{pipeline}{ConcurrentStore::DELIMITER}{task}` if a task name is provided.
+pub fn pipeline_task<S: ConcurrentStore>(
     pipeline_name: &'static str,
     task_name: Option<&str>,
 ) -> anyhow::Result<String> {

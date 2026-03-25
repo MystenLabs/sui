@@ -306,6 +306,11 @@ impl SequentialConnection for MockConnection<'_> {
 }
 
 #[async_trait]
+impl crate::store::ConcurrentStore for MockStore {
+    type ConcurrentConnection<'c> = MockConnection<'c>;
+}
+
+#[async_trait]
 impl Store for MockStore {
     type Connection<'c> = MockConnection<'c>;
 
@@ -337,6 +342,8 @@ impl Store for MockStore {
 
 #[async_trait]
 impl SequentialStore for MockStore {
+    type SequentialConnection<'c> = MockConnection<'c>;
+
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

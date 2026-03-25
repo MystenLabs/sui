@@ -246,6 +246,11 @@ impl store::SequentialConnection for Connection<'_> {
 }
 
 #[async_trait]
+impl store::ConcurrentStore for Db {
+    type ConcurrentConnection<'c> = Connection<'c>;
+}
+
+#[async_trait]
 impl store::Store for Db {
     type Connection<'c> = Connection<'c>;
 
@@ -256,6 +261,7 @@ impl store::Store for Db {
 
 #[async_trait]
 impl store::SequentialStore for Db {
+    type SequentialConnection<'c> = Connection<'c>;
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

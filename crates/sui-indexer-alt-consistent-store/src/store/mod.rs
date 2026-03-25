@@ -135,6 +135,8 @@ impl<S: Send + Sync + 'static> store::Store for Store<S> {
 
 #[async_trait::async_trait]
 impl<S: Send + Sync + 'static> store::SequentialStore for Store<S> {
+    type SequentialConnection<'c> = Connection<'c, S>;
+
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

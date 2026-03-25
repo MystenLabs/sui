@@ -95,16 +95,12 @@ impl PendingRanges {
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
 /// If the `config` is `None`, the task will shutdown immediately.
-pub(super) fn pruner<H>(
+pub(super) fn pruner<H: Handler>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
-) -> Service
-where
-    H: Handler + Send + Sync + 'static,
-    for<'c> <H::Store as Store>::Connection<'c>: ConcurrentConnection,
-{
+) -> Service {
     Service::new().spawn_aborting(async move {
         let Some(config) = config else {
             info!(pipeline = H::NAME, "Skipping pruner task");
@@ -282,7 +278,7 @@ where
     })
 }
 
-async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
+async fn prune_task_impl<H: Handler>(
     metrics: Arc<IndexerMetrics>,
     db: H::Store,
     handler: Arc<H>,

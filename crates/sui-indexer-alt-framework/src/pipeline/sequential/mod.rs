@@ -123,7 +123,7 @@ pub struct SequentialConfig {
 /// channels are created to communicate between its various components. The pipeline will shutdown
 /// if any of its input or output channels close, any of its independent tasks fail, or if it is
 /// signalled to shutdown through the returned service handle.
-pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
+pub(crate) fn pipeline<H: Handler>(
     handler: H,
     next_checkpoint: u64,
     config: SequentialConfig,

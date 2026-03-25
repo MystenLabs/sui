@@ -81,8 +81,6 @@ pub struct Db {
 struct CancelGuard<'m>(Option<&'m PoolMetrics>);
 
 /// Wrapper struct over the remote `PooledConnection` type for dealing with the `Store` trait.
-/// Internally, `checkpoint_high_inclusive = reader_lo - 1` is a temporary initial state that
-/// indicates the ingested checkpoint range is empty.
 pub struct Connection<'a>(PooledConnection<'a, AsyncPgConnectionWithId>);
 
 impl DbArgs {

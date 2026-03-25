@@ -47,6 +47,11 @@ impl BigTableConnection<'_> {
 }
 
 #[async_trait]
+impl sui_indexer_alt_framework_store_traits::ConcurrentStore for BigTableStore {
+    type ConcurrentConnection<'c> = BigTableConnection<'c>;
+}
+
+#[async_trait]
 impl Store for BigTableStore {
     type Connection<'c> = BigTableConnection<'c>;
 

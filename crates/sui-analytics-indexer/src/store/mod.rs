@@ -607,6 +607,8 @@ impl Store for AnalyticsStore {
 
 #[async_trait]
 impl SequentialStore for AnalyticsStore {
+    type SequentialConnection<'c> = AnalyticsConnection<'c>;
+
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

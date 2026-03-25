@@ -15,12 +15,12 @@ use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_framework_store_traits as framework_traits;
 use sui_indexer_alt_framework_store_traits::ConcurrentConnection;
 use sui_indexer_alt_framework_store_traits::Connection;
 use sui_indexer_alt_framework_store_traits::PrunerWatermark;
 use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
-use sui_indexer_alt_framework_store_traits::{self as framework_traits};
 use tracing::info;
 
 #[derive(Clone)]
@@ -72,6 +72,11 @@ impl From<CommitterWatermark> for framework_traits::CommitterWatermark {
             timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
         }
     }
+}
+
+#[async_trait]
+impl framework_traits::ConcurrentStore for ObjectStore {
+    type ConcurrentConnection<'c> = ObjectStoreConnection;
 }
 
 #[async_trait]
