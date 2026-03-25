@@ -308,7 +308,10 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 // It only waits for synchronizer to queue the request to a peer.
                 // When this fails, it usually means the queue is full.
                 // The fetch will retry from other peers via live and periodic syncs.
-                if let Err(err) = synchronizer.fetch_blocks(missing_ancestors, PeerId::Validator(peer)).await {
+                if let Err(err) = synchronizer
+                    .fetch_blocks(missing_ancestors, PeerId::Validator(peer))
+                    .await
+                {
                     debug!("Failed to fetch missing ancestors via synchronizer: {err}");
                 }
             });
