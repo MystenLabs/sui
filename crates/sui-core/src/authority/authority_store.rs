@@ -198,10 +198,23 @@ impl AuthorityStore {
         self.perpetual_tables
             .object_per_epoch_marker_table
             .schedule_delete_all()?;
-        Ok(self
-            .perpetual_tables
-            .object_per_epoch_marker_table_v2
-            .schedule_delete_all()?)
+        #[cfg(not(tidehunter))]
+        {
+            self.perpetual_tables
+                .object_per_epoch_marker_table_v2
+                .schedule_delete_all()?;
+        }
+        #[cfg(tidehunter)]
+        {
+            use crate::authority::authority_store_tables::EpochMarkerKeyCodec;
+            self.perpetual_tables
+                .object_per_epoch_marker_table_v2
+                .drop_cells_in_range_raw(
+                    &EpochMarkerKeyCodec::MIN_KEY,
+                    &EpochMarkerKeyCodec::MAX_KEY,
+                )?;
+        }
+        Ok(())
     }
 
     pub async fn open_with_committee_for_testing(

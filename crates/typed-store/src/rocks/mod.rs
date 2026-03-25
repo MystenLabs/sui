@@ -17,8 +17,8 @@ use crate::tidehunter_util::{
     apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
 };
 use crate::util::{
-    be_fix_int_ser, be_fix_int_ser_into, ensure_database_type, iterator_bounds,
-    iterator_bounds_with_range,
+    be_fix_int_ser, be_fix_int_ser_into, big_endian_saturating_add_one, ensure_database_type,
+    iterator_bounds, iterator_bounds_with_range,
 };
 use crate::{DbIterator, StorageType, TypedStoreError};
 use crate::{
@@ -567,6 +567,12 @@ pub struct DBMap<K, V> {
     write_sample_interval: SamplingInterval,
     iter_sample_interval: SamplingInterval,
     _metrics_task_cancel_handle: Arc<oneshot::Sender<()>>,
+    /// Custom key encoder/decoder for tidehunter, e.g. to produce fixed-length keys
+    /// from types whose default bincode encoding is variable-length.
+    #[cfg(tidehunter)]
+    th_key_encoder: Option<fn(&K) -> Vec<u8>>,
+    #[cfg(tidehunter)]
+    th_key_decoder: Option<fn(Vec<u8>) -> K>,
 }
 
 unsafe impl<K: Send, V: Send> Send for DBMap<K, V> {}
@@ -620,6 +626,10 @@ impl<K, V> DBMap<K, V> {
             multiget_sample_interval: db.multiget_sampling_interval(),
             write_sample_interval: db.write_sampling_interval(),
             iter_sample_interval: db.iter_sampling_interval(),
+            #[cfg(tidehunter)]
+            th_key_encoder: None,
+            #[cfg(tidehunter)]
+            th_key_decoder: None,
         }
     }
 
@@ -658,6 +668,34 @@ impl<K, V> DBMap<K, V> {
             ColumnFamily::TideHunter((ks, prefix.clone())),
             false,
         )
+    }
+
+    /// Configure a custom key encoder/decoder for the TideHunter backend.
+    /// The encoder maps a typed key to raw bytes stored in TideHunter (e.g. fixed-length).
+    /// The decoder is the inverse. When set, these replace the default bincode serialization
+    /// for all TideHunter reads and writes on this map.
+    #[cfg(tidehunter)]
+    pub fn with_th_key_codec(
+        mut self,
+        encoder: fn(&K) -> Vec<u8>,
+        decoder: fn(Vec<u8>) -> K,
+    ) -> Self {
+        self.th_key_encoder = Some(encoder);
+        self.th_key_decoder = Some(decoder);
+        self
+    }
+
+    /// Serialize `key` to bytes for storage. For the TideHunter backend, uses the custom
+    /// encoder if one is configured; otherwise falls back to the default bincode encoding.
+    fn encode_key(&self, key: &K) -> Vec<u8>
+    where
+        K: Serialize,
+    {
+        #[cfg(tidehunter)]
+        if let Some(encoder) = self.th_key_encoder {
+            return encoder(key);
+        }
+        be_fix_int_ser(key)
     }
 
     pub fn cf_name(&self) -> &str {
@@ -720,6 +758,20 @@ impl<K, V> DBMap<K, V> {
         Ok(())
     }
 
+    #[cfg(tidehunter)]
+    pub fn drop_cells_in_range_raw(
+        &self,
+        from_inclusive: &[u8],
+        to_inclusive: &[u8],
+    ) -> Result<(), TypedStoreError> {
+        if let ColumnFamily::TideHunter((ks, _)) = &self.column_family {
+            self.db
+                .drop_cells_in_range(*ks, from_inclusive, to_inclusive)
+                .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        }
+        Ok(())
+    }
+
     /// Returns a vector of raw values corresponding to the keys provided.
     fn multi_get_pinned<J>(
         &self,
@@ -740,7 +792,7 @@ impl<K, V> DBMap<K, V> {
         } else {
             None
         };
-        let keys_bytes = keys.into_iter().map(|k| be_fix_int_ser(k.borrow()));
+        let keys_bytes = keys.into_iter().map(|k| self.encode_key(k.borrow()));
         let results: Result<Vec<_>, TypedStoreError> = self
             .db
             .multi_get(&self.column_family, keys_bytes, &self.opts.readopts())
@@ -1130,13 +1182,26 @@ impl<K, V> DBMap<K, V> {
             #[cfg(tidehunter)]
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
+                    let (th_lb, th_ub) = if self.th_key_encoder.is_some() {
+                        (
+                            lower_bound.as_ref().map(|k| self.encode_key(k)),
+                            upper_bound.as_ref().map(|k| {
+                                let mut buf = self.encode_key(k);
+                                big_endian_saturating_add_one(&mut buf);
+                                buf
+                            }),
+                        )
+                    } else {
+                        (it_lower_bound, it_upper_bound)
+                    };
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
+                    apply_range_bounds(&mut iter, th_lb, th_ub);
                     iter.reverse();
                     Ok(Box::new(transform_th_iterator(
                         iter,
                         prefix,
                         self.start_iter_timer(),
+                        self.th_key_decoder,
                     )))
                 }
                 _ => unreachable!("storage backend invariant violation"),
@@ -1447,7 +1512,7 @@ impl DBBatch {
         purged_vals
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|k| {
-                let k_buf = be_fix_int_ser(k.borrow());
+                let k_buf = db.encode_key(k.borrow());
                 match (&mut self.batch, &db.column_family) {
                     (StorageWriteBatch::Rocks(b), ColumnFamily::Rocks(name)) => {
                         b.delete_cf(&rocks_cf_from_db(&self.database, name)?, k_buf)
@@ -1513,7 +1578,7 @@ impl DBBatch {
         new_vals
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
-                let k_buf = be_fix_int_ser(k.borrow());
+                let k_buf = db.encode_key(k.borrow());
                 let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
                 total += k_buf.len() + v_buf.len();
                 if db.opts.log_value_hash {
@@ -1587,7 +1652,7 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn contains_key(&self, key: &K) -> Result<bool, TypedStoreError> {
-        let key_buf = be_fix_int_ser(key);
+        let key_buf = self.encode_key(key);
         let readopts = self.opts.readopts();
         Ok(self.db.key_may_exist_cf(&self.cf, &key_buf, &readopts)
             && self
@@ -1621,7 +1686,7 @@ where
         } else {
             None
         };
-        let key_buf = be_fix_int_ser(key);
+        let key_buf = self.encode_key(key);
         let res = self
             .db
             .get(&self.column_family, &key_buf, &self.opts.readopts())?;
@@ -1668,7 +1733,7 @@ where
         } else {
             None
         };
-        let key_buf = be_fix_int_ser(key);
+        let key_buf = self.encode_key(key);
         let value_buf = bcs::to_bytes(value).map_err(typed_store_err_from_bcs_err)?;
         self.db_metrics
             .op_metrics
@@ -1713,7 +1778,7 @@ where
         } else {
             None
         };
-        let key_buf = be_fix_int_ser(key);
+        let key_buf = self.encode_key(key);
         self.db.delete_cf(&self.column_family, key_buf)?;
         self.db_metrics
             .op_metrics
@@ -1780,6 +1845,7 @@ where
                     db.iterator(*ks),
                     prefix,
                     self.start_iter_timer(),
+                    self.th_key_decoder,
                 )),
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1791,9 +1857,9 @@ where
         lower_bound: Option<K>,
         upper_bound: Option<K>,
     ) -> DbIterator<'a, (K, V)> {
-        let (lower_bound, upper_bound) = iterator_bounds(lower_bound, upper_bound);
         match &self.db.storage {
             Storage::Rocks(db) => {
+                let (lower_bound, upper_bound) = iterator_bounds(lower_bound, upper_bound);
                 let readopts =
                     rocks_util::apply_range_bounds(self.opts.readopts(), lower_bound, upper_bound);
                 let db_iter = db
@@ -1810,13 +1876,29 @@ where
                     Some(self.db_metrics.clone()),
                 ))
             }
-            Storage::InMemory(db) => db.iterator(&self.cf, lower_bound, upper_bound, false),
+            Storage::InMemory(db) => {
+                let (lower_bound, upper_bound) = iterator_bounds(lower_bound, upper_bound);
+                db.iterator(&self.cf, lower_bound, upper_bound, false)
+            }
             #[cfg(tidehunter)]
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
+                    let (lb, ub) = if self.th_key_encoder.is_some() {
+                        (
+                            lower_bound.as_ref().map(|k| self.encode_key(k)),
+                            upper_bound.as_ref().map(|k| self.encode_key(k)),
+                        )
+                    } else {
+                        iterator_bounds(lower_bound, upper_bound)
+                    };
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
+                    apply_range_bounds(&mut iter, lb, ub);
+                    Box::new(transform_th_iterator(
+                        iter,
+                        prefix,
+                        self.start_iter_timer(),
+                        self.th_key_decoder,
+                    ))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1824,6 +1906,39 @@ where
     }
 
     fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> DbIterator<'a, (K, V)> {
+        // Pre-compute TH bounds using the custom encoder before the range is consumed.
+        // start_bound()/end_bound() take &self so range is still owned after this.
+        #[cfg(tidehunter)]
+        let th_encoder_bounds: Option<(Option<Vec<u8>>, Option<Vec<u8>>)> = if matches!(
+            &self.db.storage,
+            Storage::TideHunter(_)
+        ) && self
+            .th_key_encoder
+            .is_some()
+        {
+            let lb = match range.start_bound() {
+                Bound::Included(k) => Some(self.encode_key(k)),
+                Bound::Excluded(k) => {
+                    let mut buf = self.encode_key(k);
+                    big_endian_saturating_add_one(&mut buf);
+                    Some(buf)
+                }
+                Bound::Unbounded => None,
+            };
+            let ub = match range.end_bound() {
+                Bound::Included(k) => {
+                    let mut buf = self.encode_key(k);
+                    big_endian_saturating_add_one(&mut buf);
+                    Some(buf)
+                }
+                Bound::Excluded(k) => Some(self.encode_key(k)),
+                Bound::Unbounded => None,
+            };
+            Some((lb, ub))
+        } else {
+            None
+        };
+
         let (lower_bound, upper_bound) = iterator_bounds_with_range(range);
         match &self.db.storage {
             Storage::Rocks(db) => {
@@ -1847,9 +1962,15 @@ where
             #[cfg(tidehunter)]
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
+                    let (lb, ub) = th_encoder_bounds.unwrap_or((lower_bound, upper_bound));
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
+                    apply_range_bounds(&mut iter, lb, ub);
+                    Box::new(transform_th_iterator(
+                        iter,
+                        prefix,
+                        self.start_iter_timer(),
+                        self.th_key_decoder,
+                    ))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },

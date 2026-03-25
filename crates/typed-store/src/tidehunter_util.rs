@@ -142,9 +142,10 @@ pub(crate) fn transform_th_iterator<'a, K, V>(
     > + 'a,
     prefix: &'a Option<Vec<u8>>,
     timer: HistogramTimer,
+    key_decoder: Option<fn(Vec<u8>) -> K>,
 ) -> impl Iterator<Item = Result<(K, V), TypedStoreError>> + 'a
 where
-    K: DeserializeOwned,
+    K: DeserializeOwned + 'a,
     V: DeserializeOwned,
 {
     let config = bincode::DefaultOptions::new()
@@ -154,19 +155,33 @@ where
         item.map_err(|e| TypedStoreError::RocksDBError(format!("tidehunter error {:?}", e)))
             .and_then(|(raw_key, raw_value)| {
                 let _timer = &timer;
-                let key = match prefix {
-                    Some(prefix) => {
-                        let mut buffer = Vec::with_capacity(raw_key.len() + prefix.len());
-                        buffer.extend_from_slice(prefix);
-                        buffer.extend_from_slice(&raw_key);
-                        config.deserialize(&buffer)
+                let key: Result<K, TypedStoreError> = if let Some(decoder) = key_decoder {
+                    // Custom decoders must not be combined with a prefix because the codec
+                    // owns the full key format and prefix-stripping would corrupt it.
+                    debug_assert!(
+                        prefix.is_none(),
+                        "th_key_decoder cannot be used with a prefix column family"
+                    );
+                    Ok(decoder(raw_key.to_vec()))
+                } else {
+                    match prefix {
+                        Some(prefix) => {
+                            let mut buffer = Vec::with_capacity(raw_key.len() + prefix.len());
+                            buffer.extend_from_slice(prefix);
+                            buffer.extend_from_slice(&raw_key);
+                            config
+                                .deserialize(&buffer)
+                                .map_err(|e| TypedStoreError::SerializationError(e.to_string()))
+                        }
+                        None => config
+                            .deserialize(&raw_key)
+                            .map_err(|e| TypedStoreError::SerializationError(e.to_string())),
                     }
-                    None => config.deserialize(&raw_key),
                 };
                 let value = bcs::from_bytes(&raw_value);
                 match (key, value) {
                     (Ok(k), Ok(v)) => Ok((k, v)),
-                    (Err(e), _) => Err(TypedStoreError::SerializationError(e.to_string())),
+                    (Err(e), _) => Err(e),
                     (_, Err(e)) => Err(TypedStoreError::SerializationError(e.to_string())),
                 }
             })

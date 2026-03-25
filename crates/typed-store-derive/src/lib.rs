@@ -21,6 +21,8 @@ const DB_OPTIONS_CUSTOM_FUNCTION: &str = "default_options_override_fn";
 const DB_OPTIONS_RENAME: &str = "rename";
 // Deprecate a column family
 const DB_OPTIONS_DEPRECATE: &str = "deprecated";
+// Custom key codec for the tidehunter backend (e.g. for fixed-length key encoding)
+const DB_OPTIONS_WITH_CODEC: &str = "with_codec";
 
 /// Options can either be simplified form or
 enum GeneralTableOptions {
@@ -45,6 +47,7 @@ fn extract_struct_info(input: ItemStruct) -> ExtractedStructInfo {
                 a.path.is_ident(DB_OPTIONS_CUSTOM_FUNCTION)
                     || a.path.is_ident(DB_OPTIONS_RENAME)
                     || a.path.is_ident(DB_OPTIONS_DEPRECATE)
+                    || a.path.is_ident(DB_OPTIONS_WITH_CODEC)
             })
             .map(|a| (a.path.get_ident().unwrap().to_string(), a))
             .collect();
@@ -54,6 +57,21 @@ fn extract_struct_info(input: ItemStruct) -> ExtractedStructInfo {
         } else {
             GeneralTableOptions::default()
         };
+
+        let codec_type: Option<proc_macro2::TokenStream> =
+            attrs.get(DB_OPTIONS_WITH_CODEC).map(|attr| {
+                match attr
+                    .parse_meta()
+                    .expect("Cannot parse meta of with_codec attribute")
+                {
+                    Meta::List(list) => {
+                        let tokens: proc_macro2::TokenStream =
+                            list.nested.iter().map(|n| quote::quote!(#n)).collect();
+                        tokens
+                    }
+                    _ => panic!("Expected #[with_codec(TypeName)] syntax"),
+                }
+            });
 
         let ty = &f.ty;
         if let Type::Path(p) = ty {
@@ -87,7 +105,10 @@ fn extract_struct_info(input: ItemStruct) -> ExtractedStructInfo {
                     deprecated_cfs.push(field_name.clone());
                 }
 
-                return ((field_name, cf_name, type_str), (inner_type, options));
+                return (
+                    (field_name, cf_name, type_str),
+                    (inner_type, options, codec_type),
+                );
             } else {
                 panic!("All struct members must be of type DBMap");
             }
@@ -110,7 +131,11 @@ fn extract_struct_info(input: ItemStruct) -> ExtractedStructInfo {
         panic!("Cannot derive on empty struct");
     };
 
-    let (inner_types, options): (Vec<_>, Vec<_>) = inner_types_with_opts.into_iter().unzip();
+    let (inner_types_and_codecs, options): (Vec<_>, Vec<_>) = inner_types_with_opts
+        .into_iter()
+        .map(|(t, o, c)| ((t, c), o))
+        .unzip();
+    let (inner_types, codec_types): (Vec<_>, Vec<_>) = inner_types_and_codecs.into_iter().unzip();
 
     ExtractedStructInfo {
         field_names,
@@ -118,6 +143,7 @@ fn extract_struct_info(input: ItemStruct) -> ExtractedStructInfo {
         inner_types,
         derived_table_options: options,
         deprecated_cfs,
+        codec_types,
     }
 }
 
@@ -178,11 +204,12 @@ struct ExtractedStructInfo {
     inner_types: Vec<AngleBracketedGenericArguments>,
     derived_table_options: Vec<GeneralTableOptions>,
     deprecated_cfs: Vec<Ident>,
+    codec_types: Vec<Option<proc_macro2::TokenStream>>,
 }
 
 #[proc_macro_derive(
     DBMapUtils,
-    attributes(default_options_override_fn, rename, tidehunter)
+    attributes(default_options_override_fn, rename, tidehunter, with_codec)
 )]
 pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -201,6 +228,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
         inner_types,
         derived_table_options,
         deprecated_cfs,
+        codec_types,
     } = extract_struct_info(input.clone());
 
     let (key_names, value_names): (Vec<_>, Vec<_>) = inner_types
@@ -352,6 +380,27 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
     };
 
     if is_tidehunter {
+        // Build per-field reopen_th expressions, chaining .with_th_key_codec(...) where specified.
+        let reopen_th_calls: Vec<proc_macro2::TokenStream> = field_names
+            .iter()
+            .zip(inner_types.iter())
+            .zip(cf_names.iter())
+            .zip(codec_types.iter())
+            .map(|(((field_name, inner_type), cf_name), codec_type)| {
+                let base = quote! {
+                    DBMap::#inner_type::reopen_th(
+                        db.clone(), stringify!(#cf_name), #field_name,
+                        cf_configs[stringify!(#cf_name)].prefix.clone()
+                    )
+                };
+                if let Some(codec) = codec_type {
+                    quote! { #base.with_th_key_codec(#codec::encode, #codec::decode) }
+                } else {
+                    base
+                }
+            })
+            .collect();
+
         TokenStream::from(quote! {
             #base_code
             impl <
@@ -391,12 +440,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         #(
                             #field_names
                         ),*
-                    ) = (#(
-                        DBMap::#inner_types::reopen_th(
-                            db.clone(), stringify!(#cf_names), #field_names,
-                            cf_configs[stringify!(#cf_names)].prefix.clone()
-                        )
-                    ),*);
+                    ) = (#(#reopen_th_calls),*);
                     Self {
                         #(
                             #field_names,

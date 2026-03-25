@@ -24,6 +24,9 @@ use crate::authority::authority_store_types::{
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store::{DBMapUtils, DbIterator};
 
+#[cfg(tidehunter)]
+pub(crate) use super::epoch_marker_key::EpochMarkerKeyCodec;
+
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
 pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
 const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
@@ -137,6 +140,7 @@ pub struct AuthorityPerpetualTables {
     /// objects that have been deleted. This table is meant to be pruned per-epoch, and all
     /// previous epochs other than the current epoch may be pruned safely.
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
+    #[cfg_attr(tidehunter, with_codec(EpochMarkerKeyCodec))]
     pub(crate) object_per_epoch_marker_table_v2: DBMap<(EpochId, FullObjectKey), MarkerValue>,
 
     /// Tracks executed transaction digests across epochs.
@@ -383,7 +387,7 @@ impl AuthorityPerpetualTables {
             (
                 "object_per_epoch_marker_table_v2".to_string(),
                 ThConfig::new_with_config_indexing(
-                    KeyIndexing::VariableLength,
+                    KeyIndexing::fixed(EpochMarkerKeyCodec::KEY_SIZE),
                     mutexes,
                     epoch_prefix_key,
                     apply_relocation_filter(

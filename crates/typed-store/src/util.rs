@@ -95,7 +95,7 @@ where
 /// Given a vec<u8>, find the value which is one more than the vector
 /// if the vector was a big endian number.
 /// If the vector is already minimum, don't change it.
-fn big_endian_saturating_add_one(v: &mut [u8]) {
+pub(crate) fn big_endian_saturating_add_one(v: &mut [u8]) {
     if is_max(v) {
         return;
     }
