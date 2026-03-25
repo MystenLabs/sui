@@ -160,7 +160,7 @@ Some framework functions have type parameters that can only be instantiated with
 **`TxContext` handling:**
 `TxContext` parameters (`&TxContext` or `&mut TxContext`) are automatically injected by the runtime; callers do not supply them. `TxContext` can appear at any position in the parameter list, and a function can have multiple `TxContext` parameters as long as they are immutable (`&TxContext`). These parameters are not counted toward the user-supplied argument count for indexing purposes.
 
-#### Non-public entry function restrictions {#non-public-entry-function-restrictions}
+#### Non-public entry function restrictions
 
 A non-public `entry` function is a function declared with `entry` that is **not** `public`. It is either private (`entry fun f()`) or `public(package)` (`public(package) entry fun f()`). These functions can be called directly in PTBs but not from other packages.
 
