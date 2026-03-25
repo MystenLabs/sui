@@ -8,6 +8,9 @@ use prometheus::Registry;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::KeyValueStoreReader;
 pub use sui_kvstore::PoolConfig;
+use sui_package_resolver::PackageStore;
+use sui_package_resolver::PackageStoreWithLruCache;
+use sui_package_resolver::Resolver;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
 use sui_rpc_api::ServerVersion;
@@ -21,7 +24,12 @@ use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 use tracing::error;
 
+mod package_store;
 mod v2;
+
+use package_store::BigTablePackageStore;
+
+pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
 
 #[derive(Clone)]
 pub struct KvRpcServer {
@@ -30,6 +38,7 @@ pub struct KvRpcServer {
     server_version: Option<ServerVersion>,
     checkpoint_bucket: Option<String>,
     cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
+    package_resolver: PackageResolver,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -103,12 +112,18 @@ impl KvRpcServer {
     ) -> Self {
         let cache = Arc::new(RwLock::new(None));
 
+        let package_store: Arc<dyn PackageStore> = Arc::new(PackageStoreWithLruCache::new(
+            BigTablePackageStore::new(client.clone()),
+        ));
+        let package_resolver = Arc::new(Resolver::new(package_store));
+
         let server = Self {
             chain_id,
             client,
             server_version,
             checkpoint_bucket,
             cache,
+            package_resolver,
         };
 
         let server_clone = server.clone();

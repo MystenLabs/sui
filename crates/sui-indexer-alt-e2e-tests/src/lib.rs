@@ -116,6 +116,9 @@ pub struct OffchainCluster {
     /// The address the GraphQL server is listening on.
     graphql_listen_address: SocketAddr,
 
+    /// The address the kv-rpc (LedgerService) server is listening on.
+    kv_rpc_listen_address: SocketAddr,
+
     /// Read access to BigTable.
     bigtable_client: BigTableClient,
 
@@ -269,6 +272,11 @@ impl FullCluster {
     /// The URL to send GraphQL requests to.
     pub fn graphql_url(&self) -> Url {
         self.offchain.graphql_url()
+    }
+
+    /// The URL to send kv-rpc (LedgerService) requests to.
+    pub fn kv_rpc_url(&self) -> Url {
+        self.offchain.kv_rpc_url()
     }
 
     /// Returns the latest checkpoint that we have all data for in the database, according to the
@@ -458,6 +466,7 @@ impl OffchainCluster {
             consistent_listen_address,
             jsonrpc_listen_address,
             graphql_listen_address,
+            kv_rpc_listen_address: kv_rpc_address,
             bigtable_client,
             db,
             pipelines,
@@ -488,6 +497,12 @@ impl OffchainCluster {
     /// The URL to send GraphQL requests to.
     pub fn graphql_url(&self) -> Url {
         Url::parse(&format!("http://{}/graphql", self.graphql_listen_address))
+            .expect("Failed to parse RPC URL")
+    }
+
+    /// The URL to send kv-rpc (LedgerService) requests to.
+    pub fn kv_rpc_url(&self) -> Url {
+        Url::parse(&format!("http://{}/", self.kv_rpc_listen_address))
             .expect("Failed to parse RPC URL")
     }
 
