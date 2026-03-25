@@ -9,7 +9,7 @@ use move_cli::base::{
 use move_package_alt_compilation::build_config::BuildConfig;
 use move_unit_test::{UnitTestingConfig, vm_test_setup::VMTestSetup};
 use move_vm_config::runtime::VMConfig;
-use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_runtime::natives::extensions::NativeContextExtensions;
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -65,7 +65,7 @@ impl Test {
             ));
         }
         // save disassembly if trace execution is enabled
-        let save_disassembly = self.test.trace;
+        let save_disassembly = self.test.trace.is_some();
         // set the default flavor to Sui if not already set by the user
         if build_config.default_flavor.is_none() {
             build_config.default_flavor = Some(move_compiler::editions::Flavor::Sui);
@@ -73,7 +73,13 @@ impl Test {
 
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
-        let unit_test_config = self.test.unit_test_config();
+
+        // If no gas limit is set, set it to the default max. This allows
+        // users to provide custom configs but not have to worry about setting a gas limit unless that
+        // is what they care about.
+        let unit_test_config = self
+            .test
+            .unit_test_config(Some(*MAX_UNIT_TEST_INSTRUCTIONS));
 
         // set the environment (this is a little janky: we get it from the manifest here, then pass
         // it as the optional argument in the build-config, which then looks it up again, but it
@@ -134,7 +140,7 @@ pub struct SuiVMTestSetup {
     gas_price: u64,
     reference_gas_price: u64,
     protocol_config: ProtocolConfig,
-    native_function_table: move_vm_runtime::native_functions::NativeFunctionTable,
+    native_function_table: move_vm_runtime::natives::functions::NativeFunctionTable,
 }
 
 impl Default for SuiVMTestSetup {
@@ -189,7 +195,7 @@ impl VMTestSetup for SuiVMTestSetup {
         sui_adapter::adapter::vm_config(&self.protocol_config)
     }
 
-    fn native_function_table(&self) -> move_vm_runtime::native_functions::NativeFunctionTable {
+    fn native_function_table(&self) -> move_vm_runtime::natives::functions::NativeFunctionTable {
         self.native_function_table.clone()
     }
 

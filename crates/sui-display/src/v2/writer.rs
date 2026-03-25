@@ -7,118 +7,29 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use sui_types::object::rpc_visitor as RV;
+use sui_types::object::rpc_visitor::Meter as _;
+use sui_types::object::rpc_visitor::Unmetered;
 
 use crate::v2::error::FormatError;
 use crate::v2::parser::Transform;
 use crate::v2::value as V;
 
-/// A writer of evaluated values into JSON, tracking limits on output size and depth. A single
-/// writer can be used to write multiple values concurrently, with all writers sharing the same
-/// budgets.
-///
-/// Once a write is attempted, the budgets are decremented, even if the write fails, meaning that
-/// the errors are sticky and not recoverable.
-pub(crate) struct Writer {
-    max_depth: usize,
-    max_output_size: usize,
-    used_output: AtomicUsize,
-}
-
-/// A writer of strings that tracks an output budget (measured in bytes) shared across multiple
-/// writers. Writes will fail once the total number of bytes sent to be written, across all
-/// writers, exceeds the maximum, and will continue to fail from there on out.
-///
-/// Once a write is attempted, the budget is decremented, even if the write fails, meaning that the
-/// error is sticky and not recoverable.
-pub(crate) struct StringWriter<'u> {
-    output: String,
-    used: &'u AtomicUsize,
-    max: usize,
-}
-
-/// A writer of structured JSON values that tracks an output budget (measured in bytes) shared
-/// across multiple writers. Writes will fail once the total number of bytes sent to be written,
-/// across all writers, exceeds the maximum, and will continue to fail from there on out.
-///
-/// Once a write is attempted, the budget is decremented, even if the write fails, meaning that the
-/// error is sticky and not recoverable.
-#[derive(Copy, Clone)]
-pub(crate) struct JsonWriter<'u> {
-    used_size: &'u AtomicUsize,
+/// Shared output meter for Display rendering. Budget usage is sticky across all render operations
+/// that share the same `used_size` counter.
+pub(crate) struct Meter<'a> {
+    used_size: &'a AtomicUsize,
     max_size: usize,
     depth_budget: usize,
 }
 
-impl Writer {
-    /// Create a new writer with the given limits.
-    ///
-    /// `max_depth` specifies the maximum depth of the output JSON, and `max_output_size` specifies
-    /// the size in bytes of the output JSON.
-    pub(crate) fn new(max_depth: usize, max_output_size: usize) -> Self {
-        Self {
-            max_depth,
-            max_output_size,
-            used_output: AtomicUsize::new(0),
-        }
-    }
-
-    /// Format a single strand as JSON.
-    pub(crate) fn write(
-        &self,
-        mut strands: Vec<V::Strand<'_>>,
-    ) -> Result<serde_json::Value, FormatError> {
-        // Detect and handle JSON transforms (single strand containing an expression with an JSON
-        // transform) as a special case, because they do not always evaluate to strings.
-        if matches!(&strands[..], [V::Strand::Value { transform, .. }] if *transform == Transform::Json)
-        {
-            let V::Strand::Value { offset, value, .. } = strands.pop().unwrap() else {
-                unreachable!();
-            };
-
-            let writer = JsonWriter::new(&self.used_output, self.max_output_size, self.max_depth);
-            return value
-                .format_json(writer)
-                .map_err(|e| e.for_expr_at_offset(offset));
-        }
-
-        // Otherwise gather the results of formatting all strands into a single string.
-        let mut writer = StringWriter::new(&self.used_output, self.max_output_size);
-        for strand in strands {
-            match strand {
-                V::Strand::Text(s) => writer
-                    .write_str(s)
-                    .map_err(|_| FormatError::TooMuchOutput)?,
-
-                V::Strand::Value {
-                    offset,
-                    value,
-                    transform,
-                } => value
-                    .format(transform, &mut writer)
-                    .map_err(|e| e.for_expr_at_offset(offset))?,
-            }
-        }
-
-        Ok(serde_json::Value::String(writer.finish()))
-    }
+/// A writer of strings backed by a shared output meter.
+pub(crate) struct StringWriter<'a> {
+    output: String,
+    meter: Meter<'a>,
 }
 
-impl<'u> StringWriter<'u> {
-    fn new(used: &'u AtomicUsize, max: usize) -> Self {
-        Self {
-            output: String::new(),
-            used,
-            max,
-        }
-    }
-
-    fn finish(self) -> String {
-        self.output
-    }
-}
-
-impl<'u> JsonWriter<'u> {
-    pub(crate) fn new(used_size: &'u AtomicUsize, max_size: usize, depth_budget: usize) -> Self {
+impl<'a> Meter<'a> {
+    pub(crate) fn new(used_size: &'a AtomicUsize, max_size: usize, depth_budget: usize) -> Self {
         Self {
             used_size,
             max_size,
@@ -126,141 +37,136 @@ impl<'u> JsonWriter<'u> {
         }
     }
 
-    fn debit(&self, size: usize) -> Result<(), FormatError> {
-        let prev = self.used_size.fetch_add(size, Ordering::Relaxed);
-        if prev + size > self.max_size {
-            return Err(FormatError::TooBig);
-        }
-        Ok(())
+    pub(crate) fn reborrow(&mut self) -> Meter<'_> {
+        Meter::new(self.used_size, self.max_size, self.depth_budget)
     }
 }
 
-impl RV::Writer for JsonWriter<'_> {
-    type Value = serde_json::Value;
-    type Error = FormatError;
+impl<'a> StringWriter<'a> {
+    fn new(meter: Meter<'a>) -> Self {
+        Self {
+            output: String::new(),
+            meter,
+        }
+    }
 
-    type Vec = Vec<Self::Value>;
-    type Map = serde_json::Map<String, Self::Value>;
+    fn finish<F: RV::Format>(self) -> F {
+        // The original meter has already been charged for the output, so do not apply metering
+        // again when formatting as a string.
+        F::string(&mut Unmetered, self.output).unwrap()
+    }
+}
 
+impl RV::Meter for Meter<'_> {
     type Nested<'a>
-        = JsonWriter<'a>
+        = Meter<'a>
     where
         Self: 'a;
 
-    fn nest(&mut self) -> Result<Self::Nested<'_>, Self::Error> {
+    fn nest(&mut self) -> Result<Self::Nested<'_>, RV::MeterError> {
         if self.depth_budget == 0 {
-            return Err(FormatError::TooDeep);
+            Err(RV::MeterError::TooDeep)
+        } else {
+            Ok(Meter::new(
+                self.used_size,
+                self.max_size,
+                self.depth_budget - 1,
+            ))
         }
-
-        Ok(JsonWriter {
-            used_size: self.used_size,
-            max_size: self.max_size,
-            depth_budget: self.depth_budget - 1,
-        })
     }
 
-    fn write_null(&mut self) -> Result<Self::Value, Self::Error> {
-        self.debit("null".len())?;
-        Ok(serde_json::Value::Null)
-    }
-
-    fn write_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error> {
-        self.debit(if value { "true".len() } else { "false".len() })?;
-        Ok(serde_json::Value::Bool(value))
-    }
-
-    fn write_number(&mut self, value: u32) -> Result<Self::Value, Self::Error> {
-        self.debit(if value == 0 { 1 } else { value.ilog10() } as usize)?;
-        Ok(serde_json::Value::Number(value.into()))
-    }
-
-    fn write_str(&mut self, value: String) -> Result<Self::Value, Self::Error> {
-        // Account for the quotes around the string.
-        self.debit(2 + value.len())?;
-        Ok(serde_json::Value::String(value))
-    }
-
-    fn write_vec(&mut self, value: Self::Vec) -> Result<Self::Value, Self::Error> {
-        // Account for the opening bracket.
-        self.debit(1)?;
-        Ok(serde_json::Value::Array(value))
-    }
-
-    fn write_map(&mut self, value: Self::Map) -> Result<Self::Value, Self::Error> {
-        // Account for the opening brace.
-        self.debit(1)?;
-        Ok(serde_json::Value::Object(value))
-    }
-
-    fn vec_push_element(
-        &mut self,
-        vec: &mut Self::Vec,
-        val: Self::Value,
-    ) -> Result<(), Self::Error> {
-        // Account for comma (or closing bracket).
-        self.debit(1)?;
-        vec.push(val);
-        Ok(())
-    }
-
-    fn map_push_field(
-        &mut self,
-        map: &mut Self::Map,
-        key: String,
-        val: Self::Value,
-    ) -> Result<(), Self::Error> {
-        // Account for quotes, colon, and comma (or closing brace).
-        self.debit(4 + key.len())?;
-        map.insert(key, val);
-        Ok(())
+    fn charge(&mut self, amount: usize) -> Result<(), RV::MeterError> {
+        let prev = self.used_size.fetch_add(amount, Ordering::Relaxed);
+        if prev + amount > self.max_size {
+            Err(RV::MeterError::TooBig)
+        } else {
+            Ok(())
+        }
     }
 }
 
 impl fmt::Write for StringWriter<'_> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        let prev = self.used.fetch_add(s.len(), Ordering::Relaxed);
-        if prev + s.len() > self.max {
-            return Err(std::fmt::Error);
-        }
-
+        self.meter.charge(s.len()).map_err(|_| std::fmt::Error)?;
         self.output.push_str(s);
         Ok(())
     }
 }
 
+pub(crate) fn write<F: RV::Format>(
+    meter: Meter<'_>,
+    mut strands: Vec<V::Strand<'_>>,
+) -> Result<F, FormatError> {
+    if matches!(&strands[..], [V::Strand::Value { transform, .. }] if *transform == Transform::Json)
+    {
+        let V::Strand::Value { offset, value, .. } = strands.pop().unwrap() else {
+            unreachable!();
+        };
+
+        return value
+            .format_json(meter)
+            .map_err(|e| e.for_expr_at_offset(offset));
+    }
+
+    let mut writer = StringWriter::new(meter);
+    for strand in strands {
+        match strand {
+            V::Strand::Text(s) => writer
+                .write_str(s)
+                .map_err(|_| FormatError::TooMuchOutput)?,
+
+            V::Strand::Value {
+                offset,
+                value,
+                transform,
+            } => value
+                .format(transform, &mut writer)
+                .map_err(|e| e.for_expr_at_offset(offset))?,
+        }
+    }
+
+    Ok(writer.finish())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fmt::Write;
+
+    use serde_json::Value as Json;
+    use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_bounded_writer_under_limit() {
         let used = AtomicUsize::new(0);
-        let mut w = StringWriter::new(&used, 100);
+        let mut w = StringWriter::new(Meter::new(&used, 100, usize::MAX));
 
         write!(w, "Hello").unwrap();
         write!(w, " ").unwrap();
         write!(w, "World").unwrap();
 
-        assert_eq!(w.finish(), "Hello World");
+        let output: Json = w.finish();
+        assert_eq!(output, json!("Hello World"));
         assert_eq!(used.load(Ordering::Relaxed), 11);
     }
 
     #[test]
     fn test_bounded_writer_at_limit() {
         let used = AtomicUsize::new(0);
-        let mut w = StringWriter::new(&used, 5);
+        let mut w = StringWriter::new(Meter::new(&used, 5, usize::MAX));
 
         write!(w, "Hello").unwrap();
 
-        assert_eq!(w.finish(), "Hello");
+        let output: Json = w.finish();
+        assert_eq!(output, json!("Hello"));
         assert_eq!(used.load(Ordering::Relaxed), 5);
     }
 
     #[test]
     fn test_bounded_writer_exceeds_limit() {
         let used = AtomicUsize::new(0);
-        let mut w = StringWriter::new(&used, 5);
+        let mut w = StringWriter::new(Meter::new(&used, 5, usize::MAX));
 
         write!(w, "Hello").unwrap();
         write!(w, " World").unwrap_err();
@@ -271,14 +177,16 @@ mod tests {
     fn test_bounded_writer_shared_counter() {
         let used = AtomicUsize::new(0);
 
-        let mut w = StringWriter::new(&used, 20);
+        let mut w = StringWriter::new(Meter::new(&used, 20, usize::MAX));
         write!(w, "First").unwrap();
-        assert_eq!(w.finish(), "First");
+        let output: Json = w.finish();
+        assert_eq!(output, json!("First"));
         assert_eq!(used.load(Ordering::Relaxed), 5);
 
-        let mut w = StringWriter::new(&used, 20);
+        let mut w = StringWriter::new(Meter::new(&used, 20, usize::MAX));
         write!(w, "Second").unwrap();
-        assert_eq!(w.finish(), "Second");
+        let output: Json = w.finish();
+        assert_eq!(output, json!("Second"));
         assert_eq!(used.load(Ordering::Relaxed), 11);
     }
 
@@ -286,10 +194,10 @@ mod tests {
     fn test_bounded_writer_shared_counter_exceeds_limit() {
         let used = AtomicUsize::new(0);
 
-        let mut w = StringWriter::new(&used, 10);
+        let mut w = StringWriter::new(Meter::new(&used, 10, usize::MAX));
         write!(w, "First").unwrap();
 
-        let mut w = StringWriter::new(&used, 10);
+        let mut w = StringWriter::new(Meter::new(&used, 10, usize::MAX));
         write!(w, "Second").unwrap_err();
 
         assert!(used.load(Ordering::Relaxed) > 10);
@@ -298,7 +206,7 @@ mod tests {
     #[test]
     fn test_bounded_writer_sticky_error() {
         let used = AtomicUsize::new(0);
-        let mut writer = StringWriter::new(&used, 6);
+        let mut writer = StringWriter::new(Meter::new(&used, 6, usize::MAX));
 
         write!(writer, "Hello").unwrap();
         write!(writer, " World").unwrap_err();
@@ -310,17 +218,17 @@ mod tests {
         let used = AtomicUsize::new(0);
         let limit = 20;
 
-        let mut w0 = StringWriter::new(&used, limit);
-        let mut w1 = StringWriter::new(&used, limit);
-        let mut w2 = StringWriter::new(&used, limit);
+        let mut w0 = StringWriter::new(Meter::new(&used, limit, usize::MAX));
+        let mut w1 = StringWriter::new(Meter::new(&used, limit, usize::MAX));
+        let mut w2 = StringWriter::new(Meter::new(&used, limit, usize::MAX));
 
         write!(w0, "AAA").unwrap();
         write!(w1, "BBBB").unwrap();
         write!(w2, "CCCCC").unwrap();
 
         assert_eq!(used.load(Ordering::Relaxed), 12);
-        assert_eq!(w0.finish(), "AAA");
-        assert_eq!(w1.finish(), "BBBB");
-        assert_eq!(w2.finish(), "CCCCC");
+        assert_eq!(w0.finish::<Json>(), json!("AAA"));
+        assert_eq!(w1.finish::<Json>(), json!("BBBB"));
+        assert_eq!(w2.finish::<Json>(), json!("CCCCC"));
     }
 }

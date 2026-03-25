@@ -21,7 +21,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     CallArg, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData, TransactionKind,
@@ -484,7 +484,7 @@ async fn test_certificate_deny() {
     assert!(matches!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CertificateDenied,
+            error: ExecutionErrorKind::CertificateDenied,
             ..
         })
     ));

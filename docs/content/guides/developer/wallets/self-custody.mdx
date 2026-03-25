@@ -1,0 +1,173 @@
+---
+title: Self-Custodial Wallets
+description: Learn about self-custodial wallets on Sui, how Phantom and Ledger work, and how to integrate any Wallet Standard wallet into your app using Sui dApp Kit.
+keywords: [ wallet, self-custodial, phantom, ledger, hardware wallet, wallet standard, dapp kit, dapp-kit-react, dapp-kit-core ]
+---
+
+A self-custodial wallet stores your private key on a device you control. No third party holds the key, and no third party can authorize transactions on your behalf. If you lose the device and your recovery passphrase, access to your assets is permanently lost. Every self-custodial wallet compatible with Sui implements the [Wallet Standard](/standards/wallet-standard), which means [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) and other apps can discover and connect to them automatically, without any wallet-specific code.
+
+## Phantom
+
+[Phantom](https://phantom.com/) is a self-custodial, multi-chain browser extension wallet available for Chrome, Firefox, Edge, and Brave, as well as a mobile app for iOS and Android. It stores your private key on your device and encrypts it with a password.
+
+On Sui, Phantom supports the following:
+
+- Sending and receiving SUI and Sui-native tokens
+- In-app token swaps
+- NFT management
+- Staking
+- Connecting to Sui apps through the Wallet Standard
+
+To get started, install Phantom from [phantom.com](https://phantom.com) and create or import a Sui account. Phantom detects the Sui network automatically. If you already have a Sui account elsewhere, you can import it using your existing recovery passphrase or private key.
+
+## Ledger
+
+[Ledger](https://www.ledger.com/) is a hardware wallet that stores private keys on a dedicated secure element chip physically isolated from your computer or phone. Transactions are signed on the device itself, so the private key never leaves the hardware.
+
+On Sui, Ledger supports the following:
+
+- Sending and receiving SUI and Sui tokens natively through Ledger Live
+- Clear Signing, which displays human-readable transaction details on the device screen before you confirm anything
+- Connecting to third-party Sui wallets and apps that support hardware signers
+
+To use Ledger with Sui, install the Sui app on your Ledger device through [Ledger Wallet](https://shop.ledger.com/pages/ledger-wallet). Connect your Ledger device to a wallet such as Ledger Wallet or a compatible Sui wallet such as [Slush](/guides/developer/wallets/slush).
+
+## App integration
+
+The [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) is the official SDK for building Sui apps. Any wallet that implements the Wallet Standard, including Phantom and Ledger, is detected automatically and appears in the connection UI without any wallet-specific configuration.
+
+Sui dApp Kit 2.0 consists of two packages:
+
+- `@mysten/dapp-kit-core`: Framework-agnostic core that works with vanilla JavaScript, React, Vue, or any other framework.
+- `@mysten/dapp-kit-react`: React bindings built on top of the core package, including hooks and pre-built components.
+
+### Install
+
+For React applications:
+
+```bash
+npm i @mysten/dapp-kit-react @mysten/sui
+```
+
+For vanilla JavaScript or other frameworks:
+
+```bash
+npm i @mysten/dapp-kit-core @mysten/sui
+```
+
+### Set up a dApp Kit instance
+
+Create a configuration file to initialize your dApp Kit instance. The `createDAppKit` function manages wallet connections, network configuration, and Sui client access.
+
+`<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-core/src/core/index.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="createDAppKit"
+  signatureOnly
+  noComments
+/>
+
+| Parameter | Required | Description |
+|---|---|---|
+| `networks` | Yes | List of networks the app supports |
+| `defaultNetwork` | No | Initial network. Defaults to first in the `networks` array |
+| `createClient` | Yes | Factory function that returns a `SuiClient` for a given network |
+| `autoConnect` | No | Reconnects to the last used wallet on load. Defaults to `true` |
+| `enableBurnerWallet` | No | Enables a development-only burner wallet. Defaults to `false` |
+| `walletInitializers` | No | Custom wallet registrations for wallets outside the Wallet Standard |
+| `slushWalletConfig` | No | Enables and configures Slush Wallet. Set to `null` to disable |
+
+### Add the provider
+
+Wrap your application with `DAppKitProvider` to make all hooks available throughout the component tree:
+
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/components/DAppKitProvider.tsx"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="DAppKitProvider"
+  noComments
+/>
+
+`ConnectButton` renders a complete wallet connection UI. It automatically lists any browser extension wallets the user has installed that implement the Wallet Standard with no additional configuration required.
+
+### Read wallet state
+
+Use hooks to access information about the connected wallet and account:
+
+| Hook | Description |
+|---|---|
+| `useWallets` | Returns all detected Wallet Standard wallets |
+| `useWalletConnection` | Returns connection status, connected wallet, and current account |
+| `useCurrentWallet` | Returns the currently connected wallet |
+| `useCurrentAccount` | Returns the currently selected account |
+| `useDAppKit` | Returns the dApp Kit instance and its actions |
+
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useWalletConnection.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useWalletConnection"
+  noComments
+/>
+
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useCurrentWallet.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useCurrentWallet"
+  noComments
+/>
+
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useCurrentAccount.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useCurrentAccount"
+  noComments
+/>
+
+### List available wallets
+
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useWallets.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useWallets"
+  noComments
+/>
+
+### Sign and execute a transaction
+
+<ImportContent
+  source="/packages/dapp-kit-next/packages/dapp-kit-react/src/hooks/useDAppKit.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  fun="useDAppKit"
+  noComments
+/>
+
+When the user is connected through a hardware wallet such as Ledger, `signAndExecuteTransaction` routes the signing request to the device. Once the user approves on the hardware device, the host wallet submits the signed transaction to the Sui network and returns the digest and effects to your app.
+
+### Preferred wallets
+
+Use `preferredWallets` in `createDAppKit` to sort specific wallets to the top of the connection UI. Wallets are matched by name:
+
+```typescript
+export const dAppKit = createDAppKit({
+  networks: ['mainnet'],
+  createClient: (network) =>
+    new SuiGrpcClient({ network, baseUrl: GRPC_URLS[network] }),
+  walletInitializers: [],
+});
+```
+
+Wallet ordering and filtering can also be controlled through the [`ConnectModal` component](https://sdk.mystenlabs.com/dapp-kit/web-components/connect-modal).

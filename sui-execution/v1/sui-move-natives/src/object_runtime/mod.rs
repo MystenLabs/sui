@@ -8,12 +8,12 @@ use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveTypeLayout, MoveValue},
     annotated_visitor as AV,
-    effects::Op,
     language_storage::StructTag,
     runtime_value as R,
     vm_status::StatusCode,
 };
 use move_vm_types::{
+    effects::Op,
     loaded_data::runtime_types::Type,
     values::{GlobalValue, Value},
 };
@@ -25,8 +25,9 @@ use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolC
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
-    error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
+    error::{ExecutionError, VMMemoryLimitExceededSubStatusCode},
     execution::DynamicallyLoadedObjectMetadata,
+    execution_status::ExecutionErrorKind,
     id::UID,
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},

@@ -174,13 +174,16 @@ mod tests {
     fn generate_committees(committee_size: usize) -> (Committee, ConsensusCommittee) {
         let (consensus_committee, _) = local_committee_and_keys(0, vec![1; committee_size]);
 
-        let public_keys = consensus_committee
+        let sui_authorities = consensus_committee
             .authorities()
-            .map(|(_i, authority)| authority.authority_key.inner())
-            .collect::<Vec<_>>();
-        let sui_authorities = public_keys
-            .iter()
-            .map(|key| (AuthorityPublicKeyBytes::from(*key), 1))
+            .map(|(_i, authority)| {
+                let bytes: [u8; 96] = authority
+                    .authority_name
+                    .to_bytes()
+                    .try_into()
+                    .expect("Authority name should be 96 bytes");
+                (AuthorityPublicKeyBytes::new(bytes), 1)
+            })
             .collect::<Vec<_>>();
         let sui_committee = Committee::new_for_testing_with_normalized_voting_power(
             0,

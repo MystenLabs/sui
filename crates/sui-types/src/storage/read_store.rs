@@ -652,7 +652,16 @@ pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
             TypeTag::U256 => Ok(Some(MoveTypeLayout::U256)),
         }
     }
-    fn get_struct_layout(&self, type_tag: &StructTag) -> Result<Option<MoveTypeLayout>>;
+
+    fn get_struct_layout(&self, struct_tag: &StructTag) -> Result<Option<MoveTypeLayout>> {
+        self.get_struct_layout_with_overlay(struct_tag, &ObjectSet::default())
+    }
+
+    fn get_struct_layout_with_overlay(
+        &self,
+        struct_tag: &StructTag,
+        overlay: &ObjectSet,
+    ) -> Result<Option<MoveTypeLayout>>;
 }
 
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;

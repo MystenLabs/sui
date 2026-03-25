@@ -202,7 +202,9 @@ pub fn simulate_transaction(
 
         message.events = submask
             .subtree(ExecutedTransaction::EVENTS_FIELD.name)
-            .and_then(|mask| events.map(|events| service.render_events_to_proto(&events, &mask)));
+            .and_then(|mask| {
+                events.map(|events| service.render_events_to_proto(&events, &mask, &objects))
+            });
 
         message.transaction = submask
             .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
@@ -219,7 +221,7 @@ pub fn simulate_transaction(
                 ObjectSet::default().with_objects(
                     objects
                         .iter()
-                        .map(|o| service.render_object_to_proto(o, &mask))
+                        .map(|o| service.render_object_to_proto(o, &mask, &objects))
                         .collect(),
                 )
             });
@@ -272,7 +274,8 @@ fn to_command_output(
         .ok()
         .flatten()
         .and_then(|layout| {
-            sui_types::proto_value::ProtoVisitor::new(service.config.max_json_move_value_size())
+            let bound = service.config.max_json_move_value_size();
+            sui_types::object::rpc_visitor::proto::ProtoVisitor::new(bound)
                 .deserialize_value(&bcs, &layout)
                 .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
                 .ok()

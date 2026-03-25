@@ -6,15 +6,15 @@ keywords: [ upgrading packages, upgrade considerations, how to upgrade a package
 
 Sui smart contracts are immutable package objects consisting of a collection of Move modules. Since packages are immutable, transactions can safely access their contents without full consensus (fastpath transactions). If packages were mutable, they would become [shared objects](/guides/developer/objects/object-ownership/shared.mdx), which would require full consensus before completing a transaction.
 
-The inability to change packages, however, becomes a problem when considering the iterative nature of code development. Builders require the ability to update their code and pull changes from other developers while still being able to benefit from fastpath transactions. Fortunately, the Sui network provides a method for upgrading your packages while still retaining their immutable properties.
+The inability to change packages, however, becomes a problem when considering the iterative nature of code development. Builders require the ability to update their code and pull changes from other developers while still being able to benefit from fastpath transactions. The Sui network provides a method for upgrading your packages while still retaining their immutable properties.
 
 ## Upgrade considerations
 
-There are some details of the process that you should consider before upgrading your packages.
+Consider the following details before upgrading your packages.
 
 Module initializers do not re-run with package upgrades. When you publish your initial package, Move runs the `init` function you define for the package once (and only once) at the time of the publish event. Any `init` functions you might include in subsequent versions of your package are ignored. See the [module initializer section](https://move-book.com/programmability/module-initializer.html) in The Move Book for more information.
 
-You cannot delete old packages from the network. As a result, there is nothing that prevents other packages from accessing the methods and types defined in the old versions of your upgraded packages. 
+You cannot delete old packages from the network. Nothing prevents other packages from accessing the methods and types defined in the old versions of your upgraded packages. 
 
 ## Upgrade requirements
 
@@ -83,17 +83,17 @@ public fun increment(c: &mut Counter) {
 }
 ```
 
-If there is a mix of callers for both the old and upgraded `increment` function, then the process fails because the old function is not aware of the `Progress` event.
+If callers use both the old and upgraded `increment` function, the process fails because the old function is not aware of the `Progress` event.
 
-Similar to mismatched function definitions, you might also run into issues maintaining dynamic fields that need to remain in sync with a struct's original fields. To address these issues, you can introduce a new type as part of the upgrade and port users over to it, breaking backwards compatibility. For example, if you're using owned objects to demonstrate proof like proof of ownership, and you develop a new version of your package to address problematic code, you can introduce a new type in the upgraded package. You can then add a function to your package that trades old objects for new ones. Because your logic only recognizes objects with the new type, you effectively force users to update.
+You might also run into issues maintaining dynamic fields that need to remain in sync with a struct's original fields. To address these issues, you can introduce a new type as part of the upgrade and port users over to it, breaking backwards compatibility. For example, if you're using owned objects to demonstrate proof like proof of ownership, and you develop a new version of your package to address problematic code, you can introduce a new type in the upgraded package. You can then add a function to your package that trades old objects for new ones. Because your logic only recognizes objects with the new type, you effectively force users to update.
 
-Another example: you discover a bookkeeping shared object in your package has flawed logic. You want users to use only the corrected object from the upgraded package, so you add a new type and migration function. This requires 2 transactions: 1 for the upgrade and 1 to set up the new shared object. Protect the setup function by creating an `AdminCap` object to ensure only you, as the package owner, can initiate it. You might also include a flag in the shared object to toggle its enabled state, preventing public access during migration. Create this flag proactively if you anticipate future migrations, not in response to flawed logic.
+Another example: you discover a shared object in your package has flawed logic. You want users to use only the corrected object from the upgraded package, so you add a new type and migration function. This requires 2 transactions: 1 for the upgrade and 1 to set up the new shared object. Protect the setup function by creating an `AdminCap` object to ensure only you, as the package owner, can initiate it. You might also include a flag in the shared object to toggle its enabled state, preventing public access during migration. Create this flag proactively if you anticipate future migrations, not in response to flawed logic.
 
 ### Versioned shared objects
 
-When you create packages that involve shared objects, you need to think about upgrades and versioning from the start given that all prior versions of a package still exist on-chain. A useful pattern is to introduce versioning to the shared object and use a version check to guard access to functions in the package. This enables you to limit access to the shared object to only the latest version of a package.
+When you create packages that involve shared objects, think about upgrades and versioning from the start because all prior versions of a package still exist on-chain. A useful pattern is to introduce versioning to the shared object and use a version check to guard access to functions in the package. This limits access to the shared object to the latest package version.
 
-Considering the earlier `counter` example:
+Using the earlier `counter` example:
 
 ```move
 module example::counter;
@@ -115,7 +115,7 @@ public fun increment(c: &mut Counter) {
 }
 ```
 
-To ensure that upgrades to this package can limit access of the shared object to the latest version of the package, you need to:
+To ensure that upgrades to this package can limit access of the shared object to the latest version of the package, you must:
 
 1. Track the current version of the module in a constant, `VERSION`.
 
@@ -125,7 +125,7 @@ To ensure that upgrades to this package can limit access of the shared object to
 
 1. Guard the entry of all functions that access the shared object with a check that its `version` matches the package `VERSION`.
 
-An upgrade-aware `counter` module that incorporates all these ideas might look like the following:
+An upgrade-aware `counter` module looks like the following:
 
 ```move
 module example::counter;

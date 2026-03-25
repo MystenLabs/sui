@@ -3,6 +3,7 @@
 
 use std::{sync::Arc, time::Instant};
 
+use consensus_config::ConsensusProtocolConfig;
 use consensus_config::{
     AuthorityIndex, Committee, NetworkKeyPair, NetworkPublicKey, Parameters, ProtocolKeyPair,
 };
@@ -12,7 +13,6 @@ use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
-use sui_protocol_config::ProtocolConfig;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
@@ -31,7 +31,9 @@ use crate::{
     leader_schedule::LeaderSchedule,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{NetworkManager, tonic_network::TonicManager},
+    network::{
+        CommitSyncerClient, NetworkManager, SynchronizerClient, tonic_network::TonicManager,
+    },
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::RoundTracker,
@@ -56,7 +58,7 @@ impl ConsensusAuthority {
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
-        protocol_config: ProtocolConfig,
+        protocol_config: ConsensusProtocolConfig,
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
@@ -127,7 +129,7 @@ pub enum NetworkType {
 
 pub(crate) struct AuthorityNode<N>
 where
-    N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
+    N: NetworkManager,
 {
     context: Arc<Context>,
     start_time: Instant,
@@ -139,13 +141,13 @@ where
     proposed_block_handler: JoinHandle<()>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    subscriber: Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>,
+    subscriber: Subscriber<N::ValidatorClient, AuthorityService<ChannelCoreThreadDispatcher>>,
     network_manager: N,
 }
 
 impl<N> AuthorityNode<N>
 where
-    N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
+    N: NetworkManager,
 {
     // See comments above ConsensusAuthority::start() for details on the input.
     pub(crate) async fn start(
@@ -153,7 +155,7 @@ where
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
-        protocol_config: ProtocolConfig,
+        protocol_config: ConsensusProtocolConfig,
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
@@ -172,7 +174,7 @@ where
             "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, replaying after commit index {}, consumer last processed commit index {}",
             own_index,
             own_hostname,
-            protocol_config.version,
+            protocol_config.protocol_version(),
             epoch_start_timestamp_ms,
             boot_counter,
             commit_consumer.replay_after_commit_index,
@@ -208,7 +210,7 @@ where
             .metrics
             .node_metrics
             .protocol_version
-            .set(context.protocol_config.version.as_u64() as i64);
+            .set(context.protocol_config.protocol_version() as i64);
 
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone());
@@ -216,7 +218,24 @@ where
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
         let mut network_manager = N::new(context.clone(), network_keypair);
-        let network_client = network_manager.client();
+        let validator_client = network_manager.validator_client();
+
+        let synchronizer_client = Arc::new(SynchronizerClient::<
+            N::ValidatorClient,
+            N::ObserverClient,
+        >::new(
+            context.clone(),
+            Some(validator_client.clone()),
+            None, // TODO: set observer client if want to talk to a peer's observer server.
+        ));
+        let commit_syncer_client = Arc::new(CommitSyncerClient::<
+            N::ValidatorClient,
+            N::ObserverClient,
+        >::new(
+            context.clone(),
+            Some(validator_client.clone()),
+            None, // TODO: set observer client if want to talk to a peer's observer server.
+        ));
 
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
@@ -308,7 +327,7 @@ where
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         let synchronizer = Synchronizer::start(
-            network_client.clone(),
+            synchronizer_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
@@ -327,7 +346,7 @@ where
             block_verifier.clone(),
             transaction_certifier.clone(),
             round_tracker.clone(),
-            network_client.clone(),
+            commit_syncer_client.clone(),
             dag_state.clone(),
         )
         .start();
@@ -337,7 +356,7 @@ where
             core_dispatcher.clone(),
             round_tracker.clone(),
             dag_state.clone(),
-            network_client.clone(),
+            validator_client.clone(),
         )
         .start();
 
@@ -357,7 +376,7 @@ where
         let subscriber = {
             let s = Subscriber::new(
                 context.clone(),
-                network_client,
+                validator_client,
                 network_service.clone(),
                 dag_state,
             );
@@ -369,7 +388,12 @@ where
             s
         };
 
-        network_manager.install_service(network_service).await;
+        network_manager
+            .start_validator_server(network_service.clone())
+            .await;
+        if context.parameters.tonic.is_observer_server_enabled() {
+            network_manager.start_observer_server(network_service).await;
+        }
 
         info!(
             "Consensus authority started, took {:?}",
@@ -474,7 +498,6 @@ mod tests {
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use prometheus::Registry;
     use rstest::rstest;
-    use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
     use tokio::time::{sleep, timeout};
     use typed_store::DBMetrics;
@@ -513,7 +536,7 @@ mod tests {
             own_index,
             committee,
             parameters,
-            ProtocolConfig::get_for_max_version_UNSAFE(),
+            ConsensusProtocolConfig::for_testing(),
             protocol_keypair,
             network_keypair,
             Arc::new(Clock::default()),
@@ -544,8 +567,8 @@ mod tests {
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(gc_depth);
 
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
             .map(|_| TempDir::new().unwrap())
@@ -645,7 +668,7 @@ mod tests {
         DBMetrics::init(RegistryService::new(db_registry));
 
         let (committee, keypairs) = local_committee_and_keys(0, vec![1; num_authorities]);
-        let protocol_config: ProtocolConfig = ProtocolConfig::get_for_max_version_UNSAFE();
+        let protocol_config = ConsensusProtocolConfig::for_testing();
 
         let temp_dirs = (0..num_authorities)
             .map(|_| TempDir::new().unwrap())
@@ -748,8 +771,8 @@ mod tests {
         let mut temp_dirs = BTreeMap::new();
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
-        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(gc_depth);
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
@@ -855,7 +878,7 @@ mod tests {
         keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
         network_type: NetworkType,
         boot_counter: u64,
-        protocol_config: ProtocolConfig,
+        protocol_config: ConsensusProtocolConfig,
     ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
         let registry = Registry::new();
 

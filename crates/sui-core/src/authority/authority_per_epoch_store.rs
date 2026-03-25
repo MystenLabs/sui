@@ -659,15 +659,20 @@ impl AuthorityEpochTables {
 
     #[cfg(tidehunter)]
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
+        Self::open_with_path(&Self::path(epoch, parent_path), db_options)
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_with_path(path: &PathBuf, db_options: Option<Options>) -> Self {
         tracing::warn!("AuthorityEpochTables using tidehunter");
         use typed_store::tidehunter_util::{
             KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,
             default_mutex_count, default_value_cache_size,
         };
-        let mutexes = default_mutex_count() * 2;
+        let mutexes = default_mutex_count();
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
-        let value_cache_size = default_value_cache_size() * 2;
+        let value_cache_size = default_value_cache_size();
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(value_cache_size);
         let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);
@@ -693,7 +698,7 @@ impl AuthorityEpochTables {
                 "owned_object_locked_transactions".to_string(),
                 ThConfig::new_with_config_indexing(
                     object_ref_indexing,
-                    mutexes * 2,
+                    mutexes * 8,
                     uniform_key,
                     bloom_config.clone(),
                 ),
@@ -736,7 +741,7 @@ impl AuthorityEpochTables {
                 "consensus_message_processed".to_string(),
                 ThConfig::new_with_config_indexing(
                     KeyIndexing::Hash,
-                    mutexes,
+                    mutexes * 8,
                     uniform_key,
                     bloom_config.clone(),
                 ),
@@ -900,12 +905,13 @@ impl AuthorityEpochTables {
             ),
         ];
         Self::open_tables_read_write(
-            Self::path(epoch, parent_path),
+            path.to_path_buf(),
             MetricConf::new("epoch"),
             configs.into_iter().collect(),
         )
     }
 
+    #[cfg(not(tidehunter))]
     pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> AuthorityEpochTablesReadOnly {
         Self::get_read_only_handle(
             Self::path(epoch, parent_path),
@@ -913,6 +919,11 @@ impl AuthorityEpochTables {
             None,
             MetricConf::new("epoch_readonly"),
         )
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> Self {
+        Self::open(epoch, parent_path, None)
     }
 
     pub fn path(epoch: EpochId, parent_path: &Path) -> PathBuf {

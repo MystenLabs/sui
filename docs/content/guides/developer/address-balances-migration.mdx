@@ -258,6 +258,37 @@ sui client ptb \
 
 ## Paying for gas from address balances
 
+### Checking if address balance gas payments are enabled
+
+Before using address balance gas payments, you can verify that the feature is enabled on the network by checking the protocol configuration flag:
+
+```typescript
+// Choose your network: 'mainnet', 'testnet', or 'devnet'
+const network = 'testnet';
+
+const networkUrls = {
+	mainnet: 'https://fullnode.mainnet.sui.io:443',
+	testnet: 'https://fullnode.testnet.sui.io:443',
+	devnet: 'https://fullnode.devnet.sui.io:443',
+};
+
+const client = new SuiGrpcClient({
+	network,
+	baseUrl: networkUrls[network],
+});
+
+const { response } = await client.ledgerService.getEpoch({
+	readMask: {
+		paths: ['protocol_config.feature_flags'],
+	},
+});
+
+const enabled =
+	response.epoch?.protocolConfig?.featureFlags['enable_address_balance_gas_payments'] ?? false;
+
+console.log(`enable_address_balance_gas_payments on ${network}:`, enabled);
+```
+
 ### Before: Gas coin management
 
 With coin-based gas payment, you must query and select gas coins:

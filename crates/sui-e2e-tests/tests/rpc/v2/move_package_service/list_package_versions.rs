@@ -21,9 +21,7 @@ async fn test_list_package_versions_system_package() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = ListPackageVersionsRequest::default();
     request.package_id = Some("0x2".to_string());
@@ -47,9 +45,7 @@ async fn test_list_package_versions_with_upgrades() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut test_package_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     test_package_path.push("tests/move_test_code");
@@ -316,9 +312,7 @@ async fn test_list_package_versions_not_found() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = ListPackageVersionsRequest::default();
     request.package_id =
@@ -334,9 +328,7 @@ async fn test_list_package_versions_invalid_package_id() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = ListPackageVersionsRequest::default();
     request.package_id = Some("invalid-package-id".to_string());
@@ -356,9 +348,7 @@ async fn test_list_package_versions_missing_package_id() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let request = ListPackageVersionsRequest::default();
 
@@ -377,9 +367,7 @@ async fn test_list_package_versions_invalid_pagination() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     // Test 1: Invalid page token encoding
     let mut request = ListPackageVersionsRequest::default();

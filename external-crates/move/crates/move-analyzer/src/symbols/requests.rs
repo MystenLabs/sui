@@ -12,7 +12,7 @@ use crate::{
         runner::SymbolicatorRunner,
         use_def::UseDef,
     },
-    utils::lsp_position_to_loc,
+    utils::{canonical_path_from_uri, lsp_position_to_loc},
 };
 
 use lsp_server::{Message, Request, RequestId, Response};
@@ -37,12 +37,9 @@ pub fn on_go_to_def_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<GotoDefinitionParams>(request.params.clone())
         .expect("could not deserialize go-to-def request");
 
-    let fpath = parameters
-        .text_document_position_params
-        .text_document
-        .uri
-        .to_file_path()
-        .unwrap();
+    let fpath =
+        canonical_path_from_uri(&parameters.text_document_position_params.text_document.uri)
+            .unwrap();
     let loc = parameters.text_document_position_params.position;
     let line = loc.line;
     let col = loc.character;
@@ -67,12 +64,9 @@ pub fn on_go_to_type_def_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<GotoTypeDefinitionParams>(request.params.clone())
         .expect("could not deserialize go-to-type-def request");
 
-    let fpath = parameters
-        .text_document_position_params
-        .text_document
-        .uri
-        .to_file_path()
-        .unwrap();
+    let fpath =
+        canonical_path_from_uri(&parameters.text_document_position_params.text_document.uri)
+            .unwrap();
     let loc = parameters.text_document_position_params.position;
     let line = loc.line;
     let col = loc.character;
@@ -99,12 +93,8 @@ pub fn on_references_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<ReferenceParams>(request.params.clone())
         .expect("could not deserialize references request");
 
-    let fpath = parameters
-        .text_document_position
-        .text_document
-        .uri
-        .to_file_path()
-        .unwrap();
+    let fpath =
+        canonical_path_from_uri(&parameters.text_document_position.text_document.uri).unwrap();
     let loc = parameters.text_document_position.position;
     let line = loc.line;
     let col = loc.character;
@@ -158,12 +148,9 @@ pub fn on_hover_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<HoverParams>(request.params.clone())
         .expect("could not deserialize hover request");
 
-    let fpath = parameters
-        .text_document_position_params
-        .text_document
-        .uri
-        .to_file_path()
-        .unwrap();
+    let fpath =
+        canonical_path_from_uri(&parameters.text_document_position_params.text_document.uri)
+            .unwrap();
     let loc = parameters.text_document_position_params.position;
     let line = loc.line;
     let col = loc.character;
@@ -238,7 +225,7 @@ pub fn on_document_symbol_request(context: &Context, request: &Request) {
     let parameters = serde_json::from_value::<DocumentSymbolParams>(request.params.clone())
         .expect("could not deserialize document symbol request");
 
-    let fpath = parameters.text_document.uri.to_file_path().unwrap();
+    let fpath = canonical_path_from_uri(&parameters.text_document.uri).unwrap();
     eprintln!("on_document_symbol_request: {:?}", fpath);
 
     let mut defs: Vec<DocumentSymbol> = vec![];

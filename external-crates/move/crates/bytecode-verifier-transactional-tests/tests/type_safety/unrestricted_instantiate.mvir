@@ -15,7 +15,7 @@ module 0x42.Test {
 
 //# run
 
-module 0x42.m {
+module 0x43.m {
 import 0x42.Test;
 
 entry foo() {
@@ -29,7 +29,7 @@ label b0:
 }
 
 //# publish
-module 0x43.Test {
+module 0x44.Test {
     enum T has drop {V {fint: u64, fv: bool} }
 
     public t1(fint: u64, fv: bool): Self.T {
@@ -44,8 +44,8 @@ module 0x43.Test {
 }
 
 //# run
-module 0x43.m {
-import 0x43.Test;
+module 0x45.m {
+import 0x44.Test;
 
 entry foo() {
     let t1: Test.T;

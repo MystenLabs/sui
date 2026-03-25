@@ -2,19 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 
 use futures::future::try_join_all;
 use futures::join;
 use indexmap::IndexMap;
+use sui_types::object::rpc_visitor as RV;
 
-use crate::v2::error::Error;
 use crate::v2::meter::Meter;
 use crate::v2::parser::Chain;
 use crate::v2::parser::Literal;
 use crate::v2::parser::Parser;
 use crate::v2::parser::Strand;
-use crate::v2::writer::Writer;
-
 mod error;
 mod interpreter;
 mod lexer;
@@ -25,6 +24,7 @@ mod value;
 mod visitor;
 mod writer;
 
+pub use crate::v2::error::Error;
 pub use crate::v2::error::FormatError;
 pub use crate::v2::interpreter::Interpreter;
 pub use crate::v2::meter::Limits;
@@ -121,18 +121,19 @@ impl<'s> Format<'s> {
     }
 
     /// Evaluate the format string returning a formatted JSON value.
-    pub async fn format<S: Store>(
+    pub async fn format<V: RV::Format>(
         &'s self,
-        interpreter: &'s Interpreter<S>,
+        interpreter: &'s Interpreter<impl Store>,
         max_depth: usize,
         max_output_size: usize,
-    ) -> Result<serde_json::Value, FormatError> {
-        let writer = Writer::new(max_depth, max_output_size);
+    ) -> Result<V, FormatError> {
+        let used_size = AtomicUsize::new(0);
+        let mut meter = writer::Meter::new(&used_size, max_output_size, max_depth);
         let Some(value) = interpreter.eval_strands(&self.0).await? else {
-            return Ok(serde_json::Value::Null);
+            return Ok(V::null(&mut meter)?);
         };
 
-        writer.write(value)
+        writer::write(meter, value)
     }
 }
 
@@ -178,33 +179,37 @@ impl<'s> Display<'s> {
     /// This operation requires all field names to evaluate successfully to unique strings, and for
     /// the overall output to be bounded by `max_depth` and `max_output_size`, but otherwise
     /// supports partial failures (if one of the field values fails to parse or evaluate).
-    pub async fn display<S: Store>(
+    pub async fn display<V: RV::Format>(
         &'s self,
-        interpreter: &'s Interpreter<S>,
         max_depth: usize,
         max_output_size: usize,
-    ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
-        let writer = Arc::new(Writer::new(max_depth, max_output_size));
+        interpreter: &'s Interpreter<impl Store>,
+    ) -> Result<IndexMap<String, Result<V, FormatError>>, Error> {
+        let used_size = Arc::new(AtomicUsize::new(0));
         let mut output = IndexMap::new();
 
         // You think you want to factor a helper out to do the evaluation and error handling, but
         // trust me, you don't.
 
         let names = try_join_all(self.fields.iter().map(|kvp| {
-            let writer = writer.clone();
+            let used_size = used_size.clone();
             async move {
                 let strands = match kvp.key.val.as_ref() {
                     Ok(strands) => strands,
                     Err(e) => return Ok(Err(e.clone())),
                 };
 
+                let mut meter = writer::Meter::new(&used_size, max_output_size, max_depth);
                 let evaluated = match interpreter.eval_strands(strands).await {
                     Ok(Some(v)) => v,
-                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Ok(None) => match V::null(&mut meter) {
+                        Ok(value) => return Ok(Ok(value)),
+                        Err(err) => return Ok(Err(err.into())),
+                    },
                     Err(e) => return Ok(Err(e)),
                 };
 
-                match writer.write(evaluated) {
+                match writer::write(meter, evaluated) {
                     Err(FormatError::TooMuchOutput) => Err(Error::TooMuchOutput),
                     other => Ok(other),
                 }
@@ -212,20 +217,24 @@ impl<'s> Display<'s> {
         }));
 
         let values = try_join_all(self.fields.iter().map(|kvp| {
-            let writer = writer.clone();
+            let used_size = used_size.clone();
             async move {
                 let strands = match kvp.val.val.as_ref() {
                     Ok(strands) => strands,
                     Err(e) => return Ok(Err(e.clone())),
                 };
 
+                let mut meter = writer::Meter::new(&used_size, max_output_size, max_depth);
                 let evaluated = match interpreter.eval_strands(strands).await {
                     Ok(Some(v)) => v,
-                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Ok(None) => match V::null(&mut meter) {
+                        Ok(value) => return Ok(Ok(value)),
+                        Err(err) => return Ok(Err(err.into())),
+                    },
                     Err(e) => return Ok(Err(e)),
                 };
 
-                match writer.write(evaluated) {
+                match writer::write(meter, evaluated) {
                     Err(FormatError::TooMuchOutput) => Err(Error::TooMuchOutput),
                     other => Ok(other),
                 }
@@ -242,13 +251,12 @@ impl<'s> Display<'s> {
 
         for ((field, name), value) in self.fields.iter().zip(names).zip(values) {
             use indexmap::map::Entry;
-            use serde_json::Value as JSON;
 
             let src = field.key.src;
 
             let n = match name {
-                Ok(JSON::String(n)) => n,
-                Ok(JSON::Null) => return Err(Error::NameEmpty(src.to_owned())),
+                Ok(v) if v.is_string() => v.as_string().unwrap().to_owned(),
+                Ok(v) if v.is_null() => return Err(Error::NameEmpty(src.to_owned())),
                 Ok(_) => return Err(Error::NameInvalid(src.to_owned())),
                 Err(e) => return Err(Error::NameEvaluation(src.to_owned(), e)),
             };
@@ -268,8 +276,10 @@ impl<'s> Display<'s> {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
 
+    use async_trait::async_trait;
     use base64::Engine as _;
     use base64::engine::general_purpose::STANDARD;
     use insta::assert_debug_snapshot;
@@ -287,6 +297,8 @@ mod tests {
     use sui_types::dynamic_field::derive_dynamic_field_id;
     use sui_types::id::ID;
     use sui_types::id::UID;
+    use tokio::sync::Barrier;
+    use tokio::time::Duration;
 
     use crate::v2::value::tests::MockStore;
     use crate::v2::value::tests::enum_;
@@ -294,7 +306,6 @@ mod tests {
     use crate::v2::value::tests::struct_;
     use crate::v2::value::tests::vec_map;
     use crate::v2::value::tests::vector_;
-    use crate::v2::writer::JsonWriter;
 
     use super::*;
 
@@ -315,8 +326,8 @@ mod tests {
             return Ok(None);
         };
 
-        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
-        Ok(Some(value.format_json(writer)?))
+        let meter = writer::Meter::new(&used, usize::MAX, usize::MAX);
+        Ok(Some(value.format_json(meter)?))
     }
 
     async fn dynamic_field_id(
@@ -353,9 +364,26 @@ mod tests {
         Ok(Some(value.derive_dynamic_object_field_id(parent)?.into()))
     }
 
+    async fn derived_object_id(
+        store: MockStore,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        parent: AccountAddress,
+        literal: &str,
+    ) -> Result<Option<AccountAddress>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+
+        let name = Name::parse(Limits::default(), literal)?;
+        let Some(value) = name.eval(&interpreter).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(value.derive_object_id(parent)?.into()))
+    }
+
     /// Helper to parse display fields and render them against the provided object.
     async fn format<'s>(
-        store: MockStore,
+        store: impl Store,
         limits: Limits,
         bytes: Vec<u8>,
         layout: MoveTypeLayout,
@@ -365,7 +393,7 @@ mod tests {
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
         let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
         Display::parse(limits, fields)?
-            .display(&interpreter, max_depth, max_output_size)
+            .display(max_depth, max_output_size, &interpreter)
             .await
     }
 
@@ -505,6 +533,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_extract_with_derived_object_loads() {
+        let parent = AccountAddress::from_str("0x5100").unwrap();
+        let child = AccountAddress::from_str("0x5101").unwrap();
+        let bytes = bcs::to_bytes(&parent).unwrap();
+
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![(
+                "parent",
+                struct_(
+                    "0x1::m::Parent",
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
+                ),
+            )],
+        );
+
+        let store = MockStore::default().with_derived_object(
+            parent,
+            "derived_key",
+            L::Struct(Box::new(move_utf8_str_layout())),
+            (child, 111u64, 222u64),
+            struct_(
+                "0x1::m::Child",
+                vec![
+                    ("id", L::Struct(Box::new(UID::layout()))),
+                    ("x", L::U64),
+                    ("y", L::U64),
+                ],
+            ),
+        );
+
+        let fields = [
+            "parent~>['derived_key'].x",
+            "parent~>['derived_key'].y",
+            "parent.id~>['derived_key'].id",
+            "parent~>['missing']",
+        ];
+
+        let mut outputs = Vec::with_capacity(fields.len());
+        for field in fields {
+            outputs.push(
+                extract(store.clone(), bytes.clone(), layout.clone(), field)
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        assert_json_snapshot!(outputs, @r###"
+        [
+          "111",
+          "222",
+          "0x0000000000000000000000000000000000000000000000000000000000005101",
+          null
+        ]
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_dynamic_field_names() {
         let parent = AccountAddress::from_str("0x4242").unwrap();
 
@@ -619,6 +705,46 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_derived_object_names() {
+        let parent = AccountAddress::from_str("0x4242").unwrap();
+
+        let obj_bytes = bcs::to_bytes(&0u8).unwrap();
+        let obj_layout = L::U8;
+
+        let cases: Vec<(&str, &str, Vec<u8>)> = vec![
+            (
+                "'hello'",
+                "0x1::string::String",
+                bcs::to_bytes(&"hello").unwrap(),
+            ),
+            ("42u64", "u64", bcs::to_bytes(&42u64).unwrap()),
+            (
+                "0x1::m::Key(99u32, 'test')",
+                "0x1::m::Key",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+        ];
+
+        for (literal, type_, bytes) in cases {
+            let id = derived_object_id(
+                MockStore::default(),
+                obj_bytes.clone(),
+                obj_layout.clone(),
+                parent,
+                literal,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+            let type_: TypeTag = type_.parse().unwrap();
+            let expected =
+                sui_types::derived_object::derive_object_id(parent, &type_, &bytes).unwrap();
+            assert_eq!(id, expected.into(), "mismatch for literal: {literal}");
+        }
+    }
+
     #[test]
     fn test_dynamic_field_name_parse_errors() {
         let cases = [
@@ -701,7 +827,7 @@ mod tests {
             bytes,
         };
 
-        let mut output = Vec::with_capacity(formats.len());
+        let mut output: Vec<serde_json::Value> = Vec::with_capacity(formats.len());
         let interpreter = Interpreter::new(root, store);
         for s in formats {
             let format = Format::parse(Limits::default(), s).unwrap();
@@ -1428,6 +1554,67 @@ mod tests {
             ),
             "miss": Ok(
                 Null,
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_display_concurrent_dynamic_field_fetch() {
+        // Define a store that intentionally holds back requests to the store so they operate
+        // concurrently.
+        #[derive(Clone)]
+        struct BlockingStore {
+            barrier: Arc<Barrier>,
+            inner: MockStore,
+        }
+
+        #[async_trait]
+        impl Store for BlockingStore {
+            async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>> {
+                self.barrier.wait().await;
+                self.inner.object(id).await
+            }
+        }
+
+        let parent = AccountAddress::from_str("0x1200").unwrap();
+        let bytes = bcs::to_bytes(&parent).unwrap();
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![("id", L::Struct(Box::new(UID::layout())))],
+        );
+
+        let store = BlockingStore {
+            barrier: Arc::new(Barrier::new(2)),
+            inner: MockStore::default().with_dynamic_field(
+                parent,
+                "key",
+                L::Struct(Box::new(move_utf8_str_layout())),
+                42u64,
+                L::U64,
+            ),
+        };
+
+        let rendered = tokio::time::timeout(
+            Duration::from_secs(10),
+            format(
+                store,
+                Limits::default(),
+                bytes,
+                layout,
+                usize::MAX,
+                ONE_MB,
+                [("concurrent", "{id->['key']}{id->['key']}")],
+            ),
+        )
+        .await
+        .expect("back-to-back dynamic field expressions should not block")
+        .unwrap();
+
+        assert_debug_snapshot!(rendered, @r###"
+        {
+            "concurrent": Ok(
+                String("4242"),
             ),
         }
         "###);

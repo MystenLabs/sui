@@ -13,7 +13,7 @@ use transaction_fuzzer::type_arg_fuzzer::{run_pt, run_pt_effects};
 
 use sui_types::base_types::ObjectRef;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg, ProgrammableTransaction};
 use sui_types::{MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID};
@@ -94,7 +94,7 @@ pub fn run_pt_success(
         matches!(
             status,
             ExecutionStatus::Failure(ExecutionFailure {
-                error: ExecutionFailureStatus::UnusedValueWithoutDrop { .. },
+                error: ExecutionErrorKind::UnusedValueWithoutDrop { .. },
                 ..
             })
         ),

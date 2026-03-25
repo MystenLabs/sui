@@ -1919,21 +1919,43 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ));
         }
 
-        let force = final_round || should_write_random_checkpoint;
-        pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, force));
+        if protocol_config.merge_randomness_into_checkpoint() {
+            // We don't want to block checkpoint formation for non-randomness schedulables
+            // on randomness state update. Therefore, we include randomness chunks in the
+            // subsequent checkpoint. First we flush the queue, then enqueue randomness
+            // for merging into the subsequent commit.
+            pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, final_round));
 
-        if should_write_random_checkpoint {
-            for chunk in chunked_randomness_schedulables {
-                pending_checkpoints.extend(checkpoint_queue.push_chunk(
-                    chunk.into(),
-                    &assigned_versions,
-                    commit_info.timestamp,
-                    commit_info.consensus_commit_ref,
-                    commit_info.rejected_transactions_digest,
-                ));
+            if should_write_random_checkpoint {
+                for chunk in chunked_randomness_schedulables {
+                    pending_checkpoints.extend(checkpoint_queue.push_chunk(
+                        chunk.into(),
+                        &assigned_versions,
+                        commit_info.timestamp,
+                        commit_info.consensus_commit_ref,
+                        commit_info.rejected_transactions_digest,
+                    ));
+                }
+                if final_round {
+                    pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, true));
+                }
             }
+        } else {
+            let force = final_round || should_write_random_checkpoint;
+            pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, force));
 
-            pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, true));
+            if should_write_random_checkpoint {
+                for chunk in chunked_randomness_schedulables {
+                    pending_checkpoints.extend(checkpoint_queue.push_chunk(
+                        chunk.into(),
+                        &assigned_versions,
+                        commit_info.timestamp,
+                        commit_info.consensus_commit_ref,
+                        commit_info.rejected_transactions_digest,
+                    ));
+                }
+                pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, true));
+            }
         }
 
         if final_round && let Some(last) = pending_checkpoints.last_mut() {

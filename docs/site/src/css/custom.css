@@ -2582,3 +2582,48 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 [data-theme='dark'] .theme-doc-sidebar-item-category .menu__list > .theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link {
   color: #A1A7B2;
 }
+
+.full-width-iframe {
+  max-width: none !important;
+  width: 58vw;
+  height: 100%;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -30vw;
+  margin-right: -30vw;
+}
+
+.full-width-iframe iframe {
+  width: 100%;
+  height: 125vh;
+  border: none;
+  display: block;
+  overflow: hidden;
+}
+
+/* Union-field note: span all 6 grid columns so it doesn't break key/val pairing */
+.protoUnionNote {
+  grid-column: 1 / -1;
+  padding: 14px 24px;
+  font-size: 14px;
+  line-height: 1.55;
+  border-bottom: 1px solid rgba(120, 120, 120, 0.14);
+  background: rgba(120, 120, 120, 0.04);
+}
+ 
+html[data-theme='dark'] .protoUnionNote {
+  background: rgba(120, 120, 120, 0.08);
+}
+ 
+/* Method signatures: allow long type names to wrap gracefully */
+.protoMethodSig {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+ 
+/* Arrow between request → response in service methods */
+.protoArrow {
+  margin: 0 4px;
+  opacity: 0.5;
+}

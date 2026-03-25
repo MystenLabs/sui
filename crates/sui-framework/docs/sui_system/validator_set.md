@@ -23,7 +23,6 @@ title: Module `sui_system::validator_set`
 -  [Function `request_withdraw_stake`](#sui_system_validator_set_request_withdraw_stake)
 -  [Function `convert_to_fungible_staked_sui`](#sui_system_validator_set_convert_to_fungible_staked_sui)
 -  [Function `redeem_fungible_staked_sui`](#sui_system_validator_set_redeem_fungible_staked_sui)
--  [Function `request_set_commission_rate`](#sui_system_validator_set_request_set_commission_rate)
 -  [Function `advance_epoch`](#sui_system_validator_set_advance_epoch)
 -  [Function `update_validator_positions_and_calculate_total_stake`](#sui_system_validator_set_update_validator_positions_and_calculate_total_stake)
 -  [Function `effectuate_staged_metadata`](#sui_system_validator_set_effectuate_staged_metadata)
@@ -48,15 +47,16 @@ title: Module `sui_system::validator_set`
 -  [Function `find_validator`](#sui_system_validator_set_find_validator)
 -  [Function `find_validator_from_table_vec`](#sui_system_validator_set_find_validator_from_table_vec)
 -  [Function `get_validator_indices`](#sui_system_validator_set_get_validator_indices)
--  [Function `get_validator_mut`](#sui_system_validator_set_get_validator_mut)
--  [Function `get_active_or_pending_or_candidate_validator_mut`](#sui_system_validator_set_get_active_or_pending_or_candidate_validator_mut)
--  [Function `get_validator_mut_with_verified_cap`](#sui_system_validator_set_get_validator_mut_with_verified_cap)
--  [Function `get_validator_mut_with_ctx`](#sui_system_validator_set_get_validator_mut_with_ctx)
--  [Function `get_validator_mut_with_ctx_including_candidates`](#sui_system_validator_set_get_validator_mut_with_ctx_including_candidates)
+-  [Function `any_validator`](#sui_system_validator_set_any_validator)
+-  [Function `any_validator_mut`](#sui_system_validator_set_any_validator_mut)
+-  [Function `active_validator`](#sui_system_validator_set_active_validator)
+-  [Function `active_validator_mut`](#sui_system_validator_set_active_validator_mut)
+-  [Function `pending_validator`](#sui_system_validator_set_pending_validator)
+-  [Function `pending_validator_mut`](#sui_system_validator_set_pending_validator_mut)
+-  [Function `candidate_validator`](#sui_system_validator_set_candidate_validator)
+-  [Function `candidate_validator_mut`](#sui_system_validator_set_candidate_validator_mut)
 -  [Function `get_validator_ref`](#sui_system_validator_set_get_validator_ref)
 -  [Function `get_active_or_pending_or_candidate_validator_ref`](#sui_system_validator_set_get_active_or_pending_or_candidate_validator_ref)
--  [Function `get_active_validator_ref`](#sui_system_validator_set_get_active_validator_ref)
--  [Function `get_pending_validator_ref`](#sui_system_validator_set_get_pending_validator_ref)
 -  [Function `verify_cap`](#sui_system_validator_set_verify_cap)
 -  [Function `process_pending_removals`](#sui_system_validator_set_process_pending_removals)
 -  [Function `process_validator_departure`](#sui_system_validator_set_process_validator_departure)
@@ -79,6 +79,8 @@ title: Module `sui_system::validator_set`
 -  [Function `is_at_risk_validator`](#sui_system_validator_set_is_at_risk_validator)
 -  [Function `active_validator_addresses`](#sui_system_validator_set_active_validator_addresses)
 -  [Macro function `mul_div`](#sui_system_validator_set_mul_div)
+-  [Function `get_active_validator_ref`](#sui_system_validator_set_get_active_validator_ref)
+-  [Function `get_pending_validator_ref`](#sui_system_validator_set_get_pending_validator_ref)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -553,15 +555,6 @@ of new validators based on a minimum voting power rather than a minimum stake.
 
 
 
-<a name="sui_system_validator_set_ENotActiveOrPendingValidator"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>: u64 = 9;
-</code></pre>
-
-
-
 <a name="sui_system_validator_set_EStakingBelowThreshold"></a>
 
 
@@ -603,6 +596,15 @@ of new validators based on a minimum voting power rather than a minimum stake.
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EInvalidCap">EInvalidCap</a>: u64 = 101;
+</code></pre>
+
+
+
+<a name="sui_system_validator_set_EInvalidValidatorSelector"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EInvalidValidatorSelector">EInvalidValidatorSelector</a>: u64 = 14;
 </code></pre>
 
 
@@ -790,6 +792,8 @@ Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_
 
 Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_system</a></code> to add a new validator to <code>pending_active_validators</code>, which will be
 processed at the end of epoch.
+
+Aborts if the validator contains duplicate metadata values with an active or pending validator.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -1103,36 +1107,6 @@ the stake and any rewards corresponding to it will be immediately processed.
         self.inactive_validators[staking_pool_id].load_validator_maybe_upgrade()
     };
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(fungible_staked_sui, ctx)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_request_set_commission_rate"></a>
-
-## Function `request_set_commission_rate`
-
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, new_commission_rate: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_request_set_commission_rate">request_set_commission_rate</a>(
-    self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
-    new_commission_rate: u64,
-    ctx: &TxContext,
-) {
-    <b>let</b> validator_address = ctx.sender();
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_request_set_commission_rate">request_set_commission_rate</a>(new_commission_rate);
 }
 </code></pre>
 
@@ -1508,8 +1482,7 @@ gas price, weighted by stake.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_ref">get_validator_ref</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>()
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator">active_validator</a>(validator_address).<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>()
 }
 </code></pre>
 
@@ -1533,8 +1506,7 @@ gas price, weighted by stake.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_stake_amount">validator_stake_amount</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_ref">get_validator_ref</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>()
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator">active_validator</a>(validator_address).<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>()
 }
 </code></pre>
 
@@ -1558,8 +1530,7 @@ gas price, weighted by stake.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_voting_power">validator_voting_power</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_ref">get_validator_ref</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>()
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator">active_validator</a>(validator_address).<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>()
 }
 </code></pre>
 
@@ -1583,8 +1554,7 @@ gas price, weighted by stake.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_staking_pool_id">validator_staking_pool_id</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): ID {
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_ref">get_validator_ref</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.staking_pool_id()
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator">active_validator</a>(validator_address).staking_pool_id()
 }
 </code></pre>
 
@@ -1652,7 +1622,7 @@ gas price, weighted by stake.
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_pool_exchange_rates">pool_exchange_rates</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, pool_id: &<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<a href="../sui/table.md#sui_table_Table">sui::table::Table</a>&lt;u64, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_PoolTokenExchangeRate">sui_system::staking_pool::PoolTokenExchangeRate</a>&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_pool_exchange_rates">pool_exchange_rates</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<a href="../sui/table.md#sui_table_Table">sui::table::Table</a>&lt;u64, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_PoolTokenExchangeRate">sui_system::staking_pool::PoolTokenExchangeRate</a>&gt;
 </code></pre>
 
 
@@ -1663,15 +1633,15 @@ gas price, weighted by stake.
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_pool_exchange_rates">pool_exchange_rates</a>(
     self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
-    pool_id: &ID,
+    pool_id: ID,
 ): &Table&lt;u64, PoolTokenExchangeRate&gt; {
     // If the pool id is recorded in the mapping, then it must be either candidate or active.
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <b>if</b> (self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>.contains(*pool_id)) {
-        <b>let</b> validator_address = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>[*pool_id];
-        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(validator_address, <a href="../sui_system/validator_set.md#sui_system_validator_set_ANY_VALIDATOR">ANY_VALIDATOR</a>)
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <b>if</b> (self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>.contains(pool_id)) {
+        <b>let</b> validator_address = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>[pool_id];
+        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_any_validator">any_validator</a>(validator_address)
     } <b>else</b> {
         // otherwise it's inactive
-        self.inactive_validators[*pool_id].load_validator_maybe_upgrade()
+        self.inactive_validators[pool_id].load_validator_maybe_upgrade()
     };
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.get_staking_pool_ref().exchange_rates()
 }
@@ -1687,7 +1657,7 @@ gas price, weighted by stake.
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_by_pool_id">validator_by_pool_id</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, pool_id: &<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_by_pool_id">validator_by_pool_id</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
 </code></pre>
 
 
@@ -1696,14 +1666,14 @@ gas price, weighted by stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_by_pool_id">validator_by_pool_id</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, pool_id: &ID): &Validator {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_by_pool_id">validator_by_pool_id</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, pool_id: ID): &Validator {
     // If the pool id is recorded in the mapping, then it must be either candidate or active.
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <b>if</b> (self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>.contains(*pool_id)) {
-        <b>let</b> validator_address = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>[*pool_id];
-        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(validator_address, <a href="../sui_system/validator_set.md#sui_system_validator_set_ANY_VALIDATOR">ANY_VALIDATOR</a>)
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <b>if</b> (self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>.contains(pool_id)) {
+        <b>let</b> validator_address = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>[pool_id];
+        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_any_validator">any_validator</a>(validator_address)
     } <b>else</b> {
         // otherwise it's inactive
-        self.inactive_validators[*pool_id].load_validator_maybe_upgrade()
+        self.inactive_validators[pool_id].load_validator_maybe_upgrade()
     };
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>
 }
@@ -1920,9 +1890,9 @@ Get mutable reference to either a candidate or an active validator by address.
     validator_address: <b>address</b>,
 ): &<b>mut</b> Validator {
     <b>if</b> (self.validator_candidates.contains(validator_address)) {
-        self.validator_candidates[validator_address].load_validator_maybe_upgrade()
+        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_candidate_validator_mut">candidate_validator_mut</a>(validator_address)
     } <b>else</b> {
-        <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address)
+        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator_mut">active_validator_mut</a>(validator_address)
     }
 }
 </code></pre>
@@ -2031,13 +2001,14 @@ Aborts if any address isn't in the given validator set.
 
 </details>
 
-<a name="sui_system_validator_set_get_validator_mut"></a>
+<a name="sui_system_validator_set_any_validator"></a>
 
-## Function `get_validator_mut`
+## Function `any_validator`
+
+Get reference to validator in any state: active, pending, or candidate.
 
 
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut">get_validator_mut</a>(validators: &<b>mut</b> vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;, validator_address: <b>address</b>): &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_any_validator">any_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
 </code></pre>
 
 
@@ -2046,61 +2017,19 @@ Aborts if any address isn't in the given validator set.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut">get_validator_mut</a>(
-    validators: &<b>mut</b> vector&lt;Validator&gt;,
-    validator_address: <b>address</b>,
-): &<b>mut</b> Validator {
-    <b>let</b> idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(validators, validator_address).destroy_or!(<b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAValidator">ENotAValidator</a>);
-    &<b>mut</b> validators[idx]
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_get_active_or_pending_or_candidate_validator_mut"></a>
-
-## Function `get_active_or_pending_or_candidate_validator_mut`
-
-Get mutable reference to an active or (if active does not exist) pending or (if pending and
-active do not exist) or candidate validator by address.
-Note: this function should be called carefully, only after verifying the transaction
-sender has the ability to modify the <code>Validator</code>.
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, validator_address: <b>address</b>, include_candidate: bool): &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(
-    self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
-    validator_address: <b>address</b>,
-    include_candidate: bool,
-): &<b>mut</b> Validator {
-    <b>let</b> <b>mut</b> validator_index_opt = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address);
-    <b>if</b> (validator_index_opt.is_some()) {
-        <b>let</b> validator_index = validator_index_opt.extract();
-        <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = &<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[validator_index];
-        <b>return</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_any_validator">any_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &Validator {
+    <b>let</b> active_idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>);
+    <b>if</b> (active_idx.is_some()) {
+        <b>return</b> &self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[active_idx.destroy_some()]
     };
-    <b>let</b> <b>mut</b> validator_index_opt = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(
+    <b>let</b> pending_idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(
         &self.pending_active_validators,
-        validator_address,
+        <a href="../sui_system/validator.md#sui_system_validator">validator</a>,
     );
-    // consider both pending validators and the candidate ones
-    <b>if</b> (validator_index_opt.is_some()) {
-        <b>let</b> validator_index = validator_index_opt.extract();
-        <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = &<b>mut</b> self.pending_active_validators[validator_index];
-        <b>return</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>
+    <b>if</b> (pending_idx.is_some()) {
+        <b>return</b> &self.pending_active_validators[pending_idx.destroy_some()]
     };
-    <b>assert</b>!(include_candidate, <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>);
-    self.validator_candidates[validator_address].load_validator_maybe_upgrade()
+    self.validator_candidates[<a href="../sui_system/validator.md#sui_system_validator">validator</a>].load_validator_maybe_upgrade()
 }
 </code></pre>
 
@@ -2108,13 +2037,14 @@ sender has the ability to modify the <code>Validator</code>.
 
 </details>
 
-<a name="sui_system_validator_set_get_validator_mut_with_verified_cap"></a>
+<a name="sui_system_validator_set_any_validator_mut"></a>
 
-## Function `get_validator_mut_with_verified_cap`
+## Function `any_validator_mut`
+
+Get mutable reference to validator in any state: active, pending, or candidate.
 
 
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut_with_verified_cap">get_validator_mut_with_verified_cap</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, verified_cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">sui_system::validator_cap::ValidatorOperationCap</a>, include_candidate: bool): &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_any_validator_mut">any_validator_mut</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
 </code></pre>
 
 
@@ -2123,15 +2053,19 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut_with_verified_cap">get_validator_mut_with_verified_cap</a>(
-    self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
-    verified_cap: &ValidatorOperationCap,
-    include_candidate: bool,
-): &<b>mut</b> Validator {
-    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(
-        *verified_cap.verified_operation_cap_address(),
-        include_candidate,
-    )
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_any_validator_mut">any_validator_mut</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &<b>mut</b> Validator {
+    <b>let</b> active_idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>);
+    <b>if</b> (active_idx.is_some()) {
+        <b>return</b> &<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[active_idx.destroy_some()]
+    };
+    <b>let</b> pending_idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(
+        &self.pending_active_validators,
+        <a href="../sui_system/validator.md#sui_system_validator">validator</a>,
+    );
+    <b>if</b> (pending_idx.is_some()) {
+        <b>return</b> &<b>mut</b> self.pending_active_validators[pending_idx.destroy_some()]
+    };
+    self.validator_candidates[<a href="../sui_system/validator.md#sui_system_validator">validator</a>].load_validator_maybe_upgrade()
 }
 </code></pre>
 
@@ -2139,13 +2073,14 @@ sender has the ability to modify the <code>Validator</code>.
 
 </details>
 
-<a name="sui_system_validator_set_get_validator_mut_with_ctx"></a>
+<a name="sui_system_validator_set_active_validator"></a>
 
-## Function `get_validator_mut_with_ctx`
+## Function `active_validator`
+
+Get reference to an active validator by address.
 
 
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut_with_ctx">get_validator_mut_with_ctx</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator">active_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
 </code></pre>
 
 
@@ -2154,12 +2089,9 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut_with_ctx">get_validator_mut_with_ctx</a>(
-    self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
-    ctx: &TxContext,
-): &<b>mut</b> Validator {
-    <b>let</b> validator_address = ctx.sender();
-    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(validator_address, <b>false</b>)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator">active_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &Validator {
+    <b>let</b> idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>).destroy_or!(<b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAValidator">ENotAValidator</a>);
+    &self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[idx]
 }
 </code></pre>
 
@@ -2167,13 +2099,14 @@ sender has the ability to modify the <code>Validator</code>.
 
 </details>
 
-<a name="sui_system_validator_set_get_validator_mut_with_ctx_including_candidates"></a>
+<a name="sui_system_validator_set_active_validator_mut"></a>
 
-## Function `get_validator_mut_with_ctx_including_candidates`
+## Function `active_validator_mut`
+
+Get mutable reference to an active validator by address.
 
 
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut_with_ctx_including_candidates">get_validator_mut_with_ctx_including_candidates</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator_mut">active_validator_mut</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
 </code></pre>
 
 
@@ -2182,12 +2115,127 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_mut_with_ctx_including_candidates">get_validator_mut_with_ctx_including_candidates</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator_mut">active_validator_mut</a>(
     self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
-    ctx: &TxContext,
+    <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>,
 ): &<b>mut</b> Validator {
-    <b>let</b> validator_address = ctx.sender();
-    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(validator_address, <b>true</b>)
+    <b>let</b> idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>).destroy_or!(<b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAValidator">ENotAValidator</a>);
+    &<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[idx]
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_pending_validator"></a>
+
+## Function `pending_validator`
+
+Get reference to a pending validator by address.
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_pending_validator">pending_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_pending_validator">pending_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &Validator {
+    <b>let</b> idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, <a href="../sui_system/validator.md#sui_system_validator">validator</a>).destroy_or!(
+        <b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>,
+    );
+    &self.pending_active_validators[idx]
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_pending_validator_mut"></a>
+
+## Function `pending_validator_mut`
+
+Get mutable reference to a pending validator by address.
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_pending_validator_mut">pending_validator_mut</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_pending_validator_mut">pending_validator_mut</a>(
+    self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
+    <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>,
+): &<b>mut</b> Validator {
+    <b>let</b> idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(
+        &self.pending_active_validators,
+        <a href="../sui_system/validator.md#sui_system_validator">validator</a>,
+    ).destroy_or!(<b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>);
+    &<b>mut</b> self.pending_active_validators[idx]
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_candidate_validator"></a>
+
+## Function `candidate_validator`
+
+Get mutable reference to a candidate validator by address.
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_candidate_validator">candidate_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_candidate_validator">candidate_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &Validator {
+    <b>assert</b>!(self.validator_candidates.contains(<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>);
+    self.validator_candidates[<a href="../sui_system/validator.md#sui_system_validator">validator</a>].load_validator_maybe_upgrade()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_candidate_validator_mut"></a>
+
+## Function `candidate_validator_mut`
+
+Get mutable reference to a candidate validator by address.
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_candidate_validator_mut">candidate_validator_mut</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>): &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_candidate_validator_mut">candidate_validator_mut</a>(
+    self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
+    <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <b>address</b>,
+): &<b>mut</b> Validator {
+    <b>assert</b>!(self.validator_candidates.contains(<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>);
+    self.validator_candidates[<a href="../sui_system/validator.md#sui_system_validator">validator</a>].load_validator_maybe_upgrade()
 }
 </code></pre>
 
@@ -2261,59 +2309,6 @@ sender has the ability to modify the <code>Validator</code>.
 
 </details>
 
-<a name="sui_system_validator_set_get_active_validator_ref"></a>
-
-## Function `get_active_validator_ref`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_validator_ref">get_active_validator_ref</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, addr: <b>address</b>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_validator_ref">get_active_validator_ref</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, addr: <b>address</b>): &Validator {
-    <b>let</b> idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, addr).destroy_or!(<b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAValidator">ENotAValidator</a>);
-    &self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[idx]
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_get_pending_validator_ref"></a>
-
-## Function `get_pending_validator_ref`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_pending_validator_ref">get_pending_validator_ref</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, addr: <b>address</b>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_pending_validator_ref">get_pending_validator_ref</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, addr: <b>address</b>): &Validator {
-    <b>let</b> idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(
-        &self.pending_active_validators,
-        addr,
-    ).destroy_or!(<b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>);
-    &self.pending_active_validators[idx]
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="sui_system_validator_set_verify_cap"></a>
 
 ## Function `verify_cap`
@@ -2338,10 +2333,18 @@ Otherwise, verify the Cap for au either active or pending validator.
     which_validator: u8,
 ): ValidatorOperationCap {
     <b>let</b> cap_address = *cap.unverified_operation_cap_address();
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <b>if</b> (which_validator == <a href="../sui_system/validator_set.md#sui_system_validator_set_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>) {
-        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_validator_ref">get_active_validator_ref</a>(cap_address)
-    } <b>else</b> {
-        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(cap_address, which_validator)
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = match (which_validator) {
+        <a href="../sui_system/validator_set.md#sui_system_validator_set_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a> =&gt; self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validator">active_validator</a>(cap_address),
+        <a href="../sui_system/validator_set.md#sui_system_validator_set_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a> =&gt; {
+            <b>let</b> active_idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, cap_address);
+            <b>if</b> (active_idx.is_some()) {
+                &self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[active_idx.destroy_some()]
+            } <b>else</b> {
+                self.<a href="../sui_system/validator_set.md#sui_system_validator_set_pending_validator">pending_validator</a>(cap_address)
+            }
+        },
+        <a href="../sui_system/validator_set.md#sui_system_validator_set_ANY_VALIDATOR">ANY_VALIDATOR</a> =&gt; self.<a href="../sui_system/validator_set.md#sui_system_validator_set_any_validator">any_validator</a>(cap_address),
+        _ =&gt; <b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EInvalidValidatorSelector">EInvalidValidatorSelector</a>,
     };
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.operation_cap_id() == &object::id(cap), <a href="../sui_system/validator_set.md#sui_system_validator_set_EInvalidCap">EInvalidCap</a>);
     cap.into_verified()
@@ -3174,6 +3177,54 @@ Return true if <code>addr</code> is currently an at-risk validator below the min
 
 <pre><code><b>macro</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_mul_div">mul_div</a>($a: u64, $b: u64, $c: u64): u64 {
     (($a <b>as</b> u128) * ($b <b>as</b> u128) / ($c <b>as</b> u128)) <b>as</b> u64
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_get_active_validator_ref"></a>
+
+## Function `get_active_validator_ref`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_validator_ref">get_active_validator_ref</a>(_self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, _addr: <b>address</b>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_active_validator_ref">get_active_validator_ref</a>(_self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, _addr: <b>address</b>): &Validator {
+    <b>abort</b>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_get_pending_validator_ref"></a>
+
+## Function `get_pending_validator_ref`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_pending_validator_ref">get_pending_validator_ref</a>(_self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, _addr: <b>address</b>): &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_pending_validator_ref">get_pending_validator_ref</a>(_self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, _addr: <b>address</b>): &Validator {
+    <b>abort</b>
 }
 </code></pre>
 

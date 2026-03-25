@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
 ---
 processed 11 tasks
 
@@ -18,7 +19,7 @@ task 2, lines 50-53:
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
 mutated: object(0,0)
-accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge)
+accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 1042)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 55:
@@ -57,7 +58,7 @@ task 7, lines 70-71:
 created: object(7,0)
 mutated: object(0,0), object(6,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge)
+accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge, 18446744073709551614)
 gas summary: computation_cost: 1000000, storage_cost: 4202800,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
 
 task 8, lines 72-73:
@@ -66,7 +67,7 @@ task 8, lines 72-73:
 created: object(8,0)
 mutated: object(0,0), object(6,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge)
+accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge, 18446744073709551614)
 gas summary: computation_cost: 1000000, storage_cost: 4202800,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
 
 task 9, line 75:

@@ -17,7 +17,7 @@ use move_core_types::{
 use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
-    error::ExecutionErrorKind,
+    execution_status::ExecutionErrorKind,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
 };
@@ -33,9 +33,7 @@ use sui_types::{
 
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
-use sui_types::execution_status::{
-    CommandArgumentError, ExecutionFailure, ExecutionFailureStatus, ExecutionStatus,
-};
+use sui_types::execution_status::{CommandArgumentError, ExecutionFailure, ExecutionStatus};
 use sui_types::move_package::UpgradeCap;
 
 #[tokio::test]
@@ -2044,7 +2042,7 @@ async fn test_entry_point_string_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2079,7 +2077,7 @@ async fn test_entry_point_string_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2114,7 +2112,7 @@ async fn test_entry_point_string_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2169,7 +2167,7 @@ async fn test_entry_point_string_vec_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2214,7 +2212,7 @@ async fn test_entry_point_string_option_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2244,7 +2242,7 @@ async fn test_entry_point_string_option_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2272,7 +2270,7 @@ async fn test_entry_point_string_option_error() {
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::CommandArgumentError {
+            error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
                 kind: CommandArgumentError::InvalidBCSBytes
             },
@@ -2580,7 +2578,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::command_argument_error(
+            error: ExecutionErrorKind::command_argument_error(
                 CommandArgumentError::InvalidMakeMoveVecNonObjectArgument,
                 0
             ),
@@ -2609,7 +2607,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::command_argument_error(
+            error: ExecutionErrorKind::command_argument_error(
                 CommandArgumentError::InvalidBCSBytes,
                 0
             ),
@@ -2640,7 +2638,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     assert_eq!(
         effects.status(),
         &ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::command_argument_error(
+            error: ExecutionErrorKind::command_argument_error(
                 CommandArgumentError::InvalidBCSBytes,
                 3,
             ),
@@ -2871,6 +2869,57 @@ pub async fn build_and_publish_test_package(
     )
     .await
     .0
+}
+
+pub async fn build_and_publish_package_with_upgrade_cap(
+    authority: &AuthorityState,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    gas_object_id: &ObjectID,
+    modules: Vec<Vec<u8>>,
+    dep_ids: Vec<ObjectID>,
+) -> (ObjectRef, ObjectRef) {
+    let gas_price = authority.reference_gas_price_for_testing().unwrap();
+    let gas_budget = TEST_ONLY_GAS_UNIT_FOR_PUBLISH * gas_price;
+    let effects = {
+        let gas_object = authority.get_object(gas_object_id).await;
+        let gas_object_ref = gas_object.unwrap().compute_object_reference();
+
+        let data = TransactionData::new_module(
+            *sender,
+            gas_object_ref,
+            modules,
+            dep_ids,
+            gas_budget,
+            gas_price,
+        );
+        let transaction = to_sender_signed_transaction(data, sender_key);
+
+        submit_and_execute(authority, transaction)
+            .await
+            .unwrap()
+            .1
+            .into_data()
+    };
+
+    assert!(
+        matches!(effects.status(), ExecutionStatus::Success),
+        "{:?}",
+        effects.status()
+    );
+
+    let package = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap();
+    let upgrade_cap = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    (package.0, upgrade_cap.0)
 }
 
 pub async fn build_and_publish_test_package_with_upgrade_cap(

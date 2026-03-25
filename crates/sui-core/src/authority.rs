@@ -6,6 +6,7 @@ use crate::accumulators::coin_reservations::CoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
+use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -66,6 +67,7 @@ use std::{
 };
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
+use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::crypto::RandomnessRound;
@@ -109,7 +111,7 @@ use crate::jsonrpc_index::IndexStore;
 use crate::jsonrpc_index::{
     CoinInfo, IndexStoreCacheUpdates, IndexStoreCacheUpdatesWithLocks, ObjectIndexChanges,
 };
-use mysten_common::debug_fatal;
+use mysten_common::{debug_fatal, debug_fatal_no_invariant};
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
@@ -132,9 +134,10 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
@@ -1887,6 +1890,67 @@ impl AuthorityState {
         );
     }
 
+    /// Helper function that handles transaction rewriting for coin reservations and executes
+    /// the transaction to effects. Returns the execution results along with the command offset
+    /// used for rewriting failure command indices.
+    fn execute_transaction_to_effects(
+        &self,
+        executor: &dyn Executor,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        gas_data: GasData,
+        gas_status: SuiGasStatus,
+        sender: SuiAddress,
+        mut kind: TransactionKind,
+        signer: SuiAddress,
+        tx_digest: TransactionDigest,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionError>,
+    ) {
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            sender,
+            &mut kind,
+        );
+
+        let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
+            .execute_transaction_to_effects(
+                store,
+                protocol_config,
+                self.metrics.limits_metrics.clone(),
+                enable_expensive_checks,
+                execution_params,
+                epoch_id,
+                epoch_timestamp_ms,
+                input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                rewritten_inputs,
+                signer,
+                tx_digest,
+                &mut None,
+            );
+
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            timings,
+            execution_error,
+        )
+    }
+
     /// execute_certificate validates the transaction input, and executes the certificate,
     /// returning transaction outputs.
     ///
@@ -1940,6 +2004,7 @@ impl AuthorityState {
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
+        let sender = transaction_data.sender();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
         let early_execution_error = get_early_execution_error(
             &tx_digest,
@@ -1955,11 +2020,11 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
-            epoch_store.executor().execute_transaction_to_effects(
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
+            .execute_transaction_to_effects(
+                &**epoch_store.executor(),
                 &tracking_store,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.config
@@ -1974,10 +2039,10 @@ impl AuthorityState {
                 input_objects,
                 gas_data,
                 gas_status,
+                sender,
                 kind,
                 signer,
                 tx_digest,
-                &mut None,
             );
 
         let object_funds_checker = self.object_funds_checker.load();
@@ -2289,11 +2354,12 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (inner_temp_store, _, effects, _timings, execution_error) = executor
+
+        let (inner_temp_store, _, effects, _timings, execution_error) = self
             .execute_transaction_to_effects(
+                executor.as_ref(),
                 self.get_backing_store().as_ref(),
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
                 expensive_checks,
                 execution_params,
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
@@ -2304,11 +2370,12 @@ impl AuthorityState {
                 checked_input_objects,
                 gas_data,
                 gas_status,
+                transaction.sender(),
                 kind,
                 signer,
                 transaction_digest,
-                &mut None,
             );
+
         let tx_digest = *effects.transaction_digest();
 
         let module_cache =
@@ -2529,6 +2596,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             kind,
+            None, // rewritten_inputs - not needed for dev_inspect
             signer,
             tx_digest,
             dev_inspect,
@@ -2564,6 +2632,7 @@ impl AuthorityState {
                     cloned_gas,
                     retry_gas_status,
                     cloned_kind,
+                    None, // rewritten_inputs
                     signer,
                     tx_digest,
                     dev_inspect,
@@ -2817,6 +2886,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             transaction_kind,
+            None, // rewritten_inputs - not needed for dev_inspect
             sender,
             transaction_digest,
             skip_checks,
@@ -4131,15 +4201,21 @@ impl AuthorityState {
         }
     }
 
-    pub async fn settle_accumulator_for_testing(&self, effects: &[TransactionEffects]) {
+    /// Executes accumulator settlement for testing purposes.
+    /// Returns a list of (transaction, execution_env) pairs that can be replayed on another
+    /// AuthorityState (e.g., a fullnode) using `replay_settlement_for_testing`.
+    pub async fn settle_accumulator_for_testing(
+        &self,
+        effects: &[TransactionEffects],
+        checkpoint_seq: Option<u64>,
+    ) -> Vec<(VerifiedExecutableTransaction, ExecutionEnv)> {
         let accumulator_version = self
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .await
             .unwrap()
             .version();
-        // Use the current accumulator version as the checkpoint sequence number.
-        // This is a convenient hack to keep the checkpoint version unique for each settlement and incrementing.
-        let ckpt_seq = accumulator_version.value();
+        // Use provided checkpoint sequence, or fall back to accumulator version.
+        let ckpt_seq = checkpoint_seq.unwrap_or_else(|| accumulator_version.value());
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.get_transaction_cache_reader().as_ref()),
             effects,
@@ -4179,15 +4255,17 @@ impl AuthorityState {
             .unwrap();
         let version_map = assigned_versions.into_map();
 
+        let mut replay_txns = Vec::new();
         let mut settlement_effects = Vec::with_capacity(settlements.len());
         for tx in settlements {
-            let env = ExecutionEnv::new()
-                .with_assigned_versions(version_map.get(&tx.key()).unwrap().clone());
+            let assigned = version_map.get(&tx.key()).unwrap().clone();
+            let env = ExecutionEnv::new().with_assigned_versions(assigned);
             let (effects, _) = self
-                .try_execute_immediately(&tx, env, &epoch_store)
+                .try_execute_immediately(&tx.clone(), env.clone(), &epoch_store)
                 .await
                 .unwrap();
             assert!(effects.status().is_ok());
+            replay_txns.push((tx, env));
             settlement_effects.push(effects);
         }
 
@@ -4210,13 +4288,14 @@ impl AuthorityState {
             .unwrap();
         let version_map = assigned_versions.into_map();
 
-        let env = ExecutionEnv::new()
-            .with_assigned_versions(version_map.get(&barrier.key()).unwrap().clone());
+        let barrier_assigned = version_map.get(&barrier.key()).unwrap().clone();
+        let env = ExecutionEnv::new().with_assigned_versions(barrier_assigned);
         let (effects, _) = self
-            .try_execute_immediately(&barrier, env, &epoch_store)
+            .try_execute_immediately(&barrier.clone(), env.clone(), &epoch_store)
             .await
             .unwrap();
         assert!(effects.status().is_ok());
+        replay_txns.push((barrier, env));
 
         let next_accumulator_version = accumulator_version.next();
         self.execution_scheduler
@@ -4225,6 +4304,24 @@ impl AuthorityState {
                 next_accumulator_version,
             });
         // object funds are settled while executing the barrier transaction
+
+        replay_txns
+    }
+
+    /// Replays settlement transactions on this AuthorityState.
+    /// Used to sync a fullnode with settlement transactions executed on a validator.
+    pub async fn replay_settlement_for_testing(
+        &self,
+        txns: &[(VerifiedExecutableTransaction, ExecutionEnv)],
+    ) {
+        let epoch_store = self.epoch_store_for_testing();
+        for (tx, env) in txns {
+            let (effects, _) = self
+                .try_execute_immediately(tx, env.clone(), &epoch_store)
+                .await
+                .unwrap();
+            assert!(effects.status().is_ok());
+        }
     }
 
     /// Advance the epoch store to the next epoch for testing only.
@@ -4319,9 +4416,9 @@ impl AuthorityState {
         // Verify all checkpointed transactions are present in transactions_seq.
         // This catches any post-processing gaps that could occur if async
         // post-processing failed to complete before persistence.
-        // This runs whenever indexes are enabled (not gated on enable_secondary_index_checks)
-        // because it is cheap and critical for async post-processing correctness.
-        if let Some(indexes) = self.indexes.clone() {
+        if expensive_safety_check_config.enable_secondary_index_checks()
+            && let Some(indexes) = self.indexes.clone()
+        {
             let epoch = cur_epoch_store.epoch();
             // Only verify the current epoch's checkpoints. Previous epoch contents
             // may have been pruned, and we only need to verify that this epoch's
@@ -4651,7 +4748,7 @@ impl AuthorityState {
         Ok(Some((object, layout)))
     }
 
-    fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
+    pub fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
         let layout = object
             .data
             .try_as_move()
@@ -6472,7 +6569,7 @@ impl RandomnessRoundReceiver {
                 Ok(result) => result,
                 Err(_) => {
                     // Crash on randomness update execution timeout in debug builds.
-                    debug_fatal!(
+                    debug_fatal_no_invariant!(
                         "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
                     );
                     // Continue waiting as long as necessary in non-debug builds.

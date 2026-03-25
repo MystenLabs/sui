@@ -549,7 +549,7 @@ pub(crate) fn genesis_blocks(context: &Context) -> Vec<VerifiedBlock> {
         .committee
         .authorities()
         .map(|(authority_index, _)| {
-            let block = if context.protocol_config.mysticeti_fastpath() {
+            let block = if context.protocol_config.transaction_voting_enabled() {
                 Block::V2(BlockV2::genesis_block(context, authority_index))
             } else {
                 Block::V1(BlockV1::genesis_block(context, authority_index))

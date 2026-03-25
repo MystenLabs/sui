@@ -149,7 +149,36 @@ pub(crate) enum Match<T> {
     Tried(Option<usize>, ExpectedSet),
 }
 
+impl Error {
+    /// Whether this error is because of something outside the user's control.
+    pub fn is_internal_error(&self) -> bool {
+        matches!(self, Self::NameEvaluation(_, e) if e.is_internal_error())
+    }
+
+    /// Whether this error is because a resource limit was exceeded.
+    pub fn is_resource_limit_error(&self) -> bool {
+        matches!(self, Self::NameEvaluation(_, e) if e.is_resource_limit_error())
+            || matches!(
+                self,
+                Self::TooBig | Self::TooManyLoads | Self::TooMuchOutput
+            )
+    }
+}
+
 impl FormatError {
+    /// Whether this error is because of something outside the user's control.
+    pub fn is_internal_error(&self) -> bool {
+        matches!(self, Self::Bcs(_) | Self::Store(_) | Self::Visitor(_))
+    }
+
+    /// Whether this error is because a resource limit was exceeded.
+    pub fn is_resource_limit_error(&self) -> bool {
+        matches!(
+            self,
+            Self::TooBig | Self::TooDeep | Self::TooManyLoads | Self::TooMuchOutput
+        )
+    }
+
     /// Indicate that the error occurred while processing an expression at `offset`.
     pub(crate) fn for_expr_at_offset(self, offset: usize) -> Self {
         match self {
@@ -270,8 +299,24 @@ impl fmt::Display for ExpectedSet {
 }
 
 impl From<RV::Error> for FormatError {
-    fn from(RV::Error: RV::Error) -> Self {
-        FormatError::Bcs(bcs::Error::Custom("unexpected type".to_string()))
+    fn from(error: RV::Error) -> Self {
+        match error {
+            RV::Error::Visitor(err) => err.into(),
+            RV::Error::Option(err) => err.into(),
+            RV::Error::Meter(err) => err.into(),
+            RV::Error::UnexpectedType => {
+                FormatError::Bcs(bcs::Error::Custom("unexpected type".to_string()))
+            }
+        }
+    }
+}
+
+impl From<RV::MeterError> for FormatError {
+    fn from(error: RV::MeterError) -> Self {
+        match error {
+            RV::MeterError::TooBig => FormatError::TooBig,
+            RV::MeterError::TooDeep => FormatError::TooDeep,
+        }
     }
 }
 

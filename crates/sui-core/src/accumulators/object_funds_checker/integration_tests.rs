@@ -17,7 +17,7 @@ use sui_types::{
     effects::TransactionEffectsAPI,
     executable_transaction::VerifiedExecutableTransaction,
     execution::ExecutionOutput,
-    execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus},
+    execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
     gas_coin::GAS,
     object::Object,
 };
@@ -123,7 +123,7 @@ impl TestEnv {
         assert!(effects.status().is_ok());
 
         self.authority
-            .settle_accumulator_for_testing(&[effects])
+            .settle_accumulator_for_testing(&[effects], None)
             .await;
     }
 
@@ -228,7 +228,7 @@ async fn test_object_withdraw_multiple_withdraws() {
         all_effects.push(effects);
     }
     env.authority
-        .settle_accumulator_for_testing(&all_effects)
+        .settle_accumulator_for_testing(&all_effects, None)
         .await;
 
     assert_eq!(env.get_latest_balance(GAS::type_tag()), 1000 - 300 * 3);
@@ -275,7 +275,7 @@ async fn test_object_withdraw_multiple_withdraws() {
             assert!(matches!(
                 effects.status(),
                 ExecutionStatus::Failure(ExecutionFailure {
-                    error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+                    error: ExecutionErrorKind::InsufficientFundsForWithdraw,
                     ..
                 })
             ));
@@ -284,7 +284,7 @@ async fn test_object_withdraw_multiple_withdraws() {
         all_effects.push(effects);
     }
     env.authority
-        .settle_accumulator_for_testing(&all_effects)
+        .settle_accumulator_for_testing(&all_effects, None)
         .await;
 
     assert_eq!(
@@ -331,7 +331,7 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
     assert!(matches!(
         effects.status(),
         ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+            error: ExecutionErrorKind::InsufficientFundsForWithdraw,
             ..
         })
     ));
@@ -392,7 +392,7 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
     assert!(matches!(
         effects.status(),
         ExecutionStatus::Failure(ExecutionFailure {
-            error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+            error: ExecutionErrorKind::InsufficientFundsForWithdraw,
             ..
         })
     ));

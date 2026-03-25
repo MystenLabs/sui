@@ -6,7 +6,6 @@ use std::mem;
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use dashmap::mapref::entry::Entry;
 use futures::future::OptionFuture;
 use futures::future::join_all;
 use futures::join;
@@ -188,6 +187,16 @@ impl<S: V::Store> Interpreter<S> {
                     root = VV::Slice(value_slice);
                 }
 
+                (VV::Address(a), A::Derived(i)) => {
+                    let id = i.derive_object_id(a)?.into();
+                    let Some(slice) = self.object(id).await? else {
+                        return Ok(None);
+                    };
+
+                    accessors.pop();
+                    root = VV::Slice(slice);
+                }
+
                 // Fetch a single byte from a byte array, as long as the accessor evaluates to a
                 // numeric index.
                 (VV::Bytes(bs), accessor) => {
@@ -279,6 +288,7 @@ impl<S: V::Store> Interpreter<S> {
             PA::Index(chain) => Box::pin(self.eval_chain(chain)).await?.map(VA::Index),
             PA::DFIndex(chain) => Box::pin(self.eval_chain(chain)).await?.map(VA::DFIndex),
             PA::DOFIndex(chain) => Box::pin(self.eval_chain(chain)).await?.map(VA::DOFIndex),
+            PA::Derived(chain) => Box::pin(self.eval_chain(chain)).await?.map(VA::Derived),
         })
     }
 
@@ -395,18 +405,20 @@ impl<S: V::Store> Interpreter<S> {
     /// to remain valid for the lifetime 's because the cache (and the Arc it contains) lives for
     /// the entire lifetime of the Interpreter.
     async fn object<'s>(&'s self, id: AccountAddress) -> Result<Option<V::Slice<'s>>, FormatError> {
-        let entry = match self.cache.entry(id) {
-            Entry::Occupied(entry) => entry,
-            Entry::Vacant(entry) => entry.insert_entry(
-                self.store
-                    .object(id)
-                    .await
-                    .map_err(|e| FormatError::Store(Arc::new(e)))?
-                    .map(Arc::new),
-            ),
+        let owned = if let Some(cached) = self.cache.get(&id) {
+            cached.clone()
+        } else {
+            let loaded = self
+                .store
+                .object(id)
+                .await
+                .map_err(|e| FormatError::Store(Arc::new(e)))?
+                .map(Arc::new);
+
+            self.cache.entry(id).or_insert(loaded).clone()
         };
 
-        let Some(owned) = entry.get().as_ref() else {
+        let Some(owned) = owned.as_ref() else {
             return Ok(None);
         };
 

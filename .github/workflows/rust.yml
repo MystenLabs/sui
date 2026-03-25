@@ -159,6 +159,25 @@ jobs:
       - run: scripts/changed-files.sh
         shell: bash
 
+  # This is a no-op job that allows the resulting action names to line up when
+  # there are no rust changes in a given PR/commit. This ensures that we can
+  # continue to block on the rust tests passing in the case of rust changes and
+  # otherwise not block pushes to main.
+  # Note that this no-op job is only when there is a strategy matrix.
+  # Other required jobs without strategy matrix do not need a no-op counterpart.
+  test-tidehunter-notrust:
+    name: test-tidehunter
+    needs: diff
+    if: needs.diff.outputs.isRust == 'false'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ ubuntu-ghcloud ]
+      fail-fast: false
+    steps:
+      - run: 'echo "No build required" '
+
   test-extra:
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'

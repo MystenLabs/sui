@@ -36,8 +36,6 @@ const concepts = [
 			'concepts/tokenomics/gas-in-sui',
 		],
 	},
-	'concepts/coin-mgt',
-	'concepts/sui-move-concepts',
 	{
 		type: 'category',
 		label: 'Accessing Data',
@@ -76,6 +74,7 @@ const concepts = [
 			'concepts/cryptography/system/checkpoint-verification',
 		],
 	},
+	'concepts/sui-move-concepts',
 	'concepts/gaming',
 	'concepts/research-papers',
 ];

@@ -40,8 +40,6 @@ ignore = [
     "RUSTSEC-2025-0010",
     # AES functions in `ring` may panic when overflow checking is enabled
     "RUSTSEC-2025-0009",
-    # Upgrade tracing.* libs to resolve.
-    "RUSTSEC-2025-0055",
     # waiting on ark-relations release: https://github.com/arkworks-rs/snark/issues/413
     "RUSTSEC-2025-0056",
     # fxhash not maintained

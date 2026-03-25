@@ -68,7 +68,6 @@ use tracing::{info, warn};
 use typed_store::DBMetrics;
 
 pub mod commands;
-#[cfg(not(tidehunter))]
 pub mod db_tool;
 mod formal_snapshot_util;
 
@@ -815,6 +814,7 @@ pub async fn download_formal_snapshot(
     snapshot_store_config: ObjectStoreConfig,
     ingestion_url: &str,
     num_parallel_downloads: usize,
+    num_parallel_chunks: usize,
     network: Chain,
     verify: SnapshotVerifyMode,
     max_retries: usize,
@@ -922,11 +922,12 @@ pub async fn download_formal_snapshot(
             m_clone,
             false, // skip_reset_local_store
             max_retries,
+            num_parallel_chunks,
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
         reader
-            .read(&perpetual_db_clone, abort_registration, Some(sender))
+            .read(perpetual_db_clone.clone(), abort_registration, Some(sender))
             .await
             .unwrap_or_else(|err| panic!("Failed during read: {}", err));
         info!("Snapshot download complete");
@@ -1050,6 +1051,13 @@ pub async fn download_formal_snapshot(
         m.clone(),
     )
     .await?;
+
+    // After a large backfill, rebuild the tidehunter control region to reclaim disk space
+    // and reduce startup time. No-op when compiled without tidehunter.
+    #[cfg(tidehunter)]
+    perpetual_db
+        .force_rebuild_control_region()
+        .expect("Failed to rebuild tidehunter control region after snapshot restore");
 
     let new_path = path.parent().unwrap().join("live");
     if new_path.exists() {

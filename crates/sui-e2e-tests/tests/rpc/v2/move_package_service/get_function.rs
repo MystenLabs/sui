@@ -14,9 +14,7 @@ async fn test_get_function_validator_cap() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetFunctionRequest::default();
     request.package_id = Some("0x3".to_string());
@@ -35,9 +33,7 @@ async fn test_get_function_not_found() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetFunctionRequest::default();
     request.package_id = Some("0x3".to_string());
@@ -55,9 +51,7 @@ async fn test_get_function_invalid_hex() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetFunctionRequest::default();
     request.package_id = Some("0xGGGG".to_string());
@@ -75,9 +69,7 @@ async fn test_get_function_missing_package_id() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetFunctionRequest::default();
     request.package_id = None;
@@ -95,9 +87,7 @@ async fn test_get_function_missing_module_name() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetFunctionRequest::default();
     request.package_id = Some("0x3".to_string());
@@ -115,9 +105,7 @@ async fn test_get_function_missing_name() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut service = MovePackageServiceClient::new(cluster.grpc_channel());
 
     let mut request = GetFunctionRequest::default();
     request.package_id = Some("0x3".to_string());

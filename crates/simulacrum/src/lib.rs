@@ -21,7 +21,7 @@ use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_framework_snapshot::load_bytecode_snapshot;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc;
@@ -29,7 +29,9 @@ use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
-use sui_types::crypto::{AccountKeyPair, AuthoritySignature, get_account_key_pair};
+use sui_types::crypto::{
+    AccountKeyPair, AuthoritySignature, SuiKeyPair, get_account_key_pair, get_key_pair,
+};
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
@@ -37,7 +39,8 @@ use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
 use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::transaction::EndOfEpochTransactionKind;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::{EndOfEpochTransactionKind, SenderSignedData};
 use sui_types::{
     base_types::{EpochId, SuiAddress},
     committee::Committee,
@@ -50,12 +53,14 @@ use sui_types::{
     transaction::{Transaction, VerifiedTransaction},
 };
 
-use self::epoch_state::EpochState;
+pub use self::epoch_state::EpochState;
 pub use self::store::SimulatorStore;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
+use sui_types::sui_system_state::SuiSystemState;
+pub use sui_types::transaction_executor::TransactionChecks;
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -190,7 +195,8 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint());
 
         let genesis = &config.genesis;
-        let epoch_state = EpochState::new(genesis.sui_system_object());
+        let chain_identifier = (*genesis.checkpoint().digest()).into();
+        let epoch_state = EpochState::new(genesis.sui_system_object(), chain_identifier);
 
         Self {
             rng,
@@ -203,6 +209,64 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             verifier_signing_config: VerifierSigningConfig::default(),
             data_ingestion_path: None,
         }
+    }
+
+    /// Create a new Simulacrum instance with the provided custom state.
+    ///
+    /// Useful for testing specific scenarios or starting from a non-genesis state.
+    ///
+    /// Note: the `system_state` should represent the state of the system that exists after the
+    /// provided `checkpoint`.
+    pub fn new_from_custom_state(
+        keystore: KeyStore,
+        checkpoint: VerifiedCheckpoint,
+        system_state: SuiSystemState,
+        config: &NetworkConfig,
+        store: S,
+        rng: R,
+    ) -> Self {
+        let checkpoint_builder = MockCheckpointBuilder::new(checkpoint);
+        let chain_identifier = (*config.genesis.checkpoint().digest()).into();
+        let epoch_state = EpochState::new(system_state, chain_identifier);
+        Self {
+            rng,
+            keystore,
+            genesis: config.genesis.clone(),
+            store,
+            checkpoint_builder,
+            epoch_state,
+            deny_config: TransactionDenyConfig::default(),
+            verifier_signing_config: VerifierSigningConfig::default(),
+            data_ingestion_path: None,
+        }
+    }
+
+    /// Execute a transaction while impersonating a specific sender.
+    ///
+    /// This method allows executing transactions as any account without requiring the private
+    /// keys for that account. This is useful for testing scenarios where you want to simulate
+    /// transactions from accounts you don't control.
+    ///
+    /// # Arguments
+    /// * `transaction_data` - The transaction data to execute
+    ///
+    /// # Returns
+    /// The transaction effects and optional execution error
+    pub fn execute_transaction_impersonating(
+        &mut self,
+        transaction_data: TransactionData,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        // Create dummy signatures for each required signer
+        let pk = SuiKeyPair::Ed25519(get_key_pair().1);
+        let sig = pk.sign(transaction_data.sender().as_ref());
+        // Create sender signed data with dummy signatures
+        let sender_signed_data = SenderSignedData::new(transaction_data, vec![sig.into()]);
+
+        // Create transaction and verify signatures
+        let verified_transaction = Transaction::new(sender_signed_data)
+            .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
+
+        self.execute_transaction_impl(verified_transaction)
     }
 
     /// Attempts to execute the provided Transaction.
@@ -413,6 +477,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let new_epoch_state = EpochState::new_with_protocol_config(
             self.store.get_system_state(),
             self.epoch_state.protocol_config().clone(),
+            self.epoch_state.chain_identifier(),
         );
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: new_epoch_state.committee().voting_rights.clone(),
@@ -433,8 +498,12 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         self.epoch_state = new_epoch_state;
     }
 
-    pub fn store(&self) -> &dyn SimulatorStore {
+    pub fn store(&self) -> &S {
         &self.store
+    }
+
+    pub fn store_mut(&mut self) -> &mut S {
+        &mut self.store
     }
 
     pub fn keystore(&self) -> &KeyStore {
@@ -443,6 +512,14 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
 
     pub fn epoch_start_state(&self) -> &EpochStartSystemState {
         self.epoch_state.epoch_start_state()
+    }
+
+    pub fn system_state(&self) -> SuiSystemState {
+        self.store.get_system_state()
+    }
+
+    pub fn protocol_config(&self) -> &ProtocolConfig {
+        self.epoch_state.protocol_config()
     }
 
     /// Return a handle to the internally held RNG.
@@ -787,9 +864,10 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for 
         None
     }
 
-    fn get_struct_layout(
+    fn get_struct_layout_with_overlay(
         &self,
         _: &move_core_types::language_storage::StructTag,
+        _overlay: &sui_types::full_checkpoint_content::ObjectSet,
     ) -> sui_types::storage::error::Result<Option<move_core_types::annotated_value::MoveTypeLayout>>
     {
         Ok(None)
@@ -810,7 +888,7 @@ impl Simulacrum {
             .owned_objects(sender)
             .find(|object| object.is_gas_coin())
             .unwrap();
-        let gas_coin = GasCoin::try_from(&object).unwrap();
+        let gas_coin = GasCoin::try_from(object).unwrap();
         let transfer_amount = gas_coin.value() / 2;
 
         let pt = {
@@ -934,7 +1012,7 @@ mod tests {
             sim.store()
                 .owned_objects(recipient)
                 .next()
-                .and_then(|object| GasCoin::try_from(&object).ok())
+                .and_then(|object| GasCoin::try_from(object).ok())
                 .unwrap()
                 .value()
         );

@@ -517,9 +517,6 @@ convert_to_fungible_staked_sui
 redeem_fungible_staked_sui
 	public(package) fun
 	0x3::validator_set
-request_set_commission_rate
-	public(package) fun
-	0x3::validator_set
 advance_epoch
 	public(package) fun
 	0x3::validator_set
@@ -592,19 +589,28 @@ find_validator_from_table_vec
 get_validator_indices
 	fun
 	0x3::validator_set
-get_validator_mut
+any_validator
 	public(package) fun
 	0x3::validator_set
-get_active_or_pending_or_candidate_validator_mut
-	fun
-	0x3::validator_set
-get_validator_mut_with_verified_cap
+any_validator_mut
 	public(package) fun
 	0x3::validator_set
-get_validator_mut_with_ctx
+active_validator
 	public(package) fun
 	0x3::validator_set
-get_validator_mut_with_ctx_including_candidates
+active_validator_mut
+	public(package) fun
+	0x3::validator_set
+pending_validator
+	public(package) fun
+	0x3::validator_set
+pending_validator_mut
+	public(package) fun
+	0x3::validator_set
+candidate_validator
+	public(package) fun
+	0x3::validator_set
+candidate_validator_mut
 	public(package) fun
 	0x3::validator_set
 get_validator_ref
@@ -612,12 +618,6 @@ get_validator_ref
 	0x3::validator_set
 get_active_or_pending_or_candidate_validator_ref
 	public(package) fun
-	0x3::validator_set
-get_active_validator_ref
-	public fun
-	0x3::validator_set
-get_pending_validator_ref
-	public fun
 	0x3::validator_set
 verify_cap
 	public(package) fun
@@ -681,6 +681,12 @@ is_at_risk_validator
 	0x3::validator_set
 active_validator_addresses
 	public(package) fun
+	0x3::validator_set
+get_active_validator_ref
+	public fun
+	0x3::validator_set
+get_pending_validator_ref
+	public fun
 	0x3::validator_set
 StorageFund
 	public struct
@@ -1361,6 +1367,12 @@ sui_coin_registry_object_id
 	public(package) fun
 	0x2::object
 sui_coin_registry_address
+	public(package) fun
+	0x2::object
+sui_display_registry_object_id
+	public(package) fun
+	0x2::object
+sui_display_registry_address
 	public(package) fun
 	0x2::object
 bridge
@@ -2929,12 +2941,84 @@ version
 fields
 	public fun
 	0x2::display
+destroy
+	public(package) fun
+	0x2::display
 create_internal
 	fun
 	0x2::display
 add_internal
 	fun
 	0x2::display
+DisplayRegistry
+	public struct
+	0x2::display_registry
+SystemMigrationCap
+	public struct
+	0x2::display_registry
+Display
+	public struct
+	0x2::display_registry
+DisplayCap
+	public struct
+	0x2::display_registry
+DisplayKey
+	public struct
+	0x2::display_registry
+new
+	public fun
+	0x2::display_registry
+new_with_publisher
+	public fun
+	0x2::display_registry
+unset
+	public fun
+	0x2::display_registry
+set
+	public fun
+	0x2::display_registry
+clear
+	public fun
+	0x2::display_registry
+share
+	public fun
+	0x2::display_registry
+claim
+	public fun
+	0x2::display_registry
+claim_with_publisher
+	public fun
+	0x2::display_registry
+system_migration
+	public fun
+	0x2::display_registry
+migrate_v1_to_v2
+	public fun
+	0x2::display_registry
+destroy_system_migration_cap
+	entry fun
+	0x2::display_registry
+transfer_migration_cap
+	entry fun
+	0x2::display_registry
+delete_legacy
+	public fun
+	0x2::display_registry
+fields
+	public fun
+	0x2::display_registry
+cap_id
+	public fun
+	0x2::display_registry
+migration_cap_receiver
+	public(package) fun
+	0x2::display_registry
+new_display
+	fun
+	0x2::display_registry
+create
+	fun
+	0x2::display_registry
 Curve
 	public struct
 	0x2::groth16

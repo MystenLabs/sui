@@ -415,6 +415,15 @@ impl Database {
     }
 
     #[cfg(tidehunter)]
+    pub fn force_rebuild_control_region(&self) -> anyhow::Result<()> {
+        if let Storage::TideHunter(db) = &self.storage {
+            db.force_rebuild_control_region()
+                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+        }
+        Ok(())
+    }
+
+    #[cfg(tidehunter)]
     pub fn drop_cells_in_range(
         &self,
         ks: KeySpace,
@@ -2042,9 +2051,26 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
 }
 
 #[cfg(tidehunter)]
-pub async fn safe_drop_db(path: PathBuf, _: Duration) -> Result<(), std::io::Error> {
-    tokio::time::sleep(Duration::from_secs(600)).await;
-    std::fs::remove_dir_all(path)
+pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
+    let mut backoff = backoff::ExponentialBackoff {
+        max_elapsed_time: Some(timeout),
+        ..Default::default()
+    };
+    loop {
+        if !path.join("LOCK").exists() {
+            return std::fs::remove_dir_all(path);
+        }
+        match backoff.next_backoff() {
+            Some(duration) => tokio::time::sleep(duration).await,
+            None => {
+                warn!(
+                    "LOCK file present after timeout ({:?}), forcefully removing: {:?}",
+                    timeout, path
+                );
+                return std::fs::remove_dir_all(&path);
+            }
+        }
+    }
 }
 
 fn populate_missing_cfs(

@@ -31,6 +31,11 @@ use sui_types::transaction::{
 
 use crate::errors::Error;
 use crate::types::ConstructionMetadata;
+pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
+use consolidate_to_fungible::consolidate_to_fungible_pt;
+pub(crate) use consolidate_to_fungible::get_validator_pool_id;
+pub use merge_and_redeem::MergeAndRedeemFungibleStakedSui;
+use merge_and_redeem::merge_and_redeem_fss_pt;
 pub use pay_coin::PayCoin;
 pub(crate) use pay_coin::pay_coin_pt;
 pub use pay_sui::PaySui;
@@ -40,6 +45,8 @@ use stake::{stake_pt_ab_gas, stake_pt_coin_gas};
 pub use withdraw_stake::WithdrawStake;
 use withdraw_stake::withdraw_stake_pt;
 
+mod consolidate_to_fungible;
+mod merge_and_redeem;
 mod pay_coin;
 mod pay_sui;
 mod stake;
@@ -62,6 +69,12 @@ pub struct TransactionObjectData {
     pub budget: u64,
     /// Amount to withdraw from address balance for payment
     pub address_balance_withdrawal: u64,
+    /// Number of FungibleStakedSui objects in the `objects` array (the rest are StakedSui).
+    /// Used by ConsolidateAllStakedSuiToFungible to split objects for PTB construction.
+    pub fss_object_count: Option<u64>,
+    /// Pool tokens to redeem. None = redeem all.
+    /// Used by MergeAndRedeemFungibleStakedSui.
+    pub redeem_token_amount: Option<u64>,
 }
 
 #[async_trait]
@@ -82,6 +95,8 @@ pub enum InternalOperation {
     PayCoin(PayCoin),
     Stake(Stake),
     WithdrawStake(WithdrawStake),
+    ConsolidateAllStakedSuiToFungible(ConsolidateAllStakedSuiToFungible),
+    MergeAndRedeemFungibleStakedSui(MergeAndRedeemFungibleStakedSui),
 }
 
 impl InternalOperation {
@@ -90,7 +105,13 @@ impl InternalOperation {
             InternalOperation::PaySui(PaySui { sender, .. })
             | InternalOperation::PayCoin(PayCoin { sender, .. })
             | InternalOperation::Stake(Stake { sender, .. })
-            | InternalOperation::WithdrawStake(WithdrawStake { sender, .. }) => *sender,
+            | InternalOperation::WithdrawStake(WithdrawStake { sender, .. })
+            | InternalOperation::ConsolidateAllStakedSuiToFungible(
+                ConsolidateAllStakedSuiToFungible { sender, .. },
+            )
+            | InternalOperation::MergeAndRedeemFungibleStakedSui(
+                MergeAndRedeemFungibleStakedSui { sender, .. },
+            ) => *sender,
         }
     }
 
@@ -194,6 +215,19 @@ impl InternalOperation {
                 let withdraw_all = stake_ids.is_empty();
                 withdraw_stake_pt(metadata.objects, withdraw_all)?
             }
+            InternalOperation::ConsolidateAllStakedSuiToFungible(
+                ConsolidateAllStakedSuiToFungible { sender, .. },
+            ) => {
+                // objects[0..fss_count] are FungibleStakedSui, objects[fss_count..] are StakedSui
+                let fss_count = metadata.fss_object_count.unwrap_or(0) as usize;
+                let (fss_refs, staked_sui_refs) = metadata
+                    .objects
+                    .split_at(fss_count.min(metadata.objects.len()));
+                consolidate_to_fungible_pt(sender, fss_refs.to_vec(), staked_sui_refs.to_vec())?
+            }
+            InternalOperation::MergeAndRedeemFungibleStakedSui(
+                MergeAndRedeemFungibleStakedSui { sender, .. },
+            ) => merge_and_redeem_fss_pt(sender, metadata.objects, metadata.redeem_token_amount)?,
         };
 
         if metadata.gas_coins.is_empty() {

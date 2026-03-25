@@ -78,6 +78,9 @@ pub enum Accessor<'s> {
 
     /// Index into a dynamic object field.
     DOFIndex(Chain<'s>),
+
+    /// Index into a derived object lookup.
+    Derived(Chain<'s>),
 }
 
 /// Literal forms are elements whose syntax determines their (outer) type.
@@ -245,6 +248,7 @@ macro_rules! match_token_opt {
 ///              | '[' chain ']'
 ///              | '->' '[' chain ']'
 ///              | '=>' '[' chain ']'
+///              | '~>' '[' chain ']'
 ///
 ///   literal  ::= self | address | bool | number | string | vector | struct | enum
 ///
@@ -595,6 +599,18 @@ impl<'s> Parser<'s> {
                 meter.load()?;
                 meter.alloc()?;
                 Accessor::DOFIndex(chain)
+            },
+
+            Tok(_, T::TArrow, _, _) => {
+                self.lexer.next();
+
+                match_token! { self.lexer; Tok(_, T::LBracket, _, _) => self.lexer.next() };
+                let chain = self.parse_chain(meter)?;
+                match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
+
+                meter.load()?;
+                meter.alloc()?;
+                Accessor::Derived(chain)
             },
 
             Tok(_, T::LBracket, _, _) => {
@@ -1165,6 +1181,7 @@ impl fmt::Debug for Chain<'_> {
                 A::Index(chain) => write!(f, "[{chain:?}]")?,
                 A::DFIndex(chain) => write!(f, "->[{chain:?}]")?,
                 A::DOFIndex(chain) => write!(f, "=>[{chain:?}]")?,
+                A::Derived(chain) => write!(f, "~>[{chain:?}]")?,
             }
         }
 

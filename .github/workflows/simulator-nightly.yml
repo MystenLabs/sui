@@ -60,18 +60,15 @@ jobs:
         run: tsh -i ${{ steps.auth.outputs.identity-file }} status
         env:
           TELEPORT_IDENTITY_FILE: ${{ env.TELEPORT_IDENTITY_FILE }}
-      # Cargo clean and git restore on any left over files from git checkout, and deletes all remote tracking branches
+      # Clean tmpfs, old repo, and old simtest logs before starting fresh
       - name: Environment clean
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 echo 'teleport OK'
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && rm -rf ~/sui"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/ && git clone git@github.com:MystenLabs/sui.git"
- 
-      # Deleting files in tmpfs that usually fill up pretty quickly after each run. Cargo clean to free up space as well.
-      - name: Tmpfs and cargo clean
-        run: |  
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -rf ~/sui"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cd ~/ && git clone git@github.com:MystenLabs/sui.git"
+          # Keep only the 10 most recent simtest log directories
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cd ~/simtest_logs && ls -dt */ 2>/dev/null | tail -n +11 | xargs rm -rf" || true
 
       # Checkout out the latest sui repo
       - name: Checkout sui repo

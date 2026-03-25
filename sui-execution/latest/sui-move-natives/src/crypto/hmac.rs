@@ -4,13 +4,15 @@ use crate::{NativesCostTable, get_extension};
 use fastcrypto::{hmac, traits::ToFromBytes};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Value, VectorRef},
+    },
+    natives::functions::NativeResult,
     pop_arg,
-    values::{Value, VectorRef},
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -56,8 +58,8 @@ pub fn hmac_sha3_256(
     let message = pop_arg!(args, VectorRef);
     let key = pop_arg!(args, VectorRef);
 
-    let msg_len = message.as_bytes_ref().len();
-    let key_len = key.as_bytes_ref().len();
+    let msg_len = message.as_bytes_ref()?.len();
+    let key_len = key.as_bytes_ref()?.len();
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
@@ -70,14 +72,14 @@ pub fn hmac_sha3_256(
                     .into()
     );
 
-    let hmac_key = hmac::HmacKey::from_bytes(&key.as_bytes_ref())
+    let hmac_key = hmac::HmacKey::from_bytes(&key.as_bytes_ref()?)
         .expect("HMAC key can be of any length and from_bytes should always succeed");
     let cost = context.gas_used();
 
     Ok(NativeResult::ok(
         cost,
         smallvec![Value::vector_u8(
-            hmac::hmac_sha3_256(&hmac_key, &message.as_bytes_ref()).to_vec()
+            hmac::hmac_sha3_256(&hmac_key, &message.as_bytes_ref()?).to_vec()
         )],
     ))
 }

@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02020]: no valid 'syntax' declaration found
+   ┌─ tests/move_2024/extensions/index_syntax_defined_in_extension_used_in_base.move:13:10
+   │
+13 │         &s[0]
+   │          ^^^^ No valid 'syntax(index)' method found for 'a::m::S'
+
+warning[W04039]: unable to determine principal type for literal
+   ┌─ tests/move_2024/extensions/index_syntax_defined_in_extension_used_in_base.move:13:12
+   │
+13 │         &s[0]
+   │            ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+   │
+   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

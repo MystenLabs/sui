@@ -52,6 +52,7 @@ pub struct StateSnapshotReaderV1 {
     object_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
     m: MultiProgress,
     concurrency: usize,
+    num_parallel_chunks: usize,
     max_retries: usize,
     remote_epoch_prefix: Path,
 }
@@ -128,6 +129,7 @@ impl StateSnapshotReaderV1 {
         m: MultiProgress,
         skip_reset_local_store: bool,
         max_retries: usize,
+        num_parallel_chunks: usize,
     ) -> Result<Self> {
         let remote_object_store = if remote_store_config.no_sign_request {
             remote_store_config.make_http()?
@@ -287,6 +289,7 @@ impl StateSnapshotReaderV1 {
             object_files,
             m,
             concurrency: download_concurrency.get(),
+            num_parallel_chunks,
             max_retries,
             remote_epoch_prefix,
         })
@@ -294,7 +297,7 @@ impl StateSnapshotReaderV1 {
 
     pub async fn read(
         &mut self,
-        perpetual_db: &AuthorityPerpetualTables,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
         abort_registration: AbortRegistration,
         sender: Option<tokio::sync::mpsc::Sender<(GlobalStateHash, u64)>>,
     ) -> Result<()> {
@@ -306,7 +309,7 @@ impl StateSnapshotReaderV1 {
         let (sha3_digests, num_part_files) = self.compute_checksum().await?;
         let accum_handle =
             sender.map(|sender| self.spawn_accumulation_tasks(sender, num_part_files));
-        self.sync_live_objects(perpetual_db, abort_registration, sha3_digests)
+        self.sync_live_objects(perpetual_db.clone(), abort_registration, sha3_digests)
             .await?;
         if let Some(handle) = accum_handle {
             handle.await?;
@@ -479,12 +482,13 @@ impl StateSnapshotReaderV1 {
 
     async fn sync_live_objects(
         &self,
-        perpetual_db: &AuthorityPerpetualTables,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
         abort_registration: AbortRegistration,
         sha3_digests: Arc<Mutex<DigestByBucketAndPartition>>,
     ) -> Result<(), anyhow::Error> {
         let epoch_dir = self.remote_epoch_prefix.clone();
         let concurrency = self.concurrency;
+        let num_parallel_chunks = self.num_parallel_chunks;
         let remote_object_store = self.remote_object_store.clone();
         let input_files: Vec<_> = self
             .object_files
@@ -507,7 +511,7 @@ impl StateSnapshotReaderV1 {
         );
         let obj_progress_bar_clone = obj_progress_bar.clone();
         let instant = Instant::now();
-        let downloaded_bytes = AtomicUsize::new(0);
+        let downloaded_bytes = Arc::new(AtomicUsize::new(0));
 
         let ret = Abortable::new(
             async move {
@@ -538,25 +542,30 @@ impl StateSnapshotReaderV1 {
                     .boxed()
                     .buffer_unordered(concurrency)
                     .try_for_each(|(bytes, file_metadata, sha3_digest)| {
-                        let bytes_len = bytes.len();
-                        let result: Result<(), anyhow::Error> =
-                            LiveObjectIter::new(&file_metadata, bytes).map(|obj_iter| {
-                                AuthorityStore::bulk_insert_live_objects(
-                                    perpetual_db,
-                                    obj_iter,
-                                    &sha3_digest,
-                                )
-                                .expect("Failed to insert live objects");
-                            });
-                        downloaded_bytes.fetch_add(bytes_len, Ordering::Relaxed);
-                        obj_progress_bar_clone.inc(1);
-                        obj_progress_bar_clone.set_message(format!(
-                            "Download speed: {} MiB/s",
-                            downloaded_bytes.load(Ordering::Relaxed) as f64
-                                / (1024 * 1024) as f64
-                                / instant.elapsed().as_secs_f64(),
-                        ));
-                        futures::future::ready(result)
+                        let perpetual_db = perpetual_db.clone();
+                        let obj_progress_bar_clone = obj_progress_bar_clone.clone();
+                        let downloaded_bytes = downloaded_bytes.clone();
+                        async move {
+                            let bytes_len = bytes.len();
+                            let objects: Vec<LiveObject> =
+                                LiveObjectIter::new(&file_metadata, bytes)?.collect();
+                            AuthorityStore::bulk_insert_live_objects(
+                                perpetual_db,
+                                objects,
+                                &sha3_digest,
+                                num_parallel_chunks,
+                            )
+                            .await?;
+                            downloaded_bytes.fetch_add(bytes_len, Ordering::Relaxed);
+                            obj_progress_bar_clone.inc(1);
+                            obj_progress_bar_clone.set_message(format!(
+                                "Download speed: {} MiB/s",
+                                downloaded_bytes.load(Ordering::Relaxed) as f64
+                                    / (1024 * 1024) as f64
+                                    / instant.elapsed().as_secs_f64(),
+                            ));
+                            Ok(())
+                        }
                     })
                     .await
             },

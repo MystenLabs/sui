@@ -115,9 +115,7 @@ impl CommitTestFixture {
     ) -> Arc<Context> {
         let (mut context, _keys) = Context::new_for_test(num_authorities);
         if let Some(gc_depth) = gc_depth {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
+            context.protocol_config.set_gc_depth_for_testing(gc_depth);
         }
         // Skipping equivocation validation is necessary when testing with equivocators.
         // Also it is ok when only testing the commit code path.

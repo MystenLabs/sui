@@ -463,6 +463,7 @@ impl OffchainCluster {
         let latest: HashMap<String, i64> = w::watermarks
             .select((w::pipeline, w::checkpoint_hi_inclusive))
             .filter(w::pipeline.eq_any(&self.pipelines))
+            .filter(w::reader_lo.le(w::checkpoint_hi_inclusive))
             .load(&mut conn)
             .await?
             .into_iter()

@@ -3,8 +3,10 @@
 
 use crate::{
     execution_mode::ExecutionMode,
-    programmable_transactions::execution::{PrimitiveArgumentLayout, bcs_argument_validate},
     sp,
+    static_programmable_transactions::execution::context::{
+        PrimitiveArgumentLayout, bcs_argument_validate,
+    },
     static_programmable_transactions::{
         env::Env,
         loading::ast::{ObjectMutability, Type},
@@ -14,8 +16,8 @@ use crate::{
 use indexmap::IndexSet;
 use sui_types::{
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
-    error::{ExecutionError, ExecutionErrorKind, SafeIndex, command_argument_error},
-    execution_status::CommandArgumentError,
+    error::{ExecutionError, SafeIndex, command_argument_error},
+    execution_status::{CommandArgumentError, ExecutionErrorKind},
     id::RESOLVED_SUI_ID,
     transfer::RESOLVED_RECEIVING_STRUCT,
 };
@@ -71,7 +73,7 @@ impl Context {
 ///    on mutable objects. And that the gas coin is only taken by value in transfer objects
 pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction {
-        gas_coin: _,
+        gas_payment: _,
         bytes,
         objects: _,
         withdrawals: _,
@@ -84,7 +86,7 @@ pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(
         check_pure_input::<Mode>(bytes, pure)?;
     }
     for receiving in receiving {
-        check_receving_input(receiving)?;
+        check_receiving_input(receiving)?;
     }
     let context = &mut Context::new(txn);
     for c in commands {
@@ -191,7 +193,7 @@ fn primitive_serialization_layout(
     })
 }
 
-fn check_receving_input(receiving: &T::ReceivingInput) -> Result<(), ExecutionError> {
+fn check_receiving_input(receiving: &T::ReceivingInput) -> Result<(), ExecutionError> {
     let T::ReceivingInput {
         original_input_index: _,
         object_ref: _,

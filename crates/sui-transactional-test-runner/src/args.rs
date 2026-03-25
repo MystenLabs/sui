@@ -99,6 +99,9 @@ pub struct SuiInitArgs {
     /// Enable using address balance as gas payments feature for testing
     #[clap(long = "enable-address-balance-gas-payments")]
     pub enable_address_balance_gas_payments: bool,
+    /// Enable coin reservations for gas payment
+    #[clap(long = "enable-coin-reservations")]
+    pub enable_coin_reservations: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -107,6 +110,13 @@ pub struct ViewObjectCommand {
     pub id: FakeID,
     #[clap(long = "hide-contents")]
     pub hide_contents: bool,
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct ViewFundsCommand {
+    #[clap(value_parser = ParsedType::parse)]
+    pub funds_type: ParsedType,
+    pub address: String,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -143,8 +153,8 @@ pub struct ProgrammableTransactionCommand {
     pub address_balance_gas: bool,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
-    #[clap(long = "gas-payment", value_parser = parse_fake_id)]
-    pub gas_payment: Option<Vec<FakeID>>,
+    #[clap(long = "gas-payment", value_parser = ParsedValue::<SuiExtraValueArgs>::parse)]
+    pub gas_payment: Option<Vec<ParsedValue<SuiExtraValueArgs>>>,
     #[clap(long = "dev-inspect")]
     pub dev_inspect: bool,
     #[clap(long = "dry-run")]
@@ -292,6 +302,7 @@ pub struct AuthenticatorStateUpdateCommand {
 #[derive(Debug)]
 pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     ViewObject(ViewObjectCommand),
+    ViewFunds(ViewFundsCommand),
     TransferObject(TransferObjectCommand),
     ConsensusCommitPrologue(ConsensusCommitPrologueCommand),
     ProgrammableTransaction(ProgrammableTransactionCommand),
@@ -316,6 +327,9 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
         Ok(match matches.subcommand() {
             Some(("view-object", matches)) => {
                 SuiSubcommand::ViewObject(ViewObjectCommand::from_arg_matches(matches)?)
+            }
+            Some(("view-funds", matches)) => {
+                SuiSubcommand::ViewFunds(ViewFundsCommand::from_arg_matches(matches)?)
             }
             Some(("transfer-object", matches)) => {
                 SuiSubcommand::TransferObject(TransferObjectCommand::from_arg_matches(matches)?)
@@ -384,6 +398,7 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
     fn command() -> clap::Command {
         clap::Command::new("sui_sub_command")
             .subcommand(ViewObjectCommand::command().name("view-object"))
+            .subcommand(ViewFundsCommand::command().name("view-funds"))
             .subcommand(TransferObjectCommand::command().name("transfer-object"))
             .subcommand(ConsensusCommitPrologueCommand::command().name("consensus-commit-prologue"))
             .subcommand(ProgrammableTransactionCommand::command().name("programmable"))

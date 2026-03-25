@@ -114,7 +114,12 @@ const references = [
 				label: 'dApp Kit',
 				href: 'https://sdk.mystenlabs.com/dapp-kit',
 			},
-			'references/rust-sdk',
+			{
+				type: 'link',
+				label: 'Rust SDK',
+				href: 'https://github.com/MystenLabs/sui-rust-sdk',
+			},
+			"references/rust-sdk",
 			{
 				type: 'link',
 				label: 'TypeScript SDK',
@@ -166,6 +171,17 @@ const references = [
 			},
 		],
 	},
+	{
+		type: 'link',
+		label: 'Open Zeppelin: Access Library',
+		href: 'https://docs.openzeppelin.com/contracts-sui/1.x/api/access',
+	},
+	{
+		type: 'link',
+		label: 'Open Zeppelin: Math Library',
+		href: 'https://docs.openzeppelin.com/contracts-sui/1.x/api/math',
+	},
+	'references/object-display-syntax',
 	'references/awesome-sui',
 	'references/awesome-sui-gaming',
 	'references/sui-glossary',

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(not(tidehunter))]
 use crate::db_tool::{DbToolCommand, execute_db_tool_command, print_db_all_tables};
 use crate::{
     ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
@@ -133,7 +132,6 @@ pub enum ToolCommand {
     },
 
     /// Tool to read validator & node db.
-    #[cfg(not(tidehunter))]
     #[command(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
@@ -295,6 +293,9 @@ pub enum ToolCommand {
         /// Number of parallel downloads to perform. Defaults to 50, max 200.
         #[clap(long = "num-parallel-downloads")]
         num_parallel_downloads: Option<usize>,
+        /// Number of parallel chunks for object insertion. Defaults to 8.
+        #[clap(long = "num-parallel-chunks", default_value = "8")]
+        num_parallel_chunks: usize,
         /// Verification mode to employ.
         #[clap(long = "verify", default_value = "normal")]
         verify: Option<SnapshotVerifyMode>,
@@ -554,7 +555,6 @@ impl ToolCommand {
                     get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
                 );
             }
-            #[cfg(not(tidehunter))]
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);
                 match cmd {
@@ -649,6 +649,7 @@ impl ToolCommand {
                 genesis,
                 path,
                 num_parallel_downloads,
+                num_parallel_chunks,
                 verify,
                 network,
                 snapshot_bucket,
@@ -783,6 +784,7 @@ impl ToolCommand {
                     snapshot_store_config,
                     ingestion_url,
                     num_parallel_downloads,
+                    num_parallel_chunks,
                     network,
                     verify,
                     max_retries,

@@ -75,6 +75,19 @@ const guides = [
           'guides/developer/objects/transfers/transfer-to-object',
         ],
       },
+      {
+        type: 'category',
+        label: 'Object Display',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/objects/display/index',
+        },
+        items: [
+          'guides/developer/objects/display/display-overview',
+          'guides/developer/objects/display/using-display',
+          'guides/developer/objects/display/display-preview'
+        ],
+      },
       'guides/developer/objects/derived-objects',
       {
         type: 'category',
@@ -103,6 +116,7 @@ const guides = [
       'guides/developer/packages/upgrade',
       'guides/developer/packages/custom-policies',
       'guides/developer/packages/automated-address-management',
+	  'guides/developer/packages/openzeppelin',
     ],
   },
   {
@@ -175,6 +189,70 @@ const guides = [
   },
   {
     type: 'category',
+    label: 'Digital Assets',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/digital-assets/index',
+    },
+    items: [
+      'guides/developer/digital-assets/types-of-assets',
+      {
+        type: 'category',
+        label: 'Fungible Tokens',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/digital-assets/fungible-tokens/index',
+        },
+        items: [
+          'guides/developer/digital-assets/fungible-tokens/create-a-fungible-token',
+          'guides/developer/digital-assets/fungible-tokens/regulated-tokens',
+          'guides/developer/digital-assets/fungible-tokens/token-vesting-strategies',
+        ],
+      },
+      {
+        type: 'category',
+        label: 'Non-Fungible Tokens',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/digital-assets/non-fungible-tokens/index',
+        },
+        items: [
+          'guides/developer/digital-assets/non-fungible-tokens/create-nft',
+          'guides/developer/digital-assets/non-fungible-tokens/asset-tokenization',
+          'guides/developer/digital-assets/non-fungible-tokens/deploy-tokenized-asset',
+        ],
+      },
+      'guides/developer/digital-assets/permissioned-assets',
+      'guides/developer/digital-assets/gasless-transactions',
+      {
+        type: 'category',
+        label: 'Address Management',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/digital-assets/address-management/index',
+        },
+        items: [
+          'guides/developer/digital-assets/address-management/migrate-address-balances',
+        ],
+      },
+      {
+        type: 'category',
+        label: 'Examples and Patterns',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/digital-assets/examples-patterns/index',
+        },
+        items: [
+          'guides/developer/digital-assets/examples-patterns/in-game-currency',
+          'guides/developer/digital-assets/examples-patterns/loyalty-tokens',
+          'guides/developer/digital-assets/examples-patterns/nft-rental',
+          'guides/developer/digital-assets/examples-patterns/soulbound-tokens',
+        ],
+      },
+    ],
+  },
+  {
+    type: 'category',
     label: 'Currencies and Tokens',
     link: {
       type: 'doc',
@@ -211,6 +289,10 @@ const guides = [
       id: 'guides/developer/wallets/index',
     },
     items: [
+      `guides/developer/wallets/what-is-a-wallet`,
+      `guides/developer/wallets/slush`,
+      `guides/developer/wallets/self-custody`,
+      `guides/developer/wallets/zk-login-wallets`,
       'guides/developer/wallets/suilink'
     ],
   },
@@ -267,7 +349,7 @@ const guides = [
       'guides/developer/nautilus/nautilus-design',
       'guides/developer/nautilus/using-nautilus',
       'guides/developer/nautilus/customize-nautilus',
-      'guides/developer/nautilus/marlin',
+      'guides/developer/nautilus/community-dev-tools',
       'guides/developer/nautilus/seal',
     ],
   },
@@ -282,6 +364,7 @@ const guides = [
       'guides/developer/app-examples/e2e-counter',
       'guides/developer/app-examples/client-tssdk',
       'guides/developer/app-examples/trustless-swap',
+	  'guides/developer/app-examples/trustless-swap-frontend',
       'guides/developer/app-examples/coin-flip',
       'guides/developer/app-examples/reviews-rating',
       'guides/developer/app-examples/blackjack',
@@ -296,7 +379,6 @@ const guides = [
         },
         items: [
           'guides/developer/app-examples/weather-oracle',
-          'guides/developer/app-examples/meta-pricing-oracle',
         ],
       },
     ],

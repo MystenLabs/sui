@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use crate::error::Error;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2::{Bcs, UserSignature, VerifySignatureRequest};
-use sui_rpc_api::Client;
 use sui_types::{
     base_types::SuiAddress,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
@@ -35,7 +35,6 @@ pub async fn verify_personal_message_signature(
                     UserSignature::default().with_bcs(Bcs::from(signature.as_ref().to_owned()));
 
                 let res = client
-                    .inner_mut()
                     .signature_verification_client()
                     .verify_signature(
                         VerifySignatureRequest::default()

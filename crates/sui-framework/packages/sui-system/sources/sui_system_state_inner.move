@@ -429,11 +429,10 @@ public(package) fun request_set_gas_price(
 ) {
     // Verify the represented address is an active or pending validator, and the capability is still valid.
     let verified_cap = self.validators.verify_cap(cap, ACTIVE_OR_PENDING_VALIDATOR);
-    let validator = self
+    self
         .validators
-        .get_validator_mut_with_verified_cap(&verified_cap, false /* include_candidate */);
-
-    validator.request_set_gas_price(verified_cap, new_gas_price);
+        .any_validator_mut(verified_cap.verified_operation_cap_address())
+        .request_set_gas_price(verified_cap, new_gas_price)
 }
 
 /// This function is used to set new gas price for candidate validators
@@ -444,10 +443,10 @@ public(package) fun set_candidate_validator_gas_price(
 ) {
     // Verify the represented address is an active or pending validator, and the capability is still valid.
     let verified_cap = self.validators.verify_cap(cap, ANY_VALIDATOR);
-    let candidate = self
+    self
         .validators
-        .get_validator_mut_with_verified_cap(&verified_cap, true /* include_candidate */);
-    candidate.set_candidate_gas_price(verified_cap, new_gas_price)
+        .candidate_validator_mut(verified_cap.verified_operation_cap_address())
+        .set_candidate_gas_price(verified_cap, new_gas_price)
 }
 
 /// A validator can call this function to set a new commission rate, updated at the end of
@@ -459,10 +458,8 @@ public(package) fun request_set_commission_rate(
 ) {
     self
         .validators
-        .request_set_commission_rate(
-            new_commission_rate,
-            ctx,
-        )
+        .active_validator_mut(ctx.sender())
+        .request_set_commission_rate(new_commission_rate)
 }
 
 /// This function is used to set new commission rate for candidate validators
@@ -471,8 +468,10 @@ public(package) fun set_candidate_validator_commission_rate(
     new_commission_rate: u64,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.set_candidate_commission_rate(new_commission_rate)
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .set_candidate_commission_rate(new_commission_rate)
 }
 
 /// Add stake to a validator's staking pool.
@@ -482,13 +481,7 @@ public(package) fun request_add_stake(
     validator_address: address,
     ctx: &mut TxContext,
 ): StakedSui {
-    self
-        .validators
-        .request_add_stake(
-            validator_address,
-            stake.into_balance(),
-            ctx,
-        )
+    self.validators.request_add_stake(validator_address, stake.into_balance(), ctx)
 }
 
 /// Add stake to a validator's staking pool using multiple coins.
@@ -512,6 +505,8 @@ public(package) fun request_withdraw_stake(
     self.validators.request_withdraw_stake(staked_sui, ctx)
 }
 
+// === Fungible Staked SUI Management ===
+
 public(package) fun convert_to_fungible_staked_sui(
     self: &mut SuiSystemStateInnerV2,
     staked_sui: StakedSui,
@@ -527,6 +522,8 @@ public(package) fun redeem_fungible_staked_sui(
 ): Balance<SUI> {
     self.validators.redeem_fungible_staked_sui(fungible_staked_sui, ctx)
 }
+
+// === Validator Reporting ===
 
 /// Report a validator as a bad or non-performant actor in the system.
 /// Succeeds if all the following are satisfied:
@@ -564,7 +561,7 @@ fun report_validator_impl(
     reportee_addr: address,
     validator_report_records: &mut VecMap<address, VecSet<address>>,
 ) {
-    let reporter_address = *verified_cap.verified_operation_cap_address();
+    let reporter_address = verified_cap.verified_operation_cap_address();
     assert!(reporter_address != reportee_addr, ECannotReportOneself);
     if (!validator_report_records.contains(&reportee_addr)) {
         validator_report_records.insert(reportee_addr, vec_set::singleton(reporter_address));
@@ -584,7 +581,7 @@ fun undo_report_validator_impl(
     assert!(validator_report_records.contains(&reportee_addr), EReportRecordNotFound);
     let reporters = &mut validator_report_records[&reportee_addr];
 
-    let reporter_addr = *verified_cap.verified_operation_cap_address();
+    let reporter_addr = verified_cap.verified_operation_cap_address();
     assert!(reporters.contains(&reporter_addr), EReportRecordNotFound);
 
     reporters.remove(&reporter_addr);
@@ -593,212 +590,264 @@ fun undo_report_validator_impl(
     }
 }
 
-// ==== validator metadata management functions ====
+// === Shared (Candidate & Validator) Metadata Bits ===
 
 /// Create a new `UnverifiedValidatorOperationCap`, transfer it to the
 /// validator and registers it. The original object is thus revoked.
 public(package) fun rotate_operation_cap(self: &mut SuiSystemStateInnerV2, ctx: &mut TxContext) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    validator.new_unverified_validator_operation_cap_and_transfer(ctx);
+    self
+        .validators
+        .any_validator_mut(ctx.sender())
+        .new_unverified_validator_operation_cap_and_transfer(ctx)
 }
 
 /// Update a validator's name.
+///
+/// Unlike `description` and `image_url`, `name` is checked against both active
+/// and pending validators and must be unique in the system.
+///
+/// For candidate validators, the name is not checked for duplicates.
 public(package) fun update_validator_name(
     self: &mut SuiSystemStateInnerV2,
     name: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
+    let validator_address = ctx.sender();
+    let validator = self.validators.any_validator_mut(validator_address);
     validator.update_name(name);
+    let validator: &Validator = validator; // Avoid parallel mutable borrow.
+
+    // only run the duplicate check for non-candidates
+    if (!self.validators.is_validator_candidate(validator_address)) {
+        self.validators.assert_no_pending_or_active_duplicates(validator);
+    };
 }
 
-/// Update a validator's description
+/// Update a validator's description.
+/// Never checked for duplicates.
 public(package) fun update_validator_description(
     self: &mut SuiSystemStateInnerV2,
     description: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    validator.update_description(description);
+    self.validators.any_validator_mut(ctx.sender()).update_description(description)
 }
 
-/// Update a validator's image url
+/// Update a validator's image url.
+/// Never checked for duplicates.
 public(package) fun update_validator_image_url(
     self: &mut SuiSystemStateInnerV2,
     image_url: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    validator.update_image_url(image_url);
+    self.validators.any_validator_mut(ctx.sender()).update_image_url(image_url)
 }
 
-/// Update a validator's project url
+/// Update a candidate or an active/pending validator's project url.
+/// Never checked for duplicates.
 public(package) fun update_validator_project_url(
     self: &mut SuiSystemStateInnerV2,
     project_url: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    validator.update_project_url(project_url);
+    self.validators.any_validator_mut(ctx.sender()).update_project_url(project_url)
 }
+
+// === Validator Metadata Management ===
 
 /// Update a validator's network address.
 /// The change will only take effects starting from the next epoch.
+///
+/// Aborts if there's a duplicate network address in the system.
 public(package) fun update_validator_next_epoch_network_address(
     self: &mut SuiSystemStateInnerV2,
     network_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_network_address(network_address);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
 /// Update candidate validator's network address.
+/// Not checked for duplicates. Uniqueness check is performed in `request_add_validator`.
 public(package) fun update_candidate_validator_network_address(
     self: &mut SuiSystemStateInnerV2,
     network_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_network_address(network_address);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_network_address(network_address)
 }
 
 /// Update a validator's p2p address.
 /// The change will only take effects starting from the next epoch.
+///
+/// Aborts if there's a duplicate p2p address in the system.
 public(package) fun update_validator_next_epoch_p2p_address(
     self: &mut SuiSystemStateInnerV2,
     p2p_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_p2p_address(p2p_address);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
 /// Update candidate validator's p2p address.
+/// Not checked for duplicates. Uniqueness check is performed in `request_add_validator`.
 public(package) fun update_candidate_validator_p2p_address(
     self: &mut SuiSystemStateInnerV2,
     p2p_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_p2p_address(p2p_address);
+    self.validators.candidate_validator_mut(ctx.sender()).update_candidate_p2p_address(p2p_address)
 }
 
 /// Update a validator's narwhal primary address.
 /// The change will only take effects starting from the next epoch.
+///
+/// Aborts if there's a duplicate primary address in the system.
 public(package) fun update_validator_next_epoch_primary_address(
     self: &mut SuiSystemStateInnerV2,
     primary_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_primary_address(primary_address);
+    let validator: &Validator = validator; // Avoid parallel mutable borrow.
+    self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
 /// Update candidate validator's narwhal primary address.
+/// Not checked for duplicates. Uniqueness check is performed in `request_add_validator`.
 public(package) fun update_candidate_validator_primary_address(
     self: &mut SuiSystemStateInnerV2,
     primary_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_primary_address(primary_address);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_primary_address(primary_address)
 }
 
 /// Update a validator's narwhal worker address.
 /// The change will only take effects starting from the next epoch.
+///
+/// Aborts if there's a duplicate worker address in the system.
 public(package) fun update_validator_next_epoch_worker_address(
     self: &mut SuiSystemStateInnerV2,
     worker_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_worker_address(worker_address);
+    let validator: &Validator = validator; // Avoid parallel mutable borrow.
+    self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
 /// Update candidate validator's narwhal worker address.
+/// Not checked for duplicates. Uniqueness check is performed in `request_add_validator`.
 public(package) fun update_candidate_validator_worker_address(
     self: &mut SuiSystemStateInnerV2,
     worker_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_worker_address(worker_address);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_worker_address(worker_address)
 }
 
 /// Update a validator's public key of protocol key and proof of possession.
 /// The change will only take effects starting from the next epoch.
+///
+/// Aborts if there's a duplicate protocol public key in the system.
 public(package) fun update_validator_next_epoch_protocol_pubkey(
     self: &mut SuiSystemStateInnerV2,
     protocol_pubkey: vector<u8>,
     proof_of_possession: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
 /// Update candidate validator's public key of protocol key and proof of possession.
+/// Not checked for duplicates. Uniqueness check is performed in `request_add_validator`.
 public(package) fun update_candidate_validator_protocol_pubkey(
     self: &mut SuiSystemStateInnerV2,
     protocol_pubkey: vector<u8>,
     proof_of_possession: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_protocol_pubkey(protocol_pubkey, proof_of_possession);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_protocol_pubkey(protocol_pubkey, proof_of_possession)
 }
 
 /// Update a validator's public key of worker key.
 /// The change will only take effects starting from the next epoch.
+///
+/// Aborts if there's a duplicate worker public key in the system.
 public(package) fun update_validator_next_epoch_worker_pubkey(
     self: &mut SuiSystemStateInnerV2,
     worker_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_worker_pubkey(worker_pubkey);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
 /// Update candidate validator's public key of worker key.
+/// Not checked for duplicates. Uniqueness check is performed in `request_add_validator`.
 public(package) fun update_candidate_validator_worker_pubkey(
     self: &mut SuiSystemStateInnerV2,
     worker_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_worker_pubkey(worker_pubkey);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_worker_pubkey(worker_pubkey)
 }
 
 /// Update a validator's public key of network key.
 /// The change will only take effects starting from the next epoch.
+///
+/// Aborts if there's a duplicate network public key in the system.
 public(package) fun update_validator_next_epoch_network_pubkey(
     self: &mut SuiSystemStateInnerV2,
     network_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let validator = self.validators.get_validator_mut_with_ctx(ctx);
+    let validator = self.validators.active_validator_mut(ctx.sender());
     validator.update_next_epoch_network_pubkey(network_pubkey);
     let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
 /// Update candidate validator's public key of network key.
+/// Not checked for duplicates. Uniqueness check is performed in `request_add_validator`.
 public(package) fun update_candidate_validator_network_pubkey(
     self: &mut SuiSystemStateInnerV2,
     network_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let candidate = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-    candidate.update_candidate_network_pubkey(network_pubkey);
+    self
+        .validators
+        .candidate_validator_mut(ctx.sender())
+        .update_candidate_network_pubkey(network_pubkey)
 }
 
 /// This function should be called at the end of an epoch, and advances the system to the next epoch.
@@ -1065,7 +1114,7 @@ public(package) fun validator_address_by_pool_id(
 
 public(package) fun pool_exchange_rates(
     self: &mut SuiSystemStateInnerV2,
-    pool_id: &ID,
+    pool_id: ID,
 ): &Table<u64, PoolTokenExchangeRate> {
     self.validators.pool_exchange_rates(pool_id)
 }
@@ -1170,7 +1219,7 @@ public(package) fun active_validator_by_address(
     self: &SuiSystemStateInnerV2,
     validator_address: address,
 ): &Validator {
-    self.validators().get_active_validator_ref(validator_address)
+    self.validators().active_validator(validator_address)
 }
 
 #[test_only]
@@ -1179,16 +1228,16 @@ public(package) fun pending_validator_by_address(
     self: &SuiSystemStateInnerV2,
     validator_address: address,
 ): &Validator {
-    self.validators().get_pending_validator_ref(validator_address)
+    self.validators().pending_validator(validator_address)
 }
 
 #[test_only]
 /// Return the currently candidate validator by address
 public(package) fun candidate_validator_by_address(
-    self: &SuiSystemStateInnerV2,
+    self: &mut SuiSystemStateInnerV2,
     validator_address: address,
 ): &Validator {
-    self.validators().get_candidate_validator_ref(validator_address)
+    self.validators_mut().candidate_validator(validator_address)
 }
 
 #[test_only]

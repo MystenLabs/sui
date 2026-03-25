@@ -7,10 +7,10 @@ use move_core_types::{
     language_storage::TypeTag,
     runtime_value::{MoveStructLayout, MoveTypeLayout},
 };
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
+use move_vm_runtime::{
+    execution::Type, execution::values::Value, natives::functions::NativeResult,
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -74,7 +74,7 @@ pub fn is_one_time_witness(
     native_charge_gas_early_exit!(
         context,
         type_is_one_time_witness_cost_params.types_is_one_time_witness_type_cost_per_byte
-            * u64::from(ty.size()).into()
+            * u64::from(ty.size()?).into()
     );
 
     let type_tag = context.type_to_type_tag(&ty)?;

@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::time::Duration;
 
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -64,12 +65,15 @@ pub struct IngestionMetrics {
     pub total_ingested_not_found_retries: IntCounter,
     pub total_ingested_permanent_errors: IntCounterVec,
     pub total_streamed_checkpoints: IntCounter,
+    pub total_skipped_streamed_checkpoints: IntCounter,
+    pub total_out_of_order_streamed_checkpoints: IntCounter,
     pub total_stream_disconnections: IntCounter,
     pub total_streaming_connection_failures: IntCounter,
 
     // Checkpoint lag metrics for the ingestion pipeline.
     pub latest_ingested_checkpoint: IntGauge,
     pub latest_streamed_checkpoint: IntGauge,
+    pub latest_skipped_streamed_checkpoint: IntGauge,
     pub latest_ingested_checkpoint_timestamp_lag_ms: IntGauge,
     pub ingested_checkpoint_timestamp_lag: Histogram,
 
@@ -83,6 +87,7 @@ pub struct IngestionMetrics {
 pub struct IndexerMetrics {
     // Statistics related to individual ingestion pipelines' handlers.
     pub total_handler_checkpoints_received: IntCounterVec,
+    pub total_handler_processor_retries: IntCounterVec,
     pub total_handler_checkpoints_processed: IntCounterVec,
     pub total_handler_rows_created: IntCounterVec,
 
@@ -234,6 +239,18 @@ impl IngestionMetrics {
                 registry,
             )
             .unwrap(),
+            total_skipped_streamed_checkpoints: register_int_counter_with_registry!(
+                name("total_skipped_streamed_checkpoints"),
+                "Total number of streamed checkpoints skipped because they were already processed",
+                registry,
+            )
+            .unwrap(),
+            total_out_of_order_streamed_checkpoints: register_int_counter_with_registry!(
+                name("total_out_of_order_streamed_checkpoints"),
+                "Total number of streamed checkpoints received out of order",
+                registry,
+            )
+            .unwrap(),
             total_stream_disconnections: register_int_counter_with_registry!(
                 name("total_stream_disconnections"),
                 "Total number of times the gRPC stream was disconnected",
@@ -255,6 +272,12 @@ impl IngestionMetrics {
             latest_streamed_checkpoint: register_int_gauge_with_registry!(
                 name("latest_streamed_checkpoint"),
                 "Latest checkpoint sequence number received from gRPC streaming",
+                registry,
+            )
+            .unwrap(),
+            latest_skipped_streamed_checkpoint: register_int_gauge_with_registry!(
+                name("latest_skipped_streamed_checkpoint"),
+                "Latest streamed checkpoint sequence number skipped because it was already processed",
                 registry,
             )
             .unwrap(),
@@ -321,6 +344,13 @@ impl IndexerMetrics {
             total_handler_checkpoints_received: register_int_counter_vec_with_registry!(
                 name("total_handler_checkpoints_received"),
                 "Total number of checkpoints received by this handler",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_handler_processor_retries: register_int_counter_vec_with_registry!(
+                name("total_handler_processor_retries"),
+                "Total number of handler retries after transient processing failures",
                 &["pipeline"],
                 registry,
             )
@@ -704,6 +734,24 @@ impl IndexerMetrics {
             )
             .unwrap(),
         })
+    }
+
+    pub(crate) fn inc_processor_retry<P: Processor>(
+        &self,
+        checkpoint: u64,
+        error: &anyhow::Error,
+        delay: Duration,
+    ) {
+        warn!(
+            pipeline = P::NAME,
+            checkpoint,
+            retry_delay_ms = delay.as_millis(),
+            "Retrying processor after error: {error:?}",
+        );
+
+        self.total_handler_processor_retries
+            .with_label_values(&[P::NAME])
+            .inc();
     }
 }
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    effects::Op,
     loaded_data::runtime_types::Type,
     views::{ValueView, ValueVisitor},
 };
@@ -13,7 +14,6 @@ use move_binary_format::{
 use move_core_types::annotated_value as A;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::Op,
     gas_algebra::AbstractMemorySize,
     runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,
@@ -4115,24 +4115,15 @@ pub mod prop {
                 .collect::<Vec<_>>()
                 .prop_map(move |vals| Value::struct_(Struct::pack(vals)))
                 .boxed(),
-
-            L::Enum(enum_layout) => {
-                let enum_layouts = (**enum_layout)
-                    .clone()
-                    .0
-                    .into_iter()
-                    .enumerate()
-                    .collect::<Vec<_>>();
-                proptest::sample::select(enum_layouts)
-                    .prop_flat_map(move |(tag, layout)| {
-                        layout
-                            .iter()
-                            .map(value_strategy_with_layout)
-                            .collect::<Vec<_>>()
-                            .prop_map(move |v| Value::variant(Variant::pack(tag as u16, v)))
-                    })
-                    .boxed()
-            }
+            L::Enum(enum_layout) => pick_variant_layout((**enum_layout).clone())
+                .prop_flat_map(move |(tag, variant_layout)| {
+                    let v = variant_layout
+                        .into_iter()
+                        .map(move |l| value_strategy_with_layout(&l))
+                        .collect::<Vec<_>>();
+                    v.prop_map(move |vals| Value::variant(Variant::pack(tag as u16, vals)))
+                })
+                .boxed(),
         }
     }
 

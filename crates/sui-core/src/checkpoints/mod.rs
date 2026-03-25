@@ -227,10 +227,10 @@ impl CheckpointStoreTables {
             Decision, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,
             default_mutex_count, default_value_cache_size,
         };
-        let mutexes = default_mutex_count() * 4;
+        let mutexes = default_mutex_count();
         let u64_sequence_key = KeyType::from_prefix_bits(6 * 8);
         let override_dirty_keys_config = KeySpaceConfig::new()
-            .with_max_dirty_keys(64_000)
+            .with_max_dirty_keys(16_000)
             .with_value_cache_size(default_value_cache_size());
         let config_u64 = ThConfig::new_with_config(
             8,
@@ -248,14 +248,12 @@ impl CheckpointStoreTables {
         let watermarks_config = KeySpaceConfig::new()
             .with_value_cache_size(10)
             .disable_unload();
-        let lru_config = KeySpaceConfig::new().with_value_cache_size(default_value_cache_size());
+        let lru_config = KeySpaceConfig::new().with_value_cache_size(100);
         let configs = vec![
             (
                 "checkpoint_content",
                 digest_config.clone().with_config(
-                    lru_config
-                        .clone()
-                        .with_relocation_filter(|_, _| Decision::Remove),
+                    KeySpaceConfig::new().with_relocation_filter(|_, _| Decision::Remove),
                 ),
             ),
             (
@@ -329,6 +327,7 @@ impl CheckpointStoreTables {
         )
     }
 
+    #[cfg(not(tidehunter))]
     pub fn open_readonly(path: &Path) -> CheckpointStoreTablesReadOnly {
         Self::get_read_only_handle(
             path.to_path_buf(),
@@ -336,6 +335,11 @@ impl CheckpointStoreTables {
             None,
             MetricConf::new("checkpoint_readonly"),
         )
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_readonly(path: &Path) -> Self {
+        Self::new(path, "checkpoint", Arc::new(PrunerWatermarks::default()))
     }
 }
 
@@ -373,7 +377,13 @@ impl CheckpointStore {
         })
     }
 
+    #[cfg(not(tidehunter))]
     pub fn open_readonly(path: &Path) -> CheckpointStoreTablesReadOnly {
+        CheckpointStoreTables::open_readonly(path)
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open_readonly(path: &Path) -> CheckpointStoreTables {
         CheckpointStoreTables::open_readonly(path)
     }
 

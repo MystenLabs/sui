@@ -37,7 +37,6 @@
 /// And when we only upgrade SuiSystemStateInner, the version of Validator in the wrapper will not be updated, and hence may become
 /// inconsistent with the version of SuiSystemStateInner. This is fine as long as we don't use the Validator version to determine
 /// the SuiSystemStateInner version, or vice versa.
-
 module sui_system::sui_system;
 
 use sui::balance::Balance;
@@ -540,7 +539,7 @@ public fun pool_exchange_rates(
     wrapper: &mut SuiSystemState,
     pool_id: &ID,
 ): &Table<u64, PoolTokenExchangeRate> {
-    wrapper.load_system_state_mut().pool_exchange_rates(pool_id)
+    wrapper.load_system_state_mut().pool_exchange_rates(*pool_id)
 }
 
 /// Getter returning addresses of the currently active validators.
@@ -569,7 +568,7 @@ public(package) fun calculate_rewards(
 
     system_state
         .validators_mut()
-        .validator_by_pool_id(&staked_sui.pool_id())
+        .validator_by_pool_id(staked_sui.pool_id())
         .get_staking_pool_ref()
         .calculate_rewards(staked_sui, ctx.epoch())
 }
@@ -771,7 +770,7 @@ public fun active_validator_by_address(
     self: &mut SuiSystemState,
     validator_address: address,
 ): &Validator {
-    self.validators().get_active_validator_ref(validator_address)
+    self.validators().active_validator(validator_address)
 }
 
 #[test_only]
@@ -780,7 +779,7 @@ public fun pending_validator_by_address(
     self: &mut SuiSystemState,
     validator_address: address,
 ): &Validator {
-    self.validators().get_pending_validator_ref(validator_address)
+    self.validators().pending_validator(validator_address)
 }
 
 #[test_only]
@@ -789,7 +788,7 @@ public fun candidate_validator_by_address(
     self: &mut SuiSystemState,
     validator_address: address,
 ): &Validator {
-    self.validators().get_candidate_validator_ref(validator_address)
+    self.validators_mut().candidate_validator(validator_address)
 }
 
 #[test_only]

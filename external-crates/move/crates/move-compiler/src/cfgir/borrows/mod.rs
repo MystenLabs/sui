@@ -7,11 +7,12 @@ mod state;
 use super::absint::*;
 use crate::{
     diag,
-    diagnostics::Diagnostics,
+    diagnostics::{Diagnostic, Diagnostics},
     hlir::{
         ast::*,
         translate::{DisplayVar, display_var},
     },
+    ice_assert,
     parser::ast::BinOp_,
     shared::unique_map::UniqueMap,
 };
@@ -27,10 +28,11 @@ use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 struct BorrowSafety {
     local_numbers: UniqueMap<Var, usize>,
     mutably_used: RefExpInfoMap,
+    outer_env_has_errors: bool,
 }
 
 impl BorrowSafety {
-    fn new<T>(local_types: &UniqueMap<Var, T>) -> Self {
+    fn new<T>(local_types: &UniqueMap<Var, T>, outer_env_has_errors: bool) -> Self {
         let mut local_numbers = UniqueMap::new();
         for (idx, (v, _)) in local_types.key_cloned_iter().enumerate() {
             local_numbers.add(v, idx).unwrap();
@@ -38,6 +40,7 @@ impl BorrowSafety {
         Self {
             local_numbers,
             mutably_used: Rc::new(RefCell::new(BTreeMap::new())),
+            outer_env_has_errors,
         }
     }
 }
@@ -46,20 +49,27 @@ struct Context<'a, 'b> {
     local_numbers: &'a UniqueMap<Var, usize>,
     borrow_state: &'b mut BorrowState,
     diags: Diagnostics,
+    outer_env_has_errors: bool,
 }
 
 impl<'a, 'b> Context<'a, 'b> {
     fn new(safety: &'a BorrowSafety, borrow_state: &'b mut BorrowState) -> Self {
         let local_numbers = &safety.local_numbers;
+        let outer_env_has_errors = safety.outer_env_has_errors;
         Self {
             local_numbers,
             borrow_state,
             diags: Diagnostics::new(),
+            outer_env_has_errors,
         }
     }
 
     fn get_diags(self) -> Diagnostics {
         self.diags
+    }
+
+    fn add_diag(&mut self, diag: Diagnostic) {
+        self.diags.add(diag);
     }
 
     fn add_diags(&mut self, additional: Diagnostics) {
@@ -94,10 +104,10 @@ pub fn verify(
     let super::CFGContext {
         signature, locals, ..
     } = context;
-    let mut safety = BorrowSafety::new(locals);
+    let has_errors = context.env.has_errors();
+    let mut safety = BorrowSafety::new(locals, has_errors);
 
     // check for existing errors
-    let has_errors = context.env.has_errors();
     let mut initial_state = BorrowState::initial(locals, safety.mutably_used.clone(), has_errors);
     initial_state.bind_arguments(&signature.parameters);
     initial_state.canonicalize_locals(&safety.local_numbers);
@@ -145,6 +155,40 @@ fn unused_mut_borrows(context: &super::CFGContext, mutably_used: RefExpInfoMap) 
 // Command
 //**************************************************************************************************
 
+macro_rules! single_value_exp {
+    ($context:ident, $e:expr) => {{
+        let e = $e;
+        let has_errors = $context.outer_env_has_errors;
+        let values = exp($context, e);
+        ice_assert!(
+            $context,
+            values.len() == 1 || has_errors,
+            e.exp.loc,
+            "Expected a single value",
+        );
+        let mut iter = values.into_iter();
+        let v = iter.next().unwrap_or(Value::NonRef);
+        for extra in iter {
+            $context.borrow_state.release_value(extra);
+        }
+        v
+    }};
+}
+
+macro_rules! assert_non_ref {
+    ($context:ident, $v:expr, $loc:expr) => {
+        let has_errors = $context.outer_env_has_errors;
+        let v = $v;
+        ice_assert!(
+            $context,
+            !v.is_ref() || has_errors,
+            $loc,
+            "Expected a non_reference value",
+        );
+        $context.borrow_state.release_value(v);
+    };
+}
+
 #[growing_stack]
 fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
     use Command_ as C;
@@ -154,19 +198,18 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
             lvalues(context, ls, values);
         }
         C::Mutate(el, er) => {
-            let value = assert_single_value(exp(context, er));
-            assert!(!value.is_ref());
-            let lvalue = assert_single_value(exp(context, el));
+            let value = single_value_exp!(context, er);
+            assert_non_ref!(context, value, er.exp.loc);
+            let lvalue = single_value_exp!(context, el);
             let diags = context.borrow_state.mutate(*loc, lvalue);
             context.add_diags(diags);
         }
         C::JumpIf { cond: e, .. } => {
-            let value = assert_single_value(exp(context, e));
-            assert!(!value.is_ref());
+            let value = single_value_exp!(context, e);
+            assert_non_ref!(context, value, e.exp.loc);
         }
         C::VariantSwitch { subject, .. } => {
-            let value = assert_single_value(exp(context, subject));
-            assert!(value.is_ref());
+            let value = single_value_exp!(context, subject);
             let diags = context.borrow_state.variant_switch(*loc, value);
             context.add_diags(diags);
         }
@@ -181,8 +224,8 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
             context.add_diags(diags);
         }
         C::Abort(_, e) => {
-            let value = assert_single_value(exp(context, e));
-            assert!(!value.is_ref());
+            let value = single_value_exp!(context, e);
+            assert_non_ref!(context, value, e.exp.loc);
             context.borrow_state.abort()
         }
         C::Jump { .. } => (),
@@ -215,20 +258,19 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue, value: Value) {
             context.add_diags(diags)
         }
         L::Unpack(_, _, fields) => {
-            assert!(!value.is_ref());
+            assert_non_ref!(context, value, *loc);
             fields
                 .iter()
                 .for_each(|(_, l)| lvalue(context, l, Value::NonRef))
         }
         L::UnpackVariant(_, _, unpack_type, _, _, fields) => match unpack_type {
             UnpackType::ByValue => {
-                assert!(!value.is_ref());
+                assert_non_ref!(context, value, *loc);
                 fields
                     .iter()
                     .for_each(|(_, l)| lvalue(context, l, Value::NonRef))
             }
             UnpackType::ByImmRef => {
-                assert!(value.is_ref());
                 let (diags, fvs) = context
                     .borrow_state
                     .borrow_variant_fields(*loc, false, value, fields);
@@ -239,7 +281,6 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue, value: Value) {
                     .for_each(|(fv, (_, l))| lvalue(context, l, fv));
             }
             UnpackType::ByMutRef => {
-                assert!(value.is_ref());
                 let (diags, fvs) = context
                     .borrow_state
                     .borrow_variant_fields(*loc, true, value, fields);
@@ -277,19 +318,19 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             vec![value]
         }
         E::Freeze(e) => {
-            let evalue = assert_single_value(exp(context, e));
+            let evalue = single_value_exp!(context, e);
             let (diags, value) = context.borrow_state.freeze(*eloc, evalue);
             context.add_diags(diags);
             vec![value]
         }
         E::Dereference(e) => {
-            let evalue = assert_single_value(exp(context, e));
+            let evalue = single_value_exp!(context, e);
             let (errors, value) = context.borrow_state.dereference(*eloc, evalue);
             context.add_diags(errors);
             vec![value]
         }
         E::Borrow(mut_, e, f, shared_borrow) => {
-            let evalue = assert_single_value(exp(context, e));
+            let evalue = single_value_exp!(context, e);
             let (diags, value) =
                 context
                     .borrow_state
@@ -301,7 +342,9 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
         E::Vector(_, n, _, args) => {
             let evalues: Values = args.iter().flat_map(|arg| exp(context, arg)).collect();
             debug_assert_eq!(*n, evalues.len());
-            evalues.into_iter().for_each(|v| assert!(!v.is_ref()));
+            for v in evalues {
+                assert_non_ref!(context, v, *eloc);
+            }
             svalue()
         }
 
@@ -321,13 +364,13 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
         E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant { .. } => svalue(),
 
         E::Cast(e, _) | E::UnaryExp(_, e) => {
-            let v = exp(context, e);
-            assert!(!assert_single_value(v).is_ref());
+            let v = single_value_exp!(context, e);
+            assert_non_ref!(context, v, e.exp.loc);
             svalue()
         }
         E::BinopExp(e1, sp!(_, BinOp_::Eq), e2) | E::BinopExp(e1, sp!(_, BinOp_::Neq), e2) => {
-            let v1 = assert_single_value(exp(context, e1));
-            let v2 = assert_single_value(exp(context, e2));
+            let v1 = single_value_exp!(context, e1);
+            let v2 = single_value_exp!(context, e2);
             // must check separately incase of using a local with an unassigned value
             if v1.is_ref() {
                 let (errors, _) = context.borrow_state.dereference(e1.exp.loc, v1);
@@ -340,24 +383,24 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             svalue()
         }
         E::BinopExp(e1, _, e2) => {
-            let v1 = assert_single_value(exp(context, e1));
-            let v2 = assert_single_value(exp(context, e2));
-            assert!(!v1.is_ref());
-            assert!(!v2.is_ref());
+            let v1 = single_value_exp!(context, e1);
+            let v2 = single_value_exp!(context, e2);
+            assert_non_ref!(context, v1, e1.exp.loc);
+            assert_non_ref!(context, v2, e2.exp.loc);
             svalue()
         }
         E::Pack(_, _, fields) => {
-            fields.iter().for_each(|(_, _, e)| {
-                let arg = exp(context, e);
-                assert!(!assert_single_value(arg).is_ref());
-            });
+            for (_, _, e) in fields.iter() {
+                let arg = single_value_exp!(context, e);
+                assert_non_ref!(context, arg, e.exp.loc);
+            }
             svalue()
         }
         E::PackVariant(_, _, _, fields) => {
-            fields.iter().for_each(|(_, _, e)| {
-                let arg = exp(context, e);
-                assert!(!assert_single_value(arg).is_ref());
-            });
+            for (_, _, e) in fields.iter() {
+                let arg = single_value_exp!(context, e);
+                assert_non_ref!(context, arg, e.exp.loc);
+            }
             svalue()
         }
 

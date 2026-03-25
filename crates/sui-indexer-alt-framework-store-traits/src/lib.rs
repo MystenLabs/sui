@@ -3,7 +3,6 @@
 
 use std::time::Duration;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Utc;
@@ -13,13 +12,14 @@ use scoped_futures::ScopedBoxFuture;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// If no existing watermark record exists, initializes it with `default_next_checkpoint`.
-    /// Returns the committer watermark `checkpoint_hi_inclusive`.
+    /// Returns the `InitWatermark` based on the existing watermark if it exists.
+    /// Otherwise, initializes a new watermark record with `InitWatermark` and returns
+    /// the value passed in.
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        default_next_checkpoint: u64,
-    ) -> anyhow::Result<Option<u64>>;
+        init_watermark: InitWatermark,
+    ) -> anyhow::Result<InitWatermark>;
 
     /// Given a `pipeline_task` representing either a pipeline name or a pipeline with an associated
     /// task (formatted as `{pipeline}{Store::DELIMITER}{task}`), return the committer watermark
@@ -100,7 +100,7 @@ pub trait Store: Send + Sync + 'static + Clone {
     /// committer watermark.
     const DELIMITER: &'static str = "@";
 
-    async fn connect<'c>(&'c self) -> Result<Self::Connection<'c>, anyhow::Error>;
+    async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>>;
 }
 
 /// Extends the Store trait with transactional capabilities, to be used within the framework for
@@ -114,6 +114,15 @@ pub trait TransactionalStore: Store {
         F: for<'r> FnOnce(
             &'r mut Self::Connection<'_>,
         ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>;
+}
+
+/// Used during watermark initialization to set and return state.
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct InitWatermark {
+    /// Calculated by the framework as `default_next_checkpoint.checked_sub(1)`.
+    pub checkpoint_hi_inclusive: Option<u64>,
+    /// Calculated by the framework as `default_next_checkpoint`.
+    pub reader_lo: u64,
 }
 
 /// Represents the highest checkpoint for some pipeline that has been processed by the indexer
@@ -198,13 +207,30 @@ impl PrunerWatermark {
     }
 }
 
+/// A utility function for connections that do not have special initialization logic. These
+/// connections delegate initialization to `Connection::committer_watermark`.
+pub async fn init_with_committer_watermark(
+    connection: &mut impl Connection,
+    pipeline_task: &str,
+    init_watermark: InitWatermark,
+) -> anyhow::Result<InitWatermark> {
+    let checkpoint_hi_inclusive = connection
+        .committer_watermark(pipeline_task)
+        .await?
+        .map(|w| w.checkpoint_hi_inclusive);
+    Ok(InitWatermark {
+        checkpoint_hi_inclusive,
+        ..init_watermark
+    })
+}
+
 /// Check that the pipeline name does not contain the store's delimiter, and construct the string
 /// used for tracking a pipeline's watermarks in the store. This is either the pipeline name itself,
 /// or `{pipeline}{Store::DELIMITER}{task}` if a task name is provided.
 pub fn pipeline_task<S: Store>(
     pipeline_name: &'static str,
     task_name: Option<&str>,
-) -> Result<String> {
+) -> anyhow::Result<String> {
     if pipeline_name.contains(S::DELIMITER) {
         anyhow::bail!(
             "Pipeline name '{}' contains invalid delimiter '{}'",

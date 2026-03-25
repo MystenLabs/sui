@@ -58,6 +58,7 @@ use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
+use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
@@ -1060,7 +1061,9 @@ impl WritebackCache {
 
         let _metrics_guard =
             mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs::flush");
-        for outputs in all_outputs.iter() {
+        // Parallel phase: tx-level metadata is keyed by unique tx_digest/effects_digest,
+        // so there are no cross-transaction ordering constraints.
+        all_outputs.par_iter().with_min_len(16).for_each(|outputs| {
             let tx_digest = outputs.transaction.digest();
             assert!(
                 self.dirty
@@ -1068,7 +1071,15 @@ impl WritebackCache {
                     .remove(tx_digest)
                     .is_some()
             );
-            self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, outputs);
+            self.flush_tx_metadata_from_dirty_to_cached(*tx_digest, outputs);
+        });
+
+        // Sequential phase: object/marker versions must be popped in causal order
+        // (oldest first) per object_id. Multiple transactions in the batch can touch
+        // the same shared object at consecutive versions, so this loop must preserve
+        // the order of all_outputs.
+        for outputs in all_outputs.iter() {
+            self.flush_objects_from_dirty_to_cached(epoch, outputs);
         }
 
         let num_outputs = all_outputs.len() as u64;
@@ -1110,21 +1121,18 @@ impl WritebackCache {
             .set(if backpressure { 1 } else { 0 });
     }
 
-    fn flush_transactions_from_dirty_to_cached(
+    // Flushes tx-level metadata for a single transaction from dirty to cache.
+    // All keys are unique per transaction (tx_digest, effects_digest), so this
+    // is safe to call in parallel across transactions.
+    fn flush_tx_metadata_from_dirty_to_cached(
         &self,
-        epoch: EpochId,
         tx_digest: TransactionDigest,
         outputs: &TransactionOutputs,
     ) {
-        // Now, remove each piece of committed data from the dirty state and insert it into the cache.
         // TODO: outputs should have a strong count of 1 so we should be able to move out of it
         let TransactionOutputs {
             transaction,
             effects,
-            markers,
-            written,
-            deleted,
-            wrapped,
             events,
             ..
         } = outputs;
@@ -1185,8 +1193,20 @@ impl WritebackCache {
             .executed_effects_digests
             .remove(&tx_digest)
             .expect("executed effects must exist");
+    }
 
-        // Move dirty markers to cache
+    // Flushes object and marker versions for a single transaction from dirty to cache.
+    // Multiple transactions in the same batch can modify the same shared object at
+    // consecutive versions, so callers must invoke this in causal (checkpoint) order.
+    fn flush_objects_from_dirty_to_cached(&self, epoch: EpochId, outputs: &TransactionOutputs) {
+        let TransactionOutputs {
+            markers,
+            written,
+            deleted,
+            wrapped,
+            ..
+        } = outputs;
+
         for (object_key, marker_value) in markers.iter() {
             Self::move_version_from_dirty_to_cache(
                 &self.dirty.markers,

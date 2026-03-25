@@ -15,12 +15,19 @@ use move_core_types::{
     language_storage::StructTag,
     vm_status::StatusCode,
 };
-use move_vm_runtime::{native_extensions::NativeExtensionMarker, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+use move_vm_runtime::{
+    execution::values::{Vector, VectorSpecialization},
+    natives::{
+        extensions::NativeExtensionMarker,
+        functions::{NativeContext, NativeResult},
+    },
+};
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{self, StructRef, Value},
+    },
     pop_arg,
-    values::{self, StructRef, Value, Vector, VectorSpecialization},
 };
 use smallvec::smallvec;
 use std::{
@@ -137,7 +144,7 @@ pub fn end_transaction(
     // Determine writes and deletes
     // We pass the received objects since they should be viewed as "loaded" for the purposes of
     // calculating the effects of the transaction.
-    let results = object_runtime_state.finish(received, ChildObjectEffects::empty());
+    let results = object_runtime_state.finish(received, ChildObjectEffects::new());
     let RuntimeResults {
         writes,
         user_events,
@@ -194,7 +201,7 @@ pub fn end_transaction(
     let mut written = vec![];
     for (id, (owner, ty, value)) in writes {
         // write configs to cache
-        new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
+        new_object_values.insert(id, (ty.clone(), value.copy_value()));
         transferred.push((id, owner.clone()));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
             || taken_shared_or_imm
@@ -500,7 +507,7 @@ pub fn take_immutable_by_id(
                 .taken_immutable_values
                 .entry(specified_obj_ty)
                 .or_default()
-                .insert(id, value.copy_value().unwrap());
+                .insert(id, value.copy_value());
             NativeResult::ok(legacy_test_cost(), smallvec![value])
         }
         Err(native_err) => native_err,
@@ -769,7 +776,7 @@ fn take_from_inventory(
     taken.insert(id, owner.clone());
     input_objects.insert(id, owner);
     let obj = obj_opt.unwrap();
-    Ok(obj.copy_value().unwrap())
+    Ok(obj.copy_value())
 }
 
 fn vector_specialization(ty: &Type) -> VectorSpecialization {
@@ -996,14 +1003,12 @@ fn find_all_wrapped_objects<'a, 'i>(
         // associated with all of these types must be in the type/module cache in the VM -- THIS IS
         // BECAUSE WE ARE IN TEST SCENARIO ONLY AND THIS MAY NOT GENERALLY HOLD IN A
         // MULTI-TRANSACTION SETTING.
-        let Some(layout) = context.type_tag_to_layout_for_test_scenario_only(&type_tag) else {
+        let Some(layout) = context.type_tag_to_type_layout(&type_tag) else {
             debug_assert!(false);
             continue;
         };
 
-        let Some(annotated_layout) =
-            context.type_tag_to_fully_annotated_layout_for_test_scenario_only(&type_tag)
-        else {
+        let Some(annotated_layout) = context.type_tag_to_annotated_type_layout(&type_tag) else {
             debug_assert!(false);
             continue;
         };

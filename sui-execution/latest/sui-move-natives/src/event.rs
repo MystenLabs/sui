@@ -10,12 +10,14 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
 };
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
-    values::{Value, VectorSpecialization},
+use move_vm_runtime::{
+    execution::{
+        Type,
+        values::{Value, Vector, VectorSpecialization},
+    },
+    natives::functions::NativeResult,
 };
+use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::ObjectID, error::VMMemoryLimitExceededSubStatusCode};
@@ -207,20 +209,20 @@ fn emit_impl(
     {
         let stream_id_addr: AccountAddress = stream_id.value_as::<AccountAddress>().unwrap();
         let accumulator_id: ObjectID = accumulator_id.value_as::<AccountAddress>().unwrap().into();
-        let events_len = obj_runtime.state.events().len();
-        if events_len == 0 {
-            return Err(
+        let event_idx = obj_runtime
+            .state
+            .total_events_emitted()
+            .checked_sub(1)
+            .ok_or_else(|| {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("No events found after emitting authenticated event".to_string()),
-            );
-        }
-        let event_idx = events_len - 1;
+                    .with_message("No events found after emitting authenticated event".to_string())
+            })?;
         obj_runtime.emit_accumulator_event(
             accumulator_id,
             MoveAccumulatorAction::Merge,
             stream_id_addr,
             stream_head_type_tag.unwrap(),
-            MoveAccumulatorValue::EventRef(event_idx as u64),
+            MoveAccumulatorValue::EventRef(event_idx),
         )?;
     }
 
@@ -264,7 +266,7 @@ pub fn get_events_by_type(
         .iter()
         .filter_map(|(tag, event)| {
             if &specified_type_tag == tag {
-                Some(event.copy_value().unwrap())
+                Some(event.copy_value())
             } else {
                 None
             }
@@ -272,9 +274,6 @@ pub fn get_events_by_type(
         .collect::<Vec<_>>();
     Ok(NativeResult::ok(
         legacy_test_cost(),
-        smallvec![move_vm_types::values::Vector::pack(
-            specialization,
-            matched_events
-        )?],
+        smallvec![Vector::pack(specialization, matched_events)?],
     ))
 }

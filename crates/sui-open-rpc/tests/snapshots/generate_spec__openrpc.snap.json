@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.68.0"
+    "version": "1.69.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "115",
+              "maxSupportedProtocolVersion": "119",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1390,6 +1390,7 @@
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
                 "max_ptb_value_size_v2": false,
+                "merge_randomness_into_checkpoint": false,
                 "minimize_child_object_mutations": false,
                 "missing_type_is_compatibility_error": true,
                 "move_native_context": false,
@@ -1401,6 +1402,7 @@
                 "narwhal_versioned_metadata": false,
                 "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
+                "normalize_depth_formula": false,
                 "normalize_ptb_arguments": false,
                 "object_runtime_charge_cache_load_gas": false,
                 "package_digest_hash_module": false,
@@ -1436,6 +1438,7 @@
                 "type_tags_in_object_runtime": false,
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
+                "use_coin_party_owner": false,
                 "use_mfp_txns_in_load_initial_object_debts": false,
                 "use_new_commit_handler": false,
                 "validate_identifier_inputs": false,
@@ -6253,9 +6256,7 @@
               "object",
               "null"
             ],
-            "additionalProperties": {
-              "type": "string"
-            }
+            "additionalProperties": true
           },
           "error": {
             "anyOf": [

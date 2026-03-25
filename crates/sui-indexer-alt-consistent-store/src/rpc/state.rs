@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::CHECKPOINT_HEIGHT_METADATA;
-use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::LEGACY_CHECKPOINT_METADATA;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::LOWEST_AVAILABLE_CHECKPOINT_METADATA;
 use tonic::metadata::AsciiMetadataValue;
 
@@ -57,10 +56,7 @@ impl State {
             .ok_or(Error::NoSnapshots)?;
 
         let metadata = request.metadata();
-        let Some(checkpoint) = metadata
-            .get(CHECKPOINT_HEIGHT_METADATA)
-            .or_else(|| metadata.get(LEGACY_CHECKPOINT_METADATA))
-        else {
+        let Some(checkpoint) = metadata.get(CHECKPOINT_HEIGHT_METADATA) else {
             // If a checkpoint hasn't been supplied default to the latest snapshot.
             return Ok(snapshot_range.end().checkpoint_hi_inclusive);
         };
@@ -100,9 +96,7 @@ impl State {
         }
 
         if let Ok(max) = range.end().checkpoint_hi_inclusive.to_string().parse() {
-            let max: AsciiMetadataValue = max;
-            meta.insert(CHECKPOINT_HEIGHT_METADATA, max.clone());
-            meta.insert(LEGACY_CHECKPOINT_METADATA, max);
+            meta.insert(CHECKPOINT_HEIGHT_METADATA, max);
         }
 
         resp

@@ -1,24 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::FutureExt;
+use prost_types::Struct;
 use sui_rpc::{
     field::FieldMaskTree,
     merge::Merge,
-    proto::sui::rpc::v2::{Bcs, Event, Object, TransactionEffects, TransactionEvents},
+    proto::sui::rpc::v2::{Bcs, Display, Event, Object, TransactionEffects, TransactionEvents},
 };
+use sui_types::full_checkpoint_content::ObjectSet;
 
-use crate::RpcService;
+use crate::{RpcService, reader::DisplayStore};
 
 impl RpcService {
     pub fn render_object_to_proto(
         &self,
         object: &sui_types::object::Object,
         read_mask: &FieldMaskTree,
+        output_objects: &ObjectSet,
     ) -> Object {
         let mut message = Object::default();
 
         if read_mask.contains(Object::JSON_FIELD) {
-            message.json = self.render_object_to_json(object).map(Box::new);
+            let move_object = object.data.try_as_move();
+            message.json = move_object.and_then(|m| {
+                self.render_json(&m.type_().clone().into(), m.contents(), output_objects)
+                    .map(Box::new)
+            });
+        }
+
+        if read_mask.contains(Object::DISPLAY_FIELD) {
+            message.display = self.render_object_display(object).map(Box::new);
         }
 
         message.merge(object, read_mask);
@@ -26,36 +38,105 @@ impl RpcService {
         message
     }
 
-    fn render_object_to_json(
-        &self,
-        object: &sui_types::object::Object,
-    ) -> Option<prost_types::Value> {
-        let move_object = object.data.try_as_move()?;
-        self.render_json(&move_object.type_().clone().into(), move_object.contents())
-    }
-
+    /// Render a Move value as JSON.
+    /// If output_objects is provided, packages from it will be checked first before the backing store.
     pub fn render_json(
         &self,
         struct_tag: &move_core_types::language_storage::StructTag,
         contents: &[u8],
+        output_objects: &ObjectSet,
     ) -> Option<prost_types::Value> {
         let layout = self
             .reader
             .inner()
-            .get_struct_layout(struct_tag)
+            .get_struct_layout_with_overlay(struct_tag, output_objects)
             .ok()
             .flatten()?;
 
-        sui_types::proto_value::ProtoVisitor::new(self.config.max_json_move_value_size())
+        let bound = self.config.max_json_move_value_size();
+        sui_types::object::rpc_visitor::proto::ProtoVisitor::new(bound)
             .deserialize_value(contents, &layout)
             .map_err(|e| tracing::debug!("unable to convert move value to JSON: {e}"))
             .ok()
+    }
+
+    pub fn render_object_display(&self, object: &sui_types::object::Object) -> Option<Display> {
+        let move_object = object.data.try_as_move()?;
+        let object_type = &move_object.type_().clone().into();
+        let contents = move_object.contents();
+
+        let limits = sui_display::v2::Limits {
+            max_depth: self.config.display().max_field_depth(),
+            max_nodes: self.config.display().max_format_nodes(),
+            max_loads: self.config.display().max_object_loads(),
+        };
+        let display_object = self.reader.get_display_object_v2_by_type(object_type)?;
+        let display_template =
+            sui_display::v2::Display::parse(limits, display_object.fields()).ok()?;
+
+        let layout = self
+            .reader
+            .inner()
+            .get_struct_layout(object_type)
+            .ok()
+            .flatten()?;
+
+        let root = sui_display::v2::OwnedSlice {
+            bytes: contents.to_owned(),
+            layout,
+        };
+        let interpreter = sui_display::v2::Interpreter::new(root, DisplayStore::new(&self.reader));
+
+        let mut display = Display::default();
+
+        // The display api requires that the `sui_display::v2::Store` is async. We know that the
+        // Store implementation we are passing in here is fully synchronous, doing db access
+        // in-place and as such should never return Poll::Pending.
+        match display_template
+            .display::<prost_types::Value>(
+                self.config.display().max_move_value_depth(),
+                self.config.display().max_output_size(),
+                &interpreter,
+            )
+            .now_or_never()
+            .unwrap()
+        {
+            Ok(rendered) => {
+                let mut output = Struct::default();
+                let mut errors = Struct::default();
+
+                for (field, result) in rendered {
+                    match result {
+                        Ok(value) => {
+                            output.fields.insert(field, value);
+                        }
+                        Err(e) => {
+                            errors.fields.insert(field, e.to_string().into());
+                        }
+                    }
+                }
+
+                if !output.fields.is_empty() {
+                    display.set_output(output.fields);
+                }
+
+                if !errors.fields.is_empty() {
+                    display.set_errors(errors.fields);
+                }
+            }
+            Err(e) => {
+                display.set_errors(e.to_string());
+            }
+        }
+
+        Some(display)
     }
 
     pub fn render_events_to_proto(
         &self,
         events: &sui_types::effects::TransactionEvents,
         mask: &FieldMaskTree,
+        output_objects: &ObjectSet,
     ) -> TransactionEvents {
         let mut message = TransactionEvents::default();
 
@@ -73,7 +154,7 @@ impl RpcService {
             message.events = events
                 .data
                 .iter()
-                .map(|event| self.render_event_to_proto(event, &event_mask))
+                .map(|event| self.render_event_to_proto(event, &event_mask, output_objects))
                 .collect();
         }
 
@@ -84,6 +165,7 @@ impl RpcService {
         &self,
         event: &sui_types::event::Event,
         mask: &FieldMaskTree,
+        output_objects: &ObjectSet,
     ) -> Event {
         let mut message = Event::default();
 
@@ -111,7 +193,7 @@ impl RpcService {
 
         if mask.contains(Event::JSON_FIELD) {
             message.json = self
-                .render_json(&event.type_, &event.contents)
+                .render_json(&event.type_, &event.contents, output_objects)
                 .map(Box::new);
         }
 
@@ -180,7 +262,7 @@ impl RpcService {
         &self,
         effects: &sui_types::effects::TransactionEffects,
         unchanged_loaded_runtime_objects: &[sui_types::storage::ObjectKey],
-        objects: &sui_types::full_checkpoint_content::ObjectSet,
+        objects: &ObjectSet,
         mask: &FieldMaskTree,
     ) -> TransactionEffects {
         // TODO consider inlining this function here to avoid needing to do the extra parsing below

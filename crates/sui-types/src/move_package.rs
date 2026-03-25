@@ -6,7 +6,8 @@ use crate::{
     SUI_FRAMEWORK_ADDRESS,
     base_types::{ObjectID, SequenceNumber},
     crypto::DefaultHash,
-    error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, SuiResult},
+    error::{ExecutionError, SuiErrorKind, SuiResult},
+    execution_status::ExecutionErrorKind,
     id::{ID, UID},
     object::OBJECT_START_VERSION,
 };
@@ -16,6 +17,7 @@ use move_binary_format::file_format::CompiledModule;
 use move_binary_format::file_format_common::VERSION_6;
 use move_binary_format::normalized;
 use move_core_types::language_storage::ModuleId;
+use move_core_types::resolver::{IntraPackageName, SerializedPackage};
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -341,14 +343,21 @@ impl MovePackage {
             (dep, info)
         }));
 
-        let module_map = BTreeMap::from_iter(modules.iter().map(|module| {
+        let mut module_map = BTreeMap::new();
+        for module in modules.iter() {
             let name = module.name().to_string();
             let mut bytes = Vec::new();
             module
                 .serialize_with_version(module.version, &mut bytes)
                 .unwrap();
-            (name, bytes)
-        }));
+            if module_map.insert(name, bytes).is_some() {
+                panic!(
+                    "Duplicate module {} in system package {}",
+                    module.self_id(),
+                    storage_id
+                );
+            }
+        }
 
         Self::new(
             storage_id,
@@ -390,7 +399,17 @@ impl MovePackage {
                 VERSION_6
             };
             module.serialize_with_version(version, &mut bytes).unwrap();
-            module_map.insert(name, bytes);
+            let prev = module_map.insert(name, bytes);
+            if protocol_config.new_vm_enabled() && prev.is_some() {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::VMVerificationOrDeserializationError,
+                    format!(
+                        "Duplicate module {} in package {}",
+                        module.self_id(),
+                        storage_id
+                    ),
+                ));
+            }
         }
 
         immediate_dependencies.remove(&self_id);
@@ -493,6 +512,13 @@ impl MovePackage {
         &self.linkage_table
     }
 
+    pub fn move_linkage_context(&self) -> BTreeMap<AccountAddress, AccountAddress> {
+        self.linkage_table
+            .iter()
+            .map(|(k, v)| ((*k).into(), v.upgraded_id.into()))
+            .collect()
+    }
+
     /// The ObjectID that this package's modules believe they are from, at runtime (can differ from
     /// `MovePackage::id()` in the case of package upgrades).
     pub fn original_package_id(&self) -> ObjectID {
@@ -542,6 +568,54 @@ impl MovePackage {
         include_code: bool,
     ) -> SuiResult<BTreeMap<String, normalized::Module<S>>> {
         normalize_modules(pool, self.module_map.values(), binary_config, include_code)
+    }
+
+    pub fn into_serialized_move_package(&self) -> SuiResult<SerializedPackage> {
+        macro_rules! expect_valid_identifier {
+            ($ident_str:expr) => {
+                Identifier::new($ident_str.clone()).map_err(|e| {
+                    debug_assert!(
+                        false,
+                        "Published modules must always have valid identifiers {}",
+                        e
+                    );
+                    SuiErrorKind::ExecutionInvariantViolation
+                })
+            };
+        }
+        let type_origin_table = self
+            .type_origin_table
+            .iter()
+            .map(|ty_origin| {
+                Ok((
+                    IntraPackageName {
+                        module_name: expect_valid_identifier!(ty_origin.module_name)?,
+                        type_name: expect_valid_identifier!(ty_origin.datatype_name)?,
+                    },
+                    ty_origin.package.into(),
+                ))
+            })
+            .collect::<SuiResult<_>>()?;
+        Ok(SerializedPackage {
+            modules: self
+                .serialized_module_map()
+                .iter()
+                .map(|(k, v)| Ok((expect_valid_identifier!(k)?, v.clone())))
+                .collect::<SuiResult<_>>()?,
+            version_id: self.id.into(),
+            original_id: self.original_package_id().into(),
+            linkage_table: self
+                .linkage_table()
+                .iter()
+                .map(|(k, v)| ((*k).into(), v.upgraded_id.into()))
+                .chain(std::iter::once((
+                    self.original_package_id().into(),
+                    self.id.into(),
+                )))
+                .collect(),
+            type_origin_table,
+            version: self.version().value(),
+        })
     }
 }
 

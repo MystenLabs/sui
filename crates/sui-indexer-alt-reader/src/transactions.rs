@@ -82,7 +82,7 @@ impl Loader<TransactionKey> for BigtableReader {
             .transactions(&digests)
             .await?
             .into_iter()
-            .map(|t| (TransactionKey(*t.transaction.digest()), t))
+            .map(|t| (TransactionKey(t.digest), t))
             .collect())
     }
 }
@@ -111,6 +111,7 @@ impl Loader<TransactionKey> for LedgerGrpcReader {
             "signatures.bcs",
             "checkpoint",
             "timestamp",
+            "balance_changes",
         ]));
 
         let batch_response = self.batch_get_transactions(request).await?;
@@ -137,6 +138,7 @@ impl Loader<TransactionKey> for LedgerGrpcReader {
                     signatures: full_tx.signatures,
                     timestamp_ms,
                     cp_sequence_number: executed.checkpoint,
+                    balance_changes: executed.balance_changes,
                 };
                 results.insert(
                     TransactionKey(transaction.transaction_data.digest()),

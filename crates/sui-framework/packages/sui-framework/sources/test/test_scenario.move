@@ -250,6 +250,7 @@ public fun create_system_objects(scenario: &mut Scenario) {
     sui::clock::create_for_testing(scenario.ctx()).share_for_testing();
     sui::random::create_for_testing(scenario.ctx());
     sui::deny_list::create_for_testing(scenario.ctx());
+    sui::display_registry::create_for_testing(scenario.ctx());
     scenario.next_tx(sender);
 }
 

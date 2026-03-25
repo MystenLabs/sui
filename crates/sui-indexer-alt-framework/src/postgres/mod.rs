@@ -111,6 +111,7 @@ pub mod tests {
     use async_trait::async_trait;
     use sui_indexer_alt_framework_store_traits::CommitterWatermark;
     use sui_indexer_alt_framework_store_traits::Connection as _;
+    use sui_indexer_alt_framework_store_traits::InitWatermark;
     use sui_types::full_checkpoint_content::Checkpoint;
 
     use crate::ConcurrentConfig;
@@ -169,6 +170,9 @@ pub mod tests {
         {
             let watermark = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
+            conn.init_watermark(ConcurrentPipeline1::NAME, InitWatermark::default())
+                .await
+                .unwrap();
             assert!(
                 conn.set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
                     .await
@@ -186,13 +190,21 @@ pub mod tests {
     async fn test_add_multiple_pipelines() {
         let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         {
-            let watermark1 = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
+
+            conn.init_watermark(ConcurrentPipeline1::NAME, InitWatermark::default())
+                .await
+                .unwrap();
+            let watermark1 = CommitterWatermark::new_for_testing(10);
             assert!(
                 conn.set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
                     .await
                     .unwrap()
             );
+
+            conn.init_watermark(ConcurrentPipeline2::NAME, InitWatermark::default())
+                .await
+                .unwrap();
             let watermark2 = CommitterWatermark::new_for_testing(20);
             assert!(
                 conn.set_committer_watermark(ConcurrentPipeline2::NAME, watermark2)

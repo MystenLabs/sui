@@ -64,6 +64,7 @@ task 6, lines 41-42:
 //> MergeCoins(Input(0), [Input(1)])
 mutated: object(0,0), object(5,0)
 deleted: object(5,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
 
 task 7, line 44:

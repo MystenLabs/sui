@@ -20,7 +20,6 @@ use url::Url;
 use crate::bootstrap::bootstrap;
 use crate::config::IndexerConfig;
 use crate::config::PipelineLayer;
-use crate::handlers::coin_balance_buckets::CoinBalanceBuckets;
 use crate::handlers::cp_bloom_blocks::CpBloomBlocks;
 use crate::handlers::cp_blooms::CpBlooms;
 use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
@@ -34,7 +33,6 @@ use crate::handlers::kv_objects::KvObjects;
 use crate::handlers::kv_packages::KvPackages;
 use crate::handlers::kv_protocol_configs::KvProtocolConfigs;
 use crate::handlers::kv_transactions::KvTransactions;
-use crate::handlers::obj_info::ObjInfo;
 use crate::handlers::obj_versions::ObjVersions;
 use crate::handlers::sum_displays::SumDisplays;
 use crate::handlers::tx_affected_addresses::TxAffectedAddresses;
@@ -71,7 +69,6 @@ pub async fn setup_indexer(
 
     let PipelineLayer {
         sum_displays,
-        coin_balance_buckets,
         cp_blooms,
         cp_bloom_blocks,
         cp_sequence_numbers,
@@ -85,7 +82,6 @@ pub async fn setup_indexer(
         kv_packages,
         kv_protocol_configs,
         kv_transactions,
-        obj_info,
         obj_versions,
         tx_affected_addresses,
         tx_affected_objects,
@@ -182,11 +178,6 @@ pub async fn setup_indexer(
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
 
-    // Concurrent pipelines with retention
-    add_concurrent!(CoinBalanceBuckets, coin_balance_buckets);
-    add_concurrent!(ObjInfo, obj_info);
-
-    // Unpruned concurrent pipelines
     add_concurrent!(CpBlooms, cp_blooms);
     add_concurrent!(CpBloomBlocks, cp_bloom_blocks);
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);

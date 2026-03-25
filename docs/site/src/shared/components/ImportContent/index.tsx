@@ -10,7 +10,7 @@ import MDXComponents from "@theme/MDXComponents";
 import utils from "./utils";
 import MarkdownIt from "markdown-it";
 
-import { importContentMap } from "../../../.generated/ImportContentMap";
+import { importContentMap } from "@generated-imports/ImportContentMap";
 
 /// <reference types="webpack-env" />
 
@@ -131,7 +131,7 @@ type Props = {
   style?: string;
   org?: string;
   repo?: string;
-  ref?: string;
+  branch?: string;
   signatureOnly?: boolean; // if included, only display function signature
 };
 
@@ -158,7 +158,7 @@ export default function ImportContent({
   style,
   org,
   repo,
-  ref,
+  branch,
   signatureOnly,
 }: Props) {
   const md = React.useMemo(
@@ -178,9 +178,9 @@ export default function ImportContent({
       setGhLoading(true);
       setGhErr(null);
       try {
-        const branch = ref || "main";
+        const branchName = branch || "main";
         const path = String(source || "").replace(/^\.\/?/, "");
-        const url = `https://raw.githubusercontent.com/${org}/${repo}/${branch}/${path}`;
+        const url = `https://raw.githubusercontent.com/${org}/${repo}/${branchName}/${path}`;
         const headers: Record<string, string> = {};
 
         const res = await fetch(url, { headers });
@@ -197,7 +197,7 @@ export default function ImportContent({
     return () => {
       cancelled = true;
     };
-  }, [isGitHub, org, repo, ref, source]);
+  }, [isGitHub, org, repo, branch, source]);
 
   // Handle snippet mode
   if (mode === "snippet") {

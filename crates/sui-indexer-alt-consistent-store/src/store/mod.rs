@@ -13,7 +13,9 @@ use prometheus::Registry;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::service::Service;
 use sui_indexer_alt_framework::store::CommitterWatermark;
+use sui_indexer_alt_framework::store::InitWatermark;
 use sui_indexer_alt_framework::store::Store as _;
+use sui_indexer_alt_framework::store::init_with_committer_watermark;
 use sui_indexer_alt_framework::store::{self};
 
 use crate::db::Db;
@@ -165,11 +167,12 @@ impl<S: Send + Sync + 'static> store::TransactionalStore for Store<S> {
 
 #[async_trait::async_trait]
 impl<S: Send + Sync> store::Connection for Connection<'_, S> {
-    async fn init_watermark(&mut self, pipeline_task: &str, _: u64) -> anyhow::Result<Option<u64>> {
-        Ok(self
-            .committer_watermark(pipeline_task)
-            .await?
-            .map(|w| w.checkpoint_hi_inclusive))
+    async fn init_watermark(
+        &mut self,
+        pipeline_task: &str,
+        init_watermark: InitWatermark,
+    ) -> anyhow::Result<InitWatermark> {
+        init_with_committer_watermark(self, pipeline_task, init_watermark).await
     }
 
     async fn committer_watermark(

@@ -40,6 +40,7 @@ config.yaml
 deny_list.yaml
 derived_object.yaml
 display.yaml
+display_registry.yaml
 dynamic_field.yaml
 dynamic_object_field.yaml
 ecdsa_k1.yaml

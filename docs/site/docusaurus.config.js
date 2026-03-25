@@ -48,7 +48,6 @@ const config = {
   onDuplicateRoutes: 'ignore',
 
   staticDirectories: ["static", "src/open-spec"],
-
   markdown: {
     format: "detect",
     mermaid: true,
@@ -59,6 +58,40 @@ const config = {
   
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
+    function llmsTxtDirectivePlugin() {
+      return {
+        name: 'llms-txt-directive-plugin',
+        injectHtmlTags() {
+          return {
+            preBodyTags: [
+              {
+                tagName: 'link',
+                attributes: {
+                  rel: 'alternate',
+                  type: 'text/plain',
+                  href: '/llms.txt',
+                  title: 'LLMs.txt',
+                },
+              },
+            ],
+          };
+        },
+      };
+    },
+     function aliasPlugin() {
+      return {
+        name: 'custom-aliases',
+        configureWebpack() {
+          return {
+            resolve: {
+              alias: {
+                '@generated-imports': path.resolve(__dirname, '.generated'),
+              },
+            },
+          };
+        },
+      };
+    },
     //require.resolve('./src/plugins/framework'),
     "docusaurus-plugin-copy-page-button",
     require.resolve("./src/plugins/validate-openrpc"),
@@ -208,6 +241,9 @@ const config = {
       "data-answer-copy-button-bg-color" : "#FFFFFF",
       "data-thread-clear-button-bg-color" : "#FFFFFF",
       "data-modal-image": "img/logo.svg",
+      "data-mcp-enabled": "true",
+      "data-mcp-server-url": "https://sui.mcp.kapa.ai",
+      "data-mcp-button-text": "Use Sui MCP Server",
       async: true,
     },
   ],

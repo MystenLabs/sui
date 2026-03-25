@@ -5,11 +5,15 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use anyhow::Context;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::Stream;
 use futures::StreamExt;
+use sui_rpc::headers::X_SUI_CHAIN_ID;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
+use sui_types::digests::ChainIdentifier;
+use sui_types::messages_checkpoint::CheckpointDigest;
 use tonic::Status;
 use tonic::transport::Endpoint;
 use tonic::transport::Uri;
@@ -19,12 +23,15 @@ use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
 use crate::types::full_checkpoint_content::Checkpoint;
 
-/// Type alias for a stream of checkpoint data.
-pub type CheckpointStream = Pin<Box<dyn Stream<Item = Result<Checkpoint>> + Send>>;
+pub struct CheckpointStream {
+    pub stream: Pin<Box<dyn Stream<Item = Result<Checkpoint>> + Send>>,
+    pub chain_id: ChainIdentifier,
+}
 
 /// Trait representing a client for streaming checkpoint data.
 #[async_trait]
 pub trait CheckpointStreamingClient {
+    /// Returns the CheckpointStream and chain id.
     async fn connect(&mut self) -> Result<CheckpointStream>;
 }
 
@@ -63,13 +70,22 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
         let mut request = SubscribeCheckpointsRequest::default();
         request.read_mask = Some(Checkpoint::proto_field_mask());
 
-        let stream = client
+        let response = client
             .subscribe_checkpoints(request)
             .await
-            .map_err(Error::RpcClientError)?
-            .into_inner();
+            .map_err(Error::RpcClientError)?;
 
-        let converted_stream = stream.map(|result| match result {
+        let chain_id_value = response.metadata().get(X_SUI_CHAIN_ID).ok_or_else(|| {
+            Error::StreamingError(anyhow!("Chain ID not found in response metadata"))
+        })?;
+        let chain_id: ChainIdentifier = chain_id_value
+            .to_str()
+            .map_err(|e| Error::StreamingError(anyhow!("Chain ID is not valid ASCII: {e}")))?
+            .parse::<CheckpointDigest>()
+            .map_err(|e| Error::StreamingError(anyhow!("Chain ID parse error: {e}")))?
+            .into();
+
+        let converted_stream = response.into_inner().map(|result| match result {
             Ok(response) => response
                 .checkpoint
                 .context("Checkpoint data missing in response")
@@ -80,7 +96,10 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
             Err(e) => Err(Error::RpcClientError(e)),
         });
 
-        Ok(Box::pin(converted_stream))
+        Ok(CheckpointStream {
+            stream: Box::pin(converted_stream),
+            chain_id,
+        })
     }
 }
 
@@ -165,6 +184,10 @@ pub mod test_utils {
     }
 
     impl MockStreamingClient {
+        pub fn mock_chain_id() -> ChainIdentifier {
+            CheckpointDigest::new([1; 32]).into()
+        }
+
         pub fn new<I>(checkpoint_range: I, timeout_duration: Option<Duration>) -> Self
         where
             I: IntoIterator<Item = u64>,
@@ -245,11 +268,14 @@ pub mod test_utils {
                     "Mock connection failure"
                 )));
             }
-            let stream = MockStreamState {
+            let stream = Box::pin(MockStreamState {
                 actions: Arc::clone(&self.actions),
-            };
+            });
 
-            Ok(Box::pin(stream))
+            Ok(CheckpointStream {
+                stream,
+                chain_id: Self::mock_chain_id(),
+            })
         }
     }
 }

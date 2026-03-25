@@ -1,0 +1,858 @@
+# Sui Documentation for LLMs
+
+> Comprehensive reference for Sui blockchain development, including Move smart contract programming, Sui framework concepts, frontend integration, and fullstack application architecture. Designed for efficient retrieval and grounding by large language models.
+
+## Move
+
+- [Move Language Reference](https://move-book.com/llms.txt)
+    Complete reference for the Move programming language as used on Sui. Covers syntax, types,
+      functions, structs, abilities (copy, drop, store, key), generics, ownership and the Sui
+      object model, entry functions, public functions, module structure, error handling, events,
+      and testing with the Move test framework. Includes best practices for safe and efficient
+      contracts, object creation and transfer, capability patterns, witness patterns, and hot
+      potato patterns. Essential reference for all Move smart contract development on Sui.
+
+## Concepts
+
+- [Concepts](/concepts.md)
+- [Coin Mgt](/concepts/coin-mgt.md)
+- [Cryptography Index](/concepts/cryptography.md)
+- [Passkeys](/concepts/cryptography/passkeys.md)
+- [Checkpoint Verification](/concepts/cryptography/system/checkpoint-verification.md)
+- [Archival Store](/concepts/data-access/archival-store.md)
+- [Custom Indexers](/concepts/data-access/custom-indexers.md)
+- [Data Serving](/concepts/data-access/data-serving.md)
+- [Graphql Rpc](/concepts/data-access/graphql-rpc.md)
+- [Grpc](/concepts/data-access/grpc.md)
+- [Indexer Data Integration](/concepts/data-access/indexer-data-integration.md)
+- [Indexer Runtime Perf](/concepts/data-access/indexer-runtime-perf.md)
+- [Pipeline Architecture](/concepts/data-access/pipeline-architecture.md)
+- [Gaming](/concepts/gaming.md)
+- [Research Papers](/concepts/research-papers.md)
+- [Sui Architecture Index](/concepts/sui-architecture.md)
+- [Components](/concepts/sui-architecture/components.md)
+- [Consensus](/concepts/sui-architecture/consensus.md)
+- [Epochs](/concepts/sui-architecture/epochs.md)
+- [Networks](/concepts/sui-architecture/networks.md)
+- [Protocol Upgrades](/concepts/sui-architecture/protocol-upgrades.md)
+- [Sui Security](/concepts/sui-architecture/sui-security.md)
+- [Sui Storage](/concepts/sui-architecture/sui-storage.md)
+- [Sui For Ethereum](/concepts/sui-for-ethereum.md)
+- [Sui For Solana](/concepts/sui-for-solana.md)
+- [Sui Move Concepts](/concepts/sui-move-concepts.md)
+- [Tokenomics Index](/concepts/tokenomics.md)
+- [Gas In Sui](/concepts/tokenomics/gas-in-sui.md)
+- [Staking Unstaking](/concepts/tokenomics/staking-unstaking.md)
+- [Sui Bridging](/concepts/tokenomics/sui-bridging.md)
+- [Tokenomics Overview](/concepts/tokenomics/tokenomics-overview.md)
+
+## Guides
+
+- [Guides](/guides.md)
+
+### Guides/Developer/Accessing Data
+- [Accessing Data Index](/guides/developer/accessing-data.md)
+- [Archival Store](/guides/developer/accessing-data/archival-store.md)
+- [Authenticated Events](/guides/developer/accessing-data/authenticated-events.md)
+- [Custom Indexer Index](/guides/developer/accessing-data/custom-indexer.md)
+- [Bring Your Own Store](/guides/developer/accessing-data/custom-indexer/bring-your-own-store.md)
+- [Build](/guides/developer/accessing-data/custom-indexer/build.md)
+- [Indexer Walrus](/guides/developer/accessing-data/custom-indexer/indexer-walrus.md)
+- [Grpc Overview](/guides/developer/accessing-data/grpc-overview.md)
+- [Query With Graphql](/guides/developer/accessing-data/query-with-graphql.md)
+- [Using Events](/guides/developer/accessing-data/using-events.md)
+- [Address Balances Migration](/guides/developer/address-balances-migration.md)
+
+### Guides/Developer/App Examples
+- [App Examples Index](/guides/developer/app-examples.md)
+- [Blackjack](/guides/developer/app-examples/blackjack.md)
+- [Client Tssdk](/guides/developer/app-examples/client-tssdk.md)
+- [Coin Flip](/guides/developer/app-examples/coin-flip.md)
+- [E2e Counter](/guides/developer/app-examples/e2e-counter.md)
+- [Oracle](/guides/developer/app-examples/oracle.md)
+- [Plinko](/guides/developer/app-examples/plinko.md)
+- [Recaptcha](/guides/developer/app-examples/recaptcha.md)
+- [Reviews Rating](/guides/developer/app-examples/reviews-rating.md)
+- [Tic Tac Toe](/guides/developer/app-examples/tic-tac-toe.md)
+- [Trustless Swap](/guides/developer/app-examples/trustless-swap.md)
+- [Weather Oracle](/guides/developer/app-examples/weather-oracle.md)
+
+### Guides/Developer/Coin
+- [Coin Index](/guides/developer/coin.md)
+- [Currency](/guides/developer/coin/currency.md)
+- [In Game Token](/guides/developer/coin/in-game-token.md)
+- [Loyalty](/guides/developer/coin/loyalty.md)
+- [Regulated](/guides/developer/coin/regulated.md)
+- [Stablecoins](/guides/developer/coin/stablecoins.md)
+- [Vesting Strategies](/guides/developer/coin/vesting-strategies.md)
+- [Common Errors](/guides/developer/common-errors.md)
+
+### Guides/Developer/Cryptography
+- [Cryptography Index](/guides/developer/cryptography.md)
+- [Ecvrf](/guides/developer/cryptography/ecvrf.md)
+- [Groth16](/guides/developer/cryptography/groth16.md)
+- [Hashing](/guides/developer/cryptography/hashing.md)
+- [Multisig](/guides/developer/cryptography/multisig.md)
+- [Signing](/guides/developer/cryptography/signing.md)
+- [Zklogin Integration Index](/guides/developer/cryptography/zklogin-integration.md)
+- [Developer Account](/guides/developer/cryptography/zklogin-integration/developer-account.md)
+- [Zklogin Example](/guides/developer/cryptography/zklogin-integration/zklogin-example.md)
+- [Zklogin Integration](/guides/developer/cryptography/zklogin-integration/zklogin-integration.md)
+- [Zklogin](/guides/developer/cryptography/zklogin-integration/zklogin.md)
+- [Dev Cheat Sheet](/guides/developer/dev-cheat-sheet.md)
+
+### Guides/Developer/Digital Assets
+- [Digital Assets Index](/guides/developer/digital-assets.md)
+- [Address Management Index](/guides/developer/digital-assets/address-management.md)
+- [Migrate Address
+    Balances](/guides/developer/digital-assets/address-management/migrate-address-balances.md)
+- [Examples Patterns Index](/guides/developer/digital-assets/examples-patterns.md)
+- [Kiosk](/guides/developer/digital-assets/examples-patterns/advanced-patterns/kiosk.md)
+- [In Game Currency](/guides/developer/digital-assets/examples-patterns/in-game-currency.md)
+- [Loyalty Tokens](/guides/developer/digital-assets/examples-patterns/loyalty-tokens.md)
+- [Nft Rental](/guides/developer/digital-assets/examples-patterns/nft-rental.md)
+- [Soulbound Tokens](/guides/developer/digital-assets/examples-patterns/soulbound-tokens.md)
+- [Fungible Tokens Index](/guides/developer/digital-assets/fungible-tokens.md)
+- [Create A Fungible
+    Token](/guides/developer/digital-assets/fungible-tokens/create-a-fungible-token.md)
+- [Integrating With
+    Stablecoins](/guides/developer/digital-assets/fungible-tokens/integrating-with-stablecoins.md)
+- [Regulated Tokens](/guides/developer/digital-assets/fungible-tokens/regulated-tokens.md)
+- [Token Vesting
+    Strategies](/guides/developer/digital-assets/fungible-tokens/token-vesting-strategies.md)
+- [Gasless Transactions](/guides/developer/digital-assets/gasless-transactions.md)
+- [Non Fungible Tokens Index](/guides/developer/digital-assets/non-fungible-tokens.md)
+- [Asset Tokenization](/guides/developer/digital-assets/non-fungible-tokens/asset-tokenization.md)
+- [Create Nft](/guides/developer/digital-assets/non-fungible-tokens/create-nft.md)
+- [Deploy Tokenized
+    Asset](/guides/developer/digital-assets/non-fungible-tokens/deploy-tokenized-asset.md)
+- [Permissioned Assets](/guides/developer/digital-assets/permissioned-assets.md)
+- [Types Of Tokens](/guides/developer/digital-assets/types-of-tokens.md)
+
+### Guides/Developer/Getting Started
+- [Getting Started Index](/guides/developer/getting-started.md)
+- [App Frontends](/guides/developer/getting-started/app-frontends.md)
+- [Configure Sui Client](/guides/developer/getting-started/configure-sui-client.md)
+- [Get Address](/guides/developer/getting-started/get-address.md)
+- [Get Coins](/guides/developer/getting-started/get-coins.md)
+- [Hello World](/guides/developer/getting-started/hello-world.md)
+- [Install Binaries](/guides/developer/getting-started/install-binaries.md)
+- [Install Source](/guides/developer/getting-started/install-source.md)
+- [Local Network](/guides/developer/getting-started/local-network.md)
+- [Next Steps](/guides/developer/getting-started/next-steps.md)
+- [Sui Install](/guides/developer/getting-started/sui-install.md)
+- [Sui Wallets](/guides/developer/getting-started/sui-wallets.md)
+- [Move Best Practices](/guides/developer/move-best-practices.md)
+
+### Guides/Developer/Nautilus
+- [Nautilus Index](/guides/developer/nautilus.md)
+- [Customize Nautilus](/guides/developer/nautilus/customize-nautilus.md)
+- [Marlin](/guides/developer/nautilus/marlin.md)
+- [Nautilus Design](/guides/developer/nautilus/nautilus-design.md)
+- [Nautilus Overview](/guides/developer/nautilus/nautilus-overview.md)
+- [Seal](/guides/developer/nautilus/seal.md)
+- [Using Nautilus](/guides/developer/nautilus/using-nautilus.md)
+
+### Guides/Developer/Nft
+- [Nft Index](/guides/developer/nft.md)
+- [Asset Tokenization](/guides/developer/nft/asset-tokenization.md)
+- [Nft Rental](/guides/developer/nft/nft-rental.md)
+- [Nft Soulbound](/guides/developer/nft/nft-soulbound.md)
+- [Nft](/guides/developer/nft/nft.md)
+
+### Guides/Developer/Objects
+- [Objects Index](/guides/developer/objects.md)
+- [Derived Objects](/guides/developer/objects/derived-objects.md)
+- [Display Index](/guides/developer/objects/display.md)
+- [Display Overview](/guides/developer/objects/display/display-overview.md)
+- [Display Preview](/guides/developer/objects/display/display-preview.md)
+- [Using Display](/guides/developer/objects/display/using-display.md)
+- [Dynamic Fields](/guides/developer/objects/dynamic-fields.md)
+- [Local Fee Markets](/guides/developer/objects/local-fee-markets.md)
+- [Object Model](/guides/developer/objects/object-model.md)
+- [Object Ownership Index](/guides/developer/objects/object-ownership.md)
+- [Address Owned](/guides/developer/objects/object-ownership/address-owned.md)
+- [Immutable](/guides/developer/objects/object-ownership/immutable.md)
+- [Party](/guides/developer/objects/object-ownership/party.md)
+- [Shared](/guides/developer/objects/object-ownership/shared.md)
+- [Wrapped](/guides/developer/objects/object-ownership/wrapped.md)
+- [Simulating Refs](/guides/developer/objects/simulating-refs.md)
+- [Tables Bags](/guides/developer/objects/tables-bags.md)
+- [Transfers Index](/guides/developer/objects/transfers.md)
+- [Custom Rules](/guides/developer/objects/transfers/custom-rules.md)
+- [Transfer Policies](/guides/developer/objects/transfers/transfer-policies.md)
+- [Transfer To Object](/guides/developer/objects/transfers/transfer-to-object.md)
+- [Versioning](/guides/developer/objects/versioning.md)
+
+### Guides/Developer/On Chain Primitives
+- [On Chain Primitives Index](/guides/developer/on-chain-primitives.md)
+- [Access Time](/guides/developer/on-chain-primitives/access-time.md)
+- [Randomness Onchain](/guides/developer/on-chain-primitives/randomness-onchain.md)
+
+### Guides/Developer/Packages
+- [Packages Index](/guides/developer/packages.md)
+- [Automated Address Management](/guides/developer/packages/automated-address-management.md)
+- [Custom Policies](/guides/developer/packages/custom-policies.md)
+- [Move Package Management](/guides/developer/packages/move-package-management.md)
+- [Package Overview](/guides/developer/packages/package-overview.md)
+- [Upgrade](/guides/developer/packages/upgrade.md)
+
+### Guides/Developer/Transactions
+- [Transactions Index](/guides/developer/transactions.md)
+- [Gas Smashing](/guides/developer/transactions/gas-smashing.md)
+- [Ptbs Index](/guides/developer/transactions/ptbs.md)
+- [Building Ptb](/guides/developer/transactions/ptbs/building-ptb.md)
+- [Inputs And Results](/guides/developer/transactions/ptbs/inputs-and-results.md)
+- [Prog Txn Blocks](/guides/developer/transactions/ptbs/prog-txn-blocks.md)
+- [Sign And Send Txn](/guides/developer/transactions/ptbs/sign-and-send-txn.md)
+- [Sponsor Txn](/guides/developer/transactions/sponsor-txn.md)
+- [Transaction Auth Index](/guides/developer/transactions/transaction-auth.md)
+- [Address Aliases](/guides/developer/transactions/transaction-auth/address-aliases.md)
+- [Auth Overview](/guides/developer/transactions/transaction-auth/auth-overview.md)
+- [Intent Signing](/guides/developer/transactions/transaction-auth/intent-signing.md)
+- [Multisig](/guides/developer/transactions/transaction-auth/multisig.md)
+- [Offline Signing](/guides/developer/transactions/transaction-auth/offline-signing.md)
+- [Transaction Lifecycle](/guides/developer/transactions/transaction-lifecycle.md)
+- [Txn Overview](/guides/developer/transactions/txn-overview.md)
+
+### Guides/Developer/Wallets
+- [Wallets Index](/guides/developer/wallets.md)
+- [Self Custody](/guides/developer/wallets/self-custody.md)
+- [Slush](/guides/developer/wallets/slush.md)
+- [Suilink](/guides/developer/wallets/suilink.md)
+- [What Is A Wallet](/guides/developer/wallets/what-is-a-wallet.md)
+- [Zk Login Wallets](/guides/developer/wallets/zk-login-wallets.md)
+- [Operator Index](/guides/operator.md)
+- [Alerts](/guides/operator/alerts.md)
+- [Archival Stack Setup](/guides/operator/archival-stack-setup.md)
+- [Archives](/guides/operator/archives.md)
+- [Bridge Node Configuration](/guides/operator/bridge-node-configuration.md)
+- [Data Management](/guides/operator/data-management.md)
+- [Exchange Integration](/guides/operator/exchange-integration.md)
+- [Genesis](/guides/operator/genesis.md)
+- [Indexer Stack Setup](/guides/operator/indexer-stack-setup.md)
+- [Monitoring](/guides/operator/monitoring.md)
+- [Observability](/guides/operator/observability.md)
+- [Remote Store Setup](/guides/operator/remote-store-setup.md)
+- [Snapshots](/guides/operator/snapshots.md)
+- [Sui Full Node](/guides/operator/sui-full-node.md)
+- [Updates](/guides/operator/updates.md)
+- [Validator Index](/guides/operator/validator-index.md)
+
+### Guides/Operator/Validator
+- [Node Tools](/guides/operator/validator/node-tools.md)
+- [Validator Config](/guides/operator/validator/validator-config.md)
+- [Validator Rewards](/guides/operator/validator/validator-rewards.md)
+- [Validator Tasks](/guides/operator/validator/validator-tasks.md)
+- [Suiplay0x1 Index](/guides/suiplay0x1.md)
+- [Best Practices](/guides/suiplay0x1/best-practices.md)
+- [Integration](/guides/suiplay0x1/integration.md)
+- [Migration Strategies](/guides/suiplay0x1/migration-strategies.md)
+- [Wallet Integration](/guides/suiplay0x1/wallet-integration.md)
+
+## References
+
+- [References](/references.md)
+- [Awesome Sui Gaming](/references/awesome-sui-gaming.md)
+- [Awesome Sui](/references/awesome-sui.md)
+- [Cli](/references/cli.md)
+- [Cheatsheet](/references/cli/cheatsheet.md)
+- [Client](/references/cli/client.md)
+- [Keytool](/references/cli/keytool.md)
+- [Move](/references/cli/move.md)
+- [Ptb](/references/cli/ptb.md)
+- [Replay](/references/cli/replay.md)
+- [Trace Analysis](/references/cli/trace-analysis.md)
+- [Validator](/references/cli/validator.md)
+- [Code Of Conduct](/references/contribute/code-of-conduct.md)
+- [Contribute To Sui Repos](/references/contribute/contribute-to-sui-repos.md)
+- [Contribution Process](/references/contribute/contribution-process.md)
+- [Localize Sui Docs](/references/contribute/localize-sui-docs.md)
+- [Mdx Components](/references/contribute/mdx-components.md)
+- [Style Guide](/references/contribute/style-guide.md)
+- [Sui Environment](/references/contribute/sui-environment.md)
+- [Exchange Integration Guide](/references/exchange-integration-guide.md)
+- [Framework](/references/framework.md)
+
+### References/Framework/Sui Bridge
+- [Sui Bridge Index](/references/framework/sui_bridge.md)
+- [Bridge](/references/framework/sui_bridge/bridge.md)
+- [Chain Ids](/references/framework/sui_bridge/chain_ids.md)
+- [Committee](/references/framework/sui_bridge/committee.md)
+- [Crypto](/references/framework/sui_bridge/crypto.md)
+- [Limiter](/references/framework/sui_bridge/limiter.md)
+- [Message Types](/references/framework/sui_bridge/message_types.md)
+- [Message](/references/framework/sui_bridge/message.md)
+- [Treasury](/references/framework/sui_bridge/treasury.md)
+
+### References/Framework/Sui Std
+- [Sui Std Index](/references/framework/sui_std.md)
+- [Address](/references/framework/sui_std/address.md)
+- [Ascii](/references/framework/sui_std/ascii.md)
+- [Bcs](/references/framework/sui_std/bcs.md)
+- [Bit Vector](/references/framework/sui_std/bit_vector.md)
+- [Bool](/references/framework/sui_std/bool.md)
+- [Debug](/references/framework/sui_std/debug.md)
+- [Fixed Point32](/references/framework/sui_std/fixed_point32.md)
+- [Hash](/references/framework/sui_std/hash.md)
+- [Internal](/references/framework/sui_std/internal.md)
+- [Macros](/references/framework/sui_std/macros.md)
+- [Option](/references/framework/sui_std/option.md)
+- [String](/references/framework/sui_std/string.md)
+- [Type Name](/references/framework/sui_std/type_name.md)
+- [U128](/references/framework/sui_std/u128.md)
+- [U16](/references/framework/sui_std/u16.md)
+- [U256](/references/framework/sui_std/u256.md)
+- [U32](/references/framework/sui_std/u32.md)
+- [U64](/references/framework/sui_std/u64.md)
+- [U8](/references/framework/sui_std/u8.md)
+- [Uq32 32](/references/framework/sui_std/uq32_32.md)
+- [Uq64 64](/references/framework/sui_std/uq64_64.md)
+- [Vector](/references/framework/sui_std/vector.md)
+
+### References/Framework/Sui Sui
+- [Sui Sui Index](/references/framework/sui_sui.md)
+- [Accumulator Metadata](/references/framework/sui_sui/accumulator_metadata.md)
+- [Accumulator Settlement](/references/framework/sui_sui/accumulator_settlement.md)
+- [Accumulator](/references/framework/sui_sui/accumulator.md)
+- [Address Alias](/references/framework/sui_sui/address_alias.md)
+- [Address](/references/framework/sui_sui/address.md)
+- [Authenticator State](/references/framework/sui_sui/authenticator_state.md)
+- [Bag](/references/framework/sui_sui/bag.md)
+- [Balance](/references/framework/sui_sui/balance.md)
+- [Bcs](/references/framework/sui_sui/bcs.md)
+- [Bls12381](/references/framework/sui_sui/bls12381.md)
+- [Borrow](/references/framework/sui_sui/borrow.md)
+- [Clock](/references/framework/sui_sui/clock.md)
+- [Coin Registry](/references/framework/sui_sui/coin_registry.md)
+- [Coin](/references/framework/sui_sui/coin.md)
+- [Config](/references/framework/sui_sui/config.md)
+- [Deny List](/references/framework/sui_sui/deny_list.md)
+- [Derived Object](/references/framework/sui_sui/derived_object.md)
+- [Display Registry](/references/framework/sui_sui/display_registry.md)
+- [Display](/references/framework/sui_sui/display.md)
+- [Dynamic Field](/references/framework/sui_sui/dynamic_field.md)
+- [Dynamic Object Field](/references/framework/sui_sui/dynamic_object_field.md)
+- [Ecdsa K1](/references/framework/sui_sui/ecdsa_k1.md)
+- [Ecdsa R1](/references/framework/sui_sui/ecdsa_r1.md)
+- [Ecvrf](/references/framework/sui_sui/ecvrf.md)
+- [Ed25519](/references/framework/sui_sui/ed25519.md)
+- [Event](/references/framework/sui_sui/event.md)
+- [Funds Accumulator](/references/framework/sui_sui/funds_accumulator.md)
+- [Groth16](/references/framework/sui_sui/groth16.md)
+- [Group Ops](/references/framework/sui_sui/group_ops.md)
+- [Hash](/references/framework/sui_sui/hash.md)
+- [Hex](/references/framework/sui_sui/hex.md)
+- [Hmac](/references/framework/sui_sui/hmac.md)
+- [Kiosk Extension](/references/framework/sui_sui/kiosk_extension.md)
+- [Kiosk](/references/framework/sui_sui/kiosk.md)
+- [Linked Table](/references/framework/sui_sui/linked_table.md)
+- [Math](/references/framework/sui_sui/math.md)
+- [Nitro Attestation](/references/framework/sui_sui/nitro_attestation.md)
+- [Object Bag](/references/framework/sui_sui/object_bag.md)
+- [Object Table](/references/framework/sui_sui/object_table.md)
+- [Object](/references/framework/sui_sui/object.md)
+- [Package](/references/framework/sui_sui/package.md)
+- [Party](/references/framework/sui_sui/party.md)
+- [Pay](/references/framework/sui_sui/pay.md)
+- [Poseidon](/references/framework/sui_sui/poseidon.md)
+- [Priority Queue](/references/framework/sui_sui/priority_queue.md)
+- [Protocol Config](/references/framework/sui_sui/protocol_config.md)
+- [Prover](/references/framework/sui_sui/prover.md)
+- [Random](/references/framework/sui_sui/random.md)
+- [Ristretto255](/references/framework/sui_sui/ristretto255.md)
+- [Sui](/references/framework/sui_sui/sui.md)
+- [Table Vec](/references/framework/sui_sui/table_vec.md)
+- [Table](/references/framework/sui_sui/table.md)
+- [Token](/references/framework/sui_sui/token.md)
+- [Transfer Policy](/references/framework/sui_sui/transfer_policy.md)
+- [Transfer](/references/framework/sui_sui/transfer.md)
+- [Tx Context](/references/framework/sui_sui/tx_context.md)
+- [Types](/references/framework/sui_sui/types.md)
+- [Url](/references/framework/sui_sui/url.md)
+- [Vdf](/references/framework/sui_sui/vdf.md)
+- [Vec Map](/references/framework/sui_sui/vec_map.md)
+- [Vec Set](/references/framework/sui_sui/vec_set.md)
+- [Versioned](/references/framework/sui_sui/versioned.md)
+- [Zklogin Verified Id](/references/framework/sui_sui/zklogin_verified_id.md)
+- [Zklogin Verified Issuer](/references/framework/sui_sui/zklogin_verified_issuer.md)
+
+### References/Framework/Sui Sui System
+- [Sui Sui System Index](/references/framework/sui_sui_system.md)
+- [Genesis](/references/framework/sui_sui_system/genesis.md)
+- [Stake Subsidy](/references/framework/sui_sui_system/stake_subsidy.md)
+- [Staking Pool](/references/framework/sui_sui_system/staking_pool.md)
+- [Storage Fund](/references/framework/sui_sui_system/storage_fund.md)
+- [Sui System State Inner](/references/framework/sui_sui_system/sui_system_state_inner.md)
+- [Sui System](/references/framework/sui_sui_system/sui_system.md)
+- [Validator Cap](/references/framework/sui_sui_system/validator_cap.md)
+- [Validator Set](/references/framework/sui_sui_system/validator_set.md)
+- [Validator Wrapper](/references/framework/sui_sui_system/validator_wrapper.md)
+- [Validator](/references/framework/sui_sui_system/validator.md)
+- [Voting Power](/references/framework/sui_sui_system/voting_power.md)
+- [Fullnode Protocol](/references/fullnode-protocol.md)
+- [Debugger](/references/ide/debugger.md)
+- [Move](/references/ide/move.md)
+- [Object Display Syntax](/references/object-display-syntax.md)
+- [Manifest Reference](/references/package-managers/manifest-reference.md)
+- [Package Manager Migration](/references/package-managers/package-manager-migration.md)
+- [Ptb Commands](/references/ptb-commands.md)
+- [Release Notes](/references/release-notes.md)
+- [Rust Sdk](/references/rust-sdk.md)
+- [Sui Api](/references/sui-api.md)
+- [Rpc Best Practices](/references/sui-api/rpc-best-practices.md)
+
+### References/Sui Api/Sui Graphql
+- [Include](/references/sui-api/sui-graphql/beta/reference/operations/directives/include.md)
+- [Skip](/references/sui-api/sui-graphql/beta/reference/operations/directives/skip.md)
+- [Execute
+    Transaction](/references/sui-api/sui-graphql/beta/reference/operations/mutations/execute-transaction.md)
+- [Address](/references/sui-api/sui-graphql/beta/reference/operations/queries/address.md)
+- [Chain
+    Identifier](/references/sui-api/sui-graphql/beta/reference/operations/queries/chain-identifier.md)
+- [Checkpoint](/references/sui-api/sui-graphql/beta/reference/operations/queries/checkpoint.md)
+- [Checkpoints](/references/sui-api/sui-graphql/beta/reference/operations/queries/checkpoints.md)
+- [Coin
+    Metadata](/references/sui-api/sui-graphql/beta/reference/operations/queries/coin-metadata.md)
+- [Epoch](/references/sui-api/sui-graphql/beta/reference/operations/queries/epoch.md)
+- [Epochs](/references/sui-api/sui-graphql/beta/reference/operations/queries/epochs.md)
+- [Events](/references/sui-api/sui-graphql/beta/reference/operations/queries/events.md)
+- [Multi Get
+    Addresses](/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-addresses.md)
+- [Multi Get
+    Checkpoints](/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-checkpoints.md)
+- [Multi Get
+    Epochs](/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-epochs.md)
+- [Multi Get
+    Objects](/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-objects.md)
+- [Multi Get
+    Packages](/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-packages.md)
+- [Multi Get Transaction
+    Effects](/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-transaction-effects.md)
+- [Multi Get
+    Transactions](/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-transactions.md)
+- [Multi Get
+    Types](/references/sui-api/sui-graphql/beta/reference/operations/queries/multi-get-types.md)
+- [Name Record](/references/sui-api/sui-graphql/beta/reference/operations/queries/name-record.md)
+- [Node](/references/sui-api/sui-graphql/beta/reference/operations/queries/node.md)
+- [Object
+    Versions](/references/sui-api/sui-graphql/beta/reference/operations/queries/object-versions.md)
+- [Object](/references/sui-api/sui-graphql/beta/reference/operations/queries/object.md)
+- [Objects](/references/sui-api/sui-graphql/beta/reference/operations/queries/objects.md)
+- [Package
+    Versions](/references/sui-api/sui-graphql/beta/reference/operations/queries/package-versions.md)
+- [Package](/references/sui-api/sui-graphql/beta/reference/operations/queries/package.md)
+- [Packages](/references/sui-api/sui-graphql/beta/reference/operations/queries/packages.md)
+- [Protocol
+    Configs](/references/sui-api/sui-graphql/beta/reference/operations/queries/protocol-configs.md)
+- [Service
+    Config](/references/sui-api/sui-graphql/beta/reference/operations/queries/service-config.md)
+- [Simulate
+    Transaction](/references/sui-api/sui-graphql/beta/reference/operations/queries/simulate-transaction.md)
+- [Transaction
+    Effects](/references/sui-api/sui-graphql/beta/reference/operations/queries/transaction-effects.md)
+- [Transaction](/references/sui-api/sui-graphql/beta/reference/operations/queries/transaction.md)
+- [Transactions](/references/sui-api/sui-graphql/beta/reference/operations/queries/transactions.md)
+- [Type](/references/sui-api/sui-graphql/beta/reference/operations/queries/type.md)
+- [Verify Zk Login
+    Signature](/references/sui-api/sui-graphql/beta/reference/operations/queries/verify-zk-login-signature.md)
+- [Deprecated](/references/sui-api/sui-graphql/beta/reference/types/directives/deprecated.md)
+- [One Of](/references/sui-api/sui-graphql/beta/reference/types/directives/one-of.md)
+- [Specified By](/references/sui-api/sui-graphql/beta/reference/types/directives/specified-by.md)
+- [Address Transaction
+    Relationship](/references/sui-api/sui-graphql/beta/reference/types/enums/address-transaction-relationship.md)
+- [Consensus Object Cancellation
+    Reason](/references/sui-api/sui-graphql/beta/reference/types/enums/consensus-object-cancellation-reason.md)
+- [Execution Status](/references/sui-api/sui-graphql/beta/reference/types/enums/execution-status.md)
+- [Move Ability](/references/sui-api/sui-graphql/beta/reference/types/enums/move-ability.md)
+- [Move Visibility](/references/sui-api/sui-graphql/beta/reference/types/enums/move-visibility.md)
+- [Multisig Member Signature
+    Scheme](/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md)
+- [Owner Kind](/references/sui-api/sui-graphql/beta/reference/types/enums/owner-kind.md)
+- [Regulated State](/references/sui-api/sui-graphql/beta/reference/types/enums/regulated-state.md)
+- [Supply State](/references/sui-api/sui-graphql/beta/reference/types/enums/supply-state.md)
+- [Transaction Kind
+    Input](/references/sui-api/sui-graphql/beta/reference/types/enums/transaction-kind-input.md)
+- [Withdraw From](/references/sui-api/sui-graphql/beta/reference/types/enums/withdraw-from.md)
+- [Zk Login Intent
+    Scope](/references/sui-api/sui-graphql/beta/reference/types/enums/zk-login-intent-scope.md)
+- [Address Key](/references/sui-api/sui-graphql/beta/reference/types/inputs/address-key.md)
+- [Checkpoint
+    Filter](/references/sui-api/sui-graphql/beta/reference/types/inputs/checkpoint-filter.md)
+- [Dynamic Field
+    Name](/references/sui-api/sui-graphql/beta/reference/types/inputs/dynamic-field-name.md)
+- [Event Filter](/references/sui-api/sui-graphql/beta/reference/types/inputs/event-filter.md)
+- [Object Filter](/references/sui-api/sui-graphql/beta/reference/types/inputs/object-filter.md)
+- [Object Key](/references/sui-api/sui-graphql/beta/reference/types/inputs/object-key.md)
+- [Package Checkpoint
+    Filter](/references/sui-api/sui-graphql/beta/reference/types/inputs/package-checkpoint-filter.md)
+- [Package Key](/references/sui-api/sui-graphql/beta/reference/types/inputs/package-key.md)
+- [Transaction
+    Filter](/references/sui-api/sui-graphql/beta/reference/types/inputs/transaction-filter.md)
+- [Version Filter](/references/sui-api/sui-graphql/beta/reference/types/inputs/version-filter.md)
+- [Iaddressable](/references/sui-api/sui-graphql/beta/reference/types/interfaces/iaddressable.md)
+- [Imove
+    Datatype](/references/sui-api/sui-graphql/beta/reference/types/interfaces/imove-datatype.md)
+- [Imove Object](/references/sui-api/sui-graphql/beta/reference/types/interfaces/imove-object.md)
+- [Iobject](/references/sui-api/sui-graphql/beta/reference/types/interfaces/iobject.md)
+- [Node](/references/sui-api/sui-graphql/beta/reference/types/interfaces/node.md)
+- [Accumulator Root Create
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/accumulator-root-create-transaction.md)
+- [Active Jwk
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/active-jwk-connection.md)
+- [Active Jwk Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/active-jwk-edge.md)
+- [Active Jwk](/references/sui-api/sui-graphql/beta/reference/types/objects/active-jwk.md)
+- [Address Alias State Create
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/address-alias-state-create-transaction.md)
+- [Address Owner](/references/sui-api/sui-graphql/beta/reference/types/objects/address-owner.md)
+- [Address](/references/sui-api/sui-graphql/beta/reference/types/objects/address.md)
+- [Authenticator State Create
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/authenticator-state-create-transaction.md)
+- [Authenticator State Expire
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/authenticator-state-expire-transaction.md)
+- [Authenticator State Update
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/authenticator-state-update-transaction.md)
+- [Available Range](/references/sui-api/sui-graphql/beta/reference/types/objects/available-range.md)
+- [Balance Change
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/balance-change-connection.md)
+- [Balance Change
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/balance-change-edge.md)
+- [Balance Change](/references/sui-api/sui-graphql/beta/reference/types/objects/balance-change.md)
+- [Balance
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/balance-connection.md)
+- [Balance Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/balance-edge.md)
+- [Balance
+    Withdraw](/references/sui-api/sui-graphql/beta/reference/types/objects/balance-withdraw.md)
+- [Balance](/references/sui-api/sui-graphql/beta/reference/types/objects/balance.md)
+- [Bridge Committee Init
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/bridge-committee-init-transaction.md)
+- [Bridge State Create
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/bridge-state-create-transaction.md)
+- [Change Epoch
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/change-epoch-transaction.md)
+- [Checkpoint
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/checkpoint-connection.md)
+- [Checkpoint Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/checkpoint-edge.md)
+- [Checkpoint](/references/sui-api/sui-graphql/beta/reference/types/objects/checkpoint.md)
+- [Circom G1](/references/sui-api/sui-graphql/beta/reference/types/objects/circom-g1.md)
+- [Circom G2](/references/sui-api/sui-graphql/beta/reference/types/objects/circom-g2.md)
+- [Coin Deny List State Create
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/coin-deny-list-state-create-transaction.md)
+- [Coin Metadata](/references/sui-api/sui-graphql/beta/reference/types/objects/coin-metadata.md)
+- [Coin Registry Create
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/coin-registry-create-transaction.md)
+- [Command
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/command-connection.md)
+- [Command Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/command-edge.md)
+- [Command Output](/references/sui-api/sui-graphql/beta/reference/types/objects/command-output.md)
+- [Command Result](/references/sui-api/sui-graphql/beta/reference/types/objects/command-result.md)
+- [Consensus Address
+    Owner](/references/sui-api/sui-graphql/beta/reference/types/objects/consensus-address-owner.md)
+- [Consensus Commit Prologue
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/consensus-commit-prologue-transaction.md)
+- [Consensus Object
+    Cancelled](/references/sui-api/sui-graphql/beta/reference/types/objects/consensus-object-cancelled.md)
+- [Consensus Object
+    Read](/references/sui-api/sui-graphql/beta/reference/types/objects/consensus-object-read.md)
+- [Display Registry Create
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/display-registry-create-transaction.md)
+- [Display](/references/sui-api/sui-graphql/beta/reference/types/objects/display.md)
+- [Dynamic Field
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/dynamic-field-connection.md)
+- [Dynamic Field
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/dynamic-field-edge.md)
+- [Dynamic Field](/references/sui-api/sui-graphql/beta/reference/types/objects/dynamic-field.md)
+- [Ed 25519 Public
+    Key](/references/sui-api/sui-graphql/beta/reference/types/objects/ed-25519-public-key.md)
+- [Ed 25519
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/objects/ed-25519-signature.md)
+- [End Of Epoch Transaction Kind
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/end-of-epoch-transaction-kind-connection.md)
+- [End Of Epoch Transaction Kind
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/end-of-epoch-transaction-kind-edge.md)
+- [End Of Epoch
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/end-of-epoch-transaction.md)
+- [Epoch
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/epoch-connection.md)
+- [Epoch Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/epoch-edge.md)
+- [Epoch](/references/sui-api/sui-graphql/beta/reference/types/objects/epoch.md)
+- [Event
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/event-connection.md)
+- [Event Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/event-edge.md)
+- [Event](/references/sui-api/sui-graphql/beta/reference/types/objects/event.md)
+- [Execution Error](/references/sui-api/sui-graphql/beta/reference/types/objects/execution-error.md)
+- [Execution
+    Result](/references/sui-api/sui-graphql/beta/reference/types/objects/execution-result.md)
+- [Feature Flag](/references/sui-api/sui-graphql/beta/reference/types/objects/feature-flag.md)
+- [Gas Coin](/references/sui-api/sui-graphql/beta/reference/types/objects/gas-coin.md)
+- [Gas Cost
+    Summary](/references/sui-api/sui-graphql/beta/reference/types/objects/gas-cost-summary.md)
+- [Gas Effects](/references/sui-api/sui-graphql/beta/reference/types/objects/gas-effects.md)
+- [Gas Input](/references/sui-api/sui-graphql/beta/reference/types/objects/gas-input.md)
+- [Genesis
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/genesis-transaction.md)
+- [Immutable](/references/sui-api/sui-graphql/beta/reference/types/objects/immutable.md)
+- [Input](/references/sui-api/sui-graphql/beta/reference/types/objects/input.md)
+- [Linkage](/references/sui-api/sui-graphql/beta/reference/types/objects/linkage.md)
+- [Make Move Vec
+    Command](/references/sui-api/sui-graphql/beta/reference/types/objects/make-move-vec-command.md)
+- [Merge Coins
+    Command](/references/sui-api/sui-graphql/beta/reference/types/objects/merge-coins-command.md)
+- [Move Call
+    Command](/references/sui-api/sui-graphql/beta/reference/types/objects/move-call-command.md)
+- [Move Datatype
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/move-datatype-connection.md)
+- [Move Datatype
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/move-datatype-edge.md)
+- [Move Datatype Type
+    Parameter](/references/sui-api/sui-graphql/beta/reference/types/objects/move-datatype-type-parameter.md)
+- [Move Datatype](/references/sui-api/sui-graphql/beta/reference/types/objects/move-datatype.md)
+- [Move Enum
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/move-enum-connection.md)
+- [Move Enum Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/move-enum-edge.md)
+- [Move Enum
+    Variant](/references/sui-api/sui-graphql/beta/reference/types/objects/move-enum-variant.md)
+- [Move Enum](/references/sui-api/sui-graphql/beta/reference/types/objects/move-enum.md)
+- [Move Field](/references/sui-api/sui-graphql/beta/reference/types/objects/move-field.md)
+- [Move Function
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/move-function-connection.md)
+- [Move Function
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/move-function-edge.md)
+- [Move Function Type
+    Parameter](/references/sui-api/sui-graphql/beta/reference/types/objects/move-function-type-parameter.md)
+- [Move Function](/references/sui-api/sui-graphql/beta/reference/types/objects/move-function.md)
+- [Move Module
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/move-module-connection.md)
+- [Move Module
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/move-module-edge.md)
+- [Move Module](/references/sui-api/sui-graphql/beta/reference/types/objects/move-module.md)
+- [Move Object
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/move-object-connection.md)
+- [Move Object
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/move-object-edge.md)
+- [Move Object](/references/sui-api/sui-graphql/beta/reference/types/objects/move-object.md)
+- [Move Package
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/move-package-connection.md)
+- [Move Package
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/move-package-edge.md)
+- [Move Package](/references/sui-api/sui-graphql/beta/reference/types/objects/move-package.md)
+- [Move Struct
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/move-struct-connection.md)
+- [Move Struct
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/move-struct-edge.md)
+- [Move Struct](/references/sui-api/sui-graphql/beta/reference/types/objects/move-struct.md)
+- [Move Type](/references/sui-api/sui-graphql/beta/reference/types/objects/move-type.md)
+- [Move Value
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/move-value-connection.md)
+- [Move Value Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/move-value-edge.md)
+- [Move Value](/references/sui-api/sui-graphql/beta/reference/types/objects/move-value.md)
+- [Multisig
+    Committee](/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-committee.md)
+- [Multisig Member
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature.md)
+- [Multisig Member](/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member.md)
+- [Multisig
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-signature.md)
+- [Mutate Consensus Stream
+    Ended](/references/sui-api/sui-graphql/beta/reference/types/objects/mutate-consensus-stream-ended.md)
+- [Name Record](/references/sui-api/sui-graphql/beta/reference/types/objects/name-record.md)
+- [Object Change
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/object-change-connection.md)
+- [Object Change
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/object-change-edge.md)
+- [Object Change](/references/sui-api/sui-graphql/beta/reference/types/objects/object-change.md)
+- [Object
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/object-connection.md)
+- [Object Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/object-edge.md)
+- [Object Owner](/references/sui-api/sui-graphql/beta/reference/types/objects/object-owner.md)
+- [Object](/references/sui-api/sui-graphql/beta/reference/types/objects/object.md)
+- [Open Move Type](/references/sui-api/sui-graphql/beta/reference/types/objects/open-move-type.md)
+- [Other Command](/references/sui-api/sui-graphql/beta/reference/types/objects/other-command.md)
+- [Owned Or
+    Immutable](/references/sui-api/sui-graphql/beta/reference/types/objects/owned-or-immutable.md)
+- [Page Info](/references/sui-api/sui-graphql/beta/reference/types/objects/page-info.md)
+- [Passkey Public
+    Key](/references/sui-api/sui-graphql/beta/reference/types/objects/passkey-public-key.md)
+- [Passkey
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/objects/passkey-signature.md)
+- [Per Epoch
+    Config](/references/sui-api/sui-graphql/beta/reference/types/objects/per-epoch-config.md)
+- [Programmable System
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/programmable-system-transaction.md)
+- [Programmable
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/programmable-transaction.md)
+- [Protocol Config](/references/sui-api/sui-graphql/beta/reference/types/objects/protocol-config.md)
+- [Protocol
+    Configs](/references/sui-api/sui-graphql/beta/reference/types/objects/protocol-configs.md)
+- [Publish Command](/references/sui-api/sui-graphql/beta/reference/types/objects/publish-command.md)
+- [Pure](/references/sui-api/sui-graphql/beta/reference/types/objects/pure.md)
+- [Randomness State Create
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/randomness-state-create-transaction.md)
+- [Randomness State Update
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/randomness-state-update-transaction.md)
+- [Read Consensus Stream
+    Ended](/references/sui-api/sui-graphql/beta/reference/types/objects/read-consensus-stream-ended.md)
+- [Receiving](/references/sui-api/sui-graphql/beta/reference/types/objects/receiving.md)
+- [Secp 256 K1 Public
+    Key](/references/sui-api/sui-graphql/beta/reference/types/objects/secp-256-k1-public-key.md)
+- [Secp 256 K1
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/objects/secp-256-k1-signature.md)
+- [Secp 256 R1 Public
+    Key](/references/sui-api/sui-graphql/beta/reference/types/objects/secp-256-r1-public-key.md)
+- [Secp 256 R1
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/objects/secp-256-r1-signature.md)
+- [Service Config](/references/sui-api/sui-graphql/beta/reference/types/objects/service-config.md)
+- [Shared Input](/references/sui-api/sui-graphql/beta/reference/types/objects/shared-input.md)
+- [Shared](/references/sui-api/sui-graphql/beta/reference/types/objects/shared.md)
+- [Simulation
+    Result](/references/sui-api/sui-graphql/beta/reference/types/objects/simulation-result.md)
+- [Split Coins
+    Command](/references/sui-api/sui-graphql/beta/reference/types/objects/split-coins-command.md)
+- [Store Execution Time Observations
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/store-execution-time-observations-transaction.md)
+- [Transaction
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/transaction-connection.md)
+- [Transaction
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/transaction-edge.md)
+- [Transaction
+    Effects](/references/sui-api/sui-graphql/beta/reference/types/objects/transaction-effects.md)
+- [Transaction Input
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/transaction-input-connection.md)
+- [Transaction Input
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/transaction-input-edge.md)
+- [Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/transaction.md)
+- [Transfer Objects
+    Command](/references/sui-api/sui-graphql/beta/reference/types/objects/transfer-objects-command.md)
+- [Tx Result](/references/sui-api/sui-graphql/beta/reference/types/objects/tx-result.md)
+- [Type Origin](/references/sui-api/sui-graphql/beta/reference/types/objects/type-origin.md)
+- [Unchanged Consensus Object
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/unchanged-consensus-object-connection.md)
+- [Unchanged Consensus Object
+    Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/unchanged-consensus-object-edge.md)
+- [Upgrade Command](/references/sui-api/sui-graphql/beta/reference/types/objects/upgrade-command.md)
+- [User Signature](/references/sui-api/sui-graphql/beta/reference/types/objects/user-signature.md)
+- [Validator Aggregated
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/objects/validator-aggregated-signature.md)
+- [Validator
+    Connection](/references/sui-api/sui-graphql/beta/reference/types/objects/validator-connection.md)
+- [Validator Edge](/references/sui-api/sui-graphql/beta/reference/types/objects/validator-edge.md)
+- [Validator Set](/references/sui-api/sui-graphql/beta/reference/types/objects/validator-set.md)
+- [Validator](/references/sui-api/sui-graphql/beta/reference/types/objects/validator.md)
+- [Withdraw Max Amount
+    U64](/references/sui-api/sui-graphql/beta/reference/types/objects/withdraw-max-amount-u64.md)
+- [Write Accumulator Storage Cost
+    Transaction](/references/sui-api/sui-graphql/beta/reference/types/objects/write-accumulator-storage-cost-transaction.md)
+- [Zk Login Claim](/references/sui-api/sui-graphql/beta/reference/types/objects/zk-login-claim.md)
+- [Zk Login Inputs](/references/sui-api/sui-graphql/beta/reference/types/objects/zk-login-inputs.md)
+- [Zk Login Jwk Id](/references/sui-api/sui-graphql/beta/reference/types/objects/zk-login-jwk-id.md)
+- [Zk Login Proof](/references/sui-api/sui-graphql/beta/reference/types/objects/zk-login-proof.md)
+- [Zk Login Public
+    Identifier](/references/sui-api/sui-graphql/beta/reference/types/objects/zk-login-public-identifier.md)
+- [Zk Login
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/objects/zk-login-signature.md)
+- [Zk Login Verify
+    Result](/references/sui-api/sui-graphql/beta/reference/types/objects/zk-login-verify-result.md)
+- [Base 64](/references/sui-api/sui-graphql/beta/reference/types/scalars/base-64.md)
+- [Big Int](/references/sui-api/sui-graphql/beta/reference/types/scalars/big-int.md)
+- [Boolean](/references/sui-api/sui-graphql/beta/reference/types/scalars/boolean.md)
+- [Date Time](/references/sui-api/sui-graphql/beta/reference/types/scalars/date-time.md)
+- [Id](/references/sui-api/sui-graphql/beta/reference/types/scalars/id.md)
+- [Int](/references/sui-api/sui-graphql/beta/reference/types/scalars/int.md)
+- [Json](/references/sui-api/sui-graphql/beta/reference/types/scalars/json.md)
+- [Move Type
+    Layout](/references/sui-api/sui-graphql/beta/reference/types/scalars/move-type-layout.md)
+- [Move Type
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/scalars/move-type-signature.md)
+- [Open Move Type
+    Signature](/references/sui-api/sui-graphql/beta/reference/types/scalars/open-move-type-signature.md)
+- [String](/references/sui-api/sui-graphql/beta/reference/types/scalars/string.md)
+- [Sui Address](/references/sui-api/sui-graphql/beta/reference/types/scalars/sui-address.md)
+- [Uint 53](/references/sui-api/sui-graphql/beta/reference/types/scalars/uint-53.md)
+- [Command](/references/sui-api/sui-graphql/beta/reference/types/unions/command.md)
+- [Dynamic Field
+    Value](/references/sui-api/sui-graphql/beta/reference/types/unions/dynamic-field-value.md)
+- [End Of Epoch Transaction
+    Kind](/references/sui-api/sui-graphql/beta/reference/types/unions/end-of-epoch-transaction-kind.md)
+- [Multisig Member Public
+    Key](/references/sui-api/sui-graphql/beta/reference/types/unions/multisig-member-public-key.md)
+- [Owner](/references/sui-api/sui-graphql/beta/reference/types/unions/owner.md)
+- [Signature
+    Scheme](/references/sui-api/sui-graphql/beta/reference/types/unions/signature-scheme.md)
+- [Transaction
+    Argument](/references/sui-api/sui-graphql/beta/reference/types/unions/transaction-argument.md)
+- [Transaction
+    Input](/references/sui-api/sui-graphql/beta/reference/types/unions/transaction-input.md)
+- [Transaction
+    Kind](/references/sui-api/sui-graphql/beta/reference/types/unions/transaction-kind.md)
+- [Unchanged Consensus
+    Object](/references/sui-api/sui-graphql/beta/reference/types/unions/unchanged-consensus-object.md)
+- [Withdrawal
+    Reservation](/references/sui-api/sui-graphql/beta/reference/types/unions/withdrawal-reservation.md)
+- [Sui Compared](/references/sui-compared.md)
+- [Sui Framework Reference](/references/sui-framework-reference.md)
+- [Sui Glossary](/references/sui-glossary.md)
+- [Sui Graphql](/references/sui-graphql.md)
+- [Sui Move](/references/sui-move.md)
+- [Sui Sdks](/references/sui-sdks.md)
+- [Ts Asset Tokenization](/references/ts-asset-tokenization.md)
+
+## Standards
+
+- [Standards](/standards.md)
+- [Closed Loop Token](/standards/closed-loop-token.md)
+- [Action Request](/standards/closed-loop-token/action-request.md)
+- [Coin Token Comparison](/standards/closed-loop-token/coin-token-comparison.md)
+- [Rules](/standards/closed-loop-token/rules.md)
+- [Spending](/standards/closed-loop-token/spending.md)
+- [Token Policy](/standards/closed-loop-token/token-policy.md)
+- [Coin](/standards/coin.md)
+- [Currency](/standards/currency.md)
+- [Deepbook Margin Indexer](/standards/deepbook-margin-indexer.md)
+- [Deepbook Margin Sdk](/standards/deepbook-margin-sdk.md)
+- [Maintainer](/standards/deepbook-margin-sdk/maintainer.md)
+- [Margin Manager](/standards/deepbook-margin-sdk/margin-manager.md)
+- [Margin Pool](/standards/deepbook-margin-sdk/margin-pool.md)
+- [Orders](/standards/deepbook-margin-sdk/orders.md)
+- [Tpsl](/standards/deepbook-margin-sdk/tpsl.md)
+- [Deepbook Margin](/standards/deepbook-margin.md)
+
+### Standards/Deepbook Margin/Contract Information
+- [Contract Information](/standards/deepbook-margin/contract-information.md)
+- [Interest Rates](/standards/deepbook-margin/contract-information/interest-rates.md)
+- [Maintainer](/standards/deepbook-margin/contract-information/maintainer.md)
+- [Margin Manager](/standards/deepbook-margin/contract-information/margin-manager.md)
+- [Margin Pool](/standards/deepbook-margin/contract-information/margin-pool.md)
+- [Orders](/standards/deepbook-margin/contract-information/orders.md)
+- [Risk Ratio](/standards/deepbook-margin/contract-information/risk-ratio.md)
+- [Supply Referral](/standards/deepbook-margin/contract-information/supply-referral.md)
+- [Tpsl](/standards/deepbook-margin/contract-information/tpsl.md)
+- [Design](/standards/deepbook-margin/design.md)
+- [Margin Risks](/standards/deepbook-margin/margin-risks.md)
+- [Deepbook](/standards/deepbook.md)
+- [Deepbookv3 Indexer](/standards/deepbookv3-indexer.md)
+- [Deepbookv3 Sdk](/standards/deepbookv3-sdk.md)
+- [Balance Manager](/standards/deepbookv3-sdk/balance-manager.md)
+- [Flash Loans](/standards/deepbookv3-sdk/flash-loans.md)
+- [Orders](/standards/deepbookv3-sdk/orders.md)
+- [Pools](/standards/deepbookv3-sdk/pools.md)
+- [Staking Governance](/standards/deepbookv3-sdk/staking-governance.md)
+- [Swaps](/standards/deepbookv3-sdk/swaps.md)
+
+### Standards/Deepbookv3/Contract Information
+- [Contract Information](/standards/deepbookv3/contract-information.md)
+- [Balance Manager](/standards/deepbookv3/contract-information/balance-manager.md)
+- [Ewma](/standards/deepbookv3/contract-information/ewma.md)
+- [Flash Loans](/standards/deepbookv3/contract-information/flash-loans.md)
+- [Orders](/standards/deepbookv3/contract-information/orders.md)
+- [Permissionless Pool](/standards/deepbookv3/contract-information/permissionless-pool.md)
+- [Query The Pool](/standards/deepbookv3/contract-information/query-the-pool.md)
+- [Referral](/standards/deepbookv3/contract-information/referral.md)
+- [Staking Governance](/standards/deepbookv3/contract-information/staking-governance.md)
+- [Swaps](/standards/deepbookv3/contract-information/swaps.md)
+- [Design](/standards/deepbookv3/design.md)
+- [Display Preview](/standards/display/display-preview.md)
+- [Kiosk Apps](/standards/kiosk-apps.md)
+- [Kiosk](/standards/kiosk.md)
+- [Payment Kit](/standards/payment-kit.md)
+- [Sagat](/standards/sagat.md)
+- [Wallet Standard](/standards/wallet-standard.md)

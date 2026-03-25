@@ -24,10 +24,11 @@ use tracing::warn;
 use crate::config::ConcurrencyConfig;
 use crate::ingestion::IngestionConfig;
 use crate::ingestion::error::Error;
+use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::ingestion::ingestion_client::IngestionClient;
+use crate::ingestion::streaming_client::CheckpointStream;
 use crate::ingestion::streaming_client::CheckpointStreamingClient;
 use crate::metrics::IngestionMetrics;
-use crate::types::full_checkpoint_content::Checkpoint;
 
 /// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges
 /// via either streaming or ingesting, or both.
@@ -51,7 +52,7 @@ pub(super) fn broadcaster<R, S>(
     config: IngestionConfig,
     client: IngestionClient,
     mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
+    subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
     metrics: Arc<IngestionMetrics>,
 ) -> Service
 where
@@ -221,7 +222,7 @@ fn ingest_and_broadcast_range(
     ingest_concurrency: ConcurrencyConfig,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     client: IngestionClient,
-    subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    subscribers: Arc<Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>>,
     metrics: Arc<IngestionMetrics>,
 ) -> TaskGuard<Result<(), Break<Error>>> {
     TaskGuard::new(tokio::spawn(async move {
@@ -235,9 +236,9 @@ fn ingest_and_broadcast_range(
                     let client = client.clone();
                     async move {
                         // Fetch the checkpoint or stop if cancelled.
-                        let checkpoint = client.wait_for(cp, retry_interval).await?;
+                        let checkpoint_envelope = client.wait_for(cp, retry_interval).await?;
                         debug!(checkpoint = cp, "Fetched checkpoint");
-                        Ok(checkpoint)
+                        Ok(Arc::new(checkpoint_envelope))
                     }
                 },
                 Arc::unwrap_or_clone(subscribers),
@@ -263,7 +264,7 @@ async fn setup_streaming_task<S>(
     end_cp: u64,
     streaming_backoff_batch_size: &mut u64,
     config: &IngestionConfig,
-    subscribers: &Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    subscribers: &Arc<Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>>,
     ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: &Arc<IngestionMetrics>,
 ) -> (TaskGuard<u64>, u64)
@@ -292,22 +293,30 @@ where
 
     // Wrap the stream with a statement timeout to prevent hanging indefinitely, and then make it
     // peekable.
-    let mut stream = Box::pin(match streaming_client.connect().await {
-        Ok(stream) => stream
-            .timeout(config.streaming_statement_timeout())
-            .map(|res| {
-                res.map_err(|_| Error::StreamingError(anyhow!("Connection timeout")))
-                    .flatten()
-            }),
-
+    let CheckpointStream { stream, chain_id } = match streaming_client.connect().await {
+        Ok(checkpoint_stream) => checkpoint_stream,
         Err(e) => {
             return fallback(&format!("Streaming connection failed: {e}"));
         }
-    })
+    };
+
+    let mut checkpoint_envelope_stream = Box::pin(
+        stream
+            .timeout(config.streaming_statement_timeout())
+            .map(move |result| {
+                result
+                    .map_err(|_| Error::StreamingError(anyhow!("Connection timeout")))
+                    .flatten()
+                    .map(|checkpoint| CheckpointEnvelope {
+                        checkpoint: Arc::new(checkpoint),
+                        chain_id,
+                    })
+            }),
+    )
     .peekable();
 
-    let checkpoint = match stream.peek().await {
-        Some(Ok(checkpoint)) => checkpoint,
+    let checkpoint_envelope = match checkpoint_envelope_stream.peek().await {
+        Some(Ok(checkpoint_envelope)) => checkpoint_envelope,
         Some(Err(e)) => {
             return fallback(&format!("Failed to peek latest checkpoint: {e}"));
         }
@@ -319,7 +328,7 @@ where
     // We have successfully connected and peeked, reset backoff batch size.
     *streaming_backoff_batch_size = config.streaming_backoff_initial_batch_size as u64;
 
-    let network_latest_cp = *checkpoint.summary.sequence_number();
+    let network_latest_cp = *checkpoint_envelope.checkpoint.summary.sequence_number();
     let ingestion_end = network_latest_cp.min(end_cp);
     if network_latest_cp > checkpoint_hi + config.checkpoint_buffer_size as u64 {
         info!(
@@ -337,7 +346,7 @@ where
     let stream_guard = TaskGuard::new(tokio::spawn(stream_and_broadcast_range(
         network_latest_cp.max(checkpoint_hi),
         end_cp,
-        stream,
+        checkpoint_envelope_stream,
         subscribers.clone(),
         ingest_hi_rx,
         metrics.clone(),
@@ -354,8 +363,8 @@ where
 async fn stream_and_broadcast_range(
     mut lo: u64,
     hi: u64,
-    mut stream: impl Stream<Item = Result<Checkpoint, Error>> + Unpin,
-    subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
+    mut stream: impl Stream<Item = Result<CheckpointEnvelope, Error>> + Unpin,
+    subscribers: Arc<Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>>,
     mut ingest_hi_rx: Option<watch::Receiver<u64>>,
     metrics: Arc<IngestionMetrics>,
 ) -> u64 {
@@ -365,26 +374,31 @@ async fn stream_and_broadcast_range(
             break;
         };
 
-        let checkpoint = match item {
-            Ok(checkpoint) => checkpoint,
+        let checkpoint_envelope = match item {
+            Ok(checkpoint_envelope) => checkpoint_envelope,
             Err(e) => {
                 warn!(lo, "Streaming error: {e}");
                 break;
             }
         };
 
-        let sequence_number = *checkpoint.summary.sequence_number();
+        let sequence_number = *checkpoint_envelope.checkpoint.summary.sequence_number();
 
         if sequence_number < lo {
             debug!(
                 checkpoint = sequence_number,
                 lo, "Skipping already processed checkpoint"
             );
+            metrics.total_skipped_streamed_checkpoints.inc();
+            metrics
+                .latest_skipped_streamed_checkpoint
+                .set(sequence_number as i64);
             continue;
         }
 
         if sequence_number > lo {
             warn!(checkpoint = sequence_number, lo, "Out-of-order checkpoint");
+            metrics.total_out_of_order_streamed_checkpoints.inc();
             // Return to main loop to fill up the gap.
             break;
         }
@@ -398,7 +412,7 @@ async fn stream_and_broadcast_range(
             break;
         }
 
-        if send_checkpoint(Arc::new(checkpoint), &subscribers)
+        if send_checkpoint(Arc::new(checkpoint_envelope), &subscribers)
             .await
             .is_err()
         {
@@ -420,10 +434,12 @@ async fn stream_and_broadcast_range(
 /// Send a checkpoint to all subscribers.
 /// Returns an error if any subscriber's channel is closed.
 async fn send_checkpoint(
-    checkpoint: Arc<Checkpoint>,
-    subscribers: &[mpsc::Sender<Arc<Checkpoint>>],
-) -> Result<Vec<()>, mpsc::error::SendError<Arc<Checkpoint>>> {
-    let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
+    checkpoint_envelope: Arc<CheckpointEnvelope>,
+    subscribers: &[mpsc::Sender<Arc<CheckpointEnvelope>>],
+) -> Result<Vec<()>, mpsc::error::SendError<Arc<CheckpointEnvelope>>> {
+    let futures = subscribers
+        .iter()
+        .map(|s| s.send(checkpoint_envelope.clone()));
     try_join_all(futures).await
 }
 
@@ -439,30 +455,37 @@ mod tests {
     use std::fmt::Debug;
     use std::sync::Arc;
     use std::time::Duration;
+
+    use async_trait::async_trait;
+    use sui_types::digests::ChainIdentifier;
+    use sui_types::messages_checkpoint::CheckpointDigest;
     use tokio::time::error::Elapsed;
     use tokio::time::timeout;
 
-    use super::*;
     use crate::ingestion::IngestionConfig;
-    use crate::ingestion::ingestion_client::FetchData;
+    use crate::ingestion::ingestion_client::CheckpointData;
+    use crate::ingestion::ingestion_client::CheckpointResult;
+    use crate::ingestion::ingestion_client::IngestionClientTrait;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
 
+    use super::*;
+
     /// Create a mock IngestionClient for tests
     fn mock_client(metrics: Arc<IngestionMetrics>) -> IngestionClient {
-        use crate::ingestion::ingestion_client::FetchError;
-        use crate::ingestion::ingestion_client::IngestionClientTrait;
-        use async_trait::async_trait;
-
         struct MockClient;
 
         #[async_trait]
         impl IngestionClientTrait for MockClient {
-            async fn fetch(&self, checkpoint: u64) -> Result<FetchData, FetchError> {
+            async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+                Ok(CheckpointDigest::new([1; 32]).into())
+            }
+
+            async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
                 // Return mock checkpoint data for any checkpoint number
                 let bytes = test_checkpoint_data(checkpoint);
-                Ok(FetchData::Raw(bytes.into()))
+                Ok(CheckpointData::Raw(bytes.into()))
             }
         }
 
@@ -497,26 +520,38 @@ mod tests {
 
     /// Receive `count` checkpoints from the channel and return their sequence numbers as a Vec.
     /// Maintains order, useful for verifying sequential delivery (e.g., from streaming).
-    async fn recv_vec(rx: &mut mpsc::Receiver<Arc<Checkpoint>>, count: usize) -> Vec<u64> {
+    async fn recv_vec(rx: &mut mpsc::Receiver<Arc<CheckpointEnvelope>>, count: usize) -> Vec<u64> {
         let mut result = Vec::with_capacity(count);
         for _ in 0..count {
-            let checkpoint = expect_recv(rx).await.unwrap();
-            result.push(*checkpoint.summary.sequence_number());
+            let checkpoint_envelope = expect_recv(rx).await.unwrap();
+            assert_eq!(
+                checkpoint_envelope.chain_id,
+                MockStreamingClient::mock_chain_id()
+            );
+            result.push(*checkpoint_envelope.checkpoint.summary.sequence_number());
         }
         result
     }
 
     /// Receive `count` checkpoints from the channel and return their sequence numbers as a BTreeSet.
     /// Useful for verifying unordered delivery (e.g., from concurrent ingestion).
-    async fn recv_set(rx: &mut mpsc::Receiver<Arc<Checkpoint>>, count: usize) -> BTreeSet<u64> {
+    async fn recv_set(
+        rx: &mut mpsc::Receiver<Arc<CheckpointEnvelope>>,
+        count: usize,
+    ) -> BTreeSet<u64> {
         let mut result = BTreeSet::new();
         for _ in 0..count {
-            let checkpoint = expect_recv(rx).await.unwrap();
-            let inserted = result.insert(*checkpoint.summary.sequence_number());
+            let checkpoint_envelope = expect_recv(rx).await.unwrap();
+            assert_eq!(
+                checkpoint_envelope.chain_id,
+                MockStreamingClient::mock_chain_id()
+            );
+            let sequence_number = *checkpoint_envelope.checkpoint.summary.sequence_number();
+            let inserted = result.insert(sequence_number);
             assert!(
                 inserted,
                 "Received duplicate checkpoint {}",
-                checkpoint.summary.sequence_number()
+                sequence_number
             );
         }
         result
@@ -739,16 +774,24 @@ mod tests {
 
         // But updating a's watermark does.
         hi_tx.send(("a", 3)).unwrap();
-        let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-        assert_eq!(*checkpoint.summary.sequence_number(), 2);
+        let checkpoint_envelope = expect_recv(&mut subscriber_rx).await.unwrap();
+        assert_eq!(*checkpoint_envelope.checkpoint.summary.sequence_number(), 2);
+        assert_eq!(
+            checkpoint_envelope.chain_id,
+            MockStreamingClient::mock_chain_id()
+        );
 
         // ...by one checkpoint.
         expect_timeout(&mut subscriber_rx).await;
 
         // And we can make more progress by updating it again.
         hi_tx.send(("a", 4)).unwrap();
-        let checkpoint = expect_recv(&mut subscriber_rx).await.unwrap();
-        assert_eq!(*checkpoint.summary.sequence_number(), 3);
+        let checkpoint_envelope = expect_recv(&mut subscriber_rx).await.unwrap();
+        assert_eq!(*checkpoint_envelope.checkpoint.summary.sequence_number(), 3);
+        assert_eq!(
+            checkpoint_envelope.chain_id,
+            MockStreamingClient::mock_chain_id()
+        );
 
         // But another update to "a" will now not make a difference, because "b" is still behind.
         hi_tx.send(("a", 5)).unwrap();
@@ -968,6 +1011,8 @@ mod tests {
         assert_eq!(metrics.total_streamed_checkpoints.get(), 70);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
         assert_eq!(metrics.latest_streamed_checkpoint.get(), 99);
+        assert_eq!(metrics.total_skipped_streamed_checkpoints.get(), 30);
+        assert_eq!(metrics.latest_skipped_streamed_checkpoint.get(), 29);
 
         svc.join().await.unwrap();
     }
@@ -1007,6 +1052,8 @@ mod tests {
         assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
         assert_eq!(metrics.latest_streamed_checkpoint.get(), 19);
+        assert_eq!(metrics.total_skipped_streamed_checkpoints.get(), 2);
+        assert_eq!(metrics.latest_skipped_streamed_checkpoint.get(), 4);
 
         svc.join().await.unwrap();
     }
@@ -1047,6 +1094,7 @@ mod tests {
         assert_eq!(metrics.total_streamed_checkpoints.get(), 6);
         assert_eq!(metrics.total_ingested_checkpoints.get(), 4);
         assert_eq!(metrics.latest_streamed_checkpoint.get(), 9);
+        assert_eq!(metrics.total_out_of_order_streamed_checkpoints.get(), 1);
 
         svc.join().await.unwrap();
     }

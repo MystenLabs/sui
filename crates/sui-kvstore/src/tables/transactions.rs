@@ -39,7 +39,8 @@ pub fn encode_key(digest: &TransactionDigest) -> Vec<u8> {
 /// Writes 8 columns by default (or 9 when `write_legacy_data()` is enabled, which adds
 /// the deprecated TX column).
 pub fn encode(
-    transaction: &Transaction,
+    transaction_data: &sui_types::transaction::TransactionData,
+    signatures: &[GenericSignature],
     effects: &TransactionEffects,
     events: &Option<TransactionEvents>,
     checkpoint_number: CheckpointSequenceNumber,
@@ -50,7 +51,11 @@ pub fn encode(
     let mut cols = Vec::with_capacity(if write_legacy_data() { 9 } else { 8 });
 
     if write_legacy_data() {
-        cols.push((col::TX, Bytes::from(bcs::to_bytes(transaction)?)));
+        let transaction = Transaction::new(SenderSignedData::new(
+            transaction_data.clone(),
+            signatures.to_vec(),
+        ));
+        cols.push((col::TX, Bytes::from(bcs::to_bytes(&transaction)?)));
     }
 
     cols.extend([
@@ -61,14 +66,8 @@ pub fn encode(
             col::CHECKPOINT_NUMBER,
             Bytes::from(bcs::to_bytes(&checkpoint_number)?),
         ),
-        (
-            col::DATA,
-            Bytes::from(bcs::to_bytes(&transaction.data().intent_message().value)?),
-        ),
-        (
-            col::SIGNATURES,
-            Bytes::from(bcs::to_bytes(transaction.data().tx_signatures())?),
-        ),
+        (col::DATA, Bytes::from(bcs::to_bytes(transaction_data)?)),
+        (col::SIGNATURES, Bytes::from(bcs::to_bytes(signatures)?)),
         (
             col::BALANCE_CHANGES,
             Bytes::from(bcs::to_bytes(balance_changes)?),
@@ -82,45 +81,43 @@ pub fn encode(
     Ok(cols)
 }
 
-pub fn decode(row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
-    let mut transaction_legacy: Option<Transaction> = None;
-    let mut tx_data: Option<sui_types::transaction::TransactionData> = None;
-    let mut tx_signatures: Option<Vec<GenericSignature>> = None;
+pub fn decode(digest: TransactionDigest, row: &[(Bytes, Bytes)]) -> Result<TransactionData> {
+    let mut tx_data = None;
+    let mut tx_signatures = None;
 
     let mut effects = None;
     let mut events = None;
     let mut timestamp = 0;
     let mut checkpoint_number = 0;
+    let mut balance_changes = Vec::new();
+    let mut unchanged_loaded_runtime_objects = Vec::new();
 
     for (column, value) in row {
         match column.as_ref() {
-            b"tx" => transaction_legacy = Some(bcs::from_bytes(value)?),
             b"td" => tx_data = Some(bcs::from_bytes(value)?),
             b"sg" => tx_signatures = Some(bcs::from_bytes(value)?),
             b"ef" => effects = Some(bcs::from_bytes(value)?),
             b"ev" => events = Some(bcs::from_bytes(value)?),
             b"ts" => timestamp = bcs::from_bytes(value)?,
             b"cn" => checkpoint_number = bcs::from_bytes(value)?,
+            b"bc" => balance_changes = bcs::from_bytes(value)?,
+            b"ul" => unchanged_loaded_runtime_objects = bcs::from_bytes(value)?,
             _ => {}
         }
     }
 
-    let transaction = match (tx_data, tx_signatures) {
-        (Some(data), Some(sigs)) => {
-            let sender_signed_data = SenderSignedData::new(data, sigs);
-            Transaction::new(sender_signed_data)
-        }
-        _ => transaction_legacy.context("transaction field is missing")?,
-    };
-
     Ok(TransactionData {
-        transaction,
-        effects: effects.context("effects field is missing")?,
-        events: events.context("events field is missing")?,
+        digest,
+        transaction_data: tx_data,
+        signatures: tx_signatures,
+        effects,
+        // events column stores Option<TransactionEvents>; flatten the double-Option
+        // from "column present with value" vs "column not fetched"
+        events: events.flatten(),
         timestamp,
         checkpoint_number,
-        balance_changes: Vec::new(),
-        unchanged_loaded_runtime_objects: Vec::new(),
+        balance_changes,
+        unchanged_loaded_runtime_objects,
     })
 }
 
@@ -146,4 +143,73 @@ pub fn decode_events(row: &[(Bytes, Bytes)]) -> Result<TransactionEventsData> {
         events,
         timestamp_ms,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use sui_types::TypeTag;
+    use sui_types::balance_change::BalanceChange;
+    use sui_types::base_types::{ObjectID, SuiAddress};
+    use sui_types::effects::TestEffectsBuilder;
+    use sui_types::object::Object;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::storage::ObjectKey;
+    use sui_types::transaction::{SenderSignedData, Transaction, TransactionData};
+
+    fn test_tx_data() -> (TransactionDigest, TransactionData) {
+        let sender = SuiAddress::random_for_testing_only();
+        let gas = Object::immutable_with_id_for_testing(ObjectID::random());
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_sui(SuiAddress::random_for_testing_only(), None);
+            builder.finish()
+        };
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas.compute_object_reference()],
+            pt,
+            1_000_000,
+            1,
+        );
+        let tx = Transaction::new(SenderSignedData::new(data.clone(), vec![]));
+        (*tx.digest(), data)
+    }
+
+    #[test]
+    fn encode_decode_round_trip() {
+        let (digest, tx_data) = test_tx_data();
+        let tx = Transaction::new(SenderSignedData::new(tx_data.clone(), vec![]));
+        let effects = TestEffectsBuilder::new(tx.data()).build();
+        let balance_change = BalanceChange {
+            address: SuiAddress::random_for_testing_only(),
+            coin_type: TypeTag::U64,
+            amount: 42,
+        };
+        let obj_key = ObjectKey(ObjectID::random(), 3.into());
+
+        let encoded = encode(
+            &tx_data,
+            &[],
+            &effects,
+            &None,
+            7,
+            42,
+            std::slice::from_ref(&balance_change),
+            std::slice::from_ref(&obj_key),
+        )
+        .expect("encoding should succeed");
+        let row: Vec<(Bytes, Bytes)> = encoded
+            .into_iter()
+            .map(|(column, value)| (Bytes::from_static(column.as_bytes()), value))
+            .collect();
+
+        let decoded = decode(digest, &row).expect("decoding should succeed");
+
+        assert_eq!(decoded.digest, digest);
+        assert_eq!(decoded.transaction_data.unwrap(), tx_data);
+        assert_eq!(decoded.balance_changes, vec![balance_change]);
+        assert_eq!(decoded.unchanged_loaded_runtime_objects, vec![obj_key]);
+    }
 }

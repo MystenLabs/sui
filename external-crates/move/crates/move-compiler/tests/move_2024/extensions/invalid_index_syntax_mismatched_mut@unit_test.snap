@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/extensions/invalid_index_syntax_mismatched_mut.move:11:14
+   │
+11 │     #[syntax(index)]
+   │              ^^^^^ Invalid syntax annotation
+12 │     fun borrow(s: &S, i: u64): &mut u64 {
+   │                   --           -------- This syntax method must return an immutable reference to match its subject type
+   │                   │             
+   │                   Immutable subject type defined here
+
+error[E07001]: referential transparency violated
+   ┌─ tests/move_2024/extensions/invalid_index_syntax_mismatched_mut.move:13:9
+   │
+12 │     fun borrow(s: &S, i: u64): &mut u64 {
+   │                   -- Immutable because of this position
+13 │         &mut s.t[i]
+   │         ^^^^^^^^^^^ Invalid mutable borrow from an immutable reference

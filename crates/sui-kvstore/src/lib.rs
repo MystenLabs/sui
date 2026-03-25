@@ -37,27 +37,28 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
+use sui_types::signature::GenericSignature;
 use sui_types::storage::ObjectKey;
+use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::Transaction;
 
 pub use crate::bigtable::client::BigTableClient;
+pub use crate::bigtable::client::PoolConfig;
 pub use crate::bigtable::store::BigTableConnection;
 pub use crate::bigtable::store::BigTableStore;
 pub use crate::handlers::BigTableHandler;
 pub use crate::handlers::CheckpointsByDigestPipeline;
 pub use crate::handlers::CheckpointsPipeline;
 pub use crate::handlers::EpochEndPipeline;
-pub use crate::handlers::EpochLegacyBatch;
-pub use crate::handlers::EpochLegacyPipeline;
 pub use crate::handlers::EpochStartPipeline;
 pub use crate::handlers::ObjectsPipeline;
 pub use crate::handlers::PackagesByCheckpointPipeline;
 pub use crate::handlers::PackagesByIdPipeline;
 pub use crate::handlers::PackagesPipeline;
-pub use crate::handlers::PrevEpochUpdate;
 pub use crate::handlers::ProtocolConfigsPipeline;
 pub use crate::handlers::SystemPackagesPipeline;
 pub use crate::handlers::TransactionsPipeline;
+pub use config::BigtablePoolLayer;
 pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
 pub use config::IndexerConfig;
@@ -78,8 +79,6 @@ pub const EPOCH_END_PIPELINE: &str =
     <BigTableHandler<EpochEndPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const PROTOCOL_CONFIGS_PIPELINE: &str =
     <BigTableHandler<ProtocolConfigsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
-pub const EPOCH_LEGACY_PIPELINE: &str =
-    <EpochLegacyPipeline as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const PACKAGES_PIPELINE: &str =
     <BigTableHandler<PackagesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const PACKAGES_BY_ID_PIPELINE: &str =
@@ -89,25 +88,8 @@ pub const PACKAGES_BY_CHECKPOINT_PIPELINE: &str =
 pub const SYSTEM_PACKAGES_PIPELINE: &str =
     <BigTableHandler<SystemPackagesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 
-/// All pipeline names registered by the indexer. Used by `LegacyWatermarkTracker`
-/// to know when all pipelines have reported.
-pub const ALL_PIPELINE_NAMES: [&str; 12] = [
-    CHECKPOINTS_PIPELINE,
-    CHECKPOINTS_BY_DIGEST_PIPELINE,
-    TRANSACTIONS_PIPELINE,
-    OBJECTS_PIPELINE,
-    EPOCH_START_PIPELINE,
-    EPOCH_END_PIPELINE,
-    PROTOCOL_CONFIGS_PIPELINE,
-    EPOCH_LEGACY_PIPELINE,
-    PACKAGES_PIPELINE,
-    PACKAGES_BY_ID_PIPELINE,
-    PACKAGES_BY_CHECKPOINT_PIPELINE,
-    SYSTEM_PACKAGES_PIPELINE,
-];
-
-/// Non-legacy pipeline names used for the default `get_watermark` implementation.
-const WATERMARK_PIPELINES: [&str; 11] = [
+/// All pipeline names registered by the indexer.
+pub const ALL_PIPELINE_NAMES: [&str; 11] = [
     CHECKPOINTS_PIPELINE,
     CHECKPOINTS_BY_DIGEST_PIPELINE,
     TRANSACTIONS_PIPELINE,
@@ -123,7 +105,7 @@ const WATERMARK_PIPELINES: [&str; 11] = [
 
 static WRITE_LEGACY_DATA: OnceLock<bool> = OnceLock::new();
 
-/// Set whether to write legacy data (legacy watermark row, epoch DEFAULT_COLUMN, tx column).
+/// Set whether to write legacy data (deprecated combined tx column).
 /// Must be called before creating any pipelines. Panics if called more than once.
 pub fn set_write_legacy_data(value: bool) {
     WRITE_LEGACY_DATA
@@ -148,13 +130,24 @@ pub struct CheckpointData {
 
 #[derive(Clone, Debug)]
 pub struct TransactionData {
-    pub transaction: Transaction,
-    pub effects: TransactionEffects,
+    pub digest: TransactionDigest,
+    pub transaction_data: Option<sui_types::transaction::TransactionData>,
+    pub signatures: Option<Vec<GenericSignature>>,
+    pub effects: Option<TransactionEffects>,
     pub events: Option<TransactionEvents>,
     pub checkpoint_number: CheckpointSequenceNumber,
     pub timestamp: u64,
     pub balance_changes: Vec<BalanceChange>,
     pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
+}
+
+impl TransactionData {
+    /// Reconstruct the full Transaction when both data and signatures are present.
+    pub fn transaction(&self) -> Option<Transaction> {
+        let data = self.transaction_data.clone()?;
+        let sigs = self.signatures.clone().unwrap_or_default();
+        Some(Transaction::new(SenderSignedData::new(data, sigs)))
+    }
 }
 
 /// Partial transaction and events for when we only need transaction content for events
@@ -241,9 +234,9 @@ pub trait KeyValueStoreReader {
         &mut self,
         pipelines: &[&str],
     ) -> Result<Option<Watermark>>;
-    /// Return the minimum watermark across all non-legacy pipelines.
+    /// Return the minimum watermark across all pipelines.
     async fn get_watermark(&mut self) -> Result<Option<Watermark>> {
-        self.get_watermark_for_pipelines(&WATERMARK_PIPELINES).await
+        self.get_watermark_for_pipelines(&ALL_PIPELINE_NAMES).await
     }
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochData>>;
@@ -461,12 +454,6 @@ impl BigTableIndexer {
                 pipeline.system_packages.finish(base.clone()),
             )
             .await?;
-
-        if write_legacy_data() {
-            indexer
-                .concurrent_pipeline(EpochLegacyPipeline, pipeline.epoch_legacy.finish(base))
-                .await?;
-        }
 
         Ok(Self { indexer })
     }

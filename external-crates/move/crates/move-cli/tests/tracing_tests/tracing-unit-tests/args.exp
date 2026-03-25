@@ -1,3 +1,67 @@
+Command `test -t 1 --trace instruction-only`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING tracing_unit_tests
+Running Move unit tests
+[ PASS    ] 0x1::calls::test_call_order
+[ PASS    ] 0x1::calls::test_call_return_order
+[ PASS    ] 0x1::calls::test_complex_nested_calls
+[ PASS    ] 0x1::calls::test_return_order
+[ PASS    ] 0x1::differential_test::f1
+[ PASS    ] 0x1::differential_test::f21
+[ PASS    ] 0x1::errors::aborter
+[ PASS    ] 0x1::errors::bad_cast
+[ PASS    ] 0x1::errors::div_0
+[ PASS    ] 0x1::errors::fail_during_abort
+[ PASS    ] 0x1::errors::fail_in_native
+[ PASS    ] 0x1::errors::overshift_l
+[ PASS    ] 0x1::errors::overshift_r
+[ PASS    ] 0x1::errors::underflow
+[ PASS    ] 0x1::natives::get_orig_type_name_test
+[ PASS    ] 0x1::natives::get_type_name_test
+[ PASS    ] 0x1::packs::test_enums_structs
+[ PASS    ] 0x1::packs::test_gen_pack_order
+[ PASS    ] 0x1::packs::test_gen_unpack_order
+[ PASS    ] 0x1::packs::test_pack_order
+[ PASS    ] 0x1::packs::test_unpack_order
+[ PASS    ] 0x1::references::nested_struct_reference_mutation
+[ PASS    ] 0x1::references::pass_mut_assign_in_other_fn
+[ PASS    ] 0x1::references::test_struct_borrow
+[ PASS    ] 0x1::references::test_vector_mut_borrow
+[ PASS    ] 0x1::references::test_vector_mut_borrow_pop
+Test result: OK. Total tests: 26; passed: 26; failed: 0
+External Command `diff -qr traces saved_instruction_only_traces`:
+Command `test -t 1 --trace function-only`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING tracing_unit_tests
+Running Move unit tests
+[ PASS    ] 0x1::calls::test_call_order
+[ PASS    ] 0x1::calls::test_call_return_order
+[ PASS    ] 0x1::calls::test_complex_nested_calls
+[ PASS    ] 0x1::calls::test_return_order
+[ PASS    ] 0x1::differential_test::f1
+[ PASS    ] 0x1::differential_test::f21
+[ PASS    ] 0x1::errors::aborter
+[ PASS    ] 0x1::errors::bad_cast
+[ PASS    ] 0x1::errors::div_0
+[ PASS    ] 0x1::errors::fail_during_abort
+[ PASS    ] 0x1::errors::fail_in_native
+[ PASS    ] 0x1::errors::overshift_l
+[ PASS    ] 0x1::errors::overshift_r
+[ PASS    ] 0x1::errors::underflow
+[ PASS    ] 0x1::natives::get_orig_type_name_test
+[ PASS    ] 0x1::natives::get_type_name_test
+[ PASS    ] 0x1::packs::test_enums_structs
+[ PASS    ] 0x1::packs::test_gen_pack_order
+[ PASS    ] 0x1::packs::test_gen_unpack_order
+[ PASS    ] 0x1::packs::test_pack_order
+[ PASS    ] 0x1::packs::test_unpack_order
+[ PASS    ] 0x1::references::nested_struct_reference_mutation
+[ PASS    ] 0x1::references::pass_mut_assign_in_other_fn
+[ PASS    ] 0x1::references::test_struct_borrow
+[ PASS    ] 0x1::references::test_vector_mut_borrow
+[ PASS    ] 0x1::references::test_vector_mut_borrow_pop
+Test result: OK. Total tests: 26; passed: 26; failed: 0
+External Command `diff -qr traces saved_function_only_traces`:
 Command `test -t 1 --trace`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING tracing_unit_tests
@@ -30,8 +94,6 @@ Running Move unit tests
 [ PASS    ] 0x1::references::test_vector_mut_borrow_pop
 Test result: OK. Total tests: 26; passed: 26; failed: 0
 External Command `diff -qr traces saved_traces`:
-Files traces/0x1__natives__get_orig_type_name_test.json.zst and saved_traces/0x1__natives__get_orig_type_name_test.json.zst differ
-Files traces/0x1__natives__get_type_name_test.json.zst and saved_traces/0x1__natives__get_type_name_test.json.zst differ
 Command `coverage lcov`:
 External Command `wc -l lcov.info`:
 6562 lcov.info

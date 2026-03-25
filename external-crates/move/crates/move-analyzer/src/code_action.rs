@@ -13,7 +13,7 @@ use crate::{
         cursor::{ChainInfo, CursorContext},
         runner::SymbolicatorRunner,
     },
-    utils::loc_start_to_lsp_position_opt,
+    utils::{canonical_path_from_uri, loc_start_to_lsp_position_opt},
 };
 
 use lsp_server::{Message, Request, Response};
@@ -24,7 +24,6 @@ use lsp_types::{
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeSet, HashMap},
-    path::PathBuf,
     sync::{Arc, Mutex},
 };
 use strum::IntoEnumIterator;
@@ -133,7 +132,9 @@ fn access_chain_autofix_actions<F: MoveFlavor>(
     }
 
     let file_url = params.text_document.uri.clone();
-    let file_path = PathBuf::from(file_url.path());
+    let Some(file_path) = canonical_path_from_uri(&file_url) else {
+        return code_actions;
+    };
     let Some(pkg_path) = SymbolicatorRunner::root_dir(&file_path) else {
         return code_actions;
     };
@@ -188,7 +189,9 @@ pub fn access_chain_autofix_actions_for_error(
         return;
     }
     // compute cursor and update symbols with it
-    let file_path: PathBuf = file_url.path().into();
+    let Some(file_path) = canonical_path_from_uri(&file_url) else {
+        return;
+    };
     compute_cursor(symbols, compiled_pkg_info, &file_path, err_pos);
     let Some(ref cursor) = symbols.cursor_context else {
         return;
