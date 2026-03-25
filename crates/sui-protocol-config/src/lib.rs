@@ -4806,7 +4806,7 @@ impl ProtocolConfig {
                     cfg.bulletproofs_ristretto255_verify_base_cost = Some(100);
                     cfg.bulletproofs_ristretto255_verify_cost_per_bit = Some(1000);
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_ristretto255_group_ops = true;
+                        cfg.feature_flags.enable_bulletproofs_range_proofs = true;
                     }
                 }
                 120 => {
