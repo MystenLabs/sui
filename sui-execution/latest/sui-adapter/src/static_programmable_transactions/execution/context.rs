@@ -1766,7 +1766,7 @@ fn finish_gas_coin<OType>(
     let address = match gas_payment.location {
         PaymentLocation::Coin(_) => {
             // small sanity check
-            assert!(
+            assert_invariant!(
                 !matches!(gas_coin_transfer, Some(GasCoinTransfer::SendFunds { .. }))
                     || deleted_object_ids.contains(&gas_id),
                 "send_funds transfer implies the coin should be deleted"
@@ -1780,29 +1780,29 @@ fn finish_gas_coin<OType>(
         // sanity check storage changes
         match gas_coin_transfer {
             GasCoinTransfer::TransferObjects => {
-                assert!(
+                assert_invariant!(
                     created_object_ids.contains(&gas_id),
                     "ephemeral coin should be newly created"
                 );
-                assert!(
+                assert_invariant!(
                     !deleted_object_ids.contains(&gas_id),
                     "ephemeral coin should not be deleted if transferred as an object"
                 );
-                assert!(
+                assert_invariant!(
                     writes.contains_key(&gas_id),
                     "ephemeral coin should be in writes if transferred as an object"
                 );
             }
             GasCoinTransfer::SendFunds { .. } => {
-                assert!(
+                assert_invariant!(
                     !created_object_ids.contains(&gas_id),
                     "ephemeral coin should not be newly created if transferred with send_funds"
                 );
-                assert!(
+                assert_invariant!(
                     !deleted_object_ids.contains(&gas_id),
                     "ephemeral coin should not be deleted if transferred with send_funds"
                 );
-                assert!(
+                assert_invariant!(
                     !writes.contains_key(&gas_id),
                     "ephemeral coin should not be in writes if transferred with send_funds"
                 );
