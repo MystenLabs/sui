@@ -15123,6 +15123,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-forking"
+version = "1.69.0"
+dependencies = [
+ "anyhow",
+ "bin-version",
+ "tokio",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "sui-framework"
 version = "0.1.0"
 dependencies = [
