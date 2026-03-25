@@ -536,36 +536,36 @@ impl VMDispatchTables {
         datatype_name: &VirtualTableKey,
         type_size: &mut TypeSize,
     ) -> PartialVMResult<DepthFormula> {
-        type_size.enter_type(|type_size| {
-            // If we've already computed this datatypes depth, no more work remains to be done.
-            if let Some(form) = self.cached_type_depth(datatype_name) {
-                return Ok(form.clone());
-            }
+        type_size.check()?;
+        // If we've already computed this datatypes depth, no more work remains to be done.
+        if let Some(form) = self.cached_type_depth(datatype_name) {
+            return Ok(form.clone());
+        }
 
-            let datatype = self.resolve_type(datatype_name)?.to_ref();
-            let formulas = match datatype.datatype_info.inner_ref() {
-                // The depth of enum is calculated as the maximum depth of any of its variants.
-                Datatype::Enum(enum_type) => enum_type
-                    .variants
-                    .iter()
-                    .flat_map(|variant_type| variant_type.fields.iter())
-                    .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, type_size))
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-                Datatype::Struct(struct_type) => struct_type
-                    .fields
-                    .iter()
-                    .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, type_size))
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            };
-            let mut formula = DepthFormula::normalize(formulas);
-            // add 1 for the struct/variant itself
-            formula.add(1);
-            // Insert without checking if it was already present; this is a pure optmization, so
-            // we do not care about overwriting.
-            self.type_depths
-                .insert(datatype_name.clone(), formula.clone());
-            Ok(formula)
-        })
+        let datatype = self.resolve_type(datatype_name)?.to_ref();
+        let formulas = match datatype.datatype_info.inner_ref() {
+            // The depth of enum is calculated as the maximum depth of any of its variants.
+            Datatype::Enum(enum_type) => enum_type
+                .variants
+                .iter()
+                .flat_map(|variant_type| variant_type.fields.iter())
+                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, type_size))
+                .collect::<PartialVMResult<Vec<_>>>()?,
+            Datatype::Struct(struct_type) => struct_type
+                .fields
+                .iter()
+                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, type_size))
+                .collect::<PartialVMResult<Vec<_>>>()?,
+        };
+        let mut formula = DepthFormula::normalize(formulas);
+        // add 1 for the struct/variant itself
+        formula.add(1);
+        // Insert without checking if it was already present; this is a pure optmization, so
+        // we do not care about overwriting.
+        self.type_depths
+            .insert(datatype_name.clone(), formula.clone());
+        type_size.check()?;
+        Ok(formula)
     }
 
     fn calculate_depth_of_type_and_cache(
@@ -631,34 +631,34 @@ impl VMDispatchTables {
         tag_type: DatatypeTagType,
         type_size: &mut TypeSize,
     ) -> PartialVMResult<StructTag> {
-        type_size.enter_type(|type_size| {
-            let type_params = ty_args
-                .iter()
-                .map(|ty| self.type_to_type_tag_impl(ty, tag_type, type_size))
-                .collect::<PartialVMResult<Vec<_>>>()?;
-            let datatype = self.resolve_type(datatype_name)?.to_ref();
+        type_size.check()?;
+        let type_params = ty_args
+            .iter()
+            .map(|ty| self.type_to_type_tag_impl(ty, tag_type, type_size))
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        let datatype = self.resolve_type(datatype_name)?.to_ref();
 
-            let (address, module) = match tag_type {
-                DatatypeTagType::Runtime => (
-                    *datatype.original_id.address(),
-                    datatype.original_id.name(&self.interner).to_owned(),
-                ),
+        let (address, module) = match tag_type {
+            DatatypeTagType::Runtime => (
+                *datatype.original_id.address(),
+                datatype.original_id.name(&self.interner).to_owned(),
+            ),
 
-                DatatypeTagType::Defining => (
-                    *datatype.defining_id.address(),
-                    datatype.defining_id.name(&self.interner).to_owned(),
-                ),
-            };
-            let name = self.interner.resolve_ident(&datatype.name, "datatype name");
+            DatatypeTagType::Defining => (
+                *datatype.defining_id.address(),
+                datatype.defining_id.name(&self.interner).to_owned(),
+            ),
+        };
+        let name = self.interner.resolve_ident(&datatype.name, "datatype name");
 
-            let tag = StructTag {
-                address,
-                module,
-                name,
-                type_params,
-            };
-            Ok(tag)
-        })
+        let tag = StructTag {
+            address,
+            module,
+            name,
+            type_params,
+        };
+        type_size.check()?;
+        Ok(tag)
     }
 
     fn type_to_type_tag_impl(
@@ -710,30 +710,14 @@ impl VMDispatchTables {
         ty_args: &[Type],
         type_size: &mut TypeSize,
     ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
-        type_size.enter_type(|type_size| {
-            let ty = self.resolve_type(datatype_name)?.to_ref();
-            let type_layout = match ty.datatype_info.inner_ref() {
-                Datatype::Enum(einfo) => {
-                    let mut variant_layouts = vec![];
-                    for variant in einfo.variants.iter() {
-                        type_size.incr_node_count()?;
-                        let field_tys = variant
-                            .fields
-                            .iter()
-                            .map(|ty| ty.subst(ty_args))
-                            .collect::<PartialVMResult<Vec<_>>>()?;
-                        let field_layouts = field_tys
-                            .iter()
-                            .map(|ty| self.type_to_type_layout_impl(ty, type_size))
-                            .collect::<PartialVMResult<Vec<_>>>()?;
-                        variant_layouts.push(field_layouts);
-                    }
-                    runtime_value::MoveDatatypeLayout::Enum(Box::new(
-                        runtime_value::MoveEnumLayout(Box::new(variant_layouts)),
-                    ))
-                }
-                Datatype::Struct(sinfo) => {
-                    let field_tys = sinfo
+        type_size.check()?;
+        let ty = self.resolve_type(datatype_name)?.to_ref();
+        let type_layout = match ty.datatype_info.inner_ref() {
+            Datatype::Enum(einfo) => {
+                let mut variant_layouts = vec![];
+                for variant in einfo.variants.iter() {
+                    type_size.incr_node_count()?;
+                    let field_tys = variant
                         .fields
                         .iter()
                         .map(|ty| ty.subst(ty_args))
@@ -742,14 +726,30 @@ impl VMDispatchTables {
                         .iter()
                         .map(|ty| self.type_to_type_layout_impl(ty, type_size))
                         .collect::<PartialVMResult<Vec<_>>>()?;
-
-                    runtime_value::MoveDatatypeLayout::Struct(Box::new(
-                        runtime_value::MoveStructLayout::new(field_layouts),
-                    ))
+                    variant_layouts.push(field_layouts);
                 }
-            };
-            Ok(type_layout)
-        })
+                runtime_value::MoveDatatypeLayout::Enum(Box::new(runtime_value::MoveEnumLayout(
+                    Box::new(variant_layouts),
+                )))
+            }
+            Datatype::Struct(sinfo) => {
+                let field_tys = sinfo
+                    .fields
+                    .iter()
+                    .map(|ty| ty.subst(ty_args))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                let field_layouts = field_tys
+                    .iter()
+                    .map(|ty| self.type_to_type_layout_impl(ty, type_size))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+
+                runtime_value::MoveDatatypeLayout::Struct(Box::new(
+                    runtime_value::MoveStructLayout::new(field_layouts),
+                ))
+            }
+        };
+        type_size.check()?;
+        Ok(type_layout)
     }
 
     fn type_to_type_layout_impl(
@@ -797,81 +797,78 @@ impl VMDispatchTables {
         ty_args: &[Type],
         type_size: &mut TypeSize,
     ) -> PartialVMResult<annotated_value::MoveDatatypeLayout> {
-        type_size.enter_type(|type_size| {
-            let ty = self.resolve_type(datatype_name)?.to_ref();
-            let struct_tag = self.datatype_to_type_tag_impl(
-                datatype_name,
-                ty_args,
-                DatatypeTagType::Defining,
-                &mut TypeSize::for_type_traversal(),
-            )?;
+        type_size.check()?;
+        let ty = self.resolve_type(datatype_name)?.to_ref();
+        let struct_tag = self.datatype_to_type_tag_impl(
+            datatype_name,
+            ty_args,
+            DatatypeTagType::Defining,
+            &mut TypeSize::for_type_traversal(),
+        )?;
 
-            let type_layout = match ty.datatype_info.inner_ref() {
-                Datatype::Enum(enum_type) => {
-                    let mut variant_layouts = BTreeMap::new();
-                    for variant in enum_type.variants.iter() {
-                        type_size.incr_node_count()?;
-                        if variant.fields.len() != variant.field_names.len() {
-                            return Err(partial_vm_error!(
-                                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                                "Field types did not match the length of field names in loaded enum variant"
-                            ));
-                        }
-                        let field_layouts = variant
-                            .field_names
-                            .iter()
-                            .zip(variant.fields.iter())
-                            .map(|(n, ty)| {
-                                let n = self.interner.resolve_ident(n, "field name");
-                                let ty = ty.subst(ty_args)?;
-                                let l = self.type_to_fully_annotated_layout_impl(
-                                    &ty, type_size,
-                                )?;
-                                Ok(annotated_value::MoveFieldLayout::new(n, l))
-                            })
-                            .collect::<PartialVMResult<Vec<_>>>()?;
-                        variant_layouts.insert(
-                            (
-                                self.interner
-                                    .resolve_ident(&variant.variant_name, "variant name"),
-                                variant.variant_tag,
-                            ),
-                            field_layouts,
-                        );
-                    }
-                    annotated_value::MoveDatatypeLayout::Enum(Box::new(
-                        annotated_value::MoveEnumLayout {
-                            type_: struct_tag.clone(),
-                            variants: variant_layouts,
-                        },
-                    ))
-                }
-                Datatype::Struct(struct_type) => {
-                    if struct_type.fields.len() != struct_type.field_names.len() {
+        let type_layout = match ty.datatype_info.inner_ref() {
+            Datatype::Enum(enum_type) => {
+                let mut variant_layouts = BTreeMap::new();
+                for variant in enum_type.variants.iter() {
+                    type_size.incr_node_count()?;
+                    if variant.fields.len() != variant.field_names.len() {
                         return Err(partial_vm_error!(
                             UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            "Field types did not match the length of field names in loaded struct"
+                            "Field types did not match the length of field names in loaded enum variant"
                         ));
                     }
-                    let field_layouts = struct_type
+                    let field_layouts = variant
                         .field_names
                         .iter()
-                        .zip(struct_type.fields.iter())
+                        .zip(variant.fields.iter())
                         .map(|(n, ty)| {
                             let n = self.interner.resolve_ident(n, "field name");
                             let ty = ty.subst(ty_args)?;
-                            let l =
-                                self.type_to_fully_annotated_layout_impl(&ty, type_size)?;
+                            let l = self.type_to_fully_annotated_layout_impl(&ty, type_size)?;
                             Ok(annotated_value::MoveFieldLayout::new(n, l))
                         })
                         .collect::<PartialVMResult<Vec<_>>>()?;
-                    annotated_value::MoveDatatypeLayout::Struct(Box::new(
-                        annotated_value::MoveStructLayout::new(struct_tag, field_layouts),
-                    ))
+                    variant_layouts.insert(
+                        (
+                            self.interner
+                                .resolve_ident(&variant.variant_name, "variant name"),
+                            variant.variant_tag,
+                        ),
+                        field_layouts,
+                    );
                 }
-            };
-            Ok(type_layout)
-        })
+                annotated_value::MoveDatatypeLayout::Enum(Box::new(
+                    annotated_value::MoveEnumLayout {
+                        type_: struct_tag.clone(),
+                        variants: variant_layouts,
+                    },
+                ))
+            }
+            Datatype::Struct(struct_type) => {
+                if struct_type.fields.len() != struct_type.field_names.len() {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Field types did not match the length of field names in loaded struct"
+                    ));
+                }
+                let field_layouts = struct_type
+                    .field_names
+                    .iter()
+                    .zip(struct_type.fields.iter())
+                    .map(|(n, ty)| {
+                        let n = self.interner.resolve_ident(n, "field name");
+                        let ty = ty.subst(ty_args)?;
+                        let l = self.type_to_fully_annotated_layout_impl(&ty, type_size)?;
+                        Ok(annotated_value::MoveFieldLayout::new(n, l))
+                    })
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                annotated_value::MoveDatatypeLayout::Struct(Box::new(
+                    annotated_value::MoveStructLayout::new(struct_tag, field_layouts),
+                ))
+            }
+        };
+        type_size.check()?;
+        Ok(type_layout)
     }
 
     fn type_to_fully_annotated_layout_impl(
