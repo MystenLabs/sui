@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
 ---
 processed 6 tasks
 
@@ -8,16 +9,20 @@ A: object(0,0)
 
 task 1, lines 6-14:
 //# publish --sender A --upgradeable
-Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: UNKNOWN_VERSION, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5814000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 16-31:
 //# upgrade --package test --upgrade-capability 1,1 --sender A
-Error: INVALID TEST. Unknown object, object(1,1)
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6338400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 3, line 33:
 //# run test::clever_error_post_v48::test_new_error --sender A
-Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
+Error: Transaction Effects Status: Move Abort in test::clever_error_post_v48::test_new_error (function index 1) at offset 1 at line 26
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("clever_error_post_v48") }, function: 1, instruction: 1, function_name: Some("test_new_error") }, 13906834286012661763), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834286012661763), message: Some("fake(1,0)::clever_error_post_v48::test_new_error at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("clever_error_post_v48") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
 
 task 4, line 35:
 //# create-checkpoint
@@ -25,28 +30,35 @@ Checkpoint created: 1
 
 task 5, lines 37-65:
 //# run-graphql
-Error: Unknown variable: obj_2_0
-Allowed variable mappings are {
-    "A": "@A",
-    "A_opt": "@A",
-    "bridge": "0xb",
-    "bridge_opt": "0xb",
-    "deepbook": "0xdee9",
-    "deepbook_opt": "0xdee9",
-    "digest_1": "D7T1DAqPMXwQrK6Dmpc93sayRgeem5cMNC6mbzta2MBb",
-    "highest_checkpoint": "1",
-    "obj_0_0": "object(0,0)",
-    "obj_0_0_opt": "object(0,0)",
-    "obj_0_1": "object(0,1)",
-    "obj_0_1_opt": "object(0,1)",
-    "std": "0x1",
-    "std_opt": "0x1",
-    "sui": "0x2",
-    "sui_opt": "0x2",
-    "sui_system": "0x3",
-    "sui_system_opt": "0x3",
-    "test": "0x0",
-    "test_opt": "0x0",
-    "validator_0": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-    "validator_0_opt": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+Response: {
+  "data": {
+    "originalPackage": {
+      "address": "0x491b027e18cb7a511fbf349789ad0c8b08b8696285e47962033b0cd33cd10f0f"
+    },
+    "upgradedPackage": {
+      "address": "0x875d46704de500c8953e182916922602b76000758d181a3781742e6b6e611ad6"
+    },
+    "cleverErrorPostV48": {
+      "executionError": {
+        "abortCode": "13906834286012661763",
+        "sourceLineNumber": 26,
+        "instructionOffset": 1,
+        "identifier": "ENewError",
+        "constant": "New error in v2",
+        "message": "Error in 1st command, from '0x875d46704de500c8953e182916922602b76000758d181a3781742e6b6e611ad6::clever_error_post_v48::test_new_error' (line 26), abort 'ENewError': New error in v2",
+        "module": {
+          "name": "clever_error_post_v48",
+          "package": {
+            "address": "0x875d46704de500c8953e182916922602b76000758d181a3781742e6b6e611ad6"
+          }
+        },
+        "function": {
+          "name": "test_new_error",
+          "module": {
+            "name": "clever_error_post_v48"
+          }
+        }
+      }
+    }
+  }
 }

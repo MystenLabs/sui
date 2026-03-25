@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 48 --accounts A --addresses test=0x0 --simulator
+//# init --protocol-version 48 --accounts A --addresses test=0x0 --simulator --file-format 6
 
-//# publish --sender A --upgradeable --file-format 6
+//# publish --sender A --upgradeable
 module test::clever_error_post_v48 {
     #[error]
     const ESimpleError: vector<u8> = b"Clever error from v1";
@@ -13,7 +13,7 @@ module test::clever_error_post_v48 {
     }
 }
 
-//# upgrade --package test --upgrade-capability 1,1 --sender A --file-format 6
+//# upgrade --package test --upgrade-capability 1,1 --sender A
 module test::clever_error_post_v48 {
     #[error]
     const ESimpleError: vector<u8> = b"Clever error from v2";
