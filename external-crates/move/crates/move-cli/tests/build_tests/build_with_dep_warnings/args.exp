@@ -2,7 +2,7 @@ Command `build`:
 INCLUDING DEPENDENCY SomeDep
 BUILDING Test
 Command `disassemble --package Test --name m`:
-// Move bytecode v6
+// Move bytecode v7
 module 43.m {
 
 public aborts() {
