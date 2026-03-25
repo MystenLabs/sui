@@ -92,7 +92,13 @@ pub enum ConsensusError {
     SignatureVerificationFailure(FastCryptoError),
 
     #[error("Synchronizer for fetching blocks directly from {0} is saturated")]
-    SynchronizerSaturated(AuthorityIndex),
+    SynchronizerSaturated(String),
+
+    #[error("Peer {0} is unavailable")]
+    PeerUnavailable(String),
+
+    #[error("Peer {0} not found")]
+    PeerNotFound(String),
 
     #[error("Block {block_ref:?} rejected: {reason}")]
     BlockRejected { block_ref: BlockRef, reason: String },
