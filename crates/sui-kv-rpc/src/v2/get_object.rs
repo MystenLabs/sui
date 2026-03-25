@@ -15,6 +15,9 @@ use sui_rpc_api::{
 };
 use sui_types::storage::ObjectKey;
 
+use super::render_json;
+use crate::PackageResolver;
+
 pub const MAX_BATCH_REQUESTS: usize = 1000;
 
 pub(crate) async fn get_object(
@@ -25,6 +28,7 @@ pub(crate) async fn get_object(
         read_mask,
         ..
     }: GetObjectRequest,
+    resolver: &PackageResolver,
 ) -> Result<GetObjectResponse, RpcError> {
     let (requests, read_mask) =
         validate_get_object_requests(vec![(object_id, version)], read_mask)?;
@@ -41,7 +45,17 @@ pub(crate) async fn get_object(
             .ok_or_else(|| ObjectNotFoundError::new(object_id))?,
     };
     let mut message = Object::default();
-    // TODO: support json read mask
+    if read_mask.contains(Object::JSON_FIELD)
+        && let Some(move_object) = object.data.try_as_move()
+    {
+        message.json = render_json(
+            resolver,
+            &move_object.type_().clone().into(),
+            move_object.contents(),
+        )
+        .await
+        .map(Box::new);
+    }
     message.merge(&object, &read_mask);
     Ok(GetObjectResponse::new(message))
 }
@@ -53,6 +67,7 @@ pub(crate) async fn batch_get_objects(
         read_mask,
         ..
     }: BatchGetObjectsRequest,
+    resolver: &PackageResolver,
 ) -> Result<BatchGetObjectsResponse, RpcError> {
     if requests.len() > MAX_BATCH_REQUESTS {
         return Err(RpcError::new(
@@ -89,20 +104,29 @@ pub(crate) async fn batch_get_objects(
         .map(|obj| ((obj.id(), obj.version()), obj))
         .collect();
 
-    let objects = object_keys
-        .into_iter()
-        .map(|object_key| {
-            if let Some(object) = response.get(&(object_key.0, object_key.1)) {
-                let mut message = Object::default();
-                message.merge(object, &read_mask);
-                return GetObjectResult::new_object(message);
+    let needs_json = read_mask.contains(Object::JSON_FIELD);
+    let mut objects = Vec::with_capacity(object_keys.len());
+    for object_key in object_keys {
+        if let Some(object) = response.get(&(object_key.0, object_key.1)) {
+            let mut message = Object::default();
+            if needs_json && let Some(move_object) = object.data.try_as_move() {
+                message.json = render_json(
+                    resolver,
+                    &move_object.type_().clone().into(),
+                    move_object.contents(),
+                )
+                .await
+                .map(Box::new);
             }
+            message.merge(object, &read_mask);
+            objects.push(GetObjectResult::new_object(message));
+        } else {
             let err: RpcError =
                 ObjectNotFoundError::new_with_version(object_key.0.into(), object_key.1.into())
                     .into();
-            GetObjectResult::new_error(err.into_status_proto())
-        })
-        .collect();
+            objects.push(GetObjectResult::new_error(err.into_status_proto()));
+        }
+    }
 
     Ok(BatchGetObjectsResponse::new(objects))
 }

@@ -58,6 +58,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+prost-types.workspace = true
 datatest-stable.workspace = true
 insta.workspace = true
 jsonrpsee.workspace = true

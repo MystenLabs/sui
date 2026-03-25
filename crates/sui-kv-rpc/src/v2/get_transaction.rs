@@ -8,7 +8,7 @@ use sui_kvstore::{BigTableClient, KeyValueStoreReader, TransactionData};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::{
-    BatchGetTransactionsRequest, BatchGetTransactionsResponse, ExecutedTransaction,
+    BatchGetTransactionsRequest, BatchGetTransactionsResponse, Event, ExecutedTransaction,
     GetTransactionRequest, GetTransactionResponse, GetTransactionResult, Transaction,
     TransactionEffects, TransactionEvents, UserSignature,
 };
@@ -20,6 +20,9 @@ use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::warn;
+
+use super::render_json;
+use crate::PackageResolver;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
 pub const READ_MASK_DEFAULT: &str = "digest";
@@ -39,6 +42,7 @@ fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, Rpc
 pub async fn get_transaction(
     mut client: BigTableClient,
     request: GetTransactionRequest,
+    resolver: &PackageResolver,
 ) -> Result<GetTransactionResponse, RpcError> {
     let transaction_digest = request
         .digest
@@ -68,11 +72,9 @@ pub async fn get_transaction(
     } else {
         HashMap::new()
     };
-    Ok(GetTransactionResponse::new(transaction_to_response(
-        transaction,
-        &read_mask,
-        &objects,
-    )?))
+    Ok(GetTransactionResponse::new(
+        transaction_to_response(transaction, &read_mask, &objects, resolver).await?,
+    ))
 }
 
 pub async fn batch_get_transactions(
@@ -80,6 +82,7 @@ pub async fn batch_get_transactions(
     BatchGetTransactionsRequest {
         digests, read_mask, ..
     }: BatchGetTransactionsRequest,
+    resolver: &PackageResolver,
 ) -> Result<BatchGetTransactionsResponse, RpcError> {
     let read_mask = validate_read_mask(read_mask)?;
 
@@ -108,26 +111,28 @@ pub async fn batch_get_transactions(
         HashMap::new()
     };
 
-    let transactions = digests
-        .into_iter()
-        .map(|digest| {
-            if let Some(tx) = response.get(&digest) {
-                return match transaction_to_response(tx.clone(), &read_mask, &objects) {
-                    Ok(tx) => GetTransactionResult::new_transaction(tx),
-                    Err(err) => GetTransactionResult::new_error(err.into_status_proto()),
-                };
+    let mut transactions = Vec::with_capacity(digests.len());
+    for digest in digests {
+        if let Some(tx) = response.get(&digest) {
+            match transaction_to_response(tx.clone(), &read_mask, &objects, resolver).await {
+                Ok(tx) => transactions.push(GetTransactionResult::new_transaction(tx)),
+                Err(err) => {
+                    transactions.push(GetTransactionResult::new_error(err.into_status_proto()))
+                }
             }
+        } else {
             let err: RpcError = TransactionNotFoundError(digest.into()).into();
-            GetTransactionResult::new_error(err.into_status_proto())
-        })
-        .collect();
+            transactions.push(GetTransactionResult::new_error(err.into_status_proto()));
+        }
+    }
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
-fn transaction_to_response(
+async fn transaction_to_response(
     source: TransactionData,
     mask: &FieldMaskTree,
     objects: &HashMap<ObjectKey, Object>,
+    resolver: &PackageResolver,
 ) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
 
@@ -201,13 +206,20 @@ fn transaction_to_response(
     }
 
     if let Some(submask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD.name)
-        && let Some(events) = source.events
+        && let Some(events) = &source.events
     {
-        message.events = Some(TransactionEvents::merge_from(
-            sui_sdk_types::TransactionEvents::try_from(events)?,
-            &submask,
-        ));
-        // TODO: add support for JSON layout
+        message.events = Some(TransactionEvents::merge_from(events, &submask));
+
+        if let Some(event_mask) = submask.subtree(TransactionEvents::EVENTS_FIELD.name)
+            && event_mask.contains(Event::JSON_FIELD.name)
+            && let Some(proto_events) = message.events.as_mut()
+        {
+            for (proto_event, sui_event) in proto_events.events.iter_mut().zip(&events.data) {
+                proto_event.json = render_json(resolver, &sui_event.type_, &sui_event.contents)
+                    .await
+                    .map(Box::new);
+            }
+        }
     }
     if mask.contains(ExecutedTransaction::CHECKPOINT_FIELD.name) {
         message.checkpoint = Some(source.checkpoint_number);
@@ -315,7 +327,10 @@ fn object_type_to_string(object_type: sui_types::base_types::ObjectType) -> Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use move_core_types::account_address::AccountAddress;
+    use std::sync::Arc;
     use sui_kvstore::TransactionData as KvTransactionData;
+    use sui_package_resolver::{Package, PackageStore, Resolver};
     use sui_rpc::proto::sui::rpc::v2::BalanceChange as ProtoBalanceChange;
     use sui_rpc::proto::sui::rpc::v2::ObjectReference;
     use sui_types::TypeTag;
@@ -350,8 +365,23 @@ mod tests {
         (*tx.digest(), data)
     }
 
-    #[test]
-    fn transaction_to_response_returns_balance_changes_when_requested() {
+    /// Empty package store for tests that don't exercise JSON rendering.
+    struct EmptyPackageStore;
+
+    #[async_trait::async_trait]
+    impl PackageStore for EmptyPackageStore {
+        async fn fetch(&self, id: AccountAddress) -> sui_package_resolver::Result<Arc<Package>> {
+            Err(sui_package_resolver::error::Error::PackageNotFound(id))
+        }
+    }
+
+    fn test_resolver() -> PackageResolver {
+        let store: Arc<dyn PackageStore> = Arc::new(EmptyPackageStore);
+        Arc::new(Resolver::new(store))
+    }
+
+    #[tokio::test]
+    async fn transaction_to_response_returns_balance_changes_when_requested() {
         let (digest, tx_data) = test_tx_data();
         let tx = Transaction::new(SenderSignedData::new(tx_data.clone(), vec![]));
         let effects = TestEffectsBuilder::new(tx.data()).build();
@@ -372,9 +402,11 @@ mod tests {
             unchanged_loaded_runtime_objects: vec![],
         };
         let mask = FieldMaskTree::from(FieldMask::from_str("balance_changes"));
+        let resolver = test_resolver();
 
-        let response =
-            transaction_to_response(source, &mask, &HashMap::new()).expect("render should succeed");
+        let response = transaction_to_response(source, &mask, &HashMap::new(), &resolver)
+            .await
+            .expect("render should succeed");
 
         assert_eq!(
             response.balance_changes,
@@ -382,8 +414,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn transaction_to_response_returns_unchanged_loaded_runtime_objects_when_requested() {
+    #[tokio::test]
+    async fn transaction_to_response_returns_unchanged_loaded_runtime_objects_when_requested() {
         let (digest, tx_data) = test_tx_data();
         let tx = Transaction::new(SenderSignedData::new(tx_data.clone(), vec![]));
         let effects = TestEffectsBuilder::new(tx.data()).build();
@@ -402,9 +434,11 @@ mod tests {
         let mask = FieldMaskTree::from(FieldMask::from_str(
             "effects.unchanged_loaded_runtime_objects",
         ));
+        let resolver = test_resolver();
 
-        let response =
-            transaction_to_response(source, &mask, &HashMap::new()).expect("render should succeed");
+        let response = transaction_to_response(source, &mask, &HashMap::new(), &resolver)
+            .await
+            .expect("render should succeed");
 
         let effects = response.effects.expect("effects should be present");
         assert_eq!(
