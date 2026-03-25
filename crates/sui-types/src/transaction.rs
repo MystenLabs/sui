@@ -2563,9 +2563,6 @@ pub trait TransactionDataAPI {
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
 
-    // Get all the funds withdrawals args in the transaction.
-    fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg>;
-
     fn coin_reservation_obj_refs(
         &self,
         chain_identifier: ChainIdentifier,
@@ -2706,7 +2703,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
-        let mut withdraws = self.get_funds_withdrawals();
+        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
 
         for withdraw in self.parsed_coin_reservations(chain_identifier) {
             let withdrawal_arg = coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw)?;
@@ -2736,7 +2733,7 @@ impl TransactionDataAPI for TransactionDataV1 {
 
             let (current_amount, _) = withdraw_map
                 .entry(account_id)
-                .or_insert_with(|| (0, type_tag.clone()));
+                .or_insert_with(|| (0, type_tag));
             *current_amount = current_amount.checked_add(reserved_amount).ok_or(
                 UserInputError::InvalidWithdrawReservation {
                     error: "Balance withdraw reservation overflow".to_string(),
@@ -2751,8 +2748,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self,
         chain_identifier: ChainIdentifier,
     ) -> BTreeMap<AccumulatorObjId, u64> {
-        let mut withdraws = self.get_funds_withdrawals();
-
+        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
         withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
         // Accumulate all withdraws per account.
@@ -2812,10 +2808,6 @@ impl TransactionDataAPI for TransactionDataV1 {
             return true;
         }
         false
-    }
-
-    fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg> {
-        self.kind.get_funds_withdrawals().cloned().collect()
     }
 
     fn coin_reservation_obj_refs(
@@ -3214,6 +3206,10 @@ impl TransactionDataV1 {
         } else {
             None
         }
+    }
+
+    fn get_funds_withdrawals(&self) -> impl Iterator<Item = FundsWithdrawalArg> + '_ {
+        self.kind.get_funds_withdrawals().cloned()
     }
 
     fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> {

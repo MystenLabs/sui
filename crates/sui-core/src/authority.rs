@@ -1076,13 +1076,17 @@ impl AuthorityState {
         receiving_objects: &ReceivingObjects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
-        let funds_withdraw_types = tx_data
-            .get_funds_withdrawals()
-            .into_iter()
-            .filter_map(|withdraw| {
-                withdraw
-                    .type_arg
-                    .get_balance_type_param()
+        use sui_types::balance::Balance;
+
+        let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+        )?;
+
+        let funds_withdraw_types = declared_withdrawals
+            .values()
+            .filter_map(|(_, type_tag)| {
+                Balance::maybe_get_balance_type_param(type_tag)
                     .map(|ty| ty.to_canonical_string(false))
             })
             .collect::<BTreeSet<_>>();

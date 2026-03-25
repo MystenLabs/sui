@@ -13,11 +13,13 @@ use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -27,8 +29,10 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::messages_checkpoint::VerifiedCheckpointContents;
 use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::object::Object;
+use sui_types::object::Owner;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
+use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::ObjectStore;
@@ -490,6 +494,38 @@ impl ReadStore for RestReadStore {
         digest: &TransactionDigest,
     ) -> Option<CheckpointSequenceNumber> {
         self.rocks.get_transaction_checkpoint(digest)
+    }
+}
+
+impl ChildObjectResolver for RestReadStore {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        Ok(self.get_object(child).and_then(|o| {
+            if o.version() <= child_version_upper_bound
+                && o.owner == Owner::ObjectOwner((*parent).into())
+            {
+                Some(o)
+            } else {
+                None
+            }
+        }))
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        _owner: &ObjectID,
+        _receiving_object_id: &ObjectID,
+        _receive_object_at_version: SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        Err(SuiErrorKind::UnsupportedFeatureError {
+            error: "RestReadStore does not support receiving objects".to_string(),
+        }
+        .into())
     }
 }
 
