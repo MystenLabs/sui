@@ -9,10 +9,10 @@ use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AuthenticatedEventEmit,
-    INVALID_ALIAS_TX, ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw,
-    ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead, SharedCounterIncrement,
-    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
-    TestCoinObjectWithdraw,
+    CoinReservationWithdraw, INVALID_ALIAS_TX, ImmutableObjectRead, ObjectBalanceDeposit,
+    ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
+    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
+    TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -497,12 +497,15 @@ impl CompositePayload {
         op: &dyn Operation,
         pool: &OperationPool,
         config: &CompositeWorkloadConfig,
+        current_epoch: u64,
     ) -> OperationResources {
         let mut counter = None;
         let mut randomness = None;
         let mut accumulator_root = None;
         let mut balance_pool = None;
         let mut test_coin_cap = None;
+        let mut chain_identifier = None;
+        let mut epoch = None;
 
         for req in op.resource_requests() {
             match req {
@@ -523,6 +526,11 @@ impl CompositePayload {
                     accumulator_root = Some(pool.accumulator_root_initial_shared_version);
                 }
                 ResourceRequest::ImmutableObject => {}
+                ResourceRequest::CoinReservation => {
+                    chain_identifier = Some(pool.chain_identifier);
+                    epoch = Some(current_epoch);
+                    accumulator_root = Some(pool.accumulator_root_initial_shared_version);
+                }
             }
         }
 
@@ -536,6 +544,8 @@ impl CompositePayload {
             test_coin_cap,
             test_coin_type: pool.test_coin_type.clone(),
             immutable_object: pool.immutable_object,
+            chain_identifier,
+            current_epoch: epoch,
         }
     }
 
@@ -577,6 +587,7 @@ impl CompositePayload {
         mut tx_builder: TestTransactionBuilder,
         account_state: &AccountState,
         keypair: &AccountKeyPair,
+        current_epoch: u64,
     ) -> (Transaction, OperationSet) {
         let ops = self.sample_operations();
 
@@ -599,8 +610,12 @@ impl CompositePayload {
         {
             let builder = tx_builder.ptb_builder_mut();
             for op in &ops {
-                let resources =
-                    Self::resolve_resources_for_op(op.as_ref(), &self.pool, &self.config);
+                let resources = Self::resolve_resources_for_op(
+                    op.as_ref(),
+                    &self.pool,
+                    &self.config,
+                    current_epoch,
+                );
                 op.apply(builder, &resources, account_state);
             }
         }
@@ -927,7 +942,8 @@ impl Payload for CompositePayload {
                 TestTransactionBuilder::new(sender, *gas, rgp)
             };
 
-            let (tx, op_set) = self.generate_transaction(builder, &account_state, &keypair);
+            let (tx, op_set) =
+                self.generate_transaction(builder, &account_state, &keypair, current_epoch);
             self.current_batch_txs.push(BatchTxInfo {
                 gas_idx: i,
                 op_set,
@@ -946,7 +962,8 @@ impl Payload for CompositePayload {
 
                 // use rgp + 1 to ensure we never make a duplicate transaction here
                 let builder = TestTransactionBuilder::new(sender, gas, rgp + 1);
-                let (tx, op_set) = self.generate_transaction(builder, &account_state, &keypair);
+                let (tx, op_set) =
+                    self.generate_transaction(builder, &account_state, &keypair, current_epoch);
                 self.current_batch_txs.push(BatchTxInfo {
                     gas_idx: *gas_idx,
                     op_set,
