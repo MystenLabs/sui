@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use move_core_types::language_storage::TypeTag;
 use sui_types::{
     accumulator_root::AccumulatorObjId,
     base_types::SequenceNumber,
@@ -28,9 +29,9 @@ pub trait AccountFundsRead: Send + Sync {
     /// where deterministic results are not required.
     fn check_amounts_available(
         &self,
-        requested_amounts: &BTreeMap<AccumulatorObjId, u64>,
+        requested_amounts: &BTreeMap<AccumulatorObjId, (u64, TypeTag)>,
     ) -> SuiResult {
-        for (object_id, requested_amount) in requested_amounts {
+        for (object_id, (requested_amount, _type_tag)) in requested_amounts {
             let (actual_amount, _) = self.get_latest_account_amount(object_id);
 
             if actual_amount < *requested_amount as u128 {

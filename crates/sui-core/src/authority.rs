@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::accumulators::coin_reservations::CoinReservationResolver;
+use crate::accumulators::coin_reservations::CachingCoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
@@ -892,7 +892,7 @@ pub struct AuthorityState {
     /// The database
     input_loader: TransactionInputLoader,
     execution_cache_trait_pointers: ExecutionCacheTraitPointers,
-    coin_reservation_resolver: Arc<CoinReservationResolver>,
+    coin_reservation_resolver: Arc<CachingCoinReservationResolver>,
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
@@ -999,7 +999,7 @@ impl AuthorityState {
         tx_signatures: &[GenericSignature],
         input_object_kinds: &[InputObjectKind],
         receiving_objects_refs: &[ObjectRef],
-    ) -> SuiResult<BTreeMap<AccumulatorObjId, u64>> {
+    ) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
         // Note: the deny checks may do redundant package loads but:
         // - they only load packages when there is an active package deny map
         // - the loads are cached anyway
@@ -3790,7 +3790,7 @@ impl AuthorityState {
                 .expect("Failed to initialize fork recovery state")
         });
 
-        let coin_reservation_resolver = Arc::new(CoinReservationResolver::new(
+        let coin_reservation_resolver = Arc::new(CachingCoinReservationResolver::new(
             execution_cache_trait_pointers.child_object_resolver.clone(),
         ));
 
