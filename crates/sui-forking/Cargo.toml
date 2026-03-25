@@ -8,10 +8,22 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
+axum.workspace = true
+axum-extra.workspace = true
+rand.workspace = true
+reqwest.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tower-http.workspace = true
+tracing.workspace = true
 tracing-subscriber.workspace = true
 
+
 bin-version.workspace = true
+
+simulacrum.workspace = true
+sui-swarm-config.workspace = true
+sui-types.workspace = true
+sui-graphql.workspace = true
 
 [lints]
 workspace = true

@@ -3,5 +3,8 @@
 
 //! Forking tool for Sui.
 
+mod forking_store;
+mod startup;
+
 #[allow(unused)]
 pub(crate) static VERSION: &str = env!("CARGO_PKG_VERSION");
