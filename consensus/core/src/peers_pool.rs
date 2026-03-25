@@ -6,9 +6,14 @@ use std::{
     sync::Arc,
 };
 
+use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
-use crate::{context::Context, network::PeerId};
+use crate::{
+    context::Context,
+    error::{ConsensusError, ConsensusResult},
+    network::{NodeId, PeerId},
+};
 
 /// The server types that a peer can support.
 /// A peer may support multiple server types.
@@ -46,33 +51,60 @@ pub(crate) struct PeersPool {
 impl PeersPool {
     // Initializes the peers pool with the committee as peers with the Validator server as available.
     pub(crate) fn new(context: Arc<Context>) -> Arc<Self> {
+        let s = Self {
+            registered_peers: RwLock::new(BTreeMap::new()),
+            context: context.clone(),
+        };
+
         // Register the committee as peers with the Validator server as available.
-        let mut registered_peers = BTreeMap::new();
         for (index, _) in context.committee.authorities() {
-            let peer = PeerId::Validator(index);
-            registered_peers.insert(
-                peer,
-                PeerInfo {
-                    supported_servers: vec![PeerServer::Validator].into_iter().collect(),
-                },
-            );
+            s.register_validator(index, vec![PeerServer::Validator])
+                .unwrap();
         }
 
-        Arc::new(Self {
-            registered_peers: RwLock::new(registered_peers),
-            context,
-        })
+        Arc::new(s)
     }
 
-    /// Registers a peer as available in the pool with its supported servers.
+    /// Registers a validator as available in the pool with its supported servers.
     /// Note: this method will override the peer if it already exists in the pool.
     #[allow(dead_code)]
-    pub(crate) fn register_peer(&self, peer: PeerId, supported_servers: Vec<PeerServer>) {
+    pub(crate) fn register_validator(
+        &self,
+        authority_index: AuthorityIndex,
+        mut supported_servers: Vec<PeerServer>,
+    ) -> ConsensusResult<()> {
+        if !self.context.committee.is_valid_index(authority_index) {
+            return Err(ConsensusError::InvalidAuthorityIndex {
+                index: authority_index,
+                max: self.context.committee.size(),
+            });
+        }
+
+        // We always ensure that whoever registers a validator supports the Validator server.
+        if !supported_servers.contains(&PeerServer::Validator) {
+            supported_servers.push(PeerServer::Validator);
+        }
         let mut peers = self.registered_peers.write();
         peers.insert(
-            peer,
+            PeerId::Validator(authority_index),
             PeerInfo {
                 supported_servers: supported_servers.into_iter().collect(),
+            },
+        );
+
+        Ok(())
+    }
+
+    /// Registers an observer as available in the pool.
+    /// Note that we do not allow observers to register with supported servers other than Observer. This is done for safety
+    /// as only validators are supposed to support both the Validator and Observer servers.
+    #[allow(dead_code)]
+    pub(crate) fn register_observer(&self, node_id: NodeId) {
+        let mut peers = self.registered_peers.write();
+        peers.insert(
+            PeerId::Observer(node_id),
+            PeerInfo {
+                supported_servers: vec![PeerServer::Observer].into_iter().collect(),
             },
         );
     }
@@ -196,17 +228,11 @@ mod tests {
         let context = Arc::new(context);
         let pool = PeersPool::new(context.clone());
 
-        // Register some observers with Observer server
+        // Register some observers
         let observer1 = NetworkKeyPair::generate(&mut rand::thread_rng()).public();
         let observer2 = NetworkKeyPair::generate(&mut rand::thread_rng()).public();
-        pool.register_peer(
-            PeerId::Observer(observer1.clone()),
-            vec![PeerServer::Observer],
-        );
-        pool.register_peer(
-            PeerId::Observer(observer2.clone()),
-            vec![PeerServer::Observer],
-        );
+        pool.register_observer(observer1.clone());
+        pool.register_observer(observer2.clone());
 
         // Check they're available
         assert!(pool.is_peer_available(&PeerId::Observer(observer1.clone())));
@@ -236,7 +262,7 @@ mod tests {
         let observer_peer = PeerId::Observer(observer.clone());
 
         // Register and verify available
-        pool.register_peer(observer_peer.clone(), vec![PeerServer::Observer]);
+        pool.register_observer(observer);
         assert!(pool.is_peer_available(&observer_peer));
 
         // Remove and verify not available
@@ -253,10 +279,7 @@ mod tests {
         let pool = PeersPool::new(context.clone());
 
         let observer = NetworkKeyPair::generate(&mut rand::thread_rng()).public();
-        pool.register_peer(
-            PeerId::Observer(observer.clone()),
-            vec![PeerServer::Observer],
-        );
+        pool.register_observer(observer.clone());
 
         let peers = pool.get_available_peers();
         // As a validator, should have 2 validators (0 and 2, excluding our own 1) and 1 observer
@@ -275,18 +298,13 @@ mod tests {
         let context = Arc::new(context);
         let pool = PeersPool::new(context.clone());
 
-        // Register an observer with Observer server
+        // Register an observer
         let observer1 = NetworkKeyPair::generate(&mut rand::thread_rng()).public();
-        pool.register_peer(
-            PeerId::Observer(observer1.clone()),
-            vec![PeerServer::Observer],
-        );
+        pool.register_observer(observer1.clone());
 
         // Register a validator with Observer server (e.g., it has an observer port open)
-        pool.register_peer(
-            PeerId::Validator(AuthorityIndex::new_for_test(1)),
-            vec![PeerServer::Observer],
-        );
+        pool.register_validator(AuthorityIndex::new_for_test(1), vec![PeerServer::Observer])
+            .unwrap();
 
         let peers = pool.get_available_peers();
         // As an observer, should only see peers that support Observer server
@@ -307,17 +325,15 @@ mod tests {
         let pool = PeersPool::new(context.clone());
 
         // Register a validator with both servers
-        pool.register_peer(
-            PeerId::Validator(AuthorityIndex::new_for_test(0)),
+        pool.register_validator(
+            AuthorityIndex::new_for_test(0),
             vec![PeerServer::Validator, PeerServer::Observer],
-        );
+        )
+        .unwrap();
 
-        // Register an observer with Observer server
+        // Register an observer
         let observer = NetworkKeyPair::generate(&mut rand::thread_rng()).public();
-        pool.register_peer(
-            PeerId::Observer(observer.clone()),
-            vec![PeerServer::Observer],
-        );
+        pool.register_observer(observer.clone());
 
         // As an observer node, get_available_peers() should only return peers that support Observer server
         // (because observers can only communicate with Observer servers)
@@ -348,28 +364,25 @@ mod tests {
         let context = Arc::new(context);
         let pool = PeersPool::new(context.clone());
 
-        // Register observers with different server combinations
+        // Register observers
         let observer1 = NetworkKeyPair::generate(&mut rand::thread_rng()).public();
         let observer2 = NetworkKeyPair::generate(&mut rand::thread_rng()).public();
-        pool.register_peer(
-            PeerId::Observer(observer1.clone()),
-            vec![PeerServer::Observer],
-        );
-        pool.register_peer(
-            PeerId::Observer(observer2.clone()),
-            vec![PeerServer::Observer, PeerServer::Validator],
-        );
+        pool.register_observer(observer1.clone());
+        // Note: register_observer only sets Observer server, cannot add Validator server to observers
+        pool.register_observer(observer2.clone());
 
         // Register a validator with both servers
-        pool.register_peer(
-            PeerId::Validator(AuthorityIndex::new_for_test(1)),
+        pool.register_validator(
+            AuthorityIndex::new_for_test(1),
             vec![PeerServer::Validator, PeerServer::Observer],
-        );
+        )
+        .unwrap();
 
         // Filter for Validator server only
         let validator_peers = pool.get_available_peers_for_servers(&[PeerServer::Validator]);
-        // Should get: validator 1 (registered with both), validators 2 and 3 (assumed), and observer2
-        assert!(validator_peers.len() >= 3);
+        // Should get: validator 1 (registered with both), validators 2 and 3 (default with Validator)
+        // Note: observers cannot have Validator server with the new API
+        assert_eq!(validator_peers.len(), 3);
 
         // Filter for Observer server only
         let observer_peers = pool.get_available_peers_for_servers(&[PeerServer::Observer]);
