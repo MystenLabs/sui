@@ -510,9 +510,9 @@ AlloyDB Omni recommends 8GB RAM per vCPU [link](https://docs.cloud.google.com/al
 ## Re-indexing from a different checkpoint
 Once the pipeline starts indexing data and the indexer starts recording watermarks, future runs of the pipeline will ignore the `--first-checkpoint` flag and always resume from the last recorded checkpoint.
 
-To restart and index from a different initial checkpoint, you must delete the watermark record for that pipeline. We also recommend deleting the existing data for that pipeline to avoid any data inconsistencies.
+To restart and index from a different initial checkpoint, you must delete the watermark record for that pipeline. Deleting the existing data for that pipeline to avoid any data inconsistencies is recommended.
 
-For the general-purpose indexer writing to Postgres, we recommend using the template below:
+The following template is recommended for the general-purpose indexer to write to Postgres.
 ```sql
 BEGIN;
 
