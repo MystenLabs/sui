@@ -65,8 +65,9 @@ pub fn verify_bulletproofs_ristretto255(
         cost_parameters
             .verify_bulletproofs_ristretto255_base_cost
             .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("verify_bulletproofs_ristretto255_base_cost not available".to_string())
+                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    "verify_bulletproofs_ristretto255_base_cost not available".to_string()
+                )
             )?
     );
 
