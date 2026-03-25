@@ -251,6 +251,7 @@ pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod congestion_log;
 pub mod consensus_tx_status_cache;
+pub(crate) mod epoch_marker_key;
 pub mod epoch_start_configuration;
 pub mod execution_time_estimator;
 pub mod shared_object_congestion_tracker;

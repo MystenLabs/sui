@@ -720,6 +720,20 @@ impl<K, V> DBMap<K, V> {
         Ok(())
     }
 
+    #[cfg(tidehunter)]
+    pub fn drop_cells_in_range_raw(
+        &self,
+        from_inclusive: &[u8],
+        to_inclusive: &[u8],
+    ) -> Result<(), TypedStoreError> {
+        if let ColumnFamily::TideHunter((ks, _)) = &self.column_family {
+            self.db
+                .drop_cells_in_range(*ks, from_inclusive, to_inclusive)
+                .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        }
+        Ok(())
+    }
+
     /// Returns a vector of raw values corresponding to the keys provided.
     fn multi_get_pinned<J>(
         &self,
