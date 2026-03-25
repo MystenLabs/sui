@@ -3,7 +3,9 @@
 
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
-use sui_types::storage::{ConsensusObjectKey, FullObjectKey, ObjectKey};
+use sui_types::storage::{FullObjectKey, ObjectKey};
+#[cfg(tidehunter)]
+use sui_types::storage::ConsensusObjectKey;
 
 /// A key type for `object_per_epoch_marker_table_v2`.
 ///
@@ -142,6 +144,7 @@ mod tests {
     use super::*;
     use typed_store::be_fix_int_ser;
 
+    #[cfg(tidehunter)]
     fn fastpath(epoch: EpochId, id: ObjectID, version: u64) -> EpochMarkerKey {
         EpochMarkerKey(
             epoch,
@@ -149,6 +152,7 @@ mod tests {
         )
     }
 
+    #[cfg(tidehunter)]
     fn consensus(epoch: EpochId, id: ObjectID, start: u64, version: u64) -> EpochMarkerKey {
         EpochMarkerKey(
             epoch,
@@ -165,7 +169,7 @@ mod tests {
         let id = ObjectID::random();
         let epoch = 42u64;
         let full_key = FullObjectKey::Fastpath(ObjectKey(id, SequenceNumber::from(7u64)));
-        let marker_key = EpochMarkerKey(epoch, full_key.clone());
+        let marker_key = EpochMarkerKey(epoch, full_key);
         assert_eq!(
             be_fix_int_ser(&(epoch, full_key)),
             be_fix_int_ser(&marker_key),
