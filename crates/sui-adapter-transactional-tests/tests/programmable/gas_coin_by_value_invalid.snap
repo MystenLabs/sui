@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 8 tasks
+processed 9 tasks
 
 init:
 A: object(0,0)
@@ -52,3 +52,12 @@ task 7, lines 43-45:
 //> test::m1::t1<sui::coin::Coin<sui::sui::SUI>>(Gas)
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid taking of the Gas coin. It can only be used by-value with TransferObjects
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidGasCoinUsage }, source: None, command: Some(1) } }
+
+task 8, lines 47-51:
+//# programmable --sender A --inputs @A
+// Similarly we try to use the gas coin both with send_funds and TransferObjects, and get an
+// error that the gas coin was already moved, even though the call is _valid_.
+//> TransferObjects([Gas], Input(0));
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue }, source: None, command: Some(1) } }

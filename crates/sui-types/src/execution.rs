@@ -131,7 +131,7 @@ impl ExecutionResultsV2 {
             self.created_object_ids.remove(id);
         }
         // While not possible currently, we should ensure that any object previously marked as
-        // deleted that is now marked as written
+        // deleted is now marked only as written
         for id in new_results.written_objects.keys() {
             self.deleted_object_ids.remove(id);
         }

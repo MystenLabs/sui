@@ -445,10 +445,14 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                     ((entry.0, self.lamport_version, *digest), owner.clone())
                 }
                 ObjectOut::NotExist => {
-                    // Gas coin was deleted (e.g. send_funds consumed it). Preserve the ID
-                    // but return dummy version/digest/owner.
+                    // Gas coin was deleted. Preserve the ID but return the marker digest and a
+                    // dummy owner.
                     (
-                        (entry.0, self.lamport_version, ObjectDigest::MIN),
+                        (
+                            entry.0,
+                            self.lamport_version,
+                            ObjectDigest::OBJECT_DIGEST_DELETED,
+                        ),
                         Owner::AddressOwner(SuiAddress::default()),
                     )
                 }
