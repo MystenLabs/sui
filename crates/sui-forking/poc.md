@@ -172,4 +172,3 @@ Shows the current checkpoint, epoch, and timestamp.
 - faucet support
 - minting any coin type
 - GraphQL RPC support
-

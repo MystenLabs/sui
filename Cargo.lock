@@ -5936,7 +5936,9 @@ dependencies = [
  "lru 0.10.1",
  "prost 0.14.1",
  "reqwest",
+ "roaring 0.10.9",
  "serde",
+ "serde_json",
  "sui-rpc",
  "sui-rpc-api",
  "sui-types",
@@ -5944,6 +5946,7 @@ dependencies = [
  "tokio",
  "tonic 0.14.3",
  "tracing",
+ "wiremock",
  "zstd 0.12.3+zstd.1.5.2",
 ]
 
