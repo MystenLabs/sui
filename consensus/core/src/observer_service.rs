@@ -25,6 +25,7 @@ use crate::{
     network::{
         NodeId, ObserverBlockStream, ObserverBlockStreamItem, ObserverNetworkService, PeerId,
     },
+    synchronizer::SynchronizerHandle,
 };
 
 pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
@@ -40,6 +41,7 @@ pub(crate) struct ObserverService {
     block_verifier: Arc<dyn BlockVerifier>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
     transaction_certifier: TransactionCertifier,
+    synchronizer: Arc<SynchronizerHandle>,
 }
 
 impl ObserverService {
@@ -51,6 +53,7 @@ impl ObserverService {
         block_verifier: Arc<dyn BlockVerifier>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         transaction_certifier: TransactionCertifier,
+        synchronizer: Arc<SynchronizerHandle>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
@@ -62,6 +65,7 @@ impl ObserverService {
             block_verifier,
             commit_vote_monitor,
             transaction_certifier,
+            synchronizer,
         }
     }
 }
@@ -191,9 +195,7 @@ impl ObserverNetworkService for ObserverService {
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
 
-        // TODO: Schedule fetching missing ancestors from this peer in the background.
-        // This requires the refactored synchronizer that supports PeerId (from the
-        // consensus-synchronizer-peers-pool branch). For now, just record metrics.
+        // Schedule fetching missing ancestors from this peer in the background.
         if !missing_ancestors.is_empty() {
             self.context
                 .metrics
@@ -202,10 +204,16 @@ impl ObserverNetworkService for ObserverService {
                 .with_label_values(&[block_author_hostname])
                 .inc_by(missing_ancestors.len() as u64);
 
-            tracing::debug!(
-                "Block has {} missing ancestors that need to be fetched",
-                missing_ancestors.len()
-            );
+            let synchronizer = self.synchronizer.clone();
+            mysten_metrics::spawn_monitored_task!(async move {
+                // This does not wait for the fetch request to complete.
+                // It only waits for synchronizer to queue the request to a peer.
+                // When this fails, it usually means the queue is full.
+                // The fetch will retry from other peers via live and periodic syncs.
+                if let Err(err) = synchronizer.fetch_blocks(missing_ancestors, peer).await {
+                    tracing::debug!("Failed to fetch missing ancestors via synchronizer: {err}");
+                }
+            });
         }
 
         Ok(())
@@ -305,6 +313,18 @@ mod tests {
         transaction_certifier::TransactionCertifier,
     };
     use mysten_metrics::monitored_mpsc;
+
+    // Helper function to create a mock synchronizer for tests
+    fn create_mock_synchronizer() -> Arc<SynchronizerHandle> {
+        use tokio::sync::mpsc;
+        use tokio::task::JoinSet;
+
+        let (tx, _rx) = mpsc::channel(1);
+        Arc::new(SynchronizerHandle {
+            commands_sender: tx,
+            tasks: tokio::sync::Mutex::new(JoinSet::new()),
+        })
+    }
 
     #[tokio::test]
     async fn test_observer_stream_receives_broadcast_blocks() {
