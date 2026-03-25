@@ -74,7 +74,7 @@ impl Context {
 /// 2. That any `Object` arguments are used validly. This means mutable references are taken only
 ///    on mutable objects. And that the gas coin is only taken by value in transfer objects or with
 ///    `sui::coin::send_funds`.
-pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction {
         gas_payment: _,
         bytes,
@@ -93,7 +93,7 @@ pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(
     }
     let context = &mut Context::new(txn);
     for c in commands {
-        command(context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
+        command(env, context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
     }
     Ok(())
 }
@@ -236,11 +236,11 @@ pub fn is_valid_receiving(constraint: &Type) -> bool {
 // Object usage
 //**************************************************************************************************
 
-fn command(context: &mut Context, sp!(_, c): &T::Command) -> Result<(), ExecutionError> {
+fn command(env: &Env, context: &mut Context, sp!(_, c): &T::Command) -> Result<(), ExecutionError> {
     match &c.command {
         T::Command__::MoveCall(mc) => {
             check_obj_usages(context, &mc.arguments)?;
-            if !is_coin_send_funds(&mc.function) {
+            if !(env.protocol_config.enable_accumulators() && is_coin_send_funds(&mc.function)) {
                 // We allow the gas coin to be used with `sui::coin::send_funds`
                 check_gas_by_values(&mc.arguments)?;
             }
