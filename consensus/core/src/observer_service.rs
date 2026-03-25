@@ -310,20 +310,14 @@ mod tests {
         context::Context,
         core_thread::MockCoreThreadDispatcher,
         storage::mem_store::MemStore,
+        synchronizer::SynchronizerHandle,
         transaction_certifier::TransactionCertifier,
     };
     use mysten_metrics::monitored_mpsc;
 
     // Helper function to create a mock synchronizer for tests
     fn create_mock_synchronizer() -> Arc<SynchronizerHandle> {
-        use tokio::sync::mpsc;
-        use tokio::task::JoinSet;
-
-        let (tx, _rx) = mpsc::channel(1);
-        Arc::new(SynchronizerHandle {
-            commands_sender: tx,
-            tasks: tokio::sync::Mutex::new(JoinSet::new()),
-        })
+        SynchronizerHandle::new_for_test()
     }
 
     #[tokio::test]
@@ -359,6 +353,7 @@ mod tests {
             block_verifier,
             commit_vote_monitor,
             transaction_certifier,
+            create_mock_synchronizer(),
         );
 
         // Observer starts with no blocks seen
@@ -435,6 +430,7 @@ mod tests {
             block_verifier,
             commit_vote_monitor,
             transaction_certifier,
+            create_mock_synchronizer(),
         );
 
         let peer = keys[0].0.public().clone();
