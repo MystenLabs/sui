@@ -101,7 +101,10 @@ impl<'de> serde::Deserialize<'de> for EpochMarkerKey {
         impl<'de> Visitor<'de> for EpochMarkerKeyVisitor {
             type Value = EpochMarkerKey;
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, "a {EPOCH_MARKER_KEY_SIZE}-byte fixed-length epoch marker key")
+                write!(
+                    f,
+                    "a {EPOCH_MARKER_KEY_SIZE}-byte fixed-length epoch marker key"
+                )
             }
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let mut buf = [0u8; EPOCH_MARKER_KEY_SIZE];
@@ -115,8 +118,7 @@ impl<'de> serde::Deserialize<'de> for EpochMarkerKey {
                 let epoch_id: EpochId = epoch_word & !CONSENSUS_BIT;
                 let object_id = ObjectID::from_bytes(&buf[8..40])
                     .map_err(|e| A::Error::custom(format!("invalid ObjectID: {e}")))?;
-                let start_version_raw =
-                    u64::from_be_bytes(buf[40..48].try_into().unwrap());
+                let start_version_raw = u64::from_be_bytes(buf[40..48].try_into().unwrap());
                 let version =
                     SequenceNumber::from(u64::from_be_bytes(buf[48..56].try_into().unwrap()));
                 let full_key = if is_consensus {
@@ -174,7 +176,10 @@ mod tests {
     #[test]
     fn test_key_size() {
         let id = ObjectID::random();
-        assert_eq!(be_fix_int_ser(&fastpath(0, id, 0)).len(), EPOCH_MARKER_KEY_SIZE);
+        assert_eq!(
+            be_fix_int_ser(&fastpath(0, id, 0)).len(),
+            EPOCH_MARKER_KEY_SIZE
+        );
         assert_eq!(
             be_fix_int_ser(&consensus(0, id, 0, 0)).len(),
             EPOCH_MARKER_KEY_SIZE
@@ -230,8 +235,6 @@ mod tests {
     #[test]
     fn test_fastpath_sorts_before_consensus_same_epoch() {
         let id = ObjectID::random();
-        assert!(
-            be_fix_int_ser(&fastpath(42, id, 1)) < be_fix_int_ser(&consensus(42, id, 1, 1))
-        );
+        assert!(be_fix_int_ser(&fastpath(42, id, 1)) < be_fix_int_ser(&consensus(42, id, 1, 1)));
     }
 }

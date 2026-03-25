@@ -209,10 +209,7 @@ impl AuthorityStore {
         {
             self.perpetual_tables
                 .object_per_epoch_marker_table_v2
-                .drop_cells_in_range_raw(
-                    &EpochMarkerKey::MIN_KEY,
-                    &EpochMarkerKey::MAX_KEY,
-                )?;
+                .drop_cells_in_range_raw(&EpochMarkerKey::MIN_KEY, &EpochMarkerKey::MAX_KEY)?;
         }
         Ok(())
     }

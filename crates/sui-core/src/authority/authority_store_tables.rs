@@ -3,6 +3,9 @@
 
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
+#[cfg(tidehunter)]
+use crate::authority::epoch_marker_key::EPOCH_MARKER_KEY_SIZE;
+use crate::authority::epoch_marker_key::EpochMarkerKey;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
@@ -10,9 +13,6 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::global_state_hash::GlobalStateHash;
-use crate::authority::epoch_marker_key::EpochMarkerKey;
-#[cfg(tidehunter)]
-use crate::authority::epoch_marker_key::EPOCH_MARKER_KEY_SIZE;
 use sui_types::storage::MarkerValue;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{
