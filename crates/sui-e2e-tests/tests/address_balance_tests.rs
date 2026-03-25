@@ -23,8 +23,10 @@ use sui_types::{
     accumulator_root::AccumulatorValue,
     balance::Balance,
     base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr},
+    coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
     digests::{ChainIdentifier, CheckpointDigest},
     effects::{InputConsensusObject, TransactionEffectsAPI},
+    error::UserInputResult,
     gas::GasCostSummary,
     gas_coin::GAS,
     object::Owner,
@@ -33,13 +35,25 @@ use sui_types::{
     transaction::{
         Argument, CallArg, Command, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability,
         Transaction, TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
-        TransactionKind, VerifiedTransaction,
+        TransactionKind, VerifiedTransaction, WithdrawalTypeArg,
     },
 };
 use test_cluster::{
     TestClusterBuilder,
     addr_balance_test_env::{TestEnv, TestEnvBuilder},
 };
+
+struct NoOpResolver;
+
+impl CoinReservationResolverTrait for NoOpResolver {
+    fn resolve_funds_withdrawal(
+        &self,
+        _sender: SuiAddress,
+        _coin_reservation: ParsedObjectRefWithdrawal,
+    ) -> UserInputResult<FundsWithdrawalArg> {
+        panic!("Not used in these tests")
+    }
+}
 
 fn create_transaction_with_expiration(
     sender: SuiAddress,
@@ -3996,4 +4010,64 @@ fn create_redeem_and_transfer_transaction(
             nonce,
         },
     })
+}
+
+/// Test that a transaction with both explicit withdrawals and implicit gas budget
+/// is rejected at signing time when the total exceeds available balance.
+///
+/// This is a regression test for a bug where get_funds_withdrawals() did not include the implicit
+/// gas budget reservation when gas_data.payment = []. This could cause callers to underestimate
+/// the total funds required by a transaction.
+#[sim_test]
+async fn test_explicit_withdrawal_plus_implicit_gas_exceeds_balance() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, gas_coin) = test_env.get_sender_and_gas(0);
+    let receiver = SuiAddress::random_for_testing_only();
+
+    let deposit_amount = 5_000_000u64;
+    let deposit_tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::coin(gas_coin), vec![(deposit_amount, sender)])
+        .build();
+    test_env.exec_tx_directly(deposit_tx).await.unwrap();
+    test_env.verify_accumulator_exists(sender, deposit_amount);
+
+    let withdraw_amount = 1_000_000u64;
+    let tx = create_redeem_and_transfer_transaction(
+        sender,
+        receiver,
+        withdraw_amount,
+        test_env.rgp,
+        test_env.chain_id,
+        0,
+    );
+
+    // Verify both explicit withdrawal and implicit gas are aggregated
+    let withdrawals = tx
+        .process_funds_withdrawals_for_signing(test_env.chain_id, &NoOpResolver)
+        .unwrap();
+    let sui_account_id = AccumulatorValue::get_field_id(
+        sender,
+        &WithdrawalTypeArg::Balance(GAS::type_tag()).to_type_tag(),
+    )
+    .unwrap();
+    // Total should be explicit withdrawal (1_000_000) + gas budget (10_000_000)
+    assert_eq!(withdrawals.get(&sui_account_id).unwrap().0, 11_000_000);
+    assert!(tx.is_gas_paid_from_address_balance());
+
+    let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+    assert!(
+        err.to_string().contains("is less than requested"),
+        "Expected insufficient balance error, got: {}",
+        err
+    );
+
+    test_env.trigger_reconfiguration().await;
 }
