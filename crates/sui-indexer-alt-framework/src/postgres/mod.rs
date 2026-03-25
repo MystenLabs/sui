@@ -110,8 +110,8 @@ pub mod tests {
 
     use async_trait::async_trait;
     use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+    use sui_indexer_alt_framework_store_traits::ConcurrentConnection as _;
     use sui_indexer_alt_framework_store_traits::Connection as _;
-    use sui_indexer_alt_framework_store_traits::InitWatermark;
     use sui_types::full_checkpoint_content::Checkpoint;
 
     use crate::ConcurrentConfig;
@@ -172,7 +172,7 @@ pub mod tests {
         {
             let watermark = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
-            conn.init_watermark(ConcurrentPipeline1::NAME, InitWatermark::default())
+            conn.init_concurrent_watermark(ConcurrentPipeline1::NAME, 0)
                 .await
                 .unwrap();
             assert!(
@@ -196,7 +196,7 @@ pub mod tests {
         {
             let mut conn = indexer.store().connect().await.unwrap();
 
-            conn.init_watermark(ConcurrentPipeline1::NAME, InitWatermark::default())
+            conn.init_concurrent_watermark(ConcurrentPipeline1::NAME, 0)
                 .await
                 .unwrap();
             let watermark1 = CommitterWatermark::new_for_testing(10);
@@ -206,7 +206,7 @@ pub mod tests {
                     .unwrap()
             );
 
-            conn.init_watermark(ConcurrentPipeline2::NAME, InitWatermark::default())
+            conn.init_concurrent_watermark(ConcurrentPipeline2::NAME, 0)
                 .await
                 .unwrap();
             let watermark2 = CommitterWatermark::new_for_testing(20);

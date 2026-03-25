@@ -12,15 +12,6 @@ use scoped_futures::ScopedBoxFuture;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// Returns the `InitWatermark` based on the existing watermark if it exists.
-    /// Otherwise, initializes a new watermark record with `InitWatermark` and returns
-    /// the value passed in.
-    async fn init_watermark(
-        &mut self,
-        pipeline_task: &str,
-        init_watermark: InitWatermark,
-    ) -> anyhow::Result<InitWatermark>;
-
     /// Checks if the store can accept a `chain_id`.
     /// Returns `Ok(true)` if the store accepts this `chain_id` thereby allowing processing to continue.
     /// Returns `Ok(false)` if the store does not accept the `chain_id` thereby halting processing with an error.
@@ -41,6 +32,40 @@ pub trait Connection: Send {
         pipeline_task: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
+    /// Upsert the high watermark for the `pipeline_task` - representing either a pipeline name or a
+    /// pipeline with an associated task (formatted as `{pipeline}{Store::DELIMITER}{task}`) - as
+    /// long as it raises the watermark stored in the database. Returns a boolean indicating whether
+    /// the watermark was actually updated or not.
+    async fn set_committer_watermark(
+        &mut self,
+        pipeline_task: &str,
+        watermark: CommitterWatermark,
+    ) -> anyhow::Result<bool>;
+}
+
+/// Extension of [`Connection`] for concurrent pipeline watermark operations including
+/// initialization, reader/pruner watermark management, and pruning.
+#[async_trait]
+pub trait ConcurrentConnection: Connection {
+    /// Returns the `InitWatermark` based on the existing watermark if it exists.
+    /// Otherwise, initializes a new watermark record and returns the default based on `reader_lo`.
+    ///
+    /// The default implementation delegates to `Connection::committer_watermark`.
+    async fn init_concurrent_watermark(
+        &mut self,
+        pipeline_task: &str,
+        reader_lo: u64,
+    ) -> anyhow::Result<InitWatermark> {
+        let checkpoint_hi_inclusive = self
+            .committer_watermark(pipeline_task)
+            .await?
+            .map(|w| w.checkpoint_hi_inclusive);
+        Ok(InitWatermark {
+            checkpoint_hi_inclusive,
+            reader_lo,
+        })
+    }
+
     /// Given a pipeline, return the reader watermark from the database. This is used by the indexer
     /// to determine the new `reader_lo` or inclusive lower bound of available data.
     async fn reader_watermark(
@@ -59,16 +84,6 @@ pub trait Connection: Send {
         pipeline: &'static str,
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>>;
-
-    /// Upsert the high watermark for the `pipeline_task` - representing either a pipeline name or a
-    /// pipeline with an associated task (formatted as `{pipeline}{Store::DELIMITER}{task}`) - as
-    /// long as it raises the watermark stored in the database. Returns a boolean indicating whether
-    /// the watermark was actually updated or not.
-    async fn set_committer_watermark(
-        &mut self,
-        pipeline_task: &str,
-        watermark: CommitterWatermark,
-    ) -> anyhow::Result<bool>;
 
     /// Update the `reader_lo` of an existing watermark entry only if it raises `reader_lo`. Readers
     /// will reference this as the inclusive lower bound of available data for the corresponding
@@ -95,6 +110,25 @@ pub trait Connection: Send {
         pipeline: &'static str,
         pruner_hi: u64,
     ) -> anyhow::Result<bool>;
+}
+
+/// Extension of [`Connection`] for sequential pipeline watermark operations.
+#[async_trait]
+pub trait SequentialConnection: Connection {
+    /// Returns the `checkpoint_hi_inclusive` based on the existing watermark if it exists.
+    /// Otherwise, initializes a new watermark record and returns the value passed in.
+    ///
+    /// The default implementation delegates to `Connection::committer_watermark`.
+    async fn init_sequential_watermark(
+        &mut self,
+        pipeline_task: &str,
+        _checkpoint_hi_inclusive: Option<u64>,
+    ) -> anyhow::Result<Option<u64>> {
+        Ok(self
+            .committer_watermark(pipeline_task)
+            .await?
+            .map(|w| w.checkpoint_hi_inclusive))
+    }
 }
 
 /// A storage-agnostic interface that provides database connections for both watermark management
@@ -216,23 +250,6 @@ impl PrunerWatermark {
         self.pruner_hi = to_exclusive;
         Some((from, to_exclusive))
     }
-}
-
-/// A utility function for connections that do not have special initialization logic. These
-/// connections delegate initialization to `Connection::committer_watermark`.
-pub async fn init_with_committer_watermark(
-    connection: &mut impl Connection,
-    pipeline_task: &str,
-    init_watermark: InitWatermark,
-) -> anyhow::Result<InitWatermark> {
-    let checkpoint_hi_inclusive = connection
-        .committer_watermark(pipeline_task)
-        .await?
-        .map(|w| w.checkpoint_hi_inclusive);
-    Ok(InitWatermark {
-        checkpoint_hi_inclusive,
-        ..init_watermark
-    })
 }
 
 /// Check that the pipeline name does not contain the store's delimiter, and construct the string

@@ -26,6 +26,7 @@ use crate::pipeline::concurrent::main_reader_lo::track_main_reader_lo;
 use crate::pipeline::concurrent::pruner::pruner;
 use crate::pipeline::concurrent::reader_watermark::reader_watermark;
 use crate::pipeline::processor::processor;
+use crate::store::ConcurrentConnection;
 use crate::store::Store;
 
 mod collector;
@@ -232,7 +233,7 @@ impl Default for PrunerConfig {
 /// channels are created to communicate between its various components. The pipeline will shutdown
 /// if any of its input or output channels close, any of its independent tasks fail, or if it is
 /// signalled to shutdown through the returned service handle.
-pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
+pub(crate) fn pipeline<H>(
     handler: H,
     next_checkpoint: u64,
     config: ConcurrentConfig,
@@ -240,7 +241,11 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     task: Option<Task>,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
     metrics: Arc<IndexerMetrics>,
-) -> Service {
+) -> Service
+where
+    H: Handler + Send + Sync + 'static,
+    for<'c> <H::Store as Store>::Connection<'c>: ConcurrentConnection,
+{
     info!(
         pipeline = H::NAME,
         "Starting pipeline with config: {config:#?}",

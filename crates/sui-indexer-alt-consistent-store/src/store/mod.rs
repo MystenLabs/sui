@@ -4,7 +4,6 @@
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::anyhow;
@@ -13,9 +12,7 @@ use prometheus::Registry;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::service::Service;
 use sui_indexer_alt_framework::store::CommitterWatermark;
-use sui_indexer_alt_framework::store::InitWatermark;
 use sui_indexer_alt_framework::store::Store as _;
-use sui_indexer_alt_framework::store::init_with_committer_watermark;
 use sui_indexer_alt_framework::store::{self};
 
 use crate::db::Db;
@@ -167,14 +164,6 @@ impl<S: Send + Sync + 'static> store::TransactionalStore for Store<S> {
 
 #[async_trait::async_trait]
 impl<S: Send + Sync> store::Connection for Connection<'_, S> {
-    async fn init_watermark(
-        &mut self,
-        pipeline_task: &str,
-        init_watermark: InitWatermark,
-    ) -> anyhow::Result<InitWatermark> {
-        init_with_committer_watermark(self, pipeline_task, init_watermark).await
-    }
-
     async fn accepts_chain_id(
         &mut self,
         _pipeline_task: &str,
@@ -196,21 +185,6 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
             .map(Into::into))
     }
 
-    async fn reader_watermark(
-        &mut self,
-        _pipeline: &'static str,
-    ) -> anyhow::Result<Option<store::ReaderWatermark>> {
-        Ok(None)
-    }
-
-    async fn pruner_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _delay: Duration,
-    ) -> anyhow::Result<Option<store::PrunerWatermark>> {
-        Ok(None)
-    }
-
     async fn set_committer_watermark(
         &mut self,
         pipeline_task: &str,
@@ -219,23 +193,10 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
         self.watermark = Some((pipeline_task.to_string(), watermark.into()));
         Ok(true)
     }
-
-    async fn set_reader_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _reader_lo: u64,
-    ) -> anyhow::Result<bool> {
-        bail!("Pruning not supported by this store");
-    }
-
-    async fn set_pruner_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _pruner_hi: u64,
-    ) -> anyhow::Result<bool> {
-        bail!("Pruning not supported by this store");
-    }
 }
+
+#[async_trait::async_trait]
+impl<S: Send + Sync> store::SequentialConnection for Connection<'_, S> {}
 
 impl<S> Clone for Store<S> {
     fn clone(&self) -> Self {
@@ -246,6 +207,7 @@ impl<S> Clone for Store<S> {
 #[cfg(test)]
 mod tests {
     use std::future::Future;
+    use std::time::Duration;
 
     use scoped_futures::ScopedFutureExt;
     use sui_indexer_alt_framework::store::Connection as _;

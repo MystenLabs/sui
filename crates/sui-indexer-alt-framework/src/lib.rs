@@ -15,8 +15,11 @@ use ingestion::IngestionService;
 use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
 use prometheus::Registry;
-use sui_indexer_alt_framework_store_traits::Connection;
+use scoped_futures::ScopedBoxFuture;
+use scoped_futures::ScopedFutureExt;
+use sui_indexer_alt_framework_store_traits::ConcurrentConnection;
 use sui_indexer_alt_framework_store_traits::InitWatermark;
+use sui_indexer_alt_framework_store_traits::SequentialConnection;
 use sui_indexer_alt_framework_store_traits::Store;
 use sui_indexer_alt_framework_store_traits::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
@@ -289,8 +292,28 @@ impl<S: Store> Indexer<S> {
     ) -> Result<()>
     where
         H: concurrent::Handler<Store = S> + Send + Sync + 'static,
+        for<'c> S::Connection<'c>: ConcurrentConnection,
     {
-        let Some(next_checkpoint) = self.add_pipeline::<H>().await? else {
+        let pipeline_task =
+            pipeline_task::<S>(H::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
+
+        let Some(next_checkpoint) = self
+            .add_pipeline::<H, _>(|conn, default_next_checkpoint| {
+                async move {
+                    let InitWatermark {
+                        checkpoint_hi_inclusive,
+                        reader_lo,
+                    } = conn
+                        .init_concurrent_watermark(&pipeline_task, default_next_checkpoint)
+                        .await
+                        .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
+
+                    Ok(checkpoint_hi_inclusive.map_or(reader_lo, |c| c + 1))
+                }
+                .scope_boxed()
+            })
+            .await?
+        else {
             return Ok(());
         };
 
@@ -352,7 +375,12 @@ impl<S: Store> Indexer<S> {
     /// calculated above.
     ///
     /// Returns `Ok(None)` if the pipeline is disabled.
-    async fn add_pipeline<P: Processor + 'static>(&mut self) -> Result<Option<u64>> {
+    async fn add_pipeline<'a, P, F>(&mut self, init: F) -> Result<Option<u64>>
+    where
+        P: Processor + 'static,
+        F: Send + 'a,
+        F: for<'r> FnOnce(&'r mut S::Connection<'_>, u64) -> ScopedBoxFuture<'a, 'r, Result<u64>>,
+    {
         ensure!(
             self.added_pipelines.insert(P::NAME),
             "Pipeline {:?} already added",
@@ -372,29 +400,10 @@ impl<S: Store> Indexer<S> {
             .await
             .context("Failed to establish connection to store")?;
 
-        let pipeline_task =
-            pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
-
         // Create a new record based on `proposed_next_checkpoint` if one does not exist.
         // Otherwise, use the existing record and disregard the proposed value.
-        let proposed_next_checkpoint = self.first_checkpoint.unwrap_or(0);
-        let InitWatermark {
-            checkpoint_hi_inclusive,
-            reader_lo,
-        } = conn
-            .init_watermark(
-                &pipeline_task,
-                InitWatermark {
-                    checkpoint_hi_inclusive: proposed_next_checkpoint.checked_sub(1),
-                    reader_lo: proposed_next_checkpoint,
-                },
-            )
-            .await
-            .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
-
-        let next_checkpoint = checkpoint_hi_inclusive.map_or(reader_lo, |c| c + 1);
-
-        self.next_checkpoint = self.next_checkpoint.min(next_checkpoint);
+        let next_checkpoint = init(&mut conn, self.first_checkpoint.unwrap_or(0)).await?;
+        self.next_checkpoint = next_checkpoint.min(self.next_checkpoint);
 
         Ok(Some(next_checkpoint))
     }
@@ -418,6 +427,7 @@ impl<T: TransactionalStore> Indexer<T> {
     ) -> Result<()>
     where
         H: Handler<Store = T> + Send + Sync + 'static,
+        for<'c> T::Connection<'c>: SequentialConnection,
     {
         if self.task.is_some() {
             bail!(
@@ -427,11 +437,24 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
-        let Some(next_checkpoint) = self.add_pipeline::<H>().await? else {
+        let Some(next_checkpoint) = self
+            .add_pipeline::<H, _>(|conn, default_next_checkpoint| {
+                async move {
+                    let checkpoint_hi_inclusive = conn
+                        .init_sequential_watermark(H::NAME, default_next_checkpoint.checked_sub(1))
+                        .await
+                        .with_context(|| format!("Failed to init watermark for {:?}", H::NAME))?;
+
+                    Ok(checkpoint_hi_inclusive.map_or(default_next_checkpoint, |c| c + 1))
+                }
+                .scope_boxed()
+            })
+            .await?
+        else {
             return Ok(());
         };
 
-        // Track the minimum checkpoint_hi across all sequential pipelines
+        // Track the minimum next_checkpoint across all sequential pipelines
         self.next_sequential_checkpoint = Some(
             self.next_sequential_checkpoint
                 .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
@@ -471,6 +494,8 @@ mod tests {
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::ConcurrentConfig;
     use crate::store::CommitterWatermark;
+    use crate::store::ConcurrentConnection as _;
+    use crate::store::Connection as _;
 
     use super::*;
 
@@ -710,9 +735,7 @@ mod tests {
 
         let mut conn = store.connect().await.unwrap();
 
-        conn.init_watermark(A::NAME, InitWatermark::default())
-            .await
-            .unwrap();
+        conn.init_concurrent_watermark(A::NAME, 0).await.unwrap();
         conn.set_committer_watermark(
             A::NAME,
             CommitterWatermark {
@@ -723,9 +746,7 @@ mod tests {
         .await
         .unwrap();
 
-        conn.init_watermark(B::NAME, InitWatermark::default())
-            .await
-            .unwrap();
+        conn.init_concurrent_watermark(B::NAME, 0).await.unwrap();
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
@@ -736,9 +757,7 @@ mod tests {
         .await
         .unwrap();
 
-        conn.init_watermark(C::NAME, InitWatermark::default())
-            .await
-            .unwrap();
+        conn.init_concurrent_watermark(C::NAME, 0).await.unwrap();
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
@@ -749,9 +768,7 @@ mod tests {
         .await
         .unwrap();
 
-        conn.init_watermark(D::NAME, InitWatermark::default())
-            .await
-            .unwrap();
+        conn.init_concurrent_watermark(D::NAME, 0).await.unwrap();
         conn.set_committer_watermark(
             D::NAME,
             CommitterWatermark {
