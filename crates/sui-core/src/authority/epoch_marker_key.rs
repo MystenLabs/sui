@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 #[cfg(tidehunter)]
+use sui_types::base_types::{ObjectID, SequenceNumber};
+#[cfg(tidehunter)]
 use sui_types::storage::ConsensusObjectKey;
-use sui_types::storage::{FullObjectKey, ObjectKey};
+#[cfg(tidehunter)]
+use sui_types::storage::ObjectKey;
+use sui_types::storage::FullObjectKey;
 
 /// A key type for `object_per_epoch_marker_table_v2`.
 ///
@@ -142,6 +145,8 @@ impl<'de> serde::Deserialize<'de> for EpochMarkerKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sui_types::base_types::{ObjectID, SequenceNumber};
+    use sui_types::storage::ObjectKey;
     use typed_store::be_fix_int_ser;
 
     #[cfg(tidehunter)]
