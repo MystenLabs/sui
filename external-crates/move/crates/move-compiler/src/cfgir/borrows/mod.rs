@@ -377,7 +377,7 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
                 assert!(errors.is_empty(), "ICE eq freezing failed");
             }
             if v2.is_ref() {
-                let (errors, _) = context.borrow_state.dereference(e1.exp.loc, v2);
+                let (errors, _) = context.borrow_state.dereference(e2.exp.loc, v2);
                 assert!(errors.is_empty(), "ICE eq freezing failed");
             }
             svalue()
