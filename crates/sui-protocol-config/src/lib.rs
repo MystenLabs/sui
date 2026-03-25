@@ -593,7 +593,7 @@ struct FeatureFlags {
 
     // Enable native functions for group operations.
     #[serde(skip_serializing_if = "is_false")]
-    enable_bulletproofs_range_proofs: bool,
+    enable_verify_bulletproofs_ristretto255: bool,
 
     // Enable nitro attestation.
     #[serde(skip_serializing_if = "is_false")]
@@ -1730,8 +1730,8 @@ pub struct ProtocolConfig {
     group_ops_ristretto_scalar_div_cost: Option<u64>,
     group_ops_ristretto_point_div_cost: Option<u64>,
 
-    bulletproofs_ristretto255_verify_base_cost: Option<u64>,
-    bulletproofs_ristretto255_verify_cost_per_bit: Option<u64>,
+    verify_bulletproofs_ristretto255_base_cost: Option<u64>,
+    verify_bulletproofs_ristretto255_cost_per_bit: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -2288,8 +2288,8 @@ impl ProtocolConfig {
         self.feature_flags.enable_ristretto255_group_ops
     }
 
-    pub fn enable_bulletproofs_range_proofs(&self) -> bool {
-        self.feature_flags.enable_bulletproofs_range_proofs
+    pub fn enable_verify_bulletproofs_ristretto255(&self) -> bool {
+        self.feature_flags.enable_verify_bulletproofs_ristretto255
     }
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
@@ -3211,8 +3211,8 @@ impl ProtocolConfig {
             group_ops_ristretto_scalar_div_cost: None,
             group_ops_ristretto_point_div_cost: None,
 
-            bulletproofs_ristretto255_verify_base_cost: None,
-            bulletproofs_ristretto255_verify_cost_per_bit: None,
+            verify_bulletproofs_ristretto255_base_cost: None,
+            verify_bulletproofs_ristretto255_cost_per_bit: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -4803,10 +4803,10 @@ impl ProtocolConfig {
                     cfg.transfer_receive_object_type_cost_per_byte = Some(2);
 
                     // Enable bulletproofs range proofs on devnet
-                    cfg.bulletproofs_ristretto255_verify_base_cost = Some(100);
-                    cfg.bulletproofs_ristretto255_verify_cost_per_bit = Some(1000);
+                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(100);
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit = Some(1000);
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_bulletproofs_range_proofs = true;
+                        cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
                     }
                 }
                 120 => {

@@ -31,18 +31,18 @@ pub const MAX_TOTAL_BITS: u64 = 256;
 
 #[derive(Clone)]
 pub struct BulletproofsCostParams {
-    pub bulletproofs_ristretto255_verify_base_cost: Option<InternalGas>,
+    pub verify_bulletproofs_ristretto255_base_cost: Option<InternalGas>,
     // The performance depends on the number of values/commitments * bits in range
-    pub bulletproofs_ristretto255_verify_cost_per_bit: Option<InternalGas>,
+    pub verify_bulletproofs_ristretto255_cost_per_bit: Option<InternalGas>,
 }
 
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
-        .enable_bulletproofs_range_proofs())
+        .enable_verify_bulletproofs_ristretto255())
 }
 
-pub fn verify_bulletproof_ristretto255(
+pub fn verify_bulletproofs_ristretto255(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -63,10 +63,10 @@ pub fn verify_bulletproof_ristretto255(
     native_charge_gas_early_exit!(
         context,
         cost_parameters
-            .bulletproofs_ristretto255_verify_base_cost
+            .verify_bulletproofs_ristretto255_base_cost
             .ok_or_else(
                 || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("bulletproof_ristretto255_base_cost not available".to_string())
+                    .with_message("verify_bulletproofs_ristretto255_base_cost not available".to_string())
             )?
     );
 
@@ -96,10 +96,10 @@ pub fn verify_bulletproof_ristretto255(
     native_charge_gas_early_exit!(
         context,
         cost_parameters
-            .bulletproofs_ristretto255_verify_cost_per_bit
+            .verify_bulletproofs_ristretto255_cost_per_bit
             .ok_or_else(
                 || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "bulletproof_ristretto255_cost_per_bit not available".to_string()
+                    "verify_bulletproofs_ristretto255_cost_per_bit not available".to_string()
                 )
             )?
             * total_bits.into()

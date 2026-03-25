@@ -40,7 +40,7 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
-use crate::crypto::bulletproofs::{self, BulletproofsCostParams};
+use crate::crypto::rangeproofs::{self, BulletproofsCostParams};
 use crate::crypto::group_ops::GroupOpsCostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
@@ -792,11 +792,11 @@ impl NativesCostTable {
                     .map(Into::into),
             },
             bulletproofs_cost_params: BulletproofsCostParams {
-                bulletproofs_ristretto255_verify_base_cost: protocol_config
-                    .bulletproofs_ristretto255_verify_base_cost_as_option()
+                verify_bulletproofs_ristretto255_base_cost: protocol_config
+                    .verify_bulletproofs_ristretto255_base_cost_as_option()
                     .map(Into::into),
-                bulletproofs_ristretto255_verify_cost_per_bit: protocol_config
-                    .bulletproofs_ristretto255_verify_cost_per_bit_as_option()
+                verify_bulletproofs_ristretto255_cost_per_bit: protocol_config
+                    .verify_bulletproofs_ristretto255_cost_per_bit_as_option()
                     .map(Into::into),
             },
         }
@@ -1302,9 +1302,9 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(nitro_attestation::load_nitro_attestation_internal),
         ),
         (
-            "bulletproofs",
-            "verify_bulletproof_ristretto255_internal",
-            make_native!(bulletproofs::verify_bulletproof_ristretto255),
+            "rangeproofs",
+            "verify_bulletproofs_ristretto255_internal",
+            make_native!(rangeproofs::verify_bulletproofs_ristretto255),
         ),
     ];
     let sui_framework_natives_iter =
