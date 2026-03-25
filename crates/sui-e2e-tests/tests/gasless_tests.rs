@@ -326,7 +326,8 @@ async fn test_gasless_rejects_transfer_objects() {
 
     let err = result.unwrap_err();
     assert!(
-        err.to_string().contains("Gasless transactions cannot call")
+        err.to_string()
+            .contains("is not supported in gasless transactions")
             || err.to_string().contains("only support MoveCall"),
         "Expected function whitelist or MoveCall-only error, got: {err}"
     );
@@ -427,7 +428,7 @@ async fn test_gasless_rejects_non_whitelisted_token() {
     let err = result.unwrap_err();
     assert!(
         err.to_string()
-            .contains("only support whitelisted token types"),
+            .contains("is not currently allowed in gasless transactions"),
         "Expected token whitelist error, got: {err}"
     );
 
@@ -533,7 +534,7 @@ async fn test_gasless_rejects_zero_type_args() {
 
     let err = result.unwrap_err();
     assert!(
-        err.to_string().contains("exactly one type argument"),
+        err.to_string().contains("type arguments"),
         "Expected type arg count error, got: {err}"
     );
 
@@ -570,7 +571,7 @@ async fn test_gasless_rejects_multiple_type_args() {
 
     let err = result.unwrap_err();
     assert!(
-        err.to_string().contains("exactly one type argument"),
+        err.to_string().contains("type arguments"),
         "Expected type arg count error, got: {err}"
     );
 
@@ -603,7 +604,7 @@ async fn test_gasless_rejects_non_balance_withdrawal_split() {
 
     let err = result.unwrap_err();
     assert!(
-        err.to_string().contains("must use Balance<T>"),
+        err.to_string().contains("Expected a type Balance<_>"),
         "Expected Balance<T> type error, got: {err}"
     );
 
@@ -638,7 +639,8 @@ async fn test_gasless_rejects_non_framework_package() {
 
     let err = result.unwrap_err();
     assert!(
-        err.to_string().contains("Gasless transactions cannot call"),
+        err.to_string()
+            .contains("is not supported in gasless transactions"),
         "Expected disallowed function error, got: {err}"
     );
 
