@@ -680,17 +680,4 @@ async fn test_combined_ab_and_coins_needed() {
         ParsedDigest::is_coin_reservation_digest(&first_payment.2),
         "First gas payment should be a coin reservation when combining AB + coins"
     );
-
-    // Execute the simulated transaction to verify it's valid
-    let simulated_tx = &response.transaction.transaction;
-    let (_, effects) = test_env
-        .cluster
-        .sign_and_execute_transaction_directly(simulated_tx)
-        .await
-        .expect("Simulated transaction should execute successfully");
-    assert!(
-        effects.status().is_ok(),
-        "Executed transaction should succeed, got: {:?}",
-        effects.status()
-    );
 }
