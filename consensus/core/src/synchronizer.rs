@@ -178,8 +178,8 @@ enum Command {
 }
 
 pub(crate) struct SynchronizerHandle {
-    commands_sender: Sender<Command>,
-    tasks: tokio::sync::Mutex<JoinSet<()>>,
+    pub(crate) commands_sender: Sender<Command>,
+    pub(crate) tasks: tokio::sync::Mutex<JoinSet<()>>,
 }
 
 impl SynchronizerHandle {
@@ -512,7 +512,7 @@ where
                     match response {
                         Ok(blocks) => {
                             if let Err(err) = Self::process_fetched_blocks(blocks,
-                                fetch_peer.clone(),
+                                peer.clone(),
                                 blocks_guard,
                                 core_dispatcher.clone(),
                                 block_verifier.clone(),
@@ -523,16 +523,16 @@ where
                                 round_tracker.clone(),
                                 "live"
                             ).await {
-                                warn!("Error while processing fetched blocks from peer {fetch_peer} {peer_name}: {err}");
+                                warn!("Error while processing fetched blocks from peer {peer_name}: {err}");
                                 context.metrics.node_metrics.synchronizer_process_fetched_failures.with_label_values(&[peer_name.as_str(), "live"]).inc();
                             }
                         },
                         Err(_) => {
                             context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_name.as_str(), "live"]).inc();
                             if retries <= MAX_RETRIES {
-                                requests.push(Self::fetch_blocks_request(network_client.clone(), fetch_peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
+                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
                             } else {
-                                warn!("Max retries {retries} reached while trying to fetch blocks from peer {fetch_peer} {peer_name}.");
+                                warn!("Max retries {retries} reached while trying to fetch blocks from peer {peer_name}.");
                                 // we don't necessarily need to do, but dropping the guard here to unlock the blocks
                                 drop(blocks_guard);
                             }
