@@ -111,6 +111,7 @@ feature_flags:
   allow_unbounded_system_objects: true
   type_tags_in_object_runtime: true
   enable_accumulators: true
+  enable_coin_reservation_obj_refs: true
   create_root_accumulator_object: true
   enable_authenticated_event_streams: true
   enable_address_balance_gas_payments: true
@@ -149,6 +150,7 @@ feature_flags:
   gas_rounding_halve_digits: true
   flexible_tx_context_positions: true
   disable_entry_point_signature_check: true
+  convert_withdrawal_compatibility_ptb_arguments: true
   restrict_hot_or_not_entry_functions: true
   split_checkpoints_in_consensus_handler: true
   consensus_always_accept_system_transactions: true

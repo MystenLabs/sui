@@ -4737,6 +4737,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_gasless = true;
                         cfg.gasless_max_computation_units = Some(50_000);
                         cfg.gasless_allowed_token_types = Some(vec![]);
+                        cfg.feature_flags.enable_coin_reservation_obj_refs = true;
+                        cfg.feature_flags
+                            .convert_withdrawal_compatibility_ptb_arguments = true;
                     }
                     if chain == Chain::Testnet {
                         cfg.gasless_allowed_token_types = Some(vec![(TESTNET_USDC.to_string(), 0)]);
