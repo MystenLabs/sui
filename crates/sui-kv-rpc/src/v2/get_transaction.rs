@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 use sui_kvstore::tables::transactions::col;
-use sui_kvstore::{BigTableClient, TransactionData};
+use sui_kvstore::{BigTableClient, KeyValueStoreReader, TransactionData};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::{
@@ -16,7 +16,10 @@ use sui_rpc_api::{
     ErrorReason, RpcError, TransactionNotFoundError,
     proto::google::rpc::bad_request::FieldViolation, proto::timestamp_ms_to_proto,
 };
-use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::object::Object;
+use sui_types::storage::ObjectKey;
+use tracing::warn;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
 pub const READ_MASK_DEFAULT: &str = "digest";
@@ -60,9 +63,15 @@ pub async fn get_transaction(
     let transaction = response
         .pop()
         .ok_or(TransactionNotFoundError(transaction_digest.into()))?;
+    let objects = if needs_object_types(&read_mask) {
+        fetch_object_map(&mut client, std::iter::once(&transaction)).await?
+    } else {
+        HashMap::new()
+    };
     Ok(GetTransactionResponse::new(transaction_to_response(
         transaction,
         &read_mask,
+        &objects,
     )?))
 }
 
@@ -93,11 +102,17 @@ pub async fn batch_get_transactions(
         .map(|tx| (tx.digest, tx))
         .collect();
 
+    let objects = if needs_object_types(&read_mask) {
+        fetch_object_map(&mut client, response.values()).await?
+    } else {
+        HashMap::new()
+    };
+
     let transactions = digests
         .into_iter()
         .map(|digest| {
             if let Some(tx) = response.get(&digest) {
-                return match transaction_to_response(tx.clone(), &read_mask) {
+                return match transaction_to_response(tx.clone(), &read_mask, &objects) {
                     Ok(tx) => GetTransactionResult::new_transaction(tx),
                     Err(err) => GetTransactionResult::new_error(err.into_status_proto()),
                 };
@@ -112,6 +127,7 @@ pub async fn batch_get_transactions(
 fn transaction_to_response(
     source: TransactionData,
     mask: &FieldMaskTree,
+    objects: &HashMap<ObjectKey, Object>,
 ) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
 
@@ -152,7 +168,35 @@ fn transaction_to_response(
                 .map(Into::into)
                 .collect();
         }
-        // TODO: add support for object_types in the KV store
+        for changed_object in effects.changed_objects.iter_mut() {
+            let Ok(object_id) = changed_object.object_id().parse::<ObjectID>() else {
+                warn!(
+                    object_id = changed_object.object_id(),
+                    "failed to parse object_id in changed_objects"
+                );
+                continue;
+            };
+            let version = changed_object
+                .input_version_opt()
+                .unwrap_or_else(|| changed_object.output_version());
+            if let Some(object) = objects.get(&ObjectKey(object_id, version.into())) {
+                changed_object.set_object_type(object_type_to_string(object.into()));
+            }
+        }
+
+        for unchanged in effects.unchanged_consensus_objects.iter_mut() {
+            let Ok(object_id) = unchanged.object_id().parse::<ObjectID>() else {
+                warn!(
+                    object_id = unchanged.object_id(),
+                    "failed to parse object_id in unchanged_consensus_objects"
+                );
+                continue;
+            };
+            if let Some(object) = objects.get(&ObjectKey(object_id, unchanged.version().into())) {
+                unchanged.set_object_type(object_type_to_string(object.into()));
+            }
+        }
+
         message.effects = Some(effects);
     }
 
@@ -200,9 +244,14 @@ fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
     }
     if let Some(effects_submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
         columns.push(col::EFFECTS);
+        let needs_objects = needs_object_types(mask);
         if effects_submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD.name)
+            || needs_objects
         {
             columns.push(col::UNCHANGED_LOADED);
+        }
+        if needs_objects {
+            columns.push(col::DATA);
         }
     }
     if mask
@@ -216,6 +265,51 @@ fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
     }
 
     columns
+}
+
+fn needs_object_types(mask: &FieldMaskTree) -> bool {
+    mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name)
+        .is_some_and(|submask| {
+            submask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name)
+                || submask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name)
+        })
+}
+
+fn compute_object_keys(source: &TransactionData) -> BTreeSet<ObjectKey> {
+    match (&source.transaction_data, &source.effects) {
+        (Some(tx_data), Some(effects)) => sui_types::storage::get_transaction_object_set(
+            tx_data,
+            effects,
+            &source.unchanged_loaded_runtime_objects,
+        ),
+        _ => BTreeSet::new(),
+    }
+}
+
+async fn fetch_object_map<'a>(
+    client: &mut BigTableClient,
+    transactions: impl Iterator<Item = &'a TransactionData>,
+) -> Result<HashMap<ObjectKey, Object>, RpcError> {
+    let keys: Vec<_> = transactions
+        .flat_map(compute_object_keys)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    Ok(client
+        .get_objects(&keys)
+        .await?
+        .into_iter()
+        .map(|o| (ObjectKey(o.id(), o.version()), o))
+        .collect())
+}
+
+fn object_type_to_string(object_type: sui_types::base_types::ObjectType) -> String {
+    match object_type {
+        sui_types::base_types::ObjectType::Package => "package".to_owned(),
+        sui_types::base_types::ObjectType::Struct(move_object_type) => {
+            move_object_type.to_canonical_string(true)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -279,7 +373,8 @@ mod tests {
         };
         let mask = FieldMaskTree::from(FieldMask::from_str("balance_changes"));
 
-        let response = transaction_to_response(source, &mask).expect("render should succeed");
+        let response =
+            transaction_to_response(source, &mask, &HashMap::new()).expect("render should succeed");
 
         assert_eq!(
             response.balance_changes,
@@ -308,7 +403,8 @@ mod tests {
             "effects.unchanged_loaded_runtime_objects",
         ));
 
-        let response = transaction_to_response(source, &mask).expect("render should succeed");
+        let response =
+            transaction_to_response(source, &mask, &HashMap::new()).expect("render should succeed");
 
         let effects = response.effects.expect("effects should be present");
         assert_eq!(
