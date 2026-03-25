@@ -4,7 +4,12 @@
 use mysten_common::random::get_rng;
 use rand::Rng;
 use sui_types::TypeTag;
+use sui_types::accumulator_root::AccumulatorValue;
+use sui_types::balance::Balance;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
+use sui_types::committee::EpochId;
+use sui_types::digests::ChainIdentifier;
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
@@ -55,6 +60,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     ObjectBalanceOverdraw::DESCRIPTOR,
     AuthenticatedEventEmit::DESCRIPTOR,
     ImmutableObjectRead::DESCRIPTOR,
+    CoinReservationWithdraw::DESCRIPTOR,
 ];
 
 #[derive(Debug, Clone)]
@@ -66,6 +72,7 @@ pub enum ResourceRequest {
     TestCoinCap,
     AccumulatorRoot,
     ImmutableObject,
+    CoinReservation,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -83,6 +90,8 @@ pub struct OperationResources {
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_type: Option<TypeTag>,
     pub immutable_object: Option<ObjectRef>,
+    pub chain_identifier: Option<ChainIdentifier>,
+    pub current_epoch: Option<EpochId>,
 }
 
 pub trait Operation: Send + Sync {
@@ -1036,6 +1045,78 @@ impl Operation for AuthenticatedEventEmit {
             vec![],
             vec![start_arg, count_arg],
         );
+    }
+}
+
+pub struct CoinReservationWithdraw;
+
+impl CoinReservationWithdraw {
+    pub const NAME: &'static str = "coin_reservation_withdraw";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(CoinReservationWithdraw),
+    };
+}
+
+impl Operation for CoinReservationWithdraw {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::CoinReservation]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::SeedAddressBalance]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let chain_identifier = resources
+            .chain_identifier
+            .expect("ChainIdentifier not resolved");
+        let current_epoch = resources.current_epoch.expect("CurrentEpoch not resolved");
+        let accumulator_root_version = resources
+            .accumulator_root
+            .expect("AccumulatorRoot version not resolved");
+
+        let withdraw_amount = if account_state.sui_balance == 0 {
+            1
+        } else {
+            account_state.sui_balance
+        };
+
+        let sui_balance_type = Balance::type_tag(GAS::type_tag());
+        let accumulator_obj_id =
+            AccumulatorValue::get_field_id(account_state.sender, &sui_balance_type)
+                .expect("Failed to compute accumulator object ID");
+
+        let coin_reservation = ParsedObjectRefWithdrawal::new(
+            *accumulator_obj_id.inner(),
+            current_epoch,
+            withdraw_amount,
+        );
+        let object_ref = coin_reservation.encode(accumulator_root_version, chain_identifier);
+
+        let withdrawal_arg = builder
+            .obj(ObjectArg::ImmOrOwnedObject(object_ref))
+            .unwrap();
+
+        let coin = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdrawal_arg],
+        );
+
+        let recipient = SuiAddress::random_for_testing_only();
+        builder.transfer_arg(recipient, coin);
     }
 }
 
