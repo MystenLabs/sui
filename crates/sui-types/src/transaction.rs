@@ -44,6 +44,7 @@ use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::{Either, Itertools};
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use mysten_common::assert_reachable;
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
@@ -2777,6 +2778,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         // the accumulator object may not exist any more. This is okay, as the scheduler will simply
         // cancel the transaction if there are no funds available.
         for obj in self.coin_reservation_obj_refs() {
+            assert_reachable!("processing coin reservation withdrawal");
             // unwrap safe because of signing time checks
             let parsed = ParsedObjectRefWithdrawal::parse(&obj, chain_identifier).unwrap();
             let value = withdraw_map
