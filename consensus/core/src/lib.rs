@@ -28,6 +28,7 @@ mod metrics;
 mod network;
 mod observer_service;
 mod observer_subscriber;
+mod peers_pool;
 mod proposed_block_handler;
 mod proposer;
 mod round_prober;
