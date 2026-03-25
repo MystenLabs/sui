@@ -145,7 +145,7 @@ Shared objects have restrictions on by value usage to ensure they remain shared 
 
 PTBs can call any `public` function and any `entry` function, whether private (`entry fun f()`), or `public(package)` (`public(package) entry fun f()`). Non-entry private and `public(package)` functions cannot be called from PTBs. Note that in this way, there is no reason to add `entry` to a `public` function.
 
-:::info 
+:::info
 
 Previously, `entry` functions had signature restrictions that limited their parameter and return types compared to `public` functions. These restrictions have been removed. `entry` functions can now have the same signature as any `public` function.
 
@@ -164,7 +164,7 @@ Some framework functions have type parameters that can only be instantiated with
 
 A non-public `entry` function is a function declared with `entry` that is **not** `public`. It is either private (`entry fun f()`) or `public(package)` (`public(package) entry fun f()`). These functions can be called directly in PTBs but not from other packages.
 
-Non-public `entry` functions have a single restriction: their arguments cannot be in a "hot" clique (see below) when the function is called. This restriction ensures that arguments to non-public `entry` functions are not entangled with outstanding [hot potato](https://move-book.com/programmability/hot-potato-pattern) values that could force behavior after the function executes.
+Non-public `entry` functions have a single restriction: their arguments cannot be in a "hot" clique (see below) when the function is called. The intuition behind this restriction is to ensure that arguments to non-public `entry` functions are not entangled with outstanding [hot potato](https://move-book.com/programmability/hot-potato-pattern) values that could force behavior after the function executes.
 
 **Hot potato values**
 
@@ -172,7 +172,7 @@ A value is a hot potato if its type has neither the `drop` nor the `store` abili
 
 **Cliques**
 
-The system tracks which values are entangled using cliques:
+The system tracks which values are entangled using cliques. As described above, the intuition behind to goal is to prevent hot potato values from forcing behavior outside of the call to the non-public `entry` function. The cliques provide a modeling of this "entanglement" by keeping a count of how many hot potato values are live and which values they have interacted with:
 
 - Each PTB input starts in its own clique with a hot count of 0.
 - When values are used together as arguments in a command, their cliques merge. The hot counts add together.
@@ -204,7 +204,7 @@ public fun cool(h: HotPotato) { ... }
 
 In this invalid PTB, the `HotPotato` from command 0 is still alive in the same clique as `Input(0)` when `spend` is called:
 
-```
+```rust
 // Invalid PTB
 // Input 0: Coin<SUI>
 // cliques: { Input(0) } => 0
@@ -216,7 +216,7 @@ In this invalid PTB, the `HotPotato` from command 0 is still alive in the same c
 
 However, if the hot potato is consumed before calling `spend`, the clique's count drops to 0 and the call succeeds:
 
-```
+```rust
 // Valid PTB
 // Input 0: Coin<SUI>
 // cliques: { Input(0) } => 0
@@ -239,7 +239,7 @@ public fun issue(bank: &mut Bank, amount: u64): (Balance<SUI>, Loan) { ERROR }
 public fun repay(bank: &mut Bank, loan: Loan, repayment: Balance<SUI>) { ERROR }
 ```
 
-```
+```rust
 // Invalid PTB
 // Input 0: flash::loan::Bank, Input 1: u64
 // cliques: { Input(0) } => 0, { Input(1) } => 0
@@ -265,7 +265,7 @@ Both commands embed their module bytes and dependency IDs directly in the comman
 **Publish:**
 
 - Returns a single `sui::package::UpgradeCap`.
-- After the package is staged, the runtime calls each module's `init` function (if present) in module order. `init` receives `&mut TxContext` and optionally a one-time witness. Additional `init` arguments are not yet supported but are planned.
+- After the package is staged, the runtime calls each module's `init` function (if present) in the order the modules are provided (in the vector of serialized bytes). `init` receives `&mut TxContext` and optionally a one-time witness. Additional `init` arguments are not yet supported but are planned.
 - The package is available to `init` functions during execution. It is staged before they run.
 
 **Upgrade:**
