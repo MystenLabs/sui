@@ -37,7 +37,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
-use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
+use sui_types::storage::{ChildObjectResolver, ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::{EndOfEpochTransactionKind, SenderSignedData};
@@ -45,7 +45,7 @@ use sui_types::{
     base_types::{EpochId, SuiAddress},
     committee::Committee,
     effects::TransactionEffects,
-    error::ExecutionError,
+    error::{ExecutionError, SuiResult},
     gas_coin::MIST_PER_SUI,
     inner_temporary_store::InnerTemporaryStore,
     messages_checkpoint::{EndOfEpochData, VerifiedCheckpoint},
@@ -728,6 +728,33 @@ impl<T, V: store::SimulatorStore> ObjectStore for Simulacrum<T, V> {
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         self.store.get_object_by_key(object_id, version)
+    }
+}
+
+impl<T, V: store::SimulatorStore> ChildObjectResolver for Simulacrum<T, V> {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        self.store
+            .read_child_object(parent, child, child_version_upper_bound)
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        self.store.get_object_received_at_version(
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
     }
 }
 
