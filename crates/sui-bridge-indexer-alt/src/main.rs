@@ -34,8 +34,8 @@ struct Args {
         default_value = "postgres://postgres:postgrespw@localhost:5432/bridge"
     )]
     database_url: Url,
-    #[clap(env, long, default_value = "https://checkpoints.mainnet.sui.io")]
-    remote_store_url: Url,
+    #[command(flatten)]
+    ingestion: IngestionClientArgs,
     #[command(flatten)]
     streaming: StreamingClientArgs,
 }
@@ -50,7 +50,7 @@ async fn main() -> Result<(), anyhow::Error> {
         indexer_args,
         metrics_address,
         database_url,
-        remote_store_url,
+        ingestion,
         streaming,
     } = Args::parse();
 
@@ -69,10 +69,7 @@ async fn main() -> Result<(), anyhow::Error> {
         db_args,
         indexer_args,
         ClientArgs {
-            ingestion: IngestionClientArgs {
-                remote_store_url: Some(remote_store_url),
-                ..Default::default()
-            },
+            ingestion,
             streaming,
         },
         Default::default(),
