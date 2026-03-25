@@ -369,8 +369,8 @@ impl VMDispatchTables {
                         ));
                     };
 
-                    // The computed runtime ID should match the runtime ID of the datatype
-                    // that we have loaded.
+                    // The original ID on the datatype that we resolved should match the package
+                    // key that we used to load it otherwise that's an invariant violation.
                     if datatype.original_id.address() != &package_key {
                         return Err(partial_vm_error!(
                             UNKNOWN_INVARIANT_VIOLATION_ERROR,
