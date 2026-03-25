@@ -293,7 +293,6 @@ where
         let (commands_sender, commands_receiver) =
             channel("consensus_synchronizer_commands", 1_000);
         let inflight_blocks_map = InflightBlocksMap::new();
-        let peers_pool = PeersPool::new(context.clone());
 
         // Spawn the tasks to fetch the blocks from the others
         let mut fetch_block_senders = BTreeMap::new();
