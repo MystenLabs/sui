@@ -87,7 +87,7 @@ pub fn verify_bulletproofs_ristretto255(
         .len(&Type::Vector(Box::new(Type::U8)))?
         .value_as::<u64>()?;
 
-    // The performance depends is linear in length times range bits
+    // The performance is linear in the product of length and range bits, so it is computed as base_cost + cost_per_bit * length * range_bits. 
     let total_bits = length * range_bits as u64;
     if length == 0 || !length.is_power_of_two() || total_bits > MAX_TOTAL_BITS {
         return Ok(NativeResult::err(context.gas_used(), INVALID_BATCH_SIZE));
