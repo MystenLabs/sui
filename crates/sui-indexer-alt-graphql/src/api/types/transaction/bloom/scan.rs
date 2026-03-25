@@ -31,7 +31,8 @@ const MAX_LIMIT: usize = 500;
 /// ```
 pub(super) struct BloomScan {
     cp_lo: u64,
-    cp_hi_inclusive: u64,
+    /// Exclusive upper bound on the checkpoint scan window.
+    cp_hi: u64,
     /// Target number of results to fill the page.
     page_limit: usize,
     /// Results that passed the real filter.
@@ -41,6 +42,10 @@ pub(super) struct BloomScan {
     /// The lowest non-zero per-batch hit rate observed so far, used as a pessimistic
     /// estimate for sizing subsequent fetches.
     min_batch_hit_rate: Option<f64>,
+    /// Number of candidates in the most recent batch, stashed by [`next`](Self::next).
+    last_batch_size: usize,
+    /// Last checkpoint in the most recent batch, stashed by [`next`](Self::next).
+    last_cp: Option<u64>,
 }
 
 /// A set of bloom-matched candidate checkpoints returned by [`BloomScan::next`].
@@ -56,17 +61,23 @@ impl BloomScan {
         let cp_lo = page.after().map_or(*cp_bounds.start(), |c| {
             c.cp_sequence_number().max(*cp_bounds.start())
         });
-        let cp_hi_inclusive = page.before().map_or(*cp_bounds.end(), |c| {
-            c.cp_sequence_number().min(*cp_bounds.end())
-        });
+        let cp_hi = page
+            .before()
+            .map_or(cp_bounds.end().saturating_add(1), |c| {
+                c.cp_sequence_number()
+                    .min(*cp_bounds.end())
+                    .saturating_add(1)
+            });
         Self {
             cp_lo,
-            cp_hi_inclusive,
+            cp_hi,
             hits: 0,
             iterations: 0,
             page_limit: page.limit_with_overhead(),
             is_from_front: page.is_from_front(),
             min_batch_hit_rate: None,
+            last_batch_size: 0,
+            last_cp: None,
         }
     }
 
@@ -81,7 +92,7 @@ impl BloomScan {
         pg_reader: &PgReader,
         filter_values: &[Vec<u8>],
     ) -> Result<Option<Candidates<'a>>, RpcError> {
-        if self.hits >= self.page_limit || self.cp_lo > self.cp_hi_inclusive {
+        if self.hits >= self.page_limit || self.cp_lo >= self.cp_hi {
             return Ok(None);
         }
 
@@ -90,7 +101,7 @@ impl BloomScan {
             pg_reader,
             filter_values,
             self.cp_lo,
-            self.cp_hi_inclusive,
+            self.cp_hi,
             self.is_from_front,
             limit,
         )
@@ -99,6 +110,8 @@ impl BloomScan {
         Ok(if candidates.is_empty() {
             None
         } else {
+            self.last_batch_size = candidates.len();
+            self.last_cp = candidates.last().copied();
             Some(Candidates {
                 scan: self,
                 candidates,
@@ -106,14 +119,13 @@ impl BloomScan {
         })
     }
 
-    fn record(&mut self, candidates: &[u64], batch_hits: usize) {
-        let batch_size = candidates.len();
-        if batch_size == 0 {
+    fn record(&mut self, batch_hits: usize) {
+        if self.last_batch_size == 0 {
             return;
         }
 
         if batch_hits > 0 {
-            let batch_rate = batch_hits as f64 / batch_size as f64;
+            let batch_rate = batch_hits as f64 / self.last_batch_size as f64;
             self.min_batch_hit_rate = Some(
                 self.min_batch_hit_rate
                     .map_or(batch_rate, |r| r.min(batch_rate)),
@@ -123,14 +135,14 @@ impl BloomScan {
         self.iterations += 1;
         self.hits += batch_hits;
 
-        let Some(&last_cp) = candidates.last() else {
+        let Some(last_cp) = self.last_cp else {
             return;
         };
 
         if self.is_from_front {
             self.cp_lo = last_cp.saturating_add(1);
         } else {
-            self.cp_hi_inclusive = last_cp.saturating_sub(1);
+            self.cp_hi = last_cp;
         }
     }
 
@@ -164,6 +176,28 @@ impl<'a> Candidates<'a> {
 
     /// Records how many candidates matched the real filter and advances the scan window.
     pub(super) fn record(self, hits: usize) {
-        self.scan.record(&self.candidates, hits);
+        self.scan.record(hits);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backward_at_checkpoint_zero_terminates() {
+        let mut scan = BloomScan {
+            cp_lo: 0,
+            cp_hi: 1,
+            page_limit: 10,
+            hits: 0,
+            iterations: 0,
+            is_from_front: false,
+            min_batch_hit_rate: None,
+            last_batch_size: 1,
+            last_cp: Some(0),
+        };
+        scan.record(1);
+        assert!(scan.cp_lo >= scan.cp_hi);
     }
 }

@@ -197,24 +197,29 @@ pub(super) async fn candidate_cps(
     pg_reader: &PgReader,
     filter_values: &[Vec<u8>],
     cp_lo: u64,
-    cp_hi_inclusive: u64,
+    cp_hi: u64,
     is_from_front: bool,
     limit: usize,
 ) -> Result<Vec<u64>, RpcError> {
+    if cp_lo >= cp_hi {
+        return Ok(vec![]);
+    }
+
     if filter_values.is_empty() {
         return Ok(if is_from_front {
-            (cp_lo..=cp_hi_inclusive).take(limit).collect()
+            (cp_lo..cp_hi).take(limit).collect()
         } else {
-            (cp_lo..=cp_hi_inclusive).rev().take(limit).collect()
+            (cp_lo..cp_hi).rev().take(limit).collect()
         });
     }
+
     let mut conn = pg_reader
         .connect()
         .await
         .context("Failed to connect to database for bloom filter scan")?;
 
     let cp_block_lo = cp_block_index(cp_lo);
-    let cp_block_hi_inclusive = cp_block_index(cp_hi_inclusive);
+    let cp_block_hi_inclusive = cp_block_index(cp_hi.saturating_sub(1));
 
     // Block index and probe for each block in the range. Seeds vary per block, so we must
     // construct probes for each block.
@@ -237,7 +242,7 @@ pub(super) async fn candidate_cps(
         SELECT
             cp_bloom_blocks.cp_block_index,
             cp_bloom_blocks.cp_block_index * {BigInt} AS cp_lo,
-            cp_bloom_blocks.cp_block_index * {BigInt} + {BigInt} - 1 AS cp_hi_inclusive
+            (cp_bloom_blocks.cp_block_index + 1) * {BigInt} AS cp_hi
         FROM
             (SELECT DISTINCT cp_block_index, bloom_block_index, bloom_count
              FROM block_byte_probes) unique_probes
@@ -261,7 +266,6 @@ pub(super) async fn candidate_cps(
         LIMIT
             {BigInt}
         "#,
-        block_size,
         block_size,
         block_size,
         if is_from_front {
@@ -291,8 +295,8 @@ pub(super) async fn candidate_cps(
             FROM
                 cp_blooms
             WHERE
-                cp_sequence_number BETWEEN GREATEST(matched_blocks.cp_lo, {BigInt})
-                    AND LEAST(matched_blocks.cp_hi_inclusive, {BigInt})
+                cp_sequence_number >= GREATEST(matched_blocks.cp_lo, {BigInt})
+                    AND cp_sequence_number < LEAST(matched_blocks.cp_hi, {BigInt})
                 AND {}
             ORDER BY
                 cp_sequence_number {}
@@ -303,7 +307,7 @@ pub(super) async fn candidate_cps(
         q_block_probes,
         matched_blocks,
         cp_lo as i64,
-        cp_hi_inclusive as i64,
+        cp_hi as i64,
         q_bloom_check,
         if is_from_front {
             query!("ASC")
