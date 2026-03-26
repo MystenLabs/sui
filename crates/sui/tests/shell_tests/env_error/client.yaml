@@ -1,6 +1,6 @@
 ---
 keystore:
-  File: /Users/mdgeorge/.sui/sui_config/sui.keystore
+  File: /tmp/sui.keystore
 external_keys: ~
 envs:
   - alias: testnet

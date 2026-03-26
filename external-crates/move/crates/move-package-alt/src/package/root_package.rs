@@ -366,12 +366,15 @@ fn localpubs_to_publications<F: MoveFlavor>(
         };
 
         let mut source = local_pub.source.clone();
-        source.0.local = source.0.local.canonicalize().map_err(|err| {
-            PackageError::InvalidEphemeralFile {
-                file: source.0.local.clone(),
-                err,
-            }
-        })?;
+        source.0.local =
+            source
+                .0
+                .local
+                .canonicalize()
+                .map_err(|err| PackageError::InvalidEphemeralFile {
+                    file: source.0.local.clone(),
+                    err,
+                })?;
 
         let old = result.insert(source, new);
         if old.is_some() {
