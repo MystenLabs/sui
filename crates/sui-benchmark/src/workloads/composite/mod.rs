@@ -292,20 +292,14 @@ impl CompositionMetrics {
 
     /// Records a successful coin reservation withdraw for the given account.
     /// This is used to track that paired accounts are successfully transferring back and forth.
+    /// The first call for an account starts tracking; subsequent calls reset the timer.
     pub fn record_coin_reservation_success(&mut self, sender: SuiAddress) {
         self.coin_reservation_last_success
             .insert(sender, Instant::now());
     }
 
-    /// Initializes tracking for an account participating in coin reservation withdrawals.
-    /// Should be called when the test starts for each participating account.
-    pub fn init_coin_reservation_tracking(&mut self, sender: SuiAddress) {
-        self.coin_reservation_last_success
-            .entry(sender)
-            .or_insert_with(Instant::now);
-    }
-
     /// Checks if any tracked account has exceeded the coin reservation timeout.
+    /// Only checks accounts that have previously had a successful withdrawal.
     /// Returns the address that timed out, if any.
     pub fn check_coin_reservation_timeout(&self) -> Option<SuiAddress> {
         let now = Instant::now();
@@ -1943,14 +1937,6 @@ impl Workload<dyn Payload> for CompositeWorkload {
             };
             payload_addresses[partner_idx]
         };
-
-        // Initialize coin reservation tracking for all payload addresses
-        {
-            let mut metrics = self.metrics.lock().unwrap();
-            for addr in &payload_addresses {
-                metrics.init_coin_reservation_tracking(*addr);
-            }
-        }
 
         let mut payloads: Vec<Box<dyn Payload>> = vec![];
         for i in 0..self.num_payloads {
