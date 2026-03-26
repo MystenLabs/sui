@@ -75,7 +75,15 @@ where
             let client = self.observer_client.as_ref().ok_or_else(|| {
                 ConsensusError::NetworkConfig("Observer client not available".to_string())
             })?;
-            client.fetch_blocks(peer, block_refs, timeout).await
+            client
+                .fetch_blocks(
+                    peer,
+                    block_refs,
+                    highest_accepted_rounds,
+                    breadth_first,
+                    timeout,
+                )
+                .await
         }
     }
 
@@ -175,7 +183,15 @@ where
             let client = self.observer_client.as_ref().ok_or_else(|| {
                 ConsensusError::NetworkConfig("Observer client not available".to_string())
             })?;
-            client.fetch_blocks(peer, block_refs, timeout).await
+            client
+                .fetch_blocks(
+                    peer,
+                    block_refs,
+                    highest_accepted_rounds,
+                    breadth_first,
+                    timeout,
+                )
+                .await
         }
     }
 }

@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{NetworkKeyPair, NetworkPublicKey};
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockRef, Round};
 use futures::{Stream, StreamExt as _, stream};
 use mysten_network::{Multiaddr, callback::CallbackLayer};
 use parking_lot::RwLock;
@@ -67,6 +67,10 @@ pub(crate) struct BlockStreamResponse {
 pub(crate) struct FetchBlocksRequest {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub(crate) block_refs: Vec<Vec<u8>>,
+    #[prost(uint64, repeated, tag = "2")]
+    pub(crate) highest_accepted_rounds: Vec<u64>,
+    #[prost(bool, tag = "3")]
+    pub(crate) breadth_first: bool,
 }
 
 #[derive(Clone, prost::Message)]
@@ -297,6 +301,8 @@ impl ObserverNetworkClient for TonicObserverClient {
         &self,
         _peer: PeerId,
         _block_refs: Vec<BlockRef>,
+        _highest_accepted_rounds: Vec<Round>,
+        _breadth_first: bool,
         _timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         // TODO: Implement block fetching for observers

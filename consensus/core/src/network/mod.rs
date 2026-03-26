@@ -261,6 +261,8 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
         &self,
         peer: NodeId,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
     ) -> ConsensusResult<Vec<Bytes>>;
 
     /// Handles the request to fetch commits by index range from an observer peer.
@@ -294,6 +296,8 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
         &self,
         peer: PeerId,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 

@@ -973,6 +973,8 @@ mod tests {
             &self,
             _peer: crate::network::PeerId,
             _block_refs: Vec<BlockRef>,
+            _highest_accepted_rounds: Vec<Round>,
+            _breadth_first: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
