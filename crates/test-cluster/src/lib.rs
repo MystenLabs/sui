@@ -8,6 +8,7 @@ use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use sui_config::genesis::Genesis;
@@ -162,6 +163,7 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
+    validator_round_robin: AtomicUsize,
 }
 
 impl TestCluster {
@@ -755,11 +757,12 @@ impl TestCluster {
             submit_type: SubmitTxType::SoftBundle.into(),
         };
 
-        let mut validator_client = self
-            .authority_aggregator()
-            .authority_clients
+        let agg = self.authority_aggregator();
+        let clients = &agg.authority_clients;
+        let index = self.validator_round_robin.fetch_add(1, Ordering::Relaxed) % clients.len();
+        let mut validator_client = clients
             .iter()
-            .next()
+            .nth(index)
             .unwrap()
             .1
             .authority_client()
@@ -945,11 +948,12 @@ impl TestCluster {
         client_addr: Option<SocketAddr>,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let agg = self.authority_aggregator();
-        // Pick a validator to submit to
-        let (_, client) = agg
-            .authority_clients
+        // Pick a validator to submit to, rotating through validators on each call
+        let clients = &agg.authority_clients;
+        let index = self.validator_round_robin.fetch_add(1, Ordering::Relaxed) % clients.len();
+        let (_, client) = clients
             .iter()
-            .next()
+            .nth(index)
             .ok_or_else(|| anyhow::anyhow!("No authority clients available"))?;
 
         // Submit the transaction
@@ -1507,6 +1511,7 @@ impl TestClusterBuilder {
             swarm,
             wallet,
             fullnode_handle,
+            validator_round_robin: AtomicUsize::new(0),
         }
     }
 
