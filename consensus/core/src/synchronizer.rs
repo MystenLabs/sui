@@ -1000,6 +1000,7 @@ where
                         blocks_to_fetch.clone(),
                         network_client,
                         dag_state,
+                        peers_pool,
                     )
                     .await
                 } else {
@@ -1156,26 +1157,29 @@ where
         inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
         dag_state: Arc<RwLock<DagState>>,
+        peers_pool: Arc<PeersPool>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
         let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
 
         // Pick a random peer (excluding self).
-        let mut peers: Vec<AuthorityIndex> = context
-            .committee
-            .authorities()
-            .filter_map(|(index, _)| (index != context.own_index).then_some(index))
-            .collect();
+        // Get available peers from the PeersPool
+        let mut peers = peers_pool.get_available_peers();
+        let available_peers_count = peers.len();
+        assert!(
+            available_peers_count > 0,
+            "No available peers to fetch blocks from. This shouldn't really happen."
+        );
+
         if cfg!(not(test)) {
             peers.shuffle(&mut ThreadRng::default());
         }
-        let peer = *peers
-            .first()
-            .expect("Committee should have more than 1 member");
+
+        let peer = peers.first().unwrap().clone();
 
         let response = timeout(
             FETCH_REQUEST_TIMEOUT,
             network_client.fetch_blocks(
-                PeerId::Validator(peer),
+                peer.clone(),
                 vec![],
                 fetch_after_rounds,
                 false,
@@ -1199,10 +1203,10 @@ where
         let blocks_guard = BlocksGuard {
             map: inflight_blocks,
             block_refs: BTreeSet::new(),
-            peer: PeerId::Validator(peer),
+            peer: peer.clone(),
         };
 
-        vec![(blocks_guard, serialized_blocks, PeerId::Validator(peer))]
+        vec![(blocks_guard, serialized_blocks, peer)]
     }
 
     /// Fetches the `missing_blocks` from peers. Requests the same number of authorities with missing blocks from each peer.
@@ -1439,8 +1443,8 @@ mod tests {
     };
     use crate::{
         authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
-        transaction_vote_tracker::TransactionVoteTracker,
         peers_pool::PeersPool, round_tracker::RoundTracker,
+        transaction_vote_tracker::TransactionVoteTracker,
     };
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
