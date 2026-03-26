@@ -15,9 +15,7 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Connection;
 use sui_indexer_alt_framework::postgres::handler::Handler;
 use sui_indexer_alt_framework::types::coin::Coin;
-use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
-use sui_indexer_alt_framework::types::gas_coin::GAS;
 use sui_indexer_alt_schema::schema::tx_balance_changes;
 use sui_indexer_alt_schema::transactions::BalanceChange;
 use sui_indexer_alt_schema::transactions::StoredTxBalanceChange;
@@ -99,18 +97,6 @@ fn balance_changes(
     transaction: &ExecutedTransaction,
     checkpoint: &Checkpoint,
 ) -> Result<Vec<BalanceChange>> {
-    // Shortcut if the transaction failed -- we know that only gas was charged.
-    if transaction.effects.status().is_err() {
-        let net_gas_usage = transaction.effects.gas_cost_summary().net_gas_usage();
-        return Ok(Vec::from_iter((net_gas_usage > 0).then(|| {
-            BalanceChange::V1 {
-                owner: transaction.effects.gas_object().1,
-                coin_type: GAS::type_tag().to_canonical_string(true),
-                amount: -(net_gas_usage as i128),
-            }
-        })));
-    }
-
     let mut changes = BTreeMap::new();
 
     // First gather address balance changes from accumulator events.
