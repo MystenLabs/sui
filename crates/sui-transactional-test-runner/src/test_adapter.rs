@@ -482,6 +482,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
 
+        #[cfg(debug_assertions)]
         sui_types::transaction::clear_gasless_tokens_for_testing();
 
         let mut test_adapter = Self {
@@ -833,14 +834,22 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 Ok(Some(output))
             }
             SuiSubcommand::GaslessAllowToken(GaslessAllowTokenCommand { token_type }) => {
-                let state = self.compiled_state();
-                let type_tag = token_type
-                    .into_type_tag(&|s| Some(state.resolve_named_address(s)))
-                    .map_err(|e| anyhow::anyhow!("invalid gasless token type: {e}"))?;
-                sui_types::transaction::add_gasless_token_for_testing(
-                    type_tag.to_canonical_string(true),
-                );
-                Ok(None)
+                #[cfg(debug_assertions)]
+                {
+                    let state = self.compiled_state();
+                    let type_tag = token_type
+                        .into_type_tag(&|s| Some(state.resolve_named_address(s)))
+                        .map_err(|e| anyhow::anyhow!("invalid gasless token type: {e}"))?;
+                    sui_types::transaction::add_gasless_token_for_testing(
+                        type_tag.to_canonical_string(true),
+                    );
+                    Ok(None)
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    let _ = token_type;
+                    panic!("gasless-allow-token is only supported in debug builds")
+                }
             }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
