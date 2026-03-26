@@ -18,6 +18,7 @@ use crate::{
     BlockAPI as _, CommitConsumerArgs,
     authority_service::AuthorityService,
     block_manager::BlockManager,
+    block_sync_service::BlockSyncService,
     block_verifier::SignedBlockVerifier,
     commit_observer::CommitObserver,
     commit_syncer::{CommitSyncer, CommitSyncerHandle},
@@ -34,12 +35,7 @@ use crate::{
     },
     observer_service::ObserverService,
     observer_subscriber::ObserverSubscriber,
-<<<<<<< HEAD
-    peers_pool::{PeerServer, PeersPool},
-=======
     peers_pool::PeersPool,
-    proposed_block_handler::ProposedBlockHandler,
->>>>>>> 96d2258e32 ([refactor] the observer peer registration now happens inside the PeersPool to ensure that any downstream components will have from the beginning available the peers. Refactored the synchronizer to use the data coming from PeersPool when it comes to peer selection)
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::RoundTracker,
     storage::rocksdb_store::RocksDBStore,
@@ -393,6 +389,13 @@ where
         )
         .start();
 
+        // Create BlockSyncService that will be shared by both AuthorityService and ObserverService
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
+
         let (subscriber, round_prober_handle) = if context.is_validator() {
             let authority_service = Arc::new(AuthorityService::new(
                 context.clone(),
@@ -404,7 +407,7 @@ where
                 signals_receivers.block_broadcast_receiver(),
                 transaction_vote_tracker.clone(),
                 dag_state.clone(),
-                store.clone(),
+                block_sync_service.clone(),
             ));
 
             // Start the validator server if this is a validator node.
@@ -448,6 +451,7 @@ where
                     commit_vote_monitor.clone(),
                     transaction_vote_tracker.clone(),
                     synchronizer.clone(),
+                    block_sync_service.clone(),
                 ));
                 network_manager
                     .start_observer_server(observer_service)
@@ -467,6 +471,7 @@ where
                 commit_vote_monitor.clone(),
                 transaction_vote_tracker.clone(),
                 synchronizer.clone(),
+                block_sync_service.clone(),
             ));
 
             let observer_subscriber = ObserverSubscriber::new(
