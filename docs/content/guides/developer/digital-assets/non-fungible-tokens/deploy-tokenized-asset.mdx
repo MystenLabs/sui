@@ -6,6 +6,32 @@ keywords: [asset tokenization, deploy, publish, WASM, bytecode, template, Move, 
 ---
 
 This guide covers how to publish the [asset tokenization](/guides/developer/digital-assets/non-fungible-tokens/asset-tokenization) packages and interact with your tokenized asset.
+ 
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] [Install Sui](/guides/developer/getting-started/sui-install)
+- [x] [Configure a Sui client](/guides/developer/getting-started/configure-sui-client)
+- [x] [Get SUI from faucet](/guides/developer/getting-started/get-coins)
+- [x] Node.js and npm installed
+- [x] Git installed
+</TabItem>
+</Tabs>
+ 
+## Clone the repository
+ 
+Clone the `asset-tokenization` repository and navigate to the `setup` directory:
+ 
+```sh
+$ git clone https://github.com/MystenLabs/asset-tokenization.git
+$ cd asset-tokenization
+```
+ 
+Copy the `.env.template` file to `.env` and install dependencies:
+ 
+```sh
+$ cp setup/.env.template setup/.env
+$ cd setup && npm install
+```
 
 ## Initialize the Sui Client CLI
 
