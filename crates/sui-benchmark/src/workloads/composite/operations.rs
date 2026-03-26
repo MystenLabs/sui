@@ -1110,8 +1110,7 @@ impl Operation for CoinReservationWithdraw {
         // Don't call coin::redeem_funds explicitly - the compatibility layer
         // (convert_withdrawal_compatibility_ptb_arguments) will automatically
         // convert the withdrawal to a Coin when needed.
-        let recipient = SuiAddress::random_for_testing_only();
-        builder.transfer_arg(recipient, withdrawal_arg);
+        builder.transfer_arg(account_state.partner_address, withdrawal_arg);
     }
 }
 
