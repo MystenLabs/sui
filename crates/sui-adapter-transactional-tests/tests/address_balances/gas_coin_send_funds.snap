@@ -11,7 +11,7 @@ task 1, lines 8-10:
 // Send gas coin to another address via send_funds
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
 deleted: object(0,0)
-accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 299999999000000)
 gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 12:
@@ -35,7 +35,7 @@ task 6, lines 21-23:
 // Send gas coin to self via send_funds, the gas coin should be deleted
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
 deleted: object(0,1)
-accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 299999999000000)
 gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 7, line 25:
@@ -54,7 +54,7 @@ task 10, lines 32-34:
 //# programmable --sender B --inputs @B --address-balance-gas --gas-budget 10000000
 // Send ephemeral gas coin to self via send_funds
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
-accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split, 1000000)
 gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 11, line 36:
@@ -69,7 +69,7 @@ task 13, lines 41-43:
 //# programmable --sender B --inputs @C --address-balance-gas --gas-budget 10000000
 // Send ephemeral gas coin to another address via send_funds
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
-accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split), (object(13,0), C, sui::balance::Balance<sui::sui::SUI>, Merge)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split, 10000000), (object(13,0), C, sui::balance::Balance<sui::sui::SUI>, Merge, 9000000)
 gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 14, line 45:
@@ -92,7 +92,7 @@ task 17, lines 52-56:
 //> TransferObjects([Result(0)], Input(0))
 created: object(17,0)
 deleted: object(0,2)
-accumulators_written: (object(17,1), D, sui::balance::Balance<sui::sui::SUI>, Merge)
+accumulators_written: (object(17,1), D, sui::balance::Balance<sui::sui::SUI>, Merge, 299999998011990)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 18, line 58:
@@ -133,7 +133,7 @@ task 23, lines 68-72:
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0));
 //> TransferObjects([Result(0)], Input(0))
 created: object(23,0)
-accumulators_written: (object(17,1), D, sui::balance::Balance<sui::sui::SUI>, Split), (object(23,1), E, sui::balance::Balance<sui::sui::SUI>, Merge)
+accumulators_written: (object(17,1), D, sui::balance::Balance<sui::sui::SUI>, Split, 10000000), (object(23,1), E, sui::balance::Balance<sui::sui::SUI>, Merge, 8012000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 24, line 74:
