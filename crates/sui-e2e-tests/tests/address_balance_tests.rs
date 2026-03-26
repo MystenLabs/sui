@@ -22,7 +22,7 @@ use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_root::AccumulatorValue,
     balance::Balance,
-    base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, dbg_addr},
     coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
     digests::{ChainIdentifier, CheckpointDigest},
     effects::{InputConsensusObject, TransactionEffectsAPI},
@@ -50,6 +50,7 @@ impl CoinReservationResolverTrait for NoOpResolver {
         &self,
         _sender: SuiAddress,
         _coin_reservation: ParsedObjectRefWithdrawal,
+        _accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
         panic!("Not used in these tests")
     }

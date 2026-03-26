@@ -258,8 +258,10 @@ impl CoinReservationResolver {
         coin_reservation: ParsedObjectRefWithdrawal,
         accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
-        let (owner, type_tag) = self
-            .get_owner_and_type_for_object(coin_reservation.unmasked_object_id, accumulator_version)?;
+        let (owner, type_tag) = self.get_owner_and_type_for_object(
+            coin_reservation.unmasked_object_id,
+            accumulator_version,
+        )?;
 
         if sender != owner {
             return Err(invalid_res_error!(
