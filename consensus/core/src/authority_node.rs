@@ -805,7 +805,7 @@ mod tests {
             ..Default::default()
         };
 
-        let (observer_commit_consumer, _observer_commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (observer_commit_consumer, observer_commit_receiver) = CommitConsumerArgs::new(0, 0);
         let observer = ConsensusAuthority::start(
             network_type,
             0,
@@ -821,6 +821,9 @@ mod tests {
             0,
         )
         .await;
+        // The relevant endpoints are now implemented for the synchronizer and commit_syncer components, so the Observer node should be able to catch up and
+        // fetch blocks beyond the latest ones that are fetched from the stream.
+        commit_receivers.push(observer_commit_receiver);
 
         // Give Observer more time to connect and sync
         sleep(Duration::from_secs(5)).await;
