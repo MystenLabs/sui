@@ -1186,7 +1186,7 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
         ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
             cfg.enable_authenticated_event_streams_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
-            cfg.set_min_checkpoint_interval_ms_for_testing(1000);
+            cfg.set_min_checkpoint_interval_ms_for_testing(5000);
             cfg.disable_randomize_checkpoint_tx_limit_for_testing();
             cfg
         });
@@ -1273,21 +1273,22 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
         })
         .collect();
 
-    let tx_digests: Vec<_> = tx_data_vec.iter().map(|tx| tx.digest()).collect();
-    let unique_digests: std::collections::HashSet<_> = tx_digests.iter().collect();
-    assert_eq!(
-        tx_digests.len(),
-        unique_digests.len(),
-        "Expected all transaction digests to be unique, but found {} total and {} unique",
-        tx_digests.len(),
-        unique_digests.len()
-    );
+    // Submit bundles sequentially via validator to avoid fullnode checkpoint dependency.
+    // Each bundle goes through a separate consensus commit. With min_checkpoint_interval_ms
+    // = 5s, multiple commits accumulate before a checkpoint is flushed, guaranteeing
+    // multiple accumulator versions per checkpoint.
+    for bundle in tx_data_vec.chunks(5) {
+        test_cluster
+            .execute_txns_via_validator(bundle)
+            .await
+            .unwrap();
+    }
 
-    let bundle_tasks: Vec<_> = tx_data_vec
-        .chunks(5)
-        .map(|bundle| test_cluster.sign_and_execute_txns_in_soft_bundle(bundle))
-        .collect();
-    futures::future::try_join_all(bundle_tasks).await.unwrap();
+    // Sleep to advance sim time past the checkpoint interval, triggering checkpoint
+    // building on all nodes so the fullnode can catch up before epoch transition.
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+    test_cluster.trigger_reconfiguration().await;
 
     let all_events = list_authenticated_events(
         test_cluster.grpc_channel(),

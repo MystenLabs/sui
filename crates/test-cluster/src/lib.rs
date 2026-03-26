@@ -803,6 +803,71 @@ impl TestCluster {
         Ok(digests.into_iter().zip(effects.into_iter()).collect())
     }
 
+    /// Like `execute_signed_txns_in_soft_bundle`, but waits for effects on a validator
+    /// instead of the fullnode. Use this when checkpoint building is delayed (e.g. high
+    /// min_checkpoint_interval_ms) since the fullnode only processes effects during
+    /// checkpoint execution.
+    pub async fn execute_txns_via_validator(
+        &self,
+        txns: &[TransactionData],
+    ) -> SuiResult<Vec<(TransactionDigest, TransactionEffects)>> {
+        let signed_txs: Vec<Transaction> =
+            futures::future::join_all(txns.iter().map(|tx| self.wallet.sign_transaction(tx))).await;
+        let digests: Vec<_> = signed_txs.iter().map(|tx| *tx.digest()).collect();
+
+        let request = RawSubmitTxRequest {
+            transactions: signed_txs
+                .iter()
+                .map(|tx| bcs::to_bytes(tx).unwrap().into())
+                .collect(),
+            submit_type: SubmitTxType::SoftBundle.into(),
+        };
+
+        let agg = self.authority_aggregator();
+        let clients = &agg.authority_clients;
+        let index = rand::thread_rng().gen_range(0..clients.len());
+        let mut validator_client = clients
+            .iter()
+            .nth(index)
+            .unwrap()
+            .1
+            .authority_client()
+            .get_client_for_testing()
+            .unwrap();
+
+        let result = validator_client
+            .submit_transaction(request.into_request())
+            .await
+            .map(tonic::Response::into_inner)?;
+        assert_eq!(result.results.len(), signed_txs.len());
+
+        for raw_result in result.results.iter() {
+            let submit_result: sui_types::messages_grpc::SubmitTxResult =
+                raw_result.clone().try_into()?;
+            if let sui_types::messages_grpc::SubmitTxResult::Rejected { error } = submit_result {
+                return Err(error);
+            }
+        }
+
+        let validator_handle = self.all_validator_handles().into_iter().next().unwrap();
+        let effects = validator_handle
+            .with_async(|node| {
+                let digests = digests.clone();
+                async move {
+                    node.state()
+                        .get_transaction_cache_reader()
+                        .notify_read_executed_effects(
+                            "execute_txns_via_validator",
+                            &digests,
+                        )
+                        .await
+                }
+            })
+            .await;
+
+        Ok(digests.into_iter().zip(effects.into_iter()).collect())
+    }
+
     /// Execute signed transactions in a soft bundle and return results for each transaction.
     /// Unlike `execute_signed_txns_in_soft_bundle`, this method handles conflicting transactions
     /// where some may be executed and others rejected.
