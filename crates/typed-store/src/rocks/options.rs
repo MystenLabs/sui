@@ -141,11 +141,18 @@ impl DBOptions {
     }
 
     // Optimize DB receiving significant insertions.
-    pub fn optimize_db_for_write_throughput(mut self, db_max_write_buffer_gb: u64) -> DBOptions {
+    pub fn optimize_db_for_write_throughput(
+        mut self,
+        db_max_write_buffer_gb: u64,
+        unlimited_open_files: bool,
+    ) -> DBOptions {
         self.options
             .set_db_write_buffer_size(db_max_write_buffer_gb as usize * 1024 * 1024 * 1024);
         self.options
             .set_max_total_wal_size(db_max_write_buffer_gb * 1024 * 1024 * 1024);
+        if unlimited_open_files {
+            self.options.set_max_open_files(-1);
+        }
         self
     }
 
@@ -219,9 +226,6 @@ impl DBOptions {
         compaction_options.set_max_table_files_size(u64::MAX);
         self.options
             .set_fifo_compaction_options(&compaction_options);
-
-        // Required for FIFO compaction.
-        self.options.set_max_open_files(-1);
 
         let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
             .unwrap_or(DEFAULT_UNIVERSAL_COMPACTION_L0_NUM_FILES_COMPACTION_TRIGGER);

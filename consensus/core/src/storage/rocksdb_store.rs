@@ -58,7 +58,8 @@ impl RocksDBStore {
     pub fn new(path: &str, use_fifo_compaction: bool) -> Self {
         // Consensus data has high write throughput (all transactions) and is rarely read
         // (only during recovery and when helping peers catch up).
-        let mut db_options = default_db_options().optimize_db_for_write_throughput(2);
+        let db_options =
+            default_db_options().optimize_db_for_write_throughput(2, use_fifo_compaction);
         let mut metrics_conf = MetricConf::new("consensus");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
         let cf_options = if use_fifo_compaction {

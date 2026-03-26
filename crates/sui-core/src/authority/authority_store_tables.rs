@@ -160,8 +160,8 @@ impl AuthorityPerpetualTables {
         _pruner_watermark: Option<Arc<AtomicU64>>,
     ) -> Self {
         let db_options_override = db_options_override.unwrap_or_default();
-        let db_options =
-            db_options_override.apply_to(default_db_options().optimize_db_for_write_throughput(4));
+        let db_options = db_options_override
+            .apply_to(default_db_options().optimize_db_for_write_throughput(4, false));
         let table_options = DBMapTableConfigMap::new(BTreeMap::from([
             (
                 "objects".to_string(),
