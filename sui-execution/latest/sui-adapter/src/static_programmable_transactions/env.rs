@@ -23,7 +23,7 @@ use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
     resolver::IntraPackageName,
-    runtime_value::{self, MoveTypeLayout},
+    runtime_value::{self},
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
@@ -145,7 +145,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
     pub fn fully_annotated_layout(
         &self,
         ty: &Type,
-    ) -> Result<annotated_value::MoveTypeLayout, ExecutionError> {
+    ) -> Result<annotated_value::compressed_layouts::MoveTypeLayout, ExecutionError> {
         let tag: TypeTag = ty.clone().try_into().map_err(|s| {
             ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
         })?;
@@ -162,7 +162,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
     pub fn runtime_layout(
         &self,
         ty: &Type,
-    ) -> Result<runtime_value::MoveTypeLayout, ExecutionError> {
+    ) -> Result<runtime_value::compressed_layouts::MoveTypeLayout, ExecutionError> {
         let tag: TypeTag = ty.clone().try_into().map_err(|s| {
             ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
         })?;
@@ -297,7 +297,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
     pub fn type_layout_for_struct(
         &self,
         tag: &StructTag,
-    ) -> Result<MoveTypeLayout, ExecutionError> {
+    ) -> Result<runtime_value::compressed_layouts::MoveTypeLayout, ExecutionError> {
         let ty: Type = self.load_type_from_struct(tag)?;
         self.runtime_layout(&ty)
     }

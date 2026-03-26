@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     gas_algebra::InternalGas,
     language_storage::TypeTag,
     runtime_value::{MoveStructLayout, MoveTypeLayout},
+    vm_status::StatusCode,
 };
 use move_vm_runtime::{
     execution::Type, execution::values::Value, natives::functions::NativeResult,
@@ -87,7 +88,14 @@ pub fn is_one_time_witness(
     let type_layout = context.type_to_type_layout(&ty)?;
 
     let cost = context.gas_used();
-    let Some(MoveTypeLayout::Struct(struct_layout)) = type_layout else {
+    let Some(type_layout) = type_layout else {
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
+    };
+    let type_layout = type_layout.inflate().map_err(|e| {
+        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+            .with_message(format!("Failed to inflate layout: {e}"))
+    })?;
+    let MoveTypeLayout::Struct(struct_layout) = type_layout else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 

@@ -114,7 +114,7 @@ pub fn read_setting_impl(
 fn consistent_value_before_current_epoch(
     object_runtime: &mut ObjectRuntime,
     field_setting_tag: StructTag,
-    field_setting_layout: &R::MoveTypeLayout,
+    field_setting_layout: &R::compressed_layouts::MoveTypeLayout,
     _setting_value_ty: &Type,
     setting_data_value_ty: &Type,
     value_ty: &Type,

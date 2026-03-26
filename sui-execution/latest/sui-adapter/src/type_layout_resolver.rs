@@ -50,9 +50,19 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         };
 
         let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
-        match vm.annotated_type_layout(&type_tag) {
-            Ok(A::MoveTypeLayout::Struct(s)) => Ok(A::MoveDatatypeLayout::Struct(s)),
-            Ok(A::MoveTypeLayout::Enum(e)) => Ok(A::MoveDatatypeLayout::Enum(e)),
+        let compressed = vm.annotated_type_layout(&type_tag).map_err(|_| {
+            SuiError::from(SuiErrorKind::FailObjectLayout {
+                st: format!("{}", struct_tag),
+            })
+        })?;
+        let inflated = compressed.inflate().map_err(|_| {
+            SuiError::from(SuiErrorKind::FailObjectLayout {
+                st: format!("{}", struct_tag),
+            })
+        })?;
+        match inflated {
+            A::MoveTypeLayout::Struct(s) => Ok(A::MoveDatatypeLayout::Struct(s)),
+            A::MoveTypeLayout::Enum(e) => Ok(A::MoveDatatypeLayout::Enum(e)),
             _ => Err(SuiErrorKind::FailObjectLayout {
                 st: format!("{}", struct_tag),
             }

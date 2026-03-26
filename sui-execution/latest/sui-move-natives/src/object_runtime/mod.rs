@@ -15,7 +15,7 @@ use indexmap::set::IndexSet;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::{MoveTypeLayout, MoveValue},
+    annotated_value::{self as A, MoveTypeLayout, MoveValue},
     annotated_visitor as AV,
     language_storage::StructTag,
     runtime_value as R,
@@ -464,8 +464,8 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_version: SequenceNumber,
-        child_layout: &R::MoveTypeLayout,
-        child_fully_annotated_layout: &MoveTypeLayout,
+        child_layout: &R::compressed_layouts::MoveTypeLayout,
+        child_fully_annotated_layout: &A::compressed_layouts::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<Option<ObjectResult<CacheMetadata<Value>>>> {
         let Some((value, obj_meta)) = self.child_object_store.receive_object(
@@ -498,8 +498,8 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_layout: &R::MoveTypeLayout,
-        child_fully_annotated_layout: &MoveTypeLayout,
+        child_layout: &R::compressed_layouts::MoveTypeLayout,
+        child_fully_annotated_layout: &A::compressed_layouts::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<CacheMetadata<&mut GlobalValue>>> {
         let res = self.child_object_store.get_or_fetch_object(
@@ -532,7 +532,7 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
-        field_setting_layout: &R::MoveTypeLayout,
+        field_setting_layout: &R::compressed_layouts::MoveTypeLayout,
         field_setting_object_type: &MoveObjectType,
     ) -> Option<Value> {
         match self.child_object_store.config_setting_unsequenced_read(

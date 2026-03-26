@@ -721,7 +721,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         vm: &MoveVM,
         linkage: &ExecutableLinkage,
         tag: StructTag,
-    ) -> Result<(Type, move_core_types::runtime_value::MoveTypeLayout), ExecutionError> {
+    ) -> Result<(Type, move_core_types::runtime_value::compressed_layouts::MoveTypeLayout), ExecutionError> {
         let type_tag = TypeTag::Struct(Box::new(tag));
         let vm_type = vm
             .load_type(&type_tag)
@@ -1560,7 +1560,11 @@ fn load_object_arg_impl(
     };
     assert_expected_move_object_type(&object_metadata.type_, move_obj.type_())?;
     let contained_uids = {
-        let fully_annotated_layout = env.fully_annotated_layout(&ty)?;
+        let fully_annotated_layout = env.fully_annotated_layout(&ty)?
+            .inflate()
+            .map_err(|e| {
+                make_invariant_violation!("Failed to inflate annotated layout: {e}")
+            })?;
         get_all_uids(&fully_annotated_layout, move_obj.contents()).map_err(|e| {
             make_invariant_violation!("Unable to retrieve UIDs for object. Got error: {e}")
         })?

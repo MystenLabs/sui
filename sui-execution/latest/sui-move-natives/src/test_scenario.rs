@@ -1012,6 +1012,10 @@ fn find_all_wrapped_objects<'a, 'i>(
             debug_assert!(false);
             continue;
         };
+        let Ok(annotated_layout) = annotated_layout.inflate() else {
+            debug_assert!(false);
+            continue;
+        };
 
         let blob = value.borrow().typed_serialize(&layout).unwrap();
         MoveValue::visit_deserialize(

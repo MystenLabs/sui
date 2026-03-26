@@ -350,7 +350,7 @@ fn move_value_info_from_ctx_value(
 fn annotated_type_layout_for_adapter_ty(
     context: &mut Context,
     type_: &Type,
-) -> Result<A::MoveTypeLayout, ExecutionError> {
+) -> Result<A::compressed_layouts::MoveTypeLayout, ExecutionError> {
     context.env.fully_annotated_layout(type_).map_err(|e| {
         make_invariant_violation!(
             "Failed to get annotated type layout for adapter type: {}",
@@ -363,11 +363,11 @@ fn annotated_type_layout_for_adapter_ty(
 /// provided annotated layout for that value.
 fn serializable_move_value_from_ctx_value(
     value: &CtxValue,
-    annotated_layout: &A::MoveTypeLayout,
+    annotated_layout: &A::compressed_layouts::MoveTypeLayout,
 ) -> Result<SerializableMoveValue, ExecutionError> {
     VMValue::as_annotated_move_value(
         value.inner_for_tracing().inner_for_tracing(),
-        annotated_layout,
+        annotated_layout.as_view(),
     )
     .ok_or_else(|| {
         make_invariant_violation!(

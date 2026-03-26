@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::account_address::AccountAddress;
-use move_core_types::runtime_value::MoveTypeLayout;
+use move_core_types::runtime_value::compressed_layouts::MoveTypeLayout;
 use move_core_types::u256::U256;
 use move_vm_runtime::execution::interpreter::locals::{BaseHeap as VMBaseHeap, BaseHeapId};
 use move_vm_runtime::shared::views::ValueVisitor;

@@ -1350,7 +1350,7 @@ pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError>
 pub(crate) fn get_tag_and_layouts(
     context: &NativeContext,
     ty: &Type,
-) -> PartialVMResult<Option<(StructTag, R::MoveTypeLayout, A::MoveTypeLayout)>> {
+) -> PartialVMResult<Option<(StructTag, R::compressed_layouts::MoveTypeLayout, A::compressed_layouts::MoveTypeLayout)>> {
     let tag = match context.type_to_type_tag(ty)? {
         TypeTag::Struct(s) => s,
         _ => {
