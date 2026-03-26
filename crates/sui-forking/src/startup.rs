@@ -139,17 +139,17 @@ async fn fetch_checkpoint(
     if let Some(checkpoint) = checkpoint {
         let summary = checkpoint.summary;
         let sequence_number = summary.sequence_number;
-        // 1. Build a dummy AuthorityStrongQuorumSignInfo
+        // build a dummy AuthorityStrongQuorumSignInfo
         let dummy_sig = AuthorityQuorumSignInfo {
             epoch: summary.epoch.clone(),
             signature: AggregateAuthoritySignature::default(),
             signers_map: roaring::RoaringBitmap::new(),
         };
 
-        // 2. Wrap into CertifiedCheckpointSummary (Envelope)
+        // wrap into CertifiedCheckpointSummary (Envelope)
         let certified = Envelope::new_from_data_and_sig(summary.try_into()?, dummy_sig);
 
-        // 3. Skip verification because we trust the GraphQL source
+        // skip verification because we trust the GraphQL source
         info!("Fetched checkpoint: {}", sequence_number);
         Ok(VerifiedCheckpoint::new_unchecked(certified))
     } else {
