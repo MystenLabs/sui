@@ -25,11 +25,13 @@ use sui_types::{
 use test_cluster::addr_balance_test_env::TestEnvBuilder;
 
 /// Helper to build a PTB that splits X MIST from GasCoin and transfers to recipient.
+/// When `gas` is provided, it's used as explicit gas payment.
+/// When `gas` is None, gas selection will choose coins.
 fn build_split_gas_coin_ptb(
     sender: SuiAddress,
     amount: u64,
     recipient: SuiAddress,
-    gas: sui_types::base_types::ObjectRef,
+    gas: Option<sui_types::base_types::ObjectRef>,
     gas_budget: u64,
     gas_price: u64,
 ) -> TransactionData {
@@ -45,20 +47,24 @@ fn build_split_gas_coin_ptb(
         recipient_arg,
     ));
     let pt = ptb.finish();
-    TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
+    let gas_payment = gas.map(|g| vec![g]).unwrap_or_default();
+    TransactionData::new_programmable(sender, gas_payment, pt, gas_budget, gas_price)
 }
 
 /// Helper to build a PTB that does NOT use Argument::GasCoin.
 /// This is an empty PTB - it just pays gas without any operations.
+/// When `gas` is provided, it's used as explicit gas payment.
+/// When `gas` is None, gas selection will choose coins or AB.
 fn build_no_gas_coin_ptb(
     sender: SuiAddress,
-    gas: sui_types::base_types::ObjectRef,
+    gas: Option<sui_types::base_types::ObjectRef>,
     gas_budget: u64,
     gas_price: u64,
 ) -> TransactionData {
     let ptb = ProgrammableTransactionBuilder::new();
     let pt = ptb.finish();
-    TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
+    let gas_payment = gas.map(|g| vec![g]).unwrap_or_default();
+    TransactionData::new_programmable(sender, gas_payment, pt, gas_budget, gas_price)
 }
 
 // =============================================================================
@@ -86,14 +92,16 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
     let ab_amount = 10 * MIST_PER_SUI;
     test_env.fund_one_address_balance(sender, ab_amount).await;
 
-    // Refresh gas after funding
-    let (sender, gas) = test_env.get_sender_and_gas(0);
+    // Refresh sender after funding (gas not used - gas selection will choose)
+    let (sender, _) = test_env.get_sender_and_gas(0);
 
     // Request 5 SUI - both AB (10 SUI) and coins (~30M SUI) can cover this independently
     let amount = 5 * MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
-    let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
+    // Don't provide explicit gas coins - let gas selection choose them
+    // This allows gas selection to prepend coin reservation
+    let tx = build_split_gas_coin_ptb(sender, amount, recipient, None, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
     let result = client.simulate_transaction(&tx, true, true).await;
@@ -111,7 +119,7 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
         response.transaction.effects.status()
     );
 
-    // Verify coin reservation is FIRST in gas payment
+    // Verify coin reservation is FIRST in gas payment (gas selection prepends it)
     let gas_payment = response.transaction.transaction.gas_data().payment.clone();
     assert!(
         !gas_payment.is_empty(),
@@ -173,14 +181,15 @@ async fn test_has_ab_has_coins_no_gas_coin() {
     let ab_amount = MIST_PER_SUI;
     test_env.fund_one_address_balance(sender, ab_amount).await;
 
-    // Refresh gas
-    let (sender, gas) = test_env.get_sender_and_gas(0);
+    // Refresh sender (gas not used - gas selection will choose)
+    let (sender, _) = test_env.get_sender_and_gas(0);
     let client = test_env.cluster.grpc_client();
 
     // Case 1: Small budget that can be satisfied by AB alone
     // When GasCoin is not used, AB is preferred if sufficient
+    // Don't provide explicit gas - let gas selection choose
     let small_budget = 50_000_000; // 0.05 SUI - easily covered by 1 SUI AB
-    let tx_small = build_no_gas_coin_ptb(sender, gas, small_budget, test_env.rgp);
+    let tx_small = build_no_gas_coin_ptb(sender, None, small_budget, test_env.rgp);
 
     let result = client.simulate_transaction(&tx_small, true, true).await;
     assert!(
@@ -220,9 +229,10 @@ async fn test_has_ab_has_coins_no_gas_coin() {
 
     // Case 2: Large budget that requires coins (AB alone insufficient)
     // Get fresh gas after first execution
-    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let (sender, _gas) = test_env.get_sender_and_gas(0);
     let large_budget = 5 * MIST_PER_SUI; // 5 SUI - exceeds 1 SUI AB
-    let tx_large = build_no_gas_coin_ptb(sender, gas, large_budget, test_env.rgp);
+    // Don't provide explicit gas - let gas selection choose
+    let tx_large = build_no_gas_coin_ptb(sender, None, large_budget, test_env.rgp);
 
     let result = client.simulate_transaction(&tx_large, true, true).await;
     assert!(
@@ -407,7 +417,7 @@ async fn test_no_ab_has_coins() {
         .build()
         .await;
 
-    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let (sender, _gas) = test_env.get_sender_and_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
 
     // NO address balance funding - sender only has coins
@@ -415,7 +425,8 @@ async fn test_no_ab_has_coins() {
     let amount = MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
-    let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
+    // Don't provide explicit gas - let gas selection choose
+    let tx = build_split_gas_coin_ptb(sender, amount, recipient, None, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
     let result = client.simulate_transaction(&tx, true, true).await;
@@ -491,7 +502,15 @@ async fn test_insufficient_funds() {
     let amount = 100_000_000 * MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
-    let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
+    // Use explicit gas coins - this test uses do_gas_selection=false
+    let tx = build_split_gas_coin_ptb(
+        sender,
+        amount,
+        recipient,
+        Some(gas),
+        gas_budget,
+        test_env.rgp,
+    );
 
     let client = test_env.cluster.grpc_client();
     let result = client.simulate_transaction(&tx, false, false).await;
@@ -528,13 +547,14 @@ async fn test_protocol_config_disabled() {
         .build()
         .await;
 
-    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let (sender, _gas) = test_env.get_sender_and_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
 
     let amount = MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
-    let tx = build_split_gas_coin_ptb(sender, amount, recipient, gas, gas_budget, test_env.rgp);
+    // Don't provide explicit gas - let gas selection choose
+    let tx = build_split_gas_coin_ptb(sender, amount, recipient, None, gas_budget, test_env.rgp);
 
     let client = test_env.cluster.grpc_client();
     let result = client.simulate_transaction(&tx, true, true).await;
@@ -609,7 +629,8 @@ async fn test_combined_ab_and_coins_needed() {
     assert!(effects.status().is_ok());
 
     // Find the coin that was created for limited_sender
-    let created_coin = effects
+    // (gas selection will find it - we don't provide explicit gas)
+    let _created_coin = effects
         .created()
         .iter()
         .find(|(_, owner)| {
@@ -645,11 +666,12 @@ async fn test_combined_ab_and_coins_needed() {
     let request_amount = 12 * MIST_PER_SUI;
     let gas_budget = 50_000_000;
 
+    // Don't provide explicit gas - let gas selection combine AB + coins
     let tx = build_split_gas_coin_ptb(
         limited_sender,
         request_amount,
         recipient,
-        created_coin,
+        None,
         gas_budget,
         test_env.rgp,
     );
