@@ -32,12 +32,12 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
 use sui_types::transaction::VerifiedTransaction;
 
-pub struct ForkingStore {
+pub struct ServiceStore {
     // The checkpoint at which this forked network was forked
     forked_at_checkpoint: u64,
 }
 
-impl ForkingStore {
+impl ServiceStore {
     /// Creates a forking store with local cache/store chains already composed.
     pub fn new(forked_at_checkpoint: u64) -> Self {
         todo!()
@@ -139,7 +139,7 @@ impl ForkingStore {
     }
 }
 
-impl ForkingStore {
+impl ServiceStore {
     /// Records checkpoint summary state and updates committee map on epoch transitions.
     /// The matching contents are expected in a later `insert_checkpoint_contents` call.
     pub fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
@@ -192,7 +192,7 @@ impl ForkingStore {
     }
 }
 
-impl BackingPackageStore for ForkingStore {
+impl BackingPackageStore for ServiceStore {
     fn get_package_object(
         &self,
         package_id: &ObjectID,
@@ -201,7 +201,7 @@ impl BackingPackageStore for ForkingStore {
     }
 }
 
-impl ChildObjectResolver for ForkingStore {
+impl ChildObjectResolver for ServiceStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
@@ -233,7 +233,7 @@ impl ChildObjectResolver for ForkingStore {
     }
 }
 
-impl ObjectStore for ForkingStore {
+impl ObjectStore for ServiceStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.get_object(object_id)
     }
@@ -247,7 +247,7 @@ impl ObjectStore for ForkingStore {
     }
 }
 
-impl ParentSync for ForkingStore {
+impl ParentSync for ServiceStore {
     fn get_latest_parent_entry_ref_deprecated(
         &self,
         _object_id: ObjectID,
@@ -256,27 +256,27 @@ impl ParentSync for ForkingStore {
     }
 }
 
-impl SimulatorStore for ForkingStore {
+impl SimulatorStore for ServiceStore {
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        ForkingStore::get_checkpoint_by_sequence_number(self, sequence_number)
+        ServiceStore::get_checkpoint_by_sequence_number(self, sequence_number)
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        ForkingStore::get_checkpoint_by_digest(self, digest)
+        ServiceStore::get_checkpoint_by_digest(self, digest)
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        ForkingStore::get_highest_checkpint(self)
+        ServiceStore::get_highest_checkpint(self)
     }
 
     fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        ForkingStore::get_checkpoint_contents_by_digest(self, digest)
+        ServiceStore::get_checkpoint_contents_by_digest(self, digest)
     }
 
     fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<Committee> {

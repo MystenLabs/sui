@@ -3,7 +3,7 @@
 
 //! Forking tool for Sui.
 
-mod forking_store;
+mod service_store;
 mod startup;
 
 #[allow(unused)]
