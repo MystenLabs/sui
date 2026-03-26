@@ -629,12 +629,20 @@ async fn test_gasless_rejects_non_coin_object_input() {
         test_env.setup_mintable_coin().await;
     transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true));
 
-    // Include TreasuryCap as an unused object input — the input validation
-    // should reject it before execution even starts.
+    // Include TreasuryCap as an object input with an allowed gasless command.
+    // The command validation passes, but object input check rejects the non-Coin.
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder
+    let treasury_arg = builder
         .obj(ObjectArg::ImmOrOwnedObject(treasury_cap_ref))
         .unwrap();
+    let recipient_arg = builder.pure(publisher).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("coin").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![coin_type.clone()],
+        vec![treasury_arg, recipient_arg],
+    );
     let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
     // Use publisher as sender since they own the TreasuryCap
     let tx = test_env.gasless_transaction_data(tx_kind, publisher, 0, 0);
