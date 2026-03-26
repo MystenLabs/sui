@@ -6,7 +6,7 @@ use std::sync::Arc;
 use moka::sync::Cache as MokaCache;
 use move_core_types::language_storage::TypeTag;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin_reservation::{
         CoinReservationResolver, CoinReservationResolverTrait, ParsedObjectRefWithdrawal,
     },
@@ -33,19 +33,28 @@ impl CachingCoinReservationResolver {
     fn get_owner_and_type_cached(
         &self,
         object_id: ObjectID,
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<(SuiAddress, TypeTag)> {
-        self.cache.get_with(object_id, || {
-            self.inner.get_owner_and_type_for_object(object_id)
-        })
+        // When a specific version is requested (MVCC), bypass the cache since the cached
+        // value may be at a different version.
+        if accumulator_version.is_some() {
+            self.inner
+                .get_owner_and_type_for_object(object_id, accumulator_version)
+        } else {
+            self.cache.get_with(object_id, || {
+                self.inner.get_owner_and_type_for_object(object_id, None)
+            })
+        }
     }
 
     pub fn resolve_funds_withdrawal(
         &self,
         sender: SuiAddress,
         coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
-        let (owner, type_tag) =
-            self.get_owner_and_type_cached(coin_reservation.unmasked_object_id)?;
+        let (owner, type_tag) = self
+            .get_owner_and_type_cached(coin_reservation.unmasked_object_id, accumulator_version)?;
 
         if sender != owner {
             return Err(UserInputError::InvalidWithdrawReservation {
@@ -68,8 +77,14 @@ impl CoinReservationResolverTrait for CachingCoinReservationResolver {
         &self,
         sender: SuiAddress,
         coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
-        CachingCoinReservationResolver::resolve_funds_withdrawal(self, sender, coin_reservation)
+        CachingCoinReservationResolver::resolve_funds_withdrawal(
+            self,
+            sender,
+            coin_reservation,
+            accumulator_version,
+        )
     }
 }
 
@@ -78,7 +93,13 @@ impl CoinReservationResolverTrait for &'_ CachingCoinReservationResolver {
         &self,
         sender: SuiAddress,
         coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
-        CachingCoinReservationResolver::resolve_funds_withdrawal(self, sender, coin_reservation)
+        CachingCoinReservationResolver::resolve_funds_withdrawal(
+            self,
+            sender,
+            coin_reservation,
+            accumulator_version,
+        )
     }
 }
