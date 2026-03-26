@@ -7,7 +7,7 @@ use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
     BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
-    Balance, FUNDS_ACCUMULATOR_MODULE_NAME, FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME,
+    Balance,
 };
 use crate::coin_reservation::{
     CoinReservationResolverTrait, ParsedDigest, ParsedObjectRefWithdrawal,
@@ -21,6 +21,7 @@ use crate::crypto::{
 use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
+use crate::funds_accumulator::{FUNDS_ACCUMULATOR_MODULE_NAME, WITHDRAWAL_SPLIT_FUNC_NAME};
 use crate::gas_coin::GAS;
 use crate::gas_model::gas_predicates::check_for_gas_price_too_high;
 use crate::gas_model::gas_v2::SuiCostTable;
@@ -57,7 +58,7 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::once;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -65,7 +66,6 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
-use sui_macros::fail_point_arg;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use tap::Pipe;
 use tracing::trace;
@@ -966,6 +966,19 @@ pub struct ProgrammableTransaction {
     pub commands: Vec<Command>,
 }
 
+static GASLESS_TOKENS_FOR_TESTING: RwLock<Vec<String>> = RwLock::new(Vec::new());
+
+pub fn add_gasless_token_for_testing(type_string: String) {
+    GASLESS_TOKENS_FOR_TESTING
+        .write()
+        .unwrap()
+        .push(type_string);
+}
+
+pub fn clear_gasless_tokens_for_testing() {
+    GASLESS_TOKENS_FOR_TESTING.write().unwrap().clear();
+}
+
 impl ProgrammableTransaction {
     pub fn has_shared_inputs(&self) -> bool {
         self.inputs
@@ -975,7 +988,6 @@ impl ProgrammableTransaction {
 
     pub fn validate_gasless_transaction(&self, config: &ProtocolConfig) -> UserInputResult {
         fn parse_gasless_allowed_token_types(config: &ProtocolConfig) -> Vec<TypeTag> {
-            #[allow(unused_mut)]
             let mut types: Vec<TypeTag> = config
                 .gasless_allowed_token_types()
                 .iter()
@@ -987,9 +999,16 @@ impl ProgrammableTransaction {
                     }
                 })
                 .collect();
-            fail_point_arg!("gasless_extra_token_types", |extra: Vec<TypeTag>| {
-                types.extend(extra);
-            });
+            if mysten_common::in_test_configuration() {
+                for s in GASLESS_TOKENS_FOR_TESTING.read().unwrap().iter() {
+                    match s.parse() {
+                        Ok(tag) => types.push(tag),
+                        Err(e) => {
+                            debug_fatal!("invalid gasless token override {s:?}: {e}");
+                        }
+                    }
+                }
+            }
             types
         }
 
@@ -1143,7 +1162,7 @@ impl ProgrammableMoveCall {
         const SUI_FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT: FunctionIdent = (
             SUI_FRAMEWORK_ADDRESS,
             FUNDS_ACCUMULATOR_MODULE_NAME,
-            FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT_FUNCTION_NAME,
+            WITHDRAWAL_SPLIT_FUNC_NAME,
         );
 
         const GASLESS_FUNCTIONS: &[(FunctionIdent, &[Option<TypeArgConstraint>])] = &[
@@ -1157,8 +1176,8 @@ impl ProgrammableMoveCall {
                 .iter()
                 .find(|((addr, module, function), _)| {
                     *addr == AccountAddress::from(self.package)
-                        && module.as_str() == self.module.as_str()
-                        && function.as_str() == self.function.as_str()
+                        && module.as_str() == &self.module
+                        && function.as_str() == &self.function
                 })
         else {
             return Err(UserInputError::Unsupported(format!(

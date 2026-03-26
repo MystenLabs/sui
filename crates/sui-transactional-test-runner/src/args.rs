@@ -305,6 +305,12 @@ pub struct AuthenticatorStateUpdateCommand {
     pub authenticator_obj_initial_shared_version: Option<u64>,
 }
 
+#[derive(Debug, clap::Parser)]
+pub struct GaslessAllowTokenCommand {
+    #[clap(long = "type")]
+    pub token_type: String,
+}
+
 #[derive(Debug)]
 pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     ViewObject(ViewObjectCommand),
@@ -320,6 +326,7 @@ pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     AdvanceClock(AdvanceClockCommand),
     SetRandomState(SetRandomStateCommand),
     AuthenticatorStateUpdate(AuthenticatorStateUpdateCommand),
+    GaslessAllowToken(GaslessAllowTokenCommand),
     ViewCheckpoint,
     RunGraphql(RunGraphqlCommand),
     RunJsonRpc(RunJsonRpcCommand),
@@ -372,6 +379,9 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
                     AuthenticatorStateUpdateCommand::from_arg_matches(matches)?,
                 )
             }
+            Some(("gasless-allow-token", matches)) => SuiSubcommand::GaslessAllowToken(
+                GaslessAllowTokenCommand::from_arg_matches(matches)?,
+            ),
             Some(("view-checkpoint", _)) => SuiSubcommand::ViewCheckpoint,
             Some(("run-graphql", matches)) => {
                 SuiSubcommand::RunGraphql(RunGraphqlCommand::from_arg_matches(matches)?)
@@ -418,6 +428,7 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
             .subcommand(
                 AuthenticatorStateUpdateCommand::command().name("authenticator-state-update"),
             )
+            .subcommand(GaslessAllowTokenCommand::command().name("gasless-allow-token"))
             .subcommand(clap::Command::new("view-checkpoint"))
             .subcommand(RunGraphqlCommand::command().name("run-graphql"))
             .subcommand(RunJsonRpcCommand::command().name("run-jsonrpc"))

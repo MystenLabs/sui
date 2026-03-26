@@ -482,6 +482,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
 
+        sui_types::transaction::clear_gasless_tokens_for_testing();
+
         let mut test_adapter = Self {
             is_simulator,
             // This is opt-in and instantiated later
@@ -829,6 +831,17 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
                 write!(&mut output, "Response: {}", resp.response_body).unwrap();
                 Ok(Some(output))
+            }
+            SuiSubcommand::GaslessAllowToken(GaslessAllowTokenCommand { token_type }) => {
+                let resolved = if let Some(prefix) = token_type.split("::").next() {
+                    let state = self.compiled_state();
+                    let addr = state.resolve_named_address(prefix);
+                    token_type.replacen(prefix, &format!("0x{addr}"), 1)
+                } else {
+                    token_type
+                };
+                sui_types::transaction::add_gasless_token_for_testing(resolved);
+                Ok(None)
             }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;

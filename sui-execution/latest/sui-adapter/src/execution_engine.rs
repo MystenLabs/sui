@@ -436,7 +436,7 @@ mod checked {
             debug_fatal!(
                 "gasless transaction produced non-accumulator writes — command validation should have prevented this"
             );
-            result = Err(ExecutionErrorKind::InvariantViolation.into());
+            result = Err(ExecutionError::from(ExecutionErrorKind::InvariantViolation).into());
         }
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
