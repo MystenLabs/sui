@@ -26,6 +26,7 @@ use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
+use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
 use sui_kvstore::testing::create_tables;
@@ -352,33 +353,34 @@ async fn test_indexer_e2e() -> Result<()> {
 
     // -- Column-filtered partial reads --
     // Fetch with only effects + checkpoint columns — no td, sg, ev, or bc.
-    {
-        use sui_kvstore::tables::transactions::col;
-        let partial = harness
-            .bigtable_client()
-            .get_transactions_filtered(
-                &tx_digests,
-                Some(&[col::EFFECTS, col::CHECKPOINT_NUMBER, col::TIMESTAMP]),
-            )
-            .await?;
-        assert_eq!(partial.len(), tx_digests.len());
-        for tx in &partial {
-            // digest comes from the row key, always present
-            assert!(tx_digests.contains(&tx.digest));
-            // td was not fetched
-            assert!(tx.transaction_data.is_none(), "td should be absent");
-            // sg was not fetched
-            assert!(tx.signatures.is_none(), "sg should be absent");
-            // ef was fetched
-            assert!(tx.effects.is_some(), "ef should be present");
-            // ev was not fetched
-            assert!(tx.events.is_none(), "ev should be absent");
-            // bc was not fetched
-            assert!(tx.balance_changes.is_empty(), "bc should be empty");
-            // metadata always present
-            assert!(tx.checkpoint_number > 0);
-            assert!(tx.timestamp > 0);
-        }
+    let partial = harness
+        .bigtable_client()
+        .get_transactions_filtered(
+            &tx_digests,
+            Some(&[
+                transactions::col::EFFECTS,
+                transactions::col::CHECKPOINT_NUMBER,
+                transactions::col::TIMESTAMP,
+            ]),
+        )
+        .await?;
+    assert_eq!(partial.len(), tx_digests.len());
+    for tx in &partial {
+        // digest comes from the row key, always present
+        assert!(tx_digests.contains(&tx.digest));
+        // td was not fetched
+        assert!(tx.transaction_data.is_none(), "td should be absent");
+        // sg was not fetched
+        assert!(tx.signatures.is_none(), "sg should be absent");
+        // ef was fetched
+        assert!(tx.effects.is_some(), "ef should be present");
+        // ev was not fetched
+        assert!(tx.events.is_none(), "ev should be absent");
+        // bc was not fetched
+        assert!(tx.balance_changes.is_empty(), "bc should be empty");
+        // metadata always present
+        assert!(tx.checkpoint_number > 0);
+        assert!(tx.timestamp > 0);
     }
 
     // -- Balance changes parity with fullnode gRPC batch_get_transactions --
@@ -476,21 +478,23 @@ async fn test_indexer_e2e() -> Result<()> {
         .await?;
     assert_eq!(checkpoints.len(), checkpoint_numbers.len());
     for cp in &checkpoints {
-        assert!(checkpoint_numbers.contains(&cp.summary.sequence_number));
-        assert!(cp.summary.epoch == 0);
+        let summary = cp.summary.as_ref().unwrap();
+        let contents = cp.contents.as_ref().unwrap();
+        assert!(checkpoint_numbers.contains(&summary.sequence_number));
+        assert!(summary.epoch == 0);
 
-        let content_digests: Vec<_> = cp.contents.iter().map(|ed| ed.transaction).collect();
+        let content_digests: Vec<_> = contents.iter().map(|ed| ed.transaction).collect();
         let expected: Vec<_> = tx_digests
             .iter()
             .zip(&tx_checkpoints)
-            .filter(|(_, cp_num)| **cp_num == cp.summary.sequence_number)
+            .filter(|(_, cp_num)| **cp_num == summary.sequence_number)
             .map(|(d, _)| *d)
             .collect();
         for d in &expected {
             assert!(
                 content_digests.contains(d),
                 "checkpoint {} should contain txn {}",
-                cp.summary.sequence_number,
+                summary.sequence_number,
                 d,
             );
         }
@@ -498,15 +502,16 @@ async fn test_indexer_e2e() -> Result<()> {
 
     // -- Checkpoint-by-digest reverse index --
     for cp in &checkpoints {
-        let digest = cp.summary.digest();
+        let summary = cp.summary.as_ref().unwrap();
+        let digest = summary.digest();
         let found = harness
             .bigtable_client()
             .get_checkpoint_by_digest(digest)
             .await?;
         assert!(found.is_some(), "checkpoint by digest should exist");
         assert_eq!(
-            found.unwrap().summary.sequence_number,
-            cp.summary.sequence_number
+            found.unwrap().summary.as_ref().unwrap().sequence_number,
+            summary.sequence_number
         );
     }
 
@@ -650,6 +655,81 @@ async fn test_indexer_e2e() -> Result<()> {
     let latest = harness.bigtable_client().get_latest_epoch().await?;
     assert!(latest.is_some());
     assert!(latest.unwrap().epoch.unwrap() >= 1);
+
+    // -- Column-filtered checkpoint partial reads --
+    // Fetch with only summary column — no signatures or contents.
+    let partial = harness
+        .bigtable_client()
+        .get_checkpoints_filtered(&checkpoint_numbers, Some(&[checkpoints::col::SUMMARY]))
+        .await?;
+    assert_eq!(partial.len(), checkpoint_numbers.len());
+    for cp in &partial {
+        assert!(cp.summary.is_some(), "summary should be present");
+        assert!(cp.signatures.is_none(), "signatures should be absent");
+        assert!(cp.contents.is_none(), "contents should be absent");
+    }
+
+    // Fetch checkpoint by digest with only summary — verify two-step lookup works with filter.
+    let first_cp = checkpoints.first().unwrap();
+    let digest = first_cp.summary.as_ref().unwrap().digest();
+    let partial = harness
+        .bigtable_client()
+        .get_checkpoint_by_digest_filtered(digest, Some(&[checkpoints::col::SUMMARY]))
+        .await?
+        .expect("checkpoint by digest should exist");
+    assert!(partial.summary.is_some(), "summary should be present");
+    assert!(partial.signatures.is_none(), "signatures should be absent");
+    assert!(partial.contents.is_none(), "contents should be absent");
+
+    // -- Column-filtered epoch partial reads --
+    // Fetch epoch with only small scalar columns — no system_state.
+    let partial = harness
+        .bigtable_client()
+        .get_epochs_filtered(
+            &[0],
+            Some(&[
+                epochs::col::EPOCH,
+                epochs::col::START_CHECKPOINT,
+                epochs::col::PROTOCOL_VERSION,
+            ]),
+        )
+        .await?;
+    assert_eq!(partial.len(), 1);
+    let ep = &partial[0];
+    assert_eq!(ep.epoch, Some(0));
+    assert!(
+        ep.start_checkpoint.is_some(),
+        "start_checkpoint should be present"
+    );
+    assert!(
+        ep.protocol_version.is_some(),
+        "protocol_version should be present"
+    );
+    assert!(ep.system_state.is_none(), "system_state should be absent");
+    assert!(
+        ep.reference_gas_price.is_none(),
+        "reference_gas_price should be absent"
+    );
+
+    // Fetch latest epoch with column filter.
+    let partial = harness
+        .bigtable_client()
+        .get_latest_epoch_filtered(Some(&[epochs::col::EPOCH, epochs::col::START_TIMESTAMP]))
+        .await?
+        .expect("latest epoch should exist");
+    assert!(partial.epoch.is_some());
+    assert!(
+        partial.start_timestamp_ms.is_some(),
+        "start_timestamp should be present"
+    );
+    assert!(
+        partial.system_state.is_none(),
+        "system_state should be absent"
+    );
+    assert!(
+        partial.end_checkpoint.is_none(),
+        "end_checkpoint should be absent"
+    );
 
     Ok(())
 }
