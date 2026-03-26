@@ -14,7 +14,7 @@ use tower_http::cors::CorsLayer;
 use tracing::info;
 use tracing::warn;
 
-use crate::forking_store::ForkingStore;
+use crate::service_store::ServiceStore;
 use simulacrum::Simulacrum;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
@@ -38,6 +38,7 @@ pub(crate) async fn start_server(
     shutdown_receiver: Option<oneshot::Receiver<()>>,
     ready_sender: Option<oneshot::Sender<()>>,
 ) -> Result<()> {
+    let context = Context::new(startup_checkpoint, network: Network)
     let app = Router::new()
         .route(endpoints::HEALTH, get(health))
         .route(endpoints::STATUS, get(get_status))
@@ -99,7 +100,7 @@ async fn setup_simulacrum(
     startup_checkpoint: Option<u64>,
     protocol_version: u64,
     initial_sui_system_state: SuiSystemState,
-) -> Result<Simulacrum<OsRng, ForkingStore>, anyhow::Error> {
+) -> Result<Simulacrum<OsRng, ServiceStore>, anyhow::Error> {
     let mut rng = OsRng;
     let config = ConfigBuilder::new_with_temp_dir()
         .rng(rng)
@@ -110,7 +111,7 @@ async fn setup_simulacrum(
     let keystore = KeyStore::from_network_config(&config);
     let checkpoint = fetch_checkpoint(startup_checkpoint).await;
     let system_state = fetch_system_state().await;
-    let store = ForkingStore::new(checkpoint.sequence_number);
+    let store = ServiceStore::new(checkpoint.sequence_number);
 
     Ok(Simulacrum::new_from_custom_state(
         keystore,
@@ -122,9 +123,7 @@ async fn setup_simulacrum(
     ))
 }
 
-async fn fetch_checkpoint(checkpoint: Option<u64>) -> VerifiedCheckpoint {
-    todo!()
-}
+async fn fetch_checkpoint(checkpoint: Option<u64>) -> VerifiedCheckpoint {}
 
 async fn fetch_system_state() -> SuiSystemState {
     todo!()
