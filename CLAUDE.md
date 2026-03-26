@@ -58,6 +58,24 @@ cargo xclippy
 
 `cargo xclippy does not recognize -p option` - This is a known issue with some clippy command variations
 
+### Useful Scripts
+
+The `scripts/` directory contains helpful development tools:
+
+```bash
+# Update all test snapshots (required after framework or protocol config changes)
+./scripts/update_all_snapshots.sh
+
+# Create new execution layer version cut
+./scripts/execution_layer.py cut <version>
+
+# Generate sparse checkout for faster iteration on large codebase
+./scripts/sparse-checkout.py
+
+# Run a local test validator
+./scripts/sui-test-validator.sh
+```
+
 ## High-Level Architecture
 
 ### Core Components Structure
