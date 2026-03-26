@@ -240,7 +240,7 @@ const config = {
       "data-answer-feedback-button-bg-color": "#FFFFFF",
       "data-answer-copy-button-bg-color" : "#FFFFFF",
       "data-thread-clear-button-bg-color" : "#FFFFFF",
-      "data-modal-image": "img/logo.svg",
+      "data-modal-image": "/img/logo.svg",
       "data-mcp-enabled": "true",
       "data-mcp-server-url": "https://sui.mcp.kapa.ai",
       "data-mcp-button-text": "Use Sui MCP Server",
