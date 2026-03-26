@@ -1,12 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Identifies the chain of the network.
+/// Mirrors `sui_protocol_config::Chain`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ChainType {
+    #[default]
+    Unknown,
+    Testnet,
+    Mainnet,
+}
+
 /// Protocol configuration values that consensus reads. This is a standalone
 /// struct so that `consensus-core` does not depend on `sui-protocol-config`
 /// (and transitively on the Move VM).
 #[derive(Clone, Debug)]
 pub struct ConsensusProtocolConfig {
     protocol_version: u64,
+    chain: ChainType,
     max_transaction_size_bytes: u64,
     max_transactions_in_block_bytes: u64,
     max_num_transactions_in_block: u64,
@@ -21,6 +32,7 @@ impl Default for ConsensusProtocolConfig {
     fn default() -> Self {
         Self {
             protocol_version: 0,
+            chain: ChainType::Unknown,
             max_transaction_size_bytes: 256 * 1024,
             max_transactions_in_block_bytes: if cfg!(msim) { 256 * 1024 } else { 512 * 1024 },
             max_num_transactions_in_block: if cfg!(msim) { 8 } else { 512 },
@@ -36,6 +48,7 @@ impl Default for ConsensusProtocolConfig {
 impl ConsensusProtocolConfig {
     pub fn new(
         protocol_version: u64,
+        chain: ChainType,
         max_transaction_size_bytes: u64,
         max_transactions_in_block_bytes: u64,
         max_num_transactions_in_block: u64,
@@ -47,6 +60,7 @@ impl ConsensusProtocolConfig {
     ) -> Self {
         Self {
             protocol_version,
+            chain,
             max_transaction_size_bytes,
             max_transactions_in_block_bytes,
             max_num_transactions_in_block,
@@ -63,6 +77,7 @@ impl ConsensusProtocolConfig {
     pub fn for_testing() -> Self {
         Self {
             protocol_version: u64::MAX,
+            chain: ChainType::Unknown,
             max_transaction_size_bytes: 256 * 1024,
             max_transactions_in_block_bytes: if cfg!(msim) { 256 * 1024 } else { 512 * 1024 },
             max_num_transactions_in_block: if cfg!(msim) { 8 } else { 512 },
@@ -78,6 +93,10 @@ impl ConsensusProtocolConfig {
 
     pub fn protocol_version(&self) -> u64 {
         self.protocol_version
+    }
+
+    pub fn chain(&self) -> ChainType {
+        self.chain
     }
 
     pub fn max_transaction_size_bytes(&self) -> u64 {

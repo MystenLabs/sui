@@ -8,7 +8,7 @@ use crate::mysticeti_adapter::LazyMysticetiClient;
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{
-    Committee, ConsensusProtocolConfig, NetworkKeyPair,
+    ChainType, Committee, ConsensusProtocolConfig, NetworkKeyPair,
     NetworkPublicKey as ConsensusNetworkPublicKey, Parameters, ProtocolKeyPair,
 };
 use consensus_core::{
@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_network::endpoint_manager::ConsensusAddressUpdater;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
@@ -117,9 +117,15 @@ impl AddressOverridesMap {
     }
 }
 
-fn to_consensus_protocol_config(config: &ProtocolConfig) -> ConsensusProtocolConfig {
+fn to_consensus_protocol_config(config: &ProtocolConfig, chain: Chain) -> ConsensusProtocolConfig {
+    let chain_type = match chain {
+        Chain::Mainnet => ChainType::Mainnet,
+        Chain::Testnet => ChainType::Testnet,
+        Chain::Unknown => ChainType::Unknown,
+    };
     ConsensusProtocolConfig::new(
         config.version.as_u64(),
+        chain_type,
         config.max_transaction_size_bytes(),
         config.max_transactions_in_block_bytes(),
         config.max_num_transactions_in_block(),
@@ -297,7 +303,7 @@ impl ConsensusManager {
             own_index,
             committee.clone(),
             parameters.clone(),
-            to_consensus_protocol_config(protocol_config),
+            to_consensus_protocol_config(protocol_config, epoch_store.get_chain()),
             self.protocol_keypair.clone(),
             self.network_keypair.clone(),
             Arc::new(Clock::default()),

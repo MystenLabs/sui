@@ -220,6 +220,9 @@ impl DBOptions {
         self.options
             .set_fifo_compaction_options(&compaction_options);
 
+        // Required for FIFO compaction.
+        self.options.set_max_open_files(-1);
+
         let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
             .unwrap_or(DEFAULT_UNIVERSAL_COMPACTION_L0_NUM_FILES_COMPACTION_TRIGGER);
         self.options.set_level_zero_file_num_compaction_trigger(
@@ -240,10 +243,6 @@ impl DBOptions {
                 * 1024
                 * 1024,
         );
-
-        // Keep all table reader file handles open to avoid repeated open/close overhead
-        // on this append-heavy, rarely-deleted workload.
-        self.options.set_max_open_files(-1);
 
         self
     }
