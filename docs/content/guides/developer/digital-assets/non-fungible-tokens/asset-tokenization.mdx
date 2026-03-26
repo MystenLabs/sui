@@ -95,7 +95,7 @@ The `template` package is an example use case package that enables asset creatio
 
 The package contains 2 modules:
 
-- **[`template`](https://github.com/MystenLabs/asset-tokenization/blob/main/move/template/sources/template.move)**: Defines a new asset by calling `tokenized_asset::new_asset`. Fields such as name, symbol, description, total supply, and burnability are defined as constants that the WASM library can modify at publish time.
-- **[`genesis`](https://github.com/MystenLabs/asset-tokenization/blob/main/move/template/sources/genesis.move)**: A minimal module that includes a One-Time Witness so the sender can claim the publisher.
+- [`template`](https://github.com/MystenLabs/asset-tokenization/blob/main/move/template/sources/template.move): Defines a new asset by calling `tokenized_asset::new_asset`. Fields such as name, symbol, description, total supply, and burnability are defined as constants that the WASM library can modify at publish time.
+- [`genesis`](https://github.com/MystenLabs/asset-tokenization/blob/main/move/template/sources/genesis.move): A minimal module that includes a One-Time Witness so the sender can claim the publisher.
 
 For more information on WASM bytecode manipulation and how to deploy, see [Deploy a Tokenized Asset](/guides/developer/digital-assets/non-fungible-tokens/deploy-tokenized-asset.mdx).

@@ -5,9 +5,9 @@ description: Create NFTs on Sui using the native object model, without needing a
 keywords: [ERC-721, NFT, non-fungible token, digital collectibles, tokenized assets, fungible token, asset tokenization, Move, mint, kiosk, soulbound, gaming assets, object model]
 ---
 
-On Sui, every object is unique and has an owner, so the [object model](/guides/developer/objects/object-model) handles uniqueness and ownership natively. Other blockchains, like Ethereum, require a dedicated standard such as ERC-721 to achieve the same result.
+On Sui, every object is unique and has an owner, so the [object model](/guides/developer/objects/object-model) handles uniqueness and ownership natively. Other blockchains, like Ethereum, require a dedicated standard such as [ERC-721](https://erc721.org/) to achieve the same result.
  
-Imagine you create an Excitable Chimp NFT collection on Sui and another blockchain that is not object based. To get an attribute like the Chimp's name on the other blockchain, you would need to interact with the smart contract that created the NFT to get that information (typically from off-chain storage) using the NFT ID. On Sui, the name attribute is a field on the object that defines the NFT itself. This construct provides a more direct process for accessing NFT metadata because the smart contract that needs the information can return the name directly from the object.
+Imagine you create a Rare Reef Shark NFT collection on Sui and another blockchain that is not object based. To get an attribute like the shark's name on the other blockchain, you would need to interact with the smart contract that created the NFT to get that information (typically from off-chain storage) using the NFT ID. On Sui, the name attribute is a field on the object that defines the NFT itself. This construct provides a more direct process for accessing NFT metadata because the smart contract that needs the information can return the name directly from the object.
 
 ## Use cases
 
