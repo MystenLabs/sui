@@ -15148,6 +15148,7 @@ dependencies = [
  "bin-version",
  "rand 0.8.5",
  "reqwest",
+ "roaring 0.10.9",
  "simulacrum",
  "sui-graphql",
  "sui-swarm-config",
@@ -15156,6 +15157,7 @@ dependencies = [
  "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

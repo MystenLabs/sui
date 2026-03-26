@@ -12,11 +12,12 @@ axum.workspace = true
 axum-extra.workspace = true
 rand.workspace = true
 reqwest.workspace = true
+roaring.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-
+url.workspace = true
 
 bin-version.workspace = true
 
