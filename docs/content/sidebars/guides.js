@@ -435,6 +435,7 @@ const guides = [
       'guides/suiplay0x1/best-practices',
     ],
   },
+  'tooling',
   'guides/developer/dev-cheat-sheet',
   'guides/developer/move-best-practices',
   'guides/developer/common-errors',
