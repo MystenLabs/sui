@@ -3,14 +3,17 @@
 
 use anyhow::Result;
 
+use sui_forking::Network;
+use sui_forking::start_server;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    // let host = "http://127.0.0.1";
-    // let server_port = 9001;
+    let host = "127.0.0.1";
+    let server_port = 9001;
 
-    // let _ = startup::start_server(None, host, server_port, None, None).await?;
+    start_server(Network::Mainnet, None, host, server_port, None, None).await?;
 
     Ok(())
 }

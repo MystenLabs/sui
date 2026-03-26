@@ -4,6 +4,7 @@
 #![allow(unused)]
 use std::collections::BTreeMap;
 
+use crate::graphql::GraphQLQueryClient;
 use simulacrum::SimulatorStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -32,7 +33,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
 use sui_types::transaction::VerifiedTransaction;
 
-pub struct ServiceStore {
+pub(crate) struct ServiceStore {
     // The checkpoint at which this forked network was forked
     forked_at_checkpoint: u64,
 }
@@ -40,7 +41,9 @@ pub struct ServiceStore {
 impl ServiceStore {
     /// Creates a forking store with local cache/store chains already composed.
     pub fn new(forked_at_checkpoint: u64) -> Self {
-        todo!()
+        Self {
+            forked_at_checkpoint,
+        }
     }
 
     /// Returns checkpoint summary by sequence from the local memory/filesystem path.
