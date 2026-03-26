@@ -66,6 +66,9 @@ pub trait CoinReservationResolverTrait {
         // Note: must be the sender. We do not support sponsorship.
         sender: SuiAddress,
         coin_reservation: ParsedObjectRefWithdrawal,
+        // The version of the accumulator root object to use for MVCC lookup.
+        // If None, use the latest version.
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg>;
 }
 
@@ -220,10 +223,11 @@ impl CoinReservationResolver {
     pub fn get_owner_and_type_for_object(
         &self,
         object_id: ObjectID,
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<(SuiAddress, TypeTag)> {
         let object = AccumulatorValue::load_object_by_id(
             self.child_object_resolver.as_ref(),
-            None,
+            accumulator_version,
             object_id,
         )
         .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?
@@ -252,9 +256,10 @@ impl CoinReservationResolver {
         &self,
         sender: SuiAddress,
         coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
-        let (owner, type_tag) =
-            self.get_owner_and_type_for_object(coin_reservation.unmasked_object_id)?;
+        let (owner, type_tag) = self
+            .get_owner_and_type_for_object(coin_reservation.unmasked_object_id, accumulator_version)?;
 
         if sender != owner {
             return Err(invalid_res_error!(
@@ -277,8 +282,14 @@ impl CoinReservationResolverTrait for CoinReservationResolver {
         &self,
         sender: SuiAddress,
         coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
-        CoinReservationResolver::resolve_funds_withdrawal(self, sender, coin_reservation)
+        CoinReservationResolver::resolve_funds_withdrawal(
+            self,
+            sender,
+            coin_reservation,
+            accumulator_version,
+        )
     }
 }
 
@@ -287,8 +298,14 @@ impl CoinReservationResolverTrait for &'_ CoinReservationResolver {
         &self,
         sender: SuiAddress,
         coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
-        CoinReservationResolver::resolve_funds_withdrawal(self, sender, coin_reservation)
+        CoinReservationResolver::resolve_funds_withdrawal(
+            self,
+            sender,
+            coin_reservation,
+            accumulator_version,
+        )
     }
 }
 #[cfg(test)]

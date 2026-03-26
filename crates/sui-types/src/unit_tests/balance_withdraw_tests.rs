@@ -32,6 +32,7 @@ impl CoinReservationResolverTrait for NoImpl {
         &self,
         _: SuiAddress,
         _: ParsedObjectRefWithdrawal,
+        _: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
         unimplemented!("these tests do not use coin reservations")
     }
@@ -45,6 +46,7 @@ impl CoinReservationResolverTrait for MockSuiResolver {
         &self,
         _sender: SuiAddress,
         coin_reservation: ParsedObjectRefWithdrawal,
+        _accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
         Ok(FundsWithdrawalArg::balance_from_sender(
             coin_reservation.reservation_amount(),

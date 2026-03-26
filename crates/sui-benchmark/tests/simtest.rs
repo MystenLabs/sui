@@ -1592,7 +1592,7 @@ mod test {
         .with_probability(AddressBalanceOverdraw::NAME, 0.3)
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
-        .with_probability(CoinReservationWithdraw::NAME, 0.3);
+        .with_probability(CoinReservationWithdraw::NAME, 0.1);
 
         test_simulated_load_with_test_config(
             test_cluster,

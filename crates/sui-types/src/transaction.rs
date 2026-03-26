@@ -2707,7 +2707,9 @@ impl TransactionDataAPI for TransactionDataV1 {
         let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
 
         for withdraw in self.parsed_coin_reservations(chain_identifier) {
-            let withdrawal_arg = coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw)?;
+            // During signing, use latest accumulator version (None).
+            let withdrawal_arg =
+                coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw, None)?;
             withdraws.push(withdrawal_arg);
         }
 

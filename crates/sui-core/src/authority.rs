@@ -1917,6 +1917,7 @@ impl AuthorityState {
         mut kind: TransactionKind,
         signer: SuiAddress,
         tx_digest: TransactionDigest,
+        accumulator_version: Option<SequenceNumber>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -1924,12 +1925,19 @@ impl AuthorityState {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
-            self.chain_identifier,
-            &*self.coin_reservation_resolver,
-            sender,
-            &mut kind,
-        );
+        // Skip rewriting if execution_params already indicates an error - the transaction will fail
+        // anyway, and trying to rewrite could fail if the accumulator was deleted.
+        let rewritten_inputs = if execution_params.is_ok() {
+            rewrite_transaction_for_coin_reservations(
+                self.chain_identifier,
+                &*self.coin_reservation_resolver,
+                sender,
+                &mut kind,
+                accumulator_version,
+            )
+        } else {
+            None
+        };
 
         let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
             // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
@@ -2052,6 +2060,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 tx_digest,
+                execution_env.assigned_versions.accumulator_version,
             );
 
         let object_funds_checker = self.object_funds_checker.load();
@@ -2383,6 +2392,8 @@ impl AuthorityState {
                 kind,
                 signer,
                 transaction_digest,
+                // Use latest accumulator version for dry run/dev inspect
+                None,
             );
 
         let tx_digest = *effects.transaction_digest();
