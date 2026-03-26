@@ -307,8 +307,8 @@ pub struct AuthenticatorStateUpdateCommand {
 
 #[derive(Debug, clap::Parser)]
 pub struct GaslessAllowTokenCommand {
-    #[clap(long = "type")]
-    pub token_type: String,
+    #[clap(value_parser = ParsedType::parse)]
+    pub token_type: ParsedType,
 }
 
 #[derive(Debug)]

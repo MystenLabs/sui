@@ -21,7 +21,7 @@ module test::usdc {
     }
 }
 
-//# gasless-allow-token --type test::usdc::USDC
+//# gasless-allow-token test::usdc::USDC
 
 //# programmable --sender A --inputs 10000 object(1,1) @A
 // Mint 10000 USDC and send to A's address balance

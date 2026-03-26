@@ -1,0 +1,85 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-39:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 19296400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 42-44:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs @B
+// Reject: TransferObjects is not a MoveCall
+//> TransferObjects([Gas], Input(0));
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support MoveCall commands
+
+task 4, lines 46-48:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0
+// Reject: SplitCoins is not a MoveCall
+//> SplitCoins(Gas, [Gas]);
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support MoveCall commands
+
+task 5, lines 50-53:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(1000)
+// Reject: coin::from_balance is not a whitelisted gasless function
+//> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
+//> 1: sui::coin::from_balance<test::usdc::USDC>(Result(0));
+Error: Error checking transaction input objects: Feature is not supported: Function object(0xobject(0x0000000000000000000000000000000000000000000000000000000000000002))::coin::from_balance is not supported in gasless transactions
+
+task 6, lines 55-58:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(500)
+// Reject: balance::value is not a whitelisted gasless function
+//> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
+//> 1: sui::balance::value<test::usdc::USDC>(Result(0));
+Error: Error checking transaction input objects: Feature is not supported: Function object(0xobject(0x0000000000000000000000000000000000000000000000000000000000000002))::balance::value is not supported in gasless transactions
+
+task 7, lines 60-62:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(500)
+// Reject: funds_accumulator::withdrawal_owner is not a whitelisted gasless function
+//> 0: sui::funds_accumulator::withdrawal_owner<sui::balance::Balance<test::usdc::USDC>>(Input(0));
+Error: Error checking transaction input objects: Feature is not supported: Function object(0xobject(0x0000000000000000000000000000000000000000000000000000000000000002))::funds_accumulator::withdrawal_owner is not supported in gasless transactions
+
+task 8, lines 64-67:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 1000 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(500) @B
+// Reject: nonzero gas budget
+//> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
+//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
+Error: Error checking transaction input objects: Feature is not supported: gas_budget must be 0 for gasless transactions
+
+task 9, lines 69-72:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(500) @B
+// Reject: send_funds with zero type args
+//> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
+//> 1: sui::balance::send_funds(Result(0), Input(1));
+Error: Error checking transaction input objects: Feature is not supported: Function object(0xobject(0x0000000000000000000000000000000000000000000000000000000000000002))::balance::send_funds requires 1 type arguments, but 0 were provided
+
+task 10, lines 74-77:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(500) @B
+// Reject: send_funds with two type args
+//> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
+//> 1: sui::balance::send_funds<test::usdc::USDC, test::usdc::USDC>(Result(0), Input(1));
+Error: Error checking transaction input objects: Feature is not supported: Function object(0xobject(0x0000000000000000000000000000000000000000000000000000000000000002))::balance::send_funds requires 1 type arguments, but 2 were provided
+
+task 11, lines 79-81:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(500) 250u256
+// Reject: withdrawal_split with non-Balance type arg
+//> 0: sui::funds_accumulator::withdrawal_split<test::usdc::USDC>(Input(0), Input(1));
+Error: Error checking transaction input objects: Feature is not supported: Expected a type Balance<_> but got object(1,0)::usdc::USDC
+
+task 12, lines 83-86:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::not_allowed::NOT_ALLOWED>>(500) @B
+// Reject: NOT_ALLOWED token type is not in the gasless allowlist
+//> 0: sui::balance::redeem_funds<test::not_allowed::NOT_ALLOWED>(Input(0));
+//> 1: sui::balance::send_funds<test::not_allowed::NOT_ALLOWED>(Result(0), Input(1));
+Error: Error checking transaction input objects: Feature is not supported: Fund type object(1,0)::not_allowed::NOT_ALLOWED is not currently allowed in gasless transactions
+
+task 13, lines 88-90:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(1,1)
+// Reject: object inputs are not allowed
+//> 0: sui::coin::value<test::usdc::USDC>(Input(0));
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support pure and withdrawal inputs (input 0)

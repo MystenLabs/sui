@@ -21,7 +21,7 @@ module test::usdc {
     }
 }
 
-//# gasless-allow-token --type test::usdc::USDC
+//# gasless-allow-token test::usdc::USDC
 
 //# programmable --sender A --inputs 1000 object(1,1) @A
 // Mint 1000 USDC and fund A

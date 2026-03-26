@@ -1911,8 +1911,8 @@ pub struct ProtocolConfig {
     /// Maximum computation units allowed for a gasless transaction.
     gasless_max_computation_units: Option<u64>,
 
-    /// Allowed token types for gasless transactions.
-    gasless_allowed_token_types: Option<Vec<String>>,
+    /// Allowed token types for gasless transactions, with minimum transfer sizes per token.
+    gasless_allowed_token_types: Option<Vec<(String, u64)>>,
 }
 
 /// An aliased address.
@@ -2700,10 +2700,9 @@ impl ProtocolConfig {
         self.feature_flags.enable_gasless
     }
 
-    pub fn gasless_allowed_token_types(&self) -> &[String] {
-        self.gasless_allowed_token_types
-            .as_deref()
-            .expect(Self::CONSTANT_ERR_MSG)
+    pub fn gasless_allowed_token_types(&self) -> &[(String, u64)] {
+        debug_assert!(self.gasless_allowed_token_types.is_some());
+        self.gasless_allowed_token_types.as_deref().unwrap_or(&[])
     }
 }
 
@@ -4736,7 +4735,7 @@ impl ProtocolConfig {
                         cfg.gasless_allowed_token_types = Some(vec![]);
                     }
                     if chain == Chain::Testnet {
-                        cfg.gasless_allowed_token_types = Some(vec![TESTNET_USDC.to_string()]);
+                        cfg.gasless_allowed_token_types = Some(vec![(TESTNET_USDC.to_string(), 0)]);
                     }
                 }
                 // Use this template when making changes:
@@ -5093,9 +5092,11 @@ impl ProtocolConfig {
 
     pub fn disable_gasless_for_testing(&mut self) {
         self.feature_flags.enable_gasless = false;
+        self.gasless_max_computation_units = None;
+        self.gasless_allowed_token_types = None;
     }
 
-    pub fn set_gasless_allowed_token_types_for_testing(&mut self, types: Vec<String>) {
+    pub fn set_gasless_allowed_token_types_for_testing(&mut self, types: Vec<(String, u64)>) {
         self.gasless_allowed_token_types = Some(types);
     }
 
