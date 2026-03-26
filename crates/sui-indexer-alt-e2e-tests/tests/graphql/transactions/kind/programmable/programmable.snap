@@ -10,7 +10,7 @@ task 1, lines 6-27:
 //# publish
 created: object(1,0), object(1,1)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 7235200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 7258000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 29-32:
 //# programmable --sender A --inputs object(1,0) 42 @B
@@ -29,7 +29,7 @@ task 4, lines 36-77:
 Response: {
   "data": {
     "programmableTransaction": {
-      "digest": "4Vksp8jyeqGSSt7h6ktSLpUktgfMfAQ2AUxhTvkBaj5E",
+      "digest": "8kGZT8XtPGppBamcd4EKb7Ha5r9GZc1AtpKWr7uuswhc",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -62,7 +62,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x9ae77a898283117b70cc87c5936e3038c85ac5447f1b4301ef232e8453acec11"
+                    "address": "0x611284c20f0a97439afeac789637404f24859d0daffb0b3cfdc6267c0ee2d85e"
                   },
                   "name": "simple"
                 },
@@ -74,7 +74,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x9ae77a898283117b70cc87c5936e3038c85ac5447f1b4301ef232e8453acec11"
+                    "address": "0x611284c20f0a97439afeac789637404f24859d0daffb0b3cfdc6267c0ee2d85e"
                   },
                   "name": "simple"
                 },
@@ -96,7 +96,7 @@ task 5, lines 79-120:
 Response: {
   "data": {
     "paginationTest": {
-      "digest": "4Vksp8jyeqGSSt7h6ktSLpUktgfMfAQ2AUxhTvkBaj5E",
+      "digest": "8kGZT8XtPGppBamcd4EKb7Ha5r9GZc1AtpKWr7uuswhc",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -125,7 +125,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x9ae77a898283117b70cc87c5936e3038c85ac5447f1b4301ef232e8453acec11"
+                    "address": "0x611284c20f0a97439afeac789637404f24859d0daffb0b3cfdc6267c0ee2d85e"
                   },
                   "name": "simple"
                 },
@@ -137,7 +137,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x9ae77a898283117b70cc87c5936e3038c85ac5447f1b4301ef232e8453acec11"
+                    "address": "0x611284c20f0a97439afeac789637404f24859d0daffb0b3cfdc6267c0ee2d85e"
                   },
                   "name": "simple"
                 },

@@ -1164,7 +1164,7 @@ async fn start(
         };
 
         let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: Some(fullnode_rpc_url.clone()),
+            fullnode_rpc_url: Some(socket_addr_to_url(fullnode_rpc_address)?),
         };
 
         let mut graphql_config = GraphQlConfig::default();

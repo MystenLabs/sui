@@ -27,6 +27,7 @@ mod checked {
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
+        coin_reservation::ParsedDigest,
         error::SuiError,
         fp_bail, fp_ensure,
         gas::SuiGasStatus,
@@ -229,7 +230,7 @@ mod checked {
             transaction,
             true, // gas_ownership_checks
         )?;
-        check_objects(transaction, input_objects)?;
+        check_objects(transaction, input_objects, protocol_config)?;
         check_replay_protection(transaction, input_objects)?;
 
         Ok(gas_status)
@@ -400,33 +401,49 @@ mod checked {
             SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
 
         // check balance and coins consistency
-        // load all gas coins
+        // load all gas coins (skip coin reservations - they're not loaded as input objects)
         let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
-        let mut gas_objects = vec![];
-        for obj_ref in gas {
-            let obj = objects.get(&obj_ref.0);
-            let obj = *obj.ok_or(UserInputError::ObjectNotFound {
-                object_id: obj_ref.0,
-                version: Some(obj_ref.1),
-            })?;
-            gas_objects.push(obj);
-        }
 
-        // Skip gas balance check for address balance payments
-        // We reserve gas budget in advance
-        if !gas_paid_from_address_balance {
-            if gas_ownership_checks {
-                gas_status.check_gas_objects(&gas_objects)?;
+        let (gas_objects, available_address_balance_gas) = if gas_paid_from_address_balance {
+            // When paying from address balance via gas_data.payment = [], the budget is reserved by the scheduler
+            // and guaranteed to be available.
+            (vec![], gas_budget)
+        } else {
+            // Gas payment may include a mix of coin objects and coin reservations (withdrawals).
+            // Sum up the reservation amounts separately since they don't have input objects.
+            let mut available_address_balance_gas: u64 = 0;
+            let mut gas_objects = vec![];
+            for obj_ref in gas {
+                if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
+                    available_address_balance_gas =
+                        available_address_balance_gas.saturating_add(parsed.reservation_amount());
+                } else {
+                    let obj = objects.get(&obj_ref.0);
+                    let obj = *obj.ok_or(UserInputError::ObjectNotFound {
+                        object_id: obj_ref.0,
+                        version: Some(obj_ref.1),
+                    })?;
+                    gas_objects.push(obj);
+                }
             }
-            gas_status.check_gas_data(&gas_objects, gas_budget)?;
+            (gas_objects, available_address_balance_gas)
+        };
+
+        if gas_ownership_checks {
+            gas_status.check_gas_objects(&gas_objects)?;
         }
+        gas_status.check_gas_balance(&gas_objects, gas_budget, available_address_balance_gas)?;
         Ok(gas_status)
     }
 
     /// Check all the objects used in the transaction against the database, and ensure
     /// that they are all the correct version and number.
     #[instrument(level = "trace", skip_all)]
-    fn check_objects(transaction: &TransactionData, objects: &InputObjects) -> UserInputResult<()> {
+    fn check_objects(
+        transaction: &TransactionData,
+        objects: &InputObjects,
+        protocol_config: &ProtocolConfig,
+    ) -> UserInputResult<()> {
         // We require that mutable objects cannot show up more than once.
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for object in objects.iter() {
@@ -440,7 +457,19 @@ mod checked {
             }
         }
 
-        if !transaction.is_genesis_tx() && objects.is_empty() {
+        // When coin reservations are enabled, allow empty objects if gas is paid from
+        // address balance or entirely from coin reservations (the gas coin is materialized
+        // from the address balance, so no input objects are needed).
+        let gas_only_contains_coin_reservations = !transaction.gas().is_empty()
+            && transaction
+                .gas()
+                .iter()
+                .all(|obj_ref| ParsedDigest::is_coin_reservation_digest(&obj_ref.2));
+
+        let allow_empty_objects = protocol_config.enable_coin_reservation_obj_refs()
+            && (transaction.is_gas_paid_from_address_balance()
+                || gas_only_contains_coin_reservations);
+        if !transaction.is_genesis_tx() && objects.is_empty() && !allow_empty_objects {
             return Err(UserInputError::ObjectInputArityViolation);
         }
 

@@ -443,7 +443,6 @@ mod tests {
         TransactionIndex,
     };
     use futures::{StreamExt, stream::FuturesUnordered};
-    use sui_protocol_config::ProtocolConfig;
     use tokio::time::timeout;
 
     use crate::transaction::NoopTransactionVerifier;
@@ -455,13 +454,14 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn basic_submit_and_consume() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes_for_testing(2_000); // 2KB
-            config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
-            config
-        });
-
-        let context = Arc::new(Context::new_for_test(4).0);
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_max_transaction_size_bytes_for_testing(2_000); // 2KB
+        context
+            .protocol_config
+            .set_max_transactions_in_block_bytes_for_testing(2_000);
+        let context = Arc::new(context);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
         let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
@@ -507,14 +507,15 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn block_status_update() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes_for_testing(2_000); // 2KB
-            config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
-            config.set_consensus_gc_depth_for_testing(10);
-            config
-        });
-
-        let context = Arc::new(Context::new_for_test(4).0);
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_max_transaction_size_bytes_for_testing(2_000); // 2KB
+        context
+            .protocol_config
+            .set_max_transactions_in_block_bytes_for_testing(2_000);
+        context.protocol_config.set_gc_depth_for_testing(10);
+        let context = Arc::new(context);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
         let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
@@ -586,13 +587,14 @@ mod tests {
 
     #[tokio::test]
     async fn submit_over_max_fetch_size_and_consume() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes_for_testing(100);
-            config.set_consensus_max_transactions_in_block_bytes_for_testing(100);
-            config
-        });
-
-        let context = Arc::new(Context::new_for_test(4).0);
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_max_transaction_size_bytes_for_testing(100);
+        context
+            .protocol_config
+            .set_max_transactions_in_block_bytes_for_testing(100);
+        let context = Arc::new(context);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
         let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
@@ -644,13 +646,14 @@ mod tests {
 
     #[tokio::test]
     async fn submit_large_batch_and_ack() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes_for_testing(15);
-            config.set_consensus_max_transactions_in_block_bytes_for_testing(200);
-            config
-        });
-
-        let context = Arc::new(Context::new_for_test(4).0);
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_max_transaction_size_bytes_for_testing(15);
+        context
+            .protocol_config
+            .set_max_transactions_in_block_bytes_for_testing(200);
+        let context = Arc::new(context);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
         let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let mut all_receivers = Vec::new();
@@ -767,14 +770,17 @@ mod tests {
     async fn test_submit_over_max_block_size_and_validate_block_size() {
         // submit transactions individually so we make sure that we have reached the block size limit of 10
         {
-            let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-                config.set_consensus_max_transaction_size_bytes_for_testing(100);
-                config.set_consensus_max_num_transactions_in_block_for_testing(10);
-                config.set_consensus_max_transactions_in_block_bytes_for_testing(300);
-                config
-            });
-
-            let context = Arc::new(Context::new_for_test(4).0);
+            let (mut context, _) = Context::new_for_test(4);
+            context
+                .protocol_config
+                .set_max_transaction_size_bytes_for_testing(100);
+            context
+                .protocol_config
+                .set_max_num_transactions_in_block_for_testing(10);
+            context
+                .protocol_config
+                .set_max_transactions_in_block_bytes_for_testing(300);
+            let context = Arc::new(context);
             let (client, tx_receiver) = TransactionClient::new(context.clone());
             let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
             let mut all_receivers = Vec::new();
@@ -810,14 +816,17 @@ mod tests {
 
         // submit transactions individually so we make sure that we have reached the block size bytes 300
         {
-            let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-                config.set_consensus_max_transaction_size_bytes_for_testing(100);
-                config.set_consensus_max_num_transactions_in_block_for_testing(1_000);
-                config.set_consensus_max_transactions_in_block_bytes_for_testing(300);
-                config
-            });
-
-            let context = Arc::new(Context::new_for_test(4).0);
+            let (mut context, _) = Context::new_for_test(4);
+            context
+                .protocol_config
+                .set_max_transaction_size_bytes_for_testing(100);
+            context
+                .protocol_config
+                .set_max_num_transactions_in_block_for_testing(1_000);
+            context
+                .protocol_config
+                .set_max_transactions_in_block_bytes_for_testing(300);
+            let context = Arc::new(context);
             let (client, tx_receiver) = TransactionClient::new(context.clone());
             let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
             let mut all_receivers = Vec::new();
@@ -848,10 +857,7 @@ mod tests {
 
             assert_eq!(limit, LimitReached::MaxBytes);
             assert!(
-                batch.len()
-                    < context
-                        .protocol_config
-                        .consensus_max_num_transactions_in_block() as usize,
+                batch.len() < context.protocol_config.max_num_transactions_in_block() as usize,
                 "Should have submitted less than the max number of transactions in a block"
             );
             assert!(size <= max_transactions_in_block_bytes);
@@ -870,13 +876,14 @@ mod tests {
     // This is the case where the client submits a "ping" signal to the consensus to get information about the next block and simulate a transaction inclusion to the next block.
     #[tokio::test]
     async fn submit_with_no_transactions() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes_for_testing(15);
-            config.set_consensus_max_transactions_in_block_bytes_for_testing(200);
-            config
-        });
-
-        let context = Arc::new(Context::new_for_test(4).0);
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_max_transaction_size_bytes_for_testing(15);
+        context
+            .protocol_config
+            .set_max_transactions_in_block_bytes_for_testing(200);
+        let context = Arc::new(context);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
         let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
@@ -922,16 +929,17 @@ mod tests {
         // Ensure that enough space is allocated in the channel for the pending transactions, so we don't end up consuming the transactions in chunks.
         static MAX_PENDING_TRANSACTIONS: usize = 2 * MAX_NUM_TRANSACTIONS_IN_BLOCK as usize;
 
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes_for_testing(200_000);
-            config.set_consensus_max_transactions_in_block_bytes_for_testing(1_000_000);
-            config.set_consensus_max_num_transactions_in_block_for_testing(
-                MAX_NUM_TRANSACTIONS_IN_BLOCK,
-            );
-            config
-        });
-
-        let context = Arc::new(Context::new_for_test(4).0);
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_max_transaction_size_bytes_for_testing(200_000);
+        context
+            .protocol_config
+            .set_max_transactions_in_block_bytes_for_testing(1_000_000);
+        context
+            .protocol_config
+            .set_max_num_transactions_in_block_for_testing(MAX_NUM_TRANSACTIONS_IN_BLOCK);
+        let context = Arc::new(context);
         let (client, tx_receiver) = TransactionClient::new_with_max_pending_transactions(
             context.clone(),
             MAX_PENDING_TRANSACTIONS,

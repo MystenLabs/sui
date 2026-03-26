@@ -10,7 +10,7 @@ task 1, lines 8-17:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 4544800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4552400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 19-21:
 //# programmable --sender A --inputs @A
@@ -36,7 +36,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "digest": "9YfL8jaDtzz6VVF9EZEgubZoRcLyXU9TNnR62dr8h4Jb",
+    "digest": "DcstsyaHUsDu3Q1srTxbhvriCYSawNHwsQRG3GnTrJuS",
     "objectChanges": [
       {
         "type": "transferred",
@@ -44,10 +44,10 @@ Response: {
         "recipient": {
           "AddressOwner": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
         },
-        "objectType": "0xf5c805ce83763009110cab769a0a0722c436ea9669e60eb47d51c34d3f5dc2e6::M::O",
-        "objectId": "0xd788c3621454bda6f9306687ca24d314c48f259bc9345721d908c6343f0c2bcd",
+        "objectType": "0x5330c6b6eaa2af2b275c60a29e5587cd414af83f73e74987a555128b414fa0fe::M::O",
+        "objectId": "0x6851278f51b23a368caf7e3997d3f5b44c860c75cd983abdb9cb998a3de9859a",
         "version": "3",
-        "digest": "9rFiQJUK4Puk6aYrSG2DcQDP3sRcSQkasDoUWzwvoEVw"
+        "digest": "3QdgQD8HPKUthKfZYcWNmDbiSqVccucSMJtJjTEsS2HB"
       },
       {
         "type": "mutated",
@@ -59,7 +59,7 @@ Response: {
         "objectId": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
         "version": "3",
         "previousVersion": "2",
-        "digest": "BGPZ5Cj5d53rpmj9z3E3qEbxsuFiPSuUZyKr9oCbseLX"
+        "digest": "FP1mkqhNNecQcF5Lwet5EJRGGHraqr1DMQU2i5W6TtpV"
       }
     ],
     "timestampMs": "0",

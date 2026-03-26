@@ -10,7 +10,7 @@ task 1, lines 10-19:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 4620800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4628400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 21-23:
 //# programmable --sender A --inputs @A
@@ -31,9 +31,9 @@ Response: {
   "id": 0,
   "result": {
     "data": {
-      "objectId": "0xd722bc743834a568c0f3ea8e9b729769d002fa3759941e8cae2ae01eaf738443",
+      "objectId": "0xff3cbc7dbfc4494862cbd9bb0e9931e073c22edb46e7c39d02cfc53ed00d0850",
       "version": "1",
-      "digest": "DP55zYhc9zkg3Avck5HCZBssJYJCZ5sT1tppBWxwptKY",
+      "digest": "E7VmPAyuA1crwkUGffcL4xvr4GgrP1oDc353p23ibYNS",
       "display": {
         "data": null,
         "error": {
@@ -52,14 +52,14 @@ Response: {
   "id": 1,
   "result": {
     "data": {
-      "objectId": "0x69600d7b4dbc386eac0375091ed36a5712d317a44d8535192315aa6290d66371",
+      "objectId": "0xb845fc047c3d9c43ceb230793521757d0ad1ed75601560b85e9b6df99aceb5d1",
       "version": "2",
-      "digest": "CvKGf3iz9AksuFkrsvNgV3uqwmN64vawHL1scMuEnnMv",
+      "digest": "98BjpgqAnojPCNKaVmXNNnjGHbuTuqSd9ABTXQeka3v1",
       "display": {
         "data": null,
         "error": {
           "code": "displayError",
-          "error": "Display format not found for 0xd722bc743834a568c0f3ea8e9b729769d002fa3759941e8cae2ae01eaf738443::mod::Foo"
+          "error": "Display format not found for 0xff3cbc7dbfc4494862cbd9bb0e9931e073c22edb46e7c39d02cfc53ed00d0850::mod::Foo"
         }
       }
     }

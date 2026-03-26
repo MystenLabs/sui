@@ -35,6 +35,7 @@ pub struct MockWatermark {
     pub reader_lo: u64,
     pub pruner_timestamp: u64,
     pub pruner_hi: u64,
+    pub chain_id: Option<[u8; 32]>,
 }
 
 /// Configuration for simulating connection failures in tests
@@ -120,12 +121,32 @@ impl Connection for MockConnection<'_> {
                 reader_lo: init_watermark.reader_lo,
                 pruner_timestamp: 0,
                 pruner_hi: init_watermark.reader_lo,
+                chain_id: None,
             });
 
         Ok(InitWatermark {
             checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
             reader_lo: watermark.reader_lo,
         })
+    }
+
+    async fn accepts_chain_id(
+        &mut self,
+        pipeline_task: &str,
+        chain_id: [u8; 32],
+    ) -> anyhow::Result<bool> {
+        let mut wm = self
+            .0
+            .watermarks
+            .entry(pipeline_task.to_string())
+            .or_default();
+
+        if let Some(stored_chain_id) = wm.chain_id {
+            Ok(stored_chain_id == chain_id)
+        } else {
+            wm.chain_id = Some(chain_id);
+            Ok(true)
+        }
     }
 
     async fn committer_watermark(

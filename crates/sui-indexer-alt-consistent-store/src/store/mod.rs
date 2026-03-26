@@ -175,6 +175,15 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
         init_with_committer_watermark(self, pipeline_task, init_watermark).await
     }
 
+    async fn accepts_chain_id(
+        &mut self,
+        _pipeline_task: &str,
+        _chain_id: [u8; 32],
+    ) -> anyhow::Result<bool> {
+        // TODO: Implement storing chain_id
+        Ok(true)
+    }
+
     async fn committer_watermark(
         &mut self,
         pipeline_task: &str,

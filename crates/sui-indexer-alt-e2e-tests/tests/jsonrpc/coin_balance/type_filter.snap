@@ -11,7 +11,7 @@ task 1, lines 6-41:
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6), object(1,7), object(1,8)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 22959600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 22967200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 43:
 //# create-checkpoint
@@ -23,7 +23,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "coinType": "0x7eb09f99f5d72e22c1c42b22bcfdeed702e2eb39b27f25c40d0371d93d839a46::fake::FAKE",
+    "coinType": "0x311a2ade9bff9e5eb87d329c7e7d312f05737f5a690a9b60feae11e7bf5344a7::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "12102",
     "lockedBalance": {},
@@ -39,7 +39,7 @@ Response: {
   "result": {
     "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
     "coinObjectCount": 1,
-    "totalBalance": "299999976040400",
+    "totalBalance": "299999976032800",
     "lockedBalance": {},
     "fundsInAddressBalance": "0"
   }
@@ -54,12 +54,12 @@ Response: {
     {
       "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
       "coinObjectCount": 1,
-      "totalBalance": "299999976040400",
+      "totalBalance": "299999976032800",
       "lockedBalance": {},
       "fundsInAddressBalance": "0"
     },
     {
-      "coinType": "0x7eb09f99f5d72e22c1c42b22bcfdeed702e2eb39b27f25c40d0371d93d839a46::fake::FAKE",
+      "coinType": "0x311a2ade9bff9e5eb87d329c7e7d312f05737f5a690a9b60feae11e7bf5344a7::fake::FAKE",
       "coinObjectCount": 1,
       "totalBalance": "12102",
       "lockedBalance": {},

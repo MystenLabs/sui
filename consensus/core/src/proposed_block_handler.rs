@@ -50,7 +50,7 @@ impl ProposedBlockHandler {
     }
 
     fn handle_proposed_block(&self, extended_block: ExtendedBlock) {
-        if !self.context.protocol_config.mysticeti_fastpath() {
+        if !self.context.protocol_config.transaction_voting_enabled() {
             return;
         }
         let _scope = monitored_scope("handle_proposed_block");

@@ -8,8 +8,8 @@ use crate::mysticeti_adapter::LazyMysticetiClient;
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{
-    Committee, NetworkKeyPair, NetworkPublicKey as ConsensusNetworkPublicKey, Parameters,
-    ProtocolKeyPair,
+    Committee, ConsensusProtocolConfig, NetworkKeyPair,
+    NetworkPublicKey as ConsensusNetworkPublicKey, Parameters, ProtocolKeyPair,
 };
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority, NetworkType,
@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_network::endpoint_manager::ConsensusAddressUpdater;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
@@ -115,6 +115,20 @@ impl AddressOverridesMap {
         }
         result
     }
+}
+
+fn to_consensus_protocol_config(config: &ProtocolConfig) -> ConsensusProtocolConfig {
+    ConsensusProtocolConfig::new(
+        config.version.as_u64(),
+        config.max_transaction_size_bytes(),
+        config.max_transactions_in_block_bytes(),
+        config.max_num_transactions_in_block(),
+        config.gc_depth(),
+        config.mysticeti_fastpath(),
+        config.mysticeti_num_leaders_per_round(),
+        config.consensus_bad_nodes_stake_threshold(),
+        config.consensus_always_accept_system_transactions(),
+    )
 }
 
 /// Used by Sui validator to start consensus protocol for each epoch.
@@ -283,7 +297,7 @@ impl ConsensusManager {
             own_index,
             committee.clone(),
             parameters.clone(),
-            protocol_config.clone(),
+            to_consensus_protocol_config(protocol_config),
             self.protocol_keypair.clone(),
             self.network_keypair.clone(),
             Arc::new(Clock::default()),

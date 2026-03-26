@@ -200,7 +200,7 @@ impl BlockVerifier for SignedBlockVerifier {
         // If the block verification passed then we can produce the verified block, but we should only return it if the transaction verification passed as well.
         let verified_block = VerifiedBlock::new_verified(block, serialized_block);
 
-        let rejected_transactions = if self.context.protocol_config.mysticeti_fastpath() {
+        let rejected_transactions = if self.context.protocol_config.transaction_voting_enabled() {
             self.vote(&verified_block)?
         } else {
             self.transaction_verifier
@@ -241,9 +241,8 @@ impl BlockVerifier for NoopBlockVerifier {
 
 #[cfg(test)]
 mod test {
-    use consensus_config::AuthorityIndex;
+    use consensus_config::{AuthorityIndex, ConsensusProtocolConfig};
     use consensus_types::block::{BlockDigest, BlockRef, TransactionIndex};
-    use sui_protocol_config::ProtocolConfig;
 
     use super::*;
     use crate::{
@@ -571,8 +570,8 @@ mod test {
 
     #[tokio::test]
     async fn test_verify_and_vote_transactions() {
-        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        protocol_config.set_mysticeti_fastpath_for_testing(true);
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_transaction_voting_enabled_for_testing(true);
 
         let (context, keypairs) = Context::new_for_test(4);
         let context = Arc::new(context.with_protocol_config(protocol_config));

@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use crate::{TestCluster, TestClusterBuilder};
 use sui_keys::keystore::AccountKeystore;
@@ -19,7 +22,7 @@ use sui_types::{
     error::SuiResult,
     gas_coin::GAS,
     storage::ChildObjectResolver,
-    transaction::TransactionData,
+    transaction::{CallArg, ObjectArg, TransactionData},
 };
 
 // TODO: Some of this code may be useful for tests other than address balance tests,
@@ -188,6 +191,14 @@ impl TestEnv {
         TestTransactionBuilder::new(sender, gas, self.rgp)
     }
 
+    pub fn tx_builder_with_gas_objects(
+        &self,
+        sender: SuiAddress,
+        gas_objects: Vec<ObjectRef>,
+    ) -> TestTransactionBuilder {
+        TestTransactionBuilder::new_with_gas_objects(sender, gas_objects, self.rgp)
+    }
+
     pub async fn exec_tx_directly(
         &mut self,
         tx: TransactionData,
@@ -225,6 +236,18 @@ impl TestEnv {
         amount: u64,
     ) -> ObjectRef {
         let accumulator_obj_id = get_sui_accumulator_object_id(sender);
+        ParsedObjectRefWithdrawal::new(accumulator_obj_id, epoch, amount)
+            .encode(SequenceNumber::new(), self.chain_id)
+    }
+
+    pub fn encode_coin_reservation_for_type(
+        &self,
+        sender: SuiAddress,
+        epoch: u64,
+        amount: u64,
+        coin_type: TypeTag,
+    ) -> ObjectRef {
+        let accumulator_obj_id = get_accumulator_object_id(sender, coin_type);
         ParsedObjectRefWithdrawal::new(accumulator_obj_id, epoch, amount)
             .encode(SequenceNumber::new(), self.chain_id)
     }
@@ -281,11 +304,24 @@ impl TestEnv {
         });
     }
 
-    pub fn get_sui_balance(&self, owner: SuiAddress) -> u64 {
-        self.get_balance(owner, GAS::type_tag())
+    /// Get the balance of the owner's SUI address balance.
+    pub fn get_sui_balance_ab(&self, owner: SuiAddress) -> u64 {
+        self.get_balance_ab(owner, GAS::type_tag())
     }
 
-    pub fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> u64 {
+    pub async fn get_coin_balance(&self, object_id: ObjectID) -> u64 {
+        self.cluster
+            .get_object_from_fullnode_store(&object_id)
+            .await
+            .expect("coin object should exist")
+            .data
+            .try_as_move()
+            .expect("should be a Move object")
+            .get_coin_value_unsafe()
+    }
+
+    /// Get the balance of the owner's address balance for a given coin type.
+    pub fn get_balance_ab(&self, owner: SuiAddress, coin_type: TypeTag) -> u64 {
         let db_balance = self.cluster.fullnode_handle.sui_node.with({
             let coin_type = coin_type.clone();
             move |node| {
@@ -296,15 +332,39 @@ impl TestEnv {
         });
 
         let client = self.cluster.grpc_client();
+        // Check that the rpc balance agrees with the db balance, on a best-effort basis.
         tokio::task::spawn(async move {
-            let rpc_balance = client
+            match client
                 .get_balance(owner, &coin_type.to_canonical_string(true).parse().unwrap())
                 .await
-                .unwrap();
-            assert_eq!(db_balance, rpc_balance.address_balance());
+            {
+                Ok(rpc_balance) => {
+                    assert_eq!(db_balance, rpc_balance.address_balance());
+                }
+                Err(e) => {
+                    // this usually just means the cluster shut down first before the rpc
+                    // completed.
+                    tracing::info!("Failed to verify balance via gRPC: {e}");
+                }
+            }
         });
 
         db_balance
+    }
+
+    /// Get the total balance of SUI owned by the address (including address balance and coins).
+    pub async fn get_sui_balance(&self, owner: SuiAddress) -> u64 {
+        self.get_balance_for_coin_type(owner, GAS::type_tag()).await
+    }
+
+    /// Get the total balance of a given coin type owned by the address (including address balance and coins).
+    pub async fn get_balance_for_coin_type(&self, owner: SuiAddress, coin_type: TypeTag) -> u64 {
+        let client = self.cluster.grpc_client();
+        let rpc_balance = client
+            .get_balance(owner, &coin_type.to_canonical_string(true).parse().unwrap())
+            .await
+            .unwrap();
+        rpc_balance.balance()
     }
 
     pub fn verify_accumulator_removed(&self, owner: SuiAddress) {
@@ -362,10 +422,192 @@ impl TestEnv {
 
         (package_id, vault_id)
     }
+
+    /// Publish the trusted_coin package and return (package_id, coin_type, treasury_cap).
+    pub async fn publish_trusted_coin(
+        &mut self,
+        sender: SuiAddress,
+    ) -> (ObjectID, TypeTag, ObjectRef) {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.pop();
+        path.extend(["sui-e2e-tests", "tests", "rpc", "data", "trusted_coin"]);
+
+        let tx = self.tx_builder(sender).publish_async(path).await.build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+
+        let package_id = effects.published_packages().into_iter().next().unwrap();
+        let coin_type: TypeTag = format!("{}::trusted_coin::TRUSTED_COIN", package_id)
+            .parse()
+            .unwrap();
+
+        // Find the treasury cap by checking object type
+        let mut treasury_cap = None;
+        for (obj_ref, owner) in effects.created() {
+            if owner.is_address_owned() {
+                let object = self
+                    .cluster
+                    .fullnode_handle
+                    .sui_node
+                    .with_async(
+                        |node| async move { node.state().get_object(&obj_ref.0).await.unwrap() },
+                    )
+                    .await;
+                if object.type_().unwrap().name().as_str() == "TreasuryCap" {
+                    treasury_cap = Some(obj_ref);
+                    break;
+                }
+            }
+        }
+
+        (
+            package_id,
+            coin_type,
+            treasury_cap.expect("Treasury cap not found"),
+        )
+    }
+
+    /// Mint a trusted coin. Returns (coin_ref, updated_treasury_cap).
+    pub async fn mint_trusted_coin(
+        &mut self,
+        sender: SuiAddress,
+        package_id: ObjectID,
+        treasury_cap: ObjectRef,
+        amount: u64,
+    ) -> (ObjectRef, ObjectRef) {
+        let tx = self
+            .tx_builder(sender)
+            .move_call(
+                package_id,
+                "trusted_coin",
+                "mint",
+                vec![
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap)),
+                    CallArg::Pure(bcs::to_bytes(&amount).unwrap()),
+                ],
+            )
+            .build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+
+        let coin_ref = effects
+            .created()
+            .iter()
+            .find(|(_, owner)| owner.is_address_owned())
+            .unwrap()
+            .0;
+
+        let new_treasury_cap = effects
+            .mutated()
+            .iter()
+            .find(|(obj_ref, _)| obj_ref.0 == treasury_cap.0)
+            .map(|(obj_ref, _)| *obj_ref)
+            .unwrap();
+
+        (coin_ref, new_treasury_cap)
+    }
+
+    /// Transfer a coin to recipient.
+    pub async fn transfer_coin(
+        &mut self,
+        sender: SuiAddress,
+        coin: ObjectRef,
+        recipient: SuiAddress,
+    ) {
+        let tx = self
+            .tx_builder(sender)
+            .transfer(FullObjectRef::from_fastpath_ref(coin), recipient)
+            .build();
+        self.exec_tx_directly(tx).await.unwrap();
+    }
+
+    /// Transfer SUI from sender's gas to recipient.
+    pub async fn transfer_sui(&mut self, sender: SuiAddress, recipient: SuiAddress, amount: u64) {
+        let tx = self
+            .tx_builder(sender)
+            .transfer_sui(Some(amount), recipient)
+            .build();
+        self.exec_tx_directly(tx).await.unwrap();
+    }
+
+    /// Transfer SUI from sender's gas to recipient's address balance.
+    pub async fn transfer_sui_to_address_balance(
+        &mut self,
+        sender: SuiAddress,
+        recipient: SuiAddress,
+        amount: u64,
+    ) {
+        let gas = self.gas_objects[&sender][0];
+        let tx = TestTransactionBuilder::new(sender, gas, self.rgp)
+            .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(amount, recipient)])
+            .build();
+        self.exec_tx_directly(tx).await.unwrap();
+    }
+
+    /// Convenience: publish trusted_coin and set up coins for recipient per config.
+    pub async fn publish_trusted_coin_and_setup(
+        &mut self,
+        funder: SuiAddress,
+        recipient: SuiAddress,
+        config: &CoinTypeConfig,
+        coin_amount: u64,
+    ) -> (ObjectID, TypeTag) {
+        let (package_id, coin_type, mut treasury_cap) = self.publish_trusted_coin(funder).await;
+
+        for _ in 0..config.real_coins {
+            let (coin, new_cap) = self
+                .mint_trusted_coin(funder, package_id, treasury_cap, coin_amount)
+                .await;
+            treasury_cap = new_cap;
+            self.transfer_coin(funder, coin, recipient).await;
+        }
+
+        if config.has_address_balance {
+            let (coin, _) = self
+                .mint_trusted_coin(funder, package_id, treasury_cap, coin_amount)
+                .await;
+            let tx = self
+                .tx_builder(funder)
+                .transfer_funds_to_address_balance(
+                    FundSource::Coin(coin),
+                    vec![(coin_amount, recipient)],
+                    coin_type.clone(),
+                )
+                .build();
+            self.exec_tx_directly(tx).await.unwrap();
+        }
+
+        (package_id, coin_type)
+    }
+
+    /// Legacy: publish trusted_coin with one real coin and address balance for sender.
+    pub async fn publish_and_mint_trusted_coin(
+        &mut self,
+        sender: SuiAddress,
+        amount: u64,
+    ) -> (ObjectID, TypeTag) {
+        let config = CoinTypeConfig {
+            real_coins: 1,
+            has_address_balance: true,
+        };
+        self.publish_trusted_coin_and_setup(sender, sender, &config, amount)
+            .await
+    }
+}
+
+/// Configuration for a single coin type in a test scenario.
+#[derive(Clone, Debug)]
+pub struct CoinTypeConfig {
+    /// Number of real coins to create for this type.
+    pub real_coins: usize,
+    /// Whether to create an address balance (fake coin) for this type.
+    pub has_address_balance: bool,
 }
 
 pub fn get_sui_accumulator_object_id(sender: SuiAddress) -> ObjectID {
-    *AccumulatorValue::get_field_id(sender, &Balance::type_tag(GAS::type_tag()))
+    get_accumulator_object_id(sender, GAS::type_tag())
+}
+
+pub fn get_accumulator_object_id(sender: SuiAddress, coin_type: TypeTag) -> ObjectID {
+    *AccumulatorValue::get_field_id(sender, &Balance::type_tag(coin_type))
         .unwrap()
         .inner()
 }

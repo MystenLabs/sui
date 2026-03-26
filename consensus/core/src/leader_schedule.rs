@@ -243,9 +243,7 @@ impl LeaderSwapTable {
         commit_index: CommitIndex,
         reputation_scores: ReputationScores,
     ) -> Self {
-        let swap_stake_threshold = context
-            .protocol_config
-            .consensus_bad_nodes_stake_threshold();
+        let swap_stake_threshold = context.protocol_config.bad_nodes_stake_threshold();
         Self::new_inner(
             context,
             swap_stake_threshold,
@@ -497,7 +495,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -576,7 +574,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -605,7 +603,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -691,7 +689,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let leader_schedule = Arc::new(LeaderSchedule::new(
             context.clone(),

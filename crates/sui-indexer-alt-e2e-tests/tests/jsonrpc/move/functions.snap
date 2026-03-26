@@ -10,7 +10,7 @@ task 1, lines 17-28:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6353600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6368800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 30:
 //# create-checkpoint
@@ -29,7 +29,7 @@ Response: {
       "U64",
       {
         "Struct": {
-          "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+          "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
           "module": "M",
           "name": "O",
           "typeArguments": []
@@ -38,7 +38,7 @@ Response: {
       {
         "MutableReference": {
           "Struct": {
-            "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+            "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -48,7 +48,7 @@ Response: {
       {
         "Vector": {
           "Struct": {
-            "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+            "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -61,7 +61,7 @@ Response: {
       {
         "Reference": {
           "Struct": {
-            "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+            "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -70,7 +70,7 @@ Response: {
       },
       {
         "Struct": {
-          "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+          "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
           "module": "M",
           "name": "O",
           "typeArguments": []
@@ -79,7 +79,7 @@ Response: {
       {
         "Vector": {
           "Struct": {
-            "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+            "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -110,7 +110,7 @@ task 5, lines 44-63:
 //# upgrade --package P --sender A --upgrade-capability 1,1
 created: object(5,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 7250400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 7273200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 6, line 65:
 //# create-checkpoint
@@ -129,7 +129,7 @@ Response: {
       "U64",
       {
         "Struct": {
-          "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+          "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
           "module": "M",
           "name": "O",
           "typeArguments": []
@@ -138,7 +138,7 @@ Response: {
       {
         "MutableReference": {
           "Struct": {
-            "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+            "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -148,7 +148,7 @@ Response: {
       {
         "Vector": {
           "Struct": {
-            "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+            "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -161,7 +161,7 @@ Response: {
       {
         "Reference": {
           "Struct": {
-            "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+            "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -170,7 +170,7 @@ Response: {
       },
       {
         "Struct": {
-          "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+          "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
           "module": "M",
           "name": "O",
           "typeArguments": []
@@ -179,7 +179,7 @@ Response: {
       {
         "Vector": {
           "Struct": {
-            "address": "0x9df785dffbfed126fed950a0556df31a5567b5c07af9467b044845a7fcc4ce15",
+            "address": "0x6c304fb15a96f87a38e88fe34b5125763c213112d0d96d9d4655bdb671745c1d",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -205,7 +205,7 @@ Response: {
       {
         "Reference": {
           "Struct": {
-            "address": "0x224da6f1c4ffa82f3cb2e1012eb80a806e0bf210f96d4ca9926b7a82da9b808c",
+            "address": "0xe39808541e310d736f7266fc94220572d2f5b3ae0cf3a693a2cdeb525fd5f4cc",
             "module": "M",
             "name": "O2",
             "typeArguments": []
@@ -275,7 +275,7 @@ Response: {
   "id": 8,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Module not found: 0x224da6f1c4ffa82f3cb2e1012eb80a806e0bf210f96d4ca9926b7a82da9b808c::N"
+    "message": "Invalid Params: Module not found: 0xe39808541e310d736f7266fc94220572d2f5b3ae0cf3a693a2cdeb525fd5f4cc::N"
   }
 }
 
@@ -286,6 +286,6 @@ Response: {
   "id": 9,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Function not found: 0x224da6f1c4ffa82f3cb2e1012eb80a806e0bf210f96d4ca9926b7a82da9b808c::M::qux"
+    "message": "Invalid Params: Function not found: 0xe39808541e310d736f7266fc94220572d2f5b3ae0cf3a693a2cdeb525fd5f4cc::M::qux"
   }
 }

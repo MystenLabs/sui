@@ -814,6 +814,7 @@ pub async fn download_formal_snapshot(
     snapshot_store_config: ObjectStoreConfig,
     ingestion_url: &str,
     num_parallel_downloads: usize,
+    num_parallel_chunks: usize,
     network: Chain,
     verify: SnapshotVerifyMode,
     max_retries: usize,
@@ -921,11 +922,12 @@ pub async fn download_formal_snapshot(
             m_clone,
             false, // skip_reset_local_store
             max_retries,
+            num_parallel_chunks,
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
         reader
-            .read(&perpetual_db_clone, abort_registration, Some(sender))
+            .read(perpetual_db_clone.clone(), abort_registration, Some(sender))
             .await
             .unwrap_or_else(|err| panic!("Failed during read: {}", err));
         info!("Snapshot download complete");

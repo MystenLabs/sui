@@ -10,19 +10,19 @@ task 1, lines 6-17:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5183200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5190800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 19-45:
 //# publish --dependencies t3
 created: object(2,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 7668400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 7698800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 48-72:
 //# publish --dependencies t2 t3
 created: object(3,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 8215600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 8238400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, line 74:
 //# run t3::o3::create --sender A

@@ -720,6 +720,20 @@ impl<K, V> DBMap<K, V> {
         Ok(())
     }
 
+    #[cfg(tidehunter)]
+    pub fn drop_cells_in_range_raw(
+        &self,
+        from_inclusive: &[u8],
+        to_inclusive: &[u8],
+    ) -> Result<(), TypedStoreError> {
+        if let ColumnFamily::TideHunter((ks, _)) = &self.column_family {
+            self.db
+                .drop_cells_in_range(*ks, from_inclusive, to_inclusive)
+                .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        }
+        Ok(())
+    }
+
     /// Returns a vector of raw values corresponding to the keys provided.
     fn multi_get_pinned<J>(
         &self,
@@ -2057,18 +2071,21 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), std::i
         ..Default::default()
     };
     loop {
-        if !path.join("LOCK").exists() {
-            return std::fs::remove_dir_all(path);
-        }
-        match backoff.next_backoff() {
-            Some(duration) => tokio::time::sleep(duration).await,
-            None => {
-                warn!(
-                    "LOCK file present after timeout ({:?}), forcefully removing: {:?}",
-                    timeout, path
-                );
-                return std::fs::remove_dir_all(&path);
+        match TideHunterDb::drop_db(&path) {
+            Ok(()) => return Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                match backoff.next_backoff() {
+                    Some(duration) => tokio::time::sleep(duration).await,
+                    None => {
+                        warn!(
+                            "Database at {:?} is still locked after timeout ({:?})",
+                            path, timeout
+                        );
+                        return Err(err);
+                    }
+                }
             }
+            Err(err) => return Err(err),
         }
     }
 }

@@ -56,8 +56,8 @@ Response: {
           "version": 1
         },
         {
-          "originalId": "0xa1b8e74a13f53377b874e11f9c74d010c8002795a9d4e8d5fe910a9f3622a682",
-          "upgradedId": "0xa1b8e74a13f53377b874e11f9c74d010c8002795a9d4e8d5fe910a9f3622a682",
+          "originalId": "0x601b308ed85fc4ced9ea483060a5c19d13b47b166ae0345252fe6f3fec48c3e0",
+          "upgradedId": "0x601b308ed85fc4ced9ea483060a5c19d13b47b166ae0345252fe6f3fec48c3e0",
           "version": 1
         }
       ]

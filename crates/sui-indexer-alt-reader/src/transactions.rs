@@ -82,7 +82,7 @@ impl Loader<TransactionKey> for BigtableReader {
             .transactions(&digests)
             .await?
             .into_iter()
-            .map(|t| (TransactionKey(*t.transaction.digest()), t))
+            .map(|t| (TransactionKey(t.digest), t))
             .collect())
     }
 }

@@ -8,7 +8,7 @@ Programmable transaction blocks (PTBs) operate on inputs and produce results. In
 
 ## Inputs 
 
-Input arguments to a PTB are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. Each `Input` is either an object, `Input::Object(ObjectArg)`, which contains the necessary metadata to specify the object being used, or a pure value, `Input::Pure(PureArg)`, which contains the bytes of the value.
+Input arguments to a PTB are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. Each `Input` is either an object, `CallArg::Object(ObjectArg)`, which contains the necessary metadata to specify the object being used, or a pure value, `CallArg::Pure(Vec<u8>)`, which contains the BCS bytes of the value.
 
 For object inputs, the metadata needed differs depending on the type of [ownership of the object](/guides/developer/objects/object-ownership). The data for the `ObjectArg` enum follows:
 
@@ -32,19 +32,19 @@ For pure inputs, the only data provided is the [BCS](https://github.com/MystenLa
 
 For vectors and options, `T` must be a valid pure input type. This rule applies recursively.
 
-Bytes are not validated until the type is specified in a command, for example in `MoveCall` or `MakeMoveVec`. This means that a given pure input could be used to instantiate Move values of several types.
+Bytes are not validated until a command specifies the expected type, for example in `MoveCall` or `MakeMoveVec`. Each distinct type creates a separate typed copy of the bytes, so the same pure input can be used at multiple types as long as the bytes are valid for each. Each typed copy is treated as its own input, so mutations affect only that type's value.
 
 ## Results
 
 Each transaction command produces an array of values. The array can be empty. The type of the value can be any arbitrary Move type, so unlike inputs, the values are not limited to objects or pure values. The number of results generated and their types are specific to each transaction command:
 
-- `MoveCall`: The number of results and their types are determined by the Move function being called. Move functions that return references are not supported at this time.
+- `MoveCall`: The number of results and their types are determined by the Move function being called. Move calls cannot return references (`&T` or `&mut T`); this restriction will be lifted in the future.
 
 - `SplitCoins`: Produces one or more coins from a single coin. The type of each coin is `sui::coin::Coin<T>` where the specific coin type `T` matches the coin being split.
 
-- `Publish`: Returns the upgrade capability `sui::package::UpgradeCap` for the newly published package.
+- `Publish`: Returns a single `sui::package::UpgradeCap`. Module bytes and dependency IDs are embedded in the command structure; they are not `Argument` values. After the package is staged, `init` functions run for each module in order.
 
-- `Upgrade`: Returns the upgrade receipt `sui::package::UpgradeReceipt` for the upgraded package.
+- `Upgrade`: Takes exactly one `Argument`: a `sui::package::UpgradeTicket` (by value). Returns a single `sui::package::UpgradeReceipt`. Module bytes and dependency IDs are embedded in the command, not supplied as `Argument` values. Does not call `init` functions.
 
 - `TransferObjects` and `MergeCoins` produce an empty result vector.
 
@@ -104,7 +104,7 @@ const hero = tx.moveCall({
    typeArguments: [],
 });
 
-//According to Move function new_sword, this moveCall will return an Object of Type Hero
+// According to Move function new_sword, this moveCall will return an Object of Type Sword
 const sword = tx.moveCall({
    target: `0x123::hero::new_sword`,
    arguments: [tx.pure.u64(10)],

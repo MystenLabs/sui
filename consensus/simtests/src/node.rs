@@ -9,7 +9,9 @@ use std::{
 
 use anyhow::Result;
 use arc_swap::ArcSwapOption;
-use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use consensus_config::{
+    AuthorityIndex, Committee, ConsensusProtocolConfig, NetworkKeyPair, Parameters, ProtocolKeyPair,
+};
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority,
     NetworkType, TransactionClient, TransactionVerifier, to_socket_addr,
@@ -19,7 +21,6 @@ use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use mysten_metrics::monitored_mpsc::unbounded_channel;
 use parking_lot::Mutex;
 use prometheus::Registry;
-use sui_protocol_config::ProtocolConfig;
 use tempfile::TempDir;
 use tracing::{info, trace};
 
@@ -31,7 +32,7 @@ pub struct Config {
     pub keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
     pub boot_counter: u64,
     pub clock_drift: BlockTimestampMs,
-    pub protocol_config: ProtocolConfig,
+    pub protocol_config: ConsensusProtocolConfig,
     pub transaction_verifier: Arc<dyn TransactionVerifier>,
 }
 

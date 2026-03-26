@@ -10,7 +10,7 @@ task 1, lines 6-20:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 10366400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 10374000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 21-26:
 //# programmable --sender A --inputs object(1,2) 100 @A
@@ -25,21 +25,21 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 gas summary: computation_cost: 1000000, storage_cost: 5198400,  storage_rebate: 2618352, non_refundable_storage_fee: 26448
 
 task 3, lines 28-29:
-//# programmable --sender A --inputs object(2,0) object(2,1) @A
+//# programmable --sender A --inputs object(2,1) object(2,0) @A
 //> MergeCoins(Input(1), [Input(0)])
-mutated: object(0,0), object(2,1)
-deleted: object(2,0)
+mutated: object(0,0), object(2,0)
+deleted: object(2,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
 
 task 4, lines 31-33:
-//# view-object 2,1
+//# view-object 2,0
 Owner: Account Address ( A )
 Version: 4
 Contents: sui::coin::Coin<ex::m::M> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,1),
+            bytes: fake(2,0),
         },
     },
     balance: sui::balance::Balance<ex::m::M> {

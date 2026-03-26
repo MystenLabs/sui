@@ -1549,9 +1549,7 @@ mod test {
     async fn test_link_causal_history() {
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = 10;
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(3);
+        context.protocol_config.set_gc_depth_for_testing(3);
         let context = Arc::new(context);
 
         let store = Arc::new(MemStore::new());
@@ -1791,9 +1789,7 @@ mod test {
         const CACHED_ROUNDS: Round = 3;
 
         let (mut context, _) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
 
         let context = Arc::new(context);
@@ -1924,9 +1920,7 @@ mod test {
         let num_authorities: u32 = 4;
         let (mut context, _) = Context::new_for_test(num_authorities as usize);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
 
@@ -2295,9 +2289,7 @@ mod test {
         const GC_DEPTH: u32 = 1;
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -2432,9 +2424,7 @@ mod test {
         const GC_DEPTH: u32 = 1;
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());

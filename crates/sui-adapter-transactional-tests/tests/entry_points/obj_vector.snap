@@ -10,7 +10,7 @@ task 1, lines 8-111:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 12646400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 12722400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 113:
 //# run Test::M::prim_vec_len --sender A --args vector[7,42]

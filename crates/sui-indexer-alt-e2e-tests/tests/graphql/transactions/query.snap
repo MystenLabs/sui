@@ -10,7 +10,7 @@ task 1, lines 6-25:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5586000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 27:
 //# run Test::M1::create --sender A --args 0 @A
@@ -91,11 +91,11 @@ Response: {
         {
           "cursor": "MQ==",
           "node": {
-            "digest": "GohBFzoBTHLTePWQfAk9NpebFRAPZrQEucFLBK7q7x1s",
+            "digest": "66WSUr1CsmKmmoxT4oYmBeYJMoZwG6MbnTDxSdxbNA1k",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "FRQJnw4Cfgha7YWrWaTmamoX23i848fVSoi3MqKjMDRb"
+                "digest": "5mWH7rGmpvpZkwkeH7KBLDo8ramKxbsDDuw4jmxYpyoR"
               }
             }
           }
@@ -103,11 +103,11 @@ Response: {
         {
           "cursor": "Mg==",
           "node": {
-            "digest": "A1TAsPmHkTbVqu49XCqnXgupdQMs94ec55FsNw8FDx4d",
+            "digest": "9mmSf7bPxeRDUNMpnvgAEwrwJzjQ1omm5jJLQ9H6pHU3",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "FRQJnw4Cfgha7YWrWaTmamoX23i848fVSoi3MqKjMDRb"
+                "digest": "5mWH7rGmpvpZkwkeH7KBLDo8ramKxbsDDuw4jmxYpyoR"
               }
             }
           }
@@ -119,7 +119,7 @@ Response: {
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "FRQJnw4Cfgha7YWrWaTmamoX23i848fVSoi3MqKjMDRb"
+                "digest": "5mWH7rGmpvpZkwkeH7KBLDo8ramKxbsDDuw4jmxYpyoR"
               }
             }
           }
@@ -127,11 +127,11 @@ Response: {
         {
           "cursor": "NA==",
           "node": {
-            "digest": "Hw8D6mwWcW33VnTAkQ2ZtDPHNsUbnMw6RgAXHnR54XJ",
+            "digest": "4SyyecAZacr3hX5fB5eeTZrUsPjbgf4cFi1E2azPMoQN",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,
-                "digest": "7Lb3mhg8opz9s3ySUuKGGvXbW1fjAFtkz551DoMTerM2"
+                "digest": "GLf5EDfhqPdoS9Qb8hiV7ohAQ1FF7VtnY3gK2Bm2RokF"
               }
             }
           }
@@ -139,11 +139,11 @@ Response: {
         {
           "cursor": "NQ==",
           "node": {
-            "digest": "AAhfG6NgCCVeVW9H3RfWWdq3EBxvxt4VfDSx2QbnFDdS",
+            "digest": "8oXBKvw544qeQ9Cbet8DB6KNnfAwBrm6WfdSuZ9UaRce",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 3,
-                "digest": "A8pTecPi37vJsyanp2tdmHjthKZELKUHaVEqTSR7PwVT"
+                "digest": "AtRjsbw2a7NXMPhJ4dRFpsH15Hw4axfACJZfibL5f52q"
               }
             }
           }
@@ -155,7 +155,7 @@ Response: {
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 3,
-                "digest": "A8pTecPi37vJsyanp2tdmHjthKZELKUHaVEqTSR7PwVT"
+                "digest": "AtRjsbw2a7NXMPhJ4dRFpsH15Hw4axfACJZfibL5f52q"
               }
             }
           }
@@ -167,7 +167,7 @@ Response: {
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 4,
-                "digest": "6HRoEMQj1F6DR5tFu2qhFHBmqUKVDLQwVUGtXyJu1N1i"
+                "digest": "Bp57ydS3XM9tesUxaBzNHgD9r2rZk52DyZoxJkeFrqkJ"
               }
             }
           }
@@ -175,11 +175,11 @@ Response: {
         {
           "cursor": "OA==",
           "node": {
-            "digest": "47qMpp2yUSBcVWDw9rWX7vCGDxVauDsGZni3FcQMAER8",
+            "digest": "BJTzxgC3ZJoHq1Sa7FhqZWAHA1U4zzLN3Twh6BGrv1HT",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 5,
-                "digest": "4cSSxpyKNS7erT8VGmWNUrsZzPZmeadUua2MHekBdeQg"
+                "digest": "12Tkwuat8qgX2MMjNPJA8iv5PbuxbDq7uBGVN8qrbEAj"
               }
             }
           }
@@ -191,7 +191,7 @@ Response: {
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 5,
-                "digest": "4cSSxpyKNS7erT8VGmWNUrsZzPZmeadUua2MHekBdeQg"
+                "digest": "12Tkwuat8qgX2MMjNPJA8iv5PbuxbDq7uBGVN8qrbEAj"
               }
             }
           }
@@ -228,11 +228,11 @@ Response: {
         {
           "cursor": "MQ==",
           "node": {
-            "digest": "GohBFzoBTHLTePWQfAk9NpebFRAPZrQEucFLBK7q7x1s",
+            "digest": "66WSUr1CsmKmmoxT4oYmBeYJMoZwG6MbnTDxSdxbNA1k",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "FRQJnw4Cfgha7YWrWaTmamoX23i848fVSoi3MqKjMDRb"
+                "digest": "5mWH7rGmpvpZkwkeH7KBLDo8ramKxbsDDuw4jmxYpyoR"
               }
             }
           }
@@ -240,11 +240,11 @@ Response: {
         {
           "cursor": "Mg==",
           "node": {
-            "digest": "A1TAsPmHkTbVqu49XCqnXgupdQMs94ec55FsNw8FDx4d",
+            "digest": "9mmSf7bPxeRDUNMpnvgAEwrwJzjQ1omm5jJLQ9H6pHU3",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "FRQJnw4Cfgha7YWrWaTmamoX23i848fVSoi3MqKjMDRb"
+                "digest": "5mWH7rGmpvpZkwkeH7KBLDo8ramKxbsDDuw4jmxYpyoR"
               }
             }
           }
@@ -269,11 +269,11 @@ Response: {
         {
           "cursor": "MQ==",
           "node": {
-            "digest": "GohBFzoBTHLTePWQfAk9NpebFRAPZrQEucFLBK7q7x1s",
+            "digest": "66WSUr1CsmKmmoxT4oYmBeYJMoZwG6MbnTDxSdxbNA1k",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "FRQJnw4Cfgha7YWrWaTmamoX23i848fVSoi3MqKjMDRb"
+                "digest": "5mWH7rGmpvpZkwkeH7KBLDo8ramKxbsDDuw4jmxYpyoR"
               }
             }
           }
@@ -281,11 +281,11 @@ Response: {
         {
           "cursor": "Mg==",
           "node": {
-            "digest": "A1TAsPmHkTbVqu49XCqnXgupdQMs94ec55FsNw8FDx4d",
+            "digest": "9mmSf7bPxeRDUNMpnvgAEwrwJzjQ1omm5jJLQ9H6pHU3",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "FRQJnw4Cfgha7YWrWaTmamoX23i848fVSoi3MqKjMDRb"
+                "digest": "5mWH7rGmpvpZkwkeH7KBLDo8ramKxbsDDuw4jmxYpyoR"
               }
             }
           }
@@ -310,11 +310,11 @@ Response: {
         {
           "cursor": "NA==",
           "node": {
-            "digest": "Hw8D6mwWcW33VnTAkQ2ZtDPHNsUbnMw6RgAXHnR54XJ",
+            "digest": "4SyyecAZacr3hX5fB5eeTZrUsPjbgf4cFi1E2azPMoQN",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,
-                "digest": "7Lb3mhg8opz9s3ySUuKGGvXbW1fjAFtkz551DoMTerM2"
+                "digest": "GLf5EDfhqPdoS9Qb8hiV7ohAQ1FF7VtnY3gK2Bm2RokF"
               }
             }
           }
@@ -322,11 +322,11 @@ Response: {
         {
           "cursor": "NQ==",
           "node": {
-            "digest": "AAhfG6NgCCVeVW9H3RfWWdq3EBxvxt4VfDSx2QbnFDdS",
+            "digest": "8oXBKvw544qeQ9Cbet8DB6KNnfAwBrm6WfdSuZ9UaRce",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 3,
-                "digest": "A8pTecPi37vJsyanp2tdmHjthKZELKUHaVEqTSR7PwVT"
+                "digest": "AtRjsbw2a7NXMPhJ4dRFpsH15Hw4axfACJZfibL5f52q"
               }
             }
           }
@@ -351,11 +351,11 @@ Response: {
         {
           "cursor": "MTE=",
           "node": {
-            "digest": "J9rQ3jrGTjLPn3aBw8ZwRdhCAtYNHTuzU9hPGhuwqSJg",
+            "digest": "7s667H3SYHefJm5aCw1EQXGUGM6Y11jup36QEPWP2WX2",
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 7,
-                "digest": "6GGPAcaxrDBJ8yx3axT1jB1s9UCFX7kqv3j1QgFCoTqV"
+                "digest": "G4F1drWDK639KVRMa1ZdJuZsdPPNn5F7maHXhmx1b3rJ"
               }
             }
           }
@@ -367,7 +367,7 @@ Response: {
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 7,
-                "digest": "6GGPAcaxrDBJ8yx3axT1jB1s9UCFX7kqv3j1QgFCoTqV"
+                "digest": "G4F1drWDK639KVRMa1ZdJuZsdPPNn5F7maHXhmx1b3rJ"
               }
             }
           }

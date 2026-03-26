@@ -4,7 +4,7 @@
 use futures::{StreamExt, future::join_all};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use mysten_common::fatal;
-use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use rand::{Rng, distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -76,6 +76,7 @@ pub struct FullNodeHandle {
     #[deprecated = "use grpc_client"]
     pub rpc_client: HttpClient,
     pub grpc_client: Client,
+    pub grpc_channel: tonic::transport::Channel,
     pub rpc_url: String,
 }
 
@@ -87,6 +88,20 @@ impl FullNodeHandle {
         let sui_client = SuiClientBuilder::default().build(&rpc_url).await.unwrap();
         let grpc_client = Client::new(&rpc_url).unwrap();
 
+        // Eagerly connect a shared gRPC channel with retry logic. Tests should
+        // create tonic service clients via `XxxServiceClient::new(channel)` instead
+        // of `XxxServiceClient::connect(url)` so that connections are established
+        // once during cluster setup rather than ad-hoc in each test.
+        let grpc_channel = Self::connect_channel_with_retry(&rpc_url).await;
+
+        // Warm up the sui_rpc_api::Client's internal lazy channel. Without this,
+        // the connect_lazy() channel may time out on its first use under MSIM's
+        // deterministic scheduler on certain seeds.
+        grpc_client
+            .get_reference_gas_price()
+            .await
+            .expect("failed to warm up grpc client");
+
         Self {
             sui_node,
             #[allow(deprecated)]
@@ -94,8 +109,52 @@ impl FullNodeHandle {
             #[allow(deprecated)]
             rpc_client,
             grpc_client,
+            grpc_channel,
             rpc_url,
         }
+    }
+
+    /// Connect a tonic channel to the given URL with retries.
+    ///
+    /// In the simulator (MSIM), deterministic scheduling can cause gRPC connection
+    /// handshakes to exceed timeouts on certain seeds. This method retries to ensure
+    /// test infrastructure setup is robust regardless of seed.
+    ///
+    /// Use [`TestCluster::grpc_channel()`] when connecting to the test cluster's
+    /// fullnode. Use this method directly only when connecting to a custom URL
+    /// (e.g. a separately-spawned fullnode with different configuration).
+    pub async fn connect_channel_with_retry(url: &str) -> tonic::transport::Channel {
+        const MAX_RETRIES: u32 = 10;
+        const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+        let endpoint = tonic::transport::Endpoint::from_shared(url.to_string())
+            .expect("invalid grpc url")
+            .connect_timeout(CONNECT_TIMEOUT);
+
+        for attempt in 0..MAX_RETRIES {
+            match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect()).await {
+                Ok(Ok(channel)) => return channel,
+                Ok(Err(e)) if attempt + 1 < MAX_RETRIES => {
+                    info!(
+                        "grpc channel connect attempt {} failed: {e}, retrying",
+                        attempt + 1
+                    );
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Ok(Err(e)) => {
+                    panic!("grpc channel connect failed after {MAX_RETRIES} attempts: {e}")
+                }
+                Err(_) if attempt + 1 < MAX_RETRIES => {
+                    info!(
+                        "grpc channel connect attempt {} timed out, retrying",
+                        attempt + 1
+                    );
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(_) => panic!("grpc channel connect timed out after {MAX_RETRIES} attempts"),
+            }
+        }
+        unreachable!()
     }
 }
 
@@ -120,6 +179,20 @@ impl TestCluster {
 
     pub fn grpc_client(&self) -> Client {
         self.fullnode_handle.grpc_client.clone()
+    }
+
+    /// Returns a pre-connected gRPC channel to the fullnode.
+    ///
+    /// Use this to create tonic service clients in tests:
+    /// ```ignore
+    /// let mut client = LedgerServiceClient::new(test_cluster.grpc_channel());
+    /// ```
+    ///
+    /// This channel is connected during test cluster setup with retry logic,
+    /// so it is resilient to MSIM scheduling-induced connection timeouts.
+    /// Prefer this over `XxxServiceClient::connect(url)` which has no retry.
+    pub fn grpc_channel(&self) -> tonic::transport::Channel {
+        self.fullnode_handle.grpc_channel.clone()
     }
 
     pub fn rpc_url(&self) -> &str {
@@ -682,11 +755,13 @@ impl TestCluster {
             submit_type: SubmitTxType::SoftBundle.into(),
         };
 
-        let mut validator_client = self
-            .authority_aggregator()
-            .authority_clients
+        let agg = self.authority_aggregator();
+        let clients = &agg.authority_clients;
+        // Use seeded RNG for deterministic but varying validator selection in simtests
+        let index = rand::thread_rng().gen_range(0..clients.len());
+        let mut validator_client = clients
             .iter()
-            .next()
+            .nth(index)
             .unwrap()
             .1
             .authority_client()
@@ -872,11 +947,12 @@ impl TestCluster {
         client_addr: Option<SocketAddr>,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let agg = self.authority_aggregator();
-        // Pick a validator to submit to
-        let (_, client) = agg
-            .authority_clients
+        // Pick a validator to submit to using seeded RNG for deterministic simtest selection
+        let clients = &agg.authority_clients;
+        let index = rand::thread_rng().gen_range(0..clients.len());
+        let (_, client) = clients
             .iter()
-            .next()
+            .nth(index)
             .ok_or_else(|| anyhow::anyhow!("No authority clients available"))?;
 
         // Submit the transaction

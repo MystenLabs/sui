@@ -273,9 +273,7 @@ impl TestEnvironment {
         };
 
         let sender = self.test_cluster.get_address_0();
-        let mut client =
-            TransactionExecutionServiceClient::connect(self.test_cluster.rpc_url().to_owned())
-                .await?;
+        let mut client = TransactionExecutionServiceClient::new(self.test_cluster.grpc_channel());
 
         let mut unresolved_transaction = Transaction::default();
         unresolved_transaction.kind = Some(TransactionKind::from({

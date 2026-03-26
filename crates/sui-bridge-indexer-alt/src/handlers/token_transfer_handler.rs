@@ -74,7 +74,7 @@ impl Processor for TokenTransferHandler {
                 continue;
             }
             for ev in tx.events.iter().flat_map(|e| &e.data) {
-                let (chain_id, nonce) = if self.deposited_event_type == ev.type_ {
+                let (chain_id, nonce, status) = if self.deposited_event_type == ev.type_ {
                     info!("Observed Sui Deposit {:?}", ev);
                     let event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
 
@@ -96,7 +96,11 @@ impl Processor for TokenTransferHandler {
                         .with_label_values(&["sui_to_eth", "true"])
                         .inc_by(tx.effects.gas_cost_summary().net_gas_usage() as u64);
 
-                    (event.source_chain, event.seq_num)
+                    (
+                        event.source_chain,
+                        event.seq_num,
+                        TokenTransferStatus::Deposited,
+                    )
                 } else if self.deposited_event_v2_type == ev.type_ {
                     info!("Observed Sui V2 Deposit {:?}", ev);
                     let event: MoveTokenDepositedEventV2 = bcs::from_bytes(&ev.contents)?;
@@ -119,7 +123,11 @@ impl Processor for TokenTransferHandler {
                         .with_label_values(&["sui_to_eth", "true"])
                         .inc_by(tx.effects.gas_cost_summary().net_gas_usage() as u64);
 
-                    (event.source_chain, event.seq_num)
+                    (
+                        event.source_chain,
+                        event.seq_num,
+                        TokenTransferStatus::Deposited,
+                    )
                 } else if self.approved_event_type == ev.type_ {
                     info!("Observed Sui Approval {:?}", ev);
                     let event: MoveTokenTransferApproved = bcs::from_bytes(&ev.contents)?;
@@ -137,6 +145,7 @@ impl Processor for TokenTransferHandler {
                     (
                         event.message_key.source_chain,
                         event.message_key.bridge_seq_num,
+                        TokenTransferStatus::Approved,
                     )
                 } else if self.claimed_event_type == ev.type_ {
                     info!("Observed Sui Claim {:?}", ev);
@@ -155,6 +164,7 @@ impl Processor for TokenTransferHandler {
                     (
                         event.message_key.source_chain,
                         event.message_key.bridge_seq_num,
+                        TokenTransferStatus::Claimed,
                     )
                 } else {
                     return Ok(results);
@@ -165,7 +175,7 @@ impl Processor for TokenTransferHandler {
                     nonce: nonce as i64,
                     block_height,
                     timestamp_ms,
-                    status: TokenTransferStatus::Deposited,
+                    status,
                     data_source: BridgeDataSource::SUI,
                     is_finalized: true,
                     txn_hash: tx.transaction.digest().inner().to_vec(),

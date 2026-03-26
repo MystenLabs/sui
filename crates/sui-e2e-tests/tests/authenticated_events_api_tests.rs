@@ -4,7 +4,7 @@
 use itertools::Itertools;
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
-use std::time::Duration;
+
 use sui_keys::keystore::AccountKeystore;
 use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_light_client::proof::base::{Proof, ProofContents, ProofTarget, ProofVerifier};
@@ -170,37 +170,8 @@ async fn emit_large_test_event(
     test_cluster.sign_and_execute_transaction(&tx_data).await
 }
 
-/// Connect to an rpc client with timeout and retry logic.
-///
-/// gRPC connection establishment can hang indefinitely if the remote peer is unable to complete
-/// connection establishment. This helper ensures we always have bounded connection times and
-/// can retry on transient failures.
-async fn connect_with_retry<T, F, Fut>(connect_fn: F) -> T
-where
-    F: Fn() -> Fut,
-    Fut: std::future::Future<Output = Result<T, tonic::transport::Error>>,
-{
-    const MAX_RETRIES: u32 = 10;
-    const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
-
-    for attempt in 0..MAX_RETRIES {
-        match tokio::time::timeout(CONNECT_TIMEOUT, connect_fn()).await {
-            Ok(Ok(client)) => return client,
-            Ok(Err(e)) if attempt + 1 < MAX_RETRIES => {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-            Ok(Err(e)) => panic!("failed to connect after {MAX_RETRIES} attempts: {e}"),
-            Err(_) if attempt + 1 < MAX_RETRIES => {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-            Err(_) => panic!("connection timed out after {MAX_RETRIES} attempts"),
-        }
-    }
-    unreachable!()
-}
-
 async fn query_authenticated_events(
-    rpc_url: &str,
+    channel: tonic::transport::Channel,
     stream_id: &str,
     start_checkpoint: u64,
     page_size: Option<u32>,
@@ -208,7 +179,7 @@ async fn query_authenticated_events(
     sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsResponse,
     tonic::Status,
 > {
-    let mut client = connect_with_retry(|| EventServiceClient::connect(rpc_url.to_owned())).await;
+    let mut client = EventServiceClient::new(channel);
 
     let mut req = ListAuthenticatedEventsRequest::default();
     req.stream_id = Some(stream_id.to_string());
@@ -223,13 +194,12 @@ async fn query_authenticated_events(
 }
 
 async fn list_authenticated_events(
-    rpc_url: &str,
+    channel: tonic::transport::Channel,
     stream_id: &str,
     start_checkpoint: u64,
     page_size: Option<u32>,
 ) -> Vec<AuthenticatedEvent> {
-    let mut event_client =
-        connect_with_retry(|| EventServiceClient::connect(rpc_url.to_owned())).await;
+    let mut event_client = EventServiceClient::new(channel.clone());
 
     let mut all_events = Vec::new();
     let mut page_token: Option<Vec<u8>> = None;
@@ -279,12 +249,9 @@ async fn verify_events_with_stream_head(
     let stream_id = sui_types::base_types::SuiAddress::from(package_id);
     let event_stream_head_id = get_event_stream_head_object_id(stream_id).unwrap();
 
-    let mut proof_client =
-        connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
-    let mut ledger_client =
-        connect_with_retry(|| LedgerServiceClient::connect(test_cluster.rpc_url().to_owned()))
-            .await;
+    let mut ledger_client = LedgerServiceClient::new(test_cluster.grpc_channel());
 
     let current_epoch = test_cluster
         .fullnode_handle
@@ -519,9 +486,7 @@ async fn get_last_checkpoint_of_epoch(
 }
 
 async fn get_genesis_committee(test_cluster: &TestCluster) -> Result<Committee, String> {
-    let mut ledger_client =
-        connect_with_retry(|| LedgerServiceClient::connect(test_cluster.rpc_url().to_owned()))
-            .await;
+    let mut ledger_client = LedgerServiceClient::new(test_cluster.grpc_channel());
 
     get_committee_for_epoch_via_api(&mut ledger_client, 0).await
 }
@@ -766,8 +731,13 @@ async fn list_authenticated_events_end_to_end() {
         emit_test_event(&test_cluster, package_id, sender, 100 + i).await;
     }
 
-    let all_events =
-        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, None).await;
+    let all_events = list_authenticated_events(
+        test_cluster.grpc_channel(),
+        &package_id.to_string(),
+        0,
+        None,
+    )
+    .await;
 
     let count = all_events.len();
     assert_eq!(count, 10, "expected 10 authenticated events, got {count}");
@@ -794,10 +764,14 @@ async fn list_authenticated_events_page_size_validation() {
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let response =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(1500))
-            .await
-            .unwrap();
+    let response = query_authenticated_events(
+        test_cluster.grpc_channel(),
+        &sender.to_string(),
+        0,
+        Some(1500),
+    )
+    .await
+    .unwrap();
 
     assert!(response.events.is_empty());
 }
@@ -813,13 +787,13 @@ async fn list_authenticated_events_start_beyond_highest() {
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
     let probe_response =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(1))
+        query_authenticated_events(test_cluster.grpc_channel(), &sender.to_string(), 0, Some(1))
             .await
             .unwrap();
     let highest = probe_response.highest_indexed_checkpoint.unwrap_or(0);
 
     let response = query_authenticated_events(
-        test_cluster.rpc_url(),
+        test_cluster.grpc_channel(),
         &sender.to_string(),
         highest + 1000,
         Some(10),
@@ -840,10 +814,14 @@ async fn list_authenticated_events_pruned_checkpoint_error() {
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let response =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(10))
-            .await
-            .unwrap();
+    let response = query_authenticated_events(
+        test_cluster.grpc_channel(),
+        &sender.to_string(),
+        0,
+        Some(10),
+    )
+    .await
+    .unwrap();
 
     assert!(response.events.is_empty());
 }
@@ -859,8 +837,13 @@ async fn authenticated_events_disabled_test() {
     let test_cluster = test_cluster::TestClusterBuilder::new().build().await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let result =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(10)).await;
+    let result = query_authenticated_events(
+        test_cluster.grpc_channel(),
+        &sender.to_string(),
+        0,
+        Some(10),
+    )
+    .await;
 
     assert!(
         result.is_err(),
@@ -903,7 +886,7 @@ async fn authenticated_events_backfill_test() {
         emit_test_event(&test_cluster, package_id, sender, 200 + i).await;
     }
 
-    let rpc_url_with_indexing = {
+    let indexing_channel = {
         let mut new_fullnode_config = test_cluster
             .fullnode_config_builder()
             .build(&mut rand::rngs::OsRng, test_cluster.swarm.config());
@@ -917,13 +900,13 @@ async fn authenticated_events_backfill_test() {
             .start_fullnode_from_config(new_fullnode_config)
             .await;
 
-        new_fullnode_handle.rpc_url.clone()
+        test_cluster::FullNodeHandle::connect_channel_with_retry(&new_fullnode_handle.rpc_url).await
     };
 
     let start = tokio::time::Instant::now();
     let response = loop {
         let response =
-            query_authenticated_events(&rpc_url_with_indexing, &package_id.to_string(), 0, None)
+            query_authenticated_events(indexing_channel.clone(), &package_id.to_string(), 0, None)
                 .await
                 .unwrap();
 
@@ -969,8 +952,7 @@ async fn authenticated_events_multiple_events_per_transaction() {
 
     let _response = emit_multiple_test_events(&test_cluster, package_id, sender, 100, 3).await;
 
-    let mut event_client =
-        connect_with_retry(|| EventServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
+    let mut event_client = EventServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = ListAuthenticatedEventsRequest::default();
     req.stream_id = Some(package_id.to_string());
@@ -1049,9 +1031,13 @@ async fn test_pagination() {
         emit_multiple_test_events(&test_cluster, package_id, sender, i * 5, 5).await;
     }
 
-    let all_events =
-        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, Some(7))
-            .await;
+    let all_events = list_authenticated_events(
+        test_cluster.grpc_channel(),
+        &package_id.to_string(),
+        0,
+        Some(7),
+    )
+    .await;
 
     assert_eq!(
         all_events.len(),
@@ -1091,8 +1077,7 @@ async fn test_object_inclusion_proof_error_code() {
             .unwrap()
     });
 
-    let mut proof_client =
-        connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
+    let mut proof_client = ProofServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some(event_stream_head_id.to_string());
@@ -1144,8 +1129,7 @@ async fn test_size_based_pagination() {
     emit_large_test_event(&test_cluster, package_id, sender, 3, 200_000).await;
     emit_large_test_event(&test_cluster, package_id, sender, 4, 200_000).await;
 
-    let mut event_client =
-        connect_with_retry(|| EventServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
+    let mut event_client = EventServiceClient::new(test_cluster.grpc_channel());
 
     let mut req = ListAuthenticatedEventsRequest::default();
     req.stream_id = Some(package_id.to_string());
@@ -1175,9 +1159,13 @@ async fn test_size_based_pagination() {
         "Should have next_page_token since not all events were returned"
     );
 
-    let all_events =
-        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, Some(10))
-            .await;
+    let all_events = list_authenticated_events(
+        test_cluster.grpc_channel(),
+        &package_id.to_string(),
+        0,
+        Some(10),
+    )
+    .await;
 
     assert_eq!(
         all_events.len(),
@@ -1301,8 +1289,13 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
         .collect();
     futures::future::try_join_all(bundle_tasks).await.unwrap();
 
-    let all_events =
-        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, None).await;
+    let all_events = list_authenticated_events(
+        test_cluster.grpc_channel(),
+        &package_id.to_string(),
+        0,
+        None,
+    )
+    .await;
 
     assert_eq!(
         all_events.len(),

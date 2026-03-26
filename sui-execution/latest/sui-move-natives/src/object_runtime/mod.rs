@@ -106,6 +106,7 @@ pub(crate) struct ObjectRuntimeState {
     accumulator_events: Vec<MoveAccumulatorEvent>,
     // total size of events emitted so far
     total_events_size: u64,
+    total_events_emitted: u64,
     received: IndexMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     // Used to track SUI conservation in settlement transactions. Settlement transactions
     // gather up withdraws and deposits from other transactions, and record them to accumulator
@@ -200,6 +201,7 @@ impl<'a> ObjectRuntime<'a> {
                 events: vec![],
                 accumulator_events: vec![],
                 total_events_size: 0,
+                total_events_emitted: 0,
                 received: IndexMap::new(),
                 settlement_input_sui: 0,
                 settlement_output_sui: 0,
@@ -371,6 +373,7 @@ impl<'a> ObjectRuntime<'a> {
             return Err(max_event_error(self.protocol_config.max_num_event_emit()));
         }
         self.state.events.push((tag, event));
+        self.state.total_events_emitted += 1;
         Ok(())
     }
 
@@ -699,6 +702,7 @@ impl ObjectRuntimeState {
             settlement_output_sui,
             accumulator_merge_totals: _,
             accumulator_split_totals: _,
+            total_events_emitted: _,
         } = self;
 
         // The set of new ids is a subset of the generated ids.
@@ -762,6 +766,10 @@ impl ObjectRuntimeState {
 
     pub fn events(&self) -> &[(StructTag, Value)] {
         &self.events
+    }
+
+    pub fn total_events_emitted(&self) -> u64 {
+        self.total_events_emitted
     }
 
     pub fn total_events_size(&self) -> u64 {

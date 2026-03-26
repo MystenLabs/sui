@@ -10,17 +10,21 @@ See [GraphQL and General-Purpose Indexer](/concepts/data-access/custom-indexers.
 
 ## Indexer setup
 
-The indexer consists of multiple pipelines that each read, transform, and write checkpoint data to a table. Multiple instances of the indexer can run in parallel, each configured by its own TOML file.
+The indexer consists of multiple pipelines that each read, transform, and write checkpoint data to various Postgres tables. Multiple instances of the indexer can run in parallel, each configured by its own TOML file.
 
 #### Hardware requirements
 
 - **CPU:** 2 cores per instance
 - **Memory:** 4GB per instance
 
+Internally at Mysten, indexer instances were provisioned with 8 CPUs and 16 GiB of memory for backfill, and scaled down to 0.5 CPU and 1 GiB of memory for normal operation at network tip.
+
 #### Storage requirements
 The general-purpose indexer writes to a Postgres database. The storage footprint estimations outlined below are based on the network as of early 2026, and may fluctuate in relation to network growth. These numbers should be seen as directional rather than exact figures.
 
 The bulk of the storage is consumed by `obj_versions` at 8.2 TB. A pruning strategy is in development.
+
+The unpruned `tx_balance_changes` table adds another 1.2 TB.
 
 A 30-day retention adds 1.8 TB on top, while a 90-day retention contributes up to an additional 3.1 TB.
 
@@ -33,11 +37,10 @@ A 30-day retention adds 1.8 TB on top, while a 90-day retention contributes up t
 | ev_struct_inst | 15–19 | 174–267 |
 | tx_affected_addresses | 17–18 | 63–92 |
 | ev_emit_mod | 8–9 | 54–85 |
-| tx_balance_changes | 18–20 | 5–6 |
 | tx_digests | 8 | 21–25 |
 | tx_kinds | 5 | 14–16 |
 | cp_sequence_numbers | 10 | 5 |
-| **TOTAL** | **444–450** | **1,827–1,842** |
+| **TOTAL** | **426–430** | **1,822–1,836** |
 
 90-day retention:
 
@@ -48,11 +51,10 @@ A 30-day retention adds 1.8 TB on top, while a 90-day retention contributes up t
 | ev_struct_inst | 45–50 | 432–531 |
 | tx_affected_addresses | 50–54 | 151–183 |
 | ev_emit_mod | 22–24 | 129–167 |
-| tx_balance_changes | 57–63 | 10–16 |
 | tx_digests | 24–26 | 45–55 |
 | tx_kinds | 15–16 | 30–36 |
 | cp_sequence_numbers | 10 | 5 |
-| **TOTAL** | **755–842** | **2,440–3,181** |
+| **TOTAL** | **698–779** | **2,430–3,165** |
 
 ### Run `sui-indexer-alt`
 
@@ -110,7 +112,9 @@ $ sui-indexer-alt indexer \
 Use the TOML files below; they are grouped by pipeline speed. All pipelines in an instance are limited by the slowest pipeline in that instance so these files each contain pipelines that run at approximately the same speed.
 
 :::info
-When backfilling, you should set the `ingest-concurrency` to a higher value, e.g. 200, then reduce it to 20 for normal operation at network tip.
+The example configs linked below use a fixed concurrency of 20 for simplicity, but this will lead to longer backfill times.
+When backfilling a pipeline, consider setting the `ingest-concurrency` to a higher initial concurrency, i.e with `{ kind = "adaptive", initial = 200, min = 50, max = 2000 }`. The indexer will automatically adjust concurrency based on current load and performance.
+Once caught up to network tip, you could manually set the max concurrency to a lower value. Mysten-internal indexers are capped at 20.
 :::
 
 <table>
@@ -276,7 +280,7 @@ All consistent store pipelines run in the same instance based on a single config
 
 ### Restore command
 
-Restores one or more pipelines from checkpoint data in a GCS bucket.
+When a new pipeline is added to the consistent store, it will force the service to backfill from genesis by default. To avoid this, you can use the `restore` command to construct the consistent state at the latest epoch, or a specific epoch with the `--epoch` flag.
 
 ```sh
 $ sui-indexer-alt-consistent-store restore \
@@ -497,20 +501,56 @@ AlloyDB Omni recommends 8GB RAM per vCPU [link](https://docs.cloud.google.com/al
 
 ## Adding a new pipeline
 
-Adding a new pipeline to an existing indexer currently requires these steps:
+### Adding a new pipeline to an existing indexer currently requires these steps:
 
 1. We recommend starting a new pipeline in its own indexer instance, optionally with the `--first-checkpoint <checkpoint>` flag set if you want to start from a checkpoint after genesis.
    * Note: `--first-checkpoint` is only respected if no watermark record exists for the pipeline(s) (the pipeline has not been run before). The watermark record must be manually removed if you want to run the pipeline with a different value of `--first-checkpoint` or it will be ignored.
 2. After the new pipeline has caught up to the tip of the network, you can optionally merge it into another indexer instance.
 
+## Re-indexing from a different checkpoint
+Once the pipeline starts indexing data and the indexer starts recording watermarks, future runs of the pipeline will ignore the `--first-checkpoint` flag and always resume from the last recorded checkpoint.
+
+To restart and index from a different initial checkpoint, you must delete the watermark record for that pipeline. Deleting the existing data for that pipeline to avoid any data inconsistencies is recommended.
+
+The following template is recommended for the general-purpose indexer to write to Postgres.
+```sql
+BEGIN;
+
+-- One statement per pipeline to re-index
+TRUNCATE TABLE ev_emit_mod;
+
+
+DELETE FROM watermarks
+WHERE pipeline IN (
+-- List all pipelines to re-index
+  'ev_emit_mod'
+);
+
+SELECT * FROM WATERMARKS; -- Verify that the watermark record(s) have been deleted
+
+-- Verify that the tables have been cleared
+
+COMMIT;
+```
+
 ## Reducing indexer pipeline table and index bloat
 
-Bloat is the difference between the size of the data in the table or index and the amount of space it takes up on disk. Autovacuum prevents bloat if approximately the same number of rows is continually inserted and deleted like the case when pipeline pruning is enabled. However, autovacuum will not handle more rows being deleted than inserted. There are two cases where this can occur:
+Bloat occurs when dead rows from deletes accumulate faster than autovacuum can reclaim them. This happens in two cases:
 
-- Enabling pruning on an unpruned pipeline.
-- Reducing the pruning retention period on a pruned table.
+- Enabling pruning on a previously unpruned pipeline.
+- Reducing the retention period on an already-pruned pipeline.
 
-These tools can be used to reduce bloat:
+The following autovacuum settings are used by Mysten for a 32-vCPU, 256 GiB Postgres instance, and should be adjusted proportionally for your setup:
+
+| Parameter | Value |
+|-----------|-------|
+| `autovacuum_max_workers` | `8` |
+| `autovacuum_vacuum_cost_limit` | `8000` |
+| `autovacuum_vacuum_scale_factor` | `0.01` |
+| `maintenance_work_mem` | `13GB` |
+| `max_parallel_maintenance_workers` | `4` |
+
+While autovacuum enables reusing dead rows for future inserts, it does not return reclaimed disk space to the OS. On-disk footprint remains until you compact tables and indexes using one of the following tools:
 
 | Tool          | Type      | `ACCESS EXCLUSIVE` locking            | Schedulable | Link                                                    |
 |---------------|-----------|---------------------------------------|-------------|---------------------------------------------------------|

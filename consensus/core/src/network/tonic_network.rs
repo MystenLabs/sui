@@ -183,7 +183,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             * self
                 .context
                 .protocol_config
-                .consensus_max_transactions_in_block_bytes() as usize
+                .max_transactions_in_block_bytes() as usize
             * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
@@ -279,7 +279,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             * self
                 .context
                 .protocol_config
-                .consensus_max_transactions_in_block_bytes() as usize
+                .max_transactions_in_block_bytes() as usize
             * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
@@ -1442,14 +1442,13 @@ pub(crate) fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<By
 mod tests {
     use super::*;
     use crate::{context::Clock, metrics::initialise_metrics};
-    use consensus_config::{Parameters, local_committee_and_keys};
+    use consensus_config::{ConsensusProtocolConfig, Parameters, local_committee_and_keys};
     use prometheus::Registry;
-    use sui_protocol_config::ProtocolConfig;
 
     fn create_test_context_and_client() -> (Arc<Context>, TonicValidatorClient) {
         let (committee, mut keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let parameters = Parameters::default();
-        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let protocol_config = ConsensusProtocolConfig::for_testing();
         let metrics = initialise_metrics(Registry::new());
 
         let context = Arc::new(Context::new(

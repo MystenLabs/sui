@@ -60,8 +60,9 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation, SuiExecutionStatus,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
+    DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation,
+    SuiAccumulatorValue, SuiExecutionStatus, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
 };
 use sui_protocol_config::{
     Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
@@ -80,7 +81,8 @@ use sui_types::crypto::{
 };
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest, TransactionDigest};
 use sui_types::effects::{
-    AccumulatorOperation, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    AccumulatorOperation, AccumulatorValue as EffectsAccumulatorValue, TransactionEffects,
+    TransactionEffectsAPI, TransactionEvents,
 };
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::messages_checkpoint::{
@@ -180,6 +182,8 @@ pub struct SuiTestAdapter {
     pub offchain_config: Option<OffChainConfig>,
     /// A trait encapsulating methods to interact with offchain state.
     pub offchain_reader: Option<Box<dyn OffchainStateReader>>,
+    /// Override for the file format version used when serializing compiled modules.
+    file_format_version: Option<u32>,
 }
 
 /// Extra args related to configuring the indexer and reader.
@@ -204,6 +208,8 @@ struct AdapterInitConfig {
     /// Configuration for offchain state reader read from the file itself, and can be passed to the
     /// specific indexing and reader flavor.
     offchain_config: Option<OffChainConfig>,
+    /// Override for the file format version used when serializing compiled modules.
+    file_format_version: Option<u32>,
 }
 
 pub(crate) struct StagedPackage {
@@ -230,7 +236,13 @@ struct TxnSummary {
     wrapped: Vec<ObjectID>,
     unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
-    accumulators_written: Vec<(ObjectID, SuiAddress, TypeTag, AccumulatorOperation)>,
+    accumulators_written: Vec<(
+        ObjectID,
+        SuiAddress,
+        TypeTag,
+        AccumulatorOperation,
+        EffectsAccumulatorValue,
+    )>,
     gas_summary: GasCostSummary,
 }
 
@@ -255,6 +267,8 @@ impl AdapterInitConfig {
             allow_references_in_ptbs,
             enable_non_exclusive_writes,
             enable_address_balance_gas_payments,
+            enable_coin_reservations,
+            file_format_version,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -295,6 +309,9 @@ impl AdapterInitConfig {
         }
         if enable_address_balance_gas_payments {
             protocol_config.enable_address_balance_gas_payments_for_testing();
+        }
+        if enable_coin_reservations {
+            protocol_config.enable_coin_reservation_for_testing();
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
         // ExecutionTimeEstimate mode which is the only supported mode.
@@ -339,6 +356,7 @@ impl AdapterInitConfig {
             default_gas_price,
             flavor,
             offchain_config,
+            file_format_version,
         }
     }
 }
@@ -416,6 +434,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             default_gas_price,
             flavor,
             offchain_config,
+            file_format_version,
         } = match task_opt.map(|t| t.command) {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
@@ -486,6 +505,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             // TODO: make this configurable
             gas_price: default_gas_price.unwrap_or(DEFAULT_GAS_PRICE),
             staged_modules: BTreeMap::new(),
+            file_format_version,
         };
 
         for well_known in WELL_KNOWN_OBJECTS.iter().copied() {
@@ -534,7 +554,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             .map(|m| {
                 let mut module_bytes = vec![];
                 m.module
-                    .serialize_with_version(m.module.version, &mut module_bytes)
+                    .serialize_with_version(self.serialize_version(&m.module), &mut module_bytes)
                     .unwrap();
                 Ok(module_bytes)
             })
@@ -1075,6 +1095,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let commands = ParsedCommand::parse_vec(&contents)?;
                 let staged = &self.staged_modules;
                 let state = &self.compiled_state;
+                let file_format_version = self.file_format_version;
                 let commands = commands
                     .into_iter()
                     .map(|c| {
@@ -1086,9 +1107,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                                     .iter()
                                     .map(|m| {
                                         let mut buf = vec![];
-                                        m.module
-                                            .serialize_with_version(m.module.version, &mut buf)
-                                            .unwrap();
+                                        let version =
+                                            file_format_version.unwrap_or(m.module.version);
+                                        m.module.serialize_with_version(version, &mut buf).unwrap();
                                         buf
                                     })
                                     .collect();
@@ -1338,7 +1359,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     .map(|m| {
                         let mut buf = vec![];
                         m.module
-                            .serialize_with_version(m.module.version, &mut buf)
+                            .serialize_with_version(self.serialize_version(&m.module), &mut buf)
                             .unwrap();
                         buf
                     })
@@ -1553,6 +1574,13 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
 }
 
 impl SuiTestAdapter {
+    /// Returns the file format version to use when serializing a module. If a file format
+    /// version override was specified via `--file-format`, that version is used; otherwise
+    /// the module's own version is used.
+    fn serialize_version(&self, module: &CompiledModule) -> u32 {
+        self.file_format_version.unwrap_or(module.version)
+    }
+
     pub fn with_offchain_reader(&mut self, offchain_reader: Box<dyn OffchainStateReader>) {
         self.offchain_reader = Some(offchain_reader);
     }
@@ -1692,7 +1720,7 @@ impl SuiTestAdapter {
             .map(|m| {
                 let mut module_bytes = vec![];
                 m.module
-                    .serialize_with_version(m.module.version, &mut module_bytes)?;
+                    .serialize_with_version(self.serialize_version(&m.module), &mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
@@ -1981,6 +2009,7 @@ impl SuiTestAdapter {
                     event.write.address.address,
                     event.write.address.ty.clone(),
                     event.write.operation.clone(),
+                    event.write.value.clone(),
                 )
             })
             .collect();
@@ -1997,14 +2026,14 @@ impl SuiTestAdapter {
         // Use a stable sort before assigning fake ids, so test output remains stable.
         might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
 
-        accumulators_written.sort_by_key(|(_, address, ty, _)| {
+        accumulators_written.sort_by_key(|(_, address, ty, _, _)| {
             (
                 self.stabilize_str(format!("{}", address)),
                 self.stabilize_str(format!("{}", ty)),
             )
         });
 
-        might_need_fake_id.extend(accumulators_written.iter().map(|(id, _, _, _)| *id));
+        might_need_fake_id.extend(accumulators_written.iter().map(|(id, _, _, _, _)| *id));
 
         for id in might_need_fake_id {
             self.enumerate_fake(id);
@@ -2027,7 +2056,7 @@ impl SuiTestAdapter {
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unchanged_shared_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
-        accumulators_written.sort_by_key(|(id, _, _, _)| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|(id, _, _, _, _)| self.real_to_fake_object_id(id));
 
         match effects.status() {
             ExecutionStatus::Success => {
@@ -2134,6 +2163,15 @@ impl SuiTestAdapter {
                     SuiAccumulatorOperation::Merge => AccumulatorOperation::Merge,
                     SuiAccumulatorOperation::Split => AccumulatorOperation::Split,
                 };
+                let value = match &event.value {
+                    SuiAccumulatorValue::Integer(v) => EffectsAccumulatorValue::Integer(*v),
+                    SuiAccumulatorValue::IntegerTuple(a, b) => {
+                        EffectsAccumulatorValue::IntegerTuple(*a, *b)
+                    }
+                    SuiAccumulatorValue::EventDigest(digests) => {
+                        EffectsAccumulatorValue::EventDigest(digests.clone())
+                    }
+                };
                 (
                     event.accumulator_obj,
                     event.address,
@@ -2143,6 +2181,7 @@ impl SuiTestAdapter {
                         .try_into()
                         .expect("Failed to parse accumulator type tag"),
                     operation,
+                    value,
                 )
             })
             .collect();
@@ -2158,14 +2197,18 @@ impl SuiTestAdapter {
 
         // Use a stable sort before assigning fake ids, so test output remains stable.
         might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
-        accumulators_written.sort_by_key(|(_, address, ty, _)| {
+        accumulators_written.sort_by_key(|(_, address, ty, _, _)| {
             (
                 self.stabilize_str(format!("{}", address)),
                 self.stabilize_str(format!("{}", ty)),
             )
         });
 
-        might_need_fake_id.extend(accumulators_written.iter().map(|(obj_id, _, _, _)| *obj_id));
+        might_need_fake_id.extend(
+            accumulators_written
+                .iter()
+                .map(|(obj_id, _, _, _, _)| *obj_id),
+        );
 
         for id in might_need_fake_id {
             self.enumerate_fake(id);
@@ -2181,7 +2224,7 @@ impl SuiTestAdapter {
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
-        accumulators_written.sort_by_key(|(id, _, _, _)| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|(id, _, _, _, _)| self.real_to_fake_object_id(id));
 
         let events = events
             .data
@@ -2373,7 +2416,13 @@ impl SuiTestAdapter {
 
     fn list_accumulator_events(
         &self,
-        accumulators: &[(ObjectID, SuiAddress, TypeTag, AccumulatorOperation)],
+        accumulators: &[(
+            ObjectID,
+            SuiAddress,
+            TypeTag,
+            AccumulatorOperation,
+            EffectsAccumulatorValue,
+        )],
         summarize: bool,
     ) -> String {
         if summarize {
@@ -2381,7 +2430,7 @@ impl SuiTestAdapter {
         }
         accumulators
             .iter()
-            .map(|(obj_id, address, ty, operation)| {
+            .map(|(obj_id, address, ty, operation, value)| {
                 let fake_id_str = self.format_fake_id(obj_id);
                 let address_str = self.stabilize_str(format!("{}", address));
                 let ty_str = self.stabilize_str(format!("{}", ty));
@@ -2389,7 +2438,19 @@ impl SuiTestAdapter {
                     AccumulatorOperation::Merge => "Merge",
                     AccumulatorOperation::Split => "Split",
                 };
-                format!("({}, {}, {}, {})", fake_id_str, address_str, ty_str, op_str)
+                let value_str = match value {
+                    EffectsAccumulatorValue::Integer(v) => format!("{}", v),
+                    EffectsAccumulatorValue::IntegerTuple(a, b) => format!("({}, {})", a, b),
+                    EffectsAccumulatorValue::EventDigest(digests) => {
+                        let indices: Vec<_> =
+                            digests.iter().map(|(idx, _)| format!("{}", idx)).collect();
+                        format!("event_indices:[{}]", indices.join(", "))
+                    }
+                };
+                format!(
+                    "({}, {}, {}, {}, {})",
+                    fake_id_str, address_str, ty_str, op_str, value_str
+                )
             })
             .collect::<Vec<_>>()
             .join(", ")
@@ -2540,6 +2601,7 @@ impl Default for AdapterInitConfig {
             default_gas_price: None,
             flavor: None,
             offchain_config: None,
+            file_format_version: None,
         }
     }
 }

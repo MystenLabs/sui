@@ -64,6 +64,10 @@ Make your function private (don't add the `public` visibility keyword) and mark 
 
 In addition to this Sui-specific use case, there are other rules and restrictions for `entry` functions:
 
-- `entry` functions can only return types with the `drop` ability.
+- Non-public `entry` functions (private or `public(package)`) have restrictions on arguments that are entangled with hot potato values in a PTB. See [Non-public entry function restrictions](/guides/developer/transactions/ptbs/prog-txn-blocks#non-public-entry-function-restrictions) for details.
 
-- `entry` functions can only take objects as inputs if they weren't used as inputs in any non-`entry` functions in the same PTB.
+:::info
+
+Note that while previously `entry` functions had additional restrictions on their signatures (their types for parameters and return values), this is no longer the case. `entry` functions can have the same arguments or return values as a `public` function in a PTB.
+
+:::

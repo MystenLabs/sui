@@ -45,11 +45,7 @@ impl UniversalCommitter {
         // Try to decide as many leaders as possible, starting with the highest round.
         let mut leaders = VecDeque::new();
 
-        let last_round = match self
-            .context
-            .protocol_config
-            .mysticeti_num_leaders_per_round()
-        {
+        let last_round = match self.context.protocol_config.num_leaders_per_round() {
             Some(1) => {
                 // Ensure that we don't commit any leaders from the same round as last_decided
                 // until we have full support for multi-leader per round.

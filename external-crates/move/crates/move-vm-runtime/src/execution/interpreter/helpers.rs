@@ -36,7 +36,7 @@ pub fn instantiate_generic_function(
     for ty in type_params.iter().chain(instantiation.iter()) {
         sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes()?);
         if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-            return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
+            return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
         }
     }
     Ok(instantiation)
@@ -46,7 +46,7 @@ pub fn instantiate_single_type(ty: &ArenaType, ty_args: &[Type]) -> PartialVMRes
     if !ty_args.is_empty() {
         ty.subst(ty_args)
     } else {
-        Ok(ty.to_type())
+        ty.to_type()
     }
 }
 
@@ -80,13 +80,13 @@ fn instantiate_datatype_common(
     for ty in type_params.iter() {
         sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes()?);
         if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-            return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
+            return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
         }
     }
     for ty in ty_args.iter() {
         sum_nodes = sum_nodes.saturating_add(ty.count_type_nodes()?);
         if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-            return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
+            return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
         }
     }
 
