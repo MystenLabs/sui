@@ -295,9 +295,7 @@ export const ToolGrid = ({ children }) => (
 <SearchProvider>
 <SearchBar />
 
-## Getting started
-
-Install the Sui toolchain using `suiup`, then use the CLI and IDE extensions to write, build, and test Move packages.
+## Fundamentals
 
 <ToolGrid>
 <ToolCard
@@ -309,13 +307,27 @@ Install the Sui toolchain using `suiup`, then use the CLI and IDE extensions to 
 />
 
 <ToolCard
-  name="sui CLI"
-  description="The core Sui command-line interface. Wraps all sui move, sui client, sui replay, and other subcommands."
+  name="Sui CLI"
+  description="The core Sui command-line interface. Includes sui move, sui client, sui replay, and other subcommands."
   github="https://github.com/MystenLabs/sui"
-  install="suiup install sui@testnet"
+  install="suiup install sui@testnet or suiup install sui@mainnet"
   notes="Also available through brew install sui or cargo install. Use suiup for version pinning."
   docs="/references/cli"
 />
+
+<ToolCard
+  name="Play Move"
+  description="Move web IDE for quick experimentation without any downloads."
+  website="https://www.playmove.dev/"
+/>
+
+</ToolGrid>
+
+## Writing Move
+
+IDEs, editor extensions, and language tools for writing Move smart contracts.
+
+<ToolGrid>
 
 <ToolCard
   name="Move Analyzer"
@@ -334,30 +346,6 @@ Install the Sui toolchain using `suiup`, then use the CLI and IDE extensions to 
   install="npm i -D prettier @mysten/prettier-plugin-move"
   notes="VS Code extension: mysten.prettier-move"
   website="https://marketplace.visualstudio.com/items?itemName=mysten.prettier-move"
-/>
-
-<ToolCard
-  name="Sui Faucet"
-  description="Request Testnet or Devnet SUI tokens for development and testing."
-  website="https://faucet.sui.io/"
-/>
-
-<ToolCard
-  name="@mysten/create-dapp"
-  description="CLI tool that helps you create Sui app projects."
-  docs="https://sdk.mystenlabs.com/dapp-kit/create-dapp"
-/>
-</ToolGrid>
-
-## Writing Move
-
-IDEs, editor extensions, and language tools for writing Move smart contracts.
-
-<ToolGrid>
-<ToolCard
-  name="Play Move"
-  description="Move web IDE for quick experimentation without any downloads."
-  website="https://www.playmove.dev/"
 />
 
 <ToolCard
@@ -462,6 +450,12 @@ Frontend toolkits, wallet integration, authentication, and app scaffolding.
 
 <ToolGrid>
 <ToolCard
+  name="@mysten/create-dapp"
+  description="CLI tool for creating Sui apps."
+  docs="https://sdk.mystenlabs.com/dapp-kit/create-dapp"
+/>
+
+<ToolCard
   name="Sui dApp Kit"
   description="React components, hooks, and utilities for building apps on Sui."
   github="https://github.com/MystenLabs/ts-sdks/tree/main/packages/dapp-kit"
@@ -482,6 +476,13 @@ Frontend toolkits, wallet integration, authentication, and app scaffolding.
   notes="Includes API backend, React frontend, and TypeScript SDK."
   docs="/standards/sagat"
   website="https://sagat.mystenlabs.com/"
+/>
+
+<ToolCard
+  name="@mysten/signers"
+  description="The Sui KMS Signers package provides a set of tools for securely signing transactions using Key Management Services (KMS) like AWS KMS and GCP KMS."
+  docs="https://www.npmjs.com/package/@mysten/signers"
+  install="npm i @mysten/signers"
 />
 
 <ToolCard
@@ -642,6 +643,12 @@ Tools for unit testing, replaying transactions, and debugging Move execution loc
 ### Faucets 
 
 Obtain testing tokens for Testnet deployment.
+
+<ToolCard
+  name="Sui Faucet"
+  description="Request Testnet or Devnet SUI tokens for development and testing."
+  website="https://faucet.sui.io/"
+/>
 
 <ToolGrid>
 <ToolCard
