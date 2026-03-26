@@ -35,16 +35,12 @@ impl CachingCoinReservationResolver {
         object_id: ObjectID,
         accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<(SuiAddress, TypeTag)> {
-        // When a specific version is requested (MVCC), bypass the cache since the cached
-        // value may be at a different version.
-        if accumulator_version.is_some() {
+        // Owner and type_tag never change, so the cache is always coherent.
+        // On cache miss, use MVCC to read at the specified version.
+        self.cache.get_with(object_id, || {
             self.inner
                 .get_owner_and_type_for_object(object_id, accumulator_version)
-        } else {
-            self.cache.get_with(object_id, || {
-                self.inner.get_owner_and_type_for_object(object_id, None)
-            })
-        }
+        })
     }
 
     pub fn resolve_funds_withdrawal(
