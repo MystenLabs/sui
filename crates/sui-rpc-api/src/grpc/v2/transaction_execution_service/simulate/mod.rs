@@ -476,47 +476,45 @@ fn select_gas(
 
         // When GasCoin is used and there's address balance, prepend a coin reservation
         // to make ALL SUI in the account available (coins + address balance)
-        if gas_coin_used {
-            if let Some(ab_value) = address_balance {
-                if ab_value > 0 {
-                    let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+        if gas_coin_used
+            && let Some(ab_value) = address_balance
+            && ab_value > 0
+        {
+            let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
 
-                    let accumulator_obj_id =
-                        AccumulatorValue::get_field_id(owner, &Balance::type_tag(GAS::type_tag()))
-                            .map_err(|e| {
-                                RpcError::new(
-                                    tonic::Code::Internal,
-                                    format!("Failed to get accumulator object ID: {e}"),
-                                )
-                            })?;
+            let accumulator_obj_id =
+                AccumulatorValue::get_field_id(owner, &Balance::type_tag(GAS::type_tag()))
+                    .map_err(|e| {
+                        RpcError::new(
+                            tonic::Code::Internal,
+                            format!("Failed to get accumulator object ID: {e}"),
+                        )
+                    })?;
 
-                    let reservation = ParsedObjectRefWithdrawal::new(
-                        *accumulator_obj_id.inner(),
-                        current_epoch,
-                        ab_value,
-                    );
-                    let coin_reservation =
-                        reservation.encode(SequenceNumber::new(), service.chain_id);
+            let reservation = ParsedObjectRefWithdrawal::new(
+                *accumulator_obj_id.inner(),
+                current_epoch,
+                ab_value,
+            );
+            let coin_reservation = reservation.encode(SequenceNumber::new(), service.chain_id);
 
-                    // Prepend coin reservation to make address balance accessible via GasCoin
-                    selected_gas.insert(0, coin_reservation);
-                    selected_gas_value += ab_value;
+            // Prepend coin reservation to make address balance accessible via GasCoin
+            selected_gas.insert(0, coin_reservation);
+            selected_gas_value += ab_value;
 
-                    // Set expiration for address balance usage if not already set
-                    if !matches!(
-                        transaction.expiration(),
-                        TransactionExpiration::ValidDuring { .. }
-                    ) {
-                        *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
-                            min_epoch: Some(current_epoch),
-                            max_epoch: Some(current_epoch.saturating_add(1)),
-                            min_timestamp: None,
-                            max_timestamp: None,
-                            chain: service.chain_id,
-                            nonce: rand::random(),
-                        };
-                    }
-                }
+            // Set expiration for address balance usage if not already set
+            if !matches!(
+                transaction.expiration(),
+                TransactionExpiration::ValidDuring { .. }
+            ) {
+                *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
+                    min_epoch: Some(current_epoch),
+                    max_epoch: Some(current_epoch.saturating_add(1)),
+                    min_timestamp: None,
+                    max_timestamp: None,
+                    chain: service.chain_id,
+                    nonce: rand::random(),
+                };
             }
         }
 
