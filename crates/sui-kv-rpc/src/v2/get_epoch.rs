@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_kvstore::{BigTableClient, KeyValueStoreReader};
+use sui_kvstore::BigTableClient;
+use sui_kvstore::tables::epochs::col;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
@@ -37,10 +38,14 @@ pub async fn get_epoch(
 
     let mut message = Epoch::default();
 
+    let columns = epoch_columns(&read_mask);
     let maybe_epoch_info = if let Some(epoch) = request.epoch {
-        client.get_epoch(epoch).await?
+        client
+            .get_epochs_filtered(&[epoch], Some(&columns))
+            .await?
+            .pop()
     } else {
-        client.get_latest_epoch().await?
+        client.get_latest_epoch_filtered(Some(&columns)).await?
     };
 
     let Some(epoch_info) = maybe_epoch_info else {
@@ -85,4 +90,34 @@ pub async fn get_epoch(
         });
     }
     Ok(GetEpochResponse::new(message))
+}
+
+/// Compute the set of BigTable columns needed for the given read mask.
+/// Always includes `ep` (epoch number, small).
+fn epoch_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
+    let mut columns = vec![col::EPOCH];
+
+    if mask.contains(Epoch::FIRST_CHECKPOINT_FIELD.name) {
+        columns.push(col::START_CHECKPOINT);
+    }
+    if mask.contains(Epoch::LAST_CHECKPOINT_FIELD.name) {
+        columns.push(col::END_CHECKPOINT);
+    }
+    if mask.contains(Epoch::START_FIELD.name) {
+        columns.push(col::START_TIMESTAMP);
+    }
+    if mask.contains(Epoch::END_FIELD.name) {
+        columns.push(col::END_TIMESTAMP);
+    }
+    if mask.contains(Epoch::REFERENCE_GAS_PRICE_FIELD.name) {
+        columns.push(col::REFERENCE_GAS_PRICE);
+    }
+    if mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name).is_some() {
+        columns.push(col::PROTOCOL_VERSION);
+    }
+    if mask.contains(Epoch::COMMITTEE_FIELD.name) {
+        columns.push(col::SYSTEM_STATE);
+    }
+
+    columns
 }

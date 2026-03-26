@@ -124,9 +124,9 @@ pub struct BigTableIndexer {
 
 #[derive(Clone, Debug)]
 pub struct CheckpointData {
-    pub summary: CheckpointSummary,
-    pub contents: CheckpointContents,
-    pub signatures: AuthorityStrongQuorumSignInfo,
+    pub summary: Option<CheckpointSummary>,
+    pub contents: Option<CheckpointContents>,
+    pub signatures: Option<AuthorityStrongQuorumSignInfo>,
 }
 
 #[derive(Clone, Debug)]

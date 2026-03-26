@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_data_ingestion_core::{CheckpointReader, create_remote_store_client};
+use sui_kvstore::tables::checkpoints::col;
 use sui_kvstore::{BigTableClient, CHECKPOINTS_PIPELINE, KeyValueStoreReader};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
@@ -30,6 +31,7 @@ pub async fn get_checkpoint(
         })?;
         FieldMaskTree::from(read_mask)
     };
+    let columns = checkpoint_columns(&read_mask);
     let checkpoint = match request.checkpoint_id {
         Some(CheckpointId::Digest(digest)) => {
             let digest = digest.parse::<CheckpointDigest>().map_err(|e| {
@@ -38,12 +40,12 @@ pub async fn get_checkpoint(
                     .with_reason(ErrorReason::FieldInvalid)
             })?;
             client
-                .get_checkpoint_by_digest(digest)
+                .get_checkpoint_by_digest_filtered(digest, Some(&columns))
                 .await?
                 .ok_or(CheckpointNotFoundError::digest(digest.into()))?
         }
         Some(CheckpointId::SequenceNumber(sequence_number)) => client
-            .get_checkpoints(&[sequence_number])
+            .get_checkpoints_filtered(&[sequence_number], Some(&columns))
             .await?
             .pop()
             .ok_or(CheckpointNotFoundError::sequence_number(sequence_number))?,
@@ -54,22 +56,35 @@ pub async fn get_checkpoint(
                 .map(|wm| wm.checkpoint_hi_inclusive)
                 .ok_or(CheckpointNotFoundError::sequence_number(0))?;
             client
-                .get_checkpoints(&[sequence_number])
+                .get_checkpoints_filtered(&[sequence_number], Some(&columns))
                 .await?
                 .pop()
                 .ok_or(CheckpointNotFoundError::sequence_number(sequence_number))?
         }
     };
-    let sequence_number = checkpoint.summary.sequence_number;
+
+    let summary = checkpoint
+        .summary
+        .ok_or_else(|| anyhow::anyhow!("checkpoint summary missing"))?;
+    let sequence_number = summary.sequence_number;
     let mut message = Checkpoint::default();
-    let summary: sui_sdk_types::CheckpointSummary = checkpoint.summary.try_into()?;
-    let signatures: sui_sdk_types::ValidatorAggregatedSignature = checkpoint.signatures.into();
+    let summary: sui_sdk_types::CheckpointSummary = summary.try_into()?;
     message.merge(&summary, &read_mask);
-    message.merge(signatures, &read_mask);
+
+    if read_mask.contains(Checkpoint::SIGNATURE_FIELD) {
+        let signatures = checkpoint
+            .signatures
+            .ok_or_else(|| anyhow::anyhow!("checkpoint signatures missing"))?;
+        let signatures: sui_sdk_types::ValidatorAggregatedSignature = signatures.into();
+        message.merge(signatures, &read_mask);
+    }
 
     if read_mask.contains(Checkpoint::CONTENTS_FIELD.name) {
+        let contents = checkpoint
+            .contents
+            .ok_or_else(|| anyhow::anyhow!("checkpoint contents missing"))?;
         message.merge(
-            sui_sdk_types::CheckpointContents::try_from(checkpoint.contents)?,
+            sui_sdk_types::CheckpointContents::try_from(contents)?,
             &read_mask,
         );
     }
@@ -89,4 +104,20 @@ pub async fn get_checkpoint(
     }
 
     Ok(GetCheckpointResponse::new(message))
+}
+
+/// Compute the set of BigTable columns needed for the given read mask.
+/// Always includes `s` (summary) since it provides sequence_number, digest, etc.
+/// Only includes `sg` (signatures) and `c` (contents) when needed.
+fn checkpoint_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
+    let mut columns = vec![col::SUMMARY];
+
+    if mask.contains(Checkpoint::SIGNATURE_FIELD) {
+        columns.push(col::SIGNATURES);
+    }
+    if mask.contains(Checkpoint::CONTENTS_FIELD) {
+        columns.push(col::CONTENTS);
+    }
+
+    columns
 }

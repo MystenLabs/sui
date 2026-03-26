@@ -79,7 +79,8 @@ impl KvRpcServer {
             .await?
             .pop()
             .expect("failed to fetch genesis checkpoint from the KV store");
-        let chain_id = ChainIdentifier::from(genesis.summary.digest());
+        let summary = genesis.summary.expect("genesis checkpoint missing summary");
+        let chain_id = ChainIdentifier::from(summary.digest());
         Ok(Self::init(
             client,
             chain_id,
