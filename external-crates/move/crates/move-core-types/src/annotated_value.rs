@@ -186,6 +186,14 @@ impl MoveValue {
         Ok(bcs::from_bytes_seed(ty, blob)?)
     }
 
+    /// Deserialize a BCS-encoded blob using a compressed annotated type layout.
+    pub fn simple_deserialize_compressed(
+        blob: &[u8],
+        layout: &compressed_layouts::MoveTypeLayout,
+    ) -> AResult<Self> {
+        Ok(bcs::from_bytes_seed(layout.as_view(), blob)?)
+    }
+
     /// Deserialize `blob` as a Move value with the given `ty`-pe layout, and visit its
     /// sub-structure with the given `visitor`. The visitor dictates the return value that is built
     /// up during deserialization.
@@ -752,5 +760,612 @@ impl fmt::Display for MoveVariant {
             map.entry(&DD(field), &DD(value));
         }
         map.finish()
+    }
+}
+
+pub mod compressed_layouts {
+    use super::{
+        MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout as TreeMoveTypeLayout,
+    };
+    use crate::identifier::Identifier;
+    use crate::language_storage::StructTag;
+    use crate::runtime_value::compressed_layouts::LayoutIdx;
+    use anyhow::Result as AResult;
+    use indexmap::IndexSet;
+    use serde::{Deserialize, Serialize};
+
+    // =============================================================================
+    // Compressed (interned) annotated layout types
+    // =============================================================================
+
+    /// Index into an [`MoveTypeLayout`]'s strings table.
+    pub type StringIdx = usize;
+
+    /// Index into an [`MoveTypeLayout`]'s tags table.
+    pub type TagIdx = usize;
+
+    /// A list of (field_name_idx, layout_idx) pairs for struct/enum fields.
+    pub type AnnotatedFieldIndices = Box<[(StringIdx, LayoutIdx)]>;
+
+    /// A single variant entry: (variant_name_idx, tag, field_indices).
+    pub type AnnotatedVariantEntry = (StringIdx, u16, AnnotatedFieldIndices);
+
+    /// Annotated struct layout node: type tag + named fields stored as interned indices.
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub struct MoveStructNode {
+        pub type_: TagIdx,
+        pub fields: AnnotatedFieldIndices,
+    }
+
+    /// Annotated enum layout node: type tag + named variants with named fields.
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub struct MoveEnumNode {
+        pub type_: TagIdx,
+        pub variants: Box<[AnnotatedVariantEntry]>,
+    }
+
+    /// A single layout node in an annotated compressed layout table.
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub enum MoveTypeNode {
+        Bool,
+        U8,
+        U16,
+        U32,
+        U64,
+        U128,
+        U256,
+        Address,
+        Signer,
+        Vector(LayoutIdx),
+        Struct(MoveStructNode),
+        Enum(MoveEnumNode),
+    }
+
+    /// A deduplicated, flat representation of an annotated [`MoveTypeLayout`] tree.
+    /// Strings (field names, variant names) and [`StructTag`]s are interned into
+    /// separate side tables.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct MoveTypeLayout {
+        nodes: Box<[MoveTypeNode]>,
+        strings: Box<[Identifier]>,
+        tags: Box<[StructTag]>,
+        root: LayoutIdx,
+    }
+
+    impl MoveTypeLayout {
+        /// Number of unique nodes in the compressed layout.
+        pub fn node_count(&self) -> usize {
+            self.nodes.len()
+        }
+
+        /// Number of unique interned strings (field/variant names).
+        pub fn string_count(&self) -> usize {
+            self.strings.len()
+        }
+
+        /// Number of unique interned struct tags.
+        pub fn tag_count(&self) -> usize {
+            self.tags.len()
+        }
+
+        /// Create a borrowed view of this layout.
+        pub fn as_view(&self) -> MoveTypeLayoutView<'_> {
+            MoveTypeLayoutView {
+                nodes: &self.nodes,
+                strings: &self.strings,
+                tags: &self.tags,
+                root: self.root,
+            }
+        }
+
+        /// Inflate back into a tree-based [`MoveTypeLayout`].
+        pub fn inflate(&self) -> AResult<TreeMoveTypeLayout> {
+            self.as_view().inflate()
+        }
+    }
+
+    // =============================================================================
+    // View — the primary public API for navigating compressed layouts
+    // =============================================================================
+
+    /// A borrowed, `Copy` cursor into an annotated [`MoveTypeLayout`]. Navigate by
+    /// calling [`current`](Self::current) to inspect the node, [`view_at`](Self::view_at)
+    /// to move to a child, and [`resolve_string`](Self::resolve_string) /
+    /// [`resolve_tag`](Self::resolve_tag) to look up interned names and type tags.
+    #[derive(Debug, Clone, Copy)]
+    pub struct MoveTypeLayoutView<'a> {
+        nodes: &'a [MoveTypeNode],
+        strings: &'a [Identifier],
+        tags: &'a [StructTag],
+        root: LayoutIdx,
+    }
+
+    impl<'a> MoveTypeLayoutView<'a> {
+        /// The node at this view's current position.
+        pub fn current(&self) -> AResult<&'a MoveTypeNode> {
+            self.nodes.get(self.root).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "layout index {} out of bounds (table has {} nodes)",
+                    self.root,
+                    self.nodes.len()
+                )
+            })
+        }
+
+        /// Create a sub-view rooted at the given index. No bounds check is
+        /// performed here — it is deferred to [`current`](Self::current).
+        pub fn view_at(&self, idx: LayoutIdx) -> MoveTypeLayoutView<'a> {
+            MoveTypeLayoutView {
+                nodes: self.nodes,
+                strings: self.strings,
+                tags: self.tags,
+                root: idx,
+            }
+        }
+
+        /// Resolve a string index to an identifier.
+        pub fn resolve_string(&self, idx: StringIdx) -> AResult<&'a Identifier> {
+            self.strings.get(idx).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "string index {} out of bounds (table has {} strings)",
+                    idx,
+                    self.strings.len()
+                )
+            })
+        }
+
+        /// Resolve a tag index to a struct tag.
+        pub fn resolve_tag(&self, idx: TagIdx) -> AResult<&'a StructTag> {
+            self.tags.get(idx).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "tag index {} out of bounds (table has {} tags)",
+                    idx,
+                    self.tags.len()
+                )
+            })
+        }
+
+        /// Inflate back into a tree-based layout.
+        pub fn inflate(&self) -> AResult<TreeMoveTypeLayout> {
+            inflate_idx(self, self.root)
+        }
+    }
+
+    // =============================================================================
+    // Internal helpers
+    // =============================================================================
+
+    fn inflate_idx(view: &MoveTypeLayoutView<'_>, idx: LayoutIdx) -> AResult<TreeMoveTypeLayout> {
+        let node = view.view_at(idx).current()?;
+        match node {
+            MoveTypeNode::Bool => Ok(TreeMoveTypeLayout::Bool),
+            MoveTypeNode::U8 => Ok(TreeMoveTypeLayout::U8),
+            MoveTypeNode::U16 => Ok(TreeMoveTypeLayout::U16),
+            MoveTypeNode::U32 => Ok(TreeMoveTypeLayout::U32),
+            MoveTypeNode::U64 => Ok(TreeMoveTypeLayout::U64),
+            MoveTypeNode::U128 => Ok(TreeMoveTypeLayout::U128),
+            MoveTypeNode::U256 => Ok(TreeMoveTypeLayout::U256),
+            MoveTypeNode::Address => Ok(TreeMoveTypeLayout::Address),
+            MoveTypeNode::Signer => Ok(TreeMoveTypeLayout::Signer),
+            MoveTypeNode::Vector(inner) => Ok(TreeMoveTypeLayout::Vector(Box::new(inflate_idx(
+                view, *inner,
+            )?))),
+            MoveTypeNode::Struct(s) => {
+                let type_ = view.resolve_tag(s.type_)?.clone();
+                let fields = s
+                    .fields
+                    .iter()
+                    .map(|(name_idx, layout_idx)| {
+                        Ok(MoveFieldLayout::new(
+                            view.resolve_string(*name_idx)?.clone(),
+                            inflate_idx(view, *layout_idx)?,
+                        ))
+                    })
+                    .collect::<AResult<_>>()?;
+                Ok(TreeMoveTypeLayout::Struct(Box::new(MoveStructLayout {
+                    type_,
+                    fields,
+                })))
+            }
+            MoveTypeNode::Enum(e) => {
+                let type_ = view.resolve_tag(e.type_)?.clone();
+                let variants = e
+                    .variants
+                    .iter()
+                    .map(|(name_idx, tag, fields)| {
+                        let variant_name = view.resolve_string(*name_idx)?.clone();
+                        let field_layouts = fields
+                            .iter()
+                            .map(|(fn_idx, l_idx)| {
+                                Ok(MoveFieldLayout::new(
+                                    view.resolve_string(*fn_idx)?.clone(),
+                                    inflate_idx(view, *l_idx)?,
+                                ))
+                            })
+                            .collect::<AResult<_>>()?;
+                        Ok(((variant_name, *tag), field_layouts))
+                    })
+                    .collect::<AResult<_>>()?;
+                Ok(TreeMoveTypeLayout::Enum(Box::new(MoveEnumLayout {
+                    type_,
+                    variants,
+                })))
+            }
+        }
+    }
+
+    // =============================================================================
+    // Builder
+    // =============================================================================
+
+    /// Incrementally builds an annotated [`MoveTypeLayout`] with automatic
+    /// deduplication of nodes, field/variant names, and struct tags.
+    pub struct MoveTypeLayoutBuilder {
+        nodes: IndexSet<MoveTypeNode>,
+        strings: IndexSet<Identifier>,
+        tags: IndexSet<StructTag>,
+    }
+
+    impl MoveTypeLayoutBuilder {
+        pub fn new() -> Self {
+            Self {
+                nodes: IndexSet::new(),
+                strings: IndexSet::new(),
+                tags: IndexSet::new(),
+            }
+        }
+
+        fn intern_string(&mut self, s: &Identifier) -> StringIdx {
+            let (idx, _) = self.strings.insert_full(s.clone());
+            idx
+        }
+
+        fn intern_tag(&mut self, tag: &StructTag) -> TagIdx {
+            let (idx, _) = self.tags.insert_full(tag.clone());
+            idx
+        }
+
+        fn intern(&mut self, node: MoveTypeNode) -> LayoutIdx {
+            let (idx, _) = self.nodes.insert_full(node);
+            idx
+        }
+
+        pub fn bool(&mut self) -> LayoutIdx {
+            self.intern(MoveTypeNode::Bool)
+        }
+        pub fn u8(&mut self) -> LayoutIdx {
+            self.intern(MoveTypeNode::U8)
+        }
+        pub fn u16(&mut self) -> LayoutIdx {
+            self.intern(MoveTypeNode::U16)
+        }
+        pub fn u32(&mut self) -> LayoutIdx {
+            self.intern(MoveTypeNode::U32)
+        }
+        pub fn u64(&mut self) -> LayoutIdx {
+            self.intern(MoveTypeNode::U64)
+        }
+        pub fn u128(&mut self) -> LayoutIdx {
+            self.intern(MoveTypeNode::U128)
+        }
+        pub fn u256(&mut self) -> LayoutIdx {
+            self.intern(MoveTypeNode::U256)
+        }
+        pub fn address(&mut self) -> LayoutIdx {
+            self.intern(MoveTypeNode::Address)
+        }
+        pub fn signer(&mut self) -> LayoutIdx {
+            self.intern(MoveTypeNode::Signer)
+        }
+
+        pub fn vector(&mut self, element: LayoutIdx) -> LayoutIdx {
+            self.intern(MoveTypeNode::Vector(element))
+        }
+
+        /// Build a struct layout node.
+        /// `fields` is a list of (field_name, field_layout) pairs.
+        pub fn struct_layout(
+            &mut self,
+            type_tag: &StructTag,
+            fields: &[(&Identifier, LayoutIdx)],
+        ) -> LayoutIdx {
+            let tag_idx = self.intern_tag(type_tag);
+            let field_indices: AnnotatedFieldIndices = fields
+                .iter()
+                .map(|(name, idx)| (self.intern_string(name), *idx))
+                .collect();
+            self.intern(MoveTypeNode::Struct(MoveStructNode {
+                type_: tag_idx,
+                fields: field_indices,
+            }))
+        }
+
+        /// Build an enum layout node.
+        /// Each variant is `(variant_name, tag, fields)` where fields is `[(field_name, layout)]`.
+        pub fn enum_layout(
+            &mut self,
+            type_tag: &StructTag,
+            variants: &[(&Identifier, u16, &[(&Identifier, LayoutIdx)])],
+        ) -> LayoutIdx {
+            let tag_idx = self.intern_tag(type_tag);
+            let variant_entries: Box<[AnnotatedVariantEntry]> = variants
+                .iter()
+                .map(|(vn, tag, fields)| {
+                    let vn_idx = self.intern_string(vn);
+                    let field_indices: AnnotatedFieldIndices = fields
+                        .iter()
+                        .map(|(fn_name, idx)| (self.intern_string(fn_name), *idx))
+                        .collect();
+                    (vn_idx, *tag, field_indices)
+                })
+                .collect();
+            self.intern(MoveTypeNode::Enum(MoveEnumNode {
+                type_: tag_idx,
+                variants: variant_entries,
+            }))
+        }
+
+        /// Recursively intern a tree-based annotated layout.
+        pub fn intern_tree(&mut self, layout: &TreeMoveTypeLayout) -> LayoutIdx {
+            match layout {
+                TreeMoveTypeLayout::Bool => self.bool(),
+                TreeMoveTypeLayout::U8 => self.u8(),
+                TreeMoveTypeLayout::U16 => self.u16(),
+                TreeMoveTypeLayout::U32 => self.u32(),
+                TreeMoveTypeLayout::U64 => self.u64(),
+                TreeMoveTypeLayout::U128 => self.u128(),
+                TreeMoveTypeLayout::U256 => self.u256(),
+                TreeMoveTypeLayout::Address => self.address(),
+                TreeMoveTypeLayout::Signer => self.signer(),
+                TreeMoveTypeLayout::Vector(inner) => {
+                    let inner_idx = self.intern_tree(inner);
+                    self.vector(inner_idx)
+                }
+                TreeMoveTypeLayout::Struct(s) => {
+                    let fields: Vec<(&Identifier, LayoutIdx)> = s
+                        .fields
+                        .iter()
+                        .map(|f| (&f.name, self.intern_tree(&f.layout)))
+                        .collect();
+                    self.struct_layout(&s.type_, &fields)
+                }
+                TreeMoveTypeLayout::Enum(e) => {
+                    let variants: Vec<(&Identifier, u16, Vec<(&Identifier, LayoutIdx)>)> = e
+                        .variants
+                        .iter()
+                        .map(|((variant_name, tag), field_layouts)| {
+                            let fields: Vec<(&Identifier, LayoutIdx)> = field_layouts
+                                .iter()
+                                .map(|f| (&f.name, self.intern_tree(&f.layout)))
+                                .collect();
+                            (variant_name, *tag, fields)
+                        })
+                        .collect();
+                    let variant_refs: Vec<(&Identifier, u16, &[(&Identifier, LayoutIdx)])> =
+                        variants
+                            .iter()
+                            .map(|(vn, tag, fields)| (*vn, *tag, fields.as_slice()))
+                            .collect();
+                    self.enum_layout(&e.type_, &variant_refs)
+                }
+            }
+        }
+
+        pub fn build(self, root: LayoutIdx) -> MoveTypeLayout {
+            MoveTypeLayout {
+                nodes: self.nodes.into_iter().collect(),
+                strings: self.strings.into_iter().collect(),
+                tags: self.tags.into_iter().collect(),
+                root,
+            }
+        }
+    }
+
+    impl Default for MoveTypeLayoutBuilder {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl From<&TreeMoveTypeLayout> for MoveTypeLayout {
+        fn from(layout: &TreeMoveTypeLayout) -> Self {
+            let mut b = MoveTypeLayoutBuilder::new();
+            let root = b.intern_tree(layout);
+            b.build(root)
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Deserialization — DeserializeSeed for MoveTypeLayoutView
+    // -------------------------------------------------------------------------
+
+    use super::{MoveStruct as AnnStruct, MoveValue as AnnValue, MoveVariant as AnnVariant};
+    use crate::{VARIANT_TAG_MAX_VALUE, account_address::AccountAddress, u256};
+    use serde::de::Error as _;
+
+    impl<'d> serde::de::DeserializeSeed<'d> for MoveTypeLayoutView<'_> {
+        type Value = AnnValue;
+
+        fn deserialize<D: serde::de::Deserializer<'d>>(
+            self,
+            deserializer: D,
+        ) -> Result<Self::Value, D::Error> {
+            let node = self
+                .current()
+                .map_err(|e| D::Error::custom(format!("{e}")))?;
+            match node {
+                MoveTypeNode::Bool => bool::deserialize(deserializer).map(AnnValue::Bool),
+                MoveTypeNode::U8 => u8::deserialize(deserializer).map(AnnValue::U8),
+                MoveTypeNode::U16 => u16::deserialize(deserializer).map(AnnValue::U16),
+                MoveTypeNode::U32 => u32::deserialize(deserializer).map(AnnValue::U32),
+                MoveTypeNode::U64 => u64::deserialize(deserializer).map(AnnValue::U64),
+                MoveTypeNode::U128 => u128::deserialize(deserializer).map(AnnValue::U128),
+                MoveTypeNode::U256 => u256::U256::deserialize(deserializer).map(AnnValue::U256),
+                MoveTypeNode::Address => {
+                    AccountAddress::deserialize(deserializer).map(AnnValue::Address)
+                }
+                MoveTypeNode::Signer => {
+                    AccountAddress::deserialize(deserializer).map(AnnValue::Signer)
+                }
+                MoveTypeNode::Struct(s) => {
+                    let type_ = self
+                        .resolve_tag(s.type_)
+                        .map_err(|e| D::Error::custom(format!("{e}")))?
+                        .clone();
+                    let fields = deserializer.deserialize_tuple(
+                        s.fields.len(),
+                        CompressedStructFieldVisitor {
+                            view: self,
+                            fields: &s.fields,
+                        },
+                    )?;
+                    Ok(AnnValue::Struct(AnnStruct { type_, fields }))
+                }
+                MoveTypeNode::Enum(e) => {
+                    let type_ = self
+                        .resolve_tag(e.type_)
+                        .map_err(|e| D::Error::custom(format!("{e}")))?
+                        .clone();
+                    let (variant_name, tag, fields) = deserializer.deserialize_tuple(
+                        2,
+                        CompressedEnumFieldVisitor {
+                            view: self,
+                            variants: &e.variants,
+                        },
+                    )?;
+                    Ok(AnnValue::Variant(AnnVariant {
+                        type_,
+                        variant_name,
+                        tag,
+                        fields,
+                    }))
+                }
+                MoveTypeNode::Vector(inner_idx) => Ok(AnnValue::Vector(
+                    deserializer
+                        .deserialize_seq(CompressedVectorVisitor(self.view_at(*inner_idx)))?,
+                )),
+            }
+        }
+    }
+
+    struct CompressedVectorVisitor<'a>(MoveTypeLayoutView<'a>);
+
+    impl<'d> serde::de::Visitor<'d> for CompressedVectorVisitor<'_> {
+        type Value = Vec<AnnValue>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("Vector")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'d>,
+        {
+            let mut vals = Vec::new();
+            while let Some(elem) = seq.next_element_seed(self.0)? {
+                vals.push(elem)
+            }
+            Ok(vals)
+        }
+    }
+
+    struct CompressedStructFieldVisitor<'a> {
+        view: MoveTypeLayoutView<'a>,
+        fields: &'a [(StringIdx, LayoutIdx)],
+    }
+
+    impl<'d> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'_> {
+        type Value = Vec<(Identifier, AnnValue)>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("Struct")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'d>,
+        {
+            let mut vals = Vec::new();
+            for (i, (name_idx, layout_idx)) in self.fields.iter().enumerate() {
+                let name = self
+                    .view
+                    .resolve_string(*name_idx)
+                    .map_err(|e| A::Error::custom(format!("{e}")))?
+                    .clone();
+                match seq.next_element_seed(self.view.view_at(*layout_idx))? {
+                    Some(val) => vals.push((name, val)),
+                    None => return Err(A::Error::invalid_length(i, &self)),
+                }
+            }
+            Ok(vals)
+        }
+    }
+
+    struct CompressedEnumFieldVisitor<'a> {
+        view: MoveTypeLayoutView<'a>,
+        variants: &'a [AnnotatedVariantEntry],
+    }
+
+    impl<'d> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'_> {
+        type Value = (Identifier, u16, Vec<(Identifier, AnnValue)>);
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("Enum")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'d>,
+        {
+            let tag = match seq.next_element::<u8>()? {
+                Some(tag) if tag as u64 <= VARIANT_TAG_MAX_VALUE => tag as u16,
+                Some(tag) => return Err(A::Error::invalid_length(tag as usize, &self)),
+                None => return Err(A::Error::invalid_length(0, &self)),
+            };
+
+            let Some((name_idx, _, variant_fields)) =
+                self.variants.iter().find(|(_, t, _)| *t == tag)
+            else {
+                return Err(A::Error::invalid_length(tag as usize, &self));
+            };
+
+            let variant_name = self
+                .view
+                .resolve_string(*name_idx)
+                .map_err(|e| A::Error::custom(format!("{e}")))?
+                .clone();
+
+            let Some(fields) = seq.next_element_seed(CompressedVariantFieldSeed {
+                view: self.view,
+                fields: variant_fields,
+            })?
+            else {
+                return Err(A::Error::invalid_length(1, &self));
+            };
+
+            Ok((variant_name, tag, fields))
+        }
+    }
+
+    struct CompressedVariantFieldSeed<'a> {
+        view: MoveTypeLayoutView<'a>,
+        fields: &'a [(StringIdx, LayoutIdx)],
+    }
+
+    impl<'d> serde::de::DeserializeSeed<'d> for CompressedVariantFieldSeed<'_> {
+        type Value = Vec<(Identifier, AnnValue)>;
+
+        fn deserialize<D: serde::de::Deserializer<'d>>(
+            self,
+            deserializer: D,
+        ) -> Result<Self::Value, D::Error> {
+            deserializer.deserialize_tuple(
+                self.fields.len(),
+                CompressedStructFieldVisitor {
+                    view: self.view,
+                    fields: self.fields,
+                },
+            )
+        }
     }
 }
