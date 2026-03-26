@@ -249,7 +249,7 @@ mod tests {
 
     use async_trait::async_trait;
     use bytes::Bytes;
-    use consensus_types::block::BlockRef;
+    use consensus_types::block::{BlockRef, Round};
     use futures::stream;
     use parking_lot::{Mutex, RwLock};
     use tokio::time::sleep;
@@ -302,6 +302,8 @@ mod tests {
             &self,
             _peer: PeerId,
             _block_refs: Vec<BlockRef>,
+            _highest_accepted_rounds: Vec<Round>,
+            _breadth_first: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
@@ -352,6 +354,8 @@ mod tests {
             &self,
             _peer: NodeId,
             _block_refs: Vec<BlockRef>,
+            _highest_accepted_rounds: Vec<Round>,
+            _breadth_first: bool,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }

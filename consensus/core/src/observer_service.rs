@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockRef, Round};
 use futures::{StreamExt as _, stream};
 use parking_lot::RwLock;
 use sui_macros::fail_point_async;
@@ -16,6 +16,7 @@ use crate::{
     BlockVerifier, TransactionVoteTracker,
     authority_service::{BroadcastStream, SubscriptionCounter},
     block::{BlockAPI as _, SignedBlock, VerifiedBlock},
+    block_sync_service::BlockSyncService,
     commit::{CommitIndex, CommitRange, TrustedCommit},
     commit_vote_monitor::CommitVoteMonitor,
     context::Context,
@@ -44,6 +45,8 @@ pub(crate) struct ObserverService {
     commit_vote_monitor: Arc<CommitVoteMonitor>,
     transaction_vote_tracker: TransactionVoteTracker,
     synchronizer: Arc<SynchronizerHandle>,
+    #[allow(dead_code)]
+    block_sync_service: Arc<BlockSyncService>,
 }
 
 impl ObserverService {
@@ -56,6 +59,7 @@ impl ObserverService {
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         transaction_vote_tracker: TransactionVoteTracker,
         synchronizer: Arc<SynchronizerHandle>,
+        block_sync_service: Arc<BlockSyncService>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
@@ -68,6 +72,7 @@ impl ObserverService {
             commit_vote_monitor,
             transaction_vote_tracker,
             synchronizer,
+            block_sync_service,
         }
     }
 }
@@ -273,24 +278,27 @@ impl ObserverNetworkService for ObserverService {
     async fn handle_fetch_blocks(
         &self,
         _peer: NodeId,
-        _block_refs: Vec<BlockRef>,
+        block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
     ) -> ConsensusResult<Vec<Bytes>> {
-        // TODO: implement observer fetch blocks, similar to validator fetch_blocks but
-        // without highest_accepted_rounds.
-        Err(ConsensusError::NetworkRequest(
-            "Observer fetch blocks not yet implemented".to_string(),
-        ))
+        fail_point_async!("consensus-rpc-response");
+
+        // Delegate to BlockSyncService (for observer, no highest_accepted_rounds)
+        self.block_sync_service
+            .fetch_blocks(block_refs, highest_accepted_rounds, breadth_first)
+            .await
     }
 
     async fn handle_fetch_commits(
         &self,
         _peer: NodeId,
-        _commit_range: CommitRange,
+        commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
-        // TODO: implement observer fetch commits, similar to validator fetch_commits.
-        Err(ConsensusError::NetworkRequest(
-            "Observer fetch commits not yet implemented".to_string(),
-        ))
+        fail_point_async!("consensus-rpc-response");
+
+        // Delegate to BlockSyncService
+        self.block_sync_service.fetch_commits(commit_range).await
     }
 }
 
@@ -324,7 +332,7 @@ mod tests {
         let context = Arc::new(context);
 
         let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let (tx_accepted_block, rx_accepted_block) =
             broadcast::channel::<(VerifiedBlock, CommitIndex)>(100);
@@ -336,6 +344,11 @@ mod tests {
         let transaction_vote_tracker =
             TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
 
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
         let observer_service = ObserverService::new(
             context.clone(),
             core_dispatcher,
@@ -345,6 +358,7 @@ mod tests {
             commit_vote_monitor,
             transaction_vote_tracker,
             create_mock_synchronizer(),
+            block_sync_service,
         );
 
         // Observer starts with no blocks seen
@@ -395,7 +409,7 @@ mod tests {
         let context = Arc::new(context);
 
         let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let (_tx_accepted_block, rx_accepted_block) =
             broadcast::channel::<(VerifiedBlock, CommitIndex)>(100);
@@ -407,6 +421,11 @@ mod tests {
         let transaction_vote_tracker =
             TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
 
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
         let observer_service = ObserverService::new(
             context.clone(),
             core_dispatcher,
@@ -416,6 +435,7 @@ mod tests {
             commit_vote_monitor,
             transaction_vote_tracker,
             create_mock_synchronizer(),
+            block_sync_service,
         );
 
         let peer = keys[0].0.public().clone();
