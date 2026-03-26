@@ -34,6 +34,7 @@ use crate::{
     },
     observer_service::ObserverService,
     observer_subscriber::ObserverSubscriber,
+    peers_pool::{PeerServer, PeersPool},
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::RoundTracker,
@@ -371,6 +372,9 @@ where
 
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
+        // Create the PeersPool
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+
         let synchronizer = Synchronizer::start(
             synchronizer_client.clone(),
             context.clone(),
@@ -380,6 +384,7 @@ where
             transaction_certifier.clone(),
             round_tracker.clone(),
             dag_state.clone(),
+            peers_pool.clone(),
             sync_last_known_own_block,
         );
 
@@ -459,6 +464,27 @@ where
 
             (SubscriberType::Validator(s), round_prober_handle)
         } else {
+            // Register all the observer peers in the peers pool
+            for peer in context.parameters.tonic.observer_peers.iter() {
+                // If the peer's public key is in the committe, then register it as a validator.
+                if let Some((index, _)) = context
+                    .committee
+                    .authorities()
+                    .find(|(_, authority)| authority.network_key == peer.public_key)
+                {
+                    peers_pool
+                        .register_validator(
+                            index,
+                            vec![PeerServer::Validator, PeerServer::Observer],
+                        )
+                        .expect("Failed to register validator");
+                } else {
+                    // Otherwise this is another Observer peer and we register it as such. This peer we know that
+                    // it will support the Observer server.
+                    peers_pool.register_observer(peer.public_key.clone());
+                }
+            }
+
             // Observer node: subscribe to specified peer(s) using ObserverSubscriber
             let observer_client = network_manager.observer_client();
             let observer_service = Arc::new(ObserverService::new(

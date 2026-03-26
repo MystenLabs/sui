@@ -50,7 +50,7 @@ pub(crate) struct PeersPool {
 
 impl PeersPool {
     // Initializes the peers pool with the committee as peers with the Validator server as available.
-    pub(crate) fn new(context: Arc<Context>) -> Arc<Self> {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         let s = Self {
             registered_peers: RwLock::new(BTreeMap::new()),
             context: context.clone(),
@@ -62,7 +62,7 @@ impl PeersPool {
                 .unwrap();
         }
 
-        Arc::new(s)
+        s
     }
 
     /// Registers a validator as available in the pool with its supported servers.

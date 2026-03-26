@@ -279,12 +279,12 @@ where
         transaction_certifier: TransactionCertifier,
         round_tracker: Arc<RwLock<RoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
+        peers_pool: Arc<PeersPool>,
         sync_last_known_own_block: bool,
     ) -> Arc<SynchronizerHandle> {
         let (commands_sender, commands_receiver) =
             channel("consensus_synchronizer_commands", 1_000);
         let inflight_blocks_map = InflightBlocksMap::new();
-        let peers_pool = PeersPool::new(context.clone());
 
         // Spawn the tasks to fetch the blocks from the others
         let mut fetch_block_senders = BTreeMap::new();
@@ -1284,7 +1284,8 @@ mod tests {
     };
     use crate::{
         authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
-        round_tracker::RoundTracker, transaction_certifier::TransactionCertifier,
+        peers_pool::PeersPool, round_tracker::RoundTracker,
+        transaction_certifier::TransactionCertifier,
     };
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
@@ -1560,15 +1561,17 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let handle = Synchronizer::start(
             network_client,
-            context,
+            context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
             transaction_certifier,
             round_tracker,
             dag_state,
+            peers_pool.clone(),
             false,
         );
 
@@ -1629,15 +1632,17 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let handle = Synchronizer::start(
             network_client,
-            context,
+            context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
             transaction_certifier,
             round_tracker,
             dag_state,
+            peers_pool.clone(),
             false,
         );
 
@@ -1745,15 +1750,17 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let _handle = Synchronizer::start(
             network_client,
-            context,
+            context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
             transaction_certifier,
             round_tracker,
             dag_state,
+            peers_pool.clone(),
             false,
         );
 
@@ -1857,6 +1864,7 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let _handle = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1866,6 +1874,7 @@ mod tests {
             transaction_certifier,
             round_tracker,
             dag_state.clone(),
+            peers_pool.clone(),
             false,
         );
 
@@ -2002,6 +2011,7 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let handle = Synchronizer::start(
             network_client,
             context.clone(),
@@ -2011,6 +2021,7 @@ mod tests {
             transaction_certifier,
             round_tracker,
             dag_state,
+            peers_pool.clone(),
             true,
         );
 
