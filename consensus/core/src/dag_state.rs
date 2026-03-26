@@ -406,6 +406,10 @@ impl DagState {
     /// Gets blocks by checking genesis, cached recent blocks in memory, then storage.
     /// An element is None when the corresponding block is not found.
     pub(crate) fn get_blocks(&self, block_refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
+        if block_refs.is_empty() {
+            return vec![];
+        }
+
         let mut blocks = vec![None; block_refs.len()];
         let mut missing = Vec::new();
 

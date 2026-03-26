@@ -393,11 +393,11 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
     // Handles two types of requests:
     // 1. Missing block for block sync:
-    //    - uses highest_accepted_rounds.
-    //    - max_blocks_per_sync blocks should be returned.
+    //    - request has highest_accepted_rounds.
+    //    - response returns max_blocks_per_sync blocks.
     // 2. Committed block for commit sync:
-    //    - does not use highest_accepted_rounds.
-    //    - max_blocks_per_fetch blocks should be returned.
+    //    - request does not have highest_accepted_rounds.
+    //    - response returns max_blocks_per_fetch blocks.
     async fn handle_fetch_blocks(
         &self,
         _peer: AuthorityIndex,
@@ -417,11 +417,12 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         }
 
         // Some quick validation of the requested block refs
-        let max_response_num_blocks = if !highest_accepted_rounds.is_empty() {
-            self.context.parameters.max_blocks_per_sync
-        } else {
-            self.context.parameters.max_blocks_per_fetch
-        };
+        let max_response_num_blocks =
+            if !highest_accepted_rounds.is_empty() && !block_refs.is_empty() {
+                self.context.parameters.max_blocks_per_sync
+            } else {
+                self.context.parameters.max_blocks_per_fetch
+            };
         if block_refs.len() > max_response_num_blocks {
             block_refs.truncate(max_response_num_blocks);
         }
@@ -439,21 +440,21 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             }
         }
 
-        // Get requested blocks from store.
-        let blocks = if !highest_accepted_rounds.is_empty() {
-            block_refs.sort();
-            block_refs.dedup();
-            let mut blocks = self
-                .dag_state
-                .read()
-                .get_blocks(&block_refs)
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
+        // Get the requested blocks first.
+        let mut blocks = self
+            .dag_state
+            .read()
+            .get_blocks(&block_refs)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
+        // Then try to get ancestor blocks using breadth-first or depth-first strategy from the input missing blocks.
+        if blocks.len() < max_response_num_blocks && !highest_accepted_rounds.is_empty() {
             if breadth_first {
                 // Get unique missing ancestor blocks of the requested blocks.
-                let mut missing_ancestors = blocks
+                // highest_accepted_rounds will only be used to filter out already accepted blocks.
+                let missing_ancestors = blocks
                     .iter()
                     .flat_map(|block| block.ancestors().to_vec())
                     .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
@@ -463,17 +464,24 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
                 // If there are too many missing ancestors, randomly select a subset to avoid
                 // fetching duplicated blocks across peers.
-                let selected_num_blocks = max_response_num_blocks.saturating_sub(blocks.len());
-                if selected_num_blocks < missing_ancestors.len() {
-                    missing_ancestors = missing_ancestors
+                let selected_num_blocks = max_response_num_blocks
+                    .saturating_sub(blocks.len())
+                    .min(missing_ancestors.len());
+                if selected_num_blocks > 0 {
+                    let selected_ancestor_refs = missing_ancestors
                         .choose_multiple(&mut mysten_common::random::get_rng(), selected_num_blocks)
                         .copied()
                         .collect::<Vec<_>>();
+                    let ancestor_blocks = self
+                        .dag_state
+                        .read()
+                        .get_blocks(&selected_ancestor_refs)
+                        .into_iter()
+                        .flatten();
+                    blocks.extend(ancestor_blocks);
                 }
-                let ancestor_blocks = self.dag_state.read().get_blocks(&missing_ancestors);
-                blocks.extend(ancestor_blocks.into_iter().flatten());
             } else {
-                // Get additional blocks from authorities with missing block, if they are available in cache.
+                // Get additional blocks from authorities with missing block.
                 // Compute the lowest missing round per requested authority.
                 let mut lowest_missing_rounds = BTreeMap::<AuthorityIndex, Round>::new();
                 for block_ref in blocks.iter().map(|b| b.reference()) {
@@ -498,28 +506,17 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                         authority,
                         highest_accepted_round + 1,
                         lowest_missing_round,
-                        self.context
-                            .parameters
-                            .max_blocks_per_sync
+                        max_response_num_blocks
                             .saturating_sub(blocks.len()),
                     );
                     blocks.extend(missing_blocks);
-                    if blocks.len() >= self.context.parameters.max_blocks_per_sync {
-                        blocks.truncate(self.context.parameters.max_blocks_per_sync);
+                    if blocks.len() >= max_response_num_blocks {
+                        blocks.truncate(max_response_num_blocks);
                         break;
                     }
                 }
             }
-
-            blocks
-        } else {
-            self.dag_state
-                .read()
-                .get_blocks(&block_refs)
-                .into_iter()
-                .flatten()
-                .collect()
-        };
+        }
 
         // Return the serialized blocks
         let bytes = blocks
