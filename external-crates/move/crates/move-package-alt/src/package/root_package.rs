@@ -371,9 +371,8 @@ fn localpubs_to_publications<F: MoveFlavor>(
                 .0
                 .local
                 .canonicalize()
-                .map_err(|err| PackageError::InvalidEphemeralFile {
-                    file: source.0.local.clone(),
-                    err,
+                .map_err(|_| PackageError::InvalidEphemeralPath {
+                    path: source.0.local.clone(),
                 })?;
 
         let old = result.insert(source, new);
@@ -1057,17 +1056,19 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ local = "/foo/bar" }}
+            source = {{ local = "{}" }}
             version = 1
             published-at = "0x1"
             original-id = "0x2"
 
             [[published]]
-            source = {{ local = "/foo/bar" }}
+            source = {{ local = "{}" }}
             version = 2
             published-at = "0x1"
             original-id = "0x2"
             "###,
+            scenario.path_for("dep").to_string_lossy(),
+            scenario.path_for("dep").to_string_lossy(),
         )
         .unwrap();
 
@@ -1083,7 +1084,9 @@ pkg_b = { local = "../pkg_b" }"#,
         .await
         .unwrap_err();
 
-        assert_snapshot!(err.to_string(), @"Multiple entries with `source = { local = \"/foo/bar\" }` exist in the publication file");
+        assert_snapshot!(err.to_string().replace(scenario.path_for("dep").to_string_lossy().as_ref(), "<DEP>"),
+        @"Multiple entries with `source = { local = \"<DEP>\" }` exist in the publication file"
+        );
     }
 
     /// Ephemerally loading a dep that is published but not in the ephemeral file produces no
@@ -1228,6 +1231,9 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_deps([("root", "dep1"), ("root", "dep2")])
             .build();
 
+        let dep1_path = scenario.path_for("dep1").canonicalize().unwrap();
+        let dep2_path = scenario.path_for("dep2").canonicalize().unwrap();
+
         let mut ephemeral = tempfile::NamedTempFile::new().unwrap();
         write!(
             ephemeral,
@@ -1236,17 +1242,19 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ local = "../dep1" }}
+            source = {{ local = "{}" }}
             original-id = "0x4"
             published-at = "0x5"
             version = 0
 
             [[published]]
-            source = {{ local = "../dep2" }}
+            source = {{ local = "{}" }}
             original-id = "0x4"
             published-at = "0x6"
             version = 0
             "###,
+            dep1_path.to_string_lossy(),
+            dep2_path.to_string_lossy(),
         )
         .unwrap();
 
