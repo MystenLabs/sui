@@ -10,7 +10,7 @@ task 1, lines 6-9:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5038800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5046400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 11-14:
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
@@ -36,7 +36,7 @@ task 6, lines 31-34:
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 created: object(6,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5038800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5046400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7, lines 36-39:
 //# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
@@ -52,4 +52,4 @@ task 9, lines 46-49:
 //# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
 created: object(9,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5038800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5046400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

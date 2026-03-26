@@ -405,6 +405,22 @@ impl WalletContext {
             .map_err(Into::into)
     }
 
+    pub async fn get_current_epoch(&self) -> Result<u64, anyhow::Error> {
+        self.grpc_client()?
+            .get_current_epoch()
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn get_chain_identifier(
+        &self,
+    ) -> Result<sui_types::digests::ChainIdentifier, anyhow::Error> {
+        self.grpc_client()?
+            .get_chain_identifier()
+            .await
+            .map_err(Into::into)
+    }
+
     /// Add an account
     pub async fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
         self.config.keystore.import(alias, keypair).await.unwrap();

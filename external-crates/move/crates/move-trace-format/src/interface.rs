@@ -13,11 +13,19 @@ pub trait Tracer {
     /// Notify the tracer of a new event in the VM. This is called for every event that is emitted,
     /// and immediatlye _after_ the `event` has been added to the trace held inside of the `writer`.
     fn notify(&mut self, event: &TraceEvent, writer: Writer<'_>) -> bool;
+
+    /// Whether this tracer wants effect events (Push, Pop, Read, Write, DataLoad). If false, the
+    /// VM tracer can skip the expensive value conversion work needed to build effects.
+    fn wants_effects(&self) -> bool;
 }
 
 impl<T: Tracer> Tracer for &mut T {
     fn notify(&mut self, event: &TraceEvent, writer: Writer<'_>) -> bool {
         <T as Tracer>::notify(self, event, writer)
+    }
+
+    fn wants_effects(&self) -> bool {
+        <T as Tracer>::wants_effects(self)
     }
 }
 

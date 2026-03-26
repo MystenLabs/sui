@@ -6,6 +6,7 @@ use crate::accumulators::coin_reservations::CoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
+use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -66,6 +67,7 @@ use std::{
 };
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
+use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::crypto::RandomnessRound;
@@ -122,7 +124,10 @@ use sui_json_rpc_types::{
 use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
+use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::authenticator_state::get_authenticator_state;
+use sui_types::balance::Balance;
+use sui_types::coin_reservation;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{AuthoritySignInfo, Signer, default_hash};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
@@ -132,7 +137,7 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorTrait, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -249,6 +254,7 @@ pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod congestion_log;
 pub mod consensus_tx_status_cache;
+pub(crate) mod epoch_marker_key;
 pub mod epoch_start_configuration;
 pub mod execution_time_estimator;
 pub mod shared_object_congestion_tracker;
@@ -1888,6 +1894,68 @@ impl AuthorityState {
         );
     }
 
+    /// Helper function that handles transaction rewriting for coin reservations and executes
+    /// the transaction to effects. Returns the execution results along with the command offset
+    /// used for rewriting failure command indices.
+    fn execute_transaction_to_effects(
+        &self,
+        executor: &dyn Executor,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        gas_data: GasData,
+        gas_status: SuiGasStatus,
+        sender: SuiAddress,
+        mut kind: TransactionKind,
+        signer: SuiAddress,
+        tx_digest: TransactionDigest,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionError>,
+    ) {
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            sender,
+            &mut kind,
+        );
+
+        let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
+            // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
+            .execute_transaction_to_effects_and_execution_error(
+                store,
+                protocol_config,
+                self.metrics.limits_metrics.clone(),
+                enable_expensive_checks,
+                execution_params,
+                epoch_id,
+                epoch_timestamp_ms,
+                input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                rewritten_inputs,
+                signer,
+                tx_digest,
+                &mut None,
+            );
+
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            timings,
+            execution_error,
+        )
+    }
+
     /// execute_certificate validates the transaction input, and executes the certificate,
     /// returning transaction outputs.
     ///
@@ -1941,6 +2009,7 @@ impl AuthorityState {
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
+        let sender = transaction_data.sender();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
         let early_execution_error = get_early_execution_error(
             &tx_digest,
@@ -1956,11 +2025,11 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
-            epoch_store.executor().execute_transaction_to_effects(
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
+            .execute_transaction_to_effects(
+                &**epoch_store.executor(),
                 &tracking_store,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.config
@@ -1975,10 +2044,10 @@ impl AuthorityState {
                 input_objects,
                 gas_data,
                 gas_status,
+                sender,
                 kind,
                 signer,
                 tx_digest,
-                &mut None,
             );
 
         let object_funds_checker = self.object_funds_checker.load();
@@ -2290,11 +2359,12 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (inner_temp_store, _, effects, _timings, execution_error) = executor
+
+        let (inner_temp_store, _, effects, _timings, execution_error) = self
             .execute_transaction_to_effects(
+                executor.as_ref(),
                 self.get_backing_store().as_ref(),
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
                 expensive_checks,
                 execution_params,
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
@@ -2305,11 +2375,12 @@ impl AuthorityState {
                 checked_input_objects,
                 gas_data,
                 gas_status,
+                transaction.sender(),
                 kind,
                 signer,
                 transaction_digest,
-                &mut None,
             );
+
         let tx_digest = *effects.transaction_digest();
 
         let module_cache =
@@ -2354,7 +2425,7 @@ impl AuthorityState {
         let execution_error_source = execution_error
             .as_ref()
             .err()
-            .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
+            .and_then(|e| e.source_ref().as_ref().map(|e| e.to_string()));
 
         Ok((
             DryRunTransactionBlockResponse {
@@ -2530,6 +2601,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             kind,
+            None, // rewritten_inputs - not needed for dev_inspect
             signer,
             tx_digest,
             dev_inspect,
@@ -2565,6 +2637,7 @@ impl AuthorityState {
                     cloned_gas,
                     retry_gas_status,
                     cloned_kind,
+                    None, // rewritten_inputs
                     signer,
                     tx_digest,
                     dev_inspect,
@@ -2818,6 +2891,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             transaction_kind,
+            None, // rewritten_inputs - not needed for dev_inspect
             sender,
             transaction_digest,
             skip_checks,
@@ -4679,7 +4753,7 @@ impl AuthorityState {
         Ok(Some((object, layout)))
     }
 
-    fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
+    pub fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
         let layout = object
             .data
             .try_as_move()
@@ -4694,6 +4768,82 @@ impl AuthorityState {
             })
             .transpose()?;
         Ok(layout)
+    }
+
+    /// Returns a fake ObjectRef representing an address balance, along with the balance value
+    /// and the previous transaction digest. The ObjectRef can be returned to JSON-RPC clients
+    /// that don't understand address balances.
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_address_balance_coin_info(
+        &self,
+        owner: SuiAddress,
+        balance_type: TypeTag,
+    ) -> SuiResult<Option<(ObjectRef, u64, TransactionDigest)>> {
+        let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)?;
+        let accumulator_obj = AccumulatorValue::load_object_by_id(
+            self.get_child_object_resolver().as_ref(),
+            None,
+            *accumulator_id.inner(),
+        )?;
+
+        let Some(accumulator_obj) = accumulator_obj else {
+            return Ok(None);
+        };
+
+        // Extract the currency type from balance_type (e.g., SUI from Balance<SUI>).
+        // get_balance expects the currency type, not the balance type.
+        let currency_type =
+            Balance::maybe_get_balance_type_param(&balance_type).unwrap_or(balance_type);
+
+        let balance = crate::accumulators::balances::get_balance(
+            owner,
+            self.get_child_object_resolver().as_ref(),
+            currency_type,
+        )?;
+
+        if balance == 0 {
+            return Ok(None);
+        };
+
+        let object_ref = coin_reservation::encode_object_ref(
+            accumulator_obj.id(),
+            accumulator_obj.version(),
+            self.load_epoch_store_one_call_per_task().epoch(),
+            balance,
+            self.get_chain_identifier(),
+        );
+
+        Ok(Some((
+            object_ref,
+            balance,
+            accumulator_obj.previous_transaction,
+        )))
+    }
+
+    /// Returns fake ObjectRefs for all address balances of an owner, keyed by coin type string.
+    /// Used by get_all_coins to include fake coins for each coin type.
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_all_address_balance_coin_infos(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiResult<std::collections::HashMap<String, (ObjectRef, u64, TransactionDigest)>> {
+        let indexes = self
+            .indexes
+            .as_ref()
+            .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
+
+        let mut result = std::collections::HashMap::new();
+        for currency_type in indexes.get_address_balance_coin_types_iter(owner) {
+            let balance_type = sui_types::balance::Balance::type_tag(currency_type.clone());
+            if let Some((obj_ref, balance, prev_tx)) =
+                self.get_address_balance_coin_info(owner, balance_type)?
+            {
+                // Use currency_type.to_string() to match the format in CoinIndexKey2
+                // (e.g., "0x2::sui::SUI", not "0x2::coin::Coin<0x2::sui::SUI>")
+                result.insert(currency_type.to_string(), (obj_ref, balance, prev_tx));
+            }
+        }
+        Ok(result)
     }
 
     fn get_owner_at_version(

@@ -1,5 +1,6 @@
 ---
 source: crates/sui/tests/shell_tests.rs
+assertion_line: 113
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -16,7 +17,7 @@ sui move --client.config "$CONFIG" build -p test_pkg --dump-bytecode-as-base64
 success: true
 exit_code: 0
 ----- stdout -----
-{"modules":["oRzrCwYAAAADAQACBwICCAQgAAABYQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"dependencies":[],"digest":[187,93,234,2,204,241,247,186,109,203,249,44,80,83,40,154,120,51,173,213,232,100,201,85,249,80,159,240,222,171,98,113]}
+{"modules":["oRzrCwcAAAUDAQACBwICCAQgAAABYQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"dependencies":[],"digest":[207,151,158,198,145,122,75,15,31,94,253,117,25,114,156,68,190,246,91,212,135,111,74,12,2,50,235,184,21,32,141,163]}
 
 ----- stderr -----
 BUILDING test_pkg

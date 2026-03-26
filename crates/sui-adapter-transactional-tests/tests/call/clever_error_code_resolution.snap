@@ -7,7 +7,7 @@ task 1, lines 6-11:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 3716400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 3724000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 13:
 //# run Test::M1::foo

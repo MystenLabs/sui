@@ -127,7 +127,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     next_checkpoint: u64,
     config: SequentialConfig,
-    db: H::Store,
+    store: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
@@ -162,6 +162,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_tx,
         metrics.clone(),
         concurrency,
+        store.clone(),
     );
 
     let s_committer = committer::<H>(
@@ -170,7 +171,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         next_checkpoint,
         committer_rx,
         commit_hi_tx,
-        db,
+        store,
         metrics.clone(),
         min_eager_rows,
         max_batch_checkpoints,

@@ -10,7 +10,7 @@ task 1, lines 10-34:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 6292800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6308000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 36-38:
 //# programmable --sender A --inputs @A
@@ -76,7 +76,7 @@ Response: {
                     "version": 4,
                     "contents": {
                       "json": {
-                        "id": "0x9f6f700c00a72833f5e5a6b2a4fe7fb4dae44d7ccea5468a887c758d3a898550",
+                        "id": "0xea395c3c76ab2e6f40d31798aad1b4591a2a89c60a2e50e717a95f555cc3d6b9",
                         "c": "0"
                       }
                     }
@@ -105,7 +105,7 @@ Response: {
                     "version": 5,
                     "contents": {
                       "json": {
-                        "id": "0x9f6f700c00a72833f5e5a6b2a4fe7fb4dae44d7ccea5468a887c758d3a898550",
+                        "id": "0xea395c3c76ab2e6f40d31798aad1b4591a2a89c60a2e50e717a95f555cc3d6b9",
                         "c": "1"
                       }
                     }

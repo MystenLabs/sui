@@ -10,7 +10,7 @@ task 1, lines 6-29:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 15146800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 15154400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 31:
 //# create-checkpoint
@@ -33,10 +33,10 @@ Response: {
       "denyCap": {
         "contents": {
           "type": {
-            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2<0xdc6077b1b177f0e0ab88ae9096375847b3389cb2db36f093bfb692018bc176f7::fake::FAKE>"
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2<0xa31528a065790ffce0ace3d6a62ef1431536239d1e9f3bfc285694f90be70513::fake::FAKE>"
           },
           "json": {
-            "id": "0x296c28a25c9f2f9d21e82fd9b56f887ee59cbbc79cef622aa1767fb67c0f5391",
+            "id": "0x9ce80757143058f03b060839e228a8fc51cce4c2820811b066092eb5c65a9d15",
             "allow_global_pause": false
           }
         }

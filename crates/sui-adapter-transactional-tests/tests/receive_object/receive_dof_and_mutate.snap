@@ -10,7 +10,7 @@ task 1, lines 6-34:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 7828000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 7843200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 36:
 //# run tto::M1::start --sender A
@@ -20,7 +20,7 @@ gas summary: computation_cost: 1000000, storage_cost: 7273200,  storage_rebate: 
 
 task 3, line 38:
 //# view-object 2,0
-Owner: Object ID: ( fake(2,2) )
+Owner: Object ID: ( fake(2,3) )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
     id: sui::object::UID {
@@ -32,7 +32,7 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
         name: 0u64,
     },
     value: sui::object::ID {
-        bytes: fake(2,3),
+        bytes: fake(2,2),
     },
 }
 
@@ -50,21 +50,8 @@ Contents: tto::M1::A {
 }
 
 task 5, line 42:
-//# view-object 2,2
-Owner: Account Address ( fake(2,1) )
-Version: 2
-Contents: tto::M1::A {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,2),
-        },
-    },
-    value: 0u64,
-}
-
-task 6, line 44:
 //# view-object 2,3
-Owner: Object ID: ( fake(2,0) )
+Owner: Account Address ( fake(2,1) )
 Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
@@ -75,15 +62,28 @@ Contents: tto::M1::A {
     value: 0u64,
 }
 
+task 6, line 44:
+//# view-object 2,2
+Owner: Object ID: ( fake(2,0) )
+Version: 2
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 0u64,
+}
+
 task 7, line 46:
-//# run tto::M1::receive --args object(2,1) receiving(2,2) --sender A
+//# run tto::M1::receive --args object(2,1) receiving(2,3) --sender A
 created: object(7,0)
-mutated: object(0,0), object(2,1), object(2,2)
+mutated: object(0,0), object(2,1), object(2,3)
 gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
 
 task 8, line 48:
 //# view-object 2,0
-Owner: Object ID: ( fake(2,2) )
+Owner: Object ID: ( fake(2,3) )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
     id: sui::object::UID {
@@ -95,7 +95,7 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
         name: 0u64,
     },
     value: sui::object::ID {
-        bytes: fake(2,3),
+        bytes: fake(2,2),
     },
 }
 
@@ -113,26 +113,26 @@ Contents: tto::M1::A {
 }
 
 task 10, line 52:
-//# view-object 2,2
+//# view-object 2,3
 Owner: Object ID: ( fake(7,0) )
 Version: 3
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,2),
+            bytes: fake(2,3),
         },
     },
     value: 100u64,
 }
 
 task 11, line 54:
-//# view-object 2,3
+//# view-object 2,2
 Owner: Object ID: ( fake(2,0) )
 Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,3),
+            bytes: fake(2,2),
         },
     },
     value: 0u64,

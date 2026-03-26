@@ -9,6 +9,7 @@ use crate::authority::authority_store_pruner::{
     AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
 use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper, get_store_object};
+use crate::authority::epoch_marker_key::EpochMarkerKey;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::rpc_index::RpcIndexStore;
@@ -198,10 +199,19 @@ impl AuthorityStore {
         self.perpetual_tables
             .object_per_epoch_marker_table
             .schedule_delete_all()?;
-        Ok(self
-            .perpetual_tables
-            .object_per_epoch_marker_table_v2
-            .schedule_delete_all()?)
+        #[cfg(not(tidehunter))]
+        {
+            self.perpetual_tables
+                .object_per_epoch_marker_table_v2
+                .schedule_delete_all()?;
+        }
+        #[cfg(tidehunter)]
+        {
+            self.perpetual_tables
+                .object_per_epoch_marker_table_v2
+                .drop_cells_in_range_raw(&EpochMarkerKey::MIN_KEY, &EpochMarkerKey::MAX_KEY)?;
+        }
+        Ok(())
     }
 
     pub async fn open_with_committee_for_testing(
@@ -394,7 +404,7 @@ impl AuthorityStore {
         Ok(self
             .perpetual_tables
             .object_per_epoch_marker_table_v2
-            .get(&(epoch_id, object_key))?)
+            .get(&EpochMarkerKey(epoch_id, object_key))?)
     }
 
     pub fn get_latest_marker(
@@ -402,8 +412,8 @@ impl AuthorityStore {
         object_id: FullObjectID,
         epoch_id: EpochId,
     ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        let min_key = (epoch_id, FullObjectKey::min_for_id(&object_id));
-        let max_key = (epoch_id, FullObjectKey::max_for_id(&object_id));
+        let min_key = EpochMarkerKey(epoch_id, FullObjectKey::min_for_id(&object_id));
+        let max_key = EpochMarkerKey(epoch_id, FullObjectKey::max_for_id(&object_id));
 
         let marker_entry = self
             .perpetual_tables
@@ -411,7 +421,7 @@ impl AuthorityStore {
             .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
             .next();
         match marker_entry {
-            Some(Ok(((epoch, key), marker))) => {
+            Some(Ok((EpochMarkerKey(epoch, key), marker))) => {
                 // because of the iterator bounds these cannot fail
                 assert_eq!(epoch, epoch_id);
                 assert_eq!(key.id(), object_id);
@@ -636,17 +646,51 @@ impl AuthorityStore {
         Ok(())
     }
 
-    pub fn bulk_insert_live_objects(
-        perpetual_db: &AuthorityPerpetualTables,
-        live_objects: impl Iterator<Item = LiveObject>,
+    pub async fn bulk_insert_live_objects(
+        perpetual_db: Arc<AuthorityPerpetualTables>,
+        objects: Vec<LiveObject>,
         expected_sha3_digest: &[u8; 32],
+        num_parallel_chunks: usize,
     ) -> SuiResult<()> {
+        // Verify SHA3 over the full object set before inserting.
         let mut hasher = Sha3_256::default();
+        for object in &objects {
+            hasher.update(object.object_reference().2.inner());
+        }
+        let sha3_digest = hasher.finalize().digest;
+        if *expected_sha3_digest != sha3_digest {
+            error!(
+                "Sha does not match! expected: {:?}, actual: {:?}",
+                expected_sha3_digest, sha3_digest
+            );
+            return Err(SuiError::from("Sha does not match"));
+        }
+
+        let chunk_size = objects.len().div_ceil(num_parallel_chunks).max(1);
+        let mut remaining = objects;
+        let mut handles = Vec::new();
+        while !remaining.is_empty() {
+            let take = chunk_size.min(remaining.len());
+            let chunk: Vec<LiveObject> = remaining.drain(..take).collect();
+            let db = perpetual_db.clone();
+            handles.push(tokio::task::spawn_blocking(move || {
+                Self::insert_objects_chunk(db, chunk)
+            }));
+        }
+        for handle in handles {
+            handle.await.expect("insert task panicked")?;
+        }
+        Ok(())
+    }
+
+    fn insert_objects_chunk(
+        perpetual_db: Arc<AuthorityPerpetualTables>,
+        objects: Vec<LiveObject>,
+    ) -> SuiResult<()> {
         let mut batch = perpetual_db.objects.batch();
         let mut written = 0usize;
         const MAX_BATCH_SIZE: usize = 100_000;
-        for object in live_objects {
-            hasher.update(object.object_reference().2.inner());
+        for object in objects {
             match object {
                 LiveObject::Normal(object) => {
                     let store_object_wrapper = get_store_object(object.clone());
@@ -682,14 +726,6 @@ impl AuthorityStore {
                 batch = perpetual_db.objects.batch();
                 written = 0;
             }
-        }
-        let sha3_digest = hasher.finalize().digest;
-        if *expected_sha3_digest != sha3_digest {
-            error!(
-                "Sha does not match! expected: {:?}, actual: {:?}",
-                expected_sha3_digest, sha3_digest
-            );
-            return Err(SuiError::from("Sha does not match"));
         }
         batch.write()?;
         Ok(())
@@ -794,7 +830,7 @@ impl AuthorityStore {
             &self.perpetual_tables.object_per_epoch_marker_table_v2,
             markers
                 .iter()
-                .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
+                .map(|(key, marker_value)| (EpochMarkerKey(epoch_id, *key), *marker_value)),
         )?;
         write_batch.insert_batch(
             &self.perpetual_tables.objects,

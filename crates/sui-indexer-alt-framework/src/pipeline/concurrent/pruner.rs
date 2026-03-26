@@ -541,6 +541,7 @@ mod tests {
             reader_lo: 3,
             pruner_timestamp: timestamp,
             pruner_hi: 0,
+            chain_id: None,
         };
         let store = MockStore::new()
             .with_watermark(DataPipeline::NAME, watermark)
@@ -620,6 +621,7 @@ mod tests {
             reader_lo: 3,
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
         let store = MockStore::new()
             .with_watermark(DataPipeline::NAME, watermark)
@@ -686,6 +688,7 @@ mod tests {
             reader_lo: 4,        // Allow pruning up to checkpoint 4 (exclusive)
             pruner_timestamp: 0, // Past timestamp so delay doesn't block
             pruner_hi: 1,
+            chain_id: None,
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding

@@ -10,7 +10,7 @@ task 1, lines 9-19:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 3959600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 21-23:
 //# programmable --sender A --inputs @A
@@ -42,12 +42,12 @@ Response: {
     "data": {
       "objectId": "0x16bf541d370cd5b6aa2e9fa98cc7422d637d2866885301634f33d885f191c62f",
       "version": "3",
-      "digest": "6FwFP25GRPybPrKUEgRm6DsikJ5r2q971tv7nRY8mKzq",
+      "digest": "3ghr8fNVsCcz99La9wninv6pzY75wHWFG9fr2ZAk7LgU",
       "type": "0x2::dynamic_field::Field<u64, u64>",
       "owner": {
         "ObjectOwner": "0xbea4d8a108b7f328f0deb26e7b8bbac3956fcfa2063ce659f4948fed47ea3140"
       },
-      "previousTransaction": "FUUNWAEKP2uW6woamdkSw31PJiSU45sVt1sQxpad74uC",
+      "previousTransaction": "Chg7MuomiYMtuy2Hv3E7XFtGM269Pf9oaXTAQndnsb4n",
       "storageRebate": "1466800",
       "content": {
         "dataType": "moveObject",
@@ -72,25 +72,25 @@ Response: {
   "id": 1,
   "result": {
     "data": {
-      "objectId": "0x20e9372e67c0099f1e670798524457fcc944c8f6f065cd1fb77665a650e161f9",
+      "objectId": "0xb7f89f2915ebf657d82d5abd066e6df0de47de1e9b11248f3c848a33ef06bd9b",
       "version": "3",
-      "digest": "iynCPuZoSDsNZNCo5AgftrCdBGg6wenT8MWTWzpSita",
-      "type": "0x2::dynamic_field::Field<0xdcdd6f27ecd09f51f237644f3d71450770eb02146534642d6c7bf4ed12324ed4::M::Name, u64>",
+      "digest": "FxmurvD6Sjcddmxy4N8kAgahsUxzkeEM8pyCWmFJHVQ2",
+      "type": "0x2::dynamic_field::Field<0x0213dd701211958b788708e94079221c647bdeac175fed63f32b69078cb54e26::M::Name, u64>",
       "owner": {
         "ObjectOwner": "0xbea4d8a108b7f328f0deb26e7b8bbac3956fcfa2063ce659f4948fed47ea3140"
       },
-      "previousTransaction": "FUUNWAEKP2uW6woamdkSw31PJiSU45sVt1sQxpad74uC",
+      "previousTransaction": "Chg7MuomiYMtuy2Hv3E7XFtGM269Pf9oaXTAQndnsb4n",
       "storageRebate": "1801200",
       "content": {
         "dataType": "moveObject",
-        "type": "0x2::dynamic_field::Field<0xdcdd6f27ecd09f51f237644f3d71450770eb02146534642d6c7bf4ed12324ed4::M::Name, u64>",
+        "type": "0x2::dynamic_field::Field<0x0213dd701211958b788708e94079221c647bdeac175fed63f32b69078cb54e26::M::Name, u64>",
         "hasPublicTransfer": false,
         "fields": {
           "id": {
-            "id": "0x20e9372e67c0099f1e670798524457fcc944c8f6f065cd1fb77665a650e161f9"
+            "id": "0xb7f89f2915ebf657d82d5abd066e6df0de47de1e9b11248f3c848a33ef06bd9b"
           },
           "name": {
-            "type": "0xdcdd6f27ecd09f51f237644f3d71450770eb02146534642d6c7bf4ed12324ed4::M::Name",
+            "type": "0x0213dd701211958b788708e94079221c647bdeac175fed63f32b69078cb54e26::M::Name",
             "fields": {
               "x": "42",
               "y": 43

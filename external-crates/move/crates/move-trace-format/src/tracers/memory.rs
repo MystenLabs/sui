@@ -159,6 +159,10 @@ impl Tracer for TraceState {
         }
         true
     }
+
+    fn wants_effects(&self) -> bool {
+        true
+    }
 }
 
 impl fmt::Display for TraceState {

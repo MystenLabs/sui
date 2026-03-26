@@ -5,7 +5,7 @@ processed 4 tasks
 
 task 0, lines 1-24:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 6.m {
 
 entry foo() {
@@ -34,7 +34,7 @@ B4:
 
 task 1, lines 26-45:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 7.m {
 
 entry foo() {
@@ -60,7 +60,7 @@ B3:
 
 task 2, lines 47-65:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 8.m {
 
 entry foo() {
@@ -95,7 +95,7 @@ B5:
 
 task 3, lines 67-82:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 9.m {
 
 entry foo() {

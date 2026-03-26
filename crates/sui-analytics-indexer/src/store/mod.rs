@@ -638,6 +638,15 @@ impl Connection for AnalyticsConnection<'_> {
         init_with_committer_watermark(self, pipeline_task, init_watermark).await
     }
 
+    async fn accepts_chain_id(
+        &mut self,
+        _pipeline_task: &str,
+        _chain_id: [u8; 32],
+    ) -> anyhow::Result<bool> {
+        // TODO: Implement storing chain_id
+        Ok(true)
+    }
+
     /// Determine the watermark.
     ///
     /// In live mode: scans file names in the object store.

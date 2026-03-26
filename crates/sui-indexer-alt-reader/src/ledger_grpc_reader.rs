@@ -69,13 +69,17 @@ impl LedgerGrpcReader {
         prefix: Option<&str>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
-        let tls_config = ClientTlsConfig::new().with_native_roots();
-
-        let mut endpoint = Channel::builder(uri);
+        let mut endpoint = Channel::builder(uri.clone());
         if let Some(timeout) = args.statement_timeout() {
             endpoint = endpoint.timeout(timeout);
         }
-        let channel = endpoint.tls_config(tls_config)?.connect_lazy();
+
+        if uri.scheme_str() == Some("https") {
+            let tls_config = ClientTlsConfig::new().with_native_roots();
+            endpoint = endpoint.tls_config(tls_config)?;
+        }
+
+        let channel = endpoint.connect_lazy();
 
         let timeout = args.statement_timeout();
         let max_decoding_message_size = args

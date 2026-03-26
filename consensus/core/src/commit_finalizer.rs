@@ -112,7 +112,7 @@ impl CommitFinalizer {
 
     async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {
         while let Some(committed_sub_dag) = receiver.recv().await {
-            let already_finalized = !self.context.protocol_config.mysticeti_fastpath()
+            let already_finalized = !self.context.protocol_config.transaction_voting_enabled()
                 || committed_sub_dag.recovered_rejected_transactions;
             let finalized_commits = if !already_finalized {
                 self.process_commit(committed_sub_dag).await
@@ -1292,7 +1292,7 @@ mod tests {
     #[tokio::test]
     async fn test_direct_finalize_with_gc() {
         let mut fixture = create_commit_finalizer_fixture();
-        assert_eq!(fixture.context.protocol_config.consensus_gc_depth(), 5);
+        assert_eq!(fixture.context.protocol_config.gc_depth(), 5);
 
         // Create round 1 blocks with 10 transactions each.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());
@@ -1395,7 +1395,7 @@ mod tests {
     #[tokio::test]
     async fn test_indirect_reject_with_gc() {
         let mut fixture = create_commit_finalizer_fixture();
-        assert_eq!(fixture.context.protocol_config.consensus_gc_depth(), 5);
+        assert_eq!(fixture.context.protocol_config.gc_depth(), 5);
 
         // Create round 1 blocks with 10 transactions each.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());

@@ -2,7 +2,7 @@ Command `build`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING Test
 Command `disassemble --package Test --name m`:
-// Move bytecode v6
+// Move bytecode v7
 module 42.m {
 
 public vec_ops_post() {

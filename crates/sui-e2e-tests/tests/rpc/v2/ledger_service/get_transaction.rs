@@ -18,9 +18,7 @@ async fn get_transaction() {
 
     let transaction_digest = stake_with_validator(&test_cluster).await;
 
-    let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
+    let mut client = LedgerServiceClient::new(test_cluster.grpc_channel());
 
     // Request with no provided read_mask
     let ExecutedTransaction {

@@ -226,6 +226,144 @@ impl BigTableClient {
         })
     }
 
+    /// Fetch transactions with an optional column filter for partial reads.
+    /// When `columns` is None, all columns are fetched. When Some, only the
+    /// specified column qualifiers are fetched (e.g. `&["td", "ef", "ts", "cn"]`).
+    pub async fn get_transactions_filtered(
+        &mut self,
+        transactions: &[TransactionDigest],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<TransactionData>> {
+        let keys = transactions
+            .iter()
+            .map(tables::transactions::encode_key)
+            .collect();
+        let filter = columns.map(|cols| {
+            let pattern = format!("^({})$", cols.join("|"));
+            RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+            }
+        });
+        let mut result = vec![];
+        for (key, row) in self
+            .multi_get(tables::transactions::NAME, keys, filter)
+            .await?
+        {
+            let digest = TransactionDigest::from(
+                <[u8; 32]>::try_from(key.as_ref())
+                    .context("invalid transaction digest key length")?,
+            );
+            result.push(tables::transactions::decode(digest, &row)?);
+        }
+        Ok(result)
+    }
+
+    /// Fetch epochs with an optional column filter for partial reads.
+    /// When `columns` is None, all columns are fetched. When Some, only the
+    /// specified column qualifiers are fetched (e.g. `&["ep", "sc", "pv"]`).
+    pub async fn get_epochs_filtered(
+        &mut self,
+        epoch_ids: &[EpochId],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<EpochData>> {
+        let keys = epoch_ids
+            .iter()
+            .map(|id| tables::epochs::encode_key(*id))
+            .collect();
+        let filter = columns.map(|cols| {
+            let pattern = format!("^({})$", cols.join("|"));
+            RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+            }
+        });
+        let mut result = vec![];
+        for (_, row) in self.multi_get(tables::epochs::NAME, keys, filter).await? {
+            result.push(tables::epochs::decode(&row)?);
+        }
+        Ok(result)
+    }
+
+    /// Fetch the latest epoch with an optional column filter for partial reads.
+    pub async fn get_latest_epoch_filtered(
+        &mut self,
+        columns: Option<&[&str]>,
+    ) -> Result<Option<EpochData>> {
+        let upper_limit = tables::epochs::encode_key_upper_bound();
+        let filter = columns.map(|cols| {
+            let pattern = format!("^({})$", cols.join("|"));
+            RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+            }
+        });
+        match self
+            .range_scan(
+                tables::epochs::NAME,
+                None,
+                Some(upper_limit),
+                1,
+                true,
+                filter,
+            )
+            .await?
+            .pop()
+        {
+            Some((_, row)) => Ok(Some(tables::epochs::decode(&row)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Fetch checkpoints with an optional column filter for partial reads.
+    /// When `columns` is None, all columns are fetched. When Some, only the
+    /// specified column qualifiers are fetched (e.g. `&["s", "sg"]`).
+    pub async fn get_checkpoints_filtered(
+        &mut self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<CheckpointData>> {
+        let keys = sequence_numbers
+            .iter()
+            .copied()
+            .map(tables::checkpoints::encode_key)
+            .collect();
+        let filter = columns.map(|cols| {
+            let pattern = format!("^({})$", cols.join("|"));
+            RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+            }
+        });
+        let mut checkpoints = vec![];
+        for (_, row) in self
+            .multi_get(tables::checkpoints::NAME, keys, filter)
+            .await?
+        {
+            checkpoints.push(tables::checkpoints::decode(&row)?);
+        }
+        Ok(checkpoints)
+    }
+
+    /// Fetch a checkpoint by digest with an optional column filter.
+    pub async fn get_checkpoint_by_digest_filtered(
+        &mut self,
+        digest: CheckpointDigest,
+        columns: Option<&[&str]>,
+    ) -> Result<Option<CheckpointData>> {
+        let key = tables::checkpoints_by_digest::encode_key(&digest);
+        let mut response = self
+            .multi_get(tables::checkpoints_by_digest::NAME, vec![key], None)
+            .await?;
+        if let Some((_, row)) = response.pop() {
+            let sequence_number = tables::checkpoints_by_digest::decode(&row)?;
+            if let Some(chk) = self
+                .get_checkpoints_filtered(&[sequence_number], columns)
+                .await?
+                .pop()
+            {
+                return Ok(Some(chk));
+            }
+        }
+        Ok(None)
+    }
+
     /// Get the pipeline watermark from the watermarks table.
     pub async fn get_pipeline_watermark(&mut self, pipeline: &str) -> Result<Option<Watermark>> {
         let pipeline_key = tables::watermarks::encode_key(pipeline);
@@ -545,6 +683,7 @@ impl BigTableClient {
 
     /// Scan a range of rows with optional start/end keys, limit, and direction.
     /// Applies `CellsPerColumnLimitFilter(1)` like `multi_get_internal`.
+    /// An optional column filter can be provided to restrict which columns are fetched.
     pub(crate) async fn range_scan(
         &mut self,
         table_name: &str,
@@ -552,10 +691,11 @@ impl BigTableClient {
         end_key: Option<Bytes>,
         limit: i64,
         reversed: bool,
+        filter: Option<RowFilter>,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
         let start_time = Instant::now();
         let result = self
-            .range_scan_internal(table_name, start_key, end_key, limit, reversed)
+            .range_scan_internal(table_name, start_key, end_key, limit, reversed, filter)
             .await;
         let elapsed_ms = start_time.elapsed().as_millis() as f64;
         let labels = [&self.client_name, table_name];
@@ -588,13 +728,22 @@ impl BigTableClient {
         end_key: Option<Bytes>,
         limit: i64,
         reversed: bool,
+        filter: Option<RowFilter>,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
         let range = RowRange {
             start_key: start_key.map(StartKey::StartKeyClosed),
             end_key: end_key.map(EndKey::EndKeyClosed),
         };
-        let filter = Some(RowFilter {
+        let version_filter = RowFilter {
             filter: Some(Filter::CellsPerColumnLimitFilter(1)),
+        };
+        let filter = Some(match filter {
+            Some(filter) => RowFilter {
+                filter: Some(Filter::Chain(Chain {
+                    filters: vec![filter, version_filter],
+                })),
+            },
+            None => version_filter,
         });
         let request = ReadRowsRequest {
             table_name: format!("{}{}", self.table_prefix, table_name),
@@ -643,54 +792,21 @@ impl KeyValueStoreReader for BigTableClient {
         &mut self,
         transactions: &[TransactionDigest],
     ) -> Result<Vec<TransactionData>> {
-        let keys = transactions
-            .iter()
-            .map(tables::transactions::encode_key)
-            .collect();
-        let mut result = vec![];
-        for (_, row) in self
-            .multi_get(tables::transactions::NAME, keys, None)
-            .await?
-        {
-            result.push(tables::transactions::decode(&row)?);
-        }
-        Ok(result)
+        self.get_transactions_filtered(transactions, None).await
     }
 
     async fn get_checkpoints(
         &mut self,
         sequence_numbers: &[CheckpointSequenceNumber],
     ) -> Result<Vec<CheckpointData>> {
-        let keys = sequence_numbers
-            .iter()
-            .copied()
-            .map(tables::checkpoints::encode_key)
-            .collect();
-        let mut checkpoints = vec![];
-        for (_, row) in self
-            .multi_get(tables::checkpoints::NAME, keys, None)
-            .await?
-        {
-            checkpoints.push(tables::checkpoints::decode(&row)?);
-        }
-        Ok(checkpoints)
+        self.get_checkpoints_filtered(sequence_numbers, None).await
     }
 
     async fn get_checkpoint_by_digest(
         &mut self,
         digest: CheckpointDigest,
     ) -> Result<Option<CheckpointData>> {
-        let key = tables::checkpoints_by_digest::encode_key(&digest);
-        let mut response = self
-            .multi_get(tables::checkpoints_by_digest::NAME, vec![key], None)
-            .await?;
-        if let Some((_, row)) = response.pop() {
-            let sequence_number = tables::checkpoints_by_digest::decode(&row)?;
-            if let Some(chk) = self.get_checkpoints(&[sequence_number]).await?.pop() {
-                return Ok(Some(chk));
-            }
-        }
-        Ok(None)
+        self.get_checkpoint_by_digest_filtered(digest, None).await
     }
 
     async fn get_watermark_for_pipelines(
@@ -723,7 +839,14 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
         let upper_limit = Bytes::from(Self::raw_object_key(&ObjectKey::max_for_id(object_id)));
         if let Some((_, row)) = self
-            .range_scan(tables::objects::NAME, None, Some(upper_limit), 1, true)
+            .range_scan(
+                tables::objects::NAME,
+                None,
+                Some(upper_limit),
+                1,
+                true,
+                None,
+            )
             .await?
             .pop()
         {
@@ -733,15 +856,7 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochData>> {
-        let key = tables::epochs::encode_key(epoch_id);
-        match self
-            .multi_get(tables::epochs::NAME, vec![key], None)
-            .await?
-            .pop()
-        {
-            Some((_, row)) => Ok(Some(tables::epochs::decode(&row)?)),
-            None => Ok(None),
-        }
+        Ok(self.get_epochs_filtered(&[epoch_id], None).await?.pop())
     }
 
     async fn get_protocol_configs(
@@ -760,15 +875,7 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_epoch(&mut self) -> Result<Option<EpochData>> {
-        let upper_limit = tables::epochs::encode_key_upper_bound();
-        match self
-            .range_scan(tables::epochs::NAME, None, Some(upper_limit), 1, true)
-            .await?
-            .pop()
-        {
-            Some((_, row)) => Ok(Some(tables::epochs::decode(&row)?)),
-            None => Ok(None),
-        }
+        self.get_latest_epoch_filtered(None).await
     }
 
     async fn get_events_for_transactions(
@@ -869,6 +976,7 @@ impl KeyValueStoreReader for BigTableClient {
                 Some(end_key),
                 50,
                 true,
+                None,
             )
             .await?;
 
@@ -911,6 +1019,7 @@ impl KeyValueStoreReader for BigTableClient {
                 Some(end_key),
                 fetch_limit,
                 descending,
+                None,
             )
             .await?;
 
@@ -953,6 +1062,7 @@ impl KeyValueStoreReader for BigTableClient {
                 Some(end_key),
                 limit as i64,
                 descending,
+                None,
             )
             .await?;
 
@@ -992,6 +1102,7 @@ impl KeyValueStoreReader for BigTableClient {
                 end_key,
                 limit as i64,
                 false,
+                None,
             )
             .await?;
 

@@ -24,19 +24,15 @@ For each wallet address (or object ID), PAS creates a one-to-one derived Account
 
 Every time funds move, they go through hot potato requests that must collect a predefined set of approval stamps (witness structs) before they can resolve within the transaction. Hot potato requests have no `drop` or `store` ability, so the transaction aborts if the request is not resolved.
 
-The following diagram compares asset ownership with and without PAS:
+The following diagrams compare asset ownership with and without PAS:
 
-```mermaid
-flowchart LR
-    subgraph without["Without PAS"]
-        direction LR
-        W1[Wallet] --> O1[Owns T] --> F1[Transfer freely]
-    end
-    subgraph with["With PAS"]
-        direction LR
-        W2[Wallet] --> A2[Auth proof] --> Acc2[Account holds T] --> R2[Request needed to move]
-    end
-```
+**Without PAS**
+
+![Unrestricted asset ownership without PAS](./images/unrestricted-ownership.svg)
+
+**With PAS**
+
+![Restricted asset ownership with PAS](./images/restricted-ownership.svg)
 
 Each asset type can have its own policy that defines which witnesses are required to approve each action. This means different assets can adhere to completely different rules. One asset might require a single compliance stamp, while another might need approvals from multiple independent contracts.
 

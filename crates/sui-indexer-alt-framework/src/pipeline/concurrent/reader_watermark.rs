@@ -201,6 +201,7 @@ mod tests {
             reader_lo: 0, // Initial reader_lo
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
         let polling_interval_ms = 100;
         let connection_failure_attempts = 0;
@@ -233,6 +234,7 @@ mod tests {
             reader_lo: 7, // Initial reader_lo
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
         let polling_interval_ms = 100;
         let connection_failure_attempts = 0;
@@ -269,6 +271,7 @@ mod tests {
             reader_lo: 0, // Initial reader_lo
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
         let polling_interval_ms = 1_000; // Long interval for testing retry
         let connection_failure_attempts = 1;
@@ -321,6 +324,7 @@ mod tests {
             reader_lo: 0, // Initial reader_lo
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
         let polling_interval_ms = 1_000; // Long interval for testing retry
         let connection_failure_attempts = 0;

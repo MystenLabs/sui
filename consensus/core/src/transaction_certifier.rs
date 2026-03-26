@@ -77,7 +77,7 @@ impl TransactionCertifier {
     /// for future commits and block proposals.
     pub(crate) fn recover_blocks_after_round(&self, after_round: Round) {
         let context = self.certifier_state.read().context.clone();
-        if !context.protocol_config.mysticeti_fastpath() {
+        if !context.protocol_config.transaction_voting_enabled() {
             info!("Skipping certifier recovery in non-mysticeti fast path mode");
             return;
         }

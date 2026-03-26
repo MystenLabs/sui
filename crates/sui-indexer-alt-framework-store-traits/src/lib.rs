@@ -21,6 +21,17 @@ pub trait Connection: Send {
         init_watermark: InitWatermark,
     ) -> anyhow::Result<InitWatermark>;
 
+    /// Checks if the store can accept a `chain_id`.
+    /// Returns `Ok(true)` if the store accepts this `chain_id` thereby allowing processing to continue.
+    /// Returns `Ok(false)` if the store does not accept the `chain_id` thereby halting processing with an error.
+    /// Returns `Err(_)` if the store encountered an error while trying to determine if it could accept
+    /// the `chain_id` which will cause `accepts_chain_id` to be retried.
+    async fn accepts_chain_id(
+        &mut self,
+        pipeline_task: &str,
+        chain_id: [u8; 32],
+    ) -> anyhow::Result<bool>;
+
     /// Given a `pipeline_task` representing either a pipeline name or a pipeline with an associated
     /// task (formatted as `{pipeline}{Store::DELIMITER}{task}`), return the committer watermark
     /// from the `Store`. The indexer fetches this value for each pipeline added to determine which

@@ -12,7 +12,8 @@
 //! so will result in a ton of compilation errors, and worse: it will not make sense!
 
 use fastcrypto::{
-    bls12381, ed25519,
+    ed25519,
+    encoding::{Base64, Encoding as _},
     error::FastCryptoError,
     hash::{Blake2b256, HashFunction},
     traits::{KeyPair as _, Signer as _, ToFromBytes as _, VerifyingKey as _},
@@ -132,37 +133,62 @@ impl ProtocolKeySignature {
     }
 }
 
-/// Authority key represents the identity of an authority. It is only used for identity sanity
-/// checks and not used for verification.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct AuthorityPublicKey(bls12381::min_sig::BLS12381PublicKey);
-pub struct AuthorityKeyPair(bls12381::min_sig::BLS12381KeyPair);
+/// Authority name is a raw bytes identity for an authority, matching `AuthorityName`
+/// on the Sui side. It is only used for identity sanity checks and not for cryptographic
+/// verification. The bytes originate from the authority's BLS12381 public key.
+pub const AUTHORITY_NAME_LENGTH: usize = 96;
 
-impl AuthorityPublicKey {
-    pub fn new(key: bls12381::min_sig::BLS12381PublicKey) -> Self {
-        Self(key)
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AuthorityName([u8; AUTHORITY_NAME_LENGTH]);
+
+impl AuthorityName {
+    pub fn new(bytes: [u8; AUTHORITY_NAME_LENGTH]) -> Self {
+        Self(bytes)
     }
 
-    pub fn inner(&self) -> &bls12381::min_sig::BLS12381PublicKey {
-        &self.0
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        let mut arr = [0u8; AUTHORITY_NAME_LENGTH];
+        arr.copy_from_slice(bytes);
+        Self(arr)
     }
 
     pub fn to_bytes(&self) -> &[u8] {
-        self.0.as_bytes()
+        &self.0
     }
 }
 
-impl AuthorityKeyPair {
-    pub fn new(keypair: bls12381::min_sig::BLS12381KeyPair) -> Self {
-        Self(keypair)
+impl std::fmt::Debug for AuthorityName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AuthorityName({})", Base64::encode(self.0))
     }
+}
 
-    pub fn generate<R: rand::Rng + fastcrypto::traits::AllowedRng>(rng: &mut R) -> Self {
-        Self(bls12381::min_sig::BLS12381KeyPair::generate(rng))
+impl Serialize for AuthorityName {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&Base64::encode(self.0))
+        } else {
+            serializer.serialize_bytes(&self.0)
+        }
     }
+}
 
-    pub fn public(&self) -> AuthorityPublicKey {
-        AuthorityPublicKey(self.0.public().clone())
+impl<'de> Deserialize<'de> for AuthorityName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let bytes = Base64::decode(&s).map_err(serde::de::Error::custom)?;
+            let arr: [u8; AUTHORITY_NAME_LENGTH] = bytes
+                .try_into()
+                .map_err(|_| serde::de::Error::custom("invalid authority name length"))?;
+            Ok(Self(arr))
+        } else {
+            let bytes = <Vec<u8>>::deserialize(deserializer)?;
+            let arr: [u8; AUTHORITY_NAME_LENGTH] = bytes
+                .try_into()
+                .map_err(|_| serde::de::Error::custom("invalid authority name length"))?;
+            Ok(Self(arr))
+        }
     }
 }
 

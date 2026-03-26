@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
 ---
 processed 4 tasks
 
@@ -17,10 +18,10 @@ task 2, lines 27-41:
 //# publish
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4848800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4856400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 43-54:
 //# publish
 created: object(4,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4430800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4438400,  storage_rebate: 978120, non_refundable_storage_fee: 9880

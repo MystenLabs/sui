@@ -10,7 +10,7 @@ task 1, lines 6-37:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 6452400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6482800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 39-44:
 //# programmable --sender A --inputs 42u64 1000u64 @A @B
@@ -39,7 +39,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0xc9b0440a792e2ca86b8897d4fbb03859754d3780df9086172d01478b9eadda72"
+                    "address": "0x9b298b1007b7e13d6ef222f89bd78cf572e8461d8168fa1ea33d6c9f1d6bbd9b"
                   },
                   "name": "move_call_test"
                 },
@@ -56,7 +56,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0xc9b0440a792e2ca86b8897d4fbb03859754d3780df9086172d01478b9eadda72"
+                    "address": "0x9b298b1007b7e13d6ef222f89bd78cf572e8461d8168fa1ea33d6c9f1d6bbd9b"
                   },
                   "name": "move_call_test"
                 },
@@ -74,7 +74,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0xc9b0440a792e2ca86b8897d4fbb03859754d3780df9086172d01478b9eadda72"
+                    "address": "0x9b298b1007b7e13d6ef222f89bd78cf572e8461d8168fa1ea33d6c9f1d6bbd9b"
                   },
                   "name": "move_call_test"
                 },
@@ -92,7 +92,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0xc9b0440a792e2ca86b8897d4fbb03859754d3780df9086172d01478b9eadda72"
+                    "address": "0x9b298b1007b7e13d6ef222f89bd78cf572e8461d8168fa1ea33d6c9f1d6bbd9b"
                   },
                   "name": "move_call_test"
                 },

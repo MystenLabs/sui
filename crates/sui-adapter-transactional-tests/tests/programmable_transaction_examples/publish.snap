@@ -15,7 +15,7 @@ task 3, lines 27-32:
 //> TransferObjects([Result(1), Result(3)], Input(1))
 created: object(3,0), object(3,1), object(3,2), object(3,3), object(3,4)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 8876800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 8899600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 6, lines 38-40:
 //# programmable --sender A
@@ -28,7 +28,7 @@ task 7, lines 42-47:
 //# publish --dependencies p q
 created: object(7,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5221200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5228800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 8, line 49:
 //# run r::all::foo_x

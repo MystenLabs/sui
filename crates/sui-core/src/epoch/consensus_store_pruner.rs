@@ -160,31 +160,11 @@ impl ConsensusStorePruner {
             };
 
             if file_epoch < drop_boundary {
-                const WAIT_BEFORE_FORCE_DELETE: Duration = Duration::from_secs(5);
-                if let Err(e) = safe_drop_db(f.path(), WAIT_BEFORE_FORCE_DELETE).await {
-                    warn!(
-                        "Could not prune old consensus storage \"{:?}\" directory with safe approach. Will fallback to force delete: {:?}",
-                        f.path(),
-                        e
-                    );
-                    metrics
-                        .error_pruning_consensus_dbs
-                        .with_label_values(&["safe"])
-                        .inc();
-
-                    if let Err(err) = fs::remove_dir_all(f.path()) {
-                        error!(
-                            "Could not prune old consensus storage \"{:?}\" directory with force delete: {:?}",
-                            f.path(),
-                            err
-                        );
-                        metrics
-                            .error_pruning_consensus_dbs
-                            .with_label_values(&["force"])
-                            .inc();
-                    } else {
+                const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+                match safe_drop_db(f.path(), WAIT_TIMEOUT).await {
+                    Ok(()) => {
                         info!(
-                            "Successfully pruned consensus epoch storage directory with force delete: {:?}",
+                            "Successfully pruned consensus epoch storage directory: {:?}",
                             f.path()
                         );
                         let last_epoch = metrics.last_pruned_consensus_db_epoch.get();
@@ -193,16 +173,54 @@ impl ConsensusStorePruner {
                             .set(last_epoch.max(file_epoch as i64));
                         metrics.successfully_pruned_consensus_dbs.inc();
                     }
-                } else {
-                    info!(
-                        "Successfully pruned consensus epoch storage directory: {:?}",
-                        f.path()
-                    );
-                    let last_epoch = metrics.last_pruned_consensus_db_epoch.get();
-                    metrics
-                        .last_pruned_consensus_db_epoch
-                        .set(last_epoch.max(file_epoch as i64));
-                    metrics.successfully_pruned_consensus_dbs.inc();
+                    Err(e) => {
+                        #[cfg(not(tidehunter))]
+                        {
+                            warn!(
+                                "Could not prune old consensus storage \"{:?}\" directory with safe approach. Will fallback to force delete: {:?}",
+                                f.path(),
+                                e
+                            );
+                            metrics
+                                .error_pruning_consensus_dbs
+                                .with_label_values(&["safe"])
+                                .inc();
+
+                            if let Err(err) = fs::remove_dir_all(f.path()) {
+                                error!(
+                                    "Could not prune old consensus storage \"{:?}\" directory with force delete: {:?}",
+                                    f.path(),
+                                    err
+                                );
+                                metrics
+                                    .error_pruning_consensus_dbs
+                                    .with_label_values(&["force"])
+                                    .inc();
+                            } else {
+                                info!(
+                                    "Successfully pruned consensus epoch storage directory with force delete: {:?}",
+                                    f.path()
+                                );
+                                let last_epoch = metrics.last_pruned_consensus_db_epoch.get();
+                                metrics
+                                    .last_pruned_consensus_db_epoch
+                                    .set(last_epoch.max(file_epoch as i64));
+                                metrics.successfully_pruned_consensus_dbs.inc();
+                            }
+                        }
+                        #[cfg(tidehunter)]
+                        {
+                            error!(
+                                "Could not prune old consensus storage \"{:?}\" directory: {:?}",
+                                f.path(),
+                                e
+                            );
+                            metrics
+                                .error_pruning_consensus_dbs
+                                .with_label_values(&["safe"])
+                                .inc();
+                        }
+                    }
                 }
             }
         }

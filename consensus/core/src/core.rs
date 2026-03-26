@@ -130,10 +130,7 @@ impl Core {
         round_tracker: Arc<RwLock<RoundTracker>>,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
-        let number_of_leaders = context
-            .protocol_config
-            .mysticeti_num_leaders_per_round()
-            .unwrap_or(1);
+        let number_of_leaders = context.protocol_config.num_leaders_per_round().unwrap_or(1);
         let committer = UniversalCommitterBuilder::new(
             context.clone(),
             leader_schedule.clone(),
@@ -624,7 +621,7 @@ impl Core {
             .write()
             .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
 
-        let transaction_votes = if self.context.protocol_config.mysticeti_fastpath() {
+        let transaction_votes = if self.context.protocol_config.transaction_voting_enabled() {
             let new_causal_history = {
                 let mut dag_state = self.dag_state.write();
                 ancestors
@@ -638,7 +635,7 @@ impl Core {
         };
 
         // Create the block and insert to storage.
-        let block = if self.context.protocol_config.mysticeti_fastpath() {
+        let block = if self.context.protocol_config.transaction_voting_enabled() {
             Block::V2(BlockV2::new(
                 self.context.committee.epoch(),
                 clock_round,
@@ -702,7 +699,7 @@ impl Core {
         // The block must be added to transaction certifier before it is broadcasted or added to DagState.
         // Update proposed state of blocks in local DAG.
         // TODO(fastpath): move this logic and the logic afterwards to proposed block handler.
-        if self.context.protocol_config.mysticeti_fastpath() {
+        if self.context.protocol_config.transaction_voting_enabled() {
             self.transaction_certifier
                 .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
             self.dag_state
@@ -1408,7 +1405,7 @@ impl CoreTextFixture {
             .with_authority_index(own_index);
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -1489,7 +1486,6 @@ mod test {
     use consensus_types::block::TransactionIndex;
     use futures::{StreamExt, stream::FuturesUnordered};
     use mysten_metrics::monitored_mpsc;
-    use sui_protocol_config::ProtocolConfig;
     use tokio::time::sleep;
 
     use super::*;
@@ -1788,13 +1784,13 @@ mod test {
     #[tokio::test]
     async fn test_core_propose_after_genesis() {
         telemetry_subscribers::init_for_testing();
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes_for_testing(2_000);
-            config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
-            config
-        });
-
-        let (context, mut key_pairs) = Context::new_for_test(4);
+        let (mut context, mut key_pairs) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_max_transaction_size_bytes_for_testing(2_000);
+        context
+            .protocol_config
+            .set_max_transactions_in_block_bytes_for_testing(2_000);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -1976,9 +1972,7 @@ mod test {
         let (mut context, mut key_pairs) = Context::new_for_test(4);
         const GC_DEPTH: u32 = 2;
 
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
 
@@ -2124,9 +2118,7 @@ mod test {
         let (mut context, mut key_pairs) = Context::new_for_test(4);
         const GC_DEPTH: u32 = 2;
 
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
 
@@ -2516,7 +2508,7 @@ mod test {
         let (mut context, _) = Context::new_for_test(5);
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
 
         // Create the cores for all authorities
         let mut all_cores = create_cores(context, vec![1, 1, 1, 1, 1]).await;
@@ -2640,7 +2632,7 @@ mod test {
         let (mut context, mut key_pairs) = Context::new_for_test(7);
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context.with_parameters(Parameters {
             sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
@@ -3483,9 +3475,7 @@ mod test {
         telemetry_subscribers::init_for_testing();
 
         let (mut context, mut key_pairs) = Context::new_for_test(5);
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
         let context = Arc::new(context.with_parameters(Parameters {
             sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
@@ -3624,7 +3614,7 @@ mod test {
         let (mut context, _) = Context::new_for_test(6);
         context
             .protocol_config
-            .set_mysticeti_num_leaders_per_round_for_testing(num_leaders_per_round);
+            .set_num_leaders_per_round_for_testing(num_leaders_per_round);
         // create the cores and their signals for all the authorities
         let mut cores = create_cores(context, vec![1, 1, 1, 1, 1, 1]).await;
 

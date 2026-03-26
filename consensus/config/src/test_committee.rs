@@ -3,12 +3,11 @@
 
 use std::net::{TcpListener, TcpStream};
 
+use fastcrypto::traits::{KeyPair as _, ToFromBytes as _};
 use mysten_network::Multiaddr;
 use rand::{SeedableRng as _, rngs::StdRng};
 
-use crate::{
-    Authority, AuthorityKeyPair, Committee, Epoch, NetworkKeyPair, ProtocolKeyPair, Stake,
-};
+use crate::{Authority, AuthorityName, Committee, Epoch, NetworkKeyPair, ProtocolKeyPair, Stake};
 
 /// Creates a committee for local testing, and the corresponding key pairs for the authorities.
 pub fn local_committee_and_keys(
@@ -27,7 +26,7 @@ pub fn local_committee_and_keys_with_test_options(
     let mut key_pairs = vec![];
     let mut rng = StdRng::from_seed([0; 32]);
     for (i, stake) in authorities_stake.into_iter().enumerate() {
-        let authority_keypair = AuthorityKeyPair::generate(&mut rng);
+        let authority_keypair = fastcrypto::bls12381::min_sig::BLS12381KeyPair::generate(&mut rng);
         let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
         let network_keypair = NetworkKeyPair::generate(&mut rng);
         authorities.push(Authority {
@@ -38,7 +37,7 @@ pub fn local_committee_and_keys_with_test_options(
                 "/ip4/127.0.0.1/udp/8081".parse().unwrap()
             },
             hostname: format!("test_host_{i}").to_string(),
-            authority_key: authority_keypair.public(),
+            authority_name: AuthorityName::from_bytes(authority_keypair.public().as_bytes()),
             protocol_key: protocol_keypair.public(),
             network_key: network_keypair.public(),
         });

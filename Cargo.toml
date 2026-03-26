@@ -531,7 +531,7 @@ synstructure = "0.12"
 sysinfo = "0.35.2"
 tabled = { version = "0.12" }
 tap = "1.0.1"
-tar = "0.4.40"
+tar = "0.4.45"
 tempfile = "3.20.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"

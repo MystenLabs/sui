@@ -693,7 +693,7 @@ where
                 // Only account for reject votes in the block, since they may vote on uncommitted
                 // blocks or transactions. It is unnecessary to vote on the committed blocks
                 // themselves.
-                if inner.context.protocol_config.mysticeti_fastpath() {
+                if inner.context.protocol_config.transaction_voting_enabled() {
                     inner
                         .transaction_certifier
                         .add_voted_blocks(vec![(block.clone(), vec![])]);
@@ -839,7 +839,7 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
             // But the blocks will be sent to Core, so they need to be fully verified.
             let (block, reject_transaction_votes) =
                 self.block_verifier.verify_and_vote(block, serialized)?;
-            if self.context.protocol_config.mysticeti_fastpath() {
+            if self.context.protocol_config.transaction_voting_enabled() {
                 self.transaction_certifier
                     .add_voted_blocks(vec![(block.clone(), reject_transaction_votes)]);
             }

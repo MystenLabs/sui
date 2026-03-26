@@ -2181,7 +2181,7 @@ impl ProtocolConfig {
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
-        self.feature_flags.enable_coin_reservation_obj_refs
+        self.new_vm_enabled() && self.feature_flags.enable_coin_reservation_obj_refs
     }
 
     pub fn create_root_accumulator_object(&self) -> bool {
@@ -5023,6 +5023,11 @@ impl ProtocolConfig {
 
     pub fn enable_coin_reservation_for_testing(&mut self) {
         self.feature_flags.enable_coin_reservation_obj_refs = true;
+        self.feature_flags
+            .convert_withdrawal_compatibility_ptb_arguments = true;
+        // Ensure execution_version >= 4 so new_vm_enabled() returns true,
+        // which is required for enable_coin_reservation_obj_refs() to return true.
+        self.execution_version = Some(self.execution_version.map_or(4, |v| v.max(4)));
     }
 
     pub fn create_root_accumulator_object_for_testing(&mut self) {
