@@ -53,11 +53,7 @@ Response: {
         }
       },
       "gasEffects": {
-        "gasObject": {
-          "address": "0x0000000000000000000000000000000000000000000000000000000000000000",
-          "version": 0,
-          "digest": "11111111111111111111111111111111"
-        },
+        "gasObject": null,
         "gasSummary": {
           "computationCost": 1000000,
           "storageCost": 0,
@@ -87,11 +83,7 @@ Response: {
         }
       },
       "gasEffects": {
-        "gasObject": {
-          "address": "0x0000000000000000000000000000000000000000000000000000000000000000",
-          "version": 0,
-          "digest": "11111111111111111111111111111111"
-        },
+        "gasObject": null,
         "gasSummary": {
           "computationCost": 1000000,
           "storageCost": 0,
