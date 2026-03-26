@@ -3,14 +3,78 @@
 
 //! File-system backed store skeleton.
 //!
+//! This module defines the intended on-disk layout for the forking data store.
+//! The actual read/write paths are still being implemented, but the constants in
+//! this file describe the directory and file names the backend will use.
 //!
+//! # Base Directory
+//!
+//! [`FileSystemStore::base_path`] resolves the store root from
+//! `FORKING_DATA_STORE` first, then `SUI_CONFIG_DIR`, `HOME`, or
+//! `USERPROFILE`, and finally appends [`DATA_STORE_DIR`].
+//!
+//! # Intended Directory Structure
+//!
+//! ```text
+//! ~./<store root>/
+//!   node_mapping.csv
+//!   <chain_id>/
+//!     transaction/
+//!       <tx_digest>
+//!     epoch/
+//!       <epoch_id>
+//!     objects/
+//!       <object_id>/
+//!         <actual_version>
+//!         root_versions
+//!         checkpoint_versions
+//!     checkpoint/
+//!       latest
+//!       checkpoint_digest_index.csv
+//!       contents_digest_index.csv
+//!       <sequence>.binpb.zst
+//! ```
+//!
+//! The `checkpoint/` directory is intended to store full checkpoint payloads
+//! and the indexes needed to resolve checkpoint and contents digests back to a
+//! sequence number.
+//!
+//! # File Formats
+//!
+//! - Transaction files in `transaction/<tx_digest>` store `TransactionFileData` as BCS, which
+//!   includes the original `TransactionData`, its `TransactionEffects`, and the execution
+//!   `checkpoint`.
+//! - Epoch files in `epoch/<epoch_id>` store `EpochFileData` as BCS, capturing epoch metadata.
+//! - Object files in `objects/<object_id>/<version>` store the `Object` at the corresponding
+//!   version as BCS.
+//! - Checkpoint files in `checkpoint/<sequence>.binpb.zst` store the `FullCheckpointData` as a
+//!  compressed protobuf payload.
+//!
+//! # Version Mapping Files
+//!
+//! The `root_versions` and `checkpoint_versions` files provide stable lookups for queries
+//! that are not targeted to a specific version. Each line is a comma-separated pair and the
+//! files can be edited manually or updated by this store:
+//!
+//! - `root_versions`: maps a root version bound to the actual stored version.
+//!   - line format: `<max_version>,<actual_version>`
+//!   - example: `4,3` means the highest version not exceeding 4 is 3
+//!
+//! - `checkpoint_versions`: maps a checkpoint to the actual stored version for the object
+//!   at that point.
+//!   - line format: `<checkpoint>,<actual_version>`
+//!   - example: `100,1` means at checkpoint 100 the object version is 1
+//!
+//! These mapping files allow answering `VersionQuery::RootVersion(_)` and
+//! `VersionQuery::AtCheckpoint(_)` without requiring a full index; the store writes them as
+//! it learns the concrete versions.
 
 use crate::{
-    node::Node, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
+    CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
     FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
-    TransactionInfo, TransactionStore, TransactionStoreWriter,
+    TransactionInfo, TransactionStore, TransactionStoreWriter, node::Node,
 };
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 use std::{io::Write, path::PathBuf};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -20,20 +84,32 @@ use sui_types::{
     supported_protocol_versions::ProtocolConfig,
 };
 
-pub const DATA_STORE_DIR: &str = ".sui_data_store";
+/// Directory name appended to the configured filesystem store root.
+pub const DATA_STORE_DIR: &str = ".forking_data_store";
+/// CSV file mapping a logical node name to a concrete chain identifier.
 pub const NODE_MAPPING_FILE: &str = "node_mapping.csv";
+/// Per-chain object storage directory.
 pub const OBJECTS_DIR: &str = "objects";
+/// Per-chain transaction storage directory.
 pub const TRANSACTION_DIR: &str = "transaction";
+/// Per-chain epoch storage directory.
 pub const EPOCH_DIR: &str = "epoch";
+/// Per-chain checkpoint storage directory.
 pub const CHECKPOINT_DIR: &str = "checkpoint";
+/// File extension used for serialized checkpoint payloads.
 pub const CHECKPOINT_FILE_EXTENSION: &str = "binpb.zst";
+/// CSV index mapping checkpoint digests to checkpoint sequence numbers.
 pub const CHECKPOINT_DIGEST_INDEX_FILE: &str = "checkpoint_digest_index.csv";
+/// CSV index mapping checkpoint contents digests to checkpoint sequence numbers.
 pub const CHECKPOINT_CONTENTS_DIGEST_INDEX_FILE: &str = "contents_digest_index.csv";
+/// Marker file for the latest checkpoint sequence known to the store.
 pub const CHECKPOINT_LATEST_FILE: &str = "latest";
+/// Per-object CSV file mapping root-version queries to concrete object versions.
 pub const ROOT_VERSIONS_FILE: &str = "root_versions";
+/// Per-object CSV file mapping checkpoint queries to concrete object versions.
 pub const CHECKPOINT_VERSIONS_FILE: &str = "checkpoint_versions";
 
-/// Persistent file-system store.
+/// Persistent file-system store rooted at a configurable on-disk path.
 #[derive(Debug)]
 pub struct FileSystemStore {
     node: Node,
@@ -57,7 +133,7 @@ impl FileSystemStore {
 
     /// Resolve the default base path for on-disk storage.
     pub fn base_path() -> Result<PathBuf, Error> {
-        let home_dir = std::env::var("SUI_DATA_STORE")
+        let home_dir = std::env::var("FORKING_DATA_STORE")
             .or_else(|_| std::env::var("SUI_CONFIG_DIR"))
             .or_else(|_| std::env::var("HOME"))
             .or_else(|_| std::env::var("USERPROFILE"))

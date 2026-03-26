@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! GraphQL-backed store skeleton.
-
 use crate::{
     CheckpointStore, EpochData, EpochStore, FullCheckpointData, ObjectKey, ObjectStore, SetupStore,
     StoreSummary, TransactionInfo, TransactionStore, node::Node,

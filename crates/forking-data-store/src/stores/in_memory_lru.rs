@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! LRU in-memory store skeleton.
-
 use crate::{
     CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
     FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
