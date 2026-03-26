@@ -34,7 +34,12 @@ use crate::{
     },
     observer_service::ObserverService,
     observer_subscriber::ObserverSubscriber,
+<<<<<<< HEAD
     peers_pool::{PeerServer, PeersPool},
+=======
+    peers_pool::PeersPool,
+    proposed_block_handler::ProposedBlockHandler,
+>>>>>>> 96d2258e32 ([refactor] the observer peer registration now happens inside the PeersPool to ensure that any downstream components will have from the beginning available the peers. Refactored the synchronizer to use the data coming from PeersPool when it comes to peer selection)
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::RoundTracker,
     storage::rocksdb_store::RocksDBStore,
@@ -451,27 +456,6 @@ where
 
             (SubscriberType::Validator(s), round_prober_handle)
         } else {
-            // Register all the observer peers in the peers pool
-            for peer in context.parameters.tonic.observer_peers.iter() {
-                // If the peer's public key is in the committe, then register it as a validator.
-                if let Some((index, _)) = context
-                    .committee
-                    .authorities()
-                    .find(|(_, authority)| authority.network_key == peer.public_key)
-                {
-                    peers_pool
-                        .register_validator(
-                            index,
-                            vec![PeerServer::Validator, PeerServer::Observer],
-                        )
-                        .expect("Failed to register validator");
-                } else {
-                    // Otherwise this is another Observer peer and we register it as such. This peer we know that
-                    // it will support the Observer server.
-                    peers_pool.register_observer(peer.public_key.clone());
-                }
-            }
-
             // Observer node: subscribe to specified peer(s) using ObserverSubscriber
             let observer_client = network_manager.observer_client();
             let observer_service = Arc::new(ObserverService::new(
@@ -816,7 +800,7 @@ mod tests {
             ..Default::default()
         };
 
-        let (observer_commit_consumer, _observer_commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let (observer_commit_consumer, observer_commit_receiver) = CommitConsumerArgs::new(0, 0);
         let observer = ConsensusAuthority::start(
             network_type,
             0,
@@ -832,6 +816,8 @@ mod tests {
             0,
         )
         .await;
+
+        commit_receivers.push(observer_commit_receiver);
 
         // Give Observer more time to connect and sync
         sleep(Duration::from_secs(5)).await;

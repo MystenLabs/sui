@@ -1348,10 +1348,7 @@ where
         loop {
             tokio::select! {
                 Some((response, blocks_guard, _retries, peer, fetch_after_rounds)) = request_futures.next() => {
-                    let peer_name = match &peer {
-                        PeerId::Validator(index) => context.committee.authority(*index).hostname.as_str(),
-                        PeerId::Observer(_) => "observer",
-                    };
+                    let peer_name = peer.hostname(&context);
                     match response {
                         Ok(fetched_blocks) => {
                             results.push((blocks_guard, fetched_blocks, peer));
@@ -1362,7 +1359,7 @@ where
                             }
                         },
                         Err(_) => {
-                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_name, "periodic"]).inc();
+                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_name.as_str(), "periodic"]).inc();
                             // try again if there is any peer left
                             if let Some(next_peer) = peers.next() {
                                 // do best effort to lock guards. If we can't lock then don't bother at this run.
