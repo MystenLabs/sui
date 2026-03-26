@@ -62,6 +62,23 @@ impl PeersPool {
                 .unwrap();
         }
 
+        // Register all the observer peers in the peers pool
+        for peer in context.parameters.tonic.observer_peers.iter() {
+            // If the peer's public key is in the committe, then register it as a validator.
+            if let Some((index, _)) = context
+                .committee
+                .authorities()
+                .find(|(_, authority)| authority.network_key == peer.public_key)
+            {
+                s.register_validator(index, vec![PeerServer::Validator, PeerServer::Observer])
+                    .expect("Failed to register validator");
+            } else {
+                // Otherwise this is another Observer peer and we register it as such. This peer we know that
+                // it will support the Observer server.
+                s.register_observer(peer.public_key.clone());
+            }
+        }
+
         s
     }
 

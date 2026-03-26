@@ -61,6 +61,15 @@ impl Display for PeerId {
     }
 }
 
+impl PeerId {
+    pub(crate) fn hostname(&self, context: &Context) -> String {
+        match self {
+            PeerId::Validator(index) => context.committee.authority(*index).hostname.to_string(),
+            PeerId::Observer(_) => format!("[Observer]{:?}", self),
+        }
+    }
+}
+
 // Tonic generated RPC stubs.
 mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
