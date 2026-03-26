@@ -1,5 +1,5 @@
 [package]
-name = "forking-store"
+name = "forking-data-store"
 version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"

@@ -4,18 +4,20 @@
 //! Multi-tier caching data store for Sui blockchain data.
 //!
 //! This crate provides a flexible data store abstraction for retrieving and caching
-//! Sui blockchain data (transactions, epochs, objects). The stores are loosely modeled
-//! after the GQL schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
+//! Sui blockchain data (transactions, checkpooints, epochs, objects). The stores are loosely
+//! modeled after the GQL schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
 //!
 //! ## Core Traits
 //!
 //! - [`TransactionStore`] - Retrieve transaction data and effects by digest
+//! - [`CheckpointStore`] - Retrieve checkpoint data by sequence number or digest
 //! - [`EpochStore`] - Retrieve epoch information and protocol configuration
 //! - [`ObjectStore`] - Retrieve objects by their keys with flexible version queries
 //!
 //! ## Store Implementations
 //!
-//! - [`stores::DataStore`] - Remote GraphQL-backed store (mainnet/testnet)
+//! - [`stores::DataStore`] - Remote GraphQL-backed store (mainnet/testnet/devnet/custom GraphQL
+//! endpoint)
 //! - [`stores::FileSystemStore`] - Persistent local disk cache
 //! - [`stores::InMemoryStore`] - Unbounded in-memory cache
 //! - [`stores::LruMemoryStore`] - Bounded LRU cache
@@ -40,7 +42,7 @@ use sui_types::{
     base_types::ObjectID,
     digests::{CheckpointContentsDigest, CheckpointDigest},
     effects::TransactionEffects,
-    full_checkpoint_content::Checkpoint as CheckpointData,
+    full_checkpoint_content::Checkpoint,
     messages_checkpoint::CheckpointSequenceNumber,
     object::Object,
     supported_protocol_versions::ProtocolConfig,
@@ -130,19 +132,16 @@ pub trait ObjectStore {
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error>;
 }
 
-/// Canonical checkpoint payload used by checkpoint store APIs.
-pub type FullCheckpointData = CheckpointData;
-
 /// Retrieve checkpoint data and indexes.
 pub trait CheckpointStore {
     /// Return a full checkpoint payload by sequence number.
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointData>, Error>;
+    ) -> Result<Option<Checkpoint>, Error>;
 
     /// Return the latest checkpoint known to this store.
-    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error>;
+    fn get_latest_checkpoint(&self) -> Result<Option<Checkpoint>, Error>;
 
     /// Resolve a checkpoint digest to a sequence number.
     fn get_sequence_by_checkpoint_digest(
@@ -223,7 +222,7 @@ pub trait ObjectStoreWriter: ObjectStore {
 /// Write-back trait for checkpoint data.
 pub trait CheckpointStoreWriter: CheckpointStore {
     /// Persist a full checkpoint payload.
-    fn write_checkpoint(&self, checkpoint: &FullCheckpointData) -> Result<(), Error>;
+    fn write_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), Error>;
 }
 
 // ============================================================================
@@ -317,11 +316,11 @@ macro_rules! impl_store_for_deref {
             fn get_checkpoint_by_sequence_number(
                 &self,
                 sequence: CheckpointSequenceNumber,
-            ) -> Result<Option<FullCheckpointData>, Error> {
+            ) -> Result<Option<Checkpoint>, Error> {
                 Deref::deref(self).get_checkpoint_by_sequence_number(sequence)
             }
 
-            fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+            fn get_latest_checkpoint(&self) -> Result<Option<Checkpoint>, Error> {
                 Deref::deref(self).get_latest_checkpoint()
             }
 
@@ -341,7 +340,7 @@ macro_rules! impl_store_for_deref {
         }
 
         impl<T: CheckpointStoreWriter + ?Sized> CheckpointStoreWriter for $wrapper {
-            fn write_checkpoint(&self, checkpoint: &FullCheckpointData) -> Result<(), Error> {
+            fn write_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), Error> {
                 Deref::deref(self).write_checkpoint(checkpoint)
             }
         }

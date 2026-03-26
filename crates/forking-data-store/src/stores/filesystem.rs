@@ -3,15 +3,14 @@
 
 //! File-system backed store skeleton.
 //!
-//! This module intentionally keeps the public shape of the intended store while
-//! deferring the actual persistence logic to a later commit.
+//!
 
 use crate::{
-    CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
+    node::Node, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
     FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
-    TransactionInfo, TransactionStore, TransactionStoreWriter, node::Node,
+    TransactionInfo, TransactionStore, TransactionStoreWriter,
 };
-use anyhow::{Error, Result, anyhow};
+use anyhow::{anyhow, Error, Result};
 use std::{io::Write, path::PathBuf};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
