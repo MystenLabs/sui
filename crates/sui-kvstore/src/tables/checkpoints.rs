@@ -3,7 +3,7 @@
 
 //! Checkpoints table: stores full checkpoint data indexed by sequence number.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bytes::Bytes;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::messages_checkpoint::{
@@ -51,8 +51,8 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<CheckpointData> {
     }
 
     Ok(CheckpointData {
-        summary: summary.context("summary field is missing")?,
-        contents: contents.context("contents field is missing")?,
-        signatures: signatures.context("signatures field is missing")?,
+        summary,
+        contents,
+        signatures,
     })
 }
