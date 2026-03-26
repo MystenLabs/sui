@@ -261,12 +261,13 @@ proptest! {
     /// serialize -> deserialize round-trip for both VM values and MoveValues.
     #[test]
     fn serializer_round_trip((layout, value) in layout_and_value_strategy()) {
-        let blob = value.typed_serialize(&layout).expect("must serialize");
+        let compressed = move_core_types::runtime_value::compressed_layouts::MoveTypeLayout::from(&layout);
+        let blob = value.typed_serialize(&compressed).expect("must serialize");
 
-        let value_deserialized = Value::simple_deserialize(&blob, &layout).expect("must deserialize");
+        let value_deserialized = Value::simple_deserialize(&blob, &compressed).expect("must deserialize");
         assert!(value.equals(&value_deserialized).unwrap());
 
-        let move_value = value.as_move_value(&layout).expect("must convert to MoveValue");
+        let move_value = value.as_move_value(compressed.as_view()).expect("must convert to MoveValue");
 
         let blob2 = move_value.simple_serialize().expect("must serialize");
         assert_eq!(blob, blob2);

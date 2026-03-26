@@ -252,17 +252,26 @@ impl<'b> NativeContext<'_, 'b, '_> {
         self.vtables.type_to_runtime_type_tag(ty)
     }
 
-    pub fn type_tag_to_type_layout(&self, ty: &TypeTag) -> Option<R::MoveTypeLayout> {
+    pub fn type_tag_to_type_layout(
+        &self,
+        ty: &TypeTag,
+    ) -> Option<R::compressed_layouts::MoveTypeLayout> {
         self.vtables.get_type_layout(ty).ok()
     }
 
-    pub fn type_tag_to_annotated_type_layout(&self, ty: &TypeTag) -> Option<A::MoveTypeLayout> {
+    pub fn type_tag_to_annotated_type_layout(
+        &self,
+        ty: &TypeTag,
+    ) -> Option<A::compressed_layouts::MoveTypeLayout> {
         self.vtables.get_fully_annotated_type_layout(ty).ok()
     }
 
-    pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<R::MoveTypeLayout>> {
+    pub fn type_to_type_layout(
+        &self,
+        ty: &Type,
+    ) -> PartialVMResult<Option<R::compressed_layouts::MoveTypeLayout>> {
         match self.vtables.type_to_type_layout(ty) {
-            Ok(ty_layout) => Ok(Some(ty_layout)),
+            Ok(compressed) => Ok(Some(compressed)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
             Err(_) => Ok(None),
         }
@@ -275,9 +284,9 @@ impl<'b> NativeContext<'_, 'b, '_> {
     pub fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
-    ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
+    ) -> PartialVMResult<Option<A::compressed_layouts::MoveTypeLayout>> {
         match self.vtables.type_to_fully_annotated_layout(ty) {
-            Ok(ty_layout) => Ok(Some(ty_layout)),
+            Ok(compressed) => Ok(Some(compressed)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
             Err(_) => Ok(None),
         }

@@ -19,7 +19,7 @@ use move_binary_format::{
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
-    runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
+    runtime_value::compressed_layouts as RC,
     u256,
     vm_status::sub_status::NFE_VECTOR_ERROR_BASE,
 };
@@ -2738,12 +2738,15 @@ use serde::{
 };
 
 impl Value {
-    pub fn simple_deserialize(blob: &[u8], layout: &MoveTypeLayout) -> Option<Value> {
-        bcs::from_bytes_seed(SeedWrapper { layout }, blob).ok()
+    pub fn simple_deserialize(blob: &[u8], layout: &RC::MoveTypeLayout) -> Option<Value> {
+        bcs::from_bytes_seed(CompressedSeedWrapper(layout.as_view()), blob).ok()
     }
 
-    pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
-        match bcs::to_bytes(&AnnotatedValue { layout, val: self }) {
+    pub fn typed_serialize(&self, layout: &RC::MoveTypeLayout) -> Option<Vec<u8>> {
+        match bcs::to_bytes(&CompressedAnnotatedValue {
+            view: layout.as_view(),
+            val: self,
+        }) {
             Ok(bytes) => Some(bytes),
             Err(e) => {
                 debug_assert!(
@@ -2839,82 +2842,146 @@ impl serde::Serialize for FixedSizeVec {
     }
 }
 
-struct AnnotatedValue<'a, 'b, T1, T2> {
-    layout: &'a T1,
-    val: &'b T2,
+// -------------------------------------------------------------------------
+// Compressed layout serialization
+// -------------------------------------------------------------------------
+
+struct CompressedAnnotatedValue<'a, 'b> {
+    view: RC::MoveTypeLayoutView<'a>,
+    val: &'b Value,
+}
+
+struct CompressedAnnotatedFields<'a, 'b> {
+    view: RC::MoveTypeLayoutView<'a>,
+    field_indices: &'a [RC::LayoutIdx],
+    vals: &'b FixedSizeVec,
 }
 
 fn invariant_violation<S: serde::Serializer>(message: String) -> S::Error {
     S::Error::custom(partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(message))
 }
 
-impl serde::Serialize for AnnotatedValue<'_, '_, MoveTypeLayout, Value> {
+impl serde::Serialize for CompressedAnnotatedValue<'_, '_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match (self.layout, self.val) {
-            (MoveTypeLayout::U8, Value::U8(x)) => serializer.serialize_u8(*x),
-            (MoveTypeLayout::U16, Value::U16(x)) => serializer.serialize_u16(*x),
-            (MoveTypeLayout::U32, Value::U32(x)) => serializer.serialize_u32(*x),
-            (MoveTypeLayout::U64, Value::U64(x)) => serializer.serialize_u64(*x),
-            (MoveTypeLayout::U128, Value::U128(x)) => serializer.serialize_u128(**x),
-            (MoveTypeLayout::U256, Value::U256(x)) => x.serialize(serializer),
-            (MoveTypeLayout::Bool, Value::Bool(x)) => serializer.serialize_bool(*x),
-            (MoveTypeLayout::Address, Value::Address(x)) => x.serialize(serializer),
+        use RC::MoveTypeNode as N;
+        let node = self
+            .view
+            .current()
+            .map_err(|e| invariant_violation::<S>(e.to_string()))?;
+        match (node, self.val) {
+            (N::U8, Value::U8(x)) => serializer.serialize_u8(*x),
+            (N::U16, Value::U16(x)) => serializer.serialize_u16(*x),
+            (N::U32, Value::U32(x)) => serializer.serialize_u32(*x),
+            (N::U64, Value::U64(x)) => serializer.serialize_u64(*x),
+            (N::U128, Value::U128(x)) => serializer.serialize_u128(**x),
+            (N::U256, Value::U256(x)) => x.serialize(serializer),
+            (N::Bool, Value::Bool(x)) => serializer.serialize_bool(*x),
+            (N::Address, Value::Address(x)) => x.serialize(serializer),
 
-            (MoveTypeLayout::Struct(struct_layout), Value::Struct(struct_)) => (AnnotatedValue {
-                layout: struct_layout.as_ref(),
-                val: &struct_.0,
+            (N::Struct(s), Value::Struct(struct_)) => (CompressedAnnotatedFields {
+                view: self.view,
+                field_indices: &s.fields,
+                vals: &struct_.0,
             })
             .serialize(serializer),
 
-            (MoveTypeLayout::Enum(enum_layout), Value::Variant(entry)) => (AnnotatedValue {
-                layout: enum_layout.as_ref(),
-                val: entry.0.as_ref(),
-            })
-            .serialize(serializer),
+            (N::Enum(e), Value::Variant(entry)) => {
+                let (tag, values) = entry.0.as_ref();
+                let tag_u8 = if *tag as u64 > VARIANT_TAG_MAX_VALUE {
+                    return Err(SerError::custom(format!(
+                        "Variant tag {} is greater than the maximum allowed value of {}",
+                        tag, VARIANT_TAG_MAX_VALUE
+                    )));
+                } else {
+                    checked_as!(*tag, u8).map_err(|err| {
+                        SerError::custom(format!(
+                            "Variant tag {} cannot be safely cast to u8: {:?}",
+                            tag, err
+                        ))
+                    })?
+                };
 
-            (MoveTypeLayout::Vector(layout), Value::PrimVec(prim_vec)) => {
-                let layout = layout.as_ref();
-                match (layout, prim_vec) {
-                    (MoveTypeLayout::U8, PrimVec::VecU8(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U16, PrimVec::VecU16(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U32, PrimVec::VecU32(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U64, PrimVec::VecU64(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U128, PrimVec::VecU128(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U256, PrimVec::VecU256(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::Bool, PrimVec::VecBool(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::Address, PrimVec::VecAddress(r)) => r.serialize(serializer),
+                let variant_fields = e
+                    .variants
+                    .get(*tag as usize)
+                    .ok_or_else(|| {
+                        invariant_violation::<S>(format!(
+                            "variant tag {} out of bounds ({})",
+                            tag,
+                            e.variants.len()
+                        ))
+                    })?;
+
+                if variant_fields.len() != values.len() {
+                    return Err(invariant_violation::<S>(format!(
+                        "variant field count mismatch: layout has {}, value has {}",
+                        variant_fields.len(),
+                        values.len()
+                    )));
+                }
+
+                let mut t = serializer.serialize_tuple(2)?;
+                t.serialize_element(&tag_u8)?;
+                t.serialize_element(&CompressedAnnotatedFields {
+                    view: self.view,
+                    field_indices: variant_fields,
+                    vals: values,
+                })?;
+                t.end()
+            }
+
+            (N::Vector(inner_idx), Value::PrimVec(prim_vec)) => {
+                let inner_node = self
+                    .view
+                    .view_at(*inner_idx)
+                    .current()
+                    .map_err(|e| invariant_violation::<S>(e.to_string()))?;
+                match (inner_node, prim_vec) {
+                    (N::U8, PrimVec::VecU8(r)) => r.serialize(serializer),
+                    (N::U16, PrimVec::VecU16(r)) => r.serialize(serializer),
+                    (N::U32, PrimVec::VecU32(r)) => r.serialize(serializer),
+                    (N::U64, PrimVec::VecU64(r)) => r.serialize(serializer),
+                    (N::U128, PrimVec::VecU128(r)) => r.serialize(serializer),
+                    (N::U256, PrimVec::VecU256(r)) => r.serialize(serializer),
+                    (N::Bool, PrimVec::VecBool(r)) => r.serialize(serializer),
+                    (N::Address, PrimVec::VecAddress(r)) => r.serialize(serializer),
                     (layout, container) => Err(invariant_violation::<S>(format!(
                         "cannot serialize container {:?} as {:?}",
                         container, layout
                     ))),
                 }
             }
-            (MoveTypeLayout::Vector(layout), Value::Vec(r)) => {
-                let layout = layout.as_ref();
-                let v = r;
-                let mut t = serializer.serialize_seq(Some(v.len()))?;
-                for val in v.iter() {
+            (N::Vector(inner_idx), Value::Vec(r)) => {
+                let elem_view = self.view.view_at(*inner_idx);
+                let mut t = serializer.serialize_seq(Some(r.len()))?;
+                for val in r.iter() {
                     let val = &*val.borrow();
-                    t.serialize_element(&AnnotatedValue { layout, val })?;
+                    t.serialize_element(&CompressedAnnotatedValue {
+                        view: elem_view,
+                        val,
+                    })?;
                 }
                 t.end()
             }
 
-            (MoveTypeLayout::Signer, Value::Struct(struct_)) => {
+            (N::Signer, Value::Struct(struct_)) => {
                 if struct_.len() != 1 {
                     return Err(invariant_violation::<S>(format!(
                         "cannot serialize container as a signer -- expected 1 field got {}",
                         struct_.len()
                     )));
                 }
-                (AnnotatedValue {
-                    layout: &MoveTypeLayout::Address,
-                    val: &*struct_
-                        .safe_get(0)
-                        .map_err(|e| invariant_violation::<S>(e.to_string()))?
-                        .borrow(),
-                })
-                .serialize(serializer)
+                let inner = &*struct_
+                    .safe_get(0)
+                    .map_err(|e| invariant_violation::<S>(e.to_string()))?
+                    .borrow();
+                match inner {
+                    Value::Address(a) => a.serialize(serializer),
+                    _ => Err(invariant_violation::<S>(format!(
+                        "cannot serialize non-address as signer: {:?}",
+                        inner
+                    ))),
+                }
             }
 
             (ty, val) => Err(invariant_violation::<S>(format!(
@@ -2925,21 +2992,20 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveTypeLayout, Value> {
     }
 }
 
-impl serde::Serialize for AnnotatedValue<'_, '_, MoveStructLayout, FixedSizeVec> {
+impl serde::Serialize for CompressedAnnotatedFields<'_, '_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let values = &self.val;
-        let fields = self.layout.fields();
-        if fields.len() != values.len() {
+        if self.field_indices.len() != self.vals.len() {
             return Err(invariant_violation::<S>(format!(
-                "cannot serialize struct value {:?} as {:?} -- number of fields mismatch",
-                self.val, self.layout
+                "cannot serialize struct -- field count mismatch: layout has {}, value has {}",
+                self.field_indices.len(),
+                self.vals.len()
             )));
         }
-        let mut t = serializer.serialize_tuple(values.len())?;
-        for (field_layout, val) in fields.iter().zip(values.iter()) {
+        let mut t = serializer.serialize_tuple(self.vals.len())?;
+        for (&field_idx, val) in self.field_indices.iter().zip(self.vals.iter()) {
             let val = &*val.borrow();
-            t.serialize_element(&AnnotatedValue {
-                layout: field_layout,
+            t.serialize_element(&CompressedAnnotatedValue {
+                view: self.view.view_at(field_idx),
                 val,
             })?;
         }
@@ -2947,122 +3013,80 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveStructLayout, FixedSizeVec>
     }
 }
 
-impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, FixedSizeVec)> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let (tag, values) = &self.val;
-        let tag = if *tag as u64 > VARIANT_TAG_MAX_VALUE {
-            return Err(serde::ser::Error::custom(format!(
-                "Variant tag {} is greater than the maximum allowed value of {}",
-                tag, VARIANT_TAG_MAX_VALUE
-            )));
-        } else {
-            checked_as!(*tag, u8).map_err(|e| {
-                serde::ser::Error::custom(format!(
-                    "Variant tag {} cannot be safely cast to u8: {:?}",
-                    tag, e
-                ))
-            })?
-        };
+// -------------------------------------------------------------------------
+// Compressed layout deserialization
+// -------------------------------------------------------------------------
 
-        let fields = &self
-            .layout
-            .0
-            .safe_get(tag as usize)
-            .map_err(|e| invariant_violation::<S>(e.to_string()))?;
-        if fields.len() != values.len() {
-            return Err(invariant_violation::<S>(format!(
-                "cannot serialize variant value {:?} as {:?} -- number of fields mismatch",
-                self.val, self.layout
-            )));
-        }
+#[derive(Clone, Copy)]
+struct CompressedSeedWrapper<'a>(RC::MoveTypeLayoutView<'a>);
 
-        let mut t = serializer.serialize_tuple(2)?;
-        t.serialize_element(&tag)?;
-
-        t.serialize_element(&AnnotatedValue {
-            layout: &VariantFields(fields),
-            val: values,
-        })?;
-
-        t.end()
-    }
-}
-
-struct VariantFields<'a>(&'a [MoveTypeLayout]);
-
-impl<'a> serde::Serialize for AnnotatedValue<'a, '_, VariantFields<'a>, FixedSizeVec> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let values = self.val;
-        let types = self.layout.0;
-        if types.len() != values.len() {
-            return Err(invariant_violation::<S>(format!(
-                "cannot serialize variant value {:?} as {:?} -- number of fields mismatch",
-                self.val, self.layout.0
-            )));
-        }
-        let mut t = serializer.serialize_tuple(values.len())?;
-        for (field_layout, val) in types.iter().zip(values.iter()) {
-            let val = &*val.borrow();
-            t.serialize_element(&AnnotatedValue {
-                layout: field_layout,
-                val,
-            })?;
-        }
-        t.end()
-    }
-}
-
-#[derive(Clone)]
-struct SeedWrapper<L> {
-    layout: L,
-}
-
-impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
+impl<'d> serde::de::DeserializeSeed<'d> for CompressedSeedWrapper<'_> {
     type Value = Value;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        use MoveTypeLayout as L;
-        use PrimVec as PV;
-        use Value as V;
+        use RC::MoveTypeNode as N;
 
-        match self.layout {
-            L::Bool => bool::deserialize(deserializer).map(Value::bool),
-            L::U8 => u8::deserialize(deserializer).map(Value::u8),
-            L::U16 => u16::deserialize(deserializer).map(Value::u16),
-            L::U32 => u32::deserialize(deserializer).map(Value::u32),
-            L::U64 => u64::deserialize(deserializer).map(Value::u64),
-            L::U128 => u128::deserialize(deserializer).map(Value::u128),
-            L::U256 => u256::U256::deserialize(deserializer).map(Value::u256),
-            L::Address => AccountAddress::deserialize(deserializer).map(Value::address),
-            L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
+        let node = self
+            .0
+            .current()
+            .map_err(|e| D::Error::custom(format!("{e}")))?;
+        match node {
+            N::Bool => bool::deserialize(deserializer).map(Value::bool),
+            N::U8 => u8::deserialize(deserializer).map(Value::u8),
+            N::U16 => u16::deserialize(deserializer).map(Value::u16),
+            N::U32 => u32::deserialize(deserializer).map(Value::u32),
+            N::U64 => u64::deserialize(deserializer).map(Value::u64),
+            N::U128 => u128::deserialize(deserializer).map(Value::u128),
+            N::U256 => u256::U256::deserialize(deserializer).map(Value::u256),
+            N::Address => AccountAddress::deserialize(deserializer).map(Value::address),
+            N::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
 
-            L::Struct(struct_layout) => Ok(SeedWrapper {
-                layout: struct_layout.as_ref(),
+            N::Struct(s) => {
+                let fields = deserializer.deserialize_tuple(
+                    s.fields.len(),
+                    CompressedStructFieldVisitor {
+                        view: self.0,
+                        fields: &s.fields,
+                    },
+                )?;
+                Ok(Value::make_struct(fields))
             }
-            .deserialize(deserializer)?),
 
-            L::Enum(enum_layout) => Ok(SeedWrapper {
-                layout: enum_layout.as_ref(),
+            N::Enum(e) => {
+                let variant = deserializer.deserialize_tuple(
+                    2,
+                    CompressedEnumFieldVisitor {
+                        view: self.0,
+                        variants: &e.variants,
+                    },
+                )?;
+                Ok(Value::Variant(variant))
             }
-            .deserialize(deserializer)?),
 
-            L::Vector(layout) => {
-                let value = match layout.as_ref() {
-                    L::U8 => V::PrimVec(PV::VecU8(Vec::deserialize(deserializer)?)),
-                    L::U16 => V::PrimVec(PV::VecU16(Vec::deserialize(deserializer)?)),
-                    L::U32 => V::PrimVec(PV::VecU32(Vec::deserialize(deserializer)?)),
-                    L::U64 => V::PrimVec(PV::VecU64(Vec::deserialize(deserializer)?)),
-                    L::U128 => V::PrimVec(PV::VecU128(Vec::deserialize(deserializer)?)),
-                    L::U256 => V::PrimVec(PV::VecU256(Vec::deserialize(deserializer)?)),
-                    L::Bool => V::PrimVec(PV::VecBool(Vec::deserialize(deserializer)?)),
-                    L::Address => V::PrimVec(PV::VecAddress(Vec::deserialize(deserializer)?)),
-                    layout => {
-                        // TODO: Box this as part of deserialization to avoid the second iteration?
+            N::Vector(inner_idx) => {
+                let inner_view = self.0.view_at(*inner_idx);
+                let inner_node = inner_view
+                    .current()
+                    .map_err(|e| D::Error::custom(format!("{e}")))?;
+                let value = match inner_node {
+                    N::U8 => Value::PrimVec(PrimVec::VecU8(Vec::deserialize(deserializer)?)),
+                    N::U16 => Value::PrimVec(PrimVec::VecU16(Vec::deserialize(deserializer)?)),
+                    N::U32 => Value::PrimVec(PrimVec::VecU32(Vec::deserialize(deserializer)?)),
+                    N::U64 => Value::PrimVec(PrimVec::VecU64(Vec::deserialize(deserializer)?)),
+                    N::U128 => Value::PrimVec(PrimVec::VecU128(Vec::deserialize(deserializer)?)),
+                    N::U256 => Value::PrimVec(PrimVec::VecU256(Vec::deserialize(deserializer)?)),
+                    N::Bool => Value::PrimVec(PrimVec::VecBool(Vec::deserialize(deserializer)?)),
+                    N::Address => {
+                        Value::PrimVec(PrimVec::VecAddress(Vec::deserialize(deserializer)?))
+                    }
+                    _ => {
                         let v = deserializer
-                            .deserialize_seq(VectorElementVisitor(SeedWrapper { layout }))?
+                            .deserialize_seq(CompressedVectorVisitor(
+                                CompressedSeedWrapper(inner_view),
+                            ))?
                             .into_iter()
                             .map(MemBox::new)
                             .collect();
@@ -3075,34 +3099,9 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
     }
 }
 
-impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveStructLayout> {
-    type Value = Value;
+struct CompressedVectorVisitor<'a>(CompressedSeedWrapper<'a>);
 
-    fn deserialize<D: serde::de::Deserializer<'d>>(
-        self,
-        deserializer: D,
-    ) -> Result<Self::Value, D::Error> {
-        let fields = deserializer
-            .deserialize_tuple(self.layout.0.len(), StructFieldVisitor(&self.layout.0))?;
-        Ok(Value::make_struct(fields))
-    }
-}
-
-impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveEnumLayout> {
-    type Value = Value;
-
-    fn deserialize<D: serde::de::Deserializer<'d>>(
-        self,
-        deserializer: D,
-    ) -> Result<Self::Value, D::Error> {
-        let variant = deserializer.deserialize_tuple(2, EnumFieldVisitor(&self.layout.0))?;
-        Ok(Value::Variant(variant))
-    }
-}
-
-struct VectorElementVisitor<'a>(SeedWrapper<&'a MoveTypeLayout>);
-
-impl<'d> serde::de::Visitor<'d> for VectorElementVisitor<'_> {
+impl<'d> serde::de::Visitor<'d> for CompressedVectorVisitor<'_> {
     type Value = Vec<Value>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -3114,16 +3113,19 @@ impl<'d> serde::de::Visitor<'d> for VectorElementVisitor<'_> {
         A: serde::de::SeqAccess<'d>,
     {
         let mut vals = Vec::new();
-        while let Some(elem) = seq.next_element_seed(self.0.clone())? {
+        while let Some(elem) = seq.next_element_seed(self.0)? {
             vals.push(elem)
         }
         Ok(vals)
     }
 }
 
-struct StructFieldVisitor<'a>(&'a [MoveTypeLayout]);
+struct CompressedStructFieldVisitor<'a> {
+    view: RC::MoveTypeLayoutView<'a>,
+    fields: &'a [RC::LayoutIdx],
+}
 
-impl<'d> serde::de::Visitor<'d> for StructFieldVisitor<'_> {
+impl<'d> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'_> {
     type Value = Vec<Value>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -3134,23 +3136,23 @@ impl<'d> serde::de::Visitor<'d> for StructFieldVisitor<'_> {
     where
         A: serde::de::SeqAccess<'d>,
     {
-        let mut val = Vec::new();
-        for (i, field_layout) in self.0.iter().enumerate() {
-            if let Some(elem) = seq.next_element_seed(SeedWrapper {
-                layout: field_layout,
-            })? {
-                val.push(elem)
-            } else {
-                return Err(A::Error::invalid_length(i, &self));
+        let mut vals = Vec::new();
+        for (i, &field_idx) in self.fields.iter().enumerate() {
+            match seq.next_element_seed(CompressedSeedWrapper(self.view.view_at(field_idx)))? {
+                Some(elem) => vals.push(elem),
+                None => return Err(A::Error::invalid_length(i, &self)),
             }
         }
-        Ok(val)
+        Ok(vals)
     }
 }
 
-struct EnumFieldVisitor<'a>(&'a Vec<Vec<MoveTypeLayout>>);
+struct CompressedEnumFieldVisitor<'a> {
+    view: RC::MoveTypeLayoutView<'a>,
+    variants: &'a [Box<[RC::LayoutIdx]>],
+}
 
-impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
+impl<'d> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'_> {
     type Value = Variant;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -3161,25 +3163,20 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
     where
         A: serde::de::SeqAccess<'d>,
     {
-        let tag = match seq.next_element_seed(&MoveTypeLayout::U8)? {
-            Some(RuntimeValue::U8(tag)) if tag as u64 <= VARIANT_TAG_MAX_VALUE => tag as u16,
-            Some(RuntimeValue::U8(tag)) => {
-                return Err(A::Error::invalid_length(tag as usize, &self));
-            }
-            Some(val) => {
-                return Err(A::Error::invalid_type(
-                    serde::de::Unexpected::Other(&format!("{val:?}")),
-                    &self,
-                ));
-            }
+        let tag = match seq.next_element::<u8>()? {
+            Some(tag) if tag as u64 <= VARIANT_TAG_MAX_VALUE => tag as u16,
+            Some(tag) => return Err(A::Error::invalid_length(tag as usize, &self)),
             None => return Err(A::Error::invalid_length(0, &self)),
         };
 
-        let Some(variant_layout) = self.0.get(tag as usize) else {
+        let Some(variant_fields) = self.variants.get(tag as usize) else {
             return Err(A::Error::invalid_length(tag as usize, &self));
         };
 
-        let Some(fields) = seq.next_element_seed(&MoveRuntimeVariantFieldLayout(variant_layout))?
+        let Some(fields) = seq.next_element_seed(CompressedVariantFieldSeed {
+            view: self.view,
+            fields: variant_fields,
+        })?
         else {
             return Err(A::Error::invalid_length(1, &self));
         };
@@ -3188,16 +3185,25 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
     }
 }
 
-struct MoveRuntimeVariantFieldLayout<'a>(&'a Vec<MoveTypeLayout>);
+struct CompressedVariantFieldSeed<'a> {
+    view: RC::MoveTypeLayoutView<'a>,
+    fields: &'a [RC::LayoutIdx],
+}
 
-impl<'d> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'_> {
+impl<'d> serde::de::DeserializeSeed<'d> for CompressedVariantFieldSeed<'_> {
     type Value = Vec<Value>;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_tuple(self.0.len(), StructFieldVisitor(self.0))
+        deserializer.deserialize_tuple(
+            self.fields.len(),
+            CompressedStructFieldVisitor {
+                view: self.view,
+                fields: self.fields,
+            },
+        )
     }
 }
 
@@ -3210,21 +3216,25 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'_> {
 **************************************************************************************/
 
 impl Value {
-    fn constant_sig_token_to_layout(constant_signature: &SignatureToken) -> Option<MoveTypeLayout> {
-        use MoveTypeLayout as L;
+    fn constant_sig_token_to_layout(
+        sig: &SignatureToken,
+        builder: &mut RC::MoveTypeLayoutBuilder,
+    ) -> Option<RC::LayoutIdx> {
         use SignatureToken as S;
-
-        Some(match constant_signature {
-            S::Bool => L::Bool,
-            S::U8 => L::U8,
-            S::U16 => L::U16,
-            S::U32 => L::U32,
-            S::U64 => L::U64,
-            S::U128 => L::U128,
-            S::U256 => L::U256,
-            S::Address => L::Address,
+        Some(match sig {
+            S::Bool => builder.bool(),
+            S::U8 => builder.u8(),
+            S::U16 => builder.u16(),
+            S::U32 => builder.u32(),
+            S::U64 => builder.u64(),
+            S::U128 => builder.u128(),
+            S::U256 => builder.u256(),
+            S::Address => builder.address(),
             S::Signer => return None,
-            S::Vector(inner) => L::Vector(Box::new(Self::constant_sig_token_to_layout(inner)?)),
+            S::Vector(inner) => {
+                let inner_idx = Self::constant_sig_token_to_layout(inner, builder)?;
+                builder.vector(inner_idx)
+            }
             // Not yet supported
             S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
             // Not allowed/Not meaningful
@@ -3233,7 +3243,9 @@ impl Value {
     }
 
     pub fn deserialize_constant(constant: &Constant) -> Option<Value> {
-        let layout = Self::constant_sig_token_to_layout(&constant.type_)?;
+        let mut builder = RC::MoveTypeLayoutBuilder::new();
+        let root = Self::constant_sig_token_to_layout(&constant.type_, &mut builder)?;
+        let layout = builder.build(root);
         Value::simple_deserialize(&constant.data, &layout)
     }
 }
@@ -3631,74 +3643,85 @@ use move_core_types::runtime_value::{
 };
 
 impl Value {
-    pub fn as_move_value(&self, layout: &MoveTypeLayout) -> PartialVMResult<RuntimeValue> {
-        use MoveTypeLayout as L;
+    pub fn as_move_value(
+        &self,
+        view: RC::MoveTypeLayoutView<'_>,
+    ) -> PartialVMResult<RuntimeValue> {
+        use RC::MoveTypeNode as C;
         use PrimVec as PV;
 
-        Ok(match (layout, self) {
-            (L::U8, Value::U8(x)) => RuntimeValue::U8(*x),
-            (L::U16, Value::U16(x)) => RuntimeValue::U16(*x),
-            (L::U32, Value::U32(x)) => RuntimeValue::U32(*x),
-            (L::U64, Value::U64(x)) => RuntimeValue::U64(*x),
-            (L::U128, Value::U128(x)) => RuntimeValue::U128(**x),
-            (L::U256, Value::U256(x)) => RuntimeValue::U256(**x),
-            (L::Bool, Value::Bool(x)) => RuntimeValue::Bool(*x),
-            (L::Address, Value::Address(x)) => RuntimeValue::Address(**x),
+        let node = view.current().map_err(|e| {
+            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "{e}")
+        })?;
 
-            // Enum variant case with dereferencing the Box.
-            (L::Enum(enum_layout), Value::Variant(entry)) => {
-                let MoveEnumLayout(variants) = &**enum_layout;
+        Ok(match (node, self) {
+            (C::U8, Value::U8(x)) => RuntimeValue::U8(*x),
+            (C::U16, Value::U16(x)) => RuntimeValue::U16(*x),
+            (C::U32, Value::U32(x)) => RuntimeValue::U32(*x),
+            (C::U64, Value::U64(x)) => RuntimeValue::U64(*x),
+            (C::U128, Value::U128(x)) => RuntimeValue::U128(**x),
+            (C::U256, Value::U256(x)) => RuntimeValue::U256(**x),
+            (C::Bool, Value::Bool(x)) => RuntimeValue::Bool(*x),
+            (C::Address, Value::Address(x)) => RuntimeValue::Address(**x),
+
+            (C::Enum(e), Value::Variant(entry)) => {
                 let (tag, values) = entry.as_ref();
-                let tag = *tag; // Simply copy the u16 value, no need for dereferencing
-                let field_layouts = variants.safe_get(tag as usize)?;
+                let tag = *tag;
+                let variant_fields = e.variants.get(tag as usize).ok_or_else(|| {
+                    partial_vm_error!(UNREACHABLE, "variant tag {tag} out of bounds")
+                })?;
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(field_layouts) {
-                    fields.push(v.try_borrow()?.as_move_value(field_layout)?);
+                for (v, &field_idx) in values.iter().zip(variant_fields.iter()) {
+                    fields.push(v.try_borrow()?.as_move_value(view.view_at(field_idx))?);
                 }
                 RuntimeValue::Variant(RuntimeVariant { tag, fields })
             }
 
-            // Struct case with direct access to Box
-            (L::Struct(struct_layout), Value::Struct(values)) => {
+            (C::Struct(s), Value::Struct(values)) => {
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(struct_layout.fields().iter()) {
-                    fields.push(v.try_borrow()?.as_move_value(field_layout)?);
+                for (v, &field_idx) in values.iter().zip(s.fields.iter()) {
+                    fields.push(v.try_borrow()?.as_move_value(view.view_at(field_idx))?);
                 }
                 RuntimeValue::Struct(RuntimeStruct::new(fields))
             }
 
-            // Vector case with handling different container types
-            (L::Vector(inner_layout), Value::Vec(values)) => RuntimeValue::Vector(
-                values
-                    .iter()
-                    .map(|v| v.try_borrow()?.as_move_value(inner_layout.as_ref()))
-                    .collect::<PartialVMResult<_>>()?,
-            ),
-            (L::Vector(inner_layout), Value::PrimVec(values)) => {
+            (C::Vector(inner_idx), Value::Vec(values)) => {
+                let elem_view = view.view_at(*inner_idx);
+                RuntimeValue::Vector(
+                    values
+                        .iter()
+                        .map(|v| v.try_borrow()?.as_move_value(elem_view))
+                        .collect::<PartialVMResult<_>>()?,
+                )
+            }
+            (C::Vector(inner_idx), Value::PrimVec(values)) => {
                 use RuntimeValue as MV;
+                let inner_node = view.view_at(*inner_idx).current().map_err(|e| {
+                    partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "{e}")
+                })?;
                 macro_rules! make_vec {
                     ($xs:expr, $ctor:ident) => {
                         MV::Vector($xs.iter().map(|x| MV::$ctor(*x)).collect())
                     };
                 }
-                match (inner_layout.as_ref(), values) {
-                    (L::U8, PV::VecU8(xs)) => make_vec!(xs, U8),
-                    (L::U16, PV::VecU16(xs)) => make_vec!(xs, U16),
-                    (L::U32, PV::VecU32(xs)) => make_vec!(xs, U32),
-                    (L::U64, PV::VecU64(xs)) => make_vec!(xs, U64),
-                    (L::U128, PV::VecU128(xs)) => make_vec!(xs, U128),
-                    (L::U256, PV::VecU256(xs)) => make_vec!(xs, U256),
-                    (L::Bool, PV::VecBool(xs)) => make_vec!(xs, Bool),
-                    (L::Address, PV::VecAddress(xs)) => make_vec!(xs, Address),
+                match (inner_node, values) {
+                    (C::U8, PV::VecU8(xs)) => make_vec!(xs, U8),
+                    (C::U16, PV::VecU16(xs)) => make_vec!(xs, U16),
+                    (C::U32, PV::VecU32(xs)) => make_vec!(xs, U32),
+                    (C::U64, PV::VecU64(xs)) => make_vec!(xs, U64),
+                    (C::U128, PV::VecU128(xs)) => make_vec!(xs, U128),
+                    (C::U256, PV::VecU256(xs)) => make_vec!(xs, U256),
+                    (C::Bool, PV::VecBool(xs)) => make_vec!(xs, Bool),
+                    (C::Address, PV::VecAddress(xs)) => make_vec!(xs, Address),
                     (
-                        ty @ (L::Bool
-                        | L::U8
-                        | L::U64
-                        | L::U128
-                        | L::Address
-                        | L::U16
-                        | L::U32
-                        | L::U256),
+                        ty @ (C::Bool
+                        | C::U8
+                        | C::U64
+                        | C::U128
+                        | C::Address
+                        | C::U16
+                        | C::U32
+                        | C::U256),
                         vec,
                     ) => {
                         return Err(partial_vm_error!(
@@ -3708,18 +3731,17 @@ impl Value {
                             vec
                         ));
                     }
-                    (L::Signer | L::Vector(_) | L::Struct(_) | L::Enum(_), _) => {
+                    (C::Signer | C::Vector(_) | C::Struct(_) | C::Enum(_), _) => {
                         return Err(partial_vm_error!(
                             UNREACHABLE,
                             "Expected a primitive type for the primitive vector, got {:?}",
-                            inner_layout.as_ref()
+                            inner_node
                         ));
                     }
                 }
             }
 
-            // Signer case: just dereferencing the box and checking for address
-            (L::Signer, Value::Struct(values)) => {
+            (C::Signer, Value::Struct(values)) => {
                 if values.len() != 1 {
                     return Err(partial_vm_error!(
                         UNREACHABLE,
@@ -3739,12 +3761,12 @@ impl Value {
                 }
             }
 
-            (layout, val) => {
+            (atom, val) => {
                 return Err(partial_vm_error!(
                     UNREACHABLE,
                     "Cannot convert value {:?} as {:?}",
                     val,
-                    layout
+                    atom
                 ));
             }
         })
@@ -3752,150 +3774,159 @@ impl Value {
 }
 
 use move_core_types::annotated_value::{
-    MoveEnumLayout as AnnEnumLayout, MoveStruct as AnnStruct, MoveTypeLayout as AnnTypeLayout,
-    MoveValue as AnnValue, MoveVariant as AnnVariant,
+    MoveStruct as AnnStruct, MoveValue as AnnValue, MoveVariant as AnnVariant,
+    compressed_layouts as AC,
 };
 
 impl Value {
-    /// Converts the value to an annotated move value. This is only needed for tracing and care
-    /// should be taken when using this function as it can possibly inflate the size of the value.
-    pub fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
-        use AnnTypeLayout as L;
-        use AnnValue as AV;
-        match (layout, self) {
-            (L::U8, Value::U8(x)) => Some(AnnValue::U8(*x)),
-            (L::U16, Value::U16(x)) => Some(AnnValue::U16(*x)),
-            (L::U32, Value::U32(x)) => Some(AnnValue::U32(*x)),
-            (L::U64, Value::U64(x)) => Some(AnnValue::U64(*x)),
-            (L::U128, Value::U128(x)) => Some(AnnValue::U128(**x)),
-            (L::U256, Value::U256(x)) => Some(AnnValue::U256(**x)),
-            (L::Bool, Value::Bool(x)) => Some(AnnValue::Bool(*x)),
-            (L::Address, Value::Address(x)) => Some(AnnValue::Address(**x)),
-            (L::Enum(e_layout), Value::Variant(var_box)) => {
-                let AnnEnumLayout { type_, variants } = e_layout.as_ref();
+    pub fn as_annotated_move_value(
+        &self,
+        view: AC::MoveTypeLayoutView<'_>,
+    ) -> Option<AnnValue> {
+        use AC::MoveTypeNode as ACN;
+
+        let node = view.current().ok()?;
+
+        match (node, self) {
+            (ACN::U8, Value::U8(x)) => Some(AnnValue::U8(*x)),
+            (ACN::U16, Value::U16(x)) => Some(AnnValue::U16(*x)),
+            (ACN::U32, Value::U32(x)) => Some(AnnValue::U32(*x)),
+            (ACN::U64, Value::U64(x)) => Some(AnnValue::U64(*x)),
+            (ACN::U128, Value::U128(x)) => Some(AnnValue::U128(**x)),
+            (ACN::U256, Value::U256(x)) => Some(AnnValue::U256(**x)),
+            (ACN::Bool, Value::Bool(x)) => Some(AnnValue::Bool(*x)),
+            (ACN::Address, Value::Address(x)) => Some(AnnValue::Address(**x)),
+
+            (ACN::Enum(e), Value::Variant(var_box)) => {
+                let type_ = view.resolve_tag(e.type_).ok()?.clone();
                 let (tag, values) = var_box.as_ref();
                 let tag = *tag;
-                let ((name, _), field_layouts) = variants.iter().find(|((_, t), _)| *t == tag)?;
+                let (name_idx, _, variant_fields) =
+                    e.variants.iter().find(|(_, t, _)| *t == tag)?;
+                let variant_name = view.resolve_string(*name_idx).ok()?.clone();
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(field_layouts) {
-                    fields.push((
-                        field_layout.name.clone(),
-                        v.borrow().as_annotated_move_value(&field_layout.layout)?,
-                    ));
+                for (v, (fn_idx, l_idx)) in values.iter().zip(variant_fields.iter()) {
+                    let field_name = view.resolve_string(*fn_idx).ok()?.clone();
+                    let field_val = v.borrow().as_annotated_move_value(view.view_at(*l_idx))?;
+                    fields.push((field_name, field_val));
                 }
-                Some(AV::Variant(AnnVariant {
+                Some(AnnValue::Variant(AnnVariant {
                     tag,
                     fields,
-                    type_: type_.clone(),
-                    variant_name: name.clone(),
+                    type_,
+                    variant_name,
                 }))
             }
-            (L::Struct(struct_layout), Value::Struct(values)) => {
+
+            (ACN::Struct(s), Value::Struct(values)) => {
+                let type_ = view.resolve_tag(s.type_).ok()?.clone();
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(struct_layout.fields.iter()) {
-                    fields.push((
-                        field_layout.name.clone(),
-                        v.borrow().as_annotated_move_value(&field_layout.layout)?,
-                    ));
+                for (v, (name_idx, layout_idx)) in values.iter().zip(s.fields.iter()) {
+                    let field_name = view.resolve_string(*name_idx).ok()?.clone();
+                    let field_val = v.borrow().as_annotated_move_value(view.view_at(*layout_idx))?;
+                    fields.push((field_name, field_val));
                 }
-                Some(AV::Struct(AnnStruct::new(
-                    struct_layout.type_.clone(),
-                    fields,
-                )))
+                Some(AnnValue::Struct(AnnStruct::new(type_, fields)))
             }
-            (L::Vector(inner_layout), Value::Vec(vec)) => {
+
+            (ACN::Vector(inner_idx), Value::Vec(vec)) => {
+                let elem_view = view.view_at(*inner_idx);
                 let result: Option<Vec<_>> = vec
                     .iter()
-                    .map(|mb| mb.borrow().as_annotated_move_value(inner_layout))
+                    .map(|mb| mb.borrow().as_annotated_move_value(elem_view))
                     .collect();
-                Some(AV::Vector(result?))
+                Some(AnnValue::Vector(result?))
             }
-            (L::Vector(inner_layout), Value::PrimVec(values)) => {
+            (ACN::Vector(inner_idx), Value::PrimVec(values)) => {
+                let inner_node = view.view_at(*inner_idx).current().ok()?;
                 macro_rules! make_vec {
                     ($xs:expr, $ctor:ident) => {
-                        Some(AV::Vector($xs.iter().map(|x| AV::$ctor(*x)).collect()))
+                        Some(AnnValue::Vector(
+                            $xs.iter().map(|x| AnnValue::$ctor(*x)).collect(),
+                        ))
                     };
                 }
-                match (inner_layout.as_ref(), values) {
-                    (L::U8, PrimVec::VecU8(xs)) => make_vec!(xs, U8),
-                    (L::U16, PrimVec::VecU16(xs)) => make_vec!(xs, U16),
-                    (L::U32, PrimVec::VecU32(xs)) => make_vec!(xs, U32),
-                    (L::U64, PrimVec::VecU64(xs)) => make_vec!(xs, U64),
-                    (L::U128, PrimVec::VecU128(xs)) => make_vec!(xs, U128),
-                    (L::U256, PrimVec::VecU256(xs)) => make_vec!(xs, U256),
-                    (L::Bool, PrimVec::VecBool(xs)) => make_vec!(xs, Bool),
-                    (L::Address, PrimVec::VecAddress(xs)) => make_vec!(xs, Address),
+                match (inner_node, values) {
+                    (ACN::U8, PrimVec::VecU8(xs)) => make_vec!(xs, U8),
+                    (ACN::U16, PrimVec::VecU16(xs)) => make_vec!(xs, U16),
+                    (ACN::U32, PrimVec::VecU32(xs)) => make_vec!(xs, U32),
+                    (ACN::U64, PrimVec::VecU64(xs)) => make_vec!(xs, U64),
+                    (ACN::U128, PrimVec::VecU128(xs)) => make_vec!(xs, U128),
+                    (ACN::U256, PrimVec::VecU256(xs)) => make_vec!(xs, U256),
+                    (ACN::Bool, PrimVec::VecBool(xs)) => make_vec!(xs, Bool),
+                    (ACN::Address, PrimVec::VecAddress(xs)) => make_vec!(xs, Address),
                     (_, _) => None,
                 }
             }
-            (L::Signer, Value::Struct(values)) => {
+
+            (ACN::Signer, Value::Struct(values)) => {
                 if values.len() != 1 {
                     return None;
                 }
                 match &*values.safe_get(0).ok()?.borrow() {
-                    Value::Address(a) => Some(AV::Signer(**a)),
+                    Value::Address(a) => Some(AnnValue::Signer(**a)),
                     _ => None,
                 }
             }
-            (layout, Value::Reference(ref_)) => ref_.as_annotated_move_value(layout),
+            (_, Value::Reference(ref_)) => ref_.as_annotated_move_value(view),
             (_, _) => None,
         }
     }
 }
 
 impl Reference {
-    pub fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
-        use AnnValue as AV;
-        use move_core_types::annotated_value::MoveTypeLayout as L;
+    pub fn as_annotated_move_value(
+        &self,
+        view: AC::MoveTypeLayoutView<'_>,
+    ) -> Option<AnnValue> {
         match self {
-            // If the reference is a direct reference, delegate to the inner Value.
-            Reference::Value(mem_box) => mem_box.borrow().as_annotated_move_value(layout),
-            // If it is an indexed reference, we need to extract the element.
+            Reference::Value(mem_box) => {
+                mem_box.borrow().as_annotated_move_value(view)
+            }
             Reference::Indexed(entry) => {
                 let (container, ndx) = &**entry;
                 match &*container.borrow() {
-                    // For a vector container, expect a Value::Vec.
                     Value::Vec(vec) => {
-                        // Get the element at the index and recursively convert.
                         let field = vec.get(*ndx)?;
-                        field.borrow().as_annotated_move_value(layout)
+                        field.borrow().as_annotated_move_value(view)
                     }
-                    // For a primitive vector container, expect Value::PrimVec.
                     Value::PrimVec(prim_vec) => {
-                        // We require that the layout is for a vector; then we inspect
-                        // the inner layout and the PrimVec variant.
-                        match layout {
-                            L::Vector(inner_layout) => match (inner_layout.as_ref(), prim_vec) {
-                                (L::U8, PrimVec::VecU8(xs)) => {
-                                    Some(AV::Vector(xs.iter().map(|u| AV::U8(*u)).collect()))
-                                }
-                                (L::U16, PrimVec::VecU16(xs)) => {
-                                    Some(AV::Vector(xs.iter().map(|u| AV::U16(*u)).collect()))
-                                }
-                                (L::U32, PrimVec::VecU32(xs)) => {
-                                    Some(AV::Vector(xs.iter().map(|u| AV::U32(*u)).collect()))
-                                }
-                                (L::U64, PrimVec::VecU64(xs)) => {
-                                    Some(AV::Vector(xs.iter().map(|u| AV::U64(*u)).collect()))
-                                }
-                                (L::U128, PrimVec::VecU128(xs)) => {
-                                    Some(AV::Vector(xs.iter().map(|u| AV::U128(*u)).collect()))
-                                }
-                                (L::U256, PrimVec::VecU256(xs)) => {
-                                    Some(AV::Vector(xs.iter().map(|u| AV::U256(*u)).collect()))
-                                }
-                                (L::Bool, PrimVec::VecBool(xs)) => {
-                                    Some(AV::Vector(xs.iter().map(|b| AV::Bool(*b)).collect()))
-                                }
-                                (L::Address, PrimVec::VecAddress(xs)) => {
-                                    Some(AV::Vector(xs.iter().map(|a| AV::Address(*a)).collect()))
-                                }
-                                (_ty, _vec) => None,
-                            },
-                            _ => None,
+                        use AC::MoveTypeNode as ACN;
+                        let inner_idx = match view.current().ok()? {
+                            ACN::Vector(idx) => *idx,
+                            _ => return None,
+                        };
+                        let inner_node = view.view_at(inner_idx).current().ok()?;
+                        match (inner_node, prim_vec) {
+                            (ACN::U8, PrimVec::VecU8(xs)) => Some(AnnValue::Vector(
+                                xs.iter().map(|u| AnnValue::U8(*u)).collect(),
+                            )),
+                            (ACN::U16, PrimVec::VecU16(xs)) => Some(AnnValue::Vector(
+                                xs.iter().map(|u| AnnValue::U16(*u)).collect(),
+                            )),
+                            (ACN::U32, PrimVec::VecU32(xs)) => Some(AnnValue::Vector(
+                                xs.iter().map(|u| AnnValue::U32(*u)).collect(),
+                            )),
+                            (ACN::U64, PrimVec::VecU64(xs)) => Some(AnnValue::Vector(
+                                xs.iter().map(|u| AnnValue::U64(*u)).collect(),
+                            )),
+                            (ACN::U128, PrimVec::VecU128(xs)) => Some(AnnValue::Vector(
+                                xs.iter().map(|u| AnnValue::U128(*u)).collect(),
+                            )),
+                            (ACN::U256, PrimVec::VecU256(xs)) => Some(AnnValue::Vector(
+                                xs.iter().map(|u| AnnValue::U256(*u)).collect(),
+                            )),
+                            (ACN::Bool, PrimVec::VecBool(xs)) => Some(AnnValue::Vector(
+                                xs.iter().map(|b| AnnValue::Bool(*b)).collect(),
+                            )),
+                            (ACN::Address, PrimVec::VecAddress(xs)) => {
+                                Some(AnnValue::Vector(
+                                    xs.iter().map(|a| AnnValue::Address(*a)).collect(),
+                                ))
+                            }
+                            (_, _) => None,
                         }
                     }
-                    // Otherwise, the container is not a supported vector-like type.
                     _ => None,
                 }
             }

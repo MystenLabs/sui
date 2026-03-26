@@ -1116,6 +1116,8 @@ impl VMTracer<'_> {
                     B::LdFalse => AnnotatedTypeLayout::Bool,
                     B::LdConst(const_ptr) => vtables
                         .arena_type_to_fully_annotated_layout(&const_ptr.type_)
+                        .ok()?
+                        .inflate()
                         .ok()?,
                     _ => unreachable!(),
                 };
@@ -1227,7 +1229,7 @@ impl VMTracer<'_> {
                 let struct_type = struct_ptr.datatype();
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count);
-                let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?;
+                let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?.inflate().ok()?;
                 let a_layout = StackType {
                     layout: ty,
                     ref_type: None,
@@ -1248,7 +1250,7 @@ impl VMTracer<'_> {
                 .ok()?;
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count);
-                let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?;
+                let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?.inflate().ok()?;
                 let a_layout = StackType {
                     layout: ty,
                     ref_type: None,
@@ -1455,7 +1457,7 @@ impl VMTracer<'_> {
             B::VecPack(ty_ptr, n) => {
                 let ty = instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
                     .ok()?;
-                let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
+                let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?.inflate().ok()?;
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - *n as usize);
@@ -1588,6 +1590,8 @@ impl VMTracer<'_> {
                 let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables
                     .type_to_fully_annotated_layout(&variant_inst_ptr.enum_def.datatype())
+                    .ok()?
+                    .inflate()
                     .ok()?;
                 let a_layout = StackType {
                     layout: ty,
@@ -1611,6 +1615,8 @@ impl VMTracer<'_> {
                         )
                         .ok()?,
                     )
+                    .ok()?
+                    .inflate()
                     .ok()?;
                 let a_layout = StackType {
                     layout: ty,
@@ -1858,7 +1864,10 @@ impl FunctionTypeInfo {
             let tag = vtables.type_to_type_tag(&ty).ok()?;
             // NB: This may fail if the type represents a value greater than the max
             // value depth.
-            let type_layout = vtables.type_to_fully_annotated_layout(&ty).ok();
+            let type_layout = vtables
+                .type_to_fully_annotated_layout(&ty)
+                .ok()
+                .and_then(|c| c.inflate().ok());
             let layout = (type_layout, ref_type);
             Some(TagWithLayoutInfoOpt { tag, layout })
         };
@@ -1897,7 +1906,9 @@ fn into_annotated_move_value(
     value: &RuntimeValue,
     type_: &AnnotatedTypeLayout,
 ) -> Option<SerializableMoveValue> {
-    Some(value.as_annotated_move_value(type_)?.into())
+    use move_core_types::annotated_value::compressed_layouts::MoveTypeLayout;
+    let compressed = MoveTypeLayout::from(type_);
+    Some(value.as_annotated_move_value(compressed.as_view())?.into())
 }
 
 fn get_version_id(
