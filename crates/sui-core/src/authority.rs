@@ -1916,13 +1916,19 @@ impl AuthorityState {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
-            self.chain_identifier,
-            &*self.coin_reservation_resolver,
-            sender,
-            &mut kind,
-            accumulator_version,
-        );
+        // Skip rewriting if execution_params already indicates an error - the transaction will fail
+        // anyway, and trying to rewrite could fail if the accumulator was deleted.
+        let rewritten_inputs = if execution_params.is_ok() {
+            rewrite_transaction_for_coin_reservations(
+                self.chain_identifier,
+                &*self.coin_reservation_resolver,
+                sender,
+                &mut kind,
+                accumulator_version,
+            )
+        } else {
+            None
+        };
 
         let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
             // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
