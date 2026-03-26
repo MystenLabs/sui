@@ -29,11 +29,14 @@ pub const INVALID_BATCH_SIZE: u64 = 4;
 /// Upper bound for batch size * range in bits
 pub const MAX_TOTAL_BITS: u64 = 256;
 
+/// Proofs with MAX_TOTAL_BITS = 256 will be exactly 800 bytes.
+const MAX_PROOF_SIZE: usize = 800;
+
 #[derive(Clone)]
 pub struct BulletproofsCostParams {
     pub verify_bulletproofs_ristretto255_base_cost: Option<InternalGas>,
     // The performance depends on the number of values/commitments * bits in range
-    pub verify_bulletproofs_ristretto255_cost_per_bit: Option<InternalGas>,
+    pub verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: Option<InternalGas>,
 }
 
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
@@ -75,7 +78,12 @@ pub fn verify_bulletproofs_ristretto255(
     let range_bits = pop_arg!(args, u8);
     let proof = pop_arg!(args, VectorRef);
 
-    let Ok(proof) = bcs::from_bytes::<RangeProof>(&proof.as_bytes_ref()?) else {
+    let proof_bytes = proof.as_bytes_ref()?;
+    if proof_bytes.len() > MAX_PROOF_SIZE {
+        return Ok(NativeResult::err(context.gas_used(), INVALID_PROOF));
+    }
+
+    let Ok(proof) = bcs::from_bytes::<RangeProof>(&proof_bytes) else {
         return Ok(NativeResult::err(context.gas_used(), INVALID_PROOF));
     };
 
@@ -87,7 +95,7 @@ pub fn verify_bulletproofs_ristretto255(
         .len(&Type::Vector(Box::new(Type::U8)))?
         .value_as::<u64>()?;
 
-    // The performance is linear in the product of length and range bits, so it is computed as base_cost + cost_per_bit * length * range_bits. 
+    // The performance is linear in the product of length and range bits, so it is computed as base_cost + cost_per_bit * length * range_bits.
     let total_bits = length * range_bits as u64;
     if length == 0 || !length.is_power_of_two() || total_bits > MAX_TOTAL_BITS {
         return Ok(NativeResult::err(context.gas_used(), INVALID_BATCH_SIZE));
@@ -97,10 +105,11 @@ pub fn verify_bulletproofs_ristretto255(
     native_charge_gas_early_exit!(
         context,
         cost_parameters
-            .verify_bulletproofs_ristretto255_cost_per_bit
+            .verify_bulletproofs_ristretto255_cost_per_bit_and_commitment
             .ok_or_else(
                 || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "verify_bulletproofs_ristretto255_cost_per_bit not available".to_string()
+                    "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment not available"
+                        .to_string()
                 )
             )?
             * total_bits.into()

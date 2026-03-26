@@ -4,14 +4,17 @@
 #[allow(implicit_const_copy), test_only]
 module sui::bulletproofs_tests;
 
+use std::unit_test::assert_eq;
+use sui::rangeproofs::verify_bulletproofs_ristretto255;
 use sui::ristretto255;
-use sui::rangeproofs::{verify_bulletproofs_ristretto255};
 
 #[test]
 fun test_bulletproof() {
     let proof =
         x"e004080e1a0bed6c9174c003049145d0df6b6533dbab16ae218db89222d0b1033b0786f079ccc8974249573b2ceefaeff9a1cd130e0b25a4308ee641d0b4f45f9072361ad791b306d9d296b2a5f8b95f206f5ab49e58ccdf0206a02a914e101e493ca22de764cee46835d461c356ff48f607587d3438bb42aadd4872634289843a2ee97e8e4815ffb4b8cb2e78bb3b76e61d4e0a8da3b42009de2e0256443e6be80751faf9d1736ed5c3bddcaebd53744bfef4177dff91c443570609dcb834616608589420673c7f768f42d180bc0f9c5eecab4a441b779d271e1e292b78194c6109e21a300f73242e2c0b5ab19174e3765ec10d69f81fb0a643c954b40ecf6ee03a60d9c98008fb8adbdeec0228bb632af4bd508504dc44c4881bd88e6870dcab49f81ebb78076ee7e47d569a2af010d0c4efd732dd99157dcb5923799b81e80f4d808c3aa9a1a088205294fdd9ff9b9153c043ff8e61848197223c29d1cdc32201ee84b3071ed05068663b9cf792d53e543b5a491b1377e72aa4d8a9757d374b71465d07a5eee2432df1f84feb97fd323edea99029e605b7a1ea22916b5178325210d9fe44ed5d0e340b64dafc757cce5391dbd09088cac5dfbe1a47570bb3706ac27e4a54894982a63c19bac74e8ddb47af72cc00f1e892a825ec9ecb3c4fc7573ed195072588fd9e5b7acf54f396c8d8d71c4b6017dc5aa87429cc5a76684a28d226cdcbb0b5a028aa7fe93c397706a3073eaeeba14ff7f05cb382a5eaebeb0e24d2be4c9e041a7a5ecdf4e89d3aff932331e3935c4109e9c417245a6f9dc802228504c12cd35376e3926bcf934373fa842fbb8878f2346660ac4d1d730ad60b";
-    let commitment = ristretto255::g_from_bytes(&x"c0db4e831a8ace10f609effd24663a5d8fd4accbf774b5384702ebcb05a1b457");
+    let commitment = ristretto255::g_from_bytes(
+        &x"c0db4e831a8ace10f609effd24663a5d8fd4accbf774b5384702ebcb05a1b457",
+    );
     assert!(verify_bulletproofs_ristretto255(&proof, 32, &vector[commitment], 0));
     assert!(!verify_bulletproofs_ristretto255(&proof, 16, &vector[commitment], 0));
 }
@@ -21,10 +24,18 @@ fun test_batch_bulletproofs() {
     let proof =
         x"e005fcd7e25c1d88f6cf3b3e9b75279a970df9bb649b748b1177fb77a6126d73dc5668c2a874889e256cb1249fa0a07f1b9b436c58f7db05656fed693023fc1afa38443db5a98efda32af35c6bfa5e0d8887f61f08fa2a8fd1d79b1f125ecda6ee3b4043406b3ccd6a601ed1a829bdea880136123c89346bdefd4ad8167468e58b660ba9e844b91cc18c14b811941089a2e6177bb656b0acc666c11af53b7dd6a805a465217ba0fdc8682c31a2a9f000d6ff060015b099841e68f536860f10aba90c0e955802966f3e1ab9ed48da8220ad026a2b798eddf18bab9570c6da37eb070ee0cd6c810d09dedfb2d210eddce3e1d1f1e3f29a8c3a4640525a4b54c3d9ff438215fc8435a871f952569e749248b93e9b18d153ab61af696321bda67b4a5b05a89991b8fae55ac82bc1389526cd07333bae62c5500777989e6c127f25038769f8eb76d18305cefb390bb8c68e58b6901712de797c562e8b5bbdca2e5e70d3460a0a1f7f1458d798da4b9c08715dfa2355cf5d9f92aab3902073c7875dd3294e760a5d04bd6f622fd3b413e8742d68f4da643dcd1c99ffc8ba1bcedddb6d752af03ab0c226873c632ee8828547aa181de34d3b4c9fb07abc5720287769fcc35042a19fa8fcb952b8b6e39a58f994470f69e8496982e438d8aebd903550624c741c47e78c1fa8bdfa86a29a927a9ec1dbd7d69a902376506930af179035d2186e84308d334639d489ceb31f14874826bd0ffa9acf44620767a07451f4676b4e75eeb4a12eafd472209596ac565b9579d0fc0ff187a1ecd194c5ae52a40f17fa256821eab0a9de00261301473bd05ce116261c865d3261b22ec95ed53abe3d04096cc443d6c5dbb39b6943721039ae9e0b650cf6af7a1a29abea20154755171370d65b67cb05949b7b83a323d2ec0259a7cc9b5a6ceb94e74337cb263998b6bd12842a7dd6cb9e588b6ff06fc2ff723065675289793b7fa442e6c242086f18fb00bfcb03e789c5e6bcfc2caa8eb7fc65a3a662dab052b120dc8d90b0248522db0f";
     let commitments = vector[
-        ristretto255::g_from_bytes(&x"820530f458329b523704da05f818af1e195a0913ba665033e6d44579cf5d4470"),
-        ristretto255::g_from_bytes(&x"160505c821faf9bfd6f5dd7ea890e77f3df6ba7cb34279089ba602b3b1e3915e"),
-        ristretto255::g_from_bytes(&x"72e436a389f3c70437d61490bac4e83300bcf177e84f5a1ab0d7f0a2ac5b097b"),
-        ristretto255::g_from_bytes(&x"8ab1b5bb8a5251e03aa143b0f8da4dbb1425b7eea96c99a8293500b9a990e016"),
+        ristretto255::g_from_bytes(
+            &x"820530f458329b523704da05f818af1e195a0913ba665033e6d44579cf5d4470",
+        ),
+        ristretto255::g_from_bytes(
+            &x"160505c821faf9bfd6f5dd7ea890e77f3df6ba7cb34279089ba602b3b1e3915e",
+        ),
+        ristretto255::g_from_bytes(
+            &x"72e436a389f3c70437d61490bac4e83300bcf177e84f5a1ab0d7f0a2ac5b097b",
+        ),
+        ristretto255::g_from_bytes(
+            &x"8ab1b5bb8a5251e03aa143b0f8da4dbb1425b7eea96c99a8293500b9a990e016",
+        ),
     ];
     assert!(verify_bulletproofs_ristretto255(&proof, 32, &commitments, 0));
 }
@@ -33,7 +44,9 @@ fun test_batch_bulletproofs() {
 fun test_invalid_bulletproof() {
     let proof =
         x"e0048a98b0f1545cab04cfb43b995a7079a35ae4a472bb2fac4d679311ab7f104531a4107479a775f79155b3b814ad7b65c34deca847e8ef9339b97d61fb83ea4c5978e1e4dab81dc027a405699617fe938d718ebfbe165ac7cf6fb10029bd07d73e5c232000f7242fdec95e66f5b80eefa1a79d18d0d8f1c50c63b5529f41fb4311f94a701a7ce42a47772e21aa7cb01a269fa4db6195f93bbde35fd35f36270b095f3b3834ccef5d833ec94e8b66598436bf9a751970cfb3ecf7738a69bd1971049d97cdf9fcf1e9a29e5028008986b7d251196fb0f8c63316903a54b1ee4b6107a62a9af25bd4d5ba55866abb132d6056e36e3c8adb508245692cd2c5a4f797187a4de2a28d2e86cf3da9ec1fa6f224564c94e471829fbc4b60cf02953cfce36f48cbdec4e1310dd30994361b71ebc8ca2ad80eb2dab0e5da6be0088d30a584071ceb34b2eaa8b2e5a026e19114f02b7c48a826584208be3c5f50828c8753877d9496195a266a412f4104fa510b9f12e4ceb9e0786a201b4eeefcfad962b3f423ce632e46ca20033990fc8ac484cd8cde10dbdd639c16c3259060ceb46aa2f463c82cac924a37e1915725381fb2aa3cfe00652a71707eb20da99f7aa9fdb40e58ee93d11ccb71b30b8573a1498c3cf776a08945413ee19e7697b6c53191594c40649fa20880fed18145e64ab58726420737708e3136e17907d1b32f48258a5509608c49827c3bc14f2458148ad3d9b87352af617f4fd168be1547d4914069d04dedcfbce83908b249d30dcbf4da212861171ccaa94cf4262b8628f073de9d63080e0598cfb37f824f4111b68fe625b56362a951c62fd02839ca3437a002f2110d";
-    let commitment = ristretto255::g_from_bytes(&x"c026d2b1790b3391f991ad4a2ad62e3ae5db6da3eeb2280aa83bd6018fe3967b");
+    let commitment = ristretto255::g_from_bytes(
+        &x"c026d2b1790b3391f991ad4a2ad62e3ae5db6da3eeb2280aa83bd6018fe3967b",
+    );
     assert!(!verify_bulletproofs_ristretto255(&proof, 32, &vector[commitment], 0));
 }
 
@@ -42,10 +55,18 @@ fun test_invalid_batch_bulletproof() {
     let proof =
         x"e0048a98b0f1545cab04cfb43b995a7079a35ae4a472bb2fac4d679311ab7f104531a4107479a775f79155b3b814ad7b65c34deca847e8ef9339b97d61fb83ea4c5978e1e4dab81dc027a405699617fe938d718ebfbe165ac7cf6fb10029bd07d73e5c232000f7242fdec95e66f5b80eefa1a79d18d0d8f1c50c63b5529f41fb4311f94a701a7ce42a47772e21aa7cb01a269fa4db6195f93bbde35fd35f36270b095f3b3834ccef5d833ec94e8b66598436bf9a751970cfb3ecf7738a69bd1971049d97cdf9fcf1e9a29e5028008986b7d251196fb0f8c63316903a54b1ee4b6107a62a9af25bd4d5ba55866abb132d6056e36e3c8adb508245692cd2c5a4f797187a4de2a28d2e86cf3da9ec1fa6f224564c94e471829fbc4b60cf02953cfce36f48cbdec4e1310dd30994361b71ebc8ca2ad80eb2dab0e5da6be0088d30a584071ceb34b2eaa8b2e5a026e19114f02b7c48a826584208be3c5f50828c8753877d9496195a266a412f4104fa510b9f12e4ceb9e0786a201b4eeefcfad962b3f423ce632e46ca20033990fc8ac484cd8cde10dbdd639c16c3259060ceb46aa2f463c82cac924a37e1915725381fb2aa3cfe00652a71707eb20da99f7aa9fdb40e58ee93d11ccb71b30b8573a1498c3cf776a08945413ee19e7697b6c53191594c40649fa20880fed18145e64ab58726420737708e3136e17907d1b32f48258a5509608c49827c3bc14f2458148ad3d9b87352af617f4fd168be1547d4914069d04dedcfbce83908b249d30dcbf4da212861171ccaa94cf4262b8628f073de9d63080e0598cfb37f824f4111b68fe625b56362a951c62fd02839ca3437a002f2110d";
     let commitments = vector[
-        ristretto255::g_from_bytes(&x"709b9120cad09076c05b30dcaacb4541b284c04baaa74e4f6af9d29688ead950"),
-        ristretto255::g_from_bytes(&x"20053eda9db252068b610c0c87afa6c408c6732991f70fec08f12a74000ee97b"),
-        ristretto255::g_from_bytes(&x"649646803a3a12353a07adca0085d304e6d5558a84713914971595bce97f177e"),
-        ristretto255::g_from_bytes(&x"18d7ee6961ba0c98a2dbd9bba68c8acadb78c4dede3e5c506b6e12198fcdca11"),
+        ristretto255::g_from_bytes(
+            &x"709b9120cad09076c05b30dcaacb4541b284c04baaa74e4f6af9d29688ead950",
+        ),
+        ristretto255::g_from_bytes(
+            &x"20053eda9db252068b610c0c87afa6c408c6732991f70fec08f12a74000ee97b",
+        ),
+        ristretto255::g_from_bytes(
+            &x"649646803a3a12353a07adca0085d304e6d5558a84713914971595bce97f177e",
+        ),
+        ristretto255::g_from_bytes(
+            &x"18d7ee6961ba0c98a2dbd9bba68c8acadb78c4dede3e5c506b6e12198fcdca11",
+        ),
     ];
     assert!(!verify_bulletproofs_ristretto255(&proof, 16, &commitments, 0));
 }
@@ -55,7 +76,9 @@ fun test_invalid_batch_bulletproof() {
 fun test_bulletproof_wrong_length() {
     let proof =
         x"e0048a98b0f1545cab04cfb43b995a7079a35ae4a472bb2fac4d679311ab7f104531a4107479a775f79155b3b814ad7b65c34deca847e8ef9339b97d61fb83ea4c5978e1e4dab81dc027a405699617fe938d718ebfbe165ac7cf6fb10029bd07d73e5c232000f7242fdec95e66f5b80eefa1a79d18d0d8f1c50c63b5529f41fb4311f94a701a7ce42a47772e21aa7cb01a269fa4db6195f93bbde35fd35f36270b095f3b3834ccef5d833ec94e8b66598436bf9a751970cfb3ecf7738a69bd1971049d97cdf9fcf1e9a29e5028008986b7d251196fb0f8c63316903a54b1ee4b6107a62a9af25bd4d5ba55866abb132d6056e36e3c8adb508245692cd2c5a4f797187a4de2a28d2e86cf3da9ec1fa6f224564c94e471829fbc4b60cf02953cfce36f48cbdec4e1310dd30994361b71ebc8ca2ad80eb2dab0e5da6be0088d30a584071ceb34b2eaa8b2e5a026e19114f02b7c48a826584208be3c5f50828c8753877d9496195a266a412f4104fa510b9f12e4ceb9e0786a201b4eeefcfad962b3f423ce632e46ca20033990fc8ac484cd8cde10dbdd639c16c3259060ceb46aa2f463c82cac924a37e1915725381fb2aa3cfe00652a71707eb20da99f7aa9fdb40e58ee93d11ccb71b30b8573a1498c3cf776a08945413ee19e7697b6c53191594c40649fa20880fed18145e64ab58726420737708e3136e17907d1b32f48258a5509608c49827c3bc14f2458148ad3d9b87352af617f4fd168be1547d4914069d04dedcfbce83908b249d30dcbf4da212861171ccaa94cf4262b8628f073de9d63080e0598cfb37f824f4111b68fe625b56362a951c62fd02839ca3437a002f211";
-    let commitment = ristretto255::g_from_bytes(&x"c026d2b1790b3391f991ad4a2ad62e3ae5db6da3eeb2280aa83bd6018fe3967b");
+    let commitment = ristretto255::g_from_bytes(
+        &x"c026d2b1790b3391f991ad4a2ad62e3ae5db6da3eeb2280aa83bd6018fe3967b",
+    );
     verify_bulletproofs_ristretto255(&proof, 32, &vector[commitment], 0);
 }
 
@@ -64,7 +87,9 @@ fun test_bulletproof_wrong_length() {
 fun test_bulletproof_invalid_range() {
     let proof =
         x"e0048a98b0f1545cab04cfb43b995a7079a35ae4a472bb2fac4d679311ab7f104531a4107479a775f79155b3b814ad7b65c34deca847e8ef9339b97d61fb83ea4c5978e1e4dab81dc027a405699617fe938d718ebfbe165ac7cf6fb10029bd07d73e5c232000f7242fdec95e66f5b80eefa1a79d18d0d8f1c50c63b5529f41fb4311f94a701a7ce42a47772e21aa7cb01a269fa4db6195f93bbde35fd35f36270b095f3b3834ccef5d833ec94e8b66598436bf9a751970cfb3ecf7738a69bd1971049d97cdf9fcf1e9a29e5028008986b7d251196fb0f8c63316903a54b1ee4b6107a62a9af25bd4d5ba55866abb132d6056e36e3c8adb508245692cd2c5a4f797187a4de2a28d2e86cf3da9ec1fa6f224564c94e471829fbc4b60cf02953cfce36f48cbdec4e1310dd30994361b71ebc8ca2ad80eb2dab0e5da6be0088d30a584071ceb34b2eaa8b2e5a026e19114f02b7c48a826584208be3c5f50828c8753877d9496195a266a412f4104fa510b9f12e4ceb9e0786a201b4eeefcfad962b3f423ce632e46ca20033990fc8ac484cd8cde10dbdd639c16c3259060ceb46aa2f463c82cac924a37e1915725381fb2aa3cfe00652a71707eb20da99f7aa9fdb40e58ee93d11ccb71b30b8573a1498c3cf776a08945413ee19e7697b6c53191594c40649fa20880fed18145e64ab58726420737708e3136e17907d1b32f48258a5509608c49827c3bc14f2458148ad3d9b87352af617f4fd168be1547d4914069d04dedcfbce83908b249d30dcbf4da212861171ccaa94cf4262b8628f073de9d63080e0598cfb37f824f4111b68fe625b56362a951c62fd02839ca3437a002f2110c";
-    let commitment = ristretto255::g_from_bytes(&x"c026d2b1790b3391f991ad4a2ad62e3ae5db6da3eeb2280aa83bd6018fe3967b");
+    let commitment = ristretto255::g_from_bytes(
+        &x"c026d2b1790b3391f991ad4a2ad62e3ae5db6da3eeb2280aa83bd6018fe3967b",
+    );
     verify_bulletproofs_ristretto255(&proof, 42, &vector[commitment], 0);
 }
 
@@ -73,24 +98,150 @@ fun test_bulletproof_invalid_range() {
 fun test_bulletproofs_invalid_batch_size() {
     let proof =
         x"e0048a98b0f1545cab04cfb43b995a7079a35ae4a472bb2fac4d679311ab7f104531a4107479a775f79155b3b814ad7b65c34deca847e8ef9339b97d61fb83ea4c5978e1e4dab81dc027a405699617fe938d718ebfbe165ac7cf6fb10029bd07d73e5c232000f7242fdec95e66f5b80eefa1a79d18d0d8f1c50c63b5529f41fb4311f94a701a7ce42a47772e21aa7cb01a269fa4db6195f93bbde35fd35f36270b095f3b3834ccef5d833ec94e8b66598436bf9a751970cfb3ecf7738a69bd1971049d97cdf9fcf1e9a29e5028008986b7d251196fb0f8c63316903a54b1ee4b6107a62a9af25bd4d5ba55866abb132d6056e36e3c8adb508245692cd2c5a4f797187a4de2a28d2e86cf3da9ec1fa6f224564c94e471829fbc4b60cf02953cfce36f48cbdec4e1310dd30994361b71ebc8ca2ad80eb2dab0e5da6be0088d30a584071ceb34b2eaa8b2e5a026e19114f02b7c48a826584208be3c5f50828c8753877d9496195a266a412f4104fa510b9f12e4ceb9e0786a201b4eeefcfad962b3f423ce632e46ca20033990fc8ac484cd8cde10dbdd639c16c3259060ceb46aa2f463c82cac924a37e1915725381fb2aa3cfe00652a71707eb20da99f7aa9fdb40e58ee93d11ccb71b30b8573a1498c3cf776a08945413ee19e7697b6c53191594c40649fa20880fed18145e64ab58726420737708e3136e17907d1b32f48258a5509608c49827c3bc14f2458148ad3d9b87352af617f4fd168be1547d4914069d04dedcfbce83908b249d30dcbf4da212861171ccaa94cf4262b8628f073de9d63080e0598cfb37f824f4111b68fe625b56362a951c62fd02839ca3437a002f2110c";
-    let commitment = ristretto255::g_from_bytes(&x"c026d2b1790b3391f991ad4a2ad62e3ae5db6da3eeb2280aa83bd6018fe3967b");
+    let commitment = ristretto255::g_from_bytes(
+        &x"c026d2b1790b3391f991ad4a2ad62e3ae5db6da3eeb2280aa83bd6018fe3967b",
+    );
     verify_bulletproofs_ristretto255(&proof, 32, &vector[commitment, commitment, commitment], 0);
 }
 
 #[test]
-#[expected_failure(abort_code = sui::rangeproofs::EInvalidBatchSize)]
+#[expected_failure(abort_code = sui::rangeproofs::EInvalidProof)]
 fun test_bulletproofs_batch_too_large() {
     let proof =
         x"e00648585c70c15eea1514b03755d1bc8965ffaebe2d25e36e5109d8d559dfa52c0a301d02e50768d5280c3319baa1d45ad8765bcc69116c03f206bc924064128c601611ac2106c5027f0cee582ddc59fee4f24393f8592eab30eedd9b2cfae51a222414c87df8b3de60e941f9bc97704e5535bbece4aa30eefe7cae86b13516791af144dec2c11ee5fc7bd17bc9413091e7dacc3f0e5ca471a1f57761729808720f787cb1f7317eae6f0acac519c10068851f391d2a6e274526545d9a25a328cb0e4f7557b2cdeb6926489e26e0a945dedcd90115ced90d96fda13d158dda40d100f4a452025b2b942f114971c9166af11d0b1ef2f86a36a96883a42e349baaa41b044ccfe1d3cc8b651543bc1725a8aaffc499f322ea8d6ff6199a10d16471e9720c1db151aef25731383b1857d0550d7ebff1bdd76b09741b4c22504c4210bd3bd46bab60410b1706126986f2262d16227117b2d52ba059813f7088634f37406340724f8c151e03a4988d659bb9dd055e9732401066df6e49cf825d565efc4a308a8b1d04a9be60501a31ad862f33e360282d571f5a5f6612340241c6d69a465256a54f1b3282eae2a8d1e6a9b23c64d992f0f6f6a992f42667e53d05b90c764d96d0faaa9efa152deb6eb6b660ea0acd3eb4af39383e8151189a43cfc77e042734329afd86b5e147c9bb573f55c3ac84f20fe37603ba728b2a67e7f0d972bb04862b9004cb2b2d781123cb990673042e4ef5251657c23b6c3f4ffc8c71a6264d5c3bd45fe56852c7fba622dd244138888883a9155d97b4e43473cee9f498544ee8e372498ae21b99cc353e4c46338d28ed1c174a95c9bdc1d9c7a761a781b27dece99a8a15df550586cea118096d9b52578210ba704ca95ff9126fb63f08b1118662ece70f47b2c8d3c9f9aad047a5af8ed5adbcee37dfc6d34c3c4b1c0ca66c62c66a2d51a80200d816cf480a7982e2f02f63deeaffe1eba464b7f358488a27d69614fcda7f02b567cc6979d3aa6961e3b5fc4da973fe5f364fbf6fcdf0206600fb1528086e9df53a53a7c7de9a7a4b36d25b5212e7c9f99aee67ebe39c66565c00628f0bab88dcdce5bb0b6c5bbaac86b82d70618eee2b57ed1dcd9049a077eab41ec25ade8561c728ecb7ee23a47e38cd759e0a18fdfdcfb15097c1e91f051d2c84e2248f965c8e1f876a8dca0a02c0154b550eb22d17f06125bd8087af0c";
     let commitments = vector[
-        ristretto255::g_from_bytes(&x"6a2519cbab6f185baa766bce4952dcc0b0a5e1bba0ca388f937ec5c11ccd860e"),
-        ristretto255::g_from_bytes(&x"3008a1ec7686b84082e75e16073df523eb240265472f308e9121b5d39d71fe67"),
-        ristretto255::g_from_bytes(&x"ea60c33984983d62db2171200519ad11d3b8891091615e2c473a7b39c624836b"),
-        ristretto255::g_from_bytes(&x"528f723e17bc8e486b0d109be4b7a8676b43225ff74af9828ccd552d8e273644"),
-        ristretto255::g_from_bytes(&x"0e1f3a7baefe9d88fcb33a38de04381a4280c330c99c471ee9cb6fa45e8f0c6b"),
-        ristretto255::g_from_bytes(&x"66793848e68eeb58a84c3b466d3c8d48e5169f7f5f6b2341b1695c3f8aa3e566"),
-        ristretto255::g_from_bytes(&x"20fec47d0247ff8077196374dbc86df994fa102fe381558cac95fc692095c460"),
-        ristretto255::g_from_bytes(&x"ccb564a38a3e9b3bd71c6301fab23070548f598741e37143d01065d31bc6e43d"),
+        ristretto255::g_from_bytes(
+            &x"6a2519cbab6f185baa766bce4952dcc0b0a5e1bba0ca388f937ec5c11ccd860e",
+        ),
+        ristretto255::g_from_bytes(
+            &x"3008a1ec7686b84082e75e16073df523eb240265472f308e9121b5d39d71fe67",
+        ),
+        ristretto255::g_from_bytes(
+            &x"ea60c33984983d62db2171200519ad11d3b8891091615e2c473a7b39c624836b",
+        ),
+        ristretto255::g_from_bytes(
+            &x"528f723e17bc8e486b0d109be4b7a8676b43225ff74af9828ccd552d8e273644",
+        ),
+        ristretto255::g_from_bytes(
+            &x"0e1f3a7baefe9d88fcb33a38de04381a4280c330c99c471ee9cb6fa45e8f0c6b",
+        ),
+        ristretto255::g_from_bytes(
+            &x"66793848e68eeb58a84c3b466d3c8d48e5169f7f5f6b2341b1695c3f8aa3e566",
+        ),
+        ristretto255::g_from_bytes(
+            &x"20fec47d0247ff8077196374dbc86df994fa102fe381558cac95fc692095c460",
+        ),
+        ristretto255::g_from_bytes(
+            &x"ccb564a38a3e9b3bd71c6301fab23070548f598741e37143d01065d31bc6e43d",
+        ),
     ];
     verify_bulletproofs_ristretto255(&proof, 64, &commitments, 0);
+}
+
+// TODO: If fixed length vectors are ever supported, we should use that instead.
+#[test_only]
+fun peel_tuple_u8(bcs: &mut sui::bcs::BCS, length: u64): vector<u8> {
+    vector::tabulate!(length, |_| bcs.peel_u8())
+}
+
+#[test]
+fun test_proof_format() {
+    use sui::bcs::{Self, BCS};
+    use sui::ristretto255::{g_from_bytes, scalar_from_bytes};
+
+    // Test that the binary format of a range proof as serialized in fastcrypto can be parsed as ristretto255 group elements and scalars.
+    let bytes =
+        x"da209ce922d4bbac9a17e62b5ae12ed42194db632aba1262798a48a3ea2db97d1e919e1b20fc45f2c758ab6cea25b6f93c354824dd18f61121ee96bb4b4a7b229a05cb2d33dcfaa4c30180b752b344efdce93f8856b633a0b21ac7d0d46e322acab380edc560d643ed7634c4933f954368c7ea22ffae960983b2cf671ce5151e66026a759b52abb6ee07095723ea6de10204004d38d5e6032c945137fb67b5075ffadb760eb32002aef47ad8feba3ce38e398be91488839a39a0fc98c4ab030e2f240812884aa8e6b83bc3a1fb84037aca932b617bdb0bfdd845fcee0f61660b72063b252fa1b5222fb78a649d94eef6309caa16e5a909d9f4d93368ca39cd4386f48e12447bc21745ac4c4fe34a06770587a0bfa3337f9cb93dfd1ce7fea0024047aea41e4128c3a3bf1a3dad56dea5f122acf3c44d5cbb5a28e1b4842b7619b8d2e878e8f7b75635d9a65b93b154ab38d0b591bce6a229ab789bb2541411040859ff602eecdf43ed95090a15a42299b22ea0db90681f12e6a9517ae8baa8488c9314617290b73ef2c735c0aac5192a6c967132e00b9569ab48f159b7c6d7108475e475b29921f1df1b862e1d42313e15499d73d83b5cda112a70927e39996f7edddfa976cb7862e4a0a5e8d48f24b5359b70f663a7ce0ca8f8a5803e4674237cfe183008f57af8693abfebc486d6f631d4329e56cab4a0e4a43d6552ff22110eccafb882b0b651bc310494298e67eeb842f2bf4b1749ccb0bb980ef0f25664e3877d7211c5fcc7b3309707b3cd1c3e4a78cf9181e2d4b5b408a385c601e7082e36634f5e7e4dcd769dbc9a9ee0490d8861a0ccebf0e9664fe63232a536d90d";
+    let mut prepared: BCS = bcs::new(bytes);
+
+    let a = g_from_bytes(&peel_tuple_u8(&mut prepared, 32));
+    assert_eq!(
+        a,
+        g_from_bytes(
+            &x"da209ce922d4bbac9a17e62b5ae12ed42194db632aba1262798a48a3ea2db97d",
+        ),
+    );
+
+    let s = g_from_bytes(&peel_tuple_u8(&mut prepared, 32));
+    assert_eq!(
+        s,
+        g_from_bytes(
+            &x"1e919e1b20fc45f2c758ab6cea25b6f93c354824dd18f61121ee96bb4b4a7b22",
+        ),
+    );
+
+    let t1 = g_from_bytes(&peel_tuple_u8(&mut prepared, 32));
+    assert_eq!(
+        t1,
+        g_from_bytes(
+            &x"9a05cb2d33dcfaa4c30180b752b344efdce93f8856b633a0b21ac7d0d46e322a",
+        ),
+    );
+
+    let t2 = g_from_bytes(&peel_tuple_u8(&mut prepared, 32));
+    assert_eq!(
+        t2,
+        g_from_bytes(
+            &x"cab380edc560d643ed7634c4933f954368c7ea22ffae960983b2cf671ce5151e",
+        ),
+    );
+
+    let tx = scalar_from_bytes(&peel_tuple_u8(&mut prepared, 32));
+    assert_eq!(
+        tx,
+        scalar_from_bytes(
+            &x"66026a759b52abb6ee07095723ea6de10204004d38d5e6032c945137fb67b507",
+        ),
+    );
+
+    let tx_blinding = scalar_from_bytes(&peel_tuple_u8(&mut prepared, 32));
+    assert_eq!(
+        tx_blinding,
+        scalar_from_bytes(
+            &x"5ffadb760eb32002aef47ad8feba3ce38e398be91488839a39a0fc98c4ab030e",
+        ),
+    );
+
+    let e_blinding = scalar_from_bytes(&peel_tuple_u8(&mut prepared, 32));
+    assert_eq!(
+        e_blinding,
+        scalar_from_bytes(
+            &x"2f240812884aa8e6b83bc3a1fb84037aca932b617bdb0bfdd845fcee0f61660b",
+        ),
+    );
+
+    let l_r = vector::tabulate!(10, |_| g_from_bytes(&peel_tuple_u8(&mut prepared, 32)));
+    assert_eq!(
+        l_r,
+        vector[
+            x"72063b252fa1b5222fb78a649d94eef6309caa16e5a909d9f4d93368ca39cd43",
+            x"86f48e12447bc21745ac4c4fe34a06770587a0bfa3337f9cb93dfd1ce7fea002",
+            x"4047aea41e4128c3a3bf1a3dad56dea5f122acf3c44d5cbb5a28e1b4842b7619",
+            x"b8d2e878e8f7b75635d9a65b93b154ab38d0b591bce6a229ab789bb254141104",
+            x"0859ff602eecdf43ed95090a15a42299b22ea0db90681f12e6a9517ae8baa848",
+            x"8c9314617290b73ef2c735c0aac5192a6c967132e00b9569ab48f159b7c6d710",
+            x"8475e475b29921f1df1b862e1d42313e15499d73d83b5cda112a70927e39996f",
+            x"7edddfa976cb7862e4a0a5e8d48f24b5359b70f663a7ce0ca8f8a5803e467423",
+            x"7cfe183008f57af8693abfebc486d6f631d4329e56cab4a0e4a43d6552ff2211",
+            x"0eccafb882b0b651bc310494298e67eeb842f2bf4b1749ccb0bb980ef0f25664",
+        ].map!(|v| g_from_bytes(&v)),
+    );
+
+    let a = scalar_from_bytes(&peel_tuple_u8(&mut prepared, 32));
+    assert_eq!(
+        a,
+        scalar_from_bytes(
+            &x"e3877d7211c5fcc7b3309707b3cd1c3e4a78cf9181e2d4b5b408a385c601e708",
+        ),
+    );
+
+    let b = scalar_from_bytes(&peel_tuple_u8(&mut prepared, 32));
+    assert_eq!(
+        b,
+        scalar_from_bytes(
+            &x"2e36634f5e7e4dcd769dbc9a9ee0490d8861a0ccebf0e9664fe63232a536d90d",
+        ),
+    );
+
+    assert!(prepared.into_remainder_bytes().is_empty())
 }

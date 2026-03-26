@@ -795,8 +795,8 @@ impl NativesCostTable {
                 verify_bulletproofs_ristretto255_base_cost: protocol_config
                     .verify_bulletproofs_ristretto255_base_cost_as_option()
                     .map(Into::into),
-                verify_bulletproofs_ristretto255_cost_per_bit: protocol_config
-                    .verify_bulletproofs_ristretto255_cost_per_bit_as_option()
+                verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: protocol_config
+                    .verify_bulletproofs_ristretto255_cost_per_bit_and_commitment_as_option()
                     .map(Into::into),
             },
         }

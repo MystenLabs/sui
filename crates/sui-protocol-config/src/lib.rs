@@ -1731,7 +1731,7 @@ pub struct ProtocolConfig {
     group_ops_ristretto_point_div_cost: Option<u64>,
 
     verify_bulletproofs_ristretto255_base_cost: Option<u64>,
-    verify_bulletproofs_ristretto255_cost_per_bit: Option<u64>,
+    verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -3212,7 +3212,7 @@ impl ProtocolConfig {
             group_ops_ristretto_point_div_cost: None,
 
             verify_bulletproofs_ristretto255_base_cost: None,
-            verify_bulletproofs_ristretto255_cost_per_bit: None,
+            verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -4803,8 +4803,8 @@ impl ProtocolConfig {
                     cfg.transfer_receive_object_type_cost_per_byte = Some(2);
 
                     // Enable bulletproofs range proofs on devnet
-                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(100);
-                    cfg.verify_bulletproofs_ristretto255_cost_per_bit = Some(1000);
+                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(30000);
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(6500);
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
                     }
