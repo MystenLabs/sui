@@ -26,6 +26,9 @@ use tracing::{info, warn};
 const MIN_PROTOCOL_VERSION: u64 = 1;
 const MAX_PROTOCOL_VERSION: u64 = 119;
 
+const TESTNET_USDC: &str =
+    "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
+
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
@@ -4727,10 +4730,13 @@ impl ProtocolConfig {
                     cfg.execution_version = Some(4);
                     cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = false;
                     cfg.feature_flags.merge_randomness_into_checkpoint = true;
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_gasless = true;
                         cfg.gasless_max_computation_units = Some(50_000);
                         cfg.gasless_allowed_token_types = Some(vec![]);
+                    }
+                    if chain == Chain::Testnet {
+                        cfg.gasless_allowed_token_types = Some(vec![TESTNET_USDC.to_string()]);
                     }
                 }
                 // Use this template when making changes:
