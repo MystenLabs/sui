@@ -290,12 +290,9 @@ where
         let mut fetch_block_senders = BTreeMap::new();
         let mut tasks = JoinSet::new();
 
-        // Create fetch tasks for validators
-        for (index, _) in context.committee.authorities() {
-            if index == context.own_index {
-                continue;
-            }
-            let peer = PeerId::Validator(index);
+        // Create fetch tasks for all available peers (validators and observers)
+        let available_peers = peers_pool.get_available_peers();
+        for peer in available_peers {
             let (sender, receiver) =
                 channel("consensus_synchronizer_fetches", FETCH_BLOCKS_CONCURRENCY);
             let fetch_blocks_from_peer_async = Self::fetch_blocks_from_peer(
@@ -691,12 +688,10 @@ where
             let (verified_block, reject_txn_votes) = block_verifier
                 .verify_and_vote(signed_block, serialized_block)
                 .tap_err(|e| {
-                    let (peer_name, peer_type) = match &peer {
-                        PeerId::Validator(index) => (
-                            context.committee.authority(*index).hostname.clone(),
-                            "validator",
-                        ),
-                        PeerId::Observer(_) => ("observer".to_string(), "observer"),
+                    let peer_name = peer.hostname(context);
+                    let peer_type = match &peer {
+                        PeerId::Validator(_) => "validator",
+                        PeerId::Observer(_) => "observer",
                     };
                     context
                         .metrics
@@ -961,6 +956,7 @@ where
         let commands_sender = self.commands_sender.clone();
         let dag_state = self.dag_state.clone();
         let round_tracker = self.round_tracker.clone();
+        let peers_pool = self.peers_pool.clone();
 
         // If we are commit lagging, then we don't want to enable the scheduler. As the node is sycnhronizing via the commit syncer, the certified commits
         // will bring all the necessary blocks to run the commits. As the commits are certified, we are guaranteed that all the necessary causal history is present.
@@ -980,12 +976,13 @@ where
 
                 fail_point_async!("consensus-delay");
                 // Fetch blocks from peers
-                let results = Self::fetch_blocks_from_authorities(
+                let results = Self::fetch_blocks_from_peers(
                     context.clone(),
                     blocks_to_fetch.clone(),
                     network_client,
                     missing_blocks,
                     dag_state,
+                    peers_pool,
                 )
                 .await;
                 context
@@ -1057,12 +1054,13 @@ where
     /// authorities with missing blocks.
     /// Each element of the vector is a tuple which contains the requested missing block refs, the returned blocks and
     /// the peer.
-    async fn fetch_blocks_from_authorities(
+    async fn fetch_blocks_from_peers(
         context: Arc<Context>,
         inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
         missing_blocks: BTreeSet<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
+        peers_pool: Arc<PeersPool>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
         // Preliminary truncation of missing blocks to fetch. Since each peer can have different
         // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_sync
@@ -1080,11 +1078,21 @@ where
                 .or_default()
                 .push(*block_ref);
         }
+
+        // Get available peers from the PeersPool
+        let mut peers = peers_pool.get_available_peers();
+
         // Distribute the same number of authorities into each peer to sync.
-        // When running this function, context.committee.size() is always greater than 1.
+        // Use the number of available peers from the pool, capped at MAX_PERIODIC_SYNC_PEERS
+        let available_peers_count = peers.len();
+        assert!(
+            available_peers_count > 0,
+            "No available peers to fetch blocks from. This shouldn't really happen."
+        );
+
         let num_authorities_per_peer = authorities
             .len()
-            .div_ceil((context.committee.size() - 1).min(MAX_PERIODIC_SYNC_PEERS));
+            .div_ceil(available_peers_count.min(MAX_PERIODIC_SYNC_PEERS));
 
         // Update metrics related to missing blocks.
         let mut missing_blocks_per_authority = vec![0; context.committee.size()];
@@ -1108,14 +1116,6 @@ where
                 .with_label_values(&[&authority.hostname])
                 .set(missing as i64);
         }
-
-        let mut peers = context
-            .committee
-            .authorities()
-            .filter_map(|(peer_index, _)| {
-                (peer_index != context.own_index).then_some(PeerId::Validator(peer_index))
-            })
-            .collect::<Vec<_>>();
 
         // TODO: probably inject the RNG to allow unit testing - this is a work around for now.
         if cfg!(not(test)) {
@@ -1141,10 +1141,7 @@ where
                 debug_fatal!("No more peers left to fetch blocks!");
                 break;
             };
-            let _peer_hostname = match &peer {
-                PeerId::Validator(index) => context.committee.authority(*index).hostname.as_str(),
-                PeerId::Observer(_) => "observer",
-            };
+            let peer_hostname = peer.hostname(&context);
             // Fetch from the lowest round missing blocks to ensure progress.
             // This may reduce efficiency and increase the chance of duplicated data transfer in edge cases.
             let block_refs = batch
@@ -1161,7 +1158,8 @@ where
                 inflight_blocks.lock_blocks(block_refs.clone(), peer.clone())
             {
                 info!(
-                    "Periodic sync of {} missing blocks from peer {:?}: {}",
+                    "Periodic sync of {} missing blocks from peer {} {:?}: {}",
+                    peer_hostname.as_str(),
                     block_refs.len(),
                     peer,
                     block_refs
@@ -1190,10 +1188,7 @@ where
         loop {
             tokio::select! {
                 Some((response, blocks_guard, _retries, peer, highest_rounds)) = request_futures.next() => {
-                    let peer_name = match &peer {
-                        PeerId::Validator(index) => context.committee.authority(*index).hostname.as_str(),
-                        PeerId::Observer(_) => "observer",
-                    };
+                    let peer_name = peer.hostname(&context);
                     match response {
                         Ok(fetched_blocks) => {
                             results.push((blocks_guard, fetched_blocks, peer));
@@ -1204,7 +1199,7 @@ where
                             }
                         },
                         Err(_) => {
-                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_name, "periodic"]).inc();
+                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_name.as_str(), "periodic"]).inc();
                             // try again if there is any peer left
                             if let Some(next_peer) = peers.next() {
                                 // do best effort to lock guards. If we can't lock then don't bother at this run.
