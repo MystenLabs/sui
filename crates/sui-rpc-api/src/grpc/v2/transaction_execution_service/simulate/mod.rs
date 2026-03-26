@@ -419,10 +419,7 @@ fn select_gas(
 
         let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
 
-        if !matches!(
-            transaction.expiration(),
-            TransactionExpiration::ValidDuring { .. }
-        ) {
+        if matches!(transaction.expiration(), TransactionExpiration::None) {
             *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
                 min_epoch: Some(current_epoch),
                 max_epoch: Some(current_epoch.saturating_add(1)),
@@ -475,7 +472,7 @@ fn select_gas(
         }
 
         // When GasCoin is used and there's address balance, prepend a coin reservation
-        // to make ALL SUI in the account available (coins + address balance)
+        // to make all SUI in the account available (coins + address balance)
         if gas_coin_used
             && let Some(ab_value) = address_balance
             && ab_value > 0
@@ -503,10 +500,7 @@ fn select_gas(
             selected_gas_value += ab_value;
 
             // Set expiration for address balance usage if not already set
-            if !matches!(
-                transaction.expiration(),
-                TransactionExpiration::ValidDuring { .. }
-            ) {
+            if matches!(transaction.expiration(), TransactionExpiration::None) {
                 *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
                     min_epoch: Some(current_epoch),
                     max_epoch: Some(current_epoch.saturating_add(1)),
