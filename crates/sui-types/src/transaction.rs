@@ -1176,8 +1176,8 @@ impl ProgrammableMoveCall {
                 .iter()
                 .find(|((addr, module, function), _)| {
                     *addr == AccountAddress::from(self.package)
-                        && module.as_str() == &self.module
-                        && function.as_str() == &self.function
+                        && module.as_str() == self.module
+                        && function.as_str() == self.function
                 })
         else {
             return Err(UserInputError::Unsupported(format!(
