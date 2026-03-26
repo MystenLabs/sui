@@ -32,7 +32,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::TypeTag;
@@ -145,14 +145,37 @@ pub struct OperationSetStats {
     pub insufficient_funds_count: u64,
 }
 
-#[derive(Debug, Default)]
+/// Default timeout for coin reservation withdraw operations. If an account doesn't
+/// successfully complete a withdrawal within this duration, the test fails.
+pub const DEFAULT_COIN_RESERVATION_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Debug)]
 pub struct CompositionMetrics {
     stats: HashMap<OperationSet, OperationSetStats>,
+    /// Tracks the last successful coin reservation withdraw time per account address.
+    /// Used to detect when paired accounts are not successfully transferring back and forth.
+    coin_reservation_last_success: HashMap<SuiAddress, Instant>,
+    coin_reservation_timeout: Duration,
+}
+
+impl Default for CompositionMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CompositionMetrics {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            stats: HashMap::new(),
+            coin_reservation_last_success: HashMap::new(),
+            coin_reservation_timeout: DEFAULT_COIN_RESERVATION_TIMEOUT,
+        }
+    }
+
+    pub fn with_coin_reservation_timeout(mut self, timeout: Duration) -> Self {
+        self.coin_reservation_timeout = timeout;
+        self
     }
 
     pub fn sum_all(&self) -> OperationSetStats {
@@ -265,6 +288,33 @@ impl CompositionMetrics {
         self.stats
             .iter()
             .map(|(op_set, stats)| (op_set.clone(), stats))
+    }
+
+    /// Records a successful coin reservation withdraw for the given account.
+    /// This is used to track that paired accounts are successfully transferring back and forth.
+    pub fn record_coin_reservation_success(&mut self, sender: SuiAddress) {
+        self.coin_reservation_last_success
+            .insert(sender, Instant::now());
+    }
+
+    /// Initializes tracking for an account participating in coin reservation withdrawals.
+    /// Should be called when the test starts for each participating account.
+    pub fn init_coin_reservation_tracking(&mut self, sender: SuiAddress) {
+        self.coin_reservation_last_success
+            .entry(sender)
+            .or_insert_with(Instant::now);
+    }
+
+    /// Checks if any tracked account has exceeded the coin reservation timeout.
+    /// Returns the address that timed out, if any.
+    pub fn check_coin_reservation_timeout(&self) -> Option<SuiAddress> {
+        let now = Instant::now();
+        for (addr, last_success) in &self.coin_reservation_last_success {
+            if now.duration_since(*last_success) > self.coin_reservation_timeout {
+                return Some(*addr);
+            }
+        }
+        None
     }
 }
 
@@ -1049,6 +1099,10 @@ impl Payload for CompositePayload {
                         metrics.record_insufficient_funds(tx_info.op_set.clone());
                     } else if effects.is_ok() {
                         metrics.record_success(tx_info.op_set.clone());
+                        // Track successful coin reservation withdrawals for timeout checking
+                        if tx_info.op_set.contains(CoinReservationWithdraw::NAME) {
+                            metrics.record_coin_reservation_success(gas.1);
+                        }
                     } else {
                         metrics.record_abort(tx_info.op_set.clone());
                     }
@@ -1088,6 +1142,17 @@ impl Payload for CompositePayload {
                 >= self.current_batch_num_conflicting_transactions + expected_alias_failure_count,
             "failure count should sometimes be greater than or equal to the number of conflicting transactions"
         );
+
+        // Check if any account has exceeded the coin reservation timeout
+        if let Some(timed_out_addr) = metrics.check_coin_reservation_timeout() {
+            panic!(
+                "Coin reservation timeout: account {} has not completed a successful \
+                 CoinReservationWithdraw in over {:?}. This indicates the back-and-forth \
+                 transfer pattern between paired accounts is not working correctly.",
+                timed_out_addr, DEFAULT_COIN_RESERVATION_TIMEOUT
+            );
+        }
+
         self.current_batch_txs.clear();
     }
 }
@@ -1878,6 +1943,14 @@ impl Workload<dyn Payload> for CompositeWorkload {
             };
             payload_addresses[partner_idx]
         };
+
+        // Initialize coin reservation tracking for all payload addresses
+        {
+            let mut metrics = self.metrics.lock().unwrap();
+            for addr in &payload_addresses {
+                metrics.init_coin_reservation_tracking(*addr);
+            }
+        }
 
         let mut payloads: Vec<Box<dyn Payload>> = vec![];
         for i in 0..self.num_payloads {
