@@ -3,13 +3,12 @@
 
 //! Forking tool for Sui.
 
-mod graphql;
+pub(crate) mod graphql;
 mod network;
 mod service_store;
 mod startup;
 
+pub use graphql::{GraphQLQueryClient, NetworkDataClient};
 pub use network::Network;
+pub use service_store::ServiceStore;
 pub use startup::start_server;
-
-#[allow(unused)]
-pub(crate) static VERSION: &str = env!("CARGO_PKG_VERSION");

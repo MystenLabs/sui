@@ -1,31 +1,89 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{Result, bail};
 use sui_graphql::{CheckpointResponse, Client};
+use sui_types::crypto::{AggregateAuthoritySignature, AuthorityQuorumSignInfo};
+use sui_types::message_envelope::Envelope;
+use sui_types::messages_checkpoint::VerifiedCheckpoint;
+use tracing::info;
+
+/// Trait abstracting network data fetching, allowing tests to provide mock implementations.
+#[async_trait::async_trait]
+pub trait NetworkDataClient: Send + Sync {
+    /// Fetch a checkpoint. If `sequence_number` is `None`, fetch the latest checkpoint.
+    async fn fetch_checkpoint(
+        &self,
+        sequence_number: Option<u64>,
+    ) -> Result<VerifiedCheckpoint>;
+
+    async fn fetch_protocol_version(&self) -> Result<u64>;
+}
 
 pub struct GraphQLQueryClient {
     client: Client,
 }
 
 impl GraphQLQueryClient {
-    pub fn new(endpoint: &str) -> anyhow::Result<Self> {
+    pub fn new(endpoint: &str) -> Result<Self> {
         let client = Client::new(endpoint)?;
         Ok(Self { client })
     }
 
-    /// Fetch a checkpoint from GraphQL. If `sequence_number` is `None`, fetch the latest
-    /// checkpoint.
-    pub async fn fetch_checkpoint(
+    fn convert_checkpoint(response: CheckpointResponse) -> Result<VerifiedCheckpoint> {
+        let summary = response.summary;
+        let sequence_number = summary.sequence_number;
+        let dummy_sig = AuthorityQuorumSignInfo {
+            epoch: summary.epoch.clone(),
+            signature: AggregateAuthoritySignature::default(),
+            signers_map: roaring::RoaringBitmap::new(),
+        };
+        let certified = Envelope::new_from_data_and_sig(summary.try_into()?, dummy_sig);
+        info!("Fetched checkpoint: {}", sequence_number);
+        Ok(VerifiedCheckpoint::new_unchecked(certified))
+    }
+}
+
+#[async_trait::async_trait]
+impl NetworkDataClient for GraphQLQueryClient {
+    async fn fetch_checkpoint(
         &self,
         sequence_number: Option<u64>,
-    ) -> anyhow::Result<Option<CheckpointResponse>> {
-        self.client
+    ) -> Result<VerifiedCheckpoint> {
+        let response = self
+            .client
             .get_checkpoint(sequence_number)
             .await
-            .map_err(|e| e.into())
+            .map_err(anyhow::Error::from)?;
+
+        match response {
+            Some(checkpoint) => Self::convert_checkpoint(checkpoint),
+            None => bail!("Failed to fetch checkpoint {sequence_number:?}"),
+        }
     }
 
-    pub async fn fetch_protocol_version(&self) -> anyhow::Result<u64> {
+    async fn fetch_protocol_version(&self) -> Result<u64> {
         Ok(self.client.protocol_version().await?)
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct MockNetworkDataClient {
+    pub checkpoint: VerifiedCheckpoint,
+    pub protocol_version: u64,
+}
+
+#[cfg(test)]
+#[async_trait::async_trait]
+impl NetworkDataClient for MockNetworkDataClient {
+    async fn fetch_checkpoint(
+        &self,
+        _sequence_number: Option<u64>,
+    ) -> Result<VerifiedCheckpoint> {
+        Ok(self.checkpoint.clone())
+    }
+
+    async fn fetch_protocol_version(&self) -> Result<u64> {
+        Ok(self.protocol_version)
     }
 }

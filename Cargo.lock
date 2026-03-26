@@ -15143,6 +15143,7 @@ name = "sui-forking"
 version = "1.69.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum 0.8.3",
  "axum-extra 0.10.1",
  "bin-version",

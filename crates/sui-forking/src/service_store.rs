@@ -33,7 +33,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
 use sui_types::transaction::VerifiedTransaction;
 
-pub(crate) struct ServiceStore {
+pub struct ServiceStore {
     // The checkpoint at which this forked network was forked
     forked_at_checkpoint: u64,
 }
