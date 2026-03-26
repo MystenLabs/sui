@@ -8,7 +8,7 @@ mod network;
 mod service_store;
 mod startup;
 
-pub use graphql::{GraphQLQueryClient, NetworkDataClient};
+pub use graphql::{ForkDataProvider, GraphQLQueryClient};
 pub use network::Network;
 pub use service_store::ServiceStore;
 pub use startup::start_server;

@@ -3,10 +3,10 @@
 
 use anyhow::Result;
 
-use sui_forking::start_server;
 use sui_forking::GraphQLQueryClient;
 use sui_forking::Network;
 use sui_forking::ServiceStore;
+use sui_forking::start_server;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     start_server(
         &client,
         None,
-        |seq| ServiceStore::new(seq),
+        ServiceStore::new,
         "127.0.0.1",
         9001,
         None,

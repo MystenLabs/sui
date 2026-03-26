@@ -4,7 +4,6 @@
 #![allow(unused)]
 use std::collections::BTreeMap;
 
-use crate::graphql::GraphQLQueryClient;
 use simulacrum::SimulatorStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -33,6 +32,12 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
 use sui_types::transaction::VerifiedTransaction;
 
+/// Persistent store backing the forked network.
+///
+/// `ServiceStore` implements [`SimulatorStore`] so it can be used as the storage layer for a
+/// [`Simulacrum`](simulacrum::Simulacrum) instance. It records the checkpoint at which the
+/// fork was created and will serve objects and transactions from a combination of local state
+/// (for post-fork data) and remote RPC reads (for pre-fork data fetched on demand).
 pub struct ServiceStore {
     // The checkpoint at which this forked network was forked
     forked_at_checkpoint: u64,

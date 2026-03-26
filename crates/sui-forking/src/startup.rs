@@ -8,6 +8,10 @@ use anyhow::Result;
 use axum::Router;
 use axum::routing::get;
 use rand::rngs::OsRng;
+use tokio::sync::oneshot;
+use tower_http::cors::CorsLayer;
+use tracing::{info, warn};
+
 use simulacrum::Simulacrum;
 use simulacrum::store::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
@@ -15,11 +19,8 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::sui_system_state::SuiSystemState;
-use tokio::sync::oneshot;
-use tower_http::cors::CorsLayer;
-use tracing::{info, warn};
 
-use crate::graphql::NetworkDataClient;
+use crate::ForkDataProvider;
 
 mod endpoints {
     pub const HEALTH: &str = "/health";
@@ -31,7 +32,7 @@ mod endpoints {
 /// `store_factory` receives the forked checkpoint sequence number and returns a store
 /// implementation.
 pub async fn start_server<S: SimulatorStore>(
-    client: &dyn NetworkDataClient,
+    client: &dyn ForkDataProvider,
     startup_checkpoint: Option<u64>,
     store_factory: impl FnOnce(u64) -> S,
     host: &str,

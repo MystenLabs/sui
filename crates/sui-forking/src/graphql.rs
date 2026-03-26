@@ -1,21 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Result, bail};
-use sui_graphql::{CheckpointResponse, Client};
-use sui_types::crypto::{AggregateAuthoritySignature, AuthorityQuorumSignInfo};
+use anyhow::Result;
+use anyhow::bail;
+use tracing::info;
+
+use sui_graphql::CheckpointResponse;
+use sui_graphql::Client;
+use sui_types::crypto::AggregateAuthoritySignature;
+use sui_types::crypto::AuthorityQuorumSignInfo;
 use sui_types::message_envelope::Envelope;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
-use tracing::info;
 
 /// Trait abstracting network data fetching, allowing tests to provide mock implementations.
 #[async_trait::async_trait]
-pub trait NetworkDataClient: Send + Sync {
+pub trait ForkDataProvider: Send + Sync {
     /// Fetch a checkpoint. If `sequence_number` is `None`, fetch the latest checkpoint.
-    async fn fetch_checkpoint(
-        &self,
-        sequence_number: Option<u64>,
-    ) -> Result<VerifiedCheckpoint>;
+    async fn fetch_checkpoint(&self, sequence_number: Option<u64>) -> Result<VerifiedCheckpoint>;
 
     async fn fetch_protocol_version(&self) -> Result<u64>;
 }
@@ -34,7 +35,7 @@ impl GraphQLQueryClient {
         let summary = response.summary;
         let sequence_number = summary.sequence_number;
         let dummy_sig = AuthorityQuorumSignInfo {
-            epoch: summary.epoch.clone(),
+            epoch: summary.epoch,
             signature: AggregateAuthoritySignature::default(),
             signers_map: roaring::RoaringBitmap::new(),
         };
@@ -45,11 +46,8 @@ impl GraphQLQueryClient {
 }
 
 #[async_trait::async_trait]
-impl NetworkDataClient for GraphQLQueryClient {
-    async fn fetch_checkpoint(
-        &self,
-        sequence_number: Option<u64>,
-    ) -> Result<VerifiedCheckpoint> {
+impl ForkDataProvider for GraphQLQueryClient {
+    async fn fetch_checkpoint(&self, sequence_number: Option<u64>) -> Result<VerifiedCheckpoint> {
         let response = self
             .client
             .get_checkpoint(sequence_number)
@@ -75,11 +73,8 @@ pub(crate) struct MockNetworkDataClient {
 
 #[cfg(test)]
 #[async_trait::async_trait]
-impl NetworkDataClient for MockNetworkDataClient {
-    async fn fetch_checkpoint(
-        &self,
-        _sequence_number: Option<u64>,
-    ) -> Result<VerifiedCheckpoint> {
+impl ForkDataProvider for MockNetworkDataClient {
+    async fn fetch_checkpoint(&self, _sequence_number: Option<u64>) -> Result<VerifiedCheckpoint> {
         Ok(self.checkpoint.clone())
     }
 
