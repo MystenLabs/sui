@@ -1107,10 +1107,34 @@ impl Operation for CoinReservationWithdraw {
             .obj(ObjectArg::ImmOrOwnedObject(object_ref))
             .unwrap();
 
-        // Don't call coin::redeem_funds explicitly - the compatibility layer
-        // (convert_withdrawal_compatibility_ptb_arguments) will automatically
-        // convert the withdrawal to a Coin when needed.
-        builder.transfer_arg(account_state.partner_address, withdrawal_arg);
+        // Redeem the withdrawal to a coin, convert to balance, and send to the partner's
+        // accumulator so the partner can do a future CoinReservationWithdraw. Simply
+        // transferring a Coin<SUI> would only give the partner a coin object, not
+        // accumulator balance.
+        let coin = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdrawal_arg],
+        );
+
+        let coin_balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("into_balance").unwrap(),
+            vec![GAS::type_tag()],
+            vec![coin],
+        );
+
+        let partner_arg = builder.pure(account_state.partner_address).unwrap();
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![coin_balance, partner_arg],
+        );
     }
 }
 
