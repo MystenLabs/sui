@@ -1915,6 +1915,15 @@ pub struct ProtocolConfig {
 
     /// Allowed token types for gasless transactions, with minimum transfer sizes per token.
     gasless_allowed_token_types: Option<Vec<(String, u64)>>,
+
+    /// Maximum number of unused Pure inputs allowed in a gasless transaction.
+    /// Object and FundsWithdrawal inputs must always be used.
+    /// When None, there is no limit (effectively unlimited).
+    gasless_max_unused_inputs: Option<u64>,
+
+    /// Maximum size in bytes of each Pure input in a gasless transaction.
+    /// When None, there is no limit (effectively unlimited).
+    gasless_max_pure_input_bytes: Option<u64>,
 }
 
 /// An aliased address.
@@ -2706,6 +2715,14 @@ impl ProtocolConfig {
         debug_assert!(self.gasless_allowed_token_types.is_some());
         self.gasless_allowed_token_types.as_deref().unwrap_or(&[])
     }
+
+    pub fn get_gasless_max_unused_inputs(&self) -> u64 {
+        self.gasless_max_unused_inputs.unwrap_or(u64::MAX)
+    }
+
+    pub fn get_gasless_max_pure_input_bytes(&self) -> u64 {
+        self.gasless_max_pure_input_bytes.unwrap_or(u64::MAX)
+    }
 }
 
 #[cfg(not(msim))]
@@ -3297,6 +3314,8 @@ impl ProtocolConfig {
 
             gasless_max_computation_units: None,
             gasless_allowed_token_types: None,
+            gasless_max_unused_inputs: None,
+            gasless_max_pure_input_bytes: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };

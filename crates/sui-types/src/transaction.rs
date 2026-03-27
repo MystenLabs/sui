@@ -61,7 +61,6 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
-use std::iter::once;
 use std::sync::Arc;
 #[cfg(debug_assertions)]
 use std::sync::RwLock;
@@ -1022,6 +1021,66 @@ impl ProgrammableTransaction {
         for command in &self.commands {
             command.validate_gasless_transaction(&allowed_token_types)?;
         }
+
+        self.validate_gasless_inputs(config)?;
+
+        Ok(())
+    }
+
+    fn validate_gasless_inputs(&self, config: &ProtocolConfig) -> UserInputResult {
+        let mut used_inputs = vec![false; self.inputs.len()];
+        for idx in self.commands.iter().flat_map(|cmd| cmd.input_arguments()) {
+            if let Some(slot) = used_inputs.get_mut(idx as usize) {
+                *slot = true;
+            }
+        }
+
+        let max_unused_pure = config.get_gasless_max_unused_inputs();
+        let max_pure_bytes = config.get_gasless_max_pure_input_bytes();
+        let mut unused_pure_count = 0u64;
+
+        for (i, input) in self.inputs.iter().enumerate() {
+            let is_used = used_inputs[i];
+            match input {
+                CallArg::Pure(bytes) => {
+                    fp_ensure!(
+                        bytes.len() as u64 <= max_pure_bytes,
+                        UserInputError::Unsupported(format!(
+                            "Input {} has size {} bytes, but gasless transactions \
+                             allow at most {} bytes per Pure input",
+                            i,
+                            bytes.len(),
+                            max_pure_bytes
+                        ))
+                    );
+                    if !is_used {
+                        unused_pure_count += 1;
+                    }
+                }
+                CallArg::Object(_) if !is_used => {
+                    return Err(UserInputError::Unsupported(format!(
+                        "Gasless transactions do not allow unused Object inputs (input {})",
+                        i
+                    )));
+                }
+                CallArg::FundsWithdrawal(_) if !is_used => {
+                    return Err(UserInputError::Unsupported(format!(
+                        "Gasless transactions do not allow unused FundsWithdrawal inputs (input {})",
+                        i
+                    )));
+                }
+                _ => {}
+            }
+        }
+
+        fp_ensure!(
+            unused_pure_count <= max_unused_pure,
+            UserInputError::Unsupported(format!(
+                "Gasless transactions allow at most {} unused Pure inputs, but found {}",
+                max_unused_pure, unused_pure_count
+            ))
+        );
+
         Ok(())
     }
 }
@@ -1440,17 +1499,27 @@ impl Command {
     }
 
     pub fn is_argument_used(&self, argument: Argument) -> bool {
-        match self {
-            Command::MoveCall(c) => c.arguments.iter().any(|a| a == &argument),
+        self.arguments().any(|a| a == &argument)
+    }
+
+    fn input_arguments(&self) -> impl Iterator<Item = u16> + '_ {
+        self.arguments().filter_map(|arg| match arg {
+            Argument::Input(i) => Some(*i),
+            _ => None,
+        })
+    }
+
+    fn arguments(&self) -> impl Iterator<Item = &Argument> + '_ {
+        let (args, single): (&[Argument], Option<&Argument>) = match self {
+            Command::MoveCall(c) => (&c.arguments, None),
             Command::TransferObjects(args, arg)
             | Command::MergeCoins(arg, args)
-            | Command::SplitCoins(arg, args) => {
-                args.iter().chain(once(arg)).any(|a| a == &argument)
-            }
-            Command::MakeMoveVec(_, args) => args.iter().any(|a| a == &argument),
-            Command::Upgrade(_, _, _, arg) => arg == &argument,
-            Command::Publish(_, _) => false,
-        }
+            | Command::SplitCoins(arg, args) => (args, Some(arg)),
+            Command::MakeMoveVec(_, args) => (args, None),
+            Command::Upgrade(_, _, _, arg) => (&[], Some(arg)),
+            Command::Publish(_, _) => (&[], None),
+        };
+        args.iter().chain(single)
     }
 }
 
@@ -5194,5 +5263,224 @@ impl TransactionKey {
             TransactionKey::Digest(d) => Some(d),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod gasless_validation_tests {
+    use super::*;
+    use crate::balance::Balance;
+    use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
+
+    fn test_token() -> TypeTag {
+        coin_type("0xabc", "usdc", "USDC")
+    }
+
+    fn gasless_config() -> ProtocolConfig {
+        gasless_config_with_tokens(vec![test_token()])
+    }
+
+    fn gasless_config_with_tokens(tokens: Vec<TypeTag>) -> ProtocolConfig {
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.enable_gasless_for_testing();
+        config.set_gasless_allowed_token_types_for_testing(
+            tokens
+                .iter()
+                .map(|t| (t.to_canonical_string(true), 0))
+                .collect(),
+        );
+        config
+    }
+
+    fn coin_type(addr: &str, module: &str, name: &str) -> TypeTag {
+        TypeTag::Struct(Box::new(move_core_types::language_storage::StructTag {
+            address: AccountAddress::from_hex_literal(addr).unwrap(),
+            module: Identifier::new(module).unwrap(),
+            name: Identifier::new(name).unwrap(),
+            type_params: vec![],
+        }))
+    }
+
+    fn send_funds_call(type_arg: TypeTag) -> Command {
+        Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: SUI_FRAMEWORK_PACKAGE_ID,
+            module: "balance".to_string(),
+            function: "send_funds".to_string(),
+            type_arguments: vec![TypeInput::from(type_arg)],
+            arguments: vec![Argument::Input(0), Argument::Input(1)],
+        }))
+    }
+
+    fn redeem_funds_call(type_arg: TypeTag) -> Command {
+        Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: SUI_FRAMEWORK_PACKAGE_ID,
+            module: "balance".to_string(),
+            function: "redeem_funds".to_string(),
+            type_arguments: vec![TypeInput::from(type_arg)],
+            arguments: vec![Argument::Input(0)],
+        }))
+    }
+
+    fn withdrawal_split_call(type_arg: TypeTag) -> Command {
+        Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: SUI_FRAMEWORK_PACKAGE_ID,
+            module: "funds_accumulator".to_string(),
+            function: "withdrawal_split".to_string(),
+            type_arguments: vec![TypeInput::from(type_arg)],
+            arguments: vec![Argument::Input(0), Argument::Input(1)],
+        }))
+    }
+
+    fn build_pt(commands: Vec<Command>) -> ProgrammableTransaction {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        for cmd in commands {
+            builder.command(cmd);
+        }
+        builder.finish()
+    }
+
+    #[test]
+    fn test_send_funds_allowed_token_succeeds() {
+        let config = gasless_config();
+        let pt = build_pt(vec![send_funds_call(test_token())]);
+        assert!(pt.validate_gasless_transaction(&config).is_ok());
+    }
+
+    #[test]
+    fn test_redeem_funds_allowed_token_succeeds() {
+        let config = gasless_config();
+        let pt = build_pt(vec![redeem_funds_call(test_token())]);
+        assert!(pt.validate_gasless_transaction(&config).is_ok());
+    }
+
+    #[test]
+    fn test_withdrawal_split_with_balance_type_succeeds() {
+        let config = gasless_config();
+        let pt = build_pt(vec![withdrawal_split_call(Balance::type_tag(test_token()))]);
+        assert!(pt.validate_gasless_transaction(&config).is_ok());
+    }
+
+    #[test]
+    fn test_withdrawal_split_with_non_balance_type_fails() {
+        let config = gasless_config();
+        let pt = build_pt(vec![withdrawal_split_call(test_token())]);
+        let err = pt.validate_gasless_transaction(&config).unwrap_err();
+        assert!(
+            err.to_string().contains("Expected a type Balance<_>"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_non_whitelisted_token_fails() {
+        let config = gasless_config();
+        let fake = coin_type("0x999", "fake", "FAKE");
+        let pt = build_pt(vec![send_funds_call(fake)]);
+        let err = pt.validate_gasless_transaction(&config).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("is not currently allowed in gasless transactions"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_non_framework_package_fails() {
+        let config = gasless_config();
+        let mut cmd = send_funds_call(test_token());
+        if let Command::MoveCall(ref mut call) = cmd {
+            call.package = ObjectID::from_hex_literal("0xdead").unwrap();
+        }
+        let pt = build_pt(vec![cmd]);
+        let err = pt.validate_gasless_transaction(&config).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("is not supported in gasless transactions"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_disallowed_function_fails() {
+        let config = gasless_config();
+        let cmd = Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: SUI_FRAMEWORK_PACKAGE_ID,
+            module: "coin".to_string(),
+            function: "from_balance".to_string(),
+            type_arguments: vec![TypeInput::from(test_token())],
+            arguments: vec![Argument::Input(0)],
+        }));
+        let pt = build_pt(vec![cmd]);
+        let err = pt.validate_gasless_transaction(&config).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("is not supported in gasless transactions"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_zero_type_args_fails() {
+        let config = gasless_config();
+        let cmd = Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: SUI_FRAMEWORK_PACKAGE_ID,
+            module: "balance".to_string(),
+            function: "send_funds".to_string(),
+            type_arguments: vec![],
+            arguments: vec![Argument::Input(0), Argument::Input(1)],
+        }));
+        let pt = build_pt(vec![cmd]);
+        let err = pt.validate_gasless_transaction(&config).unwrap_err();
+        assert!(err.to_string().contains("type arguments"), "got: {err}");
+    }
+
+    #[test]
+    fn test_too_many_type_args_fails() {
+        let config = gasless_config();
+        let token = test_token();
+        let cmd = Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: SUI_FRAMEWORK_PACKAGE_ID,
+            module: "balance".to_string(),
+            function: "send_funds".to_string(),
+            type_arguments: vec![TypeInput::from(token.clone()), TypeInput::from(token)],
+            arguments: vec![Argument::Input(0), Argument::Input(1)],
+        }));
+        let pt = build_pt(vec![cmd]);
+        let err = pt.validate_gasless_transaction(&config).unwrap_err();
+        assert!(err.to_string().contains("type arguments"), "got: {err}");
+    }
+
+    #[test]
+    fn test_non_move_call_command_fails() {
+        let config = gasless_config();
+        let cmd = Command::TransferObjects(vec![Argument::Input(0)], Argument::Input(1));
+        let pt = build_pt(vec![cmd]);
+        let err = pt.validate_gasless_transaction(&config).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("only support MoveCall, MergeCoins, and SplitCoins"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_multiple_allowed_commands_succeeds() {
+        let config = gasless_config();
+        let token = test_token();
+        let pt = build_pt(vec![
+            redeem_funds_call(token.clone()),
+            send_funds_call(token),
+        ]);
+        assert!(pt.validate_gasless_transaction(&config).is_ok());
+    }
+
+    #[test]
+    fn test_mixed_allowed_and_disallowed_fails() {
+        let config = gasless_config();
+        let pt = build_pt(vec![
+            send_funds_call(test_token()),
+            Command::TransferObjects(vec![Argument::Input(0)], Argument::Input(1)),
+        ]);
+        assert!(pt.validate_gasless_transaction(&config).is_err());
     }
 }

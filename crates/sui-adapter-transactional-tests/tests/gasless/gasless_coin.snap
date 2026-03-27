@@ -137,7 +137,7 @@ task 21, lines 107-112:
 //> 0: sui::balance::zero<test::usdc::USDC>();
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
 // --- Test 6: Party coin input succeeds (used and unused) ---
-Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions do not allow unused Object inputs (input 0)
 
 task 22, lines 114-120:
 //# programmable --sender A --inputs object(1,1) 2000 @A
@@ -166,8 +166,7 @@ task 24, lines 126-129:
 // Reject: party coin input unused, fails post-execution check
 //> 0: sui::balance::zero<test::usdc::USDC>();
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
-Error: Transaction Effects Status: Insufficient Gas.
-Debug of error: InsufficientGas at command None
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions do not allow unused Object inputs (input 0)
 
 task 25, line 131:
 //# create-checkpoint

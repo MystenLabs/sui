@@ -108,6 +108,12 @@ pub struct SuiInitArgs {
     /// Enable gasless feature for testing
     #[clap(long = "enable-gasless")]
     pub enable_gasless: bool,
+    /// Set maximum size in bytes for Pure inputs in gasless transactions
+    #[clap(long = "gasless-max-pure-input-bytes")]
+    pub gasless_max_pure_input_bytes: Option<u64>,
+    /// Set maximum number of unused Pure inputs in gasless transactions
+    #[clap(long = "gasless-max-unused-inputs")]
+    pub gasless_max_unused_inputs: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
