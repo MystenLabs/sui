@@ -1695,6 +1695,8 @@
                 },
                 "gas_rounding_step": null,
                 "gasless_max_computation_units": null,
+                "gasless_max_pure_input_bytes": null,
+                "gasless_max_unused_inputs": null,
                 "groth16_prepare_verifying_key_bls12381_cost_base": {
                   "u64": "52"
                 },
