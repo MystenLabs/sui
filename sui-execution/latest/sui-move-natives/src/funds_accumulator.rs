@@ -4,7 +4,7 @@
 use std::collections::VecDeque;
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::{safe_unwrap, safe_unwrap_err};
+use move_binary_format::safe_unwrap;
 use move_core_types::{account_address::AccountAddress, u256::U256, vm_status::StatusCode};
 use move_vm_runtime::{
     execution::{
@@ -52,9 +52,9 @@ pub fn add_to_accumulator_address(
             ),
         );
     };
-    let recipient = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
+    let recipient = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
     let accumulator: ObjectID =
-        safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
+        safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
 
     // TODO this will need to look at the layout of T when this is not guaranteed to be a Balance
     let Some([amount]): Option<[Value; 1]> = value.unpack().collect::<Vec<_>>().try_into().ok()
@@ -112,10 +112,10 @@ pub fn withdraw_from_accumulator_address(
 
     let ty_tag = context.type_to_type_tag(&safe_unwrap!(ty_args.pop()))?;
 
-    let value = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<U256>());
-    let recipient = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
+    let value = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<U256>());
+    let recipient = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
     let accumulator: ObjectID =
-        safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
+        safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
 
     // TODO this will need to look at the layout of T when this is not guaranteed to be a Balance
     let Ok(amount): Result<u64, _> = value.try_into() else {

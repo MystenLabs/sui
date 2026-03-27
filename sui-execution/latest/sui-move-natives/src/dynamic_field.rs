@@ -10,9 +10,7 @@ use crate::{
     },
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::{
-    partial_vm_error, safe_assert, safe_assert_eq, safe_unwrap, safe_unwrap_err,
-};
+use move_binary_format::{partial_vm_error, safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress,
     gas_algebra::InternalGas,
@@ -207,7 +205,7 @@ pub fn add_child_object(
     );
 
     // TODO remove this copy_value, which will require VM changes
-    let child_id = safe_unwrap_err!(
+    let child_id = safe_unwrap!(
         get_object_id(child.copy_value()).and_then(|v| v.value_as::<AccountAddress>())
     )
     .into();
@@ -287,9 +285,9 @@ pub fn borrow_child_object(
 
     let child_id = pop_arg!(args, AccountAddress).into();
 
-    let parent_uid = safe_unwrap_err!(pop_arg!(args, StructRef).read_ref());
+    let parent_uid = safe_unwrap!(pop_arg!(args, StructRef).read_ref());
     // UID { id: ID { bytes: address } }
-    let parent = safe_unwrap_err!(
+    let parent = safe_unwrap!(
         get_nested_struct_field(parent_uid, &[0, 0]).and_then(|v| v.value_as::<AccountAddress>())
     )
     .into();

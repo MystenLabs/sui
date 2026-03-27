@@ -3,7 +3,7 @@
 
 use crate::{NativesCostTable, get_extension};
 use move_binary_format::errors::PartialVMResult;
-use move_binary_format::{safe_unwrap, safe_unwrap_err};
+use move_binary_format::safe_unwrap;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas, u256::U256};
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
@@ -123,8 +123,6 @@ pub fn from_u256(
     let mut u256_bytes = u256.to_le_bytes().to_vec();
     u256_bytes.reverse();
 
-    let addr_val = Value::address(safe_unwrap_err!(AccountAddress::from_bytes(
-        &u256_bytes[..]
-    )));
+    let addr_val = Value::address(safe_unwrap!(AccountAddress::from_bytes(&u256_bytes[..])));
     Ok(NativeResult::ok(context.gas_used(), smallvec![addr_val]))
 }

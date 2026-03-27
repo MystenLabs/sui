@@ -8,7 +8,7 @@ use crate::{
 use better_any::{Tid, TidAble};
 use indexmap::{IndexMap, IndexSet};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::{safe_assert, safe_unwrap, safe_unwrap_err};
+use move_binary_format::{safe_assert, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout, MoveValue},
@@ -426,7 +426,7 @@ pub fn ids_for_address(
         .and_then(|inv| inv.get(&specified_obj_ty))
         .map(|s| s.iter().map(|id| pack_id(*id)).collect::<Vec<Value>>())
         .unwrap_or_default();
-    let ids_vector = safe_unwrap_err!(Vector::pack(VectorSpecialization::Container, ids));
+    let ids_vector = safe_unwrap!(Vector::pack(VectorSpecialization::Container, ids));
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![ids_vector]))
 }
 
@@ -671,7 +671,7 @@ pub fn allocate_receiving_ticket_for_object(
         ));
     };
     let has_public_transfer = abilities.has_store();
-    let move_object = safe_unwrap_err!(unsafe {
+    let move_object = safe_unwrap!(unsafe {
         MoveObject::new_from_execution_with_limit(
             tag.into(),
             has_public_transfer,
@@ -1012,7 +1012,7 @@ fn find_all_wrapped_objects<'a, 'i>(
         };
 
         let blob = safe_unwrap!(value.borrow().typed_serialize(&layout));
-        safe_unwrap_err!(MoveValue::visit_deserialize(
+        safe_unwrap!(MoveValue::visit_deserialize(
             &blob,
             &annotated_layout,
             &mut Traversal {
