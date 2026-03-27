@@ -652,11 +652,14 @@ async fn test_combined_ab_and_coins_needed() {
             vec![(ab_amount, limited_sender)],
         )
         .build();
-    let (_, effects) = test_env
+    let (digest, effects) = test_env
         .exec_tx_directly(fund_ab_tx)
         .await
         .expect("Fund AB should succeed");
     assert!(effects.status().is_ok());
+    // Wait for the settlement transactions to commit so that the accumulator
+    // reflects limited_sender's AB before gas selection queries it.
+    test_env.cluster.wait_for_tx_settlement(&[digest]).await;
 
     // Now limited_sender has:
     // - Coin: 10 SUI
