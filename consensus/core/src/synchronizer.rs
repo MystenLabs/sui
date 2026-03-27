@@ -259,6 +259,7 @@ pub(crate) struct Synchronizer<
     commands_sender: Sender<Command>,
     last_changed_commit_index: CommitIndex,
     last_commit_change_time: Instant,
+    // When commit is not progressing, commit sync fails over to periodic sync for catchup.
     commit_sync_failover: bool,
 }
 
@@ -910,14 +911,10 @@ where
             return Ok(());
         }
 
-        let missing_blocks = self
-            .core_dispatcher
-            .get_missing_blocks()
-            .await
-            .map_err(|_err| ConsensusError::Shutdown)?;
-
-        // No reason to kick off the scheduler if there are no missing blocks to fetch
-        if missing_blocks.is_empty() {
+        // If commit is lagging and commit sync is making progress, skip periodic sync.
+        // Commit syncer fetches certified commits with all necessary causal history.
+        // If commit sync is not making progress, periodic sync resumes as a fallback.
+        if !self.should_run_periodic_sync() {
             return Ok(());
         }
 
@@ -931,84 +928,102 @@ where
         let commands_sender = self.commands_sender.clone();
         let dag_state = self.dag_state.clone();
         let round_tracker = self.round_tracker.clone();
+        let highest_accepted_rounds =
+            Self::get_highest_accepted_rounds(dag_state.clone(), &context);
 
-        // If commit is lagging and commit sync is making progress, skip periodic sync.
-        // Commit syncer fetches certified commits with all necessary causal history.
-        // If commit sync stalls (no progress for COMMIT_PROGRESS_TIMEOUT), periodic sync
-        // resumes as a fallback.
-        if !self.should_run_periodic_sync() {
-            return Ok(());
+        let mut missing_blocks = self
+            .core_dispatcher
+            .get_missing_blocks()
+            .await
+            .map_err(|_err| ConsensusError::Shutdown)?;
+        // Calling `should_run_periodic_sync()` have updated the `commit_sync_failover` flag.
+        if self.commit_sync_failover {
+            // Filter missing blocks to those that cannot be fetched unless included in fetch request.
+            // When a fetch request has no missing block but has highest_accepted_rounds, missing blocks
+            // higher than the highest accepted rounds can still be fetched.
+            missing_blocks
+                .retain(|block| block.round <= highest_accepted_rounds[block.author.value()]);
+        } else {
+            // No reason to kick off the scheduler if there are no missing blocks and commit sync
+            // is not failing over to periodic sync.
+            if missing_blocks.is_empty() {
+                return Ok(());
+            }
         }
 
-        self.fetch_blocks_scheduler_task
-            .spawn(monitored_future!(async move {
-                let _scope = monitored_scope("FetchMissingBlocksScheduler");
-                context
-                    .metrics
-                    .node_metrics
-                    .fetch_blocks_scheduler_inflight
-                    .inc();
-                let total_requested = missing_blocks.len();
+        if missing_blocks.is_empty() {
+        } else {
+            self.fetch_blocks_scheduler_task
+                .spawn(monitored_future!(async move {
+                    let _scope = monitored_scope("FetchMissingBlocksScheduler");
+                    context
+                        .metrics
+                        .node_metrics
+                        .fetch_blocks_scheduler_inflight
+                        .inc();
+                    let total_requested = missing_blocks.len();
 
-                fail_point_async!("consensus-delay");
-                // Fetch blocks from peers
-                let results = Self::fetch_blocks_from_authorities(
-                    context.clone(),
-                    blocks_to_fetch.clone(),
-                    network_client,
-                    missing_blocks,
-                    dag_state,
-                )
-                .await;
-                context
-                    .metrics
-                    .node_metrics
-                    .fetch_blocks_scheduler_inflight
-                    .dec();
-                if results.is_empty() {
-                    return;
-                }
-
-                // Now process the returned results
-                let mut total_fetched = 0;
-                for (blocks_guard, fetched_blocks, peer) in results {
-                    total_fetched += fetched_blocks.len();
-
-                    if let Err(err) = Self::process_fetched_blocks(
-                        fetched_blocks,
-                        peer,
-                        blocks_guard,
-                        core_dispatcher.clone(),
-                        block_verifier.clone(),
-                        transaction_certifier.clone(),
-                        commit_vote_monitor.clone(),
+                    fail_point_async!("consensus-delay");
+                    // Fetch blocks from peers
+                    let results = Self::fetch_blocks_from_authorities(
                         context.clone(),
-                        commands_sender.clone(),
-                        round_tracker.clone(),
-                        "periodic",
+                        blocks_to_fetch.clone(),
+                        network_client,
+                        missing_blocks,
+                        highest_accepted_rounds,
                     )
-                    .await
-                    {
-                        warn!(
-                            "Error occurred while processing fetched blocks from peer {peer}: {err}"
-                        );
-                        context
-                            .metrics
-                            .node_metrics
-                            .synchronizer_process_fetched_failures
-                            .with_label_values(&[
-                                context.committee.authority(peer).hostname.as_str(),
-                                "periodic",
-                            ])
-                            .inc();
+                    .await;
+                    context
+                        .metrics
+                        .node_metrics
+                        .fetch_blocks_scheduler_inflight
+                        .dec();
+                    if results.is_empty() {
+                        return;
                     }
-                }
 
-                debug!(
-                    "Total blocks requested to fetch: {}, total fetched: {}",
-                    total_requested, total_fetched
-                );
-            }));
+                    // Now process the returned results
+                    let mut total_fetched = 0;
+                    for (blocks_guard, fetched_blocks, peer) in results {
+                        total_fetched += fetched_blocks.len();
+
+                        if let Err(err) = Self::process_fetched_blocks(
+                            fetched_blocks,
+                            peer,
+                            blocks_guard,
+                            core_dispatcher.clone(),
+                            block_verifier.clone(),
+                            transaction_certifier.clone(),
+                            commit_vote_monitor.clone(),
+                            context.clone(),
+                            commands_sender.clone(),
+                            round_tracker.clone(),
+                            "periodic",
+                        )
+                        .await
+                        {
+                            warn!(
+                                "Error occurred while processing fetched blocks from peer {peer}: {err}"
+                            );
+                            context
+                                .metrics
+                                .node_metrics
+                                .synchronizer_process_fetched_failures
+                                .with_label_values(&[
+                                    context.committee.authority(peer).hostname.as_str(),
+                                    "periodic",
+                                ])
+                                .inc();
+                        }
+                    }
+
+                    debug!(
+                        "Total blocks requested to fetch: {}, total fetched: {}",
+                        total_requested, total_fetched
+                    );
+                }));
+        };
+
         Ok(())
     }
 
@@ -1075,14 +1090,14 @@ where
         inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
         missing_blocks: BTreeSet<BlockRef>,
-        dag_state: Arc<RwLock<DagState>>,
+        highest_rounds: Vec<Round>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, AuthorityIndex)> {
         // Preliminary truncation of missing blocks to fetch. Since each peer can have different
-        // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_sync
+        // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_fetch
         // per peer on average.
         let missing_blocks = missing_blocks
             .into_iter()
-            .take(2 * MAX_PERIODIC_SYNC_PEERS * context.parameters.max_blocks_per_sync)
+            .take(2 * MAX_PERIODIC_SYNC_PEERS * context.parameters.max_blocks_per_fetch)
             .collect::<Vec<_>>();
 
         // Maps authorities to the missing blocks they have.
@@ -1137,8 +1152,6 @@ where
         let mut peers = peers.into_iter();
         let mut request_futures = FuturesUnordered::new();
 
-        let highest_rounds = Self::get_highest_accepted_rounds(dag_state, &context);
-
         // Shuffle the authorities for each request.
         let mut authorities = authorities.into_values().collect::<Vec<_>>();
         if cfg!(not(test)) {
@@ -1161,7 +1174,7 @@ where
                 .cloned()
                 .collect::<BTreeSet<_>>()
                 .into_iter()
-                .take(context.parameters.max_blocks_per_sync)
+                .take(context.parameters.max_blocks_per_fetch)
                 .collect::<BTreeSet<_>>();
 
             // lock the blocks to be fetched. If no lock can be acquired for any of the blocks then don't bother
