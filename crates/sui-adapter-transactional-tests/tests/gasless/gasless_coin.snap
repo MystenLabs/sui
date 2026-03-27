@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
 ---
 processed 27 tasks
 
@@ -162,11 +163,12 @@ accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, 
 gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
 
 task 24, lines 126-129:
-//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(22,1) @B
-// Reject: party coin input unused, fails post-execution check
-//> 0: sui::balance::zero<test::usdc::USDC>();
-//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
-Error: Error checking transaction input objects: Feature is not supported: Gasless transactions do not allow unused Object inputs (input 0)
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(22,1) @B 1
+// Reject: party coin input used but not deleted, fails post-execution check
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: sui::coin::send_funds<test::usdc::USDC>(NestedResult(0, 0), Input(1));
+Error: Transaction Effects Status: Insufficient Gas.
+Debug of error: InsufficientGas at command None
 
 task 25, line 131:
 //# create-checkpoint

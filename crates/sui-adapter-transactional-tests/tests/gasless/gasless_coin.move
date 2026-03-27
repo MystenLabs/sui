@@ -123,10 +123,10 @@ module test::usdc {
 // Success: party coin input used
 //> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
 
-//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(22,1) @B
-// Reject: party coin input unused, fails post-execution check
-//> 0: sui::balance::zero<test::usdc::USDC>();
-//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(22,1) @B 1
+// Reject: party coin input used but not deleted, fails post-execution check
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: sui::coin::send_funds<test::usdc::USDC>(NestedResult(0, 0), Input(1));
 
 //# create-checkpoint
 
