@@ -466,16 +466,19 @@ impl ChannelPool {
             .tls_config(client_tls_config)
             .unwrap();
 
+        const MAX_CONNECT_ATTEMPTS: u32 = 3;
         let deadline = tokio::time::Instant::now() + timeout;
+        let mut attempts = 0;
         let channel = loop {
+            attempts += 1;
             trace!("Connecting to endpoint at {address}");
             match endpoint.connect().await {
                 Ok(channel) => break channel,
                 Err(e) => {
                     debug!("Failed to connect to endpoint at {address}: {e:?}");
-                    if tokio::time::Instant::now() >= deadline {
+                    if attempts >= MAX_CONNECT_ATTEMPTS || tokio::time::Instant::now() >= deadline {
                         return Err(ConsensusError::NetworkClientConnection(format!(
-                            "Timed out connecting to endpoint at {address}: {e:?}"
+                            "Failed to connect to endpoint at {address} after {attempts} attempts: {e:?}"
                         )));
                     }
                     tokio::time::sleep(Duration::from_secs(1)).await;
