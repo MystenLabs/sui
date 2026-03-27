@@ -1069,7 +1069,7 @@ impl ProgrammableTransaction {
                         i
                     )));
                 }
-                _ => {}
+                CallArg::Object(_) | CallArg::FundsWithdrawal(_) => {}
             }
         }
 
