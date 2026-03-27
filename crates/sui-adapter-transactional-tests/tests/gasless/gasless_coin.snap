@@ -133,12 +133,12 @@ task 20, lines 103-105:
 Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
 
 task 21, lines 107-112:
-//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(19,0) @B
-// Reject: shared coin (unused)
-//> 0: sui::balance::zero<test::usdc::USDC>();
-//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(19,0) @B 1
+// Reject: shared coin (used but not deleted)
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: sui::coin::send_funds<test::usdc::USDC>(NestedResult(0, 0), Input(1));
 // --- Test 6: Party coin input succeeds (used and unused) ---
-Error: Error checking transaction input objects: Feature is not supported: Gasless transactions do not allow unused Object inputs (input 0)
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
 
 task 22, lines 114-120:
 //# programmable --sender A --inputs object(1,1) 2000 @A

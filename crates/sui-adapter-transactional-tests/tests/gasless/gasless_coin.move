@@ -104,10 +104,10 @@ module test::usdc {
 // Reject: shared coin (used)
 //> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
 
-//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(19,0) @B
-// Reject: shared coin (unused)
-//> 0: sui::balance::zero<test::usdc::USDC>();
-//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(19,0) @B 1
+// Reject: shared coin (used but not deleted)
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: sui::coin::send_funds<test::usdc::USDC>(NestedResult(0, 0), Input(1));
 
 // --- Test 6: Party coin input succeeds (used and unused) ---
 
