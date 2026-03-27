@@ -413,11 +413,7 @@ impl BorrowState {
             &BTreeMap::new(),
             code,
             move || match display_var(local.value()) {
-                DisplayVar::Tmp => panic!(
-                    "ICE invalid use of tmp local {} with borrows {:#?}",
-                    local.value(),
-                    borrows
-                ),
+                DisplayVar::Tmp => format!("Invalid {} of temporary variable", verb),
                 DisplayVar::MatchTmp(_s) => format!("Invalid {} of temporary match variable", verb),
                 DisplayVar::Orig(s) => format!("Invalid {} of variable '{}'", verb, s),
             },
@@ -577,7 +573,10 @@ impl BorrowState {
         self.locals.add(*local, Value::NonRef).unwrap();
         match old_value {
             Value::Ref(id) => (Diagnostics::new(), Value::Ref(id)),
-            Value::NonRef if last_usage_inferred => {
+            Value::NonRef
+                if last_usage_inferred
+                    && matches!(display_var(local.value()), DisplayVar::Orig(_)) =>
+            {
                 let root_and_local_borrows = self.local_borrowed_by(local);
                 let mut diag_opt = Self::borrow_error(
                     &self.borrows,
@@ -587,31 +586,19 @@ impl BorrowState {
                     ReferenceSafety::AmbiguousVariableUsage,
                     || {
                         let vstr = match display_var(local.value()) {
-                            DisplayVar::Tmp => {
-                                panic!("ICE invalid use tmp local {}", local.value())
-                            }
-                            DisplayVar::MatchTmp(s) => {
-                                panic!("ICE invalid use match tmp {}: {}", s, local.value())
-                            }
                             DisplayVar::Orig(s) => s,
+                            DisplayVar::MatchTmp(_) | DisplayVar::Tmp => unreachable!(),
                         };
                         format!("Ambiguous usage of variable '{}'", vstr)
                     },
                 );
-                diag_opt.iter_mut().for_each(|diag| {
-                    let vstr = match display_var(local.value()) {
-                        DisplayVar::Tmp => {
-                            panic!("ICE invalid use tmp local {}", local.value())
-                        }
-                        DisplayVar::MatchTmp(s) => {
-                            panic!("ICE invalid use match tmp {}: {}", s, local.value())
-                        }
+                // add a tip for user-defined variables
+                if let Some(diag) = &mut diag_opt {
+                    let v = match display_var(local.value()) {
                         DisplayVar::Orig(s) => s,
+                        DisplayVar::MatchTmp(_) | DisplayVar::Tmp => unreachable!(),
                     };
-                    let tip = format!(
-                        "Try an explicit annotation, e.g. 'move {v}' or 'copy {v}'",
-                        v = vstr
-                    );
+                    let tip = format!("Try an explicit annotation, e.g. 'move {v}' or 'copy {v}'");
                     const EXPLANATION: &str = "Ambiguous inference of 'move' or 'copy' for a \
                                                borrowed variable's last usage: A 'move' would \
                                                invalidate the borrowing reference, but a 'copy' \
@@ -619,7 +606,7 @@ impl BorrowState {
                                                this the last direct usage of the variable.";
                     diag.add_secondary_label((loc, tip));
                     diag.add_note(EXPLANATION);
-                });
+                };
                 (diag_opt.into(), Value::NonRef)
             }
             Value::NonRef => {
