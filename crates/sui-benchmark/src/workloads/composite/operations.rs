@@ -1085,11 +1085,11 @@ impl Operation for CoinReservationWithdraw {
             .accumulator_root
             .expect("AccumulatorRoot version not resolved");
 
-        let withdraw_amount = if account_state.sui_balance == 0 {
-            1
-        } else {
-            account_state.sui_balance
-        };
+        // Use the seeded amount rather than `account_state.sui_balance`, which reflects total
+        // coin balance (including gas objects), not the accumulator balance. The partner always
+        // deposits back the full withdrawal amount, so the accumulator always has exactly
+        // `address_balance_amount * 100` MIST when a withdrawal is possible.
+        let withdraw_amount = std::cmp::max(1, resources.address_balance_amount * 100);
 
         let sui_balance_type = Balance::type_tag(GAS::type_tag());
         let accumulator_obj_id =
