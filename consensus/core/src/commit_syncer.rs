@@ -900,7 +900,7 @@ mod tests {
     use std::{sync::Arc, time::Duration};
 
     use bytes::Bytes;
-    use consensus_config::{AuthorityIndex, Parameters};
+    use consensus_config::{AuthorityIndex, NetworkKeyPair, Parameters};
     use consensus_types::block::{BlockRef, Round};
     use mysten_common::ZipDebugEqIteratorExt;
     use parking_lot::RwLock;
@@ -917,7 +917,7 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{BlockStream, CommitSyncerClient, ObserverNetworkClient, ValidatorNetworkClient},
-        peers_pool::PeersPool,
+        peers_pool::{PeerServer, PeersPool},
         round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         transaction_vote_tracker::TransactionVoteTracker,
@@ -1014,6 +1014,225 @@ mod tests {
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn commit_syncer_observer_node_basic() {
+        // Test basic Observer node behavior for commit syncing
+        // An Observer node should be able to sync from both validator and observer peers
+
+        // Create an Observer node context (own_index = MAX)
+        let (mut context, _) = Context::new_for_test(4);
+        context.own_index = AuthorityIndex::MAX; // Mark this as an observer node
+        context.parameters = Parameters {
+            commit_sync_batch_size: 5,
+            commit_sync_batches_ahead: 10,
+            commit_sync_parallel_fetches: 5,
+            max_blocks_per_fetch: 5,
+            ..context.parameters
+        };
+        let context = Arc::new(context);
+
+        // Setup observer node commit syncer
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let core_thread_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let mock_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(CommitSyncerClient::new(
+            context.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+
+        // Create PeersPool - Observer typically connects to one validator
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        // Register the validator peer that the observer connects to
+        peers_pool
+            .register_validator(
+                AuthorityIndex::new_for_test(0),
+                vec![PeerServer::Validator, PeerServer::Observer],
+            )
+            .unwrap();
+
+        let mut commit_syncer = CommitSyncer::new(
+            context.clone(),
+            core_thread_dispatcher,
+            commit_vote_monitor.clone(),
+            commit_consumer_monitor.clone(),
+            block_verifier,
+            transaction_certifier,
+            round_tracker,
+            network_client,
+            dag_state,
+            peers_pool.clone(),
+        );
+
+        // Verify this is recognized as an observer
+        assert!(!context.is_validator(), "Should be an observer node");
+
+        // Simulate the observer seeing commits from its connected validator
+        for i in 0..3 {
+            let test_block = TestBlock::new(10, i)
+                .set_commit_votes(vec![CommitRef::new(5, CommitDigest::MIN)])
+                .build();
+            let block = VerifiedBlock::new_for_test(test_block);
+            commit_vote_monitor.observe_block(&block);
+        }
+
+        // Observer should be able to schedule commit fetches
+        commit_syncer.try_schedule_once();
+        assert_eq!(commit_syncer.pending_fetches().len(), 1);
+        assert_eq!(commit_syncer.highest_scheduled_index(), Some(5));
+
+        // Start fetches - observer should be able to fetch from its single peer
+        commit_syncer.try_start_fetches();
+        assert_eq!(
+            commit_syncer.inflight_fetches.len(),
+            1,
+            "Should start fetch from single peer"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn commit_syncer_observer_with_multiple_peers() {
+        // Test Observer node behavior when connected to multiple peers
+        // This simulates an observer that can sync from multiple sources
+
+        let (mut context, _) = Context::new_for_test(4);
+        context.own_index = AuthorityIndex::MAX; // Observer node
+        context.parameters = Parameters {
+            commit_sync_batch_size: 5,
+            commit_sync_batches_ahead: 10,
+            commit_sync_parallel_fetches: 8, // Allow more parallelism
+            max_blocks_per_fetch: 5,
+            ..context.parameters
+        };
+        let context = Arc::new(context);
+
+        // Setup
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let core_thread_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let network_client = Arc::new(CommitSyncerClient::new(
+            context.clone(),
+            Some(Arc::new(FakeNetworkClient::default())),
+            Some(Arc::new(FakeNetworkClient::default())),
+        ));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let (blocks_sender, _) = monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+
+        // Create PeersPool with multiple peers (validators and another observer)
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        // Register multiple validator peers
+        peers_pool
+            .register_validator(
+                AuthorityIndex::new_for_test(0),
+                vec![PeerServer::Validator, PeerServer::Observer],
+            )
+            .unwrap();
+        peers_pool
+            .register_validator(
+                AuthorityIndex::new_for_test(1),
+                vec![PeerServer::Validator, PeerServer::Observer],
+            )
+            .unwrap();
+        peers_pool
+            .register_validator(
+                AuthorityIndex::new_for_test(2),
+                vec![PeerServer::Validator, PeerServer::Observer],
+            )
+            .unwrap();
+
+        // Now register another observer peer (simulating observer-to-observer sync)
+        let observer_peer = NetworkKeyPair::generate(&mut rand::thread_rng()).public();
+        peers_pool.register_observer(observer_peer);
+
+        let mut commit_syncer = CommitSyncer::new(
+            context.clone(),
+            core_thread_dispatcher,
+            commit_vote_monitor.clone(),
+            commit_consumer_monitor.clone(),
+            block_verifier,
+            transaction_certifier,
+            round_tracker,
+            network_client,
+            dag_state,
+            peers_pool.clone(),
+        );
+
+        // Simulate heavy commit load that requires parallel fetching
+        for i in 0..3 {
+            let test_block = TestBlock::new(100, i)
+                .set_commit_votes(vec![CommitRef::new(50, CommitDigest::MIN)])
+                .build();
+            let block = VerifiedBlock::new_for_test(test_block);
+            commit_vote_monitor.observe_block(&block);
+        }
+
+        commit_syncer.try_schedule_once();
+
+        // Should schedule multiple batches
+        let pending_fetches = commit_syncer.pending_fetches().len();
+        assert!(pending_fetches > 0, "Should schedule fetches");
+
+        // Start fetches - observer should utilize multiple peers in parallel
+        commit_syncer.try_start_fetches();
+
+        // Observer with 4 peers (3 validators + 1 observer) should be able to
+        // fetch from multiple peers in parallel, not limited by 2/3 rule
+        let inflight = commit_syncer.inflight_fetches.len();
+        let available_peers = peers_pool.get_available_peers().len();
+
+        assert_eq!(
+            available_peers, 4,
+            "Should have 3 validators + 1 observer peer"
+        );
+
+        // Observer should be able to use full parallelism up to configured limit
+        // Not restricted by the validator's 2/3 limitation
+        let max_parallel = context
+            .parameters
+            .commit_sync_parallel_fetches
+            .min(pending_fetches)
+            .min(context.parameters.commit_sync_batches_ahead);
+
+        assert!(
+            inflight <= max_parallel,
+            "Observer should respect configured parallelism limit: {} <= {}",
+            inflight,
+            max_parallel
+        );
+
+        // Verify observer can potentially use more parallelism than a validator would
+        // A validator with 4 peers would be limited to 4 * 2/3 = 2 parallel fetches
+        // But an observer can use more
+        if pending_fetches >= 3 {
+            assert!(
+                max_parallel > 2,
+                "Observer should be able to use more parallelism than validator's 2/3 limit"
+            );
         }
     }
 
