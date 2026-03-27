@@ -22,7 +22,7 @@ const EUnsupportedVersion: u64 = 5;
 /// Currently, the only supported version is 0 which corresponds to the original Bulletproofs construction (https://eprint.iacr.org/2017/1066.pdf).
 /// In the future, we may add support for newer versions of Bulletproofs, such as Bulletproofs+ or Bulletproofs++.
 ///
-/// The format of the proof follows the specifications from https://github.com/dalek-cryptography/bulletproofs/blob/be67b6d5f5ad1c1f54d5511b52e6d645a1313d07/src/range_proof/mod.rs#L59-L76 serialized using BCS.
+/// The format of the proof follows the specifications from https://github.com/dalek-cryptography/bulletproofs/blob/be67b6d5f5ad1c1f54d5511b52e6d645a1313d07/src/range_proof/mod.rs#L59-L76.
 ///
 /// The commitments are Pedersen commitments to the values used in the proof. 
 /// The number of commitments must be a power of two, but if needed, the input to the prover can be padded with trivial commitments to zero.
