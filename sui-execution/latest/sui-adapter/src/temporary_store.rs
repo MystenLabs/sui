@@ -567,6 +567,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// Validates gasless post-execution invariants:
     /// - No new objects were created or existing objects mutated (written_objects is empty)
     /// - The set of deleted objects exactly equals the set of input Coin objects
+    /// - Each recipient receives at least the minimum transfer amount per token type
     pub fn check_gasless_execution_requirements(&self) -> Result<(), String> {
         if !self.execution_results.written_objects.is_empty() {
             return Err("Gasless transactions cannot create or mutate objects".to_string());
@@ -584,6 +585,52 @@ impl<'backing> TemporaryStore<'backing> {
                  Expected: {input_coin_ids:?}, deleted: {:?}",
                 self.execution_results.deleted_object_ids
             ));
+        }
+
+        let allowed_types =
+            sui_types::transaction::get_gasless_allowed_token_types(self.protocol_config);
+
+        // Compute net amounts per (address, token_type): Merge adds, Split subtracts.
+        // Positive nets are recipient deposits that must meet the minimum transfer amount.
+        // Negative nets are sender withdrawals (expected). Zero nets are no-ops.
+        let net_totals = self
+            .execution_results
+            .accumulator_events
+            .iter()
+            .filter_map(|e| match e.write.value {
+                AccumulatorValue::Integer(amount) => Some((e, amount)),
+                _ => None,
+            })
+            .try_fold(
+                BTreeMap::<(SuiAddress, TypeTag), i128>::new(),
+                |mut totals, (event, amount)| {
+                    let inner_type = sui_types::balance::Balance::maybe_get_balance_type_param(
+                        &event.write.address.ty,
+                    )
+                    .ok_or_else(|| "Accumulator event type is not Balance<T>".to_string())?;
+                    let delta = match event.write.operation {
+                        AccumulatorOperation::Merge => amount as i128,
+                        AccumulatorOperation::Split => -(amount as i128),
+                    };
+                    *totals
+                        .entry((event.write.address.address, inner_type))
+                        .or_default() += delta;
+                    Ok::<_, String>(totals)
+                },
+            )?;
+
+        for ((recipient, token_type), net_amount) in net_totals {
+            if net_amount <= 0 {
+                continue;
+            }
+            if let Some(&min_amount) = allowed_types.get(&token_type)
+                && net_amount < i128::from(min_amount)
+            {
+                return Err(format!(
+                    "Gasless transfer of {net_amount} to {recipient} is below \
+                     minimum {min_amount} for token type {token_type}"
+                ));
+            }
         }
 
         Ok(())

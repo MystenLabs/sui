@@ -684,7 +684,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
     ) -> UserInputResult<()> {
         let allowed_token_types =
-            sui_types::transaction::parse_gasless_allowed_token_types(protocol_config);
+            sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
 
         for obj_read in input_objects.iter() {
             let Some(object) = obj_read.as_object() else {
@@ -710,7 +710,7 @@ mod checked {
                 )
             })?;
             fp_ensure!(
-                allowed_token_types.contains(&coin_type),
+                allowed_token_types.contains_key(&coin_type),
                 UserInputError::Unsupported(
                     "Gasless transactions only support allowlisted types for Coin inputs"
                         .to_string()
