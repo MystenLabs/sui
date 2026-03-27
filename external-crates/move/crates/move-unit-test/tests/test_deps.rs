@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_compiler::editions::Edition;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
 };
@@ -13,6 +14,7 @@ use std::path::PathBuf;
 fn test_deps_arent_tested() {
     let mut testing_config = UnitTestingConfig::default_with_bound(None)
         .with_named_addresses(move_stdlib::named_addresses());
+    testing_config.edition = Some(Edition::DEVELOPMENT);
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let a_path = path.join("tests/sources/A.move");
     let b_path = path.join("tests/sources/B.move");

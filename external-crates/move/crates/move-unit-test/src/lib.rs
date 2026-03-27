@@ -16,7 +16,8 @@ use move_compiler::{
     self, Compiler, Flags, PASS_CFGIR,
     compiled_unit::NamedCompiledModule,
     diagnostics,
-    shared::{self, NumericalAddress},
+    editions::Edition,
+    shared::{self, NumericalAddress, PackageConfig},
     unit_test::{self, TestPlan},
 };
 use move_core_types::language_storage::ModuleId;
@@ -123,8 +124,20 @@ pub struct UnitTestingConfig {
     pub deterministic_generation: bool,
 
     // Enable tracing for tests
-    #[clap(long = TRACE_FLAG)]
-    pub trace: bool,
+    #[clap(long = TRACE_FLAG, default_missing_value = "full", num_args = 0..=1)]
+    pub trace: Option<TraceType>,
+
+    /// Edition to use when compiling
+    #[clap(long = "edition")]
+    pub edition: Option<Edition>,
+}
+
+#[derive(Debug, Clone, Default, clap::ValueEnum)]
+pub enum TraceType {
+    #[default]
+    Full,
+    InstructionOnly,
+    FunctionOnly,
 }
 
 fn format_module_id(
@@ -156,7 +169,8 @@ impl UnitTestingConfig {
             rand_num_iters: Some(DEFAULT_RAND_ITERS),
             seed: None,
             deterministic_generation: false,
-            trace: false,
+            trace: None,
+            edition: None,
         }
     }
 
@@ -178,11 +192,15 @@ impl UnitTestingConfig {
         let addresses =
             verify_and_create_named_address_mapping(self.named_address_values.clone()).ok()?;
         let flags = Flags::testing();
-        let (files, comments_and_compiler_res) =
-            Compiler::from_files(None, source_files, deps, addresses)
-                .set_flags(flags)
-                .run::<PASS_CFGIR>()
-                .unwrap();
+        let mut compiler = Compiler::from_files(None, source_files, deps, addresses)
+            .set_flags(flags);
+        if let Some(edition) = self.edition {
+            compiler = compiler.set_default_config(PackageConfig {
+                edition,
+                ..PackageConfig::default()
+            });
+        }
+        let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let compiler =
             diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
 

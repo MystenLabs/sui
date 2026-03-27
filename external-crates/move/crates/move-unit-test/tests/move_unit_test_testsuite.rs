@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_command_line_common::testing::insta_assert;
+use move_compiler::editions::Edition;
 use move_unit_test::{self, UnitTestingConfig};
 use regex::RegexBuilder;
 use std::path::Path;
@@ -19,6 +20,7 @@ fn run_test_impl(path: &Path) -> anyhow::Result<()> {
         named_address_values: move_stdlib::named_addresses().into_iter().collect(),
         report_stacktrace_on_abort: true,
         deterministic_generation: true,
+        edition: Some(Edition::DEVELOPMENT),
 
         ..UnitTestingConfig::default_with_bound(None)
     };

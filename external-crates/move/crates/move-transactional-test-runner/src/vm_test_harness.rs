@@ -21,7 +21,11 @@ use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_command_line_common::{
     files::verify_and_create_named_address_mapping, testing::InstaOptions,
 };
-use move_compiler::{PreCompiledProgramInfo, editions::Edition, shared::PackagePaths};
+use move_compiler::{
+    PreCompiledProgramInfo,
+    editions::Edition,
+    shared::{PackageConfig, PackagePaths},
+};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -669,7 +673,13 @@ fn call_vm_function(
 pub static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
-            name: None,
+            name: Some((
+                Symbol::from("stdlib"),
+                PackageConfig {
+                    edition: Edition::DEVELOPMENT,
+                    ..PackageConfig::default()
+                },
+            )),
             paths: move_stdlib::source_files(),
             named_address_map: move_stdlib::named_addresses(),
         }],
@@ -696,6 +706,10 @@ static MOVE_STDLIB_COMPILED: LazyLock<Vec<(CompiledModule, SourceMap)>> = LazyLo
         vec![],
         move_stdlib::named_addresses(),
     )
+    .set_default_config(PackageConfig {
+        edition: Edition::DEVELOPMENT,
+        ..PackageConfig::default()
+    })
     .build()
     .unwrap();
     match units_res {

@@ -669,6 +669,22 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
             VariantSwitch(VariantJumpTableIndex::new(0)),
             GasCost::new(0, 0),
         ),
+        (LdI8(0), GasCost::new(0, 0)),
+        (LdI16(0), GasCost::new(0, 0)),
+        (LdI32(0), GasCost::new(0, 0)),
+        (LdI64(0), GasCost::new(0, 0)),
+        (LdI128(Box::new(0)), GasCost::new(0, 0)),
+        (
+            LdI256(Box::new(move_core_types::i256::I256::zero())),
+            GasCost::new(0, 0),
+        ),
+        (CastI8, GasCost::new(0, 0)),
+        (CastI16, GasCost::new(0, 0)),
+        (CastI32, GasCost::new(0, 0)),
+        (CastI64, GasCost::new(0, 0)),
+        (CastI128, GasCost::new(0, 0)),
+        (CastI256, GasCost::new(0, 0)),
+        (Neg, GasCost::new(0, 0)),
     ]
 }
 
@@ -850,6 +866,22 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
             VariantSwitch(VariantJumpTableIndex::new(0)),
             GasCost::new(2, 1),
         ),
+        (LdI8(0), GasCost::new(1, 1)),
+        (LdI16(0), GasCost::new(1, 1)),
+        (LdI32(0), GasCost::new(1, 1)),
+        (LdI64(0), GasCost::new(1, 1)),
+        (LdI128(Box::new(0)), GasCost::new(1, 1)),
+        (
+            LdI256(Box::new(move_core_types::i256::I256::zero())),
+            GasCost::new(1, 1),
+        ),
+        (CastI8, GasCost::new(2, 1)),
+        (CastI16, GasCost::new(2, 1)),
+        (CastI32, GasCost::new(2, 1)),
+        (CastI64, GasCost::new(2, 1)),
+        (CastI128, GasCost::new(2, 1)),
+        (CastI256, GasCost::new(2, 1)),
+        (Neg, GasCost::new(1, 1)),
     ]
 }
 

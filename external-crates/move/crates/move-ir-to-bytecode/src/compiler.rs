@@ -512,7 +512,30 @@ fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
                 .as_ref()
                 .map(|c| c.jump_tables.is_empty())
                 .unwrap_or(true)
-        }) {
+        })
+        && !module.function_defs.iter().any(|f| {
+            f.code.as_ref().is_some_and(|c| {
+                c.code.iter().any(|instr| {
+                    matches!(
+                        instr,
+                        Bytecode::LdI8(_)
+                            | Bytecode::LdI16(_)
+                            | Bytecode::LdI32(_)
+                            | Bytecode::LdI64(_)
+                            | Bytecode::LdI128(_)
+                            | Bytecode::LdI256(_)
+                            | Bytecode::CastI8
+                            | Bytecode::CastI16
+                            | Bytecode::CastI32
+                            | Bytecode::CastI64
+                            | Bytecode::CastI128
+                            | Bytecode::CastI256
+                            | Bytecode::Neg
+                    )
+                })
+            })
+        })
+    {
         PRE_MAX_VERSION
     } else {
         VERSION_MAX
