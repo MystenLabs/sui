@@ -137,7 +137,7 @@ macro_rules! safe_unwrap {
         match $e {
             Some(x) => x,
             None => {
-                let err = move_binary_format::errors::PartialVMError::new(
+                let err = $crate::errors::PartialVMError::new(
                     move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 )
                 .with_message(format!("{}:{} (none)", file!(), line!()));
@@ -158,7 +158,7 @@ macro_rules! safe_unwrap_err {
         match $e {
             Ok(x) => x,
             Err(e) => {
-                let err = move_binary_format::errors::PartialVMError::new(
+                let err = $crate::errors::PartialVMError::new(
                     move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 )
                 .with_message(format!("{}:{} {:#}", file!(), line!(), e));
