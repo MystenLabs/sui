@@ -1634,6 +1634,9 @@ SplitCoinsCommand.amounts
 StoreExecutionTimeObservationsTransaction._
   => {}
 
+StreamSubscription.checkpoints
+  => {}
+
 Transaction.id
   => {}
 

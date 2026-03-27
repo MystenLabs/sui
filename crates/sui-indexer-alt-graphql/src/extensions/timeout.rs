@@ -38,6 +38,7 @@ pub(crate) struct Timeout(Arc<TimeoutConfig>);
 struct TimeoutExt {
     config: Arc<TimeoutConfig>,
     is_mutation: AtomicBool,
+    is_subscription: AtomicBool,
 }
 
 impl Timeout {
@@ -51,6 +52,7 @@ impl ExtensionFactory for Timeout {
         Arc::new(TimeoutExt {
             config: self.0.clone(),
             is_mutation: AtomicBool::new(false),
+            is_subscription: AtomicBool::new(false),
         })
     }
 }
@@ -74,6 +76,14 @@ impl Extension for TimeoutExt {
             Ordering::Relaxed,
         );
 
+        self.is_subscription.store(
+            document
+                .operations
+                .iter()
+                .any(|(_, op)| op.node.ty == OperationType::Subscription),
+            Ordering::Relaxed,
+        );
+
         Ok(document)
     }
 
@@ -83,6 +93,11 @@ impl Extension for TimeoutExt {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
+        // Subscriptions are long-lived streams — a per-request timeout does not apply.
+        if self.is_subscription.load(Ordering::Relaxed) {
+            return next.run(ctx, operation_name).await;
+        }
+
         let is_mutation = self.is_mutation.load(Ordering::Relaxed);
         let limit = if is_mutation {
             self.config.mutation

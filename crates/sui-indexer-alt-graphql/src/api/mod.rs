@@ -4,4 +4,5 @@
 pub(crate) mod mutation;
 pub(crate) mod query;
 pub(crate) mod scalars;
+pub(crate) mod subscription;
 pub(crate) mod types;

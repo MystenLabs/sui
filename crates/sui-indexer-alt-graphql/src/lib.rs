@@ -10,22 +10,25 @@ use api::types::address::IAddressable;
 use api::types::move_datatype::IMoveDatatype;
 use api::types::move_object::IMoveObject;
 use api::types::object::IObject;
-use async_graphql::EmptySubscription;
 use async_graphql::ObjectType;
 use async_graphql::Schema;
 use async_graphql::SchemaBuilder;
 use async_graphql::SubscriptionType;
 use async_graphql::extensions::ExtensionFactory;
 use async_graphql::extensions::Tracing;
+use async_graphql::http::ALL_WEBSOCKET_PROTOCOLS;
 use async_graphql::http::GraphiQLSource;
+use async_graphql_axum::GraphQLProtocol;
 use async_graphql_axum::GraphQLRequest;
 use async_graphql_axum::GraphQLResponse;
+use async_graphql_axum::GraphQLWebSocket;
 use axum::Extension;
 use axum::Router;
 use axum::extract::ConnectInfo;
-use axum::extract::MatchedPath;
+use axum::extract::WebSocketUpgrade;
 use axum::http::Method;
 use axum::response::Html;
+use axum::response::IntoResponse;
 use axum::routing::MethodRouter;
 use axum::routing::get;
 use axum::routing::post;
@@ -64,11 +67,16 @@ use url::Url;
 
 use crate::api::mutation::Mutation;
 use crate::api::query::Query;
+use crate::api::subscription::StreamSubscription;
 use crate::error::PanicHandler;
 use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
+
+const GRAPHQL_PATH: &str = "/graphql";
+const SUBSCRIPTION_PATH: &str = "/graphql/subscriptions";
+const HEALTH_PATH: &str = "/graphql/health";
 
 mod api;
 pub mod args;
@@ -202,8 +210,8 @@ where
         } = self;
 
         if with_ide {
-            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
-            router = router.route("/graphql", get(graphiql));
+            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}{GRAPHQL_PATH}'");
+            router = router.route(GRAPHQL_PATH, get(graphiql));
         } else {
             info!("Skipping GraphiQL IDE setup");
         }
@@ -259,8 +267,8 @@ impl Default for RpcArgs {
 }
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
-pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
-    Schema::build(Query::default(), Mutation, EmptySubscription)
+pub fn schema() -> SchemaBuilder<Query, Mutation, StreamSubscription> {
+    Schema::build(Query::default(), Mutation, StreamSubscription)
         .register_output_type::<IAddressable>()
         .register_output_type::<IMoveDatatype>()
         .register_output_type::<IMoveObject>()
@@ -288,6 +296,7 @@ pub async fn start_rpc(
     consistent_reader_args: ConsistentReaderArgs,
     args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
+    subscription_args: args::SubscriptionArgs,
     version: &'static str,
     config: RpcConfig,
     pg_pipelines: Vec<String>,
@@ -367,9 +376,14 @@ pub async fn start_rpc(
         metrics.clone(),
     );
 
+    let streaming_task = subscription_args
+        .checkpoint_stream_url
+        .map(|uri| task::streaming::CheckpointStreamTask::new(uri, &config.subscription));
+
     let rpc = rpc
-        .route("/graphql", post(graphql))
-        .route("/graphql/health", get(health::check))
+        .route(GRAPHQL_PATH, post(graphql))
+        .route(SUBSCRIPTION_PATH, get(graphql_ws))
+        .route(HEALTH_PATH, get(health::check))
         .layer(watermark_task.watermarks())
         .layer(config.health)
         .layer(DbProbe(database_url))
@@ -390,6 +404,12 @@ pub async fn start_rpc(
         .data(package_store)
         .data(fullnode_client);
 
+    let mut rpc = rpc.layer(SubscriptionsEnabled(streaming_task.is_some()));
+
+    if let Some(ref task) = streaming_task {
+        rpc = rpc.data(task.broadcaster());
+    }
+
     let s_rpc = rpc.run().await?;
     let s_system_package_task = system_package_task.run();
     let s_watermark = watermark_task.run();
@@ -403,7 +423,7 @@ pub async fn start_rpc(
 /// Handler for RPC requests (POST requests making GraphQL queries).
 async fn graphql(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(schema): Extension<Schema<Query, Mutation, EmptySubscription>>,
+    Extension(schema): Extension<Schema<Query, Mutation, StreamSubscription>>,
     Extension(watermark): Extension<WatermarksLock>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
@@ -425,8 +445,46 @@ async fn graphql(
 
 /// Handler for GET requests for the online IDE. GraphQL requests are forwarded to the POST handler
 /// at the same path.
-async fn graphiql(path: MatchedPath) -> Html<String> {
-    Html(GraphiQLSource::build().endpoint(path.as_str()).finish())
+async fn graphiql() -> Html<String> {
+    Html(
+        GraphiQLSource::build()
+            .endpoint(GRAPHQL_PATH)
+            .subscription_endpoint(SUBSCRIPTION_PATH)
+            .finish(),
+    )
+}
+
+/// Whether subscriptions are enabled on this instance (i.e., `--checkpoint-stream-url` was set).
+#[derive(Clone, Copy)]
+struct SubscriptionsEnabled(bool);
+
+/// Handler for WebSocket subscription connections.
+///
+/// If subscriptions are not enabled, the connection is rejected at `connection_init` with a
+/// clear error. This ensures that subscription resolvers can assume the broadcaster is always
+/// available.
+async fn graphql_ws(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(schema): Extension<Schema<Query, Mutation, StreamSubscription>>,
+    Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
+    protocol: GraphQLProtocol,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    ws.protocols(ALL_WEBSOCKET_PROTOCOLS)
+        .on_upgrade(move |stream| {
+            let mut data = async_graphql::Data::default();
+            data.insert(Session::new(addr));
+
+            GraphQLWebSocket::new(stream, schema, protocol)
+                .with_data(data)
+                .on_connection_init(move |_| async move {
+                    if !subscriptions_enabled {
+                        return Err("Subscriptions are not enabled on this instance.".into());
+                    }
+                    Ok(async_graphql::Data::default())
+                })
+                .serve()
+        })
 }
 
 #[cfg(test)]

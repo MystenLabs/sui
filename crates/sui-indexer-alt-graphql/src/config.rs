@@ -38,6 +38,9 @@ pub struct RpcConfig {
 
     /// Configuration for zkLogin verification.
     pub zklogin: ZkLoginConfig,
+
+    /// Configuration for streaming subscriptions.
+    pub subscription: SubscriptionConfig,
 }
 
 #[DefaultConfig]
@@ -49,6 +52,7 @@ pub struct RpcLayer {
     pub name_service: NameServiceLayer,
     pub watermark: WatermarkLayer,
     pub zklogin: ZkLoginLayer,
+    pub subscription: SubscriptionLayer,
 }
 
 #[derive(Clone)]
@@ -62,6 +66,37 @@ pub struct HealthConfig {
 #[serde(deny_unknown_fields)]
 pub struct HealthLayer {
     pub max_checkpoint_lag_ms: Option<u64>,
+}
+
+pub struct SubscriptionConfig {
+    /// Number of checkpoints the broadcast channel can buffer before slow subscribers are
+    /// dropped. Higher values give subscribers more time to catch up but use more memory,
+    /// as each buffered checkpoint's data is kept alive until it leaves the buffer.
+    /// Subscribers that fall behind by this many checkpoints receive a lagged error.
+    pub broadcast_buffer: usize,
+}
+
+impl Default for SubscriptionConfig {
+    fn default() -> Self {
+        Self {
+            broadcast_buffer: 256,
+        }
+    }
+}
+
+#[DefaultConfig]
+#[derive(Default, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct SubscriptionLayer {
+    pub broadcast_buffer: Option<usize>,
+}
+
+impl SubscriptionLayer {
+    pub(crate) fn finish(self, base: SubscriptionConfig) -> SubscriptionConfig {
+        SubscriptionConfig {
+            broadcast_buffer: self.broadcast_buffer.unwrap_or(base.broadcast_buffer),
+        }
+    }
 }
 
 /// Config for an indexer writing to a database used by this RPC service. It is simplified w.r.t.
@@ -231,6 +266,7 @@ impl RpcLayer {
             name_service: NameServiceConfig::default().into(),
             watermark: WatermarkConfig::default().into(),
             zklogin: ZkLoginConfig::default().into(),
+            subscription: SubscriptionConfig::default().into(),
         }
     }
 
@@ -241,6 +277,7 @@ impl RpcLayer {
             name_service: self.name_service.finish(NameServiceConfig::default()),
             watermark: self.watermark.finish(WatermarkConfig::default()),
             zklogin: self.zklogin.finish(ZkLoginConfig::default()),
+            subscription: self.subscription.finish(SubscriptionConfig::default()),
         }
     }
 }
@@ -479,6 +516,14 @@ impl From<ZkLoginConfig> for ZkLoginLayer {
         Self {
             env: Some(value.env),
             max_epoch_upper_bound_delta: Some(value.max_epoch_upper_bound_delta),
+        }
+    }
+}
+
+impl From<SubscriptionConfig> for SubscriptionLayer {
+    fn from(value: SubscriptionConfig) -> Self {
+        Self {
+            broadcast_buffer: Some(value.broadcast_buffer),
         }
     }
 }
