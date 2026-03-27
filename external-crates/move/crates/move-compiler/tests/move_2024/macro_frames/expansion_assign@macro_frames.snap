@@ -1,0 +1,43 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/expansion_assign.move:20:9
+   │  
+11 │           $x
+   │           -- [3] Argument
+   ·  
+16 │           $f(arg)
+   │           ------- [1] Lambda
+   ·  
+20 │ ╭         apply!(|x|
+21 │ │             if (x > p) {
+22 │ │                 id!(x)
+   │ │                 ------ [2] MacroBody(0x41::m::id)
+23 │ │             } else {
+24 │ │                 0
+25 │ │             }
+26 │ │         )
+   │ ╰─────────^ [0] MacroBody(0x41::m::apply)
+   │  
+   = Frame transitions (test):
+       15: `let arg = 1;`
+           [] -> [MacroBody(apply)]
+       20: `apply!(|x|`
+           [MacroBody(apply)] -> [MacroBody(apply), Lambda]
+       22: `id!(x)`
+           [MacroBody(apply), Lambda] -> [MacroBody(apply), Lambda, MacroBody(id), Argument]
+       21: `if (x > p) {`
+           [MacroBody(apply), Lambda, MacroBody(id), Argument] -> [MacroBody(apply), Lambda, MacroBody(id)]
+       21: `if (x > p) {`
+           [MacroBody(apply), Lambda, MacroBody(id)] -> [MacroBody(apply), Lambda]
+       24: `0`
+           [MacroBody(apply), Lambda] -> []
+       21: `if (x > p) {`
+           [] -> [MacroBody(apply), Lambda]
+       20: `apply!(|x|`
+           [MacroBody(apply), Lambda] -> []

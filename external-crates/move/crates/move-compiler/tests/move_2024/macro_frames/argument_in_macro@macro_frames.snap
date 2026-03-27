@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+  ┌─ tests/move_2024/macro_frames/argument_in_macro.move:8:9
+  │
+4 │         $x + 1
+  │         -- [1] Argument
+  ·
+8 │         add_one!(v)
+  │         ^^^^^^^^^^^ [0] MacroBody(0x41::m::add_one)
+  │
+  = Frame transitions (test):
+      8: `add_one!(v)`
+          [] -> [MacroBody(add_one), Argument]
+      4: `$x + 1`
+          [MacroBody(add_one), Argument] -> [MacroBody(add_one)]
+      8: `add_one!(v)`
+          [MacroBody(add_one)] -> []

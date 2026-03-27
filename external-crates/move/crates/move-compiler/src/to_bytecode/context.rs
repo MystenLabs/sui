@@ -32,6 +32,13 @@ pub struct Context<'a> {
     current_module: Option<&'a ModuleIdent>,
     seen_datatypes: BTreeSet<(ModuleIdent, DatatypeName)>,
     seen_functions: BTreeSet<(ModuleIdent, FunctionName)>,
+    /// Active macro expansion color for bytecode annotation. Set from
+    /// `cmd.color` at command boundaries and from `e.color` at expression
+    /// boundaries (with save/restore), mirroring how `current_color` is
+    /// tracked in HLIR translation. Passed to `push_instr` so each
+    /// bytecode carries the color of its enclosing macro scope. Starts
+    /// at 0 (no macro scope).
+    pub color: u16,
 }
 
 impl<'a> Context<'a> {
@@ -46,6 +53,7 @@ impl<'a> Context<'a> {
             current_module,
             seen_datatypes: BTreeSet::new(),
             seen_functions: BTreeSet::new(),
+            color: 0,
         }
     }
 

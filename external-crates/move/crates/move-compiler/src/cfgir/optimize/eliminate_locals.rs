@@ -114,9 +114,9 @@ mod count {
     }
 
     #[growing_stack]
-    pub fn command(context: &mut Context, sp!(_, cmd_): &Command) {
+    pub fn command(context: &mut Context, cmd: &Command) {
         use Command_ as C;
-        match cmd_ {
+        match &cmd.value {
             C::Assign(_, ls, e) => {
                 exp(context, e);
                 let substitutable_rvalues = can_subst_exp(ls.len(), e);
@@ -296,9 +296,9 @@ mod eliminate {
     }
 
     #[growing_stack]
-    pub fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
+    pub fn command(context: &mut Context, cmd: &mut Command) {
         use Command_ as C;
-        match cmd_ {
+        match &mut cmd.value {
             C::Assign(_, ls, e) => {
                 exp(context, e);
                 let eliminated = lvalues(context, ls);
@@ -368,7 +368,58 @@ mod eliminate {
         use UnannotatedExp_ as E;
         match &mut parent_e.exp.value {
             E::Copy { var, .. } | E::Move { var, .. } => {
-                if let Some(replacement) = context.eliminated.remove(var) {
+                if let Some(mut replacement) = context.eliminated.remove(var) {
+                    // When a local is eliminated, its replacement value is
+                    // substituted at the use site. The use-site expression
+                    // (parent_e, a Move or Copy) may carry a color marking
+                    // a macro scope crossing. In to_bytecode, exp() applies
+                    // e.color.unwrap_or(context.color) — so a colorless
+                    // replacement inherits the command's color instead of
+                    // the use-site's scope-crossing color.
+                    //
+                    // Non-nested case (macro_frames/eliminate_local_color):
+                    //
+                    //   macro fun m($f: |u64| -> u64): u64 {
+                    //       let v = 1; $f(v)
+                    //   }
+                    //
+                    //   CFGIR before elimination:
+                    //     cmd(MacroBody): v = Value(1)  [Value.color = None]
+                    //     cmd(Lambda):    x = Move(v)   [Move.color = MacroBody]
+                    //
+                    //   After eliminating v, Move(v) becomes Value(1):
+                    //     cmd(Lambda):    x = Value(1)
+                    //
+                    //   Without the guard, Value(1).color stays None and
+                    //   inherits Lambda from the command — MacroBody is
+                    //   lost. The guard copies MacroBody from Move(v)
+                    //   onto Value(1), preserving the scope boundary.
+                    //
+                    // Nested case (macro_frames/eliminate_local_nested_color):
+                    //
+                    //   macro fun m($v: u64, $f: |u64| -> u64): u64 {
+                    //       let v = $v; $f(v)
+                    //   }
+                    //   macro fun outer($g: |u64| -> u64): u64 {
+                    //       m!(1, $g)
+                    //   }
+                    //
+                    //   Here Value(1).color = Some(Argument) because the
+                    //   by-name $v crosses from MacroBody(outer) into
+                    //   MacroBody(m). The guard does NOT fire. This is
+                    //   correct: Argument is nested inside MacroBody(m)
+                    //   in the scope tree, so the parent chain already
+                    //   includes MacroBody(m). Overwriting would flatten
+                    //   [MacroBody(outer), MacroBody(m), Argument] to
+                    //   just [MacroBody(m)].
+                    //
+                    // Invariant: when replacement.color is Some(X), X is at
+                    // or below parent_e's scope in the tree, so X's parent
+                    // chain already covers it. Only colorless replacements
+                    // need the use-site color.
+                    if replacement.color.is_none() {
+                        replacement.color = parent_e.color;
+                    }
                     *parent_e = replacement
                 }
             }

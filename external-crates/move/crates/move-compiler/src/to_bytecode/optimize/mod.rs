@@ -51,8 +51,8 @@ pub(crate) fn code(
 fn remap_labels(blocks: &mut IR::BytecodeBlocks, map: &HashMap<IR::BlockLabel_, IR::BlockLabel_>) {
     use IR::Bytecode_ as B;
     for (_, block) in blocks {
-        for instr in block {
-            match &mut instr.value {
+        for colored in block {
+            match &mut colored.instr.value {
                 B::Branch(lbl) | B::BrTrue(lbl) | B::BrFalse(lbl) => {
                     *lbl = map[lbl].clone();
                 }

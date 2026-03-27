@@ -594,7 +594,7 @@ pub trait SimpleAbsInt: Sized {
         if self.command_custom(context, state, cmd) {
             return;
         }
-        let sp!(_, cmd_) = cmd;
+        let cmd_ = &cmd.value;
         match cmd_ {
             C::Assign(_, ls, e) => {
                 let values = self.exp(context, state, e);
@@ -908,13 +908,13 @@ fn cfg_satisfies_(
 }
 
 fn command_satisfies_(
-    cmd @ sp!(_, cmd_): &Command,
+    cmd: &Command,
     p_command: &mut impl FnMut(&Command) -> bool,
     p_exp: &mut impl FnMut(&Exp) -> bool,
 ) -> bool {
     use H::Command_ as C;
     p_command(cmd)
-        || match cmd_ {
+        || match &cmd.value {
             C::Assign(_, _, e)
             | C::Abort(_, e)
             | C::Return { exp: e, .. }

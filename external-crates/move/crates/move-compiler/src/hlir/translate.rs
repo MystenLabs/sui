@@ -13,7 +13,7 @@ use crate::{
         match_compilation,
     },
     ice, ice_assert,
-    naming::ast as N,
+    naming::ast::{self as N, Color},
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, TargetKind,
         VariantName,
@@ -143,6 +143,12 @@ pub(super) struct Context<'env> {
     tmp_counter: usize,
     named_block_binders: UniqueMap<H::BlockLabel, Vec<H::LValue>>,
     named_block_types: UniqueMap<H::BlockLabel, H::Type>,
+    /// Tracks the active macro expansion color during translation. Saved and
+    /// restored at block boundaries (set to `use_funs.expansion_color` on
+    /// entry), and stamped onto every H::Statement and H::Command so that
+    /// to_bytecode can compute debugger frame transitions between consecutive
+    /// bytecodes. Starts at 0 (no macro scope).
+    current_color: Color,
     /// collects all struct fields used in the current module
     used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
 }
@@ -169,6 +175,7 @@ impl<'env> Context<'env> {
             used_fields: BTreeMap::new(),
             named_block_binders: UniqueMap::new(),
             named_block_types: UniqueMap::new(),
+            current_color: 0,
         }
     }
 
@@ -469,7 +476,9 @@ fn function_body(
             context.extract_function_locals();
             HB::Native
         }
-        TB::Defined((_, seq)) => {
+        TB::Defined((use_funs, seq)) => {
+            let saved_color = context.current_color;
+            context.current_color = use_funs.expansion_color;
             debug_print!(context.debug.function_translation,
                          (msg format!("-- {} ----------------", _name)),
                          (lines "body" => &seq; verbose));
@@ -477,6 +486,7 @@ fn function_body(
             debug_print!(context.debug.function_translation,
                          (msg "--------"),
                          (lines "body" => &body; verbose));
+            context.current_color = saved_color;
             HB::Defined { locals, body }
         }
         TB::Macro => unreachable!("ICE macros filtered above"),
@@ -498,7 +508,7 @@ fn function_body_defined(
             from_user: false,
             exp: ret_exp,
         };
-        body.push_back(make_command(ret_loc, ret_command));
+        body.push_back(make_command(ret_loc, context.current_color, ret_command));
     }
 
     let locals = context.extract_function_locals();
@@ -867,7 +877,7 @@ fn tail(
                 if_block,
                 else_block,
             };
-            block.push_back(sp(eloc, if_else));
+            block.push_back(H::Statement::new(eloc, context.current_color, if_else));
             if arms_unreachable {
                 None
             } else {
@@ -924,7 +934,11 @@ fn tail(
                 enum_name,
                 arms,
             };
-            block.push_back(sp(eloc, variant_switch));
+            block.push_back(H::Statement::new(
+                eloc,
+                context.current_color,
+                variant_switch,
+            ));
             let result = if arms_unreachable {
                 None
             } else {
@@ -961,8 +975,9 @@ fn tail(
             };
             context.enter_named_block(name, binders, out_type.clone());
             let (loop_body, has_break) = process_loop_body(context, &name, *body);
-            block.push_back(sp(
+            block.push_back(H::Statement::new(
                 eloc,
+                context.current_color,
                 S::Loop {
                     name,
                     has_break,
@@ -978,7 +993,9 @@ fn tail(
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
             None
         }
-        E::NamedBlock(name, (_, seq)) => {
+        E::NamedBlock(name, (use_funs, seq)) => {
+            let saved_color = context.current_color;
+            context.current_color = use_funs.expansion_color;
             let name = translate_block_label(name);
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             let result = if binders.is_empty() {
@@ -993,17 +1010,33 @@ fn tail(
             if let Some(exp) = final_exp {
                 bind_value_in_block(context, binders, Some(out_type), &mut body_block, exp);
             }
-            block.push_back(sp(
+            block.push_back(H::Statement::new(
                 eloc,
+                context.current_color,
                 S::NamedBlock {
                     name,
                     block: body_block,
                 },
             ));
             context.exit_named_block(name);
+            context.current_color = saved_color;
             Some(result)
         }
-        E::Block((_, seq)) => tail_block(context, block, expected_type, seq),
+        E::Block((use_funs, seq)) => {
+            let saved_color = context.current_color;
+            context.current_color = use_funs.expansion_color;
+            let result = tail_block(context, block, expected_type, seq);
+            // Mirrors the value-position Block handler's color guard but it's
+            // difficult to conceive a source-level test that would exercise it.
+            let result = result.map(|mut e| {
+                if use_funs.expansion_color != saved_color && e.color.is_none() {
+                    e.color = Some(use_funs.expansion_color);
+                }
+                e
+            });
+            context.current_color = saved_color;
+            result
+        }
 
         // -----------------------------------------------------------------------------------------
         //  statements that need to be hoisted out
@@ -1159,9 +1192,14 @@ fn value(
                 let code = bind_exp(context, block, code_value);
                 (cond, code)
             };
-            else_block.push_back(make_command(eloc, C::Abort(code.exp.loc, code)));
-            block.push_back(sp(
+            else_block.push_back(make_command(
                 eloc,
+                context.current_color,
+                C::Abort(code.exp.loc, code),
+            ));
+            block.push_back(H::Statement::new(
+                eloc,
+                context.current_color,
                 S::IfElse {
                     cond: Box::new(cond),
                     if_block,
@@ -1205,7 +1243,7 @@ fn value(
                 if_block,
                 else_block,
             };
-            block.push_back(sp(eloc, if_else));
+            block.push_back(H::Statement::new(eloc, context.current_color, if_else));
             if arms_unreachable {
                 make_exp(HE::Unreachable)
             } else {
@@ -1254,7 +1292,11 @@ fn value(
                 enum_name,
                 arms,
             };
-            block.push_back(sp(eloc, variant_switch));
+            block.push_back(H::Statement::new(
+                eloc,
+                context.current_color,
+                variant_switch,
+            ));
             let result = if arms_unreachable {
                 make_exp(HE::Unreachable)
             } else {
@@ -1280,8 +1322,9 @@ fn value(
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             context.enter_named_block(name, binders, out_type.clone());
             let (loop_body, has_break) = process_loop_body(context, &name, *body);
-            block.push_back(sp(
+            block.push_back(H::Statement::new(
                 eloc,
+                context.current_color,
                 S::Loop {
                     name,
                     has_break,
@@ -1300,24 +1343,69 @@ fn value(
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
             make_exp(HE::Unreachable)
         }
-        E::NamedBlock(name, (_, seq)) => {
+        E::NamedBlock(name, (use_funs, seq)) => {
+            let saved_color = context.current_color;
+            context.current_color = use_funs.expansion_color;
             let name = translate_block_label(name);
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             context.enter_named_block(name, binders.clone(), out_type.clone());
             let mut body_block = make_block!();
             let final_exp = value_block(context, &mut body_block, Some(&out_type), eloc, seq);
             bind_value_in_block(context, binders, Some(out_type), &mut body_block, final_exp);
-            block.push_back(sp(
+            block.push_back(H::Statement::new(
                 eloc,
+                context.current_color,
                 S::NamedBlock {
                     name,
                     block: body_block,
                 },
             ));
             context.exit_named_block(name);
+            // Same color-preservation logic as the Block case below, applied
+            // to NamedBlock results (macro bodies use NamedBlocks for their
+            // return labels). See test: macro_frames/binop_macro.
+            let mut bound_exp = bound_exp;
+            if use_funs.expansion_color != saved_color && bound_exp.color.is_none() {
+                bound_exp.color = Some(use_funs.expansion_color);
+            }
+            context.current_color = saved_color;
             bound_exp
         }
-        E::Block((_, seq)) => value_block(context, block, Some(&out_type), eloc, seq),
+        E::Block((use_funs, seq)) => {
+            let saved_color = context.current_color;
+            context.current_color = use_funs.expansion_color;
+            let mut result = value_block(context, block, Some(&out_type), eloc, seq);
+            // Preserve the block's expansion color on its result expression
+            // when the block introduced a new color and the result doesn't
+            // already carry one from an inner scope.
+            //
+            // Consider:
+            //
+            //   macro fun add_one($x: u64): u64 { $x + 1 }
+            //   fun test(v: u64): u64 { add_one!(v) }
+            //
+            // The by-name substitution wraps `v` in a Block(Argument).
+            // This guard tags the result with the Argument color so that
+            // to_bytecode sees the scope change.
+            // See test: macro_frames/argument_in_macro.
+            //
+            // The `result.color.is_none()` guard avoids overwriting colors
+            // from inner scopes. Consider:
+            //
+            //   macro fun inner($x: u64): u64 { $x + 1 }
+            //   macro fun outer($x: u64): u64 { inner!($x) }
+            //   fun test(v: u64): u64 { outer!(v) }
+            //
+            // Here inner's result already carries MacroBody(inner) color;
+            // overwriting it with MacroBody(outer) would make the inner
+            // transition invisible.
+            // See test: macro_frames/simple_nested_macros.
+            if use_funs.expansion_color != saved_color && result.color.is_none() {
+                result.color = Some(use_funs.expansion_color);
+            }
+            context.current_color = saved_color;
+            result
+        }
 
         // -----------------------------------------------------------------------------------------
         //  calls
@@ -1700,6 +1788,7 @@ fn value_list_items_to_vec(
                     let current_exp = H::Exp {
                         ty: current_ty,
                         exp: sp(loc, HE::Multiple(es)),
+                        color: None,
                     };
                     let (mut freeze_block, frozen) = freeze(context, expected_ty, current_exp);
                     result.append(&mut freeze_block);
@@ -1797,8 +1886,9 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             let mut else_block = make_block!();
             let alt = alt_opt.unwrap_or_else(|| Box::new(typing_unit_exp(eloc)));
             statement(context, &mut else_block, *alt);
-            block.push_back(sp(
+            block.push_back(H::Statement::new(
                 eloc,
+                context.current_color,
                 S::IfElse {
                     cond: Box::new(cond),
                     if_block,
@@ -1832,7 +1922,11 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 enum_name,
                 arms,
             };
-            block.push_back(sp(eloc, variant_switch));
+            block.push_back(H::Statement::new(
+                eloc,
+                context.current_color,
+                variant_switch,
+            ));
             debug_print!(context.debug.match_variant_translation,
                          (lines "block" => block; verbose));
         }
@@ -1845,8 +1939,9 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             context.enter_named_block(name, vec![], tunit(eloc));
             let mut body_block = make_block!();
             statement(context, &mut body_block, *body);
-            block.push_back(sp(
+            block.push_back(H::Statement::new(
                 eloc,
+                context.current_color,
                 S::While {
                     cond,
                     name,
@@ -1861,8 +1956,9 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             context.enter_named_block(name, binders, out_type);
             let (loop_body, has_break) = process_loop_body(context, &name, *body);
-            block.push_back(sp(
+            block.push_back(H::Statement::new(
                 eloc,
+                context.current_color,
                 S::Loop {
                     name,
                     has_break,
@@ -1870,11 +1966,16 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 },
             ));
             if has_break {
-                make_ignore_and_pop(block, bound_exp);
+                make_ignore_and_pop(block, context.current_color, bound_exp);
             }
             context.exit_named_block(name);
         }
-        E::Block((_, seq)) => statement_block(context, block, seq),
+        E::Block((use_funs, seq)) => {
+            let saved_color = context.current_color;
+            context.current_color = use_funs.expansion_color;
+            statement_block(context, block, seq);
+            context.current_color = saved_color;
+        }
         E::Return(rhs) => {
             let expected_type = context.signature.as_ref().map(|s| s.return_type.clone());
             let exp = value(context, block, expected_type.as_ref(), *rhs);
@@ -1882,11 +1983,15 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 from_user: true,
                 exp,
             };
-            block.push_back(make_command(eloc, ret_command));
+            block.push_back(make_command(eloc, context.current_color, ret_command));
         }
         E::Abort(rhs) => {
             let exp = value(context, block, None, *rhs);
-            block.push_back(make_command(eloc, C::Abort(exp.exp.loc, exp)));
+            block.push_back(make_command(
+                eloc,
+                context.current_color,
+                C::Abort(exp.exp.loc, exp),
+            ));
         }
         E::Give(name, rhs) => {
             let out_name = translate_block_label(name);
@@ -1894,15 +1999,23 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             let rhs = value(context, block, bind_ty.as_ref(), *rhs);
             let binders = context.lookup_named_block_binders(&out_name);
             if binders.is_empty() {
-                make_ignore_and_pop(block, rhs);
+                make_ignore_and_pop(block, context.current_color, rhs);
             } else {
                 bind_value_in_block(context, binders, bind_ty, block, rhs);
             }
-            block.push_back(make_command(eloc, C::Break(out_name)));
+            block.push_back(make_command(
+                eloc,
+                context.current_color,
+                C::Break(out_name),
+            ));
         }
         E::Continue(name) => {
             let out_name = translate_block_label(name);
-            block.push_back(make_command(eloc, C::Continue(out_name)));
+            block.push_back(make_command(
+                eloc,
+                context.current_color,
+                C::Continue(out_name),
+            ));
         }
 
         // -----------------------------------------------------------------------------------------
@@ -1918,7 +2031,11 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             // evaluate RHS first
             let rhs = value(context, block, None, *rhs_in);
             let lhs = value(context, block, None, *lhs_in);
-            block.push_back(make_command(eloc, C::Mutate(Box::new(lhs), Box::new(rhs))));
+            block.push_back(make_command(
+                eloc,
+                context.current_color,
+                C::Mutate(Box::new(lhs), Box::new(rhs)),
+            ));
         }
 
         // calls might be for effect
@@ -1988,15 +2105,19 @@ fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::Se
 // Treat something like a value, and add a final `ignore_and_pop` at the end to consume that value.
 fn value_statement(context: &mut Context, block: &mut Block, e: T::Exp) {
     let exp = value(context, block, None, e);
-    make_ignore_and_pop(block, exp);
+    make_ignore_and_pop(block, context.current_color, exp);
 }
 
 // -------------------------------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------------------------------
 
-fn make_command(loc: Loc, command: H::Command_) -> H::Statement {
-    sp(loc, H::Statement_::Command(sp(loc, command)))
+fn make_command(loc: Loc, color: Color, command: H::Command_) -> H::Statement {
+    H::Statement::new(
+        loc,
+        color,
+        H::Statement_::Command(H::Command::new(loc, color, command)),
+    )
 }
 
 fn process_loop_body(context: &mut Context, name: &BlockLabel, body: T::Exp) -> (H::Block, bool) {
@@ -2103,15 +2224,15 @@ fn is_exp_list(e: &T::Exp) -> bool {
 
 macro_rules! hcmd {
     ($cmd:pat) => {
-        S::Command(sp!(_, $cmd))
+        S::Command(H::Command { value: $cmd, .. })
     };
 }
 
 fn still_has_break(name: &BlockLabel, block: &Block) -> bool {
     use H::{Command_ as C, Statement_ as S};
 
-    fn has_break(name: &BlockLabel, sp!(_, stmt_): &H::Statement) -> bool {
-        match stmt_ {
+    fn has_break(name: &BlockLabel, stmt: &H::Statement) -> bool {
+        match &stmt.value {
             S::IfElse {
                 if_block,
                 else_block,
@@ -2206,9 +2327,14 @@ fn make_assignments(
         lvalues.push(ls);
         after.append(&mut af);
     }
-    result.push_back(sp(
+    result.push_back(H::Statement::new(
         loc,
-        S::Command(sp(loc, C::Assign(case, lvalues, rvalue))),
+        context.current_color,
+        S::Command(H::Command::new(
+            loc,
+            context.current_color,
+            C::Assign(case, lvalues, rvalue),
+        )),
     ));
     result.append(&mut after);
 }
@@ -2387,7 +2513,7 @@ fn assign_fields(
 // Commands
 //**************************************************************************************************
 
-fn make_ignore_and_pop(block: &mut Block, exp: H::Exp) {
+fn make_ignore_and_pop(block: &mut Block, color: Color, exp: H::Exp) {
     use H::UnannotatedExp_ as E;
     let loc = exp.exp.loc;
     if exp.is_unreachable() {
@@ -2398,23 +2524,32 @@ fn make_ignore_and_pop(block: &mut Block, exp: H::Exp) {
             E::Unit { .. } => (),
             E::Value(_) => (),
             _ => {
-                let c = sp(loc, H::Command_::IgnoreAndPop { pop_num: 0, exp });
-                block.push_back(sp(loc, H::Statement_::Command(c)));
+                let c = H::Command_::IgnoreAndPop { pop_num: 0, exp };
+                block.push_back(H::Statement::new(
+                    loc,
+                    color,
+                    H::Statement_::Command(H::Command::new(loc, color, c)),
+                ));
             }
         },
         H::Type_::Single(_) => {
-            let c = sp(loc, H::Command_::IgnoreAndPop { pop_num: 1, exp });
-            block.push_back(sp(loc, H::Statement_::Command(c)));
+            let c = H::Command_::IgnoreAndPop { pop_num: 1, exp };
+            block.push_back(H::Statement::new(
+                loc,
+                color,
+                H::Statement_::Command(H::Command::new(loc, color, c)),
+            ));
         }
         H::Type_::Multiple(tys) => {
-            let c = sp(
+            let c = H::Command_::IgnoreAndPop {
+                pop_num: tys.len(),
+                exp,
+            };
+            block.push_back(H::Statement::new(
                 loc,
-                H::Command_::IgnoreAndPop {
-                    pop_num: tys.len(),
-                    exp,
-                },
-            );
-            block.push_back(sp(loc, H::Statement_::Command(c)));
+                color,
+                H::Statement_::Command(H::Command::new(loc, color, c)),
+            ));
         }
     };
 }
@@ -2508,9 +2643,29 @@ fn bind_value_in_block(
     }
     let rhs_exp = maybe_freeze(context, stmts, binders_type, value_exp);
     let loc = rhs_exp.exp.loc;
-    stmts.push_back(sp(
+    // Use the value expression's color for the Assign when it has one.
+    // For example, when `id!(x)` is called in an if-branch inside a lambda:
+    //
+    //   if (x > p) { id!(x) } else { 0 }
+    //
+    //   The true branch's result carries MacroBody(id) color (stamped by tail()).
+    //   bind_value_in_block creates: Assign(temp, <if-else result>)
+    //
+    //   Without this: Assign gets context.current_color (Lambda)
+    //     → MacroBody(id) is invisible in frame transitions
+    //   With this:    Assign gets rhs color (MacroBody(id))
+    //     → MacroBody(id) appears as a distinct scope transition
+    //
+    // See test: macro_frames/expansion_assign.
+    let color = rhs_exp.color.unwrap_or(context.current_color);
+    stmts.push_back(H::Statement::new(
         loc,
-        S::Command(sp(loc, C::Assign(H::AssignCase::Let, binders, rhs_exp))),
+        color,
+        S::Command(H::Command::new(
+            loc,
+            color,
+            C::Assign(H::AssignCase::Let, binders, rhs_exp),
+        )),
     ));
 }
 
@@ -2821,7 +2976,7 @@ fn process_binops(
                         if_block,
                         else_block,
                     };
-                    let if_stmt = sp(loc, if_stmt_);
+                    let if_stmt = H::Statement::new(loc, context.current_color, if_stmt_);
                     cur_block.push_back(if_stmt);
                 }
                 input_block.extend(cur_block);
@@ -2858,7 +3013,7 @@ fn process_binops(
                         if_block,
                         else_block,
                     };
-                    let if_stmt = sp(loc, if_stmt_);
+                    let if_stmt = H::Statement::new(loc, context.current_color, if_stmt_);
                     cur_block.push_back(if_stmt);
                 }
                 input_block.extend(cur_block);
@@ -2957,6 +3112,7 @@ fn freeze(context: &mut Context, expected_type: &H::Type, e: H::Exp) -> (Block, 
             if let H::Exp {
                 ty: _,
                 exp: sp!(eloc, E::Multiple(exps)),
+                ..
             } = bound_rhs
             {
                 assert!(exps.len() == points.len());

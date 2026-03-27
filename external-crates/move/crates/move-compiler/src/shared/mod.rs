@@ -17,7 +17,7 @@ use crate::{
         },
     },
     editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
-    expansion::ast::{self as E, ModuleIdent},
+    expansion::ast::{self as E, ModuleIdent, ModuleIdent_},
     hlir::ast as H,
     naming::ast::{self as N, Function, UseFuns},
     parser::ast::{self as P, FunctionName},
@@ -55,6 +55,7 @@ pub mod ast_debug;
 pub mod files;
 pub mod ide;
 pub mod known_attributes;
+pub mod macro_frames;
 pub mod matching;
 pub mod program_info;
 pub mod remembering_unique_map;
@@ -253,6 +254,8 @@ pub struct CompilationEnv {
     mapped_files: MappedFiles,
     save_hooks: Vec<SaveHook>,
     ide_information: Arc<RwLock<IDEInfo>>,
+    macro_frame_infos:
+        Arc<RwLock<BTreeMap<(ModuleIdent_, Symbol), Vec<macro_frames::ColorFrameInfo>>>>,
     // Files to fully compile (as opposed to omitting function bodies)
     files_to_compile: Option<BTreeSet<PathBuf>>,
 }
@@ -334,6 +337,7 @@ impl CompilationEnv {
             mapped_files: MappedFiles::empty(),
             save_hooks,
             ide_information: Arc::new(RwLock::new(IDEInfo::new())),
+            macro_frame_infos: Arc::new(RwLock::new(BTreeMap::new())),
             files_to_compile,
         }
     }
@@ -633,6 +637,33 @@ impl CompilationEnv {
 
     pub fn ide_information(&self) -> std::sync::RwLockReadGuard<'_, IDEInfo> {
         self.ide_information.read().unwrap()
+    }
+
+    pub fn add_macro_frame_info(
+        &self,
+        module: ModuleIdent_,
+        function: Symbol,
+        info: macro_frames::ColorFrameInfo,
+    ) {
+        self.macro_frame_infos
+            .write()
+            .unwrap()
+            .entry((module, function))
+            .or_default()
+            .push(info);
+    }
+
+    pub fn get_macro_frame_infos(
+        &self,
+        module: &ModuleIdent_,
+        function: &Symbol,
+    ) -> Vec<macro_frames::ColorFrameInfo> {
+        self.macro_frame_infos
+            .read()
+            .unwrap()
+            .get(&(module.clone(), *function))
+            .cloned()
+            .unwrap_or_default()
     }
 }
 

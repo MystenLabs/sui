@@ -36,8 +36,10 @@ fn remove_fall_through(
             continue;
         }
 
-        let remove_last =
-            matches!(&block.last().unwrap().value, B::Branch(lbl) if lbl == next_block);
+        let remove_last = matches!(
+            &block.last().unwrap().instr.value,
+            B::Branch(lbl) if lbl == next_block
+        );
         if remove_last {
             changed = true;
             block.pop();
@@ -56,7 +58,7 @@ fn remove_empty_blocks(blocks: &mut IR::BytecodeBlocks) -> bool {
             removed = true;
         } else {
             cur_label = Some(label.clone());
-            blocks.push((label.clone(), block))
+            blocks.push((label.clone(), block));
         }
         label_map.insert(label, cur_label.clone().unwrap());
     }

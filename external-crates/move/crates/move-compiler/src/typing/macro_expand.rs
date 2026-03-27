@@ -10,12 +10,17 @@ use crate::{
         self as N, BlockLabel, Color, MatchArm_, TParamID, Type, TypeInner, UseFuns, Var, Var_,
     },
     parser::ast::FunctionName,
-    shared::{ide::IDEAnnotation, program_info::FunctionInfo, unique_map::UniqueMap},
+    shared::{
+        ide::IDEAnnotation, macro_frames::ColorFrameInfo, program_info::FunctionInfo,
+        unique_map::UniqueMap,
+    },
     typing::{
         ast as T,
         core::{self, TParamSubst},
     },
 };
+use move_bytecode_source_map::source_map::MacroFrameKind;
+use move_core_types::identifier::Identifier;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -75,6 +80,29 @@ pub(crate) fn call(
     // If none, there is no body to expand, likely because of an error in the macro definition
     let macro_body = context.macro_body(&m, &f)?;
     let macro_info = context.function_info(&m, &f);
+
+    // Capture macro frame info for debugger support.
+    let module_addr = m.value.address.into_addr_bytes().into_inner();
+    if let (Ok(module_name), Ok(function_name)) = (
+        Identifier::new(m.value.module_name()),
+        Identifier::new(f.0.value.as_str()),
+    ) {
+        context.add_macro_frame_info(ColorFrameInfo {
+            color: next_color,
+            // Use expansion_color (not call_color) so that macros called inside
+            // lambda bodies get the correct parent chain. Without this, the lambda's
+            // use_funs.color is 0 (definition-site), breaking the parent link.
+            // See test: macro_frames/binop_macro.
+            parent_color: context.current_expansion_color(),
+            kind: MacroFrameKind::MacroBody {
+                module_addr,
+                module_name,
+                function_name,
+            },
+            source_loc: macro_info.full_loc,
+            call_loc,
+        });
+    }
 
     let (macro_type_params, macro_params, mut macro_body, return_label, max_color) =
         match recolor_macro(
@@ -476,6 +504,29 @@ fn recolor_block_label(ctx: &mut Recolor, label: &mut BlockLabel) {
 
 fn recolor_use_funs(ctx: &mut Recolor, use_funs: &mut UseFuns) {
     recolor_use_funs_(ctx, &mut use_funs.color);
+    // Like recolor_use_funs_, only update expansion_color when
+    // ctx.recolor_use_funs() is true (macro body recoloring).
+    //
+    // When false (argument/lambda recoloring), expansion_color retains
+    // its previous value (initialized to 0 by UseFuns::new, or set to
+    // an argument color by a prior substitution). This is important for
+    // nested argument forwarding. Consider:
+    //
+    //   macro fun add1($a: u64): u64 { $a + 1 }
+    //   macro fun wrap($b: u64): u64 { add1!($b) }
+    //   fun test(v: u64): u64 { wrap!(v) }
+    //
+    // When wrap's expansion substitutes $b in `add1!($b)`, the Block
+    // wrapping `v` gets its expansion_color set to wrap_arg_color by the
+    // by-name substitution code (below). Then when add1's expansion
+    // substitutes $a, the arg (containing that Block) is recolored with
+    // recolor_use_funs=false. Resetting expansion_color here would
+    // destroy the wrap_arg_color that the Block already carries, making
+    // the Argument frame invisible in debugger transitions.
+    // See test: macro_frames/simple_nested_macros.
+    if ctx.recolor_use_funs() {
+        use_funs.expansion_color = use_funs.color;
+    }
 }
 
 fn recolor_use_funs_(ctx: &mut Recolor, use_fun_color: &mut Color) {
@@ -1018,6 +1069,14 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             };
             // recolor in case the lambda is used more than once
             let next_color = context.core.next_variable_color();
+            // Capture lambda frame info for debugger support
+            context.core.add_macro_frame_info(ColorFrameInfo {
+                color: next_color,
+                parent_color: context.macro_color,
+                kind: MacroFrameKind::Lambda,
+                source_loc: lambda_body.loc,
+                call_loc: *eloc,
+            });
             let reloc_clever_errors = None;
             let recolor_use_funs = false;
             let recolor = &mut Recolor::new(
@@ -1081,11 +1140,15 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             };
             let body_loc = lambda_body.loc;
             let labeled_seq = VecDeque::from([sp(body_loc, N::SequenceItem_::Seq(lambda_body))]);
+            let mut lambda_use_funs = N::UseFuns::new(use_fun_color);
+            // Override expansion_color so that HLIR tags lambda body bytecodes with the
+            // lambda's own expansion color (for the debugger's macro color map), while
+            // keeping `color` at the definition-site value for method alias scoping.
+            lambda_use_funs.expansion_color = next_color;
             let labeled_body_ = N::Exp_::Block(N::Block {
                 name: Some(return_label),
-                // mark lambda expansion for recursive macro check
                 from_macro_argument: Some(N::MacroArgument::Lambda(*eloc)),
-                seq: (N::UseFuns::new(use_fun_color), labeled_seq),
+                seq: (lambda_use_funs, labeled_seq),
             });
             let labeled_body = Box::new(sp(body_loc, labeled_body_));
             let annot_body = all_result_ty.into_iter().fold(labeled_body, |body, ty| {
@@ -1107,15 +1170,73 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     let annot_arg = param_ty_annots.into_iter().fold(arg, |arg, param_ty| {
                         Box::new(sp(param_ty.loc, N::Exp_::Annotate(arg, param_ty)))
                     });
-                    sp(param_loc, N::SequenceItem_::Bind(lvs, annot_arg))
+                    // Wrap the argument expression in a MacroBody-colored block
+                    // so that argument evaluation bytecodes keep the parent
+                    // (macro body) color, while the Bind's LHS store gets the
+                    // outer block's Lambda color. This ensures the debugger's
+                    // frame transition happens at the parameter binding, not at
+                    // the argument evaluation.
+                    //
+                    // Example: for `macro fun apply($f: |u64| -> u64): u64 { $f(42) }`
+                    // the call `apply!(|y| y + 1)` expands the lambda call to:
+                    //
+                    //   Block(expansion_color=Lambda) {
+                    //       Bind(y, Block(expansion_color=MacroBody) { 42 })
+                    //       <lambda body: y + 1>
+                    //   }
+                    //
+                    // The inner MacroBody-colored block keeps `42` in the
+                    // MacroBody frame (it was written at the call site), while
+                    // the Bind's LHS `y` gets the outer Lambda color. Without
+                    // this wrapper, `42` would inherit the Lambda color and the
+                    // debugger would show entry into the lambda before the
+                    // argument is evaluated.
+                    // See test: macro_frames/lambda_computed_arg.
+                    let arg_use_funs = N::UseFuns::new(context.macro_color);
+                    let arg_loc = annot_arg.loc;
+                    let arg_seq = VecDeque::from([sp(arg_loc, N::SequenceItem_::Seq(annot_arg))]);
+                    let wrapped_arg = Box::new(sp(
+                        arg_loc,
+                        N::Exp_::Block(N::Block {
+                            name: None,
+                            from_macro_argument: None,
+                            seq: (arg_use_funs, arg_seq),
+                        }),
+                    ));
+                    sp(param_loc, N::SequenceItem_::Bind(lvs, wrapped_arg))
                 })
                 .collect();
             result.push_back(sp(body_loc, N::SequenceItem_::Seq(annot_body)));
 
+            let mut outer_use_funs = N::UseFuns::new(context.macro_color);
+            // Set Lambda color on the outer block that wraps the entire
+            // lambda expansion (parameter bindings + body). This makes the
+            // Bind LHS (parameter store) inherit the Lambda expansion color,
+            // triggering the frame transition at the parameter binding —
+            // the natural entry point into the lambda.
+            //
+            // Example:
+            //
+            //   macro fun apply($f: |u64| -> u64): u64 { $f(42) }
+            //   fun test(): u64 { apply!(|y| y * 2) }
+            //
+            // The lambda call `$f(42)` expands to:
+            //
+            //   Block(expansion_color=Lambda) {
+            //       Bind(y, Block(expansion_color=MacroBody) { 42 })
+            //       y * 2
+            //   }
+            //
+            // The Bind's LHS `y` gets Lambda color from the outer block,
+            // producing: [MacroBody] -> [MacroBody, Lambda] at the binding.
+            // Without this, `y` would stay in MacroBody and the Lambda
+            // frame transition would not occur.
+            // See test: macro_frames/lambda_computed_arg.
+            outer_use_funs.expansion_color = next_color;
             let block = N::Exp_::Block(N::Block {
                 name: None,
                 from_macro_argument: None,
-                seq: (N::UseFuns::new(context.macro_color), result),
+                seq: (outer_use_funs, result),
             });
             if context.core.env().ide_mode() {
                 context
@@ -1133,6 +1254,14 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             let (mut arg, expected_ty) = context.by_name_args.get(v_).cloned().unwrap();
             // recolor the arg in case it is used more than once
             let next_color = context.core.next_variable_color();
+            // Capture by-name argument frame info for debugger support
+            context.core.add_macro_frame_info(ColorFrameInfo {
+                color: next_color,
+                parent_color: context.macro_color,
+                kind: MacroFrameKind::Argument,
+                source_loc: arg.loc,
+                call_loc: *eloc,
+            });
             let reloc_clever_errors = None;
             let recolor_use_funs = false;
             let recolor = &mut Recolor::new(
@@ -1147,7 +1276,12 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             // mark the arg as coming from an argument substitution for recursive checks
             match &mut arg.value {
                 N::Exp_::Block(block) => {
-                    block.from_macro_argument = Some(N::MacroArgument::Substituted(*eloc))
+                    block.from_macro_argument = Some(N::MacroArgument::Substituted(*eloc));
+                    // Override expansion_color so HLIR tags argument substitution
+                    // bytecodes with the argument's own expansion color, while
+                    // keeping `color` unchanged for scoping.
+                    let (use_funs, _) = &mut block.seq;
+                    use_funs.expansion_color = next_color;
                 }
                 N::Exp_::UnresolvedError => (),
                 _ => unreachable!("ICE all macro args should have been made blocks in naming"),

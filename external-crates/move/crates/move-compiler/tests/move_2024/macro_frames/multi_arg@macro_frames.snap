@@ -1,0 +1,27 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/multi_arg.move:11:9
+   │
+ 7 │         $a + $b
+   │         --   -- [2] Argument
+   │         │     
+   │         [1] Argument
+   ·
+11 │         add!(x, y)
+   │         ^^^^^^^^^^ [0] MacroBody(0x41::m::add)
+   │
+   = Frame transitions (test):
+       11: `add!(x, y)`
+           [] -> [MacroBody(add), Argument]
+       11: `add!(x, y)`
+           [MacroBody(add), Argument] -> [MacroBody(add), Argument]
+       7: `$a + $b`
+           [MacroBody(add), Argument] -> [MacroBody(add)]
+       11: `add!(x, y)`
+           [MacroBody(add)] -> []

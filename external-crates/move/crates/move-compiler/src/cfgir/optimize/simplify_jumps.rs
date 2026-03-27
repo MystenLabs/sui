@@ -36,11 +36,11 @@ pub fn optimize(
 }
 
 #[growing_stack]
-fn optimize_cmd(sp!(_, cmd_): &mut Command) -> bool {
+fn optimize_cmd(cmd: &mut Command) -> bool {
     use Command_ as C;
     use UnannotatedExp_ as E;
     use Value_ as V;
-    match cmd_ {
+    match &mut cmd.value {
         C::JumpIf {
             cond:
                 Exp {
@@ -51,7 +51,7 @@ fn optimize_cmd(sp!(_, cmd_): &mut Command) -> bool {
             if_false,
         } => {
             let lbl = if *cond { *if_true } else { *if_false };
-            *cmd_ = C::Jump {
+            cmd.value = C::Jump {
                 target: lbl,
                 from_user: false,
             };

@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/macro_in_loop.move:13:17
+   │
+ 7 │         $x + 1
+   │         -- [1] Argument
+   ·
+13 │             i = inc!(i);
+   │                 ^^^^^^^ [0] MacroBody(0x41::m::inc)
+   │
+   = Frame transitions (test):
+       13: `i = inc!(i);`
+           [] -> [MacroBody(inc), Argument]
+       7: `$x + 1`
+           [MacroBody(inc), Argument] -> [MacroBody(inc)]
+       13: `i = inc!(i);`
+           [MacroBody(inc)] -> []

@@ -69,8 +69,10 @@ fn find_forwarding_jump_destinations(blocks: &BasicBlocks) -> LabelMap {
     use Command_ as C;
     let mut forwarding_jumps = BTreeMap::new();
     for (label, block) in blocks.iter().filter(|(_, block)| block.len() == 1) {
-        if let Some(sp!(_, C::Jump { target, .. })) = block.iter().last() {
-            forwarding_jumps.insert(*label, *target);
+        if let Some(cmd) = block.iter().last() {
+            if let C::Jump { target, .. } = &cmd.value {
+                forwarding_jumps.insert(*label, *target);
+            }
         }
     }
 
@@ -128,9 +130,9 @@ fn optimize_forwarding_jumps(
 }
 
 #[growing_stack]
-fn optimize_cmd(sp!(_, cmd_): &mut Command, final_jumps: &BTreeMap<Label, Label>) -> bool {
+fn optimize_cmd(cmd: &mut Command, final_jumps: &BTreeMap<Label, Label>) -> bool {
     use Command_ as C;
-    match cmd_ {
+    match &mut cmd.value {
         C::Jump {
             target,
             from_user: _,

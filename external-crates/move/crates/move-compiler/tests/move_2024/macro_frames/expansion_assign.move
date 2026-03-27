@@ -1,0 +1,28 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// Tests that id!(x) on line 22, called inside a lambda's if-branch,
+// appears as MacroBody(id) in frame transitions. The if/else on line 21
+// produces a compiler-generated assignment to bind the result. That
+// assignment must inherit the MacroBody(id) color from the true branch,
+// otherwise MacroBody(id) disappears from the transitions.
+module A::m {
+    macro fun id($x: u64): u64 {
+        $x
+    }
+
+    macro fun apply($f: |u64| -> u64): u64 {
+        let arg = 1;
+        $f(arg)
+    }
+
+    public fun test(p: u64): u64 {
+        apply!(|x|
+            if (x > p) {
+                id!(x)
+            } else {
+                0
+            }
+        )
+    }
+}

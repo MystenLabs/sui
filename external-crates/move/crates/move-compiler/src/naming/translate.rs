@@ -2007,6 +2007,7 @@ fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
     }
     N::UseFuns {
         color: 0, // used for macro substitution
+        expansion_color: 0,
         resolved,
         implicit_candidates: eimplicit,
     }
@@ -2182,6 +2183,7 @@ fn use_fun_module_defines(
 fn mark_all_use_funs_as_used(use_funs: &mut N::UseFuns) {
     let N::UseFuns {
         color: _,
+        expansion_color: _,
         resolved,
         implicit_candidates,
     } = use_funs;

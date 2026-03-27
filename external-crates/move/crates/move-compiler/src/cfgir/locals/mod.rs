@@ -216,9 +216,10 @@ fn unused_let_muts<T>(
 //**************************************************************************************************
 
 #[growing_stack]
-fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
+fn command(context: &mut Context, cmd: &Command) {
+    let loc = cmd.loc;
     use Command_ as C;
-    match cmd_ {
+    match &cmd.value {
         C::Assign(case, ls, e) => {
             exp(context, e);
             lvalues(context, *case, ls);
@@ -272,7 +273,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
                             );
                             let mut diag = diag!(
                                 MoveSafety::UnusedUndroppable,
-                                (*loc, "Invalid return"),
+                                (loc, "Invalid return"),
                                 (available, msg)
                             );
                             add_drop_ability_tip(context, &mut diag, ty.clone());

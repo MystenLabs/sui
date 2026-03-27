@@ -10,7 +10,7 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     hlir::{
         ast::*,
-        translate::{DisplayVar, display_var},
+        translate::{display_var, DisplayVar},
     },
     ice_assert,
     parser::ast::BinOp_,
@@ -190,9 +190,10 @@ macro_rules! assert_non_ref {
 }
 
 #[growing_stack]
-fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
+fn command(context: &mut Context, cmd: &Command) {
+    let loc = cmd.loc;
     use Command_ as C;
-    match cmd_ {
+    match &cmd.value {
         C::Assign(_, ls, e) => {
             let values = exp(context, e);
             lvalues(context, ls, values);
@@ -201,7 +202,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
             let value = single_value_exp!(context, er);
             assert_non_ref!(context, value, er.exp.loc);
             let lvalue = single_value_exp!(context, el);
-            let diags = context.borrow_state.mutate(*loc, lvalue);
+            let diags = context.borrow_state.mutate(loc, lvalue);
             context.add_diags(diags);
         }
         C::JumpIf { cond: e, .. } => {
@@ -210,7 +211,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
         }
         C::VariantSwitch { subject, .. } => {
             let value = single_value_exp!(context, subject);
-            let diags = context.borrow_state.variant_switch(*loc, value);
+            let diags = context.borrow_state.variant_switch(loc, value);
             context.add_diags(diags);
         }
         C::IgnoreAndPop { exp: e, .. } => {
@@ -220,7 +221,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
 
         C::Return { exp: e, .. } => {
             let values = exp(context, e);
-            let diags = context.borrow_state.return_(*loc, values);
+            let diags = context.borrow_state.return_(loc, values);
             context.add_diags(diags);
         }
         C::Abort(_, e) => {

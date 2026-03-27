@@ -63,9 +63,9 @@ struct Context<'a> {
 // Some(changed) to keep
 // None to remove the cmd
 #[growing_stack]
-fn optimize_cmd(context: &Context, sp!(_, cmd_): &mut Command) -> Option<bool> {
+fn optimize_cmd(context: &Context, cmd: &mut Command) -> Option<bool> {
     use Command_ as C;
-    Some(match cmd_ {
+    Some(match &mut cmd.value {
         C::Assign(_, _ls, e) => optimize_exp(context, e),
         C::Mutate(el, er) => {
             let c1 = optimize_exp(context, er);

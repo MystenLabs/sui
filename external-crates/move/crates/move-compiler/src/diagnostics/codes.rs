@@ -405,6 +405,7 @@ codes!(
         EllipsisExpansion: { msg: "IDE ellipsis expansion", severity: Note },
         PathAutocomplete: { msg: "IDE path autocomplete", severity: Note },
         StringValue: { msg: "IDE string value", severity: Note },
+        MacroFrameInfo: { msg: "macro frame info", severity: Note },
     ],
 );
 

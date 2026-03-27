@@ -80,9 +80,9 @@ fn analyze(
 }
 
 #[growing_stack]
-fn command(state: &mut LivenessState, sp!(_, cmd_): &Command) {
+fn command(state: &mut LivenessState, cmd: &Command) {
     use Command_ as C;
-    match cmd_ {
+    match &cmd.value {
         C::Assign(_, ls, e) => {
             lvalues(state, ls);
             exp(state, e);
@@ -242,9 +242,9 @@ mod last_usage {
     }
 
     #[growing_stack]
-    fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
+    fn command(context: &mut Context, cmd: &mut Command) {
         use Command_ as C;
-        match cmd_ {
+        match &mut cmd.value {
             C::Assign(_, ls, e) => {
                 lvalues(context, ls);
                 exp(context, e);
@@ -484,5 +484,5 @@ fn pop_ref(loc: Loc, var: Var, ty: SingleType) -> Command {
         pop_num: 1,
         exp: move_e,
     };
-    sp(loc, pop_)
+    H::Command::new(loc, 0, pop_)
 }

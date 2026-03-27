@@ -651,7 +651,23 @@ pub type Exp = Spanned<Exp_>;
 //**************************************************************************************************
 
 pub type BytecodeBlocks = Vec<(BlockLabel_, BytecodeBlock)>;
-pub type BytecodeBlock = Vec<Bytecode>;
+pub type BytecodeBlock = Vec<ColoredBytecode>;
+
+/// Bytecode instruction paired with a macro expansion color. Used as an
+/// intermediate representation during compilation — the color is recorded in
+/// the source map (for debugger frame transitions) but does not appear in
+/// the final compiled bytecode.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColoredBytecode {
+    pub instr: Bytecode,
+    pub color: u16,
+}
+
+impl ColoredBytecode {
+    pub fn new(instr: Bytecode, color: u16) -> Self {
+        Self { instr, color }
+    }
+}
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct BlockLabel_(pub Symbol);
@@ -1342,8 +1358,8 @@ impl fmt::Display for FunctionBody {
                 writeln!(f, "]")?;
                 for (label, block) in code {
                     writeln!(f, "{}:", &label)?;
-                    for instr in block {
-                        writeln!(f, "  {}", instr)?;
+                    for colored in block {
+                        writeln!(f, "  {}", colored.instr)?;
                     }
                 }
                 Ok(())

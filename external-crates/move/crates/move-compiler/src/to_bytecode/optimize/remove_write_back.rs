@@ -14,11 +14,11 @@ pub fn optimize(
     blocks: &mut IR::BytecodeBlocks,
 ) -> bool {
     let mut changed = false;
-    for (_lbl, block) in blocks {
+    for (_lbl, block) in blocks.iter_mut() {
         let mut new_block = vec![];
         let mut i = 0;
         while i < block.len() {
-            match (&block[i], block.get(i + 1)) {
+            match (&block[i].instr, block.get(i + 1).map(|b| &b.instr)) {
                 (sp!(_, IR::Bytecode_::CopyLoc(v1)), Some(sp!(_, IR::Bytecode_::StLoc(v2))))
                 | (sp!(_, IR::Bytecode_::MoveLoc(v1)), Some(sp!(_, IR::Bytecode_::StLoc(v2))))
                     if v1 == v2 =>
@@ -26,8 +26,8 @@ pub fn optimize(
                     changed = true;
                     i += 2
                 }
-                (instr, _) => {
-                    new_block.push(instr.clone());
+                _ => {
+                    new_block.push(block[i].clone());
                     i += 1
                 }
             }

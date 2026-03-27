@@ -84,9 +84,33 @@ pub type ResolvedUseFuns = BTreeMap<TypeName, UniqueMap<Name, UseFun>>;
 // Color for scopes of use funs and variables
 pub type Color = u16;
 
+/// Tracks scope identity and method aliases for a block or sequence.
+///
+/// # Invariants — `color` vs `expansion_color`
+///
+/// Both fields start equal (see `UseFuns::new`). They diverge during macro expansion
+/// recoloring (see `typing/macro_expand.rs`, `recolor_use_funs`):
+///
+/// - **Macro body recoloring** (`recolor_use_funs = true`): both `color` and
+///   `expansion_color` are remapped to the new macro body color. This is the
+///   common case for freshly expanded macro bodies.
+///
+/// - **Argument/lambda recoloring** (`recolor_use_funs = false`): `color` is left
+///   unchanged (it must stay at the definition-site value for correct method alias
+///   resolution), but `expansion_color` is **preserved** — it is NOT reset. This
+///   is critical for nested inlining: when macro A passes its argument or lambda
+///   to macro B, the inner Block already carries A's expansion color. Resetting it
+///   during B's recoloring would make A's frame invisible in debugger transitions.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct UseFuns {
+    /// Scope identity for method alias resolution. Each macro expansion gets a
+    /// unique color; method lookup only matches scopes with the same color. This
+    /// prevents aliases from different macro expansions from interfering.
     pub color: Color,
+    /// Color used by HLIR translation for the debugger's macro color map. Usually
+    /// equal to `color`, but differs for lambda/argument expansion blocks where
+    /// `color` must stay at the definition-site value for correct scope resolution.
+    pub expansion_color: Color,
     pub resolved: ResolvedUseFuns,
     pub implicit_candidates: UniqueMap<Name, ImplicitUseFunCandidate>,
 }
@@ -581,9 +605,14 @@ impl TName for Var {
 //**************************************************************************************************
 
 impl UseFuns {
+    /// Create a new `UseFuns` with `expansion_color` equal to `color`.
+    /// This is correct for macro body expansion where both fields should
+    /// carry the same scope color. For argument/lambda blocks that need a
+    /// different `expansion_color`, callers set it explicitly after construction.
     pub fn new(color: Color) -> Self {
         Self {
             color,
+            expansion_color: color,
             resolved: BTreeMap::new(),
             implicit_candidates: UniqueMap::new(),
         }
@@ -1246,10 +1275,15 @@ impl AstDebug for UseFuns {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self {
             color,
+            expansion_color,
             resolved,
             implicit_candidates,
         } = self;
-        w.write(format!("use_funs#{} ", color));
+        if *expansion_color != *color {
+            w.write(format!("use_funs#{}(exp:{}) ", color, expansion_color));
+        } else {
+            w.write(format!("use_funs#{} ", color));
+        }
         resolved.ast_debug(w);
         if !implicit_candidates.is_empty() {
             w.write("unresolved ");

@@ -1398,9 +1398,10 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
 
     fn visit_use_funs(&mut self, use_funs: &N::UseFuns) {
         let N::UseFuns {
+            color: _,
+            expansion_color: _,
             resolved,
             implicit_candidates,
-            color: _,
         } = use_funs;
 
         // at typing there should be no unresolved candidates (it's also checked in typing

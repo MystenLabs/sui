@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/binop_macro.move:21:9
+   │  
+12 │           $x + 1
+   │           -- [3] Argument
+   ·  
+17 │           $f(arg)
+   │           ------- [1] Lambda
+   ·  
+21 │ ╭         apply!(|x|
+22 │ │             add1!(x) + p
+   │ │             -------- [2] MacroBody(0x41::m::add1)
+23 │ │         )
+   │ ╰─────────^ [0] MacroBody(0x41::m::apply)
+   │  
+   = Frame transitions (test):
+       12: `$x + 1`
+           [] -> [MacroBody(apply), Lambda, MacroBody(add1)]
+       22: `add1!(x) + p`
+           [MacroBody(apply), Lambda, MacroBody(add1)] -> [MacroBody(apply), Lambda]
+       21: `apply!(|x|`
+           [MacroBody(apply), Lambda] -> []

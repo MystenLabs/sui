@@ -101,6 +101,7 @@ fn extract_macros(
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
         let N::UseFuns {
             color: _,
+            expansion_color: _,
             resolved,
             implicit_candidates,
         } = module_use_funs;
@@ -1593,6 +1594,9 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
     use N::SequenceItem_ as NS;
     use T::SequenceItem_ as TS;
 
+    // expansion_color is not a scope property — it's a block-level override for the debugger's
+    // color map. Save it before the scope push (which drops it) and restore it after pop.
+    let expansion_color = use_funs.expansion_color;
     context.add_use_funs_scope(use_funs);
     let mut work_queue = VecDeque::new();
 
@@ -1639,7 +1643,8 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
             }
         }
     }
-    let use_funs = context.pop_use_funs_scope();
+    let mut use_funs = context.pop_use_funs_scope();
+    use_funs.expansion_color = expansion_color;
     (use_funs, seq_items)
 }
 
