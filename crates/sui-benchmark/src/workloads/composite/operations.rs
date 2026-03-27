@@ -1107,16 +1107,11 @@ impl Operation for CoinReservationWithdraw {
             .obj(ObjectArg::ImmOrOwnedObject(object_ref))
             .unwrap();
 
-        let coin = builder.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            Identifier::new("coin").unwrap(),
-            Identifier::new("redeem_funds").unwrap(),
-            vec![GAS::type_tag()],
-            vec![withdrawal_arg],
-        );
-
+        // Don't call coin::redeem_funds explicitly - the compatibility layer
+        // (convert_withdrawal_compatibility_ptb_arguments) will automatically
+        // convert the withdrawal to a Coin when needed.
         let recipient = SuiAddress::random_for_testing_only();
-        builder.transfer_arg(recipient, coin);
+        builder.transfer_arg(recipient, withdrawal_arg);
     }
 }
 
