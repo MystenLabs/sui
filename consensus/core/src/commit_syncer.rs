@@ -59,7 +59,8 @@ use crate::{
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{CommitSyncerClient, ObserverNetworkClient, ValidatorNetworkClient},
+    network::{CommitSyncerClient, ObserverNetworkClient, PeerId, ValidatorNetworkClient},
+    peers_pool::PeersPool,
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
@@ -123,6 +124,7 @@ where
         round_tracker: Arc<RwLock<RoundTracker>>,
         network_client: Arc<CommitSyncerClient<VC, OC>>,
         dag_state: Arc<RwLock<DagState>>,
+        peers_pool: Arc<PeersPool>,
     ) -> Self {
         let inner = Arc::new(Inner {
             context,
@@ -134,6 +136,7 @@ where
             round_tracker,
             network_client,
             dag_state,
+            peers_pool,
         });
         let synced_commit_index = inner.dag_state.read().last_commit_index();
         CommitSyncer {
@@ -388,23 +391,41 @@ where
     }
 
     fn try_start_fetches(&mut self) {
-        // Cap parallel fetches based on configured limit and committee size, to avoid overloading the network.
+        // Cap parallel fetches based on configured limit and available peers, to avoid overloading the network.
         // Also when there are too many fetched blocks that cannot be sent to Core before an earlier fetch
         // has not finished, reduce parallelism so the earlier fetch can retry on a better host and succeed.
-        let target_parallel_fetches = self
-            .inner
-            .context
-            .parameters
-            .commit_sync_parallel_fetches
-            .min(self.inner.context.committee.size() * 2 / 3)
-            .min(
-                self.inner
-                    .context
-                    .parameters
-                    .commit_sync_batches_ahead
-                    .saturating_sub(self.fetched_ranges.len()),
-            )
-            .max(1);
+        // For validators, use committee size for the calculation. For observers, don't apply the 2/3 limit.
+        let available_peers_count = self.inner.peers_pool.get_available_peers().len();
+        let target_parallel_fetches = if self.inner.context.is_validator() {
+            self.inner
+                .context
+                .parameters
+                .commit_sync_parallel_fetches
+                .min(available_peers_count * 2 / 3)
+                .min(
+                    self.inner
+                        .context
+                        .parameters
+                        .commit_sync_batches_ahead
+                        .saturating_sub(self.fetched_ranges.len()),
+                )
+                .max(1)
+        } else {
+            // For observers, currently the node is probably connected only to another peer. In the future probably more observer peers might be available
+            // to sync from. That's why we do not cap the number of parallel fetches by the number of available peers.
+            self.inner
+                .context
+                .parameters
+                .commit_sync_parallel_fetches
+                .min(
+                    self.inner
+                        .context
+                        .parameters
+                        .commit_sync_batches_ahead
+                        .saturating_sub(self.fetched_ranges.len()),
+                )
+                .max(1)
+        };
         // Start new fetches if there are pending batches and available slots.
         loop {
             if self.inflight_fetches.len() >= target_parallel_fetches {
@@ -453,21 +474,10 @@ where
             .start_timer();
         info!("Starting to fetch commits in {commit_range:?} ...",);
         loop {
-            // Attempt to fetch commits and blocks through min(committee size, MAX_NUM_TARGETS) peers.
-            let mut target_authorities = inner
-                .context
-                .committee
-                .authorities()
-                .filter_map(|(i, _)| {
-                    if i != inner.context.own_index {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
-                .collect_vec();
-            target_authorities.shuffle(&mut ThreadRng::default());
-            target_authorities.truncate(MAX_NUM_TARGETS);
+            // Attempt to fetch commits and blocks through min(available peers count, MAX_NUM_TARGETS) peers.
+            let mut target_peers = inner.peers_pool.get_available_peers();
+            target_peers.shuffle(&mut ThreadRng::default());
+            target_peers.truncate(MAX_NUM_TARGETS);
             // Increase timeout multiplier for each loop until MAX_TIMEOUT_MULTIPLIER.
             timeout_multiplier = (timeout_multiplier + 1).min(MAX_TIMEOUT_MULTIPLIER);
             let request_timeout = TIMEOUT * timeout_multiplier;
@@ -477,13 +487,13 @@ where
             // - Time spent on pipelining requests to fetch blocks.
             // - Another headroom to allow fetch_once() to timeout gracefully if possible.
             let fetch_timeout = request_timeout * 4;
-            // Try fetching from selected target authority.
-            for authority in target_authorities {
+            // Try fetching from selected target peers.
+            for peer in target_peers {
                 match tokio::time::timeout(
                     fetch_timeout,
                     Self::fetch_once(
                         inner.clone(),
-                        authority,
+                        peer.clone(),
                         commit_range.clone(),
                         request_timeout,
                     ),
@@ -495,35 +505,25 @@ where
                         return (commit_range.end(), commits);
                     }
                     Ok(Err(e)) => {
-                        let hostname = inner
-                            .context
-                            .committee
-                            .authority(authority)
-                            .hostname
-                            .clone();
-                        warn!("Failed to fetch {commit_range:?} from {hostname}: {}", e);
+                        let peer_name = peer.hostname(&inner.context);
+                        warn!("Failed to fetch {commit_range:?} from {peer_name}: {}", e);
                         inner
                             .context
                             .metrics
                             .node_metrics
                             .commit_sync_fetch_once_errors
-                            .with_label_values(&[hostname.as_str(), e.name()])
+                            .with_label_values(&[peer_name.as_str(), e.name()])
                             .inc();
                     }
                     Err(_) => {
-                        let hostname = inner
-                            .context
-                            .committee
-                            .authority(authority)
-                            .hostname
-                            .clone();
-                        warn!("Timed out fetching {commit_range:?} from {authority}",);
+                        let peer_name = peer.hostname(&inner.context);
+                        warn!("Timed out fetching {commit_range:?} from {peer}",);
                         inner
                             .context
                             .metrics
                             .node_metrics
                             .commit_sync_fetch_once_errors
-                            .with_label_values(&[hostname.as_str(), "FetchTimeout"])
+                            .with_label_values(&[peer_name.as_str(), "FetchTimeout"])
                             .inc();
                     }
                 }
@@ -533,12 +533,12 @@ where
         }
     }
 
-    // Fetches commits and blocks from a single authority. At a high level, first the commits are
+    // Fetches commits and blocks from a single peer. At a high level, first the commits are
     // fetched and verified. After that, blocks referenced in the certified commits are fetched
     // and sent to Core for processing.
     async fn fetch_once(
         inner: Arc<Inner<VC, OC>>,
-        target_authority: AuthorityIndex,
+        target_peer: PeerId,
         commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<CertifiedCommits> {
@@ -549,14 +549,10 @@ where
             .commit_sync_fetch_once_latency
             .start_timer();
 
-        // 1. Fetch commits in the commit range from the target authority.
+        // 1. Fetch commits in the commit range from the target peer.
         let (serialized_commits, serialized_blocks) = inner
             .network_client
-            .fetch_commits(
-                crate::network::PeerId::Validator(target_authority),
-                commit_range.clone(),
-                timeout,
-            )
+            .fetch_commits(target_peer.clone(), commit_range.clone(), timeout)
             .await?;
 
         // 2. Verify the response contains blocks that can certify the last returned commit,
@@ -565,13 +561,9 @@ where
         let (commits, vote_blocks) = Handle::current()
             .spawn_blocking({
                 let inner = inner.clone();
+                let peer = target_peer.clone();
                 move || {
-                    inner.verify_commits(
-                        target_authority,
-                        commit_range,
-                        serialized_commits,
-                        serialized_blocks,
-                    )
+                    inner.verify_commits(peer, commit_range, serialized_commits, serialized_blocks)
                 }
             })
             .await
@@ -589,6 +581,7 @@ where
             .enumerate()
             .map(|(i, request_block_refs)| {
                 let inner = inner.clone();
+                let peer = target_peer.clone();
                 async move {
                     // 4. Send out pipelined fetch requests to avoid overloading the target authority.
                     sleep(timeout * i as u32 / num_chunks).await;
@@ -596,7 +589,7 @@ where
                     let serialized_blocks = inner
                         .network_client
                         .fetch_blocks(
-                            crate::network::PeerId::Validator(target_authority),
+                            peer.clone(),
                             request_block_refs.to_vec(),
                             vec![],
                             false,
@@ -606,7 +599,7 @@ where
                     // 5. Verify the same number of blocks are returned as requested.
                     if request_block_refs.len() != serialized_blocks.len() {
                         return Err(ConsensusError::UnexpectedNumberOfBlocksFetched {
-                            authority: target_authority,
+                            peer: peer.to_string(), // Convert to string for error
                             requested: request_block_refs.len(),
                             received: serialized_blocks.len(),
                         });
@@ -636,7 +629,7 @@ where
                         );
                         if *requested_block_ref != received_block_ref {
                             return Err(ConsensusError::UnexpectedBlockForCommit {
-                                peer: target_authority,
+                                peer: peer.to_string(), // Convert to string for error
                                 requested: *requested_block_ref,
                                 received: received_block_ref,
                             });
@@ -662,7 +655,8 @@ where
             if forward_drift == 0 {
                 continue;
             };
-            let peer_hostname = &inner.context.committee.authority(target_authority).hostname;
+            // Extract hostname based on peer type
+            let peer_hostname = target_peer.hostname(&inner.context);
             inner
                 .context
                 .metrics
@@ -777,6 +771,7 @@ struct Inner<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> {
     round_tracker: Arc<RwLock<RoundTracker>>,
     network_client: Arc<CommitSyncerClient<VC, OC>>,
     dag_state: Arc<RwLock<DagState>>,
+    peers_pool: Arc<PeersPool>,
 }
 
 impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
@@ -784,7 +779,7 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
     /// method returns the trusted commits and the votes as verified blocks.
     fn verify_commits(
         &self,
-        peer: AuthorityIndex,
+        peer: PeerId,
         commit_range: CommitRange,
         serialized_commits: Vec<Bytes>,
         serialized_vote_blocks: Vec<Bytes>,
@@ -798,8 +793,13 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
             if commits.is_empty() {
                 // start is inclusive, so first commit must be at the start index.
                 if commit.index() != commit_range.start() {
+                    // Extract authority index if it's a validator, otherwise use MAX
+                    let authority = match peer {
+                        PeerId::Validator(idx) => idx,
+                        PeerId::Observer(_) => AuthorityIndex::MAX,
+                    };
                     return Err(ConsensusError::UnexpectedStartCommit {
-                        peer,
+                        peer: authority,
                         start: commit_range.start(),
                         commit: Box::new(commit),
                     });
@@ -811,8 +811,13 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
                 if commit.index() != last_commit.index() + 1
                     || &commit.previous_digest() != last_commit_digest
                 {
+                    // Extract authority index if it's a validator, otherwise use MAX
+                    let authority = match peer {
+                        PeerId::Validator(idx) => idx,
+                        PeerId::Observer(_) => AuthorityIndex::MAX,
+                    };
                     return Err(ConsensusError::UnexpectedCommitSequence {
-                        peer,
+                        peer: authority,
                         prev_commit: Box::new(last_commit.clone()),
                         curr_commit: Box::new(commit),
                     });
@@ -825,7 +830,12 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
             commits.push((digest, commit));
         }
         let Some((end_commit_digest, end_commit)) = commits.last() else {
-            return Err(ConsensusError::NoCommitReceived { peer });
+            // Extract authority index if it's a validator, otherwise use MAX
+            let authority = match peer {
+                PeerId::Validator(idx) => idx,
+                PeerId::Observer(_) => AuthorityIndex::MAX,
+            };
+            return Err(ConsensusError::NoCommitReceived { peer: authority });
         };
 
         // Parse and verify blocks. Then accumulate votes on the end commit.
@@ -853,9 +863,14 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
 
         // Check if the end commit has enough votes.
         if !stake_aggregator.reached_threshold(&self.context.committee) {
+            // Extract authority index if it's a validator, otherwise use MAX
+            let authority = match peer {
+                PeerId::Validator(idx) => idx,
+                PeerId::Observer(_) => AuthorityIndex::MAX,
+            };
             return Err(ConsensusError::NotEnoughCommitVotes {
                 stake: stake_aggregator.stake(),
-                peer,
+                peer: authority,
                 commit: Box::new(end_commit.clone()),
             });
         }
@@ -891,6 +906,7 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{BlockStream, CommitSyncerClient, ObserverNetworkClient, ValidatorNetworkClient},
+        peers_pool::PeersPool,
         round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         transaction_certifier::TransactionCertifier,
@@ -1028,6 +1044,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let mut commit_syncer = CommitSyncer::new(
             context,
             core_thread_dispatcher,
@@ -1038,6 +1055,7 @@ mod tests {
             round_tracker,
             network_client,
             dag_state,
+            peers_pool,
         );
 
         // Check initial state.
