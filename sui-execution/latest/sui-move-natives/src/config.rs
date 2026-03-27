@@ -6,7 +6,7 @@ use crate::{
     object_runtime::ObjectRuntime,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::safe_unwrap;
+use move_binary_format::{safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::StructTag,
     runtime_value as R, vm_status::StatusCode,
@@ -38,8 +38,8 @@ pub fn read_setting_impl(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert_eq!(ty_args.len(), 4);
-    assert_eq!(args.len(), 3);
+    safe_assert_eq!(ty_args.len(), 4);
+    safe_assert_eq!(args.len(), 3);
 
     let ConfigReadSettingImplCostParams {
         config_read_setting_impl_cost_base,

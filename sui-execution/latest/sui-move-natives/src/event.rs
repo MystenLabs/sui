@@ -6,7 +6,7 @@ use crate::{
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::{safe_unwrap, safe_unwrap_err};
+use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap, safe_unwrap_err};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
@@ -236,8 +236,8 @@ pub fn num_events(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.is_empty());
-    assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = get_extension!(context)?;
     let num_events = object_runtime_ref.state.events().len();
     Ok(NativeResult::ok(
@@ -252,10 +252,10 @@ pub fn get_events_by_type(
     mut ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(ty_args.len(), 1);
     let specified_ty = safe_unwrap!(ty_args.pop());
     let specialization: VectorSpecialization = (&specified_ty).try_into()?;
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = get_extension!(context)?;
     let specified_type_tag = match context.type_to_type_tag(&specified_ty)? {
         TypeTag::Struct(s) => *s,

@@ -190,6 +190,32 @@ macro_rules! safe_assert {
     }};
 }
 
+/// Similar as above, but asserts two expressions are equal.
+#[macro_export]
+macro_rules! safe_assert_eq {
+    ($left:expr, $right:expr) => {{
+        let left = &$left;
+        let right = &$right;
+        if left != right {
+            let err = $crate::errors::PartialVMError::new(
+                move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message(format!(
+                "{}:{} (assert_eq: {:?} != {:?})",
+                file!(),
+                line!(),
+                left,
+                right,
+            ));
+            if cfg!(debug_assertions) {
+                panic!("{:?}", err)
+            } else {
+                return Err(err);
+            }
+        }
+    }};
+}
+
 /// Create a PartialVMError with the given error code and an optional message.
 #[macro_export]
 macro_rules! partial_vm_error {

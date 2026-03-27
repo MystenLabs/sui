@@ -101,8 +101,8 @@ pub fn end_transaction(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.is_empty());
-    assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
     let object_runtime_ref: &mut ObjectRuntime = get_extension_mut!(context)?;
     let taken_shared_or_imm: BTreeMap<_, _> = object_runtime_ref
         .test_inventories
@@ -383,7 +383,7 @@ pub fn take_from_address_by_id(
     let id = pop_id(&mut args)?;
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     pop_arg!(args, StructRef);
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
@@ -416,7 +416,7 @@ pub fn ids_for_address(
 ) -> PartialVMResult<NativeResult> {
     let specified_ty = get_specified_ty(ty_args)?;
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
@@ -438,7 +438,7 @@ pub fn most_recent_id_for_address(
 ) -> PartialVMResult<NativeResult> {
     let specified_ty = get_specified_ty(ty_args)?;
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
@@ -458,10 +458,10 @@ pub fn was_taken_from_address(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.is_empty());
+    safe_assert!(ty_args.is_empty());
     let id = pop_id(&mut args)?;
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
@@ -484,7 +484,7 @@ pub fn take_immutable_by_id(
     let specified_ty = get_specified_ty(ty_args)?;
     let id = pop_id(&mut args)?;
     pop_arg!(args, StructRef);
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
@@ -522,7 +522,7 @@ pub fn most_recent_immutable_id(
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     let specified_ty = get_specified_ty(ty_args)?;
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
@@ -544,9 +544,9 @@ pub fn was_taken_immutable(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.is_empty());
+    safe_assert!(ty_args.is_empty());
     let id = pop_id(&mut args)?;
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
@@ -569,7 +569,7 @@ pub fn take_shared_by_id(
     let specified_ty = get_specified_ty(ty_args)?;
     let id = pop_id(&mut args)?;
     pop_arg!(args, StructRef);
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
@@ -600,7 +600,7 @@ pub fn most_recent_id_shared(
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     let specified_ty = get_specified_ty(ty_args)?;
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
@@ -622,9 +622,9 @@ pub fn was_taken_shared(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.is_empty());
+    safe_assert!(ty_args.is_empty());
     let id = pop_id(&mut args)?;
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories

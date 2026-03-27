@@ -7,7 +7,7 @@ use crate::{
     get_tag_and_layouts, object_runtime::object_store::ObjectResult,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::{safe_unwrap, safe_unwrap_err};
+use move_binary_format::{safe_assert, safe_unwrap, safe_unwrap_err};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
@@ -69,13 +69,13 @@ pub fn receive_object_internal(
     let child_receiver_sequence_number: SequenceNumber = pop_arg!(args, u64).into();
     let child_receiver_object_id = safe_unwrap!(args.pop_back());
     let parent = pop_arg!(args, AccountAddress).into();
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let child_id: ObjectID = safe_unwrap_err!(
         get_receiver_object_id(child_receiver_object_id.copy_value())
             .and_then(|v| v.value_as::<AccountAddress>())
     )
     .into();
-    assert!(ty_args.is_empty());
+    safe_assert!(ty_args.is_empty());
 
     let Some((tag, layout, annotated_layout)) = get_tag_and_layouts(context, &child_ty)? else {
         return Ok(NativeResult::err(
