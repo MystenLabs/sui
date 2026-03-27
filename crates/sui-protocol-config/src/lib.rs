@@ -4756,9 +4756,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_gasless = true;
                         cfg.gasless_max_computation_units = Some(50_000);
                         cfg.gasless_allowed_token_types = Some(vec![]);
-                        cfg.gasless_max_unused_inputs = Some(1);
-                        cfg.gasless_max_pure_input_bytes = Some(32);
                     }
+                    cfg.gasless_max_unused_inputs = Some(1);
+                    cfg.gasless_max_pure_input_bytes = Some(32);
                     if chain == Chain::Testnet {
                         cfg.gasless_allowed_token_types = Some(vec![(TESTNET_USDC.to_string(), 0)]);
                     }
