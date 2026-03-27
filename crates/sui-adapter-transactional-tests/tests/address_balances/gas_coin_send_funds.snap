@@ -1,0 +1,168 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 29 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2), D: object(0,3), E: object(0,4)
+
+task 1, lines 8-10:
+//# programmable --sender A --inputs @B --gas-budget 10000000
+// Send gas coin to another address via send_funds
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+deleted: object(0,0)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 299999999000000)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 12:
+//# view-object 0,0
+No object at id 0,0
+
+task 3, line 14:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 16:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+No funds accumulator object found
+
+task 5, line 18:
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+299999999000000
+
+task 6, lines 21-23:
+//# programmable --sender B --inputs @B --gas-budget 10000000
+// Send gas coin to self via send_funds, the gas coin should be deleted
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+deleted: object(0,1)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 299999999000000)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 7, line 25:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, line 27:
+//# view-object 0,1
+No object at id 0,1
+
+task 9, line 29:
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+599999998000000
+
+task 10, lines 32-34:
+//# programmable --sender B --inputs @B --address-balance-gas --gas-budget 10000000
+// Send ephemeral gas coin to self via send_funds
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split, 1000000)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 11, line 36:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 12, line 38:
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+599999997000000
+
+task 13, lines 41-43:
+//# programmable --sender B --inputs @C --address-balance-gas --gas-budget 10000000
+// Send ephemeral gas coin to another address via send_funds
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split, 10000000), (object(13,0), C, sui::balance::Balance<sui::sui::SUI>, Merge, 9000000)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 14, line 45:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 15, line 47:
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+599999987000000
+
+task 16, line 49:
+//# view-funds sui::balance::Balance<sui::sui::SUI> C
+9000000
+
+task 17, lines 52-56:
+//# programmable --sender C --inputs @D 10 --gas-budget 10000000
+// Send the gas coin via send_funds, but split from it first
+//> 0: SplitCoins(Gas, [Input(1)]);
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0));
+//> TransferObjects([Result(0)], Input(0))
+created: object(17,0)
+deleted: object(0,2)
+accumulators_written: (object(17,1), D, sui::balance::Balance<sui::sui::SUI>, Merge, 299999998011990)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 18, line 58:
+//# view-object 0,2
+No object at id 0,2
+
+task 19, line 60:
+//# view-object 17,0
+Owner: Account Address ( D )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(17,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 10u64,
+    },
+}
+
+task 20, line 62:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 21, line 64:
+//# view-funds sui::balance::Balance<sui::sui::SUI> C
+9000000
+
+task 22, line 66:
+//# view-funds sui::balance::Balance<sui::sui::SUI> D
+299999998011990
+
+task 23, lines 68-72:
+//# programmable --sender D --inputs @E 0 --address-balance-gas --gas-budget 10000000
+// Send the ephemeral gas coin via send_funds, but split from it first
+//> 0: SplitCoins(Gas, [Input(1)]);
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0));
+//> TransferObjects([Result(0)], Input(0))
+created: object(23,0)
+accumulators_written: (object(17,1), D, sui::balance::Balance<sui::sui::SUI>, Split, 10000000), (object(23,1), E, sui::balance::Balance<sui::sui::SUI>, Merge, 8012000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 24, line 74:
+//# view-object 0,2
+No object at id 0,2
+
+task 25, line 76:
+//# view-object 23,0
+Owner: Account Address ( E )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(23,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
+
+task 26, line 78:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 27, line 80:
+//# view-funds sui::balance::Balance<sui::sui::SUI> D
+299999988011990
+
+task 28, line 82:
+//# view-funds sui::balance::Balance<sui::sui::SUI> E
+8012000

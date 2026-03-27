@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
+use anyhow::ensure;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
 
@@ -149,7 +150,7 @@ pub struct SystemDependency {
 /// Convenience type for serializing/deserializing external deps
 #[derive(Serialize, Deserialize)]
 struct RField {
-    r: BTreeMap<String, toml::Value>,
+    r: BTreeMap<ResolverName, toml::Value>,
 }
 
 impl ReplacementDependency {
@@ -206,13 +207,14 @@ impl<'de> Deserialize<'de> for ManifestDependencyInfo {
 }
 
 impl TryFrom<RField> for ExternalDependency {
-    type Error = &'static str;
+    type Error = anyhow::Error;
 
     /// Convert from [RField] (`{r.<res> = <data>}`) to [ExternalDependency] (`{ res, data }`)
     fn try_from(value: RField) -> Result<Self, Self::Error> {
-        if value.r.len() != 1 {
-            return Err("Externally resolved dependencies may only have one `r.<resolver>` field");
-        }
+        ensure!(
+            value.r.len() == 1,
+            "Externally resolved dependencies may only have one `r.<resolver>` field"
+        );
 
         let (resolver, data) = value
             .r
@@ -364,7 +366,7 @@ mod tests {
 
         let dep = manifest.get_dep("mock").dependency_info.as_external();
 
-        assert_eq!(dep.resolver, "mock-resolver");
+        assert_eq!(dep.resolver.to_string(), "mock-resolver");
         assert_eq!(
             dep.data,
             toml_edit::de::from_str(r#"resolved = { local = "." }"#).unwrap()
@@ -392,6 +394,29 @@ mod tests {
         7 |             foo = { r.mvr = "a", r.ext = "b" }
           |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         Externally resolved dependencies may only have one `r.<resolver>` field
+        "###);
+    }
+
+    /// external resolver names can't contain invalid characters (DVX-2019)
+    #[test]
+    fn parse_malformed_external_resolver() {
+        let error = toml_edit::de::from_str::<ParsedManifest>(
+            r#"
+            [package]
+            name = "test"
+
+            [dependencies]
+            foo = { r."foo//bar" = "foo" }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert_snapshot!(error, @r###"
+        TOML parse error at line 6, column 19
+          |
+        6 |             foo = { r."foo//bar" = "foo" }
+          |                   ^^^^^^^^^^^^^^^^^^^^^^^^
+        invalid character in external resolver name `foo//bar` for key `r`
         "###);
     }
 

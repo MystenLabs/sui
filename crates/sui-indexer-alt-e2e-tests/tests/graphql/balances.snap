@@ -10,7 +10,7 @@ task 1, lines 8-42:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 12144800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 12167600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 44:
 //# view-object 1,1
@@ -57,13 +57,13 @@ Response: {
             "coinType": {
               "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
             },
-            "totalBalance": "299999984505896",
-            "coinBalance": "299999984505896",
+            "totalBalance": "299999984483096",
+            "coinBalance": "299999984483096",
             "addressBalance": "0"
           },
           {
             "coinType": {
-              "repr": "0x4cfb8176152d731f9a40ebb86ee58f35113f289d60ba3b4e07a3e073590d5371::test::TEST"
+              "repr": "0x2ac83f6a9739ff0fd4030bc3270cc6ca02d5dc2a15e1aa46416ab5f1c45399e3::test::TEST"
             },
             "totalBalance": "1002000",
             "coinBalance": "2000",

@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 817
 ---
 processed 5 tasks
 
@@ -11,7 +10,7 @@ task 1, lines 6-10:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5555600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5563200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 12:
 //# create-checkpoint
@@ -24,7 +23,7 @@ Response: {
     "package": {
       "module": {
         "name": "M",
-        "fileFormatVersion": 6,
+        "fileFormatVersion": 7,
         "functions": null
       }
     }
@@ -57,7 +56,7 @@ Response: {
     "package": {
       "validModule": {
         "name": "M",
-        "fileFormatVersion": 6
+        "fileFormatVersion": 7
       },
       "partialErrorModule": {
         "name": "M",

@@ -37,6 +37,7 @@ use sui_verifier_v3::meter::SuiVerifierMeter;
 use crate::executor;
 use crate::verifier;
 use sui_adapter_v3::execution_mode;
+use sui_types::execution_status::ExecutionFailure;
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
@@ -62,6 +63,57 @@ impl<'m> Verifier<'m> {
 
 impl executor::Executor for Executor {
     fn execute_transaction_to_effects(
+        &self,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        gas: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        _rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionFailure>,
+    ) {
+        let (inner_temp_store, gas_status, effects, timings, result) =
+            execute_transaction_to_effects::<execution_mode::Normal>(
+                store,
+                input_objects,
+                gas,
+                gas_status,
+                transaction_kind,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                execution_params,
+                trace_builder_opt,
+            );
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            timings,
+            result.map_err(ExecutionFailure::from),
+        )
+    }
+
+    fn execute_transaction_to_effects_and_execution_error(
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,

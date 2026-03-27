@@ -1,10 +1,10 @@
 ---
 title: Gaming on Sui
-description: Sui offers features like dynamic NFTs, Kiosk, soulbound assets, and on-chain randomness to provide builders with the tools to create immersive, transparent, and fair gaming experiences.
+description: Sui offers features like dynamic NFTs, Kiosk, soulbound assets, and onchain randomness to provide builders with the tools to create immersive, transparent, and fair gaming experiences.
 keywords: [gaming, game components, game features, game nfts, soulbound assets, create games on sui, build games on sui, sui Object Display, game economics, kiosk, sui kiosk, token economics]
 ---
 
-Gaming on Sui leverages blockchain technology to enhance in-game economies, ownership, and interactions. With features like dynamic NFTs, Kiosk, soulbound assets, and on-chain randomness, Sui provides builders with the tools to create immersive, transparent, and fair gaming experiences. Players benefit from true asset ownership, decentralized marketplaces, and seamless Web3 integration without compromising usability.
+Gaming on Sui leverages blockchain technology to enhance in-game economies, ownership, and interactions. With features like dynamic NFTs, Kiosk, soulbound assets, and onchain randomness, Sui provides builders with the tools to create immersive, transparent, and fair gaming experiences. Players benefit from true asset ownership, decentralized marketplaces, and seamless Web3 integration without compromising usability.
 
 This topic explores the key features of Sui for gaming, real-world use cases, and essential tools for builders. Whether you're building an RPG, a racing game, or a digital card game, Sui provides the Web3 infrastructure to power your next-generation gaming projects.
 
@@ -20,23 +20,23 @@ Many players use single sign-on (SSO) or social login to create game accounts. [
 
 Modern players often opt for free-to-play (F2P) games that do not require an upfront cost. Sponsored transactions allow you, or a designated entity, to cover the required gas fees for a player, removing the initial need to purchase SUI tokens.
 
-## Representing in-game objects on-chain
+## Representing in-game objects onchain
 
-Blockchain games typically represent in-game assets as on-chain objects. Whether managing currency, items, character attributes, or other game elements, understanding how to create and integrate these objects is fundamental to building blockchain-based game experiences.
+Blockchain games typically represent in-game assets as onchain objects. Whether managing currency, items, character attributes, or other game elements, understanding how to create and integrate these objects is fundamental to building blockchain-based game experiences.
 
-### On-chain randomness and verification
+### Onchain randomness and verification
 
 Sui provides [native randomness](/guides/developer/on-chain-primitives/randomness-onchain.mdx), allowing games to operate without requiring players to trust a centralized operator.
 
 Additionally, all transactions on the Sui network are viewable and verifiable. Sui leverages threshold cryptography and Distributed Key Generation (DKG), which generates secret shares of a distributed key at the beginning of each epoch, and continuously uses them to produce randomness.
 
-Off-chain computation can also be verified on-chain by using [Nautilus](/guides/developer/nautilus/nautilus-design.mdx). 
+Offchain computation can also be verified onchain by using [Nautilus](/guides/developer/nautilus/nautilus-design.mdx). 
 
 ### In-game currencies
 
 In-game currencies allow users to purchase game features like items, upgrades, and premium content. In Web2 games, these currencies are exclusively in-game, with values set by the developers. 
 
-Using Sui, players can now have [true ownership of their in-game currency](/guides/developer/coin/in-game-token.mdx). The currency exists as a [token on the Sui blockchain](/standards/currency.mdx), where players can conceivably buy, sell, or swap that currency for anything else that also lives on-chain. If you create an ecosystem of games, players can purchase currency in one of your games but spend it in another one that also uses that same currency. The possibilities are vast, but you must first learn how to create the currency.
+Using Sui, players can now have [true ownership of their in-game currency](/guides/developer/coin/in-game-token.mdx). The currency exists as a [token on the Sui blockchain](/standards/currency.mdx), where players can conceivably buy, sell, or swap that currency for anything else that also lives onchain. If you create an ecosystem of games, players can purchase currency in one of your games but spend it in another one that also uses that same currency. The possibilities are vast, but you must first learn how to create the currency.
 
 ### Closed-Loop Tokens
 
@@ -64,7 +64,7 @@ Smart contracts contain the functions that create objects. Using the previous ex
 
 <ImportContent source="examples/tic-tac-toe/move/sources/owned.move" mode="code" fun="new" noComments />
 
-This is an on-chain action, or transaction. In this case, the transaction is a request to the chain to create an object. You provide the necessary data to the function and pay the gas fee for the computation effort of the network validators. The result is the creation of a new NFT that exists on the Sui blockchain at the address (`id`).
+This is an onchain action, or transaction. In this case, the transaction is a request to the chain to create an object. You provide the necessary data to the function and pay the gas fee for the computation effort of the network validators. The result is the creation of a new NFT that exists on the Sui blockchain at the address (`id`).
 
 #### Updating assets
 
@@ -92,11 +92,11 @@ Composability is a really important feature of Sui. While it provides many optio
 
 Sui enables more use cases with the [transfer to object feature](/guides/developer/objects/transfers/transfer-to-object.mdx), which allows an owned object to be sent to another object (shared or owned). In this case, the sent object appears as owned by the parent object. In the above examples, the objects are wrapped inside other objects and this can be seen in the parent object's metadata when inspecting the parent object.
 
-When an object is sent to another object, the metadata of the parent object remain the same, but its `id` has a new object. This feature can enable use cases such as on-chain wallets where a `Wallet` object is used to deposit other objects. Combining this with transfer to object can lead to complex and exciting use cases.
+When an object is sent to another object, the metadata of the parent object remain the same, but its `id` has a new object. This feature can enable use cases such as onchain wallets where a `Wallet` object is used to deposit other objects. Combining this with transfer to object can lead to complex and exciting use cases.
 
 #### Deleting assets
 
-On Sui, you can delete an object if the smart contract allows the operation. If the correct smart contract function is present, then you can delete the object in a single transaction. This results in a gas-fee rebate, which happens whenever bytes are freed on-chain. The transaction's gas payer [receives a rebate](/concepts/tokenomics#storage-fund/) to account for the future storage of the object no longer being necessary but having already been paid for.
+On Sui, you can delete an object if the smart contract allows the operation. If the correct smart contract function is present, then you can delete the object in a single transaction. This results in a gas-fee rebate, which happens whenever bytes are freed onchain. The transaction's gas payer [receives a rebate](/concepts/tokenomics#storage-fund/) to account for the future storage of the object no longer being necessary but having already been paid for.
 
 ### Soulbound assets {#soulbound-assets}
 
@@ -114,14 +114,14 @@ The same pattern can be used to implement NFT assets that are transferable or bu
 
 ### Sui Object Display {#sui-object-display}
 
-The [Sui Object Display](/guides/developer/objects/display/display-overview.mdx) standard is a tool that helps define how objects appear in apps and interfaces. It works like a template where you can insert data from an object to control how it's displayed. Use it to manage how different types of data are shown, even if the data itself is stored on-chain while the display happens off-chain (in apps or websites).
+The [Sui Object Display](/guides/developer/objects/display/display-overview.mdx) standard is a tool that helps define how objects appear in apps and interfaces. It works like a template where you can insert data from an object to control how it's displayed. Use it to manage how different types of data are shown, even if the data itself is stored onchain while the display happens offchain (in apps or websites).
 
 The Sui Object Display standard provides several key benefits and components:
 
 - Controlled representation: Manages how assets are displayed online without directly interacting with the underlying asset. You can make updates to the display independent of the assets and affect how all assets of type `<T>` are displayed.
 - Flexibility: No limits on the fields you can customize.
 - Enhancing asset information: Similar to enhancing ERC721 or ERC1155 NFTs with extra details, the Sui Object Display allows you to add specific details to your digital items, such as names, descriptions, images, and more.
-- Stored data and off-chain representation: Manages stored data based on metadata standards and controls how it's represented off-chain.
+- Stored data and offchain representation: Manages stored data based on metadata standards and controls how it's represented offchain.
 - Dynamic display: Ensures a uniform presentation of shared attributes across all NFTs of type `<T>`, maintaining a consistent representation of common fields (such as image URLs derived from unique IDs) and a cohesive display format across the asset collection.
 
 There are a few limitations to be aware of. First, the current structure of Sui Object Display is per type, limiting its scope. Secondly, its structure does not allow for nested attributes or enums.
@@ -193,7 +193,7 @@ The terms that follow are frequently used when discussing GameFi, so it's import
 
 Tokenomics refers to the model and design of the rules that govern tokens for a Web3 ecosystem. In the case of GameFi, it defines how a token is created, distributed, utilized, and maintained within your gaming platform. Some of the features that comprise a token's economics include supply details, distribution mechanisms, staking and vesting.
 
-There are several types of token supply that are considered when discussing tokenomics for an on-chain ecosystem.
+There are several types of token supply that are considered when discussing tokenomics for an onchain ecosystem.
 
 | Supply type | Description |
 | --- | --- |
@@ -295,7 +295,7 @@ There are a number of tools available in the Sui ecosystem to help you realize y
 
 <TabItem label="Beamable" value="beamable" >
 
-[Beamable](https://beamable.com/) is a development platform that helps you integrate live services and backend features into your games. It offers SDKs for both Unity and Unreal Engine, facilitating development and deployment of online game functionalities. You can incorporate features such as player authentication, inventory management, and microservices within the environments of your chosen game engines. Beamable provides support for the Sui blockchain, allowing for the integration of Web3 elements like NFTs and on-chain assets into games. The Beamable SDKs offer tools and sample projects to help you build on the Sui network. 
+[Beamable](https://beamable.com/) is a development platform that helps you integrate live services and backend features into your games. It offers SDKs for both Unity and Unreal Engine, facilitating development and deployment of online game functionalities. You can incorporate features such as player authentication, inventory management, and microservices within the environments of your chosen game engines. Beamable provides support for the Sui blockchain, allowing for the integration of Web3 elements like NFTs and onchain assets into games. The Beamable SDKs offer tools and sample projects to help you build on the Sui network. 
 
 </TabItem>
 
@@ -372,7 +372,7 @@ Sui for Speed is a racing game set in the Sui ecosystem. Players pilot customiza
 
 In Sui for Speed, players own racing vehicles represented by dynamic NFTs that you can upgrade and customize with new parts, skins, and abilities. As players progress and win races, their vehicles evolve, reflecting their achievements and style.
 
-Dynamic NFTs on the Sui network allow vehicles to securely update attributes and metadata over time. Every upgrade and customization is recorded on-chain, ensuring each vehicle's uniqueness and authenticity.
+Dynamic NFTs on the Sui network allow vehicles to securely update attributes and metadata over time. Every upgrade and customization is recorded onchain, ensuring each vehicle's uniqueness and authenticity.
 
 **SuiNS: Personalized racer profiles and teams**
 
@@ -390,13 +390,13 @@ Asset tokenization on the Sui network enables minting of circuits as unique asse
 
 The game world includes extensive data such as track designs and leaderboards. Leveraging decentralized and efficient storage, combined with asset tokenization, enables true decentralization of these terrains and models.
 
-Walrus offers scalable off-chain storage for large amounts of game data. This ensures high availability and security, protecting against data loss and enhancing player trust.
+Walrus offers scalable offchain storage for large amounts of game data. This ensures high availability and security, protecting against data loss and enhancing player trust.
 
 **Competitive events and betting mechanisms**
 
 The game hosts regular competitive events and tournaments where players can participate individually or as teams. Additionally, players can place bets on race outcomes using $RALLY tokens, adding an extra layer of excitement and engagement.
 
-On-chain logic enables secure and transparent management of events and betting systems. The Sui network ensures fairness, with immutable records of bets and outcomes.
+Onchain logic enables secure and transparent management of events and betting systems. The Sui network ensures fairness, with immutable records of bets and outcomes.
 
 </TabItem>
 
@@ -427,7 +427,7 @@ Each card in ArcaneBattles is represented as an NFT on the Sui blockchain, grant
 
 ArcaneBattles ensures randomness in card draws and in-game events to prevent manipulation and enhance fairness.
     
-By leveraging Sui's on-chain randomness, ArcaneBattles introduces unpredictable elements such as random card draws, critical hit chances, and random effects from certain cards. This randomness is verifiable and secure, preventing manipulation by any party and maintaining fairness across all gameplay aspects.
+By leveraging Sui's onchain randomness, ArcaneBattles introduces unpredictable elements such as random card draws, critical hit chances, and random effects from certain cards. This randomness is verifiable and secure, preventing manipulation by any party and maintaining fairness across all gameplay aspects.
     
 **Enhanced card visualization and dynamic wear mechanism**
 

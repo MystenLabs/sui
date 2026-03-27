@@ -35,7 +35,12 @@ sui-config.workspace = true
 sui-swarm-config.workspace = true
 sui-simulator.workspace = true
 sui-protocol-config.workspace = true
-sui-data-ingestion-core.workspace = true
+object_store.workspace = true
+url.workspace = true
+backoff.workspace = true
+prost.workspace = true
+zstd.workspace = true
+sui-rpc.workspace = true
 
 arc-swap.workspace = true
 bcs.workspace = true

@@ -10,7 +10,7 @@ task 1, lines 6-70:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 22625200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 22655600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 72:
 //# view-object 1,1
@@ -208,7 +208,7 @@ Response: {
     "symbol": "REAL",
     "description": "A coin that is real",
     "iconUrl": "https://real.com",
-    "id": "0xdd9c83df6637f7a1ba36665b721ef6e5c6a24f58b4b9aa88ea32f9281756eaa4"
+    "id": "0x8274e4184f157dc1b89ac1d76e28b9baed9be8ee28fe76a34c3501031287d0e5"
   }
 }
 
@@ -223,7 +223,7 @@ Response: {
     "symbol": "FAKE",
     "description": "A coin that is fake",
     "iconUrl": "https://fake.com",
-    "id": "0x5b4ae58cea643905892056b89b91db0c93268b9a9bc18817d0f5c1c0d441f29f"
+    "id": "0x6e8a3c64dec1d08ef6bb52234d477b4599bf77f6b113ee0830009be6c740adf9"
   }
 }
 
@@ -267,7 +267,7 @@ Response: {
     "symbol": "REAL",
     "description": "A coin that is real",
     "iconUrl": "https://real.com",
-    "id": "0xdd9c83df6637f7a1ba36665b721ef6e5c6a24f58b4b9aa88ea32f9281756eaa4"
+    "id": "0x8274e4184f157dc1b89ac1d76e28b9baed9be8ee28fe76a34c3501031287d0e5"
   }
 }
 
@@ -291,7 +291,7 @@ Response: {
     "symbol": "REAL",
     "description": "A coin that is real",
     "iconUrl": "https://real.com",
-    "id": "0xdd9c83df6637f7a1ba36665b721ef6e5c6a24f58b4b9aa88ea32f9281756eaa4"
+    "id": "0x8274e4184f157dc1b89ac1d76e28b9baed9be8ee28fe76a34c3501031287d0e5"
   }
 }
 

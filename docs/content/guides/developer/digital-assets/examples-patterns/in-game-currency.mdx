@@ -1,62 +1,32 @@
 ---
-title: In-Game Currency
 draft: true
-description: Use the Sui Closed-Loop Token standard to create tokens that you can use as currency within a game application.
-keywords: [ closed-loop tokens, closed-loop, closed loop, in-game tokens, in-game currency, game currency, token example, create a token, how to create token, SUI token standards ]
+title: In-Game Currencies
+description: Use the Sui Closed-Loop Token standard to create assets that you can use as currency within a game application.
+keywords: [closed-loop tokens, closed-loop, closed loop, in-game tokens, in-game currency, game currency, token example, create a token, how to create token, SUI token standards]
 ---
 
-Using the Sui [Closed-Loop Token](/standards/closed-loop-token.mdx) standard, you can create in-game currency (such as gems or diamonds in mobile games) that you can grant to players for their actions or make available to purchase. You mint the tokens on Sui, but players can only use the tokens within the economy of the game itself. These types of tokens are usually not transferable and you typically mint them in predefined amounts to maintain scarcity and game balance.
+Using the Sui [Closed-Loop Token](/standards/closed-loop-token.mdx) standard, you can create in-game currencies. These might be in the form of in-game assets such as gems and diamonds that you can grant to players for their actions or make available for purchase. You mint the currency on Sui, but players can only use the currency within the economy of the game itself. You typically mint them in predefined amounts to maintain scarcity and the game economy.
 
-The following example creates an in-game currency called a GEM, which represents a certain number of SUI. In the example, the user can buy fungible GEMs using SUI, which can then be used as currency within the game. Use the code comments to follow the logic of the example.
+This example implements a governance-controlled currency in Move. Transferring the currency requires an approval, which is implemented using custom rule logic. The currency in this example is called King Credits, and it can only be transferred with approval from the Crown Council.
 
-## Example 
+## Initialize the currency
 
-The Sui repo hosts a basic example of creating in-game currency. The Move modules that create the economy of the example are in the `gems.move` source file.
+To create the King Credits currency, initialize the currency using the `coin::create_currency` module and configure the currency policy with `token::add_rule_for_action`:
 
-### Module `examples::sword`
+<ImportContent source="I3/king_credits/sources/king_credits.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" noComments />
 
-The `examples::sword` module creates 1 of the objects, a `sword`, that has in-game value. The module assigns a value in GEMs (the other valuable in-game item) to the sword. The module also provides the logic for trading GEMs to receive a sword. 
+:::info
 
-<ImportContent source="examples/move/token/sources/gems.move" mode="code" module="examples::sword" noComments />
+`init` functions run only during the package publish event.
 
-### Module `examples::gem`
+:::
 
-The `examples::gem` module creates the in-game currency, GEMs. Users spend SUI to purchase GEMs, which can then be traded for swords. The module defines 3 groups of GEMs (small, medium, and large), with each group representing a different in-game value. Constants hold both the value of each package and the actual number of GEMs the groups contain. 
+## Set custom transfer rules
 
-The module's `init` function uses `coin::create_currency` to create the GEM. The `init` function, which runs only when the module publishes, also sets the policies for the in-game currency, freezes the metadata for the coin, and transfers the policy capability to the publisher of the package. 
+In another Move package, implement the `add_rule_config` function to initialize the rule configuration with initial council members and set a limit on the maximum number of members, including a check to ensure the count does not exceed that maximum.
 
-<ImportContent source="examples/move/token/sources/gems.move" mode="code" fun="init" noComments />
+The `add_council_member` and `remove_council_member` functions add and remove members from the council. The `prove` function checks whether the request sender is a council member and adds an approval for the rule if they are:
 
-The module handles the purchase of GEMs with the `buy_gems` function. 
+<ImportContent source="I3/king_credits/sources/crown_council_rule.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" noComments />
 
-<ImportContent source="examples/move/token/sources/gems.move" mode="code" fun="buy_gems" noComments />
-
-Use the following toggle to control the display of the complete module. 
-
-<details>
-
-<summary>
-
-`examples::gem` module in `gems.move`
-
-</summary>
-
-<ImportContent source="examples/move/token/sources/gems.move" mode="code" module="examples::gem" noComments />
-
-</details>
-
-### Complete code 
-
-Toggle display of the complete source for this example, including comments, or use the link in the [Related links](#related-links) section to view the project source on GitHub.
-
-<details>
-
-<summary>
-
-`gems.move`
-
-</summary>
-
-<ImportContent source="examples/move/token/sources/gems.move" mode="code" />
-
-</details>
+[View the full example on GitHub](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/I3).

@@ -174,7 +174,7 @@ Note that an address on Sui can be derived from a public key (this fact is used 
 
 ### Building a multisig transaction
 
-When creating a multisig game, we make use of `owned::Game`'s `admin` field to store the multisig public key for the admin account. Later, it will be used to form the signature for the second transaction in the move. This does not need to be stored on-chain, but we are doing so for convenience so that when we fetch the `Game`'s contents, we get the public key as well:
+When creating a multisig game, we make use of `owned::Game`'s `admin` field to store the multisig public key for the admin account. Later, it will be used to form the signature for the second transaction in the move. This does not need to be stored onchain, but we are doing so for convenience so that when we fetch the `Game`'s contents, we get the public key as well:
 
 ```typescript title="examples/tic-tac-toe/ui/src/hooks/useTransactions.ts"
 newMultiSigGame(player: PublicKey, opponent: PublicKey): Transaction {

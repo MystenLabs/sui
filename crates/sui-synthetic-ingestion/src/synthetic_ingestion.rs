@@ -76,7 +76,7 @@ pub async fn generate_ingestion(config: Config) {
                 .build();
             let tx = to_sender_signed_transaction(tx_data, &keypair);
             let (effects, _) = sim.execute_transaction(tx).unwrap();
-            gas_object = effects.gas_object().0;
+            gas_object = effects.gas_object().unwrap().0;
             tx_count += 1;
         }
         let checkpoint = sim.create_checkpoint();

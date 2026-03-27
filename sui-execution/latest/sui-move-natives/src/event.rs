@@ -6,6 +6,7 @@ use crate::{
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap, safe_unwrap_err};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
@@ -50,8 +51,8 @@ pub fn emit(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
-    let ty = ty_args.pop().unwrap();
-    let event_value = args.pop_back().unwrap();
+    let ty = safe_unwrap!(ty_args.pop());
+    let event_value = safe_unwrap!(args.pop_back());
     emit_impl(context, ty, event_value, None)
 }
 
@@ -71,13 +72,13 @@ pub fn emit_authenticated_impl(
         return Ok(NativeResult::err(cost, NOT_SUPPORTED));
     }
 
-    let event_ty = ty_args.pop().unwrap();
+    let event_ty = safe_unwrap!(ty_args.pop());
     // This type is always sui::event::EventStreamHead
-    let stream_head_ty = ty_args.pop().unwrap();
+    let stream_head_ty = safe_unwrap!(ty_args.pop());
 
-    let event_value = args.pop_back().unwrap();
-    let stream_id = args.pop_back().unwrap();
-    let accumulator_id = args.pop_back().unwrap();
+    let event_value = safe_unwrap!(args.pop_back());
+    let stream_id = safe_unwrap!(args.pop_back());
+    let accumulator_id = safe_unwrap!(args.pop_back());
 
     emit_impl(
         context,
@@ -146,9 +147,7 @@ fn emit_impl(
     if stream_ref.is_some() {
         native_charge_gas_early_exit!(
             context,
-            // this code cannot be reached in protocol versions which don't define
-            // event_emit_auth_stream_cost
-            event_emit_cost_params.event_emit_auth_stream_cost.unwrap()
+            safe_unwrap!(event_emit_cost_params.event_emit_auth_stream_cost)
         );
     }
 
@@ -207,8 +206,10 @@ fn emit_impl(
         stream_head_ty: _,
     }) = stream_ref
     {
-        let stream_id_addr: AccountAddress = stream_id.value_as::<AccountAddress>().unwrap();
-        let accumulator_id: ObjectID = accumulator_id.value_as::<AccountAddress>().unwrap().into();
+        let stream_id_addr: AccountAddress =
+            safe_unwrap_err!(stream_id.value_as::<AccountAddress>());
+        let accumulator_id: ObjectID =
+            safe_unwrap_err!(accumulator_id.value_as::<AccountAddress>()).into();
         let event_idx = obj_runtime
             .state
             .total_events_emitted()
@@ -221,7 +222,7 @@ fn emit_impl(
             accumulator_id,
             MoveAccumulatorAction::Merge,
             stream_id_addr,
-            stream_head_type_tag.unwrap(),
+            safe_unwrap!(stream_head_type_tag),
             MoveAccumulatorValue::EventRef(event_idx),
         )?;
     }
@@ -235,8 +236,8 @@ pub fn num_events(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.is_empty());
-    assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = get_extension!(context)?;
     let num_events = object_runtime_ref.state.events().len();
     Ok(NativeResult::ok(
@@ -251,10 +252,10 @@ pub fn get_events_by_type(
     mut ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert_eq!(ty_args.len(), 1);
-    let specified_ty = ty_args.pop().unwrap();
+    safe_assert_eq!(ty_args.len(), 1);
+    let specified_ty = safe_unwrap!(ty_args.pop());
     let specialization: VectorSpecialization = (&specified_ty).try_into()?;
-    assert!(args.is_empty());
+    safe_assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = get_extension!(context)?;
     let specified_type_tag = match context.type_to_type_tag(&specified_ty)? {
         TypeTag::Struct(s) => *s,

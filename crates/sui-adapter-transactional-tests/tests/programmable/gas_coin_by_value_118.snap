@@ -1,0 +1,35 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-10:
+//# programmable --sender A --inputs @B
+//> TransferObjects([Gas], Input(0))
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 12:
+//# view-object 0,0
+Owner: Account Address ( B )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299999998012000u64,
+    },
+}
+
+task 3, lines 14-16:
+//# programmable --sender B --inputs @A --gas-payment object(0,0)
+// This should fai:
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid taking of the Gas coin. It can only be used by-value with TransferObjects
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidGasCoinUsage }, source: None, command: Some(0) } }

@@ -94,8 +94,8 @@ fn thdb_config() -> Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
         snapshot_written_bytes: 64 * 1024 * 1024 * 1024,
-        // force unloading dirty index entries if behind 128 Gb of wal
-        snapshot_unload_threshold: 128 * 1024 * 1024 * 1024,
+        // force unloading dirty index entries if behind 60 Gb of wal
+        snapshot_unload_threshold: 60 * 1024 * 1024 * 1024,
         unload_jitter_pct: 30,
         max_dirty_keys: 1024,
         max_maps,

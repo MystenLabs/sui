@@ -27,6 +27,22 @@ jobs:
         run: cargo install tree-sitter-cli
       - run: ./run-tests.sh
 
+  prettier-move-tests:
+    name: Move Formatter - run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+      - name: Install tree-sitter-cli
+        run: cargo install tree-sitter-cli
+      - name: Use Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # pin@v6.2.0
+        # build the tree-sitter-move.wasm file and copy it to the prettier-move directory
+      - run: tree-sitter build --wasm; cp tree-sitter-move.wasm ./../prettier-move/tree-sitter-move.wasm
+        working-directory: external-crates/move/tooling/tree-sitter
+        # install the dependencies and run the tests
+      - run: npm i; npm test
+        working-directory: external-crates/move/tooling/prettier-move
+
   prettier-move:
     name: Move Formatter - check formatting
     runs-on: ubuntu-latest

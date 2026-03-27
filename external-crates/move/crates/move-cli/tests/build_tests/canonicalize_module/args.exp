@@ -1,5 +1,5 @@
 Command `disassemble --Xdebug --package Test --name c`:
-// Move bytecode v6
+// Move bytecode v7
 module 2.c {
 use 0000000000000000000000000000000000000000000000000000000000000002::b;
 use 0000000000000000000000000000000000000000000000000000000000000003::d;
@@ -38,7 +38,7 @@ B0:
 
 
 CompiledModule {
-    version: 6,
+    version: 7,
     publishable: true,
     self_module_handle_idx: ModuleHandleIndex(0),
     module_handles: [

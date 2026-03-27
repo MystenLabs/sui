@@ -4,7 +4,7 @@
 use futures::{StreamExt, future::join_all};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use mysten_common::fatal;
-use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use rand::{Rng, distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -755,11 +755,13 @@ impl TestCluster {
             submit_type: SubmitTxType::SoftBundle.into(),
         };
 
-        let mut validator_client = self
-            .authority_aggregator()
-            .authority_clients
+        let agg = self.authority_aggregator();
+        let clients = &agg.authority_clients;
+        // Use seeded RNG for deterministic but varying validator selection in simtests
+        let index = rand::thread_rng().gen_range(0..clients.len());
+        let mut validator_client = clients
             .iter()
-            .next()
+            .nth(index)
             .unwrap()
             .1
             .authority_client()
@@ -945,11 +947,12 @@ impl TestCluster {
         client_addr: Option<SocketAddr>,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let agg = self.authority_aggregator();
-        // Pick a validator to submit to
-        let (_, client) = agg
-            .authority_clients
+        // Pick a validator to submit to using seeded RNG for deterministic simtest selection
+        let clients = &agg.authority_clients;
+        let index = rand::thread_rng().gen_range(0..clients.len());
+        let (_, client) = clients
             .iter()
-            .next()
+            .nth(index)
             .ok_or_else(|| anyhow::anyhow!("No authority clients available"))?;
 
         // Submit the transaction

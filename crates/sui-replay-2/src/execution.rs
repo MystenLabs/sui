@@ -129,8 +129,9 @@ pub fn execute_transaction_to_effects(
         Some(error) => ExecutionOrEarlyError::Err(error),
         None => ExecutionOrEarlyError::Ok(()),
     };
-    let (inner_store, gas_status, effects, _execution_timing, result) =
-        executor.executor.execute_transaction_to_effects(
+    let (inner_store, gas_status, effects, _execution_timing, result) = executor
+        .executor
+        .execute_transaction_to_effects_and_execution_error(
             &store,
             protocol_config,
             executor.metrics.clone(),

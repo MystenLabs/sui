@@ -212,7 +212,14 @@ async fn test_coin_reservation_gating() {
     if has_mainnet_protocol_config_override() {
         return;
     }
-    let mut test_env = TestEnvBuilder::new().build().await;
+    // Explicitly disable coin reservation flags to test the gating logic
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.disable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
 
     let sender = test_env.get_sender(0);
 

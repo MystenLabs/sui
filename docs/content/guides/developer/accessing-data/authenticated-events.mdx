@@ -10,7 +10,7 @@ Authenticated Events provide a cryptographically verifiable stream of Move event
 
 Regular Sui events are indexed and queryable, but verifying them requires trusting the RPC provider. Authenticated events solve this by:
 
-1. **Cryptographic Commitments**: Events are committed into a Merkle Mountain Range (MMR) structure stored on-chain (see [MMR section](#merkle-mountain-range-mmr) below)
+1. **Cryptographic Commitments**: Events are committed into a Merkle Mountain Range (MMR) structure stored onchain (see [MMR section](#merkle-mountain-range-mmr) below)
 2. **Checkpoint Verification**: The commitment is tied to Sui checkpoints, which are signed by the validator committee
 3. **Light Client Verification**: Clients verify the chain from genesis committee → checkpoint signatures → event inclusion proofs
 
@@ -113,7 +113,7 @@ let mut stream = client.clone()
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    EventStreamHead (On-chain)                   │
+│                    EventStreamHead (Onchain)                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  mmr: vector<u256>     // Merkle Mountain Range root    │   │
 │  │  checkpoint_seq: u64   // Last update checkpoint        │   │
@@ -136,7 +136,7 @@ let mut stream = client.clone()
 | Component | Description |
 |-----------|-------------|
 | `emit_authenticated<T>()` | Move function to emit verified events |
-| `EventStreamHead` | On-chain commitment structure per package |
+| `EventStreamHead` | Onchain commitment structure per package |
 | `ListAuthenticatedEvents` | gRPC API to fetch events with pagination |
 | `AuthenticatedEventsClient` | Reference Rust client for verification |
 | MMR (Merkle Mountain Range) | Append-only commitment structure |
@@ -222,13 +222,13 @@ let client = AuthenticatedEventsClient::new_with_config(
 
 An MMR is a forest of perfect binary trees ("mountains"). After `n` leaves are appended, mountain sizes correspond to the set bits in the binary representation of `n`. For example, when `n = 13 (1101 in binary with bit 3, 2 and 0 set)`, the mountains have sizes `2^3 = 8`, `2^2 = 4`, and `2^0 = 1`. The diagram below shows an expanded MMR (internal nodes and leaves).
 
-The MMR state in `EventStreamHead` is stored as a compact vector of digests indexed by tree height (not the full expanded tree). This keeps on-chain state `O(log n)` in the number of appended leaves.
+The MMR state in `EventStreamHead` is stored as a compact vector of digests indexed by tree height (not the full expanded tree). This keeps onchain state `O(log n)` in the number of appended leaves.
 
 Key properties of an MMR:
 
-- Compact on-chain accumulator state: `O(log n)` digests.
+- Compact onchain accumulator state: `O(log n)` digests.
 - Append-only updates: new leaves can be incorporated using only the current accumulator state (without the expanded MMR).
-- Inclusion proofs are `O(log n)` in size. Event-level MMR inclusion proofs are not yet exposed by current RPC services (this is separate from OCS inclusion proofs exposed by the ProofService). These inclusion proofs can lead to many interesting applications, e.g., move data storage off-chain, efficient cross-chain reads, prove inclusion in ZK, etc.
+- Inclusion proofs are `O(log n)` in size. Event-level MMR inclusion proofs are not yet exposed by current RPC services (this is separate from OCS inclusion proofs exposed by the ProofService). These inclusion proofs can lead to many interesting applications, e.g., move data storage offchain, efficient cross-chain reads, prove inclusion in ZK, etc.
 
 ### Expanded MMR with 13 leaves
 
@@ -269,9 +269,9 @@ The client verifies a checkpoint range by:
 1. Starting with a verified `EventStreamHead` from the preceding checkpoint (or empty state for a new stream)
 2. Fetching events in the range and appending them to the MMR
 3. Fetching the `EventStreamHead` at the final checkpoint and proving its inclusion via OCS proof
-4. Comparing the locally computed MMR against the on-chain `EventStreamHead`
+4. Comparing the locally computed MMR against the onchain `EventStreamHead`
 
-If any event is missing, modified, or out of order, the computed MMR will not match the on-chain state.
+If any event is missing, modified, or out of order, the computed MMR will not match the onchain state.
 
 The client automatically handles epoch transitions and committee changes.
 
@@ -279,9 +279,9 @@ The client automatically handles epoch transitions and committee changes.
 
 **Completeness**: When you receive event N from a stream, you are guaranteed to have received all events 0..N-1 in the correct order. The MMR structure ensures that any missing or reordered events would cause verification to fail.
 
-**What completeness does NOT guarantee**: An intermediary (e.g., RPC provider) is not obligated to return all events up to a requested checkpoint height. To detect withholding, clients must verify against the on-chain `EventStreamHead` which contains the authoritative event count. The reference client does this automatically — if the events received don't match the on-chain commitment, verification fails.
+**What completeness does NOT guarantee**: An intermediary (e.g., RPC provider) is not obligated to return all events up to a requested checkpoint height. To detect withholding, clients must verify against the onchain `EventStreamHead` which contains the authoritative event count. The reference client does this automatically — if the events received don't match the onchain commitment, verification fails.
 
-**Correctness**: Each event's content is committed to the MMR. Any modification to event data would cause the computed MMR to diverge from the on-chain state.
+**Correctness**: Each event's content is committed to the MMR. Any modification to event data would cause the computed MMR to diverge from the onchain state.
 
 ## Limitations
 

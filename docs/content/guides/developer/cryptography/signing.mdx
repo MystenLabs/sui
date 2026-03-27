@@ -1,14 +1,14 @@
 ---
 title: Sui On-Chain Signatures Verification in Move
 description: Sui supports verification within Move smart contracts through several signature schemes. Signature schemes include Ed25519, Secp256k1 recoverable, Secp256k1 non-recoverable, Secp256r1 non-recoverable, Secp256r1 recoverable, BLS G1, and BLS G2.
-keywords: [ Ed25519, Secp256k1 recoverable, Secp256k1 non-recoverable, Secp256r1 non-recoverable, Secp256r1 recoverable, BLS G1, BLS G2, signature schemes, signature verification fastcrypto, on-chain verification ]
+keywords: [ Ed25519, Secp256k1 recoverable, Secp256k1 non-recoverable, Secp256r1 non-recoverable, Secp256r1 recoverable, BLS G1, BLS G2, signature schemes, signature verification fastcrypto, onchain verification ]
 ---
 
-Move contracts in Sui support verifications for several signature schemes on-chain. Not all signatures supported in on-chain verification are supported as user signature verification. See [Sui Signatures](/guides/developer/transactions/transaction-auth/auth-overview) for valid signature schemes for transaction authorization.
+Move contracts in Sui support verifications for several signature schemes onchain. Not all signatures supported in onchain verification are supported as user signature verification. See [Sui Signatures](/guides/developer/transactions/transaction-auth/auth-overview) for valid signature schemes for transaction authorization.
 
 This topic covers:
 1. How to use [fastcrypto](https://github.com/MystenLabs/fastcrypto)'s CLI tool to create a signature of a given scheme. For testing and debugging only, DO NOT use in production.
-1. Call the Move method on-chain to verification by submitting the signature, the message and the public key. 
+1. Call the Move method onchain to verification by submitting the signature, the message and the public key. 
 
 Signature schemes covered: 
 - Ed25519 signature (64 bytes)
@@ -29,7 +29,7 @@ cd fastcrypto/
 cargo build --bin sigs-cli
 ```
 
-### Sign with CLI and submit to on-chain Move method
+### Sign with CLI and submit to onchain Move method
 
 #### Ed25519 signature (64 bytes)
 

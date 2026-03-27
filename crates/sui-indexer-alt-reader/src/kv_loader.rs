@@ -304,7 +304,10 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => bcs::from_bytes(&stored.raw_transaction)
                 .context("Failed to deserialize transaction data"),
-            Self::Bigtable(kv) => Ok(kv.transaction.data().transaction_data().clone()),
+            Self::Bigtable(kv) => kv
+                .transaction_data
+                .clone()
+                .context("transaction_data missing from bigtable data"),
             Self::LedgerGrpc(txn) => Ok(txn.transaction_data.as_ref().clone()),
             Self::ExecutedTransaction {
                 transaction_data, ..
@@ -316,7 +319,7 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => TransactionDigest::try_from(stored.tx_digest.clone())
                 .context("Failed to deserialize transaction digest"),
-            Self::Bigtable(kv) => Ok(*kv.transaction.digest()),
+            Self::Bigtable(kv) => Ok(kv.digest),
             Self::LedgerGrpc(txn) => Ok(*txn.effects.as_ref().transaction_digest()),
             Self::ExecutedTransaction { effects, .. } => Ok(*effects.as_ref().transaction_digest()),
         }
@@ -330,7 +333,11 @@ impl TransactionContents {
 
                 Ok(effects.digest())
             }
-            Self::Bigtable(kv) => Ok(kv.effects.digest()),
+            Self::Bigtable(kv) => Ok(kv
+                .effects
+                .as_ref()
+                .context("effects missing from bigtable data")?
+                .digest()),
             Self::LedgerGrpc(txn) => Ok(txn.effects.digest()),
             Self::ExecutedTransaction { effects, .. } => Ok(effects.digest()),
         }
@@ -341,7 +348,10 @@ impl TransactionContents {
             Self::Pg(stored) => {
                 bcs::from_bytes(&stored.user_signatures).context("Failed to deserialize signatures")
             }
-            Self::Bigtable(kv) => Ok(kv.transaction.tx_signatures().to_vec()),
+            Self::Bigtable(kv) => kv
+                .signatures
+                .clone()
+                .context("signatures missing from bigtable data"),
             Self::LedgerGrpc(txn) => Ok(txn.signatures.clone()),
             Self::ExecutedTransaction { signatures, .. } => Ok(signatures.clone()),
         }
@@ -352,7 +362,10 @@ impl TransactionContents {
             Self::Pg(stored) => {
                 bcs::from_bytes(&stored.raw_effects).context("Failed to deserialize effects")
             }
-            Self::Bigtable(kv) => Ok(kv.effects.clone()),
+            Self::Bigtable(kv) => kv
+                .effects
+                .clone()
+                .context("effects missing from bigtable data"),
             Self::LedgerGrpc(txn) => Ok(txn.effects.as_ref().clone()),
             Self::ExecutedTransaction { effects, .. } => Ok(effects.as_ref().clone()),
         }
@@ -436,8 +449,13 @@ impl TransactionContents {
     pub fn raw_transaction(&self) -> anyhow::Result<Vec<u8>> {
         match self {
             Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
-            Self::Bigtable(kv) => bcs::to_bytes(kv.transaction.data().transaction_data())
-                .context("Failed to serialize transaction"),
+            Self::Bigtable(kv) => {
+                let tx_data = kv
+                    .transaction_data
+                    .as_ref()
+                    .context("transaction_data missing from bigtable data")?;
+                bcs::to_bytes(tx_data).context("Failed to serialize transaction")
+            }
             Self::LedgerGrpc(txn) => bcs::to_bytes(txn.transaction_data.as_ref())
                 .context("Failed to serialize transaction"),
             Self::ExecutedTransaction {
@@ -451,7 +469,13 @@ impl TransactionContents {
     pub fn raw_effects(&self) -> anyhow::Result<Vec<u8>> {
         match self {
             Self::Pg(stored) => Ok(stored.raw_effects.clone()),
-            Self::Bigtable(kv) => bcs::to_bytes(&kv.effects).context("Failed to serialize effects"),
+            Self::Bigtable(kv) => {
+                let effects = kv
+                    .effects
+                    .as_ref()
+                    .context("effects missing from bigtable data")?;
+                bcs::to_bytes(effects).context("Failed to serialize effects")
+            }
             Self::LedgerGrpc(txn) => {
                 bcs::to_bytes(txn.effects.as_ref()).context("Failed to serialize effects")
             }

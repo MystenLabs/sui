@@ -1,4 +1,4 @@
-//# init --protocol-version 30
+//# init --protocol-version 30 --file-format 6
 
 //# publish
 module 0x0.m2 {

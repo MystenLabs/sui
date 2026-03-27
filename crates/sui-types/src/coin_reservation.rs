@@ -34,15 +34,28 @@
 //! 2. The epoch(s) in which the tx is valid [4 bytes] (good enough for 12 million years of 24 hour epochs).
 //! 3. A magic number to identify this ObjectRef as a coin reservation [20 bytes].
 
+use std::sync::Arc;
+
+use move_core_types::language_storage::TypeTag;
 use thiserror::Error;
 
 use crate::{
+    accumulator_root::{AccumulatorKey, AccumulatorValue},
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     committee::EpochId,
     digests::{ChainIdentifier, ObjectDigest},
-    error::UserInputResult,
+    error::{UserInputError, UserInputResult},
+    storage::ChildObjectResolver,
     transaction::FundsWithdrawalArg,
 };
+
+macro_rules! invalid_res_error {
+    ($($args:tt)*) => {
+        UserInputError::InvalidWithdrawReservation {
+            error: format!($($args)*),
+        }
+    };
+}
 
 /// Trait for resolving funds withdrawal from a coin reservation
 pub trait CoinReservationResolverTrait {
@@ -53,6 +66,9 @@ pub trait CoinReservationResolverTrait {
         // Note: must be the sender. We do not support sponsorship.
         sender: SuiAddress,
         coin_reservation: ParsedObjectRefWithdrawal,
+        // The version of the accumulator root object to use for MVCC lookup.
+        // If None, use the latest version.
+        accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg>;
 }
 
@@ -175,6 +191,125 @@ pub fn mask_or_unmask_id(object_id: ObjectID, chain_identifier: ChainIdentifier)
     ObjectID::new(masked_object_id_bytes)
 }
 
+/// Creates a fake ObjectRef representing an address balance, suitable for returning from
+/// JSON-RPC APIs to backward-compatible clients. The object_id is masked with the chain
+/// identifier to prevent cross-chain replay.
+pub fn encode_object_ref(
+    unmasked_object_id: ObjectID,
+    version: SequenceNumber,
+    epoch: EpochId,
+    balance: u64,
+    chain_identifier: ChainIdentifier,
+) -> ObjectRef {
+    ParsedObjectRefWithdrawal::new(unmasked_object_id, epoch, balance)
+        .encode(version, chain_identifier)
+}
+
+/// Resolves coin reservations by looking up the accumulator object to determine
+/// the owner and type of the balance being withdrawn.
+pub struct CoinReservationResolver {
+    child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+}
+
+impl CoinReservationResolver {
+    pub fn new(child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>) -> Self {
+        Self {
+            child_object_resolver,
+        }
+    }
+
+    /// Looks up the type tag and owner for a given accumulator object ID.
+    /// Returns (owner, type_tag) if the object exists and is a valid balance accumulator field.
+    pub fn get_owner_and_type_for_object(
+        &self,
+        object_id: ObjectID,
+        accumulator_version: Option<SequenceNumber>,
+    ) -> UserInputResult<(SuiAddress, TypeTag)> {
+        let object = AccumulatorValue::load_object_by_id(
+            self.child_object_resolver.as_ref(),
+            accumulator_version,
+            object_id,
+        )
+        .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?
+        .ok_or_else(|| invalid_res_error!("coin reservation object id {} not found", object_id))?;
+
+        let move_object = object.data.try_as_move().unwrap();
+
+        let type_tag: TypeTag = move_object
+            .type_()
+            .balance_accumulator_field_type_maybe()
+            .ok_or_else(|| {
+                invalid_res_error!(
+                    "coin reservation object id {} is not a balance accumulator field",
+                    object_id
+                )
+            })?;
+
+        let (key, _): (AccumulatorKey, AccumulatorValue) = move_object
+            .try_into()
+            .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?;
+
+        Ok((key.owner, type_tag))
+    }
+
+    pub fn resolve_funds_withdrawal(
+        &self,
+        sender: SuiAddress,
+        coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
+    ) -> UserInputResult<FundsWithdrawalArg> {
+        let (owner, type_tag) = self.get_owner_and_type_for_object(
+            coin_reservation.unmasked_object_id,
+            accumulator_version,
+        )?;
+
+        if sender != owner {
+            return Err(invalid_res_error!(
+                "coin reservation object id {} is owned by {}, not sender {}",
+                coin_reservation.unmasked_object_id,
+                owner,
+                sender
+            ));
+        }
+
+        Ok(FundsWithdrawalArg::balance_from_sender(
+            coin_reservation.reservation_amount(),
+            type_tag,
+        ))
+    }
+}
+
+impl CoinReservationResolverTrait for CoinReservationResolver {
+    fn resolve_funds_withdrawal(
+        &self,
+        sender: SuiAddress,
+        coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
+    ) -> UserInputResult<FundsWithdrawalArg> {
+        CoinReservationResolver::resolve_funds_withdrawal(
+            self,
+            sender,
+            coin_reservation,
+            accumulator_version,
+        )
+    }
+}
+
+impl CoinReservationResolverTrait for &'_ CoinReservationResolver {
+    fn resolve_funds_withdrawal(
+        &self,
+        sender: SuiAddress,
+        coin_reservation: ParsedObjectRefWithdrawal,
+        accumulator_version: Option<SequenceNumber>,
+    ) -> UserInputResult<FundsWithdrawalArg> {
+        CoinReservationResolver::resolve_funds_withdrawal(
+            self,
+            sender,
+            coin_reservation,
+            accumulator_version,
+        )
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

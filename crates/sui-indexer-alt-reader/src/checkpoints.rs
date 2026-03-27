@@ -78,11 +78,11 @@ impl Loader<CheckpointKey> for BigtableReader {
             .checkpoints(&checkpoint_keys)
             .await?
             .into_iter()
-            .map(|c| {
-                (
-                    CheckpointKey(c.summary.sequence_number),
-                    (c.summary, c.contents, c.signatures),
-                )
+            .filter_map(|c| {
+                Some((
+                    CheckpointKey(c.summary.as_ref()?.sequence_number),
+                    (c.summary?, c.contents?, c.signatures?),
+                ))
             })
             .collect())
     }

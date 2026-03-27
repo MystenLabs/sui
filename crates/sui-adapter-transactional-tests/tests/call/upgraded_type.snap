@@ -28,7 +28,7 @@ task 4, lines 21-26:
 //# publish --upgradeable --dependencies TestDepV2 --sender A
 created: object(4,0), object(4,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5768400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, line 28:
 //# run TestRoot::m::pub_fun --type-args TestDepV1::m::V1

@@ -283,6 +283,7 @@ impl Client {
         &self,
         tx: &TransactionData,
         checks: bool,
+        do_gas_selection: bool,
     ) -> Result<SimulateTransactionResponse> {
         let mut request = proto::SimulateTransactionRequest::default();
         request.set_checks(if checks {
@@ -290,6 +291,7 @@ impl Client {
         } else {
             proto::simulate_transaction_request::TransactionChecks::Disabled
         });
+        request.set_do_gas_selection(do_gas_selection);
         request.set_transaction(
             proto::Transaction::default()
                 .with_bcs(proto::Bcs::serialize(&tx).map_err(|e| Status::from_error(e.into()))?),
@@ -458,6 +460,21 @@ impl Client {
             .into_inner();
 
         Ok(response.epoch().reference_gas_price())
+    }
+
+    pub async fn get_current_epoch(&self) -> Result<u64> {
+        let request =
+            proto::GetEpochRequest::default().with_read_mask(FieldMask::from_paths(["epoch"]));
+
+        let response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        Ok(response.epoch().epoch())
     }
 
     /// Wait for a transaction to be available in the ledger AND indexed (equivalent to WaitForLocalExecution)

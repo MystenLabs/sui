@@ -102,12 +102,12 @@ This fee is split into 2 parts:
 
 2. **Non-refundable fee:** Permanently locked in the storage fund, removing that SUI from circulation forever.
 
-The storage fund is designed such that the network's current validators process and store data, but future validators are incentivized to maintain it. If users only paid when they store data on-chain, future validators would front the cost of storage without reimbursement. The storage fund resolves this by collecting fees when data is first stored, then redistributing it to validators throughout the entire time the data exists.
+The storage fund is designed such that the network's current validators process and store data, but future validators are incentivized to maintain it. If users only paid when they store data onchain, future validators would front the cost of storage without reimbursement. The storage fund resolves this by collecting fees when data is first stored, then redistributing it to validators throughout the entire time the data exists.
 
 The storage fund is locked and staked each epoch to compensate active validators. Excess staking rewards earned by the storage fund are reinvested back into it, ensuring the storage fund has the capability needed to compensate validators.
 
 ### Storage rebates
 
-The design of the storage fund also incentivizes users to delete data if the cost of storing it exceeds the value of keeping it on-chain. By offering a rebate on storage fees, the system encourages users to free up space.
+The design of the storage fund also incentivizes users to delete data if the cost of storing it exceeds the value of keeping it onchain. By offering a rebate on storage fees, the system encourages users to free up space.
 
 If data is deleted from Sui, it would stop using storage resources and a portion of the original storage fee, currently set at 99%, would be returned to the gas fee payer as a rebate. The non-refundable portion of the storage fee (1%) is never returned. Immutable objects lock both their storage fee forever and cannot receive a rebate, as they cannot be deleted or modified.

@@ -10,7 +10,7 @@ task 1, lines 6-52:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 7425200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 7448000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 53-55:
 //# run P1::M1::emit_event --sender A --args 42
@@ -58,91 +58,91 @@ Response: {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "82wgmhHrfFXg6ytEi3PqTFetCH8TdE1JrkVf51tEPrhe"
+            "digest": "AhE8WnAi6wZbf4jFr3Bp2o7TwJADWwZdpC9DPmoateSQ"
           }
         },
         {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "FjysjcSqU7b6N7BR5ZnBAHjRZiK6LgDpqmyibMLvziJH"
+            "digest": "8F8aaPgehB674x1Dx5btV5V2zYZVRdddW2iKRE84w9u"
           }
         },
         {
           "sequenceNumber": 1,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "FjysjcSqU7b6N7BR5ZnBAHjRZiK6LgDpqmyibMLvziJH"
+            "digest": "8F8aaPgehB674x1Dx5btV5V2zYZVRdddW2iKRE84w9u"
           }
         },
         {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 1,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 2,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 3,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 4,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 5,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 6,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 7,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 8,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 9,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         }
       ]
@@ -159,14 +159,14 @@ Response: {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "82wgmhHrfFXg6ytEi3PqTFetCH8TdE1JrkVf51tEPrhe"
+            "digest": "AhE8WnAi6wZbf4jFr3Bp2o7TwJADWwZdpC9DPmoateSQ"
           }
         },
         {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "FjysjcSqU7b6N7BR5ZnBAHjRZiK6LgDpqmyibMLvziJH"
+            "digest": "8F8aaPgehB674x1Dx5btV5V2zYZVRdddW2iKRE84w9u"
           }
         }
       ]
@@ -183,14 +183,14 @@ Response: {
           "sequenceNumber": 8,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         },
         {
           "sequenceNumber": 9,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         }
       ]
@@ -234,7 +234,7 @@ Response: {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "FjysjcSqU7b6N7BR5ZnBAHjRZiK6LgDpqmyibMLvziJH"
+            "digest": "8F8aaPgehB674x1Dx5btV5V2zYZVRdddW2iKRE84w9u"
           }
         }
       ]
@@ -245,7 +245,7 @@ Response: {
           "sequenceNumber": 8,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "4L7yRUxvc2miXvZrkRK3GkSe3oNqzLxZDHaAmRfrGxLD"
+            "digest": "3W4uJ9DeX8gRfbfJBKfEpvA1xAtKdX1gZDxdGYj6udsX"
           }
         }
       ]
@@ -272,7 +272,7 @@ Response: {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "FjysjcSqU7b6N7BR5ZnBAHjRZiK6LgDpqmyibMLvziJH"
+            "digest": "8F8aaPgehB674x1Dx5btV5V2zYZVRdddW2iKRE84w9u"
           }
         }
       ]
@@ -296,7 +296,7 @@ Response: {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "82wgmhHrfFXg6ytEi3PqTFetCH8TdE1JrkVf51tEPrhe"
+            "digest": "AhE8WnAi6wZbf4jFr3Bp2o7TwJADWwZdpC9DPmoateSQ"
           }
         }
       ]
@@ -320,14 +320,14 @@ Response: {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "82wgmhHrfFXg6ytEi3PqTFetCH8TdE1JrkVf51tEPrhe"
+            "digest": "AhE8WnAi6wZbf4jFr3Bp2o7TwJADWwZdpC9DPmoateSQ"
           }
         },
         {
           "sequenceNumber": 0,
           "timestamp": "1970-01-01T00:00:00Z",
           "transaction": {
-            "digest": "FjysjcSqU7b6N7BR5ZnBAHjRZiK6LgDpqmyibMLvziJH"
+            "digest": "8F8aaPgehB674x1Dx5btV5V2zYZVRdddW2iKRE84w9u"
           }
         }
       ]

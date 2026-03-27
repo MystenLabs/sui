@@ -49,6 +49,7 @@ use better_any::{Tid, TidAble};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::safe_unwrap;
 use move_core_types::{
     annotated_value as A,
     gas_algebra::{AbstractMemorySize, InternalGas},
@@ -601,6 +602,14 @@ impl NativesCostTable {
             transfer_receive_object_internal_cost_params: TransferReceiveObjectInternalCostParams {
                 transfer_receive_object_internal_cost_base: protocol_config
                     .transfer_receive_object_cost_base_as_option()
+                    .unwrap_or(0)
+                    .into(),
+                transfer_receive_object_internal_cost_per_byte: protocol_config
+                    .transfer_receive_object_cost_per_byte_as_option()
+                    .unwrap_or(0)
+                    .into(),
+                transfer_receive_object_internal_type_cost_per_byte: protocol_config
+                    .transfer_receive_object_type_cost_per_byte_as_option()
                     .unwrap_or(0)
                     .into(),
             },
@@ -1288,6 +1297,7 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             .map(|(module_name, func_name, func)| {
                 (
                     SUI_FRAMEWORK_ADDRESS,
+                    // Safe: string literals are always valid identifiers
                     Identifier::new(module_name).unwrap(),
                     Identifier::new(func_name).unwrap(),
                     func,
@@ -1304,6 +1314,7 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         .map(|(module_name, func_name, func)| {
             (
                 SUI_SYSTEM_ADDRESS,
+                // Safe: string literals are always valid identifiers
                 Identifier::new(module_name).unwrap(),
                 Identifier::new(func_name).unwrap(),
                 func,
@@ -1343,7 +1354,7 @@ pub fn get_nested_struct_field(mut v: Value, offsets: &[usize]) -> Result<Value,
 
 pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError> {
     let mut itr = v.value_as::<Struct>()?.unpack();
-    Ok(itr.nth(n).unwrap())
+    Ok(safe_unwrap!(itr.nth(n)))
 }
 
 /// Returns the struct tag, non-annotated type layout, and fully annotated type layout of `ty`.

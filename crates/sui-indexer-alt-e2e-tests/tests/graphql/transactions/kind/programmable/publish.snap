@@ -10,7 +10,7 @@ task 1, lines 6-11:
 //# publish --sender A
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 3655600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 13:
 //# create-checkpoint
@@ -27,7 +27,7 @@ Response: {
             {
               "__typename": "PublishCommand",
               "modules": [
-                "oRzrCwYAAAAGAQACAwIFBQcDBwoUCB4gDD4QAAEAAAABAAABAwVoZWxsbw1zaW1wbGVfbW9kdWxlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAIGKgAAAAAAAAACAA=="
+                "oRzrCwcAAAUGAQACAwIFBQcDBwoUCB4gDD4RAAEAAAABAAABAwVoZWxsbw1zaW1wbGVfbW9kdWxlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAIGKgAAAAAAAAACAAA="
               ],
               "dependencies": [
                 "0x0000000000000000000000000000000000000000000000000000000000000001",

@@ -7,7 +7,7 @@ task 1, lines 6-50:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 8937600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9006000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 52:
 //# run tto::M1::start

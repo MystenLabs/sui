@@ -580,7 +580,7 @@ impl SuiNode {
                 .unwrap_or(highest_executed_checkpoint)
         };
 
-        let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
+        let epoch_options = default_db_options().optimize_db_for_write_throughput(4, false);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee.clone(),

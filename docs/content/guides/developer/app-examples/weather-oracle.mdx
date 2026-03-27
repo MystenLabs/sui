@@ -143,7 +143,7 @@ public fun add_city(
 
 The `add_city` function lets the `AdminCap` holder add a new city to the Sui Weather Oracle. The caller must present their `AdminCap` and pass a mutable reference to the main `Oracle` object. The function accepts city metadata—geoname ID, name, country and coordinates (latitude, longitude, and their positive flags). It then creates a `CityWeatherOracle` sub-object, initializes its weather fields to empty/zero, and inserts it into the oracle’s dynamic fields keyed by the geoname ID. After this, the city is registered and ready to receive updates from the backend.
 
-To delete a city, call `remove_city`. The admin again provides the `AdminCap` and a **mutable** oracle reference, plus the city’s geoname ID. The function removes the corresponding `CityWeatherOracle` sub-object and deletes its dynamic field entry from the oracle. This cleanly unregisters the city and frees the associated on-chain storage.
+To delete a city, call `remove_city`. The admin again provides the `AdminCap` and a **mutable** oracle reference, plus the city’s geoname ID. The function removes the corresponding `CityWeatherOracle` sub-object and deletes its dynamic field entry from the oracle. This cleanly unregisters the city and frees the associated onchain storage.
 
 ```rust title='weather.move'
 public fun remove_city(
@@ -176,7 +176,7 @@ public fun remove_city(
 
 After you implement `add_city` and `remove_city`, update each city’s weather data. Every 10 minutes, the backend service fetches conditions from the OpenWeather API and **calls** the `weather_oracle` module's `update` function with the results.
 
-The `update` function accepts the city’s geoname ID and the new weather fields, then **writes** them to the corresponding `CityWeatherOracle` object. This keeps the on-chain weather data current and accurate.
+The `update` function accepts the city’s geoname ID and the new weather fields, then **writes** them to the corresponding `CityWeatherOracle` object. This keeps the onchain weather data current and accurate.
 
 
 ```rust title='weather.move'

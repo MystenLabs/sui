@@ -5,7 +5,14 @@
 use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
-use crate::balance::Balance;
+use crate::balance::{
+    BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
+    BALANCE_SPLIT_FUNCTION_NAME, BALANCE_ZERO_FUNCTION_NAME, Balance,
+};
+use crate::coin::{
+    COIN_MODULE_NAME, INTO_BALANCE_FUNC_NAME, PUT_FUNC_NAME, REDEEM_FUNDS_FUNC_NAME,
+    SEND_FUNDS_FUNC_NAME,
+};
 use crate::coin_reservation::{
     CoinReservationResolverTrait, ParsedDigest, ParsedObjectRefWithdrawal,
 };
@@ -18,6 +25,7 @@ use crate::crypto::{
 use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
+use crate::funds_accumulator::{FUNDS_ACCUMULATOR_MODULE_NAME, WITHDRAWAL_SPLIT_FUNC_NAME};
 use crate::gas_coin::GAS;
 use crate::gas_model::gas_predicates::check_for_gas_price_too_high;
 use crate::gas_model::gas_v2::SuiCostTable;
@@ -36,21 +44,26 @@ use crate::signature_verification::{
 use crate::type_input::TypeInput;
 use crate::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
-    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::{Either, Itertools};
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::IdentStr;
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use mysten_common::{assert_reachable, debug_fatal};
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
-use std::iter::once;
 use std::sync::Arc;
+#[cfg(debug_assertions)]
+use std::sync::RwLock;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -958,12 +971,148 @@ pub struct ProgrammableTransaction {
     pub commands: Vec<Command>,
 }
 
+#[cfg(debug_assertions)]
+static GASLESS_TOKENS_FOR_TESTING: RwLock<Vec<String>> = RwLock::new(Vec::new());
+
+#[cfg(debug_assertions)]
+pub fn add_gasless_token_for_testing(type_string: String) {
+    GASLESS_TOKENS_FOR_TESTING
+        .write()
+        .unwrap()
+        .push(type_string);
+}
+
+#[cfg(debug_assertions)]
+pub fn clear_gasless_tokens_for_testing() {
+    GASLESS_TOKENS_FOR_TESTING.write().unwrap().clear();
+}
+
 impl ProgrammableTransaction {
     pub fn has_shared_inputs(&self) -> bool {
         self.inputs
             .iter()
             .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
     }
+
+    pub fn validate_gasless_transaction(&self, config: &ProtocolConfig) -> UserInputResult {
+        fp_ensure!(
+            !self.commands.is_empty(),
+            UserInputError::Unsupported(
+                "Gasless transactions must have at least one command".to_string()
+            )
+        );
+
+        for input in &self.inputs {
+            match input {
+                CallArg::Pure(_) | CallArg::FundsWithdrawal(_) => {}
+                CallArg::Object(
+                    ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. },
+                ) => {}
+                CallArg::Object(ObjectArg::Receiving(_)) => {
+                    return Err(UserInputError::Unsupported(
+                        "Gasless transactions do not support Receiving object inputs".to_string(),
+                    ));
+                }
+            }
+        }
+
+        let allowed_token_types = parse_gasless_allowed_token_types(config);
+
+        for command in &self.commands {
+            command.validate_gasless_transaction(&allowed_token_types)?;
+        }
+
+        self.validate_gasless_inputs(config)?;
+
+        Ok(())
+    }
+
+    fn validate_gasless_inputs(&self, config: &ProtocolConfig) -> UserInputResult {
+        let mut used_inputs = vec![false; self.inputs.len()];
+        for idx in self.commands.iter().flat_map(|cmd| cmd.input_arguments()) {
+            if let Some(slot) = used_inputs.get_mut(idx as usize) {
+                *slot = true;
+            }
+        }
+
+        let max_unused_pure = config.get_gasless_max_unused_inputs();
+        let max_pure_bytes = config.get_gasless_max_pure_input_bytes();
+        let mut unused_pure_count = 0u64;
+
+        for (i, input) in self.inputs.iter().enumerate() {
+            let is_used = used_inputs[i];
+            match input {
+                CallArg::Pure(bytes) => {
+                    fp_ensure!(
+                        bytes.len() as u64 <= max_pure_bytes,
+                        UserInputError::Unsupported(format!(
+                            "Input {} has size {} bytes, but gasless transactions \
+                             allow at most {} bytes per Pure input",
+                            i,
+                            bytes.len(),
+                            max_pure_bytes
+                        ))
+                    );
+                    if !is_used {
+                        unused_pure_count += 1;
+                    }
+                }
+                CallArg::Object(_) if !is_used => {
+                    return Err(UserInputError::Unsupported(format!(
+                        "Gasless transactions do not allow unused Object inputs (input {})",
+                        i
+                    )));
+                }
+                CallArg::FundsWithdrawal(_) if !is_used => {
+                    return Err(UserInputError::Unsupported(format!(
+                        "Gasless transactions do not allow unused FundsWithdrawal inputs (input {})",
+                        i
+                    )));
+                }
+                CallArg::Object(_) | CallArg::FundsWithdrawal(_) => {}
+            }
+        }
+
+        fp_ensure!(
+            unused_pure_count <= max_unused_pure,
+            UserInputError::Unsupported(format!(
+                "Gasless transactions allow at most {} unused Pure inputs, but found {}",
+                max_unused_pure, unused_pure_count
+            ))
+        );
+
+        Ok(())
+    }
+}
+
+pub fn parse_gasless_allowed_token_types(config: &ProtocolConfig) -> Vec<TypeTag> {
+    let mut types: Vec<TypeTag> = config
+        .gasless_allowed_token_types()
+        .iter()
+        .filter_map(|(s, min_transfer_size)| {
+            debug_assert_eq!(
+                *min_transfer_size, 0,
+                "min_transfer_size not yet implemented"
+            );
+            match s.parse() {
+                Ok(tag) => Some(tag),
+                Err(e) => {
+                    debug_fatal!("invalid gasless token type {s:?}: {e}");
+                    None
+                }
+            }
+        })
+        .collect();
+    #[cfg(debug_assertions)]
+    for s in GASLESS_TOKENS_FOR_TESTING.read().unwrap().iter() {
+        match s.parse() {
+            Ok(tag) => types.push(tag),
+            Err(e) => {
+                debug_fatal!("invalid gasless token override {s:?}: {e}");
+            }
+        }
+    }
+    types
 }
 
 /// A single command in a programmable transaction.
@@ -1078,6 +1227,129 @@ impl ProgrammableMoveCall {
                 UserInputError::InvalidIdentifier {
                     error: self.module.clone()
                 }
+            );
+        }
+        Ok(())
+    }
+
+    fn validate_gasless_transaction(&self, allowed_token_types: &[TypeTag]) -> UserInputResult {
+        type FunctionIdent = (AccountAddress, &'static IdentStr, &'static IdentStr);
+
+        enum TypeArgConstraint {
+            /// Type arg is the fund type directly (e.g. `send_funds<USDC>`).
+            FundType,
+            /// Type arg is `Balance<T>`; extract `T` as the fund type.
+            BalanceType,
+        }
+        use TypeArgConstraint::*;
+
+        const SUI_BALANCE_SEND_FUNDS: FunctionIdent = (
+            SUI_FRAMEWORK_ADDRESS,
+            BALANCE_MODULE_NAME,
+            BALANCE_SEND_FUNDS_FUNCTION_NAME,
+        );
+        const SUI_BALANCE_REDEEM_FUNDS: FunctionIdent = (
+            SUI_FRAMEWORK_ADDRESS,
+            BALANCE_MODULE_NAME,
+            BALANCE_REDEEM_FUNDS_FUNCTION_NAME,
+        );
+        const SUI_BALANCE_SPLIT: FunctionIdent = (
+            SUI_FRAMEWORK_ADDRESS,
+            BALANCE_MODULE_NAME,
+            BALANCE_SPLIT_FUNCTION_NAME,
+        );
+        const SUI_BALANCE_ZERO: FunctionIdent = (
+            SUI_FRAMEWORK_ADDRESS,
+            BALANCE_MODULE_NAME,
+            BALANCE_ZERO_FUNCTION_NAME,
+        );
+        const SUI_FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT: FunctionIdent = (
+            SUI_FRAMEWORK_ADDRESS,
+            FUNDS_ACCUMULATOR_MODULE_NAME,
+            WITHDRAWAL_SPLIT_FUNC_NAME,
+        );
+        const SUI_COIN_INTO_BALANCE: FunctionIdent = (
+            SUI_FRAMEWORK_ADDRESS,
+            COIN_MODULE_NAME,
+            INTO_BALANCE_FUNC_NAME,
+        );
+        const SUI_COIN_REDEEM_FUNDS: FunctionIdent = (
+            SUI_FRAMEWORK_ADDRESS,
+            COIN_MODULE_NAME,
+            REDEEM_FUNDS_FUNC_NAME,
+        );
+        const SUI_COIN_SEND_FUNDS: FunctionIdent = (
+            SUI_FRAMEWORK_ADDRESS,
+            COIN_MODULE_NAME,
+            SEND_FUNDS_FUNC_NAME,
+        );
+        const SUI_COIN_PUT: FunctionIdent =
+            (SUI_FRAMEWORK_ADDRESS, COIN_MODULE_NAME, PUT_FUNC_NAME);
+
+        const GASLESS_FUNCTIONS: &[(FunctionIdent, &[Option<TypeArgConstraint>])] = &[
+            (SUI_BALANCE_SEND_FUNDS, &[Some(FundType)]),
+            (SUI_BALANCE_REDEEM_FUNDS, &[Some(FundType)]),
+            (SUI_BALANCE_SPLIT, &[Some(FundType)]),
+            (SUI_BALANCE_ZERO, &[Some(FundType)]),
+            (SUI_FUNDS_ACCUMULATOR_WITHDRAWAL_SPLIT, &[Some(BalanceType)]),
+            (SUI_COIN_INTO_BALANCE, &[Some(FundType)]),
+            (SUI_COIN_REDEEM_FUNDS, &[Some(FundType)]),
+            (SUI_COIN_SEND_FUNDS, &[Some(FundType)]),
+            (SUI_COIN_PUT, &[Some(FundType)]),
+        ];
+
+        let Some((_, type_arg_constraints)) =
+            GASLESS_FUNCTIONS
+                .iter()
+                .find(|((addr, module, function), _)| {
+                    *addr == AccountAddress::from(self.package)
+                        && module.as_str() == self.module
+                        && function.as_str() == self.function
+                })
+        else {
+            return Err(UserInputError::Unsupported(format!(
+                "Function {}::{}::{} is not supported in gasless transactions",
+                self.package, self.module, self.function
+            )));
+        };
+
+        fp_ensure!(
+            type_arg_constraints.len() == self.type_arguments.len(),
+            UserInputError::Unsupported(format!(
+                "Function {}::{}::{} requires {} type arguments, but {} were provided",
+                self.package,
+                self.module,
+                self.function,
+                type_arg_constraints.len(),
+                self.type_arguments.len()
+            ))
+        );
+
+        for (type_arg_constraint, type_input) in
+            type_arg_constraints.iter().zip(&self.type_arguments)
+        {
+            let Some(type_arg_constraint) = type_arg_constraint else {
+                continue;
+            };
+            let type_arg = type_input.to_type_tag().map_err(|e| {
+                UserInputError::Unsupported(format!(
+                    "Failed to parse type argument {type_input} as a type tag: {e}"
+                ))
+            })?;
+            let fund_type = match type_arg_constraint {
+                TypeArgConstraint::FundType => type_arg,
+                TypeArgConstraint::BalanceType => Balance::maybe_get_balance_type_param(&type_arg)
+                    .ok_or_else(|| {
+                        UserInputError::Unsupported(format!(
+                            "Expected a type Balance<_> but got {type_input}",
+                        ))
+                    })?,
+            };
+            fp_ensure!(
+                allowed_token_types.contains(&fund_type),
+                UserInputError::Unsupported(format!(
+                    "Fund type {fund_type} is not currently allowed in gasless transactions"
+                ))
             );
         }
         Ok(())
@@ -1207,6 +1479,17 @@ impl Command {
         Ok(())
     }
 
+    fn validate_gasless_transaction(&self, allowed_token_types: &[TypeTag]) -> UserInputResult {
+        match self {
+            Command::MoveCall(call) => call.validate_gasless_transaction(allowed_token_types),
+            Command::MergeCoins(_, _) | Command::SplitCoins(_, _) => Ok(()),
+            _ => Err(UserInputError::Unsupported(
+                "Gasless transactions only support MoveCall, MergeCoins, and SplitCoins commands"
+                    .to_string(),
+            )),
+        }
+    }
+
     fn is_input_arg_used(&self, input_arg: u16) -> bool {
         self.is_argument_used(Argument::Input(input_arg))
     }
@@ -1216,17 +1499,27 @@ impl Command {
     }
 
     pub fn is_argument_used(&self, argument: Argument) -> bool {
-        match self {
-            Command::MoveCall(c) => c.arguments.iter().any(|a| a == &argument),
+        self.arguments().any(|a| a == &argument)
+    }
+
+    fn input_arguments(&self) -> impl Iterator<Item = u16> + '_ {
+        self.arguments().filter_map(|arg| match arg {
+            Argument::Input(i) => Some(*i),
+            _ => None,
+        })
+    }
+
+    fn arguments(&self) -> impl Iterator<Item = &Argument> + '_ {
+        let (args, single): (&[Argument], Option<&Argument>) = match self {
+            Command::MoveCall(c) => (&c.arguments, None),
             Command::TransferObjects(args, arg)
             | Command::MergeCoins(arg, args)
-            | Command::SplitCoins(arg, args) => {
-                args.iter().chain(once(arg)).any(|a| a == &argument)
-            }
-            Command::MakeMoveVec(_, args) => args.iter().any(|a| a == &argument),
-            Command::Upgrade(_, _, _, arg) => arg == &argument,
-            Command::Publish(_, _) => false,
-        }
+            | Command::SplitCoins(arg, args) => (args, Some(arg)),
+            Command::MakeMoveVec(_, args) => (args, None),
+            Command::Upgrade(_, _, _, arg) => (&[], Some(arg)),
+            Command::Publish(_, _) => (&[], None),
+        };
+        args.iter().chain(single)
     }
 }
 
@@ -1979,6 +2272,10 @@ pub fn is_gas_paid_from_address_balance(
         )
 }
 
+pub fn is_gasless_transaction(gas_data: &GasData, transaction_kind: &TransactionKind) -> bool {
+    is_gas_paid_from_address_balance(gas_data, transaction_kind) && gas_data.price == 0
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum TransactionExpiration {
     /// The transaction has no expiration
@@ -2128,6 +2425,20 @@ impl TransactionData {
             sender,
             gas_data,
             expiration: TransactionExpiration::None,
+        })
+    }
+
+    pub fn new_with_gas_data_and_expiration(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_data: GasData,
+        expiration: TransactionExpiration,
+    ) -> Self {
+        TransactionData::V1(TransactionDataV1 {
+            kind,
+            sender,
+            gas_data,
+            expiration,
         })
     }
 
@@ -2526,10 +2837,10 @@ pub trait TransactionDataAPI {
         &self,
     ) -> UserInputResult<(Vec<ObjectRef>, Vec<ObjectID>, Vec<ObjectRef>)>;
 
-    /// Processes funds withdraws and returns a map from funds account object ID to total
-    /// reserved amount. This method aggregates all withdraw operations for the same account by
-    /// merging their reservations. Each account object ID is derived from the type parameter of
-    /// each withdraw operation.
+    /// Processes funds withdraws and returns a map from funds account object ID to (total
+    /// reserved amount, type tag). This method aggregates all withdraw operations for the same
+    /// account by merging their reservations. Each account object ID is derived from the type
+    /// parameter of each withdraw operation.
     ///
     /// This method is used at signing time, and can reject a transaction if it contains
     /// invalid reservations.
@@ -2537,7 +2848,7 @@ pub trait TransactionDataAPI {
         &self,
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
-    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>>;
 
     /// Like `process_funds_withdrawals_for_signing`, but must only be called on a certified
     /// transaction, i.e. one that is known to be valid.
@@ -2548,9 +2859,6 @@ pub trait TransactionDataAPI {
 
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
-
-    // Get all the funds withdrawals args in the transaction.
-    fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg>;
 
     fn coin_reservation_obj_refs(
         &self,
@@ -2577,6 +2885,8 @@ pub trait TransactionDataAPI {
     fn is_sponsored_tx(&self) -> bool;
 
     fn is_gas_paid_from_address_balance(&self) -> bool;
+
+    fn is_gasless_transaction(&self) -> bool;
 
     fn sender_mut_for_testing(&mut self) -> &mut SuiAddress;
 
@@ -2691,18 +3001,20 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self,
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
-    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
-        let mut withdraws = self.get_funds_withdrawals();
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
 
         for withdraw in self.parsed_coin_reservations(chain_identifier) {
-            let withdrawal_arg = coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw)?;
+            // During signing, use latest accumulator version (None).
+            let withdrawal_arg =
+                coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw, None)?;
             withdraws.push(withdrawal_arg);
         }
 
         withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
         // Accumulate all withdraws per account.
-        let mut withdraw_map: BTreeMap<_, u64> = BTreeMap::new();
+        let mut withdraw_map: BTreeMap<AccumulatorObjId, (u64, TypeTag)> = BTreeMap::new();
         for withdraw in withdraws {
             let reserved_amount = match &withdraw.reservation {
                 Reservation::MaxAmountU64(amount) => {
@@ -2712,13 +3024,17 @@ impl TransactionDataAPI for TransactionDataV1 {
             };
 
             let account_address = withdraw.owner_for_withdrawal(self);
+            let type_tag = withdraw.type_arg.to_type_tag();
             let account_id =
-                AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag())
-                    .map_err(|e| UserInputError::InvalidWithdrawReservation {
-                    error: e.to_string(),
+                AccumulatorValue::get_field_id(account_address, &type_tag).map_err(|e| {
+                    UserInputError::InvalidWithdrawReservation {
+                        error: e.to_string(),
+                    }
                 })?;
 
-            let current_amount = withdraw_map.entry(account_id).or_default();
+            let (current_amount, _) = withdraw_map
+                .entry(account_id)
+                .or_insert_with(|| (0, type_tag));
             *current_amount = current_amount.checked_add(reserved_amount).ok_or(
                 UserInputError::InvalidWithdrawReservation {
                     error: "Balance withdraw reservation overflow".to_string(),
@@ -2733,8 +3049,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self,
         chain_identifier: ChainIdentifier,
     ) -> BTreeMap<AccumulatorObjId, u64> {
-        let mut withdraws = self.get_funds_withdrawals();
-
+        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
         withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
         // Accumulate all withdraws per account.
@@ -2763,6 +3078,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         // the accumulator object may not exist any more. This is okay, as the scheduler will simply
         // cancel the transaction if there are no funds available.
         for obj in self.coin_reservation_obj_refs() {
+            assert_reachable!("processing coin reservation withdrawal");
             // unwrap safe because of signing time checks
             let parsed = ParsedObjectRefWithdrawal::parse(&obj, chain_identifier).unwrap();
             let value = withdraw_map
@@ -2780,7 +3096,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn has_funds_withdrawals(&self) -> bool {
-        if self.is_gas_paid_from_address_balance() {
+        if self.is_gas_paid_from_address_balance() && self.gas_data().budget > 0 {
             return true;
         }
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
@@ -2794,10 +3110,6 @@ impl TransactionDataAPI for TransactionDataV1 {
             return true;
         }
         false
-    }
-
-    fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg> {
-        self.kind.get_funds_withdrawals().cloned().collect()
     }
 
     fn coin_reservation_obj_refs(
@@ -2945,6 +3257,13 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
             }
 
+            // Count implicit gas budget as a withdrawal when gas is paid from address balance
+            if config.enable_address_balance_gas_payments()
+                && self.is_gas_paid_from_address_balance()
+            {
+                num_reservations += 1;
+            }
+
             fp_ensure!(
                 num_reservations <= max_withdraws,
                 UserInputError::InvalidWithdrawReservation {
@@ -2973,7 +3292,8 @@ impl TransactionDataAPI for TransactionDataV1 {
                 );
             }
 
-            if config.address_balance_gas_check_rgp_at_signing() {
+            let is_gasless = config.enable_gasless() && self.is_gasless_transaction();
+            if config.address_balance_gas_check_rgp_at_signing() && !is_gasless {
                 fp_ensure!(
                     self.gas_data.price >= context.reference_gas_price,
                     UserInputError::GasPriceUnderRGP {
@@ -3088,14 +3408,25 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
                 .into()
             );
-            fp_ensure!(
-                self.gas_data.budget >= cost_table.min_transaction_cost,
-                UserInputError::GasBudgetTooLow {
-                    gas_budget: self.gas_data.budget,
-                    min_budget: cost_table.min_transaction_cost,
-                }
-                .into()
-            );
+            let is_gasless = config.enable_gasless() && self.is_gasless_transaction();
+            if is_gasless {
+                fp_ensure!(
+                    self.gas_data.budget == 0,
+                    UserInputError::Unsupported(
+                        "gas_budget must be 0 for gasless transactions".to_string()
+                    )
+                    .into()
+                );
+            } else {
+                fp_ensure!(
+                    self.gas_data.budget >= cost_table.min_transaction_cost,
+                    UserInputError::GasBudgetTooLow {
+                        gas_budget: self.gas_data.budget,
+                        min_budget: cost_table.min_transaction_cost,
+                    }
+                    .into()
+                );
+            }
         }
 
         self.validity_check_no_gas_check(config)?;
@@ -3106,6 +3437,17 @@ impl TransactionDataAPI for TransactionDataV1 {
     // may not be provided and created "on the fly"
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
+
+        if config.enable_gasless() && self.is_gasless_transaction() {
+            let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
+                debug_fatal!("gasless transaction is not a ProgrammableTransaction");
+                return Err(UserInputError::Unsupported(
+                    "Gasless transactions must be programmable transactions".to_string(),
+                ));
+            };
+            pt.validate_gasless_transaction(config)?;
+        }
+
         self.check_sponsorship()
     }
 
@@ -3119,6 +3461,10 @@ impl TransactionDataAPI for TransactionDataV1 {
     // it indicates use of the first-class API for address balance gas payments, not the legacy API.
     fn is_gas_paid_from_address_balance(&self) -> bool {
         is_gas_paid_from_address_balance(&self.gas_data, &self.kind)
+    }
+
+    fn is_gasless_transaction(&self) -> bool {
+        is_gasless_transaction(&self.gas_data, &self.kind)
     }
 
     /// Check if the transaction is compliant with sponsorship.
@@ -3180,7 +3526,7 @@ impl TransactionDataAPI for TransactionDataV1 {
 
 impl TransactionDataV1 {
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
-        if self.is_gas_paid_from_address_balance() {
+        if self.is_gas_paid_from_address_balance() && self.gas_data().budget > 0 {
             Some(if self.sender() != self.gas_owner() {
                 FundsWithdrawalArg::balance_from_sponsor(self.gas_data().budget, GAS::type_tag())
             } else {
@@ -3189,6 +3535,10 @@ impl TransactionDataV1 {
         } else {
             None
         }
+    }
+
+    fn get_funds_withdrawals(&self) -> impl Iterator<Item = FundsWithdrawalArg> + '_ {
+        self.kind.get_funds_withdrawals().cloned()
     }
 
     fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> {

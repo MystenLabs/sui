@@ -3,6 +3,7 @@
 
 use crate::{NativesCostTable, get_extension};
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{safe_unwrap, safe_unwrap_err};
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas, u256::U256};
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
@@ -84,8 +85,9 @@ pub fn to_u256(
     let mut addr_bytes_le = addr.to_vec();
     addr_bytes_le.reverse();
 
-    // unwrap safe because we know addr_bytes_le is length 32
-    let u256_val = Value::u256(U256::from_le_bytes(&addr_bytes_le.try_into().unwrap()));
+    let u256_val = Value::u256(U256::from_le_bytes(&safe_unwrap!(
+        addr_bytes_le.try_into().ok()
+    )));
     Ok(NativeResult::ok(context.gas_used(), smallvec![u256_val]))
 }
 
@@ -121,7 +123,8 @@ pub fn from_u256(
     let mut u256_bytes = u256.to_le_bytes().to_vec();
     u256_bytes.reverse();
 
-    // unwrap safe because we are passing a 32 byte slice
-    let addr_val = Value::address(AccountAddress::from_bytes(&u256_bytes[..]).unwrap());
+    let addr_val = Value::address(safe_unwrap_err!(AccountAddress::from_bytes(
+        &u256_bytes[..]
+    )));
     Ok(NativeResult::ok(context.gas_used(), smallvec![addr_val]))
 }

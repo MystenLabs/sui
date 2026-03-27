@@ -33,7 +33,7 @@ our latest design inspired by previous works below.
 - **Publication:** Not published
 - **Relevance:** For many users, a private key based wallet serves as the primary entry point to blockchains. Commonly recommended wallet authentication methods, such as mnemonics or hardware wallets, can be cumbersome. This difficulty in user onboarding has significantly hindered the adoption of blockchain-based applications.
 We develop zkLogin, a novel technique that leverages identity tokens issued by popular platforms (any OpenID Connect enabled platform e.g. Google, Facebook, etc.) to authenticate transactions. At the heart of zkLogin lies a signature scheme allowing the signer to sign using their existing OpenID accounts and nothing else. This improves the user experience significantly as users do not need to remember a new secret and can reuse their existing accounts.
-zkLogin provides strong security and privacy guarantees. By design, zkLogin builds on top of the underlying platform's authentication mechanisms, and derives its security from there. Unlike prior related works however, zkLogin avoids the use of additional trusted parties (e.g., trusted hardware or oracles) for its security guarantees. zkLogin leverages zero-knowledge proofs (ZKP) to ensure that the link between a user's off-chain and on-chain identities is hidden, even from the platform itself.
+zkLogin provides strong security and privacy guarantees. By design, zkLogin builds on top of the underlying platform's authentication mechanisms, and derives its security from there. Unlike prior related works however, zkLogin avoids the use of additional trusted parties (e.g., trusted hardware or oracles) for its security guarantees. zkLogin leverages zero-knowledge proofs (ZKP) to ensure that the link between a user's offchain and onchain identities is hidden, even from the platform itself.
 zkLogin is implemented and deployed on the Sui blockchain as an alternative to traditional digital signature-based addresses. Due to the ease of Web3 on-boarding just with social login, without requiring mnemonics, many hundreds of thousands zkLogin accounts have already been generated in various industries such as gaming, DeFi, direct payments, NFT collections, ride sharing, sports racing and many more.
 </div>
 
@@ -48,7 +48,7 @@ zkLogin is implemented and deployed on the Sui blockchain as an alternative to t
   crashed parties become designated leaders infinitely often, slowing down overall system performance. In this paper, we provide a new Leader-Aware SMR
   framework that, among other desirable properties, formalizes a Leader-utilization requirement that bounds the number of rounds whose leaders are faulty
   in crash-only executions. We introduce Carousel, a novel, reputation-based Leader-rotation solution to achieve Leader-Aware SMR. The challenge in adaptive
-  Leader-rotation is that it cannot rely on consensus to determine a leader, since consensus itself needs a leader. Carousel uses the available on-chain
+  Leader-rotation is that it cannot rely on consensus to determine a leader, since consensus itself needs a leader. Carousel uses the available onchain
   information to determine a leader locally and achieves Liveness despite this difficulty. A HotStuff implementation fitted with Carousel demonstrates
   drastic performance improvements: it increases throughput over 2x in faultless settings and provides a 20x throughput increase and 5x latency reduction
   in the presence of faults.
@@ -148,7 +148,7 @@ increase when suffering faults (100 validators, 33 faults).
   to add strong privacy to FastPay transactions (but Sui does not plan to do this).
 - **Summary:** We introduce Zef, the first Byzantine-Fault Tolerant (BFT) protocol to support payments in anonymous digital coins at arbitrary scale. Zef
   follows the communication and security model of FastPay: both protocols are asynchronous, low-latency, linearly-scalable, and powered by partially-trusted
-  sharded validators. Zef further introduces opaque coins represented as off-chain certificates that are bound to user accounts. In order to hide the face
+  sharded validators. Zef further introduces opaque coins represented as offchain certificates that are bound to user accounts. In order to hide the face
   values of coins when a payment operation consumes or creates them, Zef uses random commitments and NIZK proofs. Created coins are made unlinkable using the
   blind and randomizable threshold anonymous credentials of [Coconut](https://arxiv.org/pdf/1802.07344.pdf). To control storage costs associated with coin
   replay prevention, Zef accounts are designed so that data can be safely removed once an account is deactivated. Besides the specifications and a detailed

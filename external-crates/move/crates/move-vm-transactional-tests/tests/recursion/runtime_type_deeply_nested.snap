@@ -6,7 +6,7 @@ processed 3 tasks
 task 1, lines 72-81:
 //# run
 Error: Function execution failed with VMError: {
-    major_status: TOO_MANY_TYPE_NODES,
+    major_status: VM_MAX_TYPE_NODES_REACHED,
     sub_status: None,
     location: 0x42::M,
     indices: [],
@@ -16,7 +16,7 @@ Error: Function execution failed with VMError: {
 task 2, lines 83-93:
 //# run
 Error: Function execution failed with VMError: {
-    major_status: TOO_MANY_TYPE_NODES,
+    major_status: VM_MAX_TYPE_NODES_REACHED,
     sub_status: None,
     location: 0x42::M,
     indices: [],

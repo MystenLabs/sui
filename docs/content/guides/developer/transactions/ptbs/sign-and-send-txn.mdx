@@ -28,14 +28,14 @@ With a signature and the transaction bytes, a transaction can be submitted to be
 
 ## Workflow
 
-The following high-level process describes the overall workflow for constructing, signing, and executing an on-chain transaction:
+The following high-level process describes the overall workflow for constructing, signing, and executing an onchain transaction:
 
 - Construct the transaction data by creating a `Transaction` where multiple commands are chained. See [Building Programmable Transaction Blocks](/guides/developer/transactions/ptbs/building-ptb) for more information.
 - The SDK's built-in gas estimation and coin selection picks the gas coin.
 
 - Sign the transaction to generate a [signature](/guides/developer/transactions/transaction-auth/auth-overview).
 
-- Submit the `Transaction` and its signature for on-chain execution.
+- Submit the `Transaction` and its signature for onchain execution.
 
 :::info
 

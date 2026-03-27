@@ -931,7 +931,7 @@ async fn claim_on_sui(
     if dry_run {
         let sui_client = sui_bridge_client.grpc_client().clone();
         let resp = sui_client
-            .simulate_transaction(&tx_data, true)
+            .simulate_transaction(&tx_data, true, true)
             .await
             .map_err(|e| anyhow!("Dry run (simulate) failed: {:?}", e))?;
         println!(

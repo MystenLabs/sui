@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::safe_unwrap;
 use move_core_types::{
     gas_algebra::InternalGas,
     language_storage::TypeTag,
@@ -68,13 +69,12 @@ pub fn is_one_time_witness(
         type_is_one_time_witness_cost_params.types_is_one_time_witness_cost_base
     );
 
-    // unwrap safe because the interface of native function guarantees it.
-    let ty = ty_args.pop().unwrap();
+    let ty = safe_unwrap!(ty_args.pop());
 
     native_charge_gas_early_exit!(
         context,
         type_is_one_time_witness_cost_params.types_is_one_time_witness_type_cost_per_byte
-            * u64::from(ty.size()).into()
+            * u64::from(ty.size()?).into()
     );
 
     let type_tag = context.type_to_type_tag(&ty)?;

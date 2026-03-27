@@ -5,7 +5,7 @@ processed 2 tasks
 
 task 0, lines 1-7:
 //# print-bytecode --syntax=mvir
-// Move bytecode v6
+// Move bytecode v7
 module 42.M {
 
 entry foo<T, U>() {
@@ -18,7 +18,7 @@ B0:
 
 task 1, lines 9-13:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 43.M {
 
 entry foo<X, Y>() {

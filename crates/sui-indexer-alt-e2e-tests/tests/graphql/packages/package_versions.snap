@@ -10,7 +10,7 @@ task 1, lines 6-9:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 11:
 //# create-checkpoint
@@ -20,13 +20,13 @@ task 3, lines 13-16:
 //# upgrade --package P1 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 4, lines 18-21:
 //# upgrade --package P2 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 5, lines 23-25:
 //# programmable --sender A --inputs 42 @A
@@ -55,21 +55,21 @@ Response: {
         {
           "cursor": "MQ==",
           "node": {
-            "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
+            "address": "0xbbf0790ca1de52171924169450e0e020d28d60177e9adb6f561e037acff45b7c",
             "version": 1
           }
         },
         {
           "cursor": "Mg==",
           "node": {
-            "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
+            "address": "0x756e803c4fe77d95aadf839dc93ffe9940582692adcf697a70d7f639f513926d",
             "version": 2
           }
         },
         {
           "cursor": "Mw==",
           "node": {
-            "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
+            "address": "0x2cf8558a953adcf407e345ee3394c682c3da3551f6c8b5edb7119de90be06dc9",
             "version": 3
           }
         }
@@ -93,14 +93,14 @@ Response: {
         {
           "cursor": "MQ==",
           "node": {
-            "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
+            "address": "0xbbf0790ca1de52171924169450e0e020d28d60177e9adb6f561e037acff45b7c",
             "version": 1
           }
         },
         {
           "cursor": "Mg==",
           "node": {
-            "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
+            "address": "0x756e803c4fe77d95aadf839dc93ffe9940582692adcf697a70d7f639f513926d",
             "version": 2
           }
         }
@@ -124,14 +124,14 @@ Response: {
         {
           "cursor": "Mg==",
           "node": {
-            "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
+            "address": "0x756e803c4fe77d95aadf839dc93ffe9940582692adcf697a70d7f639f513926d",
             "version": 2
           }
         },
         {
           "cursor": "Mw==",
           "node": {
-            "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
+            "address": "0x2cf8558a953adcf407e345ee3394c682c3da3551f6c8b5edb7119de90be06dc9",
             "version": 3
           }
         }
@@ -155,7 +155,7 @@ Response: {
         {
           "cursor": "Mg==",
           "node": {
-            "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
+            "address": "0x756e803c4fe77d95aadf839dc93ffe9940582692adcf697a70d7f639f513926d",
             "version": 2
           }
         }
@@ -179,7 +179,7 @@ Response: {
         {
           "cursor": "Mw==",
           "node": {
-            "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
+            "address": "0x2cf8558a953adcf407e345ee3394c682c3da3551f6c8b5edb7119de90be06dc9",
             "version": 3
           }
         }
@@ -203,7 +203,7 @@ Response: {
         {
           "cursor": "Mw==",
           "node": {
-            "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
+            "address": "0x2cf8558a953adcf407e345ee3394c682c3da3551f6c8b5edb7119de90be06dc9",
             "version": 3
           }
         }
@@ -227,7 +227,7 @@ Response: {
         {
           "cursor": "Mg==",
           "node": {
-            "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
+            "address": "0x756e803c4fe77d95aadf839dc93ffe9940582692adcf697a70d7f639f513926d",
             "version": 2
           }
         }
@@ -251,7 +251,7 @@ Response: {
         {
           "cursor": "MQ==",
           "node": {
-            "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
+            "address": "0xbbf0790ca1de52171924169450e0e020d28d60177e9adb6f561e037acff45b7c",
             "version": 1
           }
         }
@@ -275,7 +275,7 @@ Response: {
         {
           "cursor": "MQ==",
           "node": {
-            "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
+            "address": "0xbbf0790ca1de52171924169450e0e020d28d60177e9adb6f561e037acff45b7c",
             "version": 1
           }
         }
@@ -299,7 +299,7 @@ Response: {
         {
           "cursor": "MQ==",
           "node": {
-            "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
+            "address": "0xbbf0790ca1de52171924169450e0e020d28d60177e9adb6f561e037acff45b7c",
             "version": 1
           }
         }
@@ -323,7 +323,7 @@ Response: {
         {
           "cursor": "Mg==",
           "node": {
-            "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
+            "address": "0x756e803c4fe77d95aadf839dc93ffe9940582692adcf697a70d7f639f513926d",
             "version": 2
           }
         }

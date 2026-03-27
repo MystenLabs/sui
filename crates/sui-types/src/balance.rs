@@ -28,6 +28,8 @@ pub const BALANCE_DESTROY_REBATES_FUNCTION_NAME: &IdentStr = ident_str!("destroy
 
 pub const BALANCE_REDEEM_FUNDS_FUNCTION_NAME: &IdentStr = ident_str!("redeem_funds");
 pub const BALANCE_SEND_FUNDS_FUNCTION_NAME: &IdentStr = ident_str!("send_funds");
+pub const BALANCE_SPLIT_FUNCTION_NAME: &IdentStr = ident_str!("split");
+pub const BALANCE_ZERO_FUNCTION_NAME: &IdentStr = ident_str!("zero");
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]

@@ -33,7 +33,7 @@ mod checked {
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
     use sui_types::effects::TransactionEffects;
-    use sui_types::error::ExecutionError;
+    use sui_types::error::{ExecutionError, ExecutionErrorTrait};
     use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -130,7 +130,7 @@ mod checked {
                         kind = ?error.kind(),
                         tx_digest = ?transaction_digest,
                         "INVARIANT VIOLATION! Source: {:?}",
-                        error.source(),
+                        error.source_ref(),
                     );
                 }
 
@@ -140,7 +140,7 @@ mod checked {
                         kind = ?error.kind(),
                         tx_digest = ?transaction_digest,
                         "Verification Error. Source: {:?}",
-                        error.source(),
+                        error.source_ref(),
                     );
                 }
 
@@ -150,7 +150,7 @@ mod checked {
                         kind = ?error.kind(),
                         tx_digest = ?transaction_digest,
                         "Publish/Upgrade Error. Source: {:?}",
-                        error.source(),
+                        error.source_ref(),
                     )
                 }
 

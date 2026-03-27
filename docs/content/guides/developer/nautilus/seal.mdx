@@ -49,7 +49,7 @@ The admin builds and runs the enclave with the exposed `/get_attestation` endpoi
 
 1. The admin uses the attestation response to register PCRs and the enclave public key. The `/process_data` endpoint returns an error at this point because the `SEAL_API_KEY` is not yet initialized.
 
-1. The admin registers the enclave on-chain and retrieves the enclave object ID and initial shared version.
+1. The admin registers the enclave onchain and retrieves the enclave object ID and initial shared version.
 
 ## Phease 2: Initialize and complete key load
 
@@ -69,7 +69,7 @@ The admin builds and runs the enclave with the exposed `/get_attestation` endpoi
 
 The enclave generates 3 keys on startup, all kept only in enclave memory:
 
-1. Enclave ephemeral key pair (`state.eph_kp`): Ed25519 key pair. Used to sign `/process_data` responses and to create the signature argument in `seal_approve` PTB. Its public key is registered on-chain in the Enclave object.
+1. Enclave ephemeral key pair (`state.eph_kp`): Ed25519 key pair. Used to sign `/process_data` responses and to create the signature argument in `seal_approve` PTB. Its public key is registered onchain in the Enclave object.
 
 1. Seal wallet (`WALLET_BYTES`): Ed25519 key pair. Used for Seal certificate signing and as the transaction sender for `seal_approve`.
 

@@ -4,18 +4,21 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use backoff::ExponentialBackoff;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
 use sui_futures::stream::TrySpawnStreamExt;
+use sui_indexer_alt_framework_store_traits::Connection;
+use sui_indexer_alt_framework_store_traits::Store;
+use sui_types::digests::ChainIdentifier;
 use sui_types::full_checkpoint_content::Checkpoint;
+use tokio::sync::OnceCell;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
-
-use async_trait::async_trait;
 
 use crate::config::ConcurrencyConfig;
 use crate::ingestion::ingestion_client::CheckpointEnvelope;
@@ -60,12 +63,13 @@ pub trait Processor: Send + Sync + 'static {
 ///
 /// Each worker processes a checkpoint into rows and sends them on to the committer using the `tx`
 /// channel.
-pub(super) fn processor<P: Processor>(
+pub(super) fn processor<P: Processor, S: Store>(
     processor: Arc<P>,
     rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     concurrency: ConcurrencyConfig,
+    store: S,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = P::NAME, "Starting processor");
@@ -76,6 +80,8 @@ pub(super) fn processor<P: Processor>(
         );
 
         let report_metrics = metrics.clone();
+        // Caches this pipeline's chain_id after the first time it has been read from the database.
+        let chain_id_accepted: Arc<OnceCell<(bool, ChainIdentifier)>> = Arc::default();
         match ReceiverStream::new(rx)
             .try_for_each_send_spawned(
                 concurrency.into(),
@@ -83,8 +89,11 @@ pub(super) fn processor<P: Processor>(
                     let metrics = metrics.clone();
                     let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                     let processor = processor.clone();
+                    let store = store.clone();
+                    let chain_id_accepted = chain_id_accepted.clone();
 
                     async move {
+
                         metrics
                             .total_handler_checkpoints_received
                             .with_label_values(&[P::NAME])
@@ -104,14 +113,28 @@ pub(super) fn processor<P: Processor>(
                             ..Default::default()
                         };
 
-                        let checkpoint = checkpoint_envelope.checkpoint.clone();
+                        let chain_id = checkpoint_envelope.chain_id;
+                        let checkpoint = &checkpoint_envelope.checkpoint;
                         let checkpoint_sequence_number = checkpoint.summary.sequence_number;
                         let retry_metrics = metrics.clone();
                         let values = backoff::future::retry_notify(
                             backoff,
                             || async {
+                                let (accepted, accepted_chain_id) = chain_id_accepted.get_or_try_init(async || {
+                                    let mut conn = store.connect().await
+                                        .map_err(backoff::Error::transient)?;
+                                    let accepted = conn.accepts_chain_id(P::NAME, *chain_id.as_bytes()).await
+                                        .map_err(backoff::Error::transient)?;
+                                    Ok::<_, backoff::Error<anyhow::Error>>((accepted, chain_id))
+                                }).await?;
+                                if !accepted || *accepted_chain_id != chain_id {
+                                    return Err(backoff::Error::permanent(anyhow::anyhow!(
+                                        "checkpoint chain_id={chain_id:?} does not match stored chain_id",
+                                    )))
+                                }
+
                                 processor
-                                    .process(&checkpoint)
+                                    .process(checkpoint)
                                     .await
                                     .map_err(backoff::Error::transient)
                             },
@@ -200,12 +223,16 @@ mod tests {
     use std::time::Duration;
 
     use anyhow::ensure;
+    use sui_futures::service;
     use sui_types::digests::ChainIdentifier;
+    use sui_types::digests::CheckpointDigest;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use tokio::sync::mpsc;
     use tokio::time::timeout;
 
     use crate::metrics::IndexerMetrics;
+    use crate::mocks::store::MockStore;
+    use crate::mocks::store::MockWatermark;
 
     use super::*;
 
@@ -270,6 +297,7 @@ mod tests {
             indexed_tx,
             metrics,
             ConcurrencyConfig::Fixed { value: 10 },
+            MockStore::default(),
         );
 
         // Send both checkpoints
@@ -334,6 +362,7 @@ mod tests {
             indexed_tx,
             metrics,
             ConcurrencyConfig::Fixed { value: 10 },
+            MockStore::default(),
         );
 
         // Send first checkpoint.
@@ -412,6 +441,7 @@ mod tests {
             indexed_tx,
             metrics.clone(),
             ConcurrencyConfig::Fixed { value: 10 },
+            MockStore::default(),
         );
 
         // Send and verify first checkpoint (should succeed immediately)
@@ -442,10 +472,107 @@ mod tests {
         );
     }
 
-    // By default, Rust's async tests run on the single-threaded runtime.
-    // We need multi_thread here because our test uses std::thread::sleep which blocks the worker thread.
-    // The multi-threaded runtime allows other worker threads to continue processing while one is blocked.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn test_chain_id(
+        store: MockStore,
+        checkpoint_chain_id: ChainIdentifier,
+    ) -> (
+        Option<IndexedCheckpoint<DataPipeline>>,
+        Result<(), service::Error>,
+    ) {
+        let checkpoint_envelope = Arc::new(CheckpointEnvelope {
+            checkpoint: Arc::new(TestCheckpointBuilder::new(1).build_checkpoint()),
+            chain_id: checkpoint_chain_id,
+        });
+
+        let processor = Arc::new(DataPipeline);
+        let (data_tx, data_rx) = mpsc::channel(1);
+        let (indexed_tx, mut indexed_rx) = mpsc::channel(1);
+        let metrics = IndexerMetrics::new(None, &Default::default());
+
+        let service = super::processor(
+            processor,
+            data_rx,
+            indexed_tx,
+            metrics,
+            ConcurrencyConfig::Fixed { value: 1 },
+            store,
+        );
+
+        // Send the checkpoint then close the input channel.
+        data_tx.try_send(checkpoint_envelope).unwrap();
+        drop(data_tx);
+
+        let indexed_checkpoint = indexed_rx.recv().await;
+        let shutdown_result = service.shutdown().await;
+
+        (indexed_checkpoint, shutdown_result)
+    }
+
+    #[tokio::test]
+    async fn test_chain_id_stored_when_none_exists() {
+        let store = MockStore::default();
+        let chain_id = ChainIdentifier::default();
+
+        let (indexed_checkpoint, shutdown_result) = test_chain_id(store.clone(), chain_id).await;
+        assert!(shutdown_result.is_ok());
+
+        let indexed = indexed_checkpoint.expect("Should receive IndexedCheckpoint");
+        assert_eq!(indexed.watermark.checkpoint_hi_inclusive, 1);
+
+        let watermark = store.watermark(DataPipeline::NAME).unwrap();
+        assert_eq!(
+            watermark.chain_id,
+            Some(*chain_id.as_bytes()),
+            "chain_id should be stored after first checkpoint"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chain_id_matches_existing() {
+        let chain_id = ChainIdentifier::default();
+        let store = MockStore::default().with_watermark(
+            DataPipeline::NAME,
+            MockWatermark {
+                chain_id: Some(*chain_id.as_bytes()),
+                ..Default::default()
+            },
+        );
+
+        let (indexed_checkpoint, shutdown_result) = test_chain_id(store, chain_id).await;
+        assert!(shutdown_result.is_ok());
+
+        let indexed =
+            indexed_checkpoint.expect("Should receive IndexedCheckpoint when chain_id matches");
+        assert_eq!(indexed.watermark.checkpoint_hi_inclusive, 1);
+    }
+
+    #[tokio::test]
+    async fn test_chain_id_mismatch_returns_error() {
+        let stored_chain_id = ChainIdentifier::default();
+        let different_chain_id: ChainIdentifier = CheckpointDigest::from([1u8; 32]).into();
+        let store = MockStore::default().with_watermark(
+            DataPipeline::NAME,
+            MockWatermark {
+                chain_id: Some(*stored_chain_id.as_bytes()),
+                ..Default::default()
+            },
+        );
+
+        let (indexed_checkpoint, shutdown_result) = test_chain_id(store, different_chain_id).await;
+        let shutdown_err = shutdown_result.unwrap_err();
+        assert!(
+            format!("{shutdown_err:#}").contains("does not match"),
+            "Error should indicate chain_id mismatch, got: {shutdown_err:#}"
+        );
+
+        // The processor should fail and drop indexed_tx, so recv returns None.
+        assert!(
+            indexed_checkpoint.is_none(),
+            "Channel should close without producing a result on chain_id mismatch"
+        );
+    }
+
+    #[tokio::test]
     async fn test_processor_concurrency() {
         // Create a processor that simulates work by sleeping
         struct SlowProcessor;
@@ -458,8 +585,11 @@ mod tests {
                 &self,
                 checkpoint: &Arc<Checkpoint>,
             ) -> anyhow::Result<Vec<Self::Value>> {
-                // Simulate work by sleeping
-                std::thread::sleep(std::time::Duration::from_millis(500));
+                // Use tokio::time::sleep rather than std::thread::sleep to avoid
+                // starving tasks woken by the chain_id RwLock. std::thread::sleep
+                // blocks the worker thread, preventing woken tasks queued on the
+                // same thread from making progress until the sleep finishes.
+                tokio::time::sleep(Duration::from_millis(500)).await;
                 Ok(vec![StoredData {
                     value: checkpoint.summary.sequence_number,
                 }])
@@ -489,6 +619,7 @@ mod tests {
             indexed_tx,
             metrics,
             ConcurrencyConfig::Fixed { value: 3 },
+            MockStore::default(),
         );
 
         // Send all checkpoints and measure time
@@ -508,7 +639,7 @@ mod tests {
         // With concurrency=3, 5 checkpoints should take ~1000ms (500ms * 2 (batches)) instead of 2500ms (500ms * 5).
         // Adding small 200ms for some processing overhead.
         let elapsed = start.elapsed();
-        assert!(elapsed < std::time::Duration::from_millis(1200));
+        assert!(elapsed < Duration::from_millis(1200));
 
         // Verify results
         assert_eq!(received.len(), 5);

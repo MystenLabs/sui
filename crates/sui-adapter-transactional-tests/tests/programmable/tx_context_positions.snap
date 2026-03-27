@@ -7,7 +7,7 @@ task 1, lines 8-27:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4833600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4879200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 29-30:
 //# programmable --inputs 0 0

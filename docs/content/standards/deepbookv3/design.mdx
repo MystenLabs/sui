@@ -114,7 +114,7 @@ The vault also stores the `DeepPrice` struct. This object holds up to 100 data p
 
 ### BigVector
 
-`BigVector` is an arbitrary sized vector-like data structure, implemented using an on-chain B+ Tree to support almost constant time (log base max_fan_out) random access, insertion and removal.
+`BigVector` is an arbitrary sized vector-like data structure, implemented using an onchain B+ Tree to support almost constant time (log base max_fan_out) random access, insertion and removal.
 
 Iteration is supported by exposing access to leaf nodes (slices). Finding the initial slice can be done in almost constant time, and subsequently finding the previous or next slice can also be done in constant time.
 

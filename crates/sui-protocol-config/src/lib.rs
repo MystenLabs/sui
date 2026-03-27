@@ -26,6 +26,9 @@ use tracing::{info, warn};
 const MIN_PROTOCOL_VERSION: u64 = 1;
 const MAX_PROTOCOL_VERSION: u64 = 119;
 
+const TESTNET_USDC: &str =
+    "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
+
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
@@ -1034,6 +1037,9 @@ struct FeatureFlags {
     // If true, use coin party owner information.
     #[serde(skip_serializing_if = "is_false")]
     use_coin_party_owner: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    enable_gasless: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1548,6 +1554,8 @@ pub struct ProtocolConfig {
     // Cost params for the Move native function
     // `receive_object<T: key>(p: &mut UID, recv: Receiving<T>T)`
     transfer_receive_object_cost_base: Option<u64>,
+    transfer_receive_object_cost_per_byte: Option<u64>,
+    transfer_receive_object_type_cost_per_byte: Option<u64>,
 
     // TxContext
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -1901,6 +1909,21 @@ pub struct ProtocolConfig {
 
     /// The maximum number of updates per settlement transaction.
     max_updates_per_settlement_txn: Option<u32>,
+
+    /// Maximum computation units allowed for a gasless transaction.
+    gasless_max_computation_units: Option<u64>,
+
+    /// Allowed token types for gasless transactions, with minimum transfer sizes per token.
+    gasless_allowed_token_types: Option<Vec<(String, u64)>>,
+
+    /// Maximum number of unused Pure inputs allowed in a gasless transaction.
+    /// Object and FundsWithdrawal inputs must always be used.
+    /// When None, there is no limit (effectively unlimited).
+    gasless_max_unused_inputs: Option<u64>,
+
+    /// Maximum size in bytes of each Pure input in a gasless transaction.
+    /// When None, there is no limit (effectively unlimited).
+    gasless_max_pure_input_bytes: Option<u64>,
 }
 
 /// An aliased address.
@@ -2683,6 +2706,23 @@ impl ProtocolConfig {
     pub fn use_coin_party_owner(&self) -> bool {
         self.feature_flags.use_coin_party_owner
     }
+
+    pub fn enable_gasless(&self) -> bool {
+        self.feature_flags.enable_gasless
+    }
+
+    pub fn gasless_allowed_token_types(&self) -> &[(String, u64)] {
+        debug_assert!(self.gasless_allowed_token_types.is_some());
+        self.gasless_allowed_token_types.as_deref().unwrap_or(&[])
+    }
+
+    pub fn get_gasless_max_unused_inputs(&self) -> u64 {
+        self.gasless_max_unused_inputs.unwrap_or(u64::MAX)
+    }
+
+    pub fn get_gasless_max_pure_input_bytes(&self) -> u64 {
+        self.gasless_max_pure_input_bytes.unwrap_or(u64::MAX)
+    }
 }
 
 #[cfg(not(msim))]
@@ -2979,6 +3019,8 @@ impl ProtocolConfig {
             // Cost params for the Move native function `share_object<T: key>(obj: T)`
             transfer_share_object_cost_base: Some(52),
             transfer_receive_object_cost_base: None,
+            transfer_receive_object_type_cost_per_byte: None,
+            transfer_receive_object_cost_per_byte: None,
 
             // `tx_context` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -3269,6 +3311,11 @@ impl ProtocolConfig {
             translation_per_linkage_entry_charge: None,
 
             max_updates_per_settlement_txn: None,
+
+            gasless_max_computation_units: None,
+            gasless_allowed_token_types: None,
+            gasless_max_unused_inputs: None,
+            gasless_max_pure_input_bytes: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4705,6 +4752,21 @@ impl ProtocolConfig {
                     cfg.execution_version = Some(4);
                     cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = false;
                     cfg.feature_flags.merge_randomness_into_checkpoint = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_gasless = true;
+                        cfg.gasless_max_computation_units = Some(50_000);
+                        cfg.gasless_allowed_token_types = Some(vec![]);
+                        cfg.feature_flags.enable_coin_reservation_obj_refs = true;
+                        cfg.feature_flags
+                            .convert_withdrawal_compatibility_ptb_arguments = true;
+                    }
+                    cfg.gasless_max_unused_inputs = Some(1);
+                    cfg.gasless_max_pure_input_bytes = Some(32);
+                    if chain == Chain::Testnet {
+                        cfg.gasless_allowed_token_types = Some(vec![(TESTNET_USDC.to_string(), 0)]);
+                    }
+                    cfg.transfer_receive_object_cost_per_byte = Some(1);
+                    cfg.transfer_receive_object_type_cost_per_byte = Some(2);
                 }
                 // Use this template when making changes:
                 //
@@ -5025,6 +5087,15 @@ impl ProtocolConfig {
         self.feature_flags.enable_coin_reservation_obj_refs = true;
         self.feature_flags
             .convert_withdrawal_compatibility_ptb_arguments = true;
+        // Ensure execution_version >= 4 so new_vm_enabled() returns true,
+        // which is required for enable_coin_reservation_obj_refs() to return true.
+        self.execution_version = Some(self.execution_version.map_or(4, |v| v.max(4)));
+    }
+
+    pub fn disable_coin_reservation_for_testing(&mut self) {
+        self.feature_flags.enable_coin_reservation_obj_refs = false;
+        self.feature_flags
+            .convert_withdrawal_compatibility_ptb_arguments = false;
     }
 
     pub fn create_root_accumulator_object_for_testing(&mut self) {
@@ -5046,6 +5117,23 @@ impl ProtocolConfig {
 
     pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
         self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
+    pub fn enable_gasless_for_testing(&mut self) {
+        self.enable_address_balance_gas_payments_for_testing();
+        self.feature_flags.enable_gasless = true;
+        self.gasless_max_computation_units = Some(50_000);
+        self.gasless_allowed_token_types = Some(vec![]);
+    }
+
+    pub fn disable_gasless_for_testing(&mut self) {
+        self.feature_flags.enable_gasless = false;
+        self.gasless_max_computation_units = None;
+        self.gasless_allowed_token_types = None;
+    }
+
+    pub fn set_gasless_allowed_token_types_for_testing(&mut self, types: Vec<(String, u64)>) {
+        self.gasless_allowed_token_types = Some(types);
     }
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {

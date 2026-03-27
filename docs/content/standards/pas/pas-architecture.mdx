@@ -24,19 +24,15 @@ For each wallet address (or object ID), PAS creates a one-to-one derived Account
 
 Every time funds move, they go through hot potato requests that must collect a predefined set of approval stamps (witness structs) before they can resolve within the transaction. Hot potato requests have no `drop` or `store` ability, so the transaction aborts if the request is not resolved.
 
-The following diagram compares asset ownership with and without PAS:
+The following diagrams compare asset ownership with and without PAS:
 
-```mermaid
-flowchart LR
-    subgraph without["Without PAS"]
-        direction LR
-        W1[Wallet] --> O1[Owns T] --> F1[Transfer freely]
-    end
-    subgraph with["With PAS"]
-        direction LR
-        W2[Wallet] --> A2[Auth proof] --> Acc2[Account holds T] --> R2[Request needed to move]
-    end
-```
+**Without PAS**
+
+![Unrestricted asset ownership without PAS](./images/unrestricted-ownership.svg)
+
+**With PAS**
+
+![Restricted asset ownership with PAS](./images/restricted-ownership.svg)
 
 Each asset type can have its own policy that defines which witnesses are required to approve each action. This means different assets can adhere to completely different rules. One asset might require a single compliance stamp, while another might need approvals from multiple independent contracts.
 
@@ -65,7 +61,7 @@ Namespace (shared, singleton)
 └── Templates             ← derived from (namespace_id, TemplateKey)
 ```
 
-All objects use derived addresses (`sui::derived_object`), making them deterministic and queryable without on-chain lookups.
+All objects use derived addresses (`sui::derived_object`), making them deterministic and queryable without onchain lookups.
 
 ### Namespace
 
@@ -200,7 +196,7 @@ let auth = account::new_auth_as_object(&mut my_object_uid);
 
 ## Derived object addresses
 
-All PAS objects (Accounts, policies) use deterministic derived addresses. You can compute them off-chain:
+All PAS objects (Accounts, policies) use deterministic derived addresses. You can compute them offchain:
 
 ```move
 // Get the account address for an owner

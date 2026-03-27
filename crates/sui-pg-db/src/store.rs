@@ -3,11 +3,15 @@
 
 use std::time::Duration;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use chrono::Utc;
 use diesel::ExpressionMethods;
 use diesel::prelude::*;
 use diesel::sql_types::BigInt;
+use diesel::sql_types::Nullable;
+use diesel::sql_types::SingleValue;
+use diesel::sql_types::SqlType;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
 use scoped_futures::ScopedBoxFuture;
@@ -20,6 +24,10 @@ use crate::model::StoredWatermark;
 use crate::schema::watermarks;
 
 pub use sui_indexer_alt_framework_store_traits::Store;
+
+define_sql_function! {
+    fn coalesce<T: SqlType + SingleValue>(x: Nullable<T>, y: T) -> Nullable<T>;
+}
 
 #[async_trait]
 impl store::Connection for Connection<'_> {
@@ -63,6 +71,26 @@ impl store::Connection for Connection<'_> {
             checkpoint_hi_inclusive: u64::try_from(checkpoint_hi_inclusive).ok(),
             reader_lo: reader_lo as u64,
         })
+    }
+
+    async fn accepts_chain_id(
+        &mut self,
+        pipeline_task: &str,
+        chain_id: [u8; 32],
+    ) -> anyhow::Result<bool> {
+        let stored_chain_id: Option<Vec<u8>> = diesel::update(watermarks::table)
+            .filter(watermarks::pipeline.eq(pipeline_task))
+            // "coalesce" only updates the value if it is null in the existing row
+            .set(watermarks::chain_id.eq(coalesce(watermarks::chain_id, chain_id)))
+            .returning(watermarks::chain_id)
+            .get_result(self)
+            .await?;
+
+        let stored_chain_id = stored_chain_id.context("missing chain id after update")?;
+        let stored_chain_id: [u8; 32] = stored_chain_id
+            .try_into()
+            .map_err(|v: Vec<u8>| anyhow::anyhow!("chain id has wrong length: {}", v.len()))?;
+        Ok(stored_chain_id == chain_id)
     }
 
     async fn committer_watermark(

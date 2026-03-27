@@ -7,10 +7,12 @@ use crate::{
     get_tag_and_layouts, object_runtime::object_store::ObjectResult,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::{safe_assert, safe_unwrap, safe_unwrap_err};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
 };
+use move_vm_runtime::shared::views::{SizeConfig, ValueView};
 use move_vm_runtime::{
     execution::Type, execution::values::Value, natives::functions::NativeResult, pop_arg,
 };
@@ -34,6 +36,8 @@ const E_NOT_SUPPORTED: u64 = 5;
 #[derive(Clone, Debug)]
 pub struct TransferReceiveObjectInternalCostParams {
     pub transfer_receive_object_internal_cost_base: InternalGas,
+    pub transfer_receive_object_internal_cost_per_byte: InternalGas,
+    pub transfer_receive_object_internal_type_cost_per_byte: InternalGas,
 }
 /***************************************************************************************************
 * native fun receive_object_internal
@@ -55,17 +59,23 @@ pub fn receive_object_internal(
         context,
         transfer_receive_object_internal_cost_params.transfer_receive_object_internal_cost_base
     );
-    let child_ty = ty_args.pop().unwrap();
+    let child_ty = safe_unwrap!(ty_args.pop());
+    native_charge_gas_early_exit!(
+        context,
+        transfer_receive_object_internal_cost_params
+            .transfer_receive_object_internal_type_cost_per_byte
+            * u64::from(child_ty.size()?).into()
+    );
     let child_receiver_sequence_number: SequenceNumber = pop_arg!(args, u64).into();
-    let child_receiver_object_id = args.pop_back().unwrap();
+    let child_receiver_object_id = safe_unwrap!(args.pop_back());
     let parent = pop_arg!(args, AccountAddress).into();
-    assert!(args.is_empty());
-    let child_id: ObjectID = get_receiver_object_id(child_receiver_object_id.copy_value())
-        .unwrap()
-        .value_as::<AccountAddress>()
-        .unwrap()
-        .into();
-    assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
+    let child_id: ObjectID = safe_unwrap_err!(
+        get_receiver_object_id(child_receiver_object_id.copy_value())
+            .and_then(|v| v.value_as::<AccountAddress>())
+    )
+    .into();
+    safe_assert!(ty_args.is_empty());
 
     let Some((tag, layout, annotated_layout)) = get_tag_and_layouts(context, &child_ty)? else {
         return Ok(NativeResult::err(
@@ -100,6 +110,17 @@ pub fn receive_object_internal(
         Err(x) => return Err(x),
     };
 
+    let child_size = child.abstract_memory_size(&SizeConfig {
+        include_vector_size: true,
+        traverse_references: true,
+    })?;
+
+    native_charge_gas_early_exit!(
+        context,
+        transfer_receive_object_internal_cost_params.transfer_receive_object_internal_cost_per_byte
+            * u64::from(child_size).into()
+    );
+
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
 }
 
@@ -129,9 +150,9 @@ pub fn transfer_internal(
         transfer_transfer_internal_cost_params.transfer_transfer_internal_cost_base
     );
 
-    let ty = ty_args.pop().unwrap();
+    let ty = safe_unwrap!(ty_args.pop());
     let recipient = pop_arg!(args, AccountAddress);
-    let obj = args.pop_back().unwrap();
+    let obj = safe_unwrap!(args.pop_back());
 
     let owner = Owner::AddressOwner(recipient.into());
     object_runtime_transfer(context, owner, ty, obj)?;
@@ -195,11 +216,11 @@ pub fn party_transfer_internal(
         transfer_party_transfer_internal_cost_params.transfer_party_transfer_internal_cost_base
     );
 
-    let ty = ty_args.pop().unwrap();
+    let ty = safe_unwrap!(ty_args.pop());
     let permissions = pop_arg!(args, Vec<u64>);
     let addresses = pop_arg!(args, Vec<AccountAddress>);
     let default_permissions = pop_arg!(args, u64);
-    let obj = args.pop_back().unwrap();
+    let obj = safe_unwrap!(args.pop_back());
     let Ok([permissions]): Result<[u64; 1], _> = permissions.try_into() else {
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -257,8 +278,8 @@ pub fn freeze_object(
         transfer_freeze_object_cost_params.transfer_freeze_object_cost_base
     );
 
-    let ty = ty_args.pop().unwrap();
-    let obj = args.pop_back().unwrap();
+    let ty = safe_unwrap!(ty_args.pop());
+    let obj = safe_unwrap!(args.pop_back());
 
     object_runtime_transfer(context, Owner::Immutable, ty, obj)?;
 
@@ -291,8 +312,8 @@ pub fn share_object(
         transfer_share_object_cost_params.transfer_share_object_cost_base
     );
 
-    let ty = ty_args.pop().unwrap();
-    let obj = args.pop_back().unwrap();
+    let ty = safe_unwrap!(ty_args.pop());
+    let obj = safe_unwrap!(args.pop_back());
     let transfer_result = object_runtime_transfer(
         context,
         // Dummy version, to be filled with the correct initial version when the effects of the

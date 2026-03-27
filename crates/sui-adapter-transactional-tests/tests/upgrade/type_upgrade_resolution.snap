@@ -10,7 +10,7 @@ task 1, lines 6-9:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5000800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5008400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 11-14:
 //# publish --upgradeable --sender A
@@ -22,19 +22,19 @@ task 3, lines 16-20:
 //# upgrade --package A1 --upgrade-capability 2,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 5563200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 5, lines 24-28:
 //# publish --upgradeable --sender A --dependencies A1
 created: object(5,0), object(5,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5540400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5548000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, lines 30-37:
 //# upgrade --package B --upgrade-capability 5,1 --sender A --dependencies A2
 created: object(6,0)
 mutated: object(0,0), object(5,1)
-gas summary: computation_cost: 1000000, storage_cost: 6437200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6444800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7, lines 39-41:
 //# programmable

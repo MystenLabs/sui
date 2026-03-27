@@ -366,13 +366,16 @@ fn select_gas(
     transaction: &mut sui_types::transaction::TransactionData,
     max_gas_payment_objects: u32,
 ) -> Result<()> {
+    use sui_types::accumulator_root::AccumulatorValue;
+    use sui_types::balance::Balance;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::coin_reservation::CoinReservationResolver;
+    use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
     use sui_types::gas_coin::GAS;
     use sui_types::gas_coin::GasCoin;
     use sui_types::transaction::Command;
-    use sui_types::transaction::Reservation;
     use sui_types::transaction::TransactionDataAPI;
     use sui_types::transaction::TransactionExpiration;
-    use sui_types::transaction::WithdrawalTypeArg;
 
     let reader = &service.reader;
 
@@ -387,27 +390,18 @@ fn select_gas(
         .lookup_address_balance(owner, GAS::type_())
         .map(|balance| {
             // Sum up the total SUI reservations for the `owner` so that we can deduct that from the
-            // available address balance for determining if an account as sufficient funds.
+            // available address balance for determining if an account has sufficient funds.
+            let coin_resolver = CoinReservationResolver::new(reader.inner().clone());
+
             let reserved_sui = transaction
-                .get_funds_withdrawals()
-                .into_iter()
-                .filter_map(|w| {
-                    // Skip if this withdrawal isn't for the gas owner
-                    if w.owner_for_withdrawal(&*transaction) != owner {
-                        return None;
-                    }
-
-                    // Skip if this withdrawal isn't for SUI
-                    let WithdrawalTypeArg::Balance(coin_type) = &w.type_arg;
-                    if !GAS::is_gas_type(coin_type) {
-                        return None;
-                    }
-
-                    match w.reservation {
-                        Reservation::MaxAmountU64(value) => Some(value),
-                    }
+                .process_funds_withdrawals_for_signing(service.chain_id, &coin_resolver)
+                .ok()
+                .and_then(|withdrawals| {
+                    let sui_type = Balance::type_tag(GAS::type_tag());
+                    let sui_account_id = AccumulatorValue::get_field_id(owner, &sui_type).ok()?;
+                    withdrawals.get(&sui_account_id).map(|(amount, _)| *amount)
                 })
-                .sum::<u64>();
+                .unwrap_or(0);
 
             balance.saturating_sub(reserved_sui)
         });
@@ -425,14 +419,16 @@ fn select_gas(
 
         let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
 
-        *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
-            min_epoch: Some(current_epoch),
-            max_epoch: Some(current_epoch.saturating_add(1)),
-            min_timestamp: None,
-            max_timestamp: None,
-            chain: service.chain_id,
-            nonce: rand::random(), // generate a random nonce to use
-        };
+        if matches!(transaction.expiration(), TransactionExpiration::None) {
+            *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
+                min_epoch: Some(current_epoch),
+                max_epoch: Some(current_epoch.saturating_add(1)),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: service.chain_id,
+                nonce: rand::random(),
+            };
+        }
 
         budget
     } else {
@@ -473,6 +469,47 @@ fn select_gas(
                 maybe_coin.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
             selected_gas.push(object_ref);
             selected_gas_value += value;
+        }
+
+        // When GasCoin is used and there's address balance, prepend a coin reservation
+        // to make all SUI in the account available (coins + address balance)
+        if gas_coin_used
+            && let Some(ab_value) = address_balance
+            && ab_value > 0
+        {
+            let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+
+            let accumulator_obj_id =
+                AccumulatorValue::get_field_id(owner, &Balance::type_tag(GAS::type_tag()))
+                    .map_err(|e| {
+                        RpcError::new(
+                            tonic::Code::Internal,
+                            format!("Failed to get accumulator object ID: {e}"),
+                        )
+                    })?;
+
+            let reservation = ParsedObjectRefWithdrawal::new(
+                *accumulator_obj_id.inner(),
+                current_epoch,
+                ab_value,
+            );
+            let coin_reservation = reservation.encode(SequenceNumber::new(), service.chain_id);
+
+            // Prepend coin reservation to make address balance accessible via GasCoin
+            selected_gas.insert(0, coin_reservation);
+            selected_gas_value += ab_value;
+
+            // Set expiration for address balance usage if not already set
+            if matches!(transaction.expiration(), TransactionExpiration::None) {
+                *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
+                    min_epoch: Some(current_epoch),
+                    max_epoch: Some(current_epoch.saturating_add(1)),
+                    min_timestamp: None,
+                    max_timestamp: None,
+                    chain: service.chain_id,
+                    nonce: rand::random(),
+                };
+            }
         }
 
         transaction.gas_data_mut().payment = selected_gas;

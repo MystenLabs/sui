@@ -22,6 +22,7 @@ pub const RESOLVED_WITHDRAWAL_STRUCT: (&AccountAddress, &IdentStr, &IdentStr) = 
     WITHDRAWAL_STRUCT_NAME,
 );
 pub const WITHDRAWAL_OWNER_FUNC_NAME: &IdentStr = ident_str!("withdrawal_owner");
+pub const WITHDRAWAL_SPLIT_FUNC_NAME: &IdentStr = ident_str!("withdrawal_split");
 
 /// Rust bindings for the Move struct `sui::funds_accumulator::Withdrawal`.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]

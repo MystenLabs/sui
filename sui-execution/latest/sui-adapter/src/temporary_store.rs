@@ -564,6 +564,31 @@ impl<'backing> TemporaryStore<'backing> {
             .fold(0, |sum, obj| sum + obj.object_size_for_gas_metering())
     }
 
+    /// Validates gasless post-execution invariants:
+    /// - No new objects were created or existing objects mutated (written_objects is empty)
+    /// - The set of deleted objects exactly equals the set of input Coin objects
+    pub fn check_gasless_execution_requirements(&self) -> Result<(), String> {
+        if !self.execution_results.written_objects.is_empty() {
+            return Err("Gasless transactions cannot create or mutate objects".to_string());
+        }
+
+        let input_coin_ids: BTreeSet<ObjectID> = self
+            .input_objects
+            .iter()
+            .filter(|(_, obj)| obj.coin_type_maybe().is_some())
+            .map(|(id, _)| *id)
+            .collect();
+        if self.execution_results.deleted_object_ids != input_coin_ids {
+            return Err(format!(
+                "Gasless transaction must destroy exactly its input Coins. \
+                 Expected: {input_coin_ids:?}, deleted: {:?}",
+                self.execution_results.deleted_object_ids
+            ));
+        }
+
+        Ok(())
+    }
+
     /// If there are unmetered storage rebate (due to system transaction), we put them into
     /// the storage rebate of 0x5 object.
     /// TODO: This will not work for potential future new system transactions if 0x5 is not in the input.
@@ -1241,7 +1266,9 @@ impl Storage for TemporaryStore<'_> {
 
         // It's important to merge instead of override results because it's
         // possible to execute PT more than once during tx execution.
-        self.execution_results.merge_results(results);
+        self.execution_results.merge_results(
+            results, /* consistent_merge */ true, /* invariant_checks */ true,
+        )?;
 
         Ok(())
     }

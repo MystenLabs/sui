@@ -112,7 +112,7 @@ async fn main() -> Result<()> {
 
     let store = BigTableStore::new(client);
 
-    let registry = prometheus::Registry::new_custom(Some("kvstore_alt".into()), None)?;
+    let registry = prometheus::Registry::new();
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 

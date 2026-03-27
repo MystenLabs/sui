@@ -248,7 +248,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
             .unwrap()
             .1;
         assert!(effects.status().is_ok(), "Funding should succeed");
-        env_gas_ref = effects.gas_object().0;
+        env_gas_ref = effects.gas_object().unwrap().0;
 
         env.authority
             .settle_accumulator_for_testing(std::slice::from_ref(&effects), None)

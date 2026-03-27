@@ -156,29 +156,27 @@ where
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         const MAX_DRIVE_TRANSACTION_RETRY_DELAY: Duration = Duration::from_secs(10);
 
-        // For ping requests, the amplification factor is always 1.
-        let amplification_factor = if request.ping_type.is_some() {
-            1
-        } else {
-            let gas_price = request
-                .transaction
-                .as_ref()
-                .unwrap()
-                .transaction_data()
-                .gas_price();
-            let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
-            let amplification_factor = gas_price / reference_gas_price.max(1);
-            if amplification_factor == 0 {
-                return Err(TransactionDriverError::ValidationFailed {
-                    error: UserInputError::GasPriceUnderRGP {
-                        gas_price,
-                        reference_gas_price,
-                    }
-                    .to_string(),
-                });
-            }
-            amplification_factor
-        };
+        let tx_data = request.transaction.as_ref().map(|t| t.transaction_data());
+        // gas_price=0 for gasless; use 1 for baseline (RGP-equivalent) priority
+        let amplification_factor =
+            if request.ping_type.is_some() || tx_data.is_some_and(|d| d.is_gasless_transaction()) {
+                1
+            } else {
+                let tx_data = tx_data.unwrap();
+                let gas_price = tx_data.gas_price();
+                let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
+                let amplification_factor = gas_price / reference_gas_price.max(1);
+                if amplification_factor == 0 {
+                    return Err(TransactionDriverError::ValidationFailed {
+                        error: UserInputError::GasPriceUnderRGP {
+                            gas_price,
+                            reference_gas_price,
+                        }
+                        .to_string(),
+                    });
+                }
+                amplification_factor
+            };
 
         let tx_type = request.tx_type();
         let ping_label = if request.ping_type.is_some() {

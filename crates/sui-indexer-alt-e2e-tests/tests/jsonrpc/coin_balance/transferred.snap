@@ -11,7 +11,7 @@ task 1, lines 9-38:
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 19843600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 19851200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 40:
 //# create-checkpoint
@@ -23,7 +23,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "coinType": "0x9cbf2bc1b9750b0ddf83ecb66705a6b3fe54718c30daeca8d9fdfc359b7e16de::fake::FAKE",
+    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "300",
     "lockedBalance": {},
@@ -47,7 +47,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "coinType": "0x9cbf2bc1b9750b0ddf83ecb66705a6b3fe54718c30daeca8d9fdfc359b7e16de::fake::FAKE",
+    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "200",
     "lockedBalance": {},
@@ -61,7 +61,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 2,
   "result": {
-    "coinType": "0x9cbf2bc1b9750b0ddf83ecb66705a6b3fe54718c30daeca8d9fdfc359b7e16de::fake::FAKE",
+    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "100",
     "lockedBalance": {},
@@ -91,7 +91,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 3,
   "result": {
-    "coinType": "0x9cbf2bc1b9750b0ddf83ecb66705a6b3fe54718c30daeca8d9fdfc359b7e16de::fake::FAKE",
+    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "0",
     "lockedBalance": {},
@@ -105,7 +105,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 4,
   "result": {
-    "coinType": "0x9cbf2bc1b9750b0ddf83ecb66705a6b3fe54718c30daeca8d9fdfc359b7e16de::fake::FAKE",
+    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "300",
     "lockedBalance": {},

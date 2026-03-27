@@ -1,0 +1,60 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 8-22:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10776800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 26-30:
+//# programmable --sender A --inputs 1000 object(1,1) @A
+// Mint 1000 USDC and fund A
+//> 0: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
+//> 1: sui::coin::into_balance<test::usdc::USDC>(Result(0));
+//> 2: sui::balance::send_funds<test::usdc::USDC>(Result(1), Input(2));
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 4, line 32:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, line 34:
+//# view-funds sui::balance::Balance<test::usdc::USDC> A
+1000
+
+task 6, lines 36-42:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(1000) 400u256 @B @C
+// Gasless: A splits withdrawal - 400 to B, remainder (600) to C
+//> 0: sui::funds_accumulator::withdrawal_split<sui::balance::Balance<test::usdc::USDC>>(Input(0), Input(1));
+//> 1: sui::balance::redeem_funds<test::usdc::USDC>(Result(0));
+//> 2: sui::balance::send_funds<test::usdc::USDC>(Result(1), Input(2));
+//> 3: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
+//> 4: sui::balance::send_funds<test::usdc::USDC>(Result(3), Input(3));
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 1000), (object(6,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 400), (object(6,1), C, sui::balance::Balance<test::usdc::USDC>, Merge, 600)
+gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 7, line 44:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, line 46:
+//# view-funds sui::balance::Balance<test::usdc::USDC> A
+No funds accumulator object found
+
+task 9, line 48:
+//# view-funds sui::balance::Balance<test::usdc::USDC> B
+400
+
+task 10, line 50:
+//# view-funds sui::balance::Balance<test::usdc::USDC> C
+600

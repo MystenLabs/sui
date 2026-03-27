@@ -1180,5 +1180,5 @@ fn run_tx_and_return_gas(
         .execute_transaction(Transaction::from_data_and_signer(data, vec![signer]))
         .expect("Failed to execute transaction");
     assert!(fx.status().is_ok(), "Transaction failed: {:?}", fx.status());
-    fx.gas_object().0
+    fx.gas_object().unwrap().0
 }

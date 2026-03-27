@@ -45,7 +45,7 @@ Response: {
   "id": 2,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0x1315e43f35d4caeb369d8fe69902711b5c82615e2c773a3b52b2ee556125694c::N::Key<u64>: Module not found: 0x1315e43f35d4caeb369d8fe69902711b5c82615e2c773a3b52b2ee556125694c::N"
+    "message": "Invalid Params: Invalid type 0x9c3e911c3ab5ace018b6d55ee880803da7087b4ff89486206e592f8a55bfabb2::N::Key<u64>: Module not found: 0x9c3e911c3ab5ace018b6d55ee880803da7087b4ff89486206e592f8a55bfabb2::N"
   }
 }
 
@@ -56,7 +56,7 @@ Response: {
   "id": 3,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0x1315e43f35d4caeb369d8fe69902711b5c82615e2c773a3b52b2ee556125694c::M::DoesntExist<u64>: Datatype not found: 0x1315e43f35d4caeb369d8fe69902711b5c82615e2c773a3b52b2ee556125694c::M::DoesntExist"
+    "message": "Invalid Params: Invalid type 0x9c3e911c3ab5ace018b6d55ee880803da7087b4ff89486206e592f8a55bfabb2::M::DoesntExist<u64>: Datatype not found: 0x9c3e911c3ab5ace018b6d55ee880803da7087b4ff89486206e592f8a55bfabb2::M::DoesntExist"
   }
 }
 
@@ -67,7 +67,7 @@ Response: {
   "id": 4,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0x1315e43f35d4caeb369d8fe69902711b5c82615e2c773a3b52b2ee556125694c::M::Key<u64, u32>: Expected 1 type parameters, but got 2"
+    "message": "Invalid Params: Invalid type 0x9c3e911c3ab5ace018b6d55ee880803da7087b4ff89486206e592f8a55bfabb2::M::Key<u64, u32>: Expected 1 type parameters, but got 2"
   }
 }
 
@@ -89,6 +89,6 @@ Response: {
   "id": 6,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Could not serialize dynamic field name as 0x1315e43f35d4caeb369d8fe69902711b5c82615e2c773a3b52b2ee556125694c::M::Key<u64>: Unable to convert hello, world to unsigned int."
+    "message": "Invalid Params: Could not serialize dynamic field name as 0x9c3e911c3ab5ace018b6d55ee880803da7087b4ff89486206e592f8a55bfabb2::M::Key<u64>: Unable to convert hello, world to unsigned int."
   }
 }

@@ -222,7 +222,7 @@ where
         ExecutionErrorKind::InsufficientGas
     );
     // gas object in effects is first coin in vector of coins
-    assert_eq!(gas_coin_ids[0], effects.gas_object().0.0);
+    assert_eq!(gas_coin_ids[0], effects.gas_object().unwrap().0.0);
     //  gas at position 0 mutated
     assert_eq!(effects.mutated().len(), 1);
     // extra coins are deleted
@@ -235,7 +235,7 @@ where
                 .any(|deleted| deleted.0 == *gas_coin_id)
         );
     }
-    let gas_ref = effects.gas_object().0;
+    let gas_ref = effects.gas_object().unwrap().0;
     let gas_object = authority_state.get_object(&gas_ref.0).await.unwrap();
     let final_value = GasCoin::try_from(&gas_object)?.value();
     let summary = effects.gas_cost_summary();

@@ -9,7 +9,7 @@ When the enclave starts, it exposes 3 HTTP endpoints:
 
 1. `/health_check`: Checks that the enclave can reach the allowed external domains. It is used for debugging.
 
-1. `/get_attestation`: Returns the signed attestation document. It is used during on-chain registration.
+1. `/get_attestation`: Returns the signed attestation document. It is used during onchain registration.
 
 1. `/process_data`: Contains your custom logic. You will write the code for this yourself. This is the endpoint that your app frontend will hit.
 
@@ -37,7 +37,7 @@ When `process_data` returns `{ response, signature }`, then the enclave signs th
 
 ### Step 3: Move contract verifies signature
 
-An on-chain Move contract checks that the signature matches public key of registered enclave, the PCRs are correct, and the timestamp is recent. If all checks pass, the computation is accepted.
+An onchain Move contract checks that the signature matches public key of registered enclave, the PCRs are correct, and the timestamp is recent. If all checks pass, the computation is accepted.
 
 ## The role of smart contracts
 
@@ -57,7 +57,7 @@ Nautilus involves two main participants: app developers who build and deploy the
 
 As an app developer, follow these steps to deploy a self-managed TEE. Alternatively, you can use the [Marlin Oyster marketplace](/guides/developer/nautilus/community-dev-tools) for Docker-based simplicity.
 
-1. Create a Nautilus off-chain server with a reproducible build using the [provided template](https://github.com/MystenLabs/nautilus).
+1. Create a Nautilus offchain server with a reproducible build using the [provided template](https://github.com/MystenLabs/nautilus).
 
 1. Publish the server code to a public repository like GitHub to ensure transparency and verifiability.
 
@@ -69,7 +69,7 @@ As an app developer, follow these steps to deploy a self-managed TEE. Alternativ
 
 :::info
 
-Verify attestation documents on-chain only during enclave registration due to high gas costs. After registration, use the enclave key for more efficient message verification.
+Verify attestation documents onchain only during enclave registration due to high gas costs. After registration, use the enclave key for more efficient message verification.
 
 :::
 
@@ -79,11 +79,11 @@ To reduce the trusted computing base, route access to the enclave through backen
 
 As a user or client application, you can verify and interact with a Nautilus enclave:
 
-1. (Optional) Verify the Nautilus off-chain server code by building it locally and confirming that the generated PCRs match the on-chain records.
+1. (Optional) Verify the Nautilus offchain server code by building it locally and confirming that the generated PCRs match the onchain records.
 
 1. Send a request to the deployed enclave and receive a signed response.
 
-1. Submit the signed response on-chain for verification before executing the corresponding application logic.
+1. Submit the signed response onchain for verification before executing the corresponding application logic.
 
 ## Trust model
 
@@ -91,7 +91,7 @@ The Nautilus trust model enables you to verify computations without trusting ind
 
 ### Attestation verification
 
-The attestation document from an AWS Nitro Enclave includes a certificate chain that you can verify on-chain using AWS as the root certificate authority. This verification confirms:
+The attestation document from an AWS Nitro Enclave includes a certificate chain that you can verify onchain using AWS as the root certificate authority. This verification confirms:
 
 - The enclave instance is running unmodified software, as validated by its PCR values.
 

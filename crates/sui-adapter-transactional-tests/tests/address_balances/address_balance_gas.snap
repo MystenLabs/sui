@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 10 tasks
 
@@ -42,7 +41,8 @@ task 4, lines 20-22:
 task 5, lines 23-25:
 //# programmable --sender A --address-balance-gas
 // Use the object, but not as gas
-Error: Error checking transaction input objects: Wrong number of parameters for the transaction
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 1000000)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 6, lines 26-28:
 //# programmable --sender A --address-balance-gas --inputs object(0,0)
@@ -72,4 +72,4 @@ Checkpoint created: 2
 
 task 9, line 33:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
-9998990120
+9997990120

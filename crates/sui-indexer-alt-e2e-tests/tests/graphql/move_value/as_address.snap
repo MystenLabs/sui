@@ -10,7 +10,7 @@ task 1, lines 6-47:
 //# publish --sender A
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 8078800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 8116800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 49:
 //# create-checkpoint
@@ -98,21 +98,21 @@ Response: {
                       },
                       "json": {
                         "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                        "balance": "299999977479288"
+                        "balance": "299999977441288"
                       }
                     }
                   },
                   {
                     "contents": {
                       "type": {
-                        "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
+                        "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
                       },
                       "json": {
-                        "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
+                        "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
                         "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                        "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
+                        "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
                         "bag": {
-                          "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
+                          "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
                           "size": "2"
                         }
                       }
@@ -121,10 +121,10 @@ Response: {
                   {
                     "contents": {
                       "type": {
-                        "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::FooCap"
+                        "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
                       },
                       "json": {
-                        "id": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c"
+                        "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
                       }
                     }
                   }
@@ -154,6 +154,13 @@ Response: {
                       "objectChanges": {
                         "nodes": [
                           {
+                            "idCreated": true,
+                            "inputState": null,
+                            "outputState": {
+                              "asMoveObject": null
+                            }
+                          },
+                          {
                             "idCreated": false,
                             "inputState": {
                               "asMoveObject": {
@@ -176,17 +183,10 @@ Response: {
                                   },
                                   "json": {
                                     "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999990921200"
+                                    "balance": "299999990883200"
                                   }
                                 }
                               }
-                            }
-                          },
-                          {
-                            "idCreated": true,
-                            "inputState": null,
-                            "outputState": {
-                              "asMoveObject": null
                             }
                           }
                         ]
@@ -204,10 +204,10 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::FooCap"
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
                                   },
                                   "json": {
-                                    "id": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c"
+                                    "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
                                   }
                                 }
                               }
@@ -223,7 +223,7 @@ Response: {
                                   },
                                   "json": {
                                     "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999990921200"
+                                    "balance": "299999990883200"
                                   }
                                 }
                               }
@@ -236,7 +236,7 @@ Response: {
                                   },
                                   "json": {
                                     "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999988649720"
+                                    "balance": "299999988611720"
                                   }
                                 }
                               }
@@ -256,10 +256,10 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::FooCap"
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
                                   },
                                   "json": {
-                                    "id": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c"
+                                    "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
                                   }
                                 }
                               }
@@ -268,10 +268,39 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::FooCap"
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
                                   },
                                   "json": {
-                                    "id": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c"
+                                    "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
+                                    "balance": "299999988611720"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
+                                    "balance": "299999985856424"
                                   }
                                 }
                               }
@@ -284,46 +313,17 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
                                     "bag": null
                                   }
                                 }
                               }
                             }
-                          },
-                          {
-                            "idCreated": false,
-                            "inputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                                  },
-                                  "json": {
-                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999988649720"
-                                  }
-                                }
-                              }
-                            },
-                            "outputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                                  },
-                                  "json": {
-                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999985894424"
-                                  }
-                                }
-                              }
-                            }
                           }
                         ]
                       }
@@ -333,75 +333,75 @@ Response: {
                     "effects": {
                       "objectChanges": {
                         "nodes": [
-                          {
-                            "idCreated": false,
-                            "inputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
-                                  },
-                                  "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
-                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
-                                    "bag": null
-                                  }
-                                }
-                              }
-                            },
-                            "outputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
-                                  },
-                                  "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
-                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
-                                    "bag": {
-                                      "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
-                                      "size": "0"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "idCreated": false,
-                            "inputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                                  },
-                                  "json": {
-                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999985894424"
-                                  }
-                                }
-                              }
-                            },
-                            "outputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                                  },
-                                  "json": {
-                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999984563216"
-                                  }
-                                }
-                              }
-                            }
-                          },
                           {
                             "idCreated": true,
                             "inputState": null,
                             "outputState": null
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
+                                    "balance": "299999985856424"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
+                                    "balance": "299999984525216"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "bag": null
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "bag": {
+                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "size": "0"
+                                    }
+                                  }
+                                }
+                              }
+                            }
                           }
                         ]
                       }
@@ -411,45 +411,6 @@ Response: {
                     "effects": {
                       "objectChanges": {
                         "nodes": [
-                          {
-                            "idCreated": false,
-                            "inputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
-                                  },
-                                  "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
-                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
-                                    "bag": {
-                                      "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
-                                      "size": "0"
-                                    }
-                                  }
-                                }
-                              }
-                            },
-                            "outputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
-                                  },
-                                  "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
-                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
-                                    "bag": {
-                                      "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
-                                      "size": "1"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          },
                           {
                             "idCreated": true,
                             "inputState": null,
@@ -460,7 +421,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0x6755a7f40ee2863d4b708ba541ccdc2305b86f57c8bd5f7bd8863c36d9e9a6d9",
+                                    "id": "0x62216fda04b35ef594c8e1b8addac946530cb72879a44d48b7c92e4ded0214a1",
                                     "name": "1",
                                     "value": "200"
                                   }
@@ -478,7 +439,7 @@ Response: {
                                   },
                                   "json": {
                                     "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999984563216"
+                                    "balance": "299999984525216"
                                   }
                                 }
                               }
@@ -491,7 +452,46 @@ Response: {
                                   },
                                   "json": {
                                     "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999982066168"
+                                    "balance": "299999982028168"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "bag": {
+                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "size": "0"
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "bag": {
+                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "size": "1"
+                                    }
                                   }
                                 }
                               }
@@ -505,6 +505,35 @@ Response: {
                     "effects": {
                       "objectChanges": {
                         "nodes": [
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
+                                    "balance": "299999982028168"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
+                                    "balance": "299999979531120"
+                                  }
+                                }
+                              }
+                            }
+                          },
                           {
                             "idCreated": true,
                             "inputState": null,
@@ -515,7 +544,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0x161cb48abc765f2604f91fceff352b913ba1aa28a480f337aa2ccc5c9a0d8d62",
+                                    "id": "0xe0e54e608fd0fd7d66ed72de1d6f6dffa68b3b79a78954eaf9d9d72574f0370c",
                                     "name": "3",
                                     "value": "400"
                                   }
@@ -529,14 +558,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
                                     "bag": {
-                                      "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
+                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
                                       "size": "1"
                                     }
                                   }
@@ -547,45 +576,16 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
                                     "bag": {
-                                      "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
+                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
                                       "size": "2"
                                     }
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "idCreated": false,
-                            "inputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                                  },
-                                  "json": {
-                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999982066168"
-                                  }
-                                }
-                              }
-                            },
-                            "outputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                                  },
-                                  "json": {
-                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999979569120"
                                   }
                                 }
                               }
@@ -605,10 +605,39 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
+                                    "balance": "299999979531120"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
+                                    "balance": "299999978486204"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0x161cb48abc765f2604f91fceff352b913ba1aa28a480f337aa2ccc5c9a0d8d62",
+                                    "id": "0xe0e54e608fd0fd7d66ed72de1d6f6dffa68b3b79a78954eaf9d9d72574f0370c",
                                     "name": "3",
                                     "value": "400"
                                   }
@@ -622,7 +651,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0x161cb48abc765f2604f91fceff352b913ba1aa28a480f337aa2ccc5c9a0d8d62",
+                                    "id": "0xe0e54e608fd0fd7d66ed72de1d6f6dffa68b3b79a78954eaf9d9d72574f0370c",
                                     "name": "3",
                                     "value": "4"
                                   }
@@ -636,14 +665,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
                                     "bag": {
-                                      "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
+                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
                                       "size": "2"
                                     }
                                   }
@@ -654,45 +683,16 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
                                     "bag": {
-                                      "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
+                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
                                       "size": "2"
                                     }
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "idCreated": false,
-                            "inputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                                  },
-                                  "json": {
-                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999979569120"
-                                  }
-                                }
-                              }
-                            },
-                            "outputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                                  },
-                                  "json": {
-                                    "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999978524204"
                                   }
                                 }
                               }
@@ -712,49 +712,10 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
-                                  },
-                                  "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
-                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
-                                    "bag": {
-                                      "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
-                                      "size": "2"
-                                    }
-                                  }
-                                }
-                              }
-                            },
-                            "outputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::Foo"
-                                  },
-                                  "json": {
-                                    "id": "0x45598fca752710daf45ba2b7aad63a4395d0db875823bd6412b58d5b2daeae68",
-                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c",
-                                    "bag": {
-                                      "id": "0xcbbf2b9b60d44d090efcfde61c1802426ff63f4e02bd04712a84509a78f1e9fe",
-                                      "size": "2"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "idCreated": false,
-                            "inputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0x6755a7f40ee2863d4b708ba541ccdc2305b86f57c8bd5f7bd8863c36d9e9a6d9",
+                                    "id": "0x62216fda04b35ef594c8e1b8addac946530cb72879a44d48b7c92e4ded0214a1",
                                     "name": "1",
                                     "value": "200"
                                   }
@@ -768,7 +729,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0x6755a7f40ee2863d4b708ba541ccdc2305b86f57c8bd5f7bd8863c36d9e9a6d9",
+                                    "id": "0x62216fda04b35ef594c8e1b8addac946530cb72879a44d48b7c92e4ded0214a1",
                                     "name": "1",
                                     "value": "2"
                                   }
@@ -786,7 +747,7 @@ Response: {
                                   },
                                   "json": {
                                     "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999978524204"
+                                    "balance": "299999978486204"
                                   }
                                 }
                               }
@@ -799,7 +760,46 @@ Response: {
                                   },
                                   "json": {
                                     "id": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
-                                    "balance": "299999977479288"
+                                    "balance": "299999977441288"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "bag": {
+                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "size": "2"
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "bag": {
+                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "size": "2"
+                                    }
                                   }
                                 }
                               }
@@ -832,10 +832,10 @@ Response: {
                 "asMoveObject": {
                   "contents": {
                     "type": {
-                      "repr": "0xf1fa29aba3590db510bc5eddeb8660cb559d611b4e8c8b9afb4c0b0dadb33b37::mod::FooCap"
+                      "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
                     },
                     "json": {
-                      "id": "0x17181947ff92d1491da692b25ccd4745ed0db80b8f2619c0e06d0a5aa2be7f7c"
+                      "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
                     }
                   }
                 }
@@ -984,18 +984,18 @@ Response: {
                   "nodes": [
                     {
                       "name": {
-                        "json": "3"
-                      },
-                      "value": {
-                        "json": "400"
-                      }
-                    },
-                    {
-                      "name": {
                         "json": "1"
                       },
                       "value": {
                         "json": "200"
+                      }
+                    },
+                    {
+                      "name": {
+                        "json": "3"
+                      },
+                      "value": {
+                        "json": "400"
                       }
                     }
                   ]
@@ -1006,18 +1006,18 @@ Response: {
                   "nodes": [
                     {
                       "name": {
-                        "json": "3"
-                      },
-                      "value": {
-                        "json": "4"
-                      }
-                    },
-                    {
-                      "name": {
                         "json": "1"
                       },
                       "value": {
                         "json": "2"
+                      }
+                    },
+                    {
+                      "name": {
+                        "json": "3"
+                      },
+                      "value": {
+                        "json": "4"
                       }
                     }
                   ]
@@ -1031,18 +1031,18 @@ Response: {
                 "nodes": [
                   {
                     "name": {
-                      "json": "3"
-                    },
-                    "value": {
-                      "json": "4"
-                    }
-                  },
-                  {
-                    "name": {
                       "json": "1"
                     },
                     "value": {
                       "json": "2"
+                    }
+                  },
+                  {
+                    "name": {
+                      "json": "3"
+                    },
+                    "value": {
+                      "json": "4"
                     }
                   }
                 ]

@@ -1,0 +1,103 @@
+---
+source: crates/move-docgen-tests/tests/testsuite.rs
+assertion_line: 74
+info:
+  section_level_start: 1
+  exclude_private_fun: false
+  exclude_impl: false
+  toc_depth: 3
+  no_collapsed_sections: false
+  include_dep_diagrams: false
+  include_call_diagrams: false
+---
+<a name="a_m"></a>
+
+# Module `a::m`
+
+
+<a name="@Nested_Bullet_Points_0"></a>
+
+## Nested Bullet Points
+
+
+- Item one
+  - Nested item one-a
+  - Nested item one-b
+    - Deeply nested item one-b-i
+    - Deeply nested item one-b-ii
+  - Nested item one-c
+- Item two
+- Item three
+  - Nested item three-a
+
+
+<a name="@Nested_Enumerated_Lists_1"></a>
+
+## Nested Enumerated Lists
+
+
+1. First item
+   1. Sub-item one
+   2. Sub-item two
+      1. Sub-sub-item one
+      2. Sub-sub-item two
+   3. Sub-item three
+2. Second item
+3. Third item
+   1. Sub-item one
+
+
+<a name="@Mixed_Nested_Lists_2"></a>
+
+## Mixed Nested Lists
+
+
+1. Ordered item one
+   - Unordered sub-item a
+   - Unordered sub-item b
+     1. Back to ordered
+     2. Still ordered
+2. Ordered item two
+  - Mixed sub-item
+
+
+-  [Nested Bullet Points](#@Nested_Bullet_Points_0)
+-  [Nested Enumerated Lists](#@Nested_Enumerated_Lists_1)
+-  [Mixed Nested Lists](#@Mixed_Nested_Lists_2)
+-  [Function `nested_list_fn`](#a_m_nested_list_fn)
+
+
+<pre><code></code></pre>
+
+
+
+<a name="a_m_nested_list_fn"></a>
+
+## Function `nested_list_fn`
+
+- Top-level bullet
+  - Nested bullet in function doc
+    - Deeply nested bullet
+- Another top-level bullet
+
+1. First step
+   1. Sub-step one
+   2. Sub-step two
+2. Second step
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../a/m.md#a_m_nested_list_fn">nested_list_fn</a>()
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../a/m.md#a_m_nested_list_fn">nested_list_fn</a>() { }
+</code></pre>
+
+
+
+</details>

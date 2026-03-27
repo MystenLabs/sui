@@ -1,0 +1,83 @@
+---
+source: crates/move-docgen-tests/tests/testsuite.rs
+assertion_line: 74
+info:
+  section_level_start: 1
+  exclude_private_fun: false
+  exclude_impl: false
+  toc_depth: 3
+  no_collapsed_sections: false
+  include_dep_diagrams: false
+  include_call_diagrams: false
+---
+<a name="a_m"></a>
+
+# Module `a::m`
+
+
+<a name="@Code_Block_Formatting_0"></a>
+
+## Code Block Formatting
+
+
+Indented code inside a fenced block should be preserved:
+
+```
+fun example() {
+    let x = 1;
+    if (x > 0) {
+        let y = x + 1;
+    };
+}
+```
+
+Text after code block with a nested list:
+
+- Item one
+  - Nested item
+
+
+-  [Code Block Formatting](#@Code_Block_Formatting_0)
+-  [Function `with_code_blocks`](#a_m_with_code_blocks)
+
+
+<pre><code></code></pre>
+
+
+
+<a name="a_m_with_code_blocks"></a>
+
+## Function `with_code_blocks`
+
+Function with code block in doc:
+
+```
+let v = vector[1, 2, 3];
+let sum = 0;
+while (!vector::is_empty(&v)) {
+    sum = sum + vector::pop_back(&mut v);
+};
+```
+
+And indented code block:
+
+  ```
+  indented_block();
+  ```
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../a/m.md#a_m_with_code_blocks">with_code_blocks</a>()
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../a/m.md#a_m_with_code_blocks">with_code_blocks</a>() { }
+</code></pre>
+
+
+
+</details>

@@ -1165,7 +1165,11 @@ impl Storage for TemporaryStore<'_> {
         };
         // It's important to merge instead of override results because it's
         // possible to execute PT more than once during tx execution.
-        self.execution_results.merge_results(results);
+        self.execution_results
+            .merge_results(
+                results, /* consistent_merge */ false, /* invariant_checks */ true,
+            )
+            .unwrap();
         Ok(())
     }
 

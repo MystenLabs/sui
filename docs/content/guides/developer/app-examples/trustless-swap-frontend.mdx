@@ -15,7 +15,7 @@ In this guide, you build a frontend (UI) that allows end users to discover trade
 
 - [x] [Complete the smart contracts](/guides/developer/app-examples/trustless-swap.mdx#smart-contracts) and understand their design.
 
-- [x] [Implement the backend](/guides/developer/app-examples/trustless-swap.mdx#backend) to learn how to index on-chain data and expose it through an API.
+- [x] [Implement the backend](/guides/developer/app-examples/trustless-swap.mdx#backend) to learn how to index onchain data and expose it through an API.
 
 - [x] [Deploy your smart contracts and started the backend indexer](/guides/developer/app-examples/trustless-swap.mdx#deployment).
 
@@ -766,7 +766,7 @@ This query pattern is similar to the one in the `LockOwnedObjects` component. Th
 
 ### `LockedObject` and `Locked` component
 
-The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using TanStack Query's `useQuery` hook with the `useCurrentClient()` hook to call the `getDynamicFieldObject` RPC endpoint. Recall that in this smart contract, the locked item is put into a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx).
+The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an onchain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using TanStack Query's `useQuery` hook with the `useCurrentClient()` hook to call the `getDynamicFieldObject` RPC endpoint. Recall that in this smart contract, the locked item is put into a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx).
 
 <details>
 
@@ -783,7 +783,7 @@ The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is m
 
 </details>
 
-The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. Later on, it also consists of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
+The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. Later on, it also consists of several onchain interactions: unlock the locked objects and create an escrow out of the locked object.
 
 <details>
 
@@ -806,7 +806,7 @@ import { ExplorerLink } from '../../ExplorerLink';
  * Prefer to use the `Locked` component only through `LockedObject`.
  *
  * This can also render data directly from the API, but we prefer
- * to also validate ownership from on-chain state (as objects are transferable)
+ * to also validate ownership from onchain state (as objects are transferable)
  * and the API cannot track all the ownership changes.
  */
 export function Locked({
@@ -892,7 +892,7 @@ Run your app and ensure you can:
 
 To unlock the object, execute the `unlock` Move function identified by `{PACKAGE_ID}::lock::unlock`. Call the `unlock` function supplying the `Locked` object, its corresponding `Key`, the struct type of the original object, and transfer the unlocked object to the current connected wallet account. Also, implement the `onSuccess` callback to invalidate the cache data at query key `locked` after one second to force `react-query` to re-fetch the data at corresponding query key automatically.
 
-Unlocking owned objects is another crucial and complex on-chain action in this application. Extract its logic into separated mutating functions to enhance discoverability and encapsulation.
+Unlocking owned objects is another crucial and complex onchain action in this application. Extract its logic into separated mutating functions to enhance discoverability and encapsulation.
 
 <details>
 
@@ -1097,7 +1097,7 @@ Add `src/components/locked/ApiLockedList.tsx`:
 
 </details>
 
-This hook fetches all the non-deleted system `Locked` objects from the API in a paginated fashion. Then, it proceeds into fetching the on-chain state, to ensure the latest state of the object is displayed.
+This hook fetches all the non-deleted system `Locked` objects from the API in a paginated fashion. Then, it proceeds into fetching the onchain state, to ensure the latest state of the object is displayed.
 
 <details>
 
@@ -1217,7 +1217,7 @@ The object should disappear from the list of locked objects in the `Browse Locke
 
 ## Cancel and accept escrows
 
-To cancel an escrow, create a mutation through the `useCancelEscrowMutation` hook. The cancel function accepts the escrow `ApiEscrowObject` and its on-chain data. Execute `{PACKAGE_ID}::shared::return_to_sender` and transfer the returned escrowed object to the creator of the escrow.
+To cancel an escrow, create a mutation through the `useCancelEscrowMutation` hook. The cancel function accepts the escrow `ApiEscrowObject` and its onchain data. Execute `{PACKAGE_ID}::shared::return_to_sender` and transfer the returned escrowed object to the creator of the escrow.
 
 To accept an escrow, create a mutation through the `useAcceptEscrowMutation` hook. The accept function accepts the escrow `ApiEscrowObject` and the locked object `ApiLockedObject`. Query the object details using `multiGetObjects` on the Sui client instance. Execute `{PACKAGE_ID}::shared::swap` and transfer the returned escrowed item to the connected wallet account.
 

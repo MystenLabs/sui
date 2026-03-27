@@ -10,7 +10,7 @@ task 1, lines 6-27:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5715200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5738000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 29-36:
 //# create-checkpoint
@@ -93,7 +93,7 @@ Response: {
             },
             "value": {
               "json": {
-                "id": "0x0622ba936cbc3bed80985b80ecd24f782508cf92906a5c74e6d781d92e32d659",
+                "id": "0xd55904a9dffaeefdbaae2304a9e1fb87c2f65d03b0b4b7c3eb392db19f00a259",
                 "x": "4"
               }
             }
@@ -104,7 +104,7 @@ Response: {
             },
             "value": {
               "json": {
-                "id": "0xa65b85aeba27d77dde5a366ed9a9adcc3b615b9a40506f03cf6bc8f33197b6ae",
+                "id": "0x2e1da6c067aed6b5d4d98687f97af18f48243a3112c66176d0013a38a3c696f3",
                 "x": "8"
               }
             }
@@ -116,7 +116,7 @@ Response: {
             "value": {
               "contents": {
                 "json": {
-                  "id": "0x00aeee42bd96d47f46bb9c1696a4325517d881125f0f0ae001d05425359c677a",
+                  "id": "0x50a2054184f8c664c0836cde63994c8a8455c407686f5860d96203647bd45bdb",
                   "x": "6"
                 }
               },
@@ -128,7 +128,7 @@ Response: {
                     },
                     "value": {
                       "json": {
-                        "id": "0x9a2ae0cd8208edc4274cd24630a288014803c5b57c05c213913bd2be400d5a27",
+                        "id": "0xea601a22a01879c2f4b6477fbfb4d4ae1339bf99fd68641f54f4fec486b37770",
                         "x": "7"
                       }
                     }
@@ -151,7 +151,7 @@ Response: {
               },
               "value": {
                 "json": {
-                  "id": "0x0622ba936cbc3bed80985b80ecd24f782508cf92906a5c74e6d781d92e32d659",
+                  "id": "0xd55904a9dffaeefdbaae2304a9e1fb87c2f65d03b0b4b7c3eb392db19f00a259",
                   "x": "4"
                 }
               }
@@ -162,7 +162,7 @@ Response: {
               },
               "value": {
                 "json": {
-                  "id": "0xa65b85aeba27d77dde5a366ed9a9adcc3b615b9a40506f03cf6bc8f33197b6ae",
+                  "id": "0x2e1da6c067aed6b5d4d98687f97af18f48243a3112c66176d0013a38a3c696f3",
                   "x": "8"
                 }
               }
@@ -174,7 +174,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x00aeee42bd96d47f46bb9c1696a4325517d881125f0f0ae001d05425359c677a",
+                    "id": "0x50a2054184f8c664c0836cde63994c8a8455c407686f5860d96203647bd45bdb",
                     "x": "6"
                   }
                 },
@@ -186,7 +186,7 @@ Response: {
                       },
                       "value": {
                         "json": {
-                          "id": "0x9a2ae0cd8208edc4274cd24630a288014803c5b57c05c213913bd2be400d5a27",
+                          "id": "0xea601a22a01879c2f4b6477fbfb4d4ae1339bf99fd68641f54f4fec486b37770",
                           "x": "7"
                         }
                       }
@@ -208,7 +208,7 @@ Response: {
             },
             "value": {
               "json": {
-                "id": "0xab230c0ad310dd6ab9185afee72f95a5da546160103de4eb4d47e605eb76d8af",
+                "id": "0x816b8741c1c4edbf04476f3172f6f39feeef30dce3629d1dcd609486d5578524",
                 "x": "5"
               }
             }

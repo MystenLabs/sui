@@ -9,6 +9,7 @@ use crate::authority::authority_store_pruner::{
     AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
 use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper, get_store_object};
+use crate::authority::epoch_marker_key::EpochMarkerKey;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::rpc_index::RpcIndexStore;
@@ -198,10 +199,19 @@ impl AuthorityStore {
         self.perpetual_tables
             .object_per_epoch_marker_table
             .schedule_delete_all()?;
-        Ok(self
-            .perpetual_tables
-            .object_per_epoch_marker_table_v2
-            .schedule_delete_all()?)
+        #[cfg(not(tidehunter))]
+        {
+            self.perpetual_tables
+                .object_per_epoch_marker_table_v2
+                .schedule_delete_all()?;
+        }
+        #[cfg(tidehunter)]
+        {
+            self.perpetual_tables
+                .object_per_epoch_marker_table_v2
+                .drop_cells_in_range_raw(&EpochMarkerKey::MIN_KEY, &EpochMarkerKey::MAX_KEY)?;
+        }
+        Ok(())
     }
 
     pub async fn open_with_committee_for_testing(
@@ -394,7 +404,7 @@ impl AuthorityStore {
         Ok(self
             .perpetual_tables
             .object_per_epoch_marker_table_v2
-            .get(&(epoch_id, object_key))?)
+            .get(&EpochMarkerKey(epoch_id, object_key))?)
     }
 
     pub fn get_latest_marker(
@@ -402,8 +412,8 @@ impl AuthorityStore {
         object_id: FullObjectID,
         epoch_id: EpochId,
     ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        let min_key = (epoch_id, FullObjectKey::min_for_id(&object_id));
-        let max_key = (epoch_id, FullObjectKey::max_for_id(&object_id));
+        let min_key = EpochMarkerKey(epoch_id, FullObjectKey::min_for_id(&object_id));
+        let max_key = EpochMarkerKey(epoch_id, FullObjectKey::max_for_id(&object_id));
 
         let marker_entry = self
             .perpetual_tables
@@ -411,7 +421,7 @@ impl AuthorityStore {
             .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
             .next();
         match marker_entry {
-            Some(Ok(((epoch, key), marker))) => {
+            Some(Ok((EpochMarkerKey(epoch, key), marker))) => {
                 // because of the iterator bounds these cannot fail
                 assert_eq!(epoch, epoch_id);
                 assert_eq!(key.id(), object_id);
@@ -820,7 +830,7 @@ impl AuthorityStore {
             &self.perpetual_tables.object_per_epoch_marker_table_v2,
             markers
                 .iter()
-                .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
+                .map(|(key, marker_value)| (EpochMarkerKey(epoch_id, *key), *marker_value)),
         )?;
         write_batch.insert_batch(
             &self.perpetual_tables.objects,

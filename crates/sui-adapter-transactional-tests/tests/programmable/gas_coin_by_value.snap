@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 3 tasks
+processed 8 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -26,3 +26,26 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
         value: 299999998012000u64,
     },
 }
+
+task 3, lines 13-14:
+//# programmable --sender B --inputs @A --gas-payment object(0,0)
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+deleted: object(0,0)
+accumulators_written: (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 299999997990120)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 16:
+//# view-object 0,0
+No object at id 0,0
+
+task 5, line 18:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, line 20:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+299999997990120
+
+task 7, line 22:
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+No funds accumulator object found

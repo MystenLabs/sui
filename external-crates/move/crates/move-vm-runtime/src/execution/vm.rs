@@ -20,7 +20,7 @@ use crate::{
 };
 use move_binary_format::{
     checked_as,
-    errors::{Location, VMError, VMResult},
+    errors::{Location, PartialVMResult, VMError, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility},
     partial_vm_error,
 };
@@ -396,9 +396,19 @@ impl<'extensions> MoveVM<'extensions> {
 
         let fun_ref = function.to_ref();
 
-        let parameters = fun_ref.parameters.iter().map(|ty| ty.to_type()).collect();
+        let parameters = fun_ref
+            .parameters
+            .iter()
+            .map(|ty| ty.to_type())
+            .collect::<PartialVMResult<Vec<_>>>()
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
-        let return_ = fun_ref.return_.iter().map(|ty| ty.to_type()).collect();
+        let return_ = fun_ref
+            .return_
+            .iter()
+            .map(|ty| ty.to_type())
+            .collect::<PartialVMResult<Vec<_>>>()
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         // verify type arguments
         self.virtual_tables

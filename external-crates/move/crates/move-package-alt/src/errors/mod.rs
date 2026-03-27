@@ -105,6 +105,11 @@ pub enum PackageError {
     #[error("Unable to create ephemeral publication file `{file}`: {err:?}")]
     InvalidEphemeralFile { file: PathBuf, err: std::io::Error },
 
+    #[error(
+        "Ephemeral publication file refers to a local package `{path}`, but the directory at `{path}` cannot be accessed."
+    )]
+    InvalidEphemeralPath { path: PathBuf },
+
     #[error("Multiple entries with `source = {{ {dep} }}` exist in the publication file")]
     MultipleEphemeralEntries { dep: String },
 

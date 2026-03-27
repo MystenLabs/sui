@@ -16,6 +16,7 @@ use sui_types::{
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
+    execution_status::ExecutionFailure,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
@@ -83,9 +84,55 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
+        Result<(), ExecutionFailure>,
+    ) {
+        let (store_out, gas_status_out, effects, timings, result) =
+            execute_transaction_to_effects::<execution_mode::Normal>(
+                store,
+                input_objects,
+                gas,
+                gas_status,
+                transaction_kind,
+                rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                execution_params,
+                trace_builder_opt,
+            );
+        (store_out, gas_status_out, effects, timings, result)
+    }
+
+    fn execute_transaction_to_effects_and_execution_error(
+        &self,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        gas: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        execute_transaction_to_effects::<execution_mode::Normal>(
+        execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
             store,
             input_objects,
             gas,

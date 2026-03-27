@@ -199,13 +199,13 @@ async fn test_address_owner() {
     for (i, coin) in coins {
         let fx = transfer_object(&mut cluster, a, &akp, a_gas, coin, c);
         objects.insert((!i, coin.0), find::address_mutated(&fx).unwrap());
-        a_gas = fx.gas_object().0;
+        a_gas = fx.gas_object().unwrap().0;
     }
 
     for bag in bags.into_values() {
         let fx = transfer_object(&mut cluster, b, &bkp, b_gas, bag, c);
         objects.insert((0, bag.0), find::address_mutated(&fx).unwrap());
-        b_gas = fx.gas_object().0;
+        b_gas = fx.gas_object().unwrap().0;
     }
 
     cluster.create_checkpoint().await;
@@ -636,7 +636,7 @@ async fn test_coin_balance_change_cleanup() {
     );
 
     // Update gas reference
-    a_gas = fx.gas_object().0;
+    a_gas = fx.gas_object().unwrap().0;
     let new_coin = find::address_owned(&fx).expect("Failed to find new coin");
 
     cluster.create_checkpoint().await;

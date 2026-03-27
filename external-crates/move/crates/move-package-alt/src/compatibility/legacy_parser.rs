@@ -509,9 +509,9 @@ fn parse_external_resolver(resolver_val: &TV) -> Result<ExternalDependency> {
         );
     }
 
-    // We parse the old dependencies using the new style rgardless.
+    // We parse the old dependencies using the new style regardless.
     Ok(ExternalDependency {
-        resolver: key.to_string(),
+        resolver: key.to_string().try_into()?,
         data: key_value.clone(),
     })
 }

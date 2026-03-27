@@ -10,7 +10,7 @@ task 1, lines 8-45:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 8360000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 8420800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 47-48:
 //# programmable --sender A
