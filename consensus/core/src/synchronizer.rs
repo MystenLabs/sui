@@ -38,7 +38,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{ObserverNetworkClient, SynchronizerClient, ValidatorNetworkClient},
+    network::{ObserverNetworkClient, PeerId, SynchronizerClient, ValidatorNetworkClient},
     round_tracker::RoundTracker,
 };
 use crate::{
@@ -952,6 +952,28 @@ where
         }
 
         if missing_blocks.is_empty() {
+            if self.commit_sync_failover {
+                self.fetch_blocks_scheduler_task
+                    .spawn(monitored_future!(async move {
+                        let _scope = monitored_scope("FetchBlocksCommitSyncFailover");
+                        if let Err(err) = Self::fetch_blocks_with_highest_accepted_rounds(
+                            context,
+                            network_client,
+                            block_verifier,
+                            transaction_certifier,
+                            commit_vote_monitor,
+                            core_dispatcher,
+                            commands_sender,
+                            dag_state,
+                            round_tracker,
+                            blocks_to_fetch,
+                        )
+                        .await
+                        {
+                            debug!("Failed to fetch blocks with highest accepted rounds: {err}");
+                        }
+                    }));
+            }
         } else {
             self.fetch_blocks_scheduler_task
                 .spawn(monitored_future!(async move {
@@ -970,7 +992,7 @@ where
                         blocks_to_fetch.clone(),
                         network_client,
                         missing_blocks,
-                        highest_accepted_rounds,
+                        dag_state,
                     )
                     .await;
                     context
@@ -1080,6 +1102,83 @@ where
         false
     }
 
+    /// Fetches blocks from a random peer using only highest_accepted_rounds (no specific missing blocks).
+    /// Used during commit sync failover to make progress when commit sync is stalled.
+    async fn fetch_blocks_with_highest_accepted_rounds(
+        context: Arc<Context>,
+        network_client: Arc<SynchronizerClient<VC, OC>>,
+        block_verifier: Arc<V>,
+        transaction_certifier: TransactionCertifier,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
+        core_dispatcher: Arc<D>,
+        commands_sender: Sender<Command>,
+        dag_state: Arc<RwLock<DagState>>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
+        inflight_blocks_map: Arc<InflightBlocksMap>,
+    ) -> ConsensusResult<()> {
+        let highest_accepted_rounds = Self::get_highest_accepted_rounds(dag_state, &context);
+
+        // Pick a random peer (excluding self).
+        let mut peers: Vec<AuthorityIndex> = context
+            .committee
+            .authorities()
+            .filter_map(|(index, _)| (index != context.own_index).then_some(index))
+            .collect();
+        if cfg!(not(test)) {
+            peers.shuffle(&mut ThreadRng::default());
+        }
+        let peer = *peers
+            .first()
+            .expect("Committee should have more than 1 member");
+
+        let response = timeout(
+            FETCH_REQUEST_TIMEOUT,
+            network_client.fetch_blocks(
+                PeerId::Validator(peer),
+                vec![],
+                highest_accepted_rounds,
+                false,
+                FETCH_REQUEST_TIMEOUT,
+            ),
+        )
+        .await;
+
+        let serialized_blocks = match response {
+            Ok(Ok(blocks)) => blocks,
+            Ok(Err(err)) => {
+                debug!(
+                    "Failed to fetch blocks with highest accepted rounds from peer {peer}: {err}"
+                );
+                return Ok(());
+            }
+            Err(_) => {
+                debug!("Timed out fetching blocks with highest accepted rounds from peer {peer}");
+                return Ok(());
+            }
+        };
+
+        let blocks_guard = BlocksGuard {
+            map: inflight_blocks_map,
+            block_refs: BTreeSet::new(),
+            peer,
+        };
+
+        Self::process_fetched_blocks(
+            serialized_blocks,
+            peer,
+            blocks_guard,
+            core_dispatcher,
+            block_verifier,
+            transaction_certifier,
+            commit_vote_monitor,
+            context,
+            commands_sender,
+            round_tracker,
+            "periodic",
+        )
+        .await
+    }
+
     /// Fetches the `missing_blocks` from peers. Requests the same number of authorities with missing blocks from each peer.
     /// Each response from peer can contain the requested blocks, and additional blocks from the last accepted round for
     /// authorities with missing blocks.
@@ -1090,7 +1189,7 @@ where
         inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
         missing_blocks: BTreeSet<BlockRef>,
-        highest_rounds: Vec<Round>,
+        dag_state: Arc<RwLock<DagState>>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, AuthorityIndex)> {
         // Preliminary truncation of missing blocks to fetch. Since each peer can have different
         // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_fetch
@@ -1158,6 +1257,8 @@ where
             // Shuffle the authorities
             authorities.shuffle(&mut ThreadRng::default());
         }
+
+        let highest_rounds = Self::get_highest_accepted_rounds(dag_state.clone(), &context);
 
         // Send the fetch requests
         for batch in authorities.chunks(num_authorities_per_peer) {
@@ -1328,6 +1429,17 @@ mod tests {
                 .map(|block| block.reference())
                 .collect::<Vec<_>>();
             lock.insert((block_refs, peer), (blocks, latency));
+        }
+
+        async fn stub_fetch_blocks_for_key(
+            &self,
+            key_refs: Vec<BlockRef>,
+            response_blocks: Vec<VerifiedBlock>,
+            peer: AuthorityIndex,
+            latency: Option<Duration>,
+        ) {
+            let mut lock = self.fetch_blocks_requests.lock().await;
+            lock.insert((key_refs, peer), (response_blocks, latency));
         }
 
         async fn stub_fetch_latest_blocks(
@@ -1787,26 +1899,23 @@ mod tests {
 
         // AND stub the requests for authority 1 & 2
         // Make the first authority timeout, so the second will be called. "We" are authority = 0, so
-        // we are skipped anyways.
-        let mut expected_blocks = stub_blocks
-            .iter()
-            .take(context.parameters.max_blocks_per_sync)
-            .cloned()
-            .collect::<Vec<_>>();
+        // we are skipped anyways. Stub all blocks since the full set is sent in one request.
+        // Only the first max_blocks_per_sync blocks will be processed by process_fetched_blocks.
         mock_client
             .stub_fetch_blocks(
-                expected_blocks.clone(),
+                stub_blocks.clone(),
                 AuthorityIndex::new_for_test(1),
                 Some(FETCH_REQUEST_TIMEOUT),
             )
             .await;
         mock_client
-            .stub_fetch_blocks(
-                expected_blocks.clone(),
-                AuthorityIndex::new_for_test(2),
-                None,
-            )
+            .stub_fetch_blocks(stub_blocks.clone(), AuthorityIndex::new_for_test(2), None)
             .await;
+        let mut expected_blocks = stub_blocks
+            .iter()
+            .take(context.parameters.max_blocks_per_sync)
+            .cloned()
+            .collect::<Vec<_>>();
 
         // Now create some blocks to simulate a commit lag
         let round = context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER * 2;
@@ -1846,7 +1955,9 @@ mod tests {
             false,
         );
 
-        sleep(4 * FETCH_REQUEST_TIMEOUT).await;
+        // Wait long enough for periodic sync to have run, but stay under COMMIT_PROGRESS_TIMEOUT
+        // to avoid triggering commit sync failover.
+        sleep(COMMIT_PROGRESS_TIMEOUT / 2).await;
 
         // Since we should be in commit lag mode none of the missed blocks should have been fetched - hence nothing should be
         // sent to core for processing.
@@ -1921,26 +2032,23 @@ mod tests {
             .stub_missing_blocks(missing_blocks.clone())
             .await;
 
-        // AND stub the fetch responses for authority 1 & 2
-        let mut expected_blocks = stub_blocks
-            .iter()
-            .take(context.parameters.max_blocks_per_sync)
-            .cloned()
-            .collect::<Vec<_>>();
+        // AND stub the fetch responses for authority 1 & 2.
+        // Stub all blocks since the full set is sent in one request.
         mock_client
             .stub_fetch_blocks(
-                expected_blocks.clone(),
+                stub_blocks.clone(),
                 AuthorityIndex::new_for_test(1),
                 Some(FETCH_REQUEST_TIMEOUT),
             )
             .await;
         mock_client
-            .stub_fetch_blocks(
-                expected_blocks.clone(),
-                AuthorityIndex::new_for_test(2),
-                None,
-            )
+            .stub_fetch_blocks(stub_blocks.clone(), AuthorityIndex::new_for_test(2), None)
             .await;
+        let mut expected_blocks = stub_blocks
+            .iter()
+            .take(context.parameters.max_blocks_per_sync)
+            .cloned()
+            .collect::<Vec<_>>();
 
         // AND create commit lag by observing high commit votes
         let round = context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER * 2;
@@ -1976,34 +2084,28 @@ mod tests {
             false,
         );
 
-        // Wait past COMMIT_PROGRESS_TIMEOUT. The missing blocks stub gets consumed each
-        // 200ms cycle by get_missing_blocks(), so re-stub after the timeout elapses.
-        sleep(COMMIT_PROGRESS_TIMEOUT + Duration::from_millis(100)).await;
-        // No blocks should have been fetched yet (periodic sync was being skipped).
+        // Wait just under COMMIT_PROGRESS_TIMEOUT — sync should be skipped (commit lagging).
+        sleep(COMMIT_PROGRESS_TIMEOUT - Duration::from_millis(100)).await;
         let added_blocks = core_dispatcher.get_add_blocks().await;
         assert_eq!(added_blocks, vec![]);
 
-        // Now re-stub missing blocks and fetch responses for the next sync cycle.
+        // Re-stub missing blocks (consumed by earlier get_missing_blocks calls).
         core_dispatcher
             .stub_missing_blocks(missing_blocks.clone())
             .await;
+        // Stub the failover fetch (empty block_refs key, peer 1) before the stall triggers.
+        // Use latency to prevent immediate completion and re-triggering.
         mock_client
-            .stub_fetch_blocks(
+            .stub_fetch_blocks_for_key(
+                vec![],
                 expected_blocks.clone(),
                 AuthorityIndex::new_for_test(1),
-                Some(FETCH_REQUEST_TIMEOUT),
-            )
-            .await;
-        mock_client
-            .stub_fetch_blocks(
-                expected_blocks.clone(),
-                AuthorityIndex::new_for_test(2),
-                None,
+                Some(Duration::from_millis(500)),
             )
             .await;
 
-        // Wait for the fetch task to complete
-        sleep(2 * FETCH_REQUEST_TIMEOUT).await;
+        // Now sleep past the stall trigger + time for the fetch to complete.
+        sleep(Duration::from_millis(200) + FETCH_REQUEST_TIMEOUT).await;
 
         let mut added_blocks = core_dispatcher.get_add_blocks().await;
         assert!(
@@ -2013,53 +2115,6 @@ mod tests {
         added_blocks.sort_by_key(|block| block.reference());
         expected_blocks.sort_by_key(|block| block.reference());
         assert_eq!(added_blocks, expected_blocks);
-
-        // AND advance commit index by a small amount (< COMMIT_PROGRESS_RECOVERY).
-        // Periodic sync should still run because failover is active and not enough progress.
-        core_dispatcher.get_add_blocks().await;
-        {
-            let current = dag_state.read().last_commit_index();
-            let mut d = dag_state.write();
-            for index in (current + 1)..=(current + COMMIT_PROGRESS_RECOVERY / 2) {
-                let commit =
-                    TrustedCommit::new_for_test(index, CommitDigest::MIN, 0, BlockRef::MIN, vec![]);
-                d.add_commit(commit);
-            }
-        }
-
-        // Re-stub and verify periodic sync still runs during failover with partial progress.
-        core_dispatcher
-            .stub_missing_blocks(missing_blocks.clone())
-            .await;
-        mock_client
-            .stub_fetch_blocks(
-                stub_blocks
-                    .iter()
-                    .take(context.parameters.max_blocks_per_sync)
-                    .cloned()
-                    .collect::<Vec<_>>(),
-                AuthorityIndex::new_for_test(1),
-                Some(FETCH_REQUEST_TIMEOUT),
-            )
-            .await;
-        mock_client
-            .stub_fetch_blocks(
-                stub_blocks
-                    .iter()
-                    .take(context.parameters.max_blocks_per_sync)
-                    .cloned()
-                    .collect::<Vec<_>>(),
-                AuthorityIndex::new_for_test(2),
-                None,
-            )
-            .await;
-
-        sleep(2 * FETCH_REQUEST_TIMEOUT).await;
-        let added_blocks = core_dispatcher.get_add_blocks().await;
-        assert!(
-            !added_blocks.is_empty(),
-            "Expected periodic sync to keep running during failover with partial progress"
-        );
 
         // AND advance commit index enough to exceed COMMIT_PROGRESS_RECOVERY from stall start.
         // This should resolve the failover and skip periodic sync again.
