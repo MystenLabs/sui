@@ -43,11 +43,9 @@ pub enum ConsensusError {
     #[error("Genesis blocks should not be queried!")]
     UnexpectedGenesisBlockRequested,
 
-    #[error(
-        "Expected {requested} but received {received} blocks returned from authority {authority}"
-    )]
+    #[error("Expected {requested} but received {received} blocks returned from peer {peer}")]
     UnexpectedNumberOfBlocksFetched {
-        authority: AuthorityIndex,
+        peer: String, // Use String instead of PeerId to avoid large error size
         requested: usize,
         received: usize,
     },
@@ -160,7 +158,7 @@ pub enum ConsensusError {
 
     #[error("Received unexpected block from peer {peer}: {requested:?} vs {received:?}")]
     UnexpectedBlockForCommit {
-        peer: AuthorityIndex,
+        peer: String, // Use String instead of PeerId to avoid large error size
         requested: BlockRef,
         received: BlockRef,
     },
