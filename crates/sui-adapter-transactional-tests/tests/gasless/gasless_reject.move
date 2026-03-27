@@ -90,3 +90,7 @@ module test::not_allowed {
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
 //> TransferObjects([Gas], Input(1));
+
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs receiving(1,1) @B
+// Reject: receiving object input
+//> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
