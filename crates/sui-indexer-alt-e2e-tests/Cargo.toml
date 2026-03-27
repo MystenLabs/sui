@@ -72,6 +72,6 @@ sui-macros.workspace = true
 sui-sdk.workspace = true
 sui-swarm-config.workspace = true
 sui-test-transaction-builder.workspace = true
-sui-transactional-test-runner.workspace = true
+sui-transactional-test-runner = { workspace = true, features = ["testing"] }
 test-cluster.workspace = true
 tracing.workspace = true

@@ -61,5 +61,8 @@ sui-framework-snapshot.workspace = true
 sui-storage.workspace = true
 typed-store.workspace = true
 
+[features]
+testing = ["sui-types/testing"]
+
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true

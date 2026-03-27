@@ -498,7 +498,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
 
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "testing")]
         sui_types::transaction::clear_gasless_tokens_for_testing();
 
         let mut test_adapter = Self {
@@ -853,7 +853,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 token_type,
                 min_transfer,
             }) => {
-                #[cfg(debug_assertions)]
+                #[cfg(feature = "testing")]
                 {
                     let state = self.compiled_state();
                     let type_tag = token_type
@@ -865,10 +865,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     );
                     Ok(None)
                 }
-                #[cfg(not(debug_assertions))]
+                #[cfg(not(feature = "testing"))]
                 {
                     let _ = (token_type, min_transfer);
-                    panic!("gasless-allow-token is only supported in debug builds")
+                    panic!("gasless-allow-token requires the `testing` feature")
                 }
             }
             SuiSubcommand::ViewCheckpoint => {
