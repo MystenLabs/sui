@@ -24,7 +24,8 @@ const EUnsupportedVersion: u64 = 5;
 ///
 /// The format of the proof follows the specifications from https://github.com/dalek-cryptography/bulletproofs/blob/be67b6d5f5ad1c1f54d5511b52e6d645a1313d07/src/range_proof/mod.rs#L59-L76 serialized using BCS.
 ///
-/// The commitments are Pedersen commitments to the values used in the proof.
+/// The commitments are Pedersen commitments to the values used in the proof. 
+/// The number of commitments must be a power of two, but if needed, the input to the prover can be padded with trivial commitments to zero.
 ///
 /// The number of commitments times bits can be at most 256.
 public fun verify_bulletproofs_ristretto255(
