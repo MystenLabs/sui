@@ -1003,6 +1003,20 @@ impl ProgrammableTransaction {
             )
         );
 
+        for input in &self.inputs {
+            match input {
+                CallArg::Pure(_) | CallArg::FundsWithdrawal(_) => {}
+                CallArg::Object(
+                    ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. },
+                ) => {}
+                CallArg::Object(ObjectArg::Receiving(_)) => {
+                    return Err(UserInputError::Unsupported(
+                        "Gasless transactions do not support Receiving object inputs".to_string(),
+                    ));
+                }
+            }
+        }
+
         let allowed_token_types = parse_gasless_allowed_token_types(config);
 
         for command in &self.commands {
