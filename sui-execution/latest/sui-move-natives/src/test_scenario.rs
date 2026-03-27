@@ -836,9 +836,7 @@ fn pack_id(a: impl Into<AccountAddress>) -> Value {
     Value::struct_(values::Struct::pack(vec![Value::address(a.into())]))
 }
 
-fn pack_ids(
-    items: impl IntoIterator<Item = impl Into<AccountAddress>>,
-) -> PartialVMResult<Value> {
+fn pack_ids(items: impl IntoIterator<Item = impl Into<AccountAddress>>) -> PartialVMResult<Value> {
     Vector::pack(
         VectorSpecialization::Container,
         items.into_iter().map(pack_id),
@@ -908,16 +906,14 @@ fn object_type_of_type(context: &NativeContext, ty: &Type) -> PartialVMResult<Mo
     Ok(MoveObjectType::from(*s_tag))
 }
 
-fn pack_option(
-    specialization: VectorSpecialization,
-    opt: Option<Value>,
-) -> PartialVMResult<Value> {
+fn pack_option(specialization: VectorSpecialization, opt: Option<Value>) -> PartialVMResult<Value> {
     let item = match opt {
         Some(v) => vec![v],
         None => vec![],
     };
     Ok(Value::struct_(values::Struct::pack(vec![Vector::pack(
-        specialization, item,
+        specialization,
+        item,
     )?])))
 }
 

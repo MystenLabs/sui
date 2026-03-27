@@ -85,7 +85,9 @@ pub fn to_u256(
     let mut addr_bytes_le = addr.to_vec();
     addr_bytes_le.reverse();
 
-    let u256_val = Value::u256(U256::from_le_bytes(&safe_unwrap!(addr_bytes_le.try_into().ok())));
+    let u256_val = Value::u256(U256::from_le_bytes(&safe_unwrap!(
+        addr_bytes_le.try_into().ok()
+    )));
     Ok(NativeResult::ok(context.gas_used(), smallvec![u256_val]))
 }
 
@@ -121,6 +123,8 @@ pub fn from_u256(
     let mut u256_bytes = u256.to_le_bytes().to_vec();
     u256_bytes.reverse();
 
-    let addr_val = Value::address(safe_unwrap_err!(AccountAddress::from_bytes(&u256_bytes[..])));
+    let addr_val = Value::address(safe_unwrap_err!(AccountAddress::from_bytes(
+        &u256_bytes[..]
+    )));
     Ok(NativeResult::ok(context.gas_used(), smallvec![addr_val]))
 }

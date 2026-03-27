@@ -48,8 +48,7 @@ fn emit_event(
     native_charge_gas_early_exit!(context, event_emit_cost_params.event_emit_cost_base);
 
     let amount = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<u64>());
-    let recipient =
-        safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
+    let recipient = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
     let accumulator: ObjectID =
         safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
 

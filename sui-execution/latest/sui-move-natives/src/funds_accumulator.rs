@@ -52,8 +52,7 @@ pub fn add_to_accumulator_address(
             ),
         );
     };
-    let recipient =
-        safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
+    let recipient = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
     let accumulator: ObjectID =
         safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
 
@@ -114,8 +113,7 @@ pub fn withdraw_from_accumulator_address(
     let ty_tag = context.type_to_type_tag(&safe_unwrap!(ty_args.pop()))?;
 
     let value = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<U256>());
-    let recipient =
-        safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
+    let recipient = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
     let accumulator: ObjectID =
         safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
 
