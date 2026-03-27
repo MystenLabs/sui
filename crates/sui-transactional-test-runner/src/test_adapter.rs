@@ -320,9 +320,17 @@ impl AdapterInitConfig {
             protocol_config.enable_gasless_for_testing();
         }
         if let Some(max_bytes) = gasless_max_pure_input_bytes {
+            assert!(
+                enable_gasless,
+                "gasless-max-pure-input-bytes requires --enable-gasless"
+            );
             protocol_config.set_gasless_max_pure_input_bytes_for_testing(max_bytes);
         }
         if let Some(max_unused) = gasless_max_unused_inputs {
+            assert!(
+                enable_gasless,
+                "gasless-max-unused-inputs requires --enable-gasless"
+            );
             protocol_config.set_gasless_max_unused_inputs_for_testing(max_unused);
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
