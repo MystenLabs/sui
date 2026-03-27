@@ -10,6 +10,7 @@ use crate::{
     },
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::{safe_unwrap, safe_unwrap_err};
 use move_core_types::{
     account_address::AccountAddress,
     gas_algebra::InternalGas,
@@ -43,7 +44,7 @@ const BORROW_ABSTRACT_SIZE: u64 = 8;
 
 macro_rules! get_or_fetch_object {
     ($context:ident, $ty_args:ident, $parent:ident, $child_id:ident, $ty_cost_per_byte:expr) => {{
-        let child_ty = $ty_args.pop().unwrap();
+        let child_ty = safe_unwrap!($ty_args.pop());
         native_charge_gas_early_exit!(
             $context,
             $ty_cost_per_byte * u64::from(child_ty.size()?).into()
@@ -107,8 +108,8 @@ pub fn hash_type_and_key(
         dynamic_field_hash_type_and_key_cost_params.dynamic_field_hash_type_and_key_cost_base
     );
 
-    let k_ty = ty_args.pop().unwrap();
-    let k: Value = args.pop_back().unwrap();
+    let k_ty = safe_unwrap!(ty_args.pop());
+    let k: Value = safe_unwrap!(args.pop_back());
     let parent = pop_arg!(args, AccountAddress);
 
     // Get size info for costing for derivations, serializations, etc
@@ -189,7 +190,7 @@ pub fn add_child_object(
         dynamic_field_add_child_object_cost_params.dynamic_field_add_child_object_cost_base
     );
 
-    let child = args.pop_back().unwrap();
+    let child = safe_unwrap!(args.pop_back());
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
 
@@ -204,12 +205,10 @@ pub fn add_child_object(
     );
 
     // TODO remove this copy_value, which will require VM changes
-    let child_id = get_object_id(child.copy_value())
-        .unwrap()
-        .value_as::<AccountAddress>()
-        .unwrap()
-        .into();
-    let child_ty = ty_args.pop().unwrap();
+    let child_id = safe_unwrap_err!(get_object_id(child.copy_value()).and_then(|v| v
+        .value_as::<AccountAddress>()))
+    .into();
+    let child_ty = safe_unwrap!(ty_args.pop());
     let child_type_size = u64::from(child_ty.size()?);
 
     native_charge_gas_early_exit!(
@@ -285,13 +284,11 @@ pub fn borrow_child_object(
 
     let child_id = pop_arg!(args, AccountAddress).into();
 
-    let parent_uid = pop_arg!(args, StructRef).read_ref().unwrap();
+    let parent_uid = safe_unwrap_err!(pop_arg!(args, StructRef).read_ref());
     // UID { id: ID { bytes: address } }
-    let parent = get_nested_struct_field(parent_uid, &[0, 0])
-        .unwrap()
-        .value_as::<AccountAddress>()
-        .unwrap()
-        .into();
+    let parent = safe_unwrap_err!(get_nested_struct_field(parent_uid, &[0, 0])
+        .and_then(|v| v.value_as::<AccountAddress>()))
+    .into();
 
     assert!(args.is_empty());
     let global_value_result = get_or_fetch_object!(
@@ -497,7 +494,7 @@ pub fn has_child_object_with_ty(
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
-    let ty = ty_args.pop().unwrap();
+    let ty = safe_unwrap!(ty_args.pop());
 
     native_charge_gas_early_exit!(
         context,

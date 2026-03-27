@@ -158,8 +158,10 @@ macro_rules! safe_unwrap_err {
         match $e {
             Ok(x) => x,
             Err(e) => {
-                let err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("{}:{} {:#}", file!(), line!(), e));
+                let err = move_binary_format::errors::PartialVMError::new(
+                    move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                )
+                .with_message(format!("{}:{} {:#}", file!(), line!(), e));
                 if cfg!(debug_assertions) {
                     panic!("{:?}", err);
                 } else {
