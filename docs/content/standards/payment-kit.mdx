@@ -29,7 +29,7 @@ The Payment Kit provides the following core capabilities:
 - **Secure payment processing**: Validates payment amounts and transfers coins safely.
 - **Payment registries**: Optional persistent storage for payment receipts with duplicate detection.
 - **Flexible receipt management**: Generates receipts for payment tracking and verification.
-- **Event-driven architecture**: Emits events for off-chain tracking and integration.
+- **Event-driven architecture**: Emits events for offchain tracking and integration.
 - **Multi-coin support**: Works with any Sui coin type.
 - **Transaction URIs**: Standardized URI format in order to create encoded links for user friendly payment flows.
 
@@ -94,7 +94,7 @@ Every processed payment generates a `PaymentReceipt` object containing:
 - Timestamp of payment
 - Registry information (for registry payments; not applicable to ephemeral payments)
 
-Receipts serve as proof of payment and can be used for off-chain verification, accounting, or integration with other systems.
+Receipts serve as proof of payment and can be used for offchain verification, accounting, or integration with other systems.
 
 ### Payment records
 
@@ -105,7 +105,7 @@ Payment records differ from payment receipts in key ways:
 **PaymentRecords vs PaymentReceipts:**
 
 - **`PaymentRecords`**: Internal registry storage structures that persist payment metadata for duplicate detection. These are stored within the registry's internal tables and are not directly accessible as objects.
-- **`PaymentReceipts`**: User-facing objects returned after payment processing that serve as proof of payment. These can be stored, transferred, or used for off-chain verification.
+- **`PaymentReceipts`**: User-facing objects returned after payment processing that serve as proof of payment. These can be stored, transferred, or used for offchain verification.
 
 **`PaymentRecord` lifecycle:**
 
@@ -279,10 +279,10 @@ public fun process_ephemeral_payment<T>(
 Ephemeral payments:
 
 - Do not check for duplicates
-- Do not store payment records on-chain
+- Do not store payment records onchain
 - Transfer funds immediately to the receiver
 - Generate receipts for the transaction
-- Emit payment events for off-chain tracking
+- Emit payment events for offchain tracking
 - Have lower gas costs than registry payments
 
 This mode is ideal for:
@@ -490,7 +490,7 @@ public struct PaymentRecord has store {
 
 ## Events
 
-The Payment Kit emits events for off-chain tracking and integration. Payment processing functions emit events containing:
+The Payment Kit emits events for offchain tracking and integration. Payment processing functions emit events containing:
 
 - Payment nonce
 - Payment amount
@@ -501,7 +501,7 @@ The Payment Kit emits events for off-chain tracking and integration. Payment pro
 
 Use these events to:
 
-- Track payment history off-chain
+- Track payment history offchain
 - Trigger external workflows
 - Update application state
 - Generate reports and analytics

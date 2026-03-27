@@ -270,6 +270,8 @@ impl AdapterInitConfig {
             enable_coin_reservations,
             file_format_version,
             enable_gasless,
+            gasless_max_pure_input_bytes,
+            gasless_max_unused_inputs,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -316,6 +318,20 @@ impl AdapterInitConfig {
         }
         if enable_gasless {
             protocol_config.enable_gasless_for_testing();
+        }
+        if let Some(max_bytes) = gasless_max_pure_input_bytes {
+            assert!(
+                enable_gasless,
+                "gasless-max-pure-input-bytes requires --enable-gasless"
+            );
+            protocol_config.set_gasless_max_pure_input_bytes_for_testing(max_bytes);
+        }
+        if let Some(max_unused) = gasless_max_unused_inputs {
+            assert!(
+                enable_gasless,
+                "gasless-max-unused-inputs requires --enable-gasless"
+            );
+            protocol_config.set_gasless_max_unused_inputs_for_testing(max_unused);
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
         // ExecutionTimeEstimate mode which is the only supported mode.

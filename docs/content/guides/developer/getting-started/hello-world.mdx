@@ -8,7 +8,7 @@ pagination_next: null
 
 You'll build a "Hello, World!" program to learn the fundamentals of programming on Sui. You create programs on Sui by writing and deploying smart contracts to the network.
 
-The most basic unit of storage on Sui is an [object](/guides/developer/objects/object-model.mdx). Other blockchains typically structure storage using key-value stores. Sui centers storage around objects with unique ID addresses on-chain. Every Sui smart contract is an object that manipulates other objects.
+The most basic unit of storage on Sui is an [object](/guides/developer/objects/object-model.mdx). Other blockchains typically structure storage using key-value stores. Sui centers storage around objects with unique ID addresses onchain. Every Sui smart contract is an object that manipulates other objects.
 
 Objects can be immutable or mutable:
 
@@ -16,7 +16,7 @@ Objects can be immutable or mutable:
 
 - **Mutable** objects can be transferred, changed, and deleted. A Sui address can own them, or they can be shared for public access.
 
-Every object's unique ID and version number references it on-chain. Every transaction on the network takes objects as input, then reads, writes, and mutates the inputs to produce new or altered objects as output. Every object knows the hash of the transaction that produced it. 
+Every object's unique ID and version number references it onchain. Every transaction on the network takes objects as input, then reads, writes, and mutates the inputs to produce new or altered objects as output. Every object knows the hash of the transaction that produced it. 
 
 When an object is modified by a transaction, the transaction's output writes the object's mutated contents to the same object ID but with a new version number. 
 
@@ -26,9 +26,9 @@ Sui has limits on the maximum transaction size (128KB) and number of objects (2,
 
 [Move](/concepts/sui-move-concepts.mdx) is the programming language Sui uses to create smart contracts. It is platform agnostic and enables common libraries, tooling, and developer communities across blockchains with vastly different data and execution models. There are three ways to use Move in the context of Sui: Move packages, Move modules, and Move objects.
 
-A Sui **Move package** is also referred to as a Move smart contract. It is a set of Move bytecode published to the Sui network. It is immutable and cannot be changed or removed, however you can upgrade it. Upgrading creates a new version of the package object on-chain, leaving the original intact. All prior versions of a package still exist on-chain. Once you publish it, other packages can import and use the modules it provides. Anyone can view a package's contents and use a Sui Explorer to see how its logic manipulates other objects. 
+A Sui **Move package** is also referred to as a Move smart contract. It is a set of Move bytecode published to the Sui network. It is immutable and cannot be changed or removed, however you can upgrade it. Upgrading creates a new version of the package object onchain, leaving the original intact. All prior versions of a package still exist onchain. Once you publish it, other packages can import and use the modules it provides. Anyone can view a package's contents and use a Sui Explorer to see how its logic manipulates other objects. 
 
-Every Move package on Sui includes one or more **Sui Move modules** that define the package's interaction with on-chain objects. A module's name is always unique within the package that contains it.
+Every Move package on Sui includes one or more **Sui Move modules** that define the package's interaction with onchain objects. A module's name is always unique within the package that contains it.
 
 A Sui Move module governs a Sui **Move object**, which is typed data from a Sui Move package. Each Move object value is a struct with fields that can contain primitive types, such as integers and addresses, other objects, and non-object structs.
 
@@ -330,7 +330,7 @@ Transaction Digest: 8R39iKKLGPDG3QkW2SrRW3QX71csRP2BLhK9H7oz9SwW
 
 </details>
 
-When you publish a Move package to the network, the network uploads and stores the bytecode as a Move package with a unique package ID and version number. The network consumes SUI tokens as gas and processes the transaction on-chain.
+When you publish a Move package to the network, the network uploads and stores the bytecode as a Move package with a unique package ID and version number. The network consumes SUI tokens as gas and processes the transaction onchain.
 
 After successfully executing, the output provides details about the transaction used to publish the package, including the gas cost, transaction digest, dependencies, owner, and sender. 
 

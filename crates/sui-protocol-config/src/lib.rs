@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 119;
+const MAX_PROTOCOL_VERSION: u64 = 120;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -1915,6 +1915,15 @@ pub struct ProtocolConfig {
 
     /// Allowed token types for gasless transactions, with minimum transfer sizes per token.
     gasless_allowed_token_types: Option<Vec<(String, u64)>>,
+
+    /// Maximum number of unused Pure inputs allowed in a gasless transaction.
+    /// Object and FundsWithdrawal inputs must always be used.
+    /// When None, there is no limit (effectively unlimited).
+    gasless_max_unused_inputs: Option<u64>,
+
+    /// Maximum size in bytes of each Pure input in a gasless transaction.
+    /// When None, there is no limit (effectively unlimited).
+    gasless_max_pure_input_bytes: Option<u64>,
 }
 
 /// An aliased address.
@@ -2706,6 +2715,14 @@ impl ProtocolConfig {
         debug_assert!(self.gasless_allowed_token_types.is_some());
         self.gasless_allowed_token_types.as_deref().unwrap_or(&[])
     }
+
+    pub fn get_gasless_max_unused_inputs(&self) -> u64 {
+        self.gasless_max_unused_inputs.unwrap_or(u64::MAX)
+    }
+
+    pub fn get_gasless_max_pure_input_bytes(&self) -> u64 {
+        self.gasless_max_pure_input_bytes.unwrap_or(u64::MAX)
+    }
 }
 
 #[cfg(not(msim))]
@@ -3297,6 +3314,8 @@ impl ProtocolConfig {
 
             gasless_max_computation_units: None,
             gasless_allowed_token_types: None,
+            gasless_max_unused_inputs: None,
+            gasless_max_pure_input_bytes: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4741,12 +4760,15 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .convert_withdrawal_compatibility_ptb_arguments = true;
                     }
+                    cfg.gasless_max_unused_inputs = Some(1);
+                    cfg.gasless_max_pure_input_bytes = Some(32);
                     if chain == Chain::Testnet {
                         cfg.gasless_allowed_token_types = Some(vec![(TESTNET_USDC.to_string(), 0)]);
                     }
                     cfg.transfer_receive_object_cost_per_byte = Some(1);
                     cfg.transfer_receive_object_type_cost_per_byte = Some(2);
                 }
+                120 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

@@ -671,3 +671,5 @@ translation_per_type_node_charge: 1
 translation_per_reference_node_charge: 1
 translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
+gasless_max_unused_inputs: 1
+gasless_max_pure_input_bytes: 32

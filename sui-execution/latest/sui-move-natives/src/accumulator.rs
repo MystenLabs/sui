@@ -6,6 +6,7 @@ use crate::{
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
 };
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{safe_unwrap, safe_unwrap_err};
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::execution::{Type, values::Value};
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -46,20 +47,12 @@ fn emit_event(
     // TODO(address-balances): add specific cost for this
     native_charge_gas_early_exit!(context, event_emit_cost_params.event_emit_cost_base);
 
-    let amount = args.pop_back().unwrap().value_as::<u64>().unwrap();
-    let recipient = args
-        .pop_back()
-        .unwrap()
-        .value_as::<AccountAddress>()
-        .unwrap();
-    let accumulator: ObjectID = args
-        .pop_back()
-        .unwrap()
-        .value_as::<AccountAddress>()
-        .unwrap()
-        .into();
+    let amount = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<u64>());
+    let recipient = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
+    let accumulator: ObjectID =
+        safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
 
-    let ty_tag = context.type_to_type_tag(&ty_args.pop().unwrap())?;
+    let ty_tag = context.type_to_type_tag(&safe_unwrap!(ty_args.pop()))?;
 
     let obj_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
 
@@ -82,8 +75,8 @@ pub fn record_settlement_sui_conservation(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    let output_sui = args.pop_back().unwrap().value_as::<u64>().unwrap();
-    let input_sui = args.pop_back().unwrap().value_as::<u64>().unwrap();
+    let output_sui = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<u64>());
+    let input_sui = safe_unwrap_err!(safe_unwrap!(args.pop_back()).value_as::<u64>());
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 

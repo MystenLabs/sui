@@ -27,7 +27,7 @@ Source code locations for the smart contracts and frontend:
 - **One-time witnesses:** The guide teaches you how to use [one-time witnesses](/concepts/sui-move-concepts.mdx) to ensure only a single instance of the `HouseData` object ever exists.
 - **Asserts:** The guide teaches you how to use [asserts](https://move-book.com/move-basics/assert-and-abort.html?highlight=asserts#assert) to abort functions due to certain conditions not being met.
 - **Address-owned objects:** The guide teaches you how to use [address-owned objects](/guides/developer/objects/object-ownership/address-owned) when necessary.
-- **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](/guides/developer/accessing-data/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
+- **Events:** The guide teaches you how to emit events in your contracts, which can be used to track onchain activity. For more information on events, see [Using Events](/guides/developer/accessing-data/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
 - **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](/concepts/tokenomics/tokenomics-overview.mdx).
 - **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
 
@@ -865,7 +865,7 @@ Okay, that's a good start to have an overview of the project. Time to move to in
       arguments: [
         txb.object(HOUSECAP_ID),
         houseStakeCoin,
-        // This argument is not an on-chain object, hence, we must serialize it using `bcs`
+        // This argument is not an onchain object, hence, we must serialize it using `bcs`
         // https://sdk.mystenlabs.com/typescript/transaction-building/basics#pure-values
         txb.pure(
           bcs
@@ -925,7 +925,7 @@ There are a few parameters that you need to pass into `initialize_house_data()` 
 
 - Import the `HouseCap` ID from `constants.ts`, which you set up in the previous section.
 - Use `Transaction::splitCoin` for the House stake to create a new coin with a defined amount split from the Gas Coin `txb.gas`. Think of the gas coin as one singular coin available for gas payment from your account (which might cover the entire remaining balance of your account). This is useful for Sui payments - instead of manually selecting the coins for gas payment or manually splitting/merging to have the coin with correct amount for your Move call, the gas coin is the single entry point for this, with all the heavy lifting delegated to the SDK behind the scenes.
-- Pass the BLS public key as bytes `vector<u8>`. When providing inputs that are not on-chain objects, serialize them as BCS using a combination of `txb.pure` and `bcs` imported from `@mysten/sui/bcs`.
+- Pass the BLS public key as bytes `vector<u8>`. When providing inputs that are not onchain objects, serialize them as BCS using a combination of `txb.pure` and `bcs` imported from `@mysten/sui/bcs`.
 
 Now sign and execute the transaction. dApp Kit provides the `signAndExecuteTransaction` method on the dAppKit instance (accessed via `useDAppKit()`) to streamline this process. When called, it prompts the UI for you to approve, sign, and execute the transaction. The `HouseData` object is important as you use it as input for later Move calls, so save its ID somewhere.
 
@@ -1045,7 +1045,7 @@ try {
 }
 ```
 
-Great, now you can create the game with the created `Counter` object. Isolate the game creation logic into `PlayerCreateGame.tsx`. There is one more thing to keep in mind - to flag an input as an on-chain object, you should use `txb.object()` with the corresponding object ID.
+Great, now you can create the game with the created `Counter` object. Isolate the game creation logic into `PlayerCreateGame.tsx`. There is one more thing to keep in mind - to flag an input as an onchain object, you should use `txb.object()` with the corresponding object ID.
 
 ```typescript title='containers/Player/PlayerCreateGame.tsx'
 const dAppKit = useDAppKit();

@@ -1,32 +1,32 @@
 ---
 title: What is Nautilus?
-description: Nautilus is a verifiable off-chain compute layer on Sui.
+description: Nautilus is a verifiable offchain compute layer on Sui.
 ---
 
-Nautilus is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/guides/developer/nautilus/community-dev-tools) while preserving trust on-chain through smart contract-based verification.
+Nautilus is a verifiable offchain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/guides/developer/nautilus/community-dev-tools) while preserving trust onchain through smart contract-based verification.
 
 Nautilus supports hybrid decentralized applications that require private data handling, complex computations, or integration with external (Web2) systems. The framework ensures computations are tamper-resistant, isolated, and cryptographically verifiable.
 
-It currently supports self-managed [AWS Nitro Enclave TEEs](https://aws.amazon.com/ec2/nitro/nitro-enclaves/) and Dockerized deployments through [Marlin](/guides/developer/nautilus/community-dev-tools). You can verify AWS-signed enclave attestations on-chain using Sui smart contracts written in Move. Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the reproducible build template.
+It currently supports self-managed [AWS Nitro Enclave TEEs](https://aws.amazon.com/ec2/nitro/nitro-enclaves/) and Dockerized deployments through [Marlin](/guides/developer/nautilus/community-dev-tools). You can verify AWS-signed enclave attestations onchain using Sui smart contracts written in Move. Refer to the [Github repo](https://github.com/MystenLabs/nautilus) for the reproducible build template.
 
 ## Features
 
 :::important
 Nautilus is **not** just about running code in privacy-preserving manner in a TEE. Part of the overall value proposition is **on-chain verification** of computation integrity:
 
-1. PCRs (enclave measurements) must be registered and verified on-chain
-2. Every computation result could optionally be verified on-chain
+1. PCRs (enclave measurements) must be registered and verified onchain
+2. Every computation result could optionally be verified onchain
 :::
 
 A Nautilus application consists of 2 components:
 
-- **Off-chain server:** Runs inside a TEE and handles computations like user input processing or scheduled tasks.
+- **Offchain server:** Runs inside a TEE and handles computations like user input processing or scheduled tasks.
 
-- **On-chain smart contract**: Written in Move, verifies TEE attestations before executing transactions.
+- **Onchain smart contract**: Written in Move, verifies TEE attestations before executing transactions.
 
 ## How it works
 
-- Deploy the off-chain server to a self-managed TEE, such as AWS Nitro Enclaves, or use [Marlin Oyster](/guides/developer/nautilus/community-dev-tools) to deploy Dockerized Nautilus apps.
+- Deploy the offchain server to a self-managed TEE, such as AWS Nitro Enclaves, or use [Marlin Oyster](/guides/developer/nautilus/community-dev-tools) to deploy Dockerized Nautilus apps.
 
 :::danger
 
@@ -40,7 +40,7 @@ You can adapt and extend it to fit your specific use case.
 
 - The TEE generates a cryptographic attestation that proves the integrity of the execution environment.
 
-- Sui smart contracts verify the attestation on-chain before accepting the TEE output.
+- Sui smart contracts verify the attestation onchain before accepting the TEE output.
 
 - The integrity of the TEE is auditable and anchored by the provider's root of trust.
 
@@ -48,17 +48,17 @@ Refer to [Nautilus design](/guides/developer/nautilus/nautilus-design.mdx) and [
 
 ## Use cases
 
-Nautilus supports several Web3 use cases for trustworthy and verifiable off-chain computation. Some examples include:
+Nautilus supports several Web3 use cases for trustworthy and verifiable offchain computation. Some examples include:
 
-- **Trusted oracles**: Process off-chain data from Web2 services (weather, sports, financial data) or decentralized storage platforms like [Walrus](https://walrus.xyz) in a tamper-resistant way.
+- **Trusted oracles**: Process offchain data from Web2 services (weather, sports, financial data) or decentralized storage platforms like [Walrus](https://walrus.xyz) in a tamper-resistant way.
 
-- **AI agents:** Nautilus is ideal for securely running AI models for inference or to execute agentic workflows to produce actionable outcomes, while providing data and model provenance on-chain.
+- **AI agents:** Nautilus is ideal for securely running AI models for inference or to execute agentic workflows to produce actionable outcomes, while providing data and model provenance onchain.
 
 - **DePIN solutions:** DePIN (Decentralized Physical Infrastructure) can leverage Nautilus for private data computation in IoT and supply chain networks.
 
 - **Fraud prevention in multi-party systems:** Decentralized exchanges (DEXs) could use Nautilus for order matching and settlement, or layer 2 solutions could prevent collision and fraud by securely running computations between untrusted parties.
 
-- **Identity management:** Nautilus can provide solutions in the identity management space that require on-chain verifiability for decentralized governance and proof of tamper resistance.
+- **Identity management:** Nautilus can provide solutions in the identity management space that require onchain verifiability for decentralized governance and proof of tamper resistance.
 
 ## Seal
 

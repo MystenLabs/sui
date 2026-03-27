@@ -61,7 +61,6 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
-use std::iter::once;
 use std::sync::Arc;
 #[cfg(debug_assertions)]
 use std::sync::RwLock;
@@ -1022,6 +1021,66 @@ impl ProgrammableTransaction {
         for command in &self.commands {
             command.validate_gasless_transaction(&allowed_token_types)?;
         }
+
+        self.validate_gasless_inputs(config)?;
+
+        Ok(())
+    }
+
+    fn validate_gasless_inputs(&self, config: &ProtocolConfig) -> UserInputResult {
+        let mut used_inputs = vec![false; self.inputs.len()];
+        for idx in self.commands.iter().flat_map(|cmd| cmd.input_arguments()) {
+            if let Some(slot) = used_inputs.get_mut(idx as usize) {
+                *slot = true;
+            }
+        }
+
+        let max_unused_pure = config.get_gasless_max_unused_inputs();
+        let max_pure_bytes = config.get_gasless_max_pure_input_bytes();
+        let mut unused_pure_count = 0u64;
+
+        for (i, input) in self.inputs.iter().enumerate() {
+            let is_used = used_inputs[i];
+            match input {
+                CallArg::Pure(bytes) => {
+                    fp_ensure!(
+                        bytes.len() as u64 <= max_pure_bytes,
+                        UserInputError::Unsupported(format!(
+                            "Input {} has size {} bytes, but gasless transactions \
+                             allow at most {} bytes per Pure input",
+                            i,
+                            bytes.len(),
+                            max_pure_bytes
+                        ))
+                    );
+                    if !is_used {
+                        unused_pure_count += 1;
+                    }
+                }
+                CallArg::Object(_) if !is_used => {
+                    return Err(UserInputError::Unsupported(format!(
+                        "Gasless transactions do not allow unused Object inputs (input {})",
+                        i
+                    )));
+                }
+                CallArg::FundsWithdrawal(_) if !is_used => {
+                    return Err(UserInputError::Unsupported(format!(
+                        "Gasless transactions do not allow unused FundsWithdrawal inputs (input {})",
+                        i
+                    )));
+                }
+                CallArg::Object(_) | CallArg::FundsWithdrawal(_) => {}
+            }
+        }
+
+        fp_ensure!(
+            unused_pure_count <= max_unused_pure,
+            UserInputError::Unsupported(format!(
+                "Gasless transactions allow at most {} unused Pure inputs, but found {}",
+                max_unused_pure, unused_pure_count
+            ))
+        );
+
         Ok(())
     }
 }
@@ -1476,17 +1535,27 @@ impl Command {
     }
 
     pub fn is_argument_used(&self, argument: Argument) -> bool {
-        match self {
-            Command::MoveCall(c) => c.arguments.iter().any(|a| a == &argument),
+        self.arguments().any(|a| a == &argument)
+    }
+
+    fn input_arguments(&self) -> impl Iterator<Item = u16> + '_ {
+        self.arguments().filter_map(|arg| match arg {
+            Argument::Input(i) => Some(*i),
+            _ => None,
+        })
+    }
+
+    fn arguments(&self) -> impl Iterator<Item = &Argument> + '_ {
+        let (args, single): (&[Argument], Option<&Argument>) = match self {
+            Command::MoveCall(c) => (&c.arguments, None),
             Command::TransferObjects(args, arg)
             | Command::MergeCoins(arg, args)
-            | Command::SplitCoins(arg, args) => {
-                args.iter().chain(once(arg)).any(|a| a == &argument)
-            }
-            Command::MakeMoveVec(_, args) => args.iter().any(|a| a == &argument),
-            Command::Upgrade(_, _, _, arg) => arg == &argument,
-            Command::Publish(_, _) => false,
-        }
+            | Command::SplitCoins(arg, args) => (args, Some(arg)),
+            Command::MakeMoveVec(_, args) => (args, None),
+            Command::Upgrade(_, _, _, arg) => (&[], Some(arg)),
+            Command::Publish(_, _) => (&[], None),
+        };
+        args.iter().chain(single)
     }
 }
 

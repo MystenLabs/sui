@@ -50,7 +50,7 @@ The following gRPC services are available on Sui. Protocol buffers define the gR
 | --- | --- | --- |
 | `TransactionExecutionService` | `sui/rpc/v2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use this service to send user actions to the network. |
 | `LedgerService` | `sui/rpc/v2/ledger_service.proto` | Look up specific checkpoints, transactions, objects, and more from the current state and recent history of the Sui network. History refers to the recent past, limited to what a full node retains. |
-| `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. It also supports dry-run simulations for transactions. |
+| `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date onchain data like balances, coin metadata, dynamic fields, or owned objects. It also supports dry-run simulations for transactions. |
 | `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. See Subscriptions for streaming data. |
 | `MovePackageService` | `sui/rpc/v2/move_package_service.proto` | Access metadata and the content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
 | `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that might include [zkLogin](/guides/developer/cryptography/zklogin-integration) or other signatures, simulate authentication, or build custom signing workflows. |
@@ -66,7 +66,7 @@ If you were using the `v2beta2` `.proto` files previously, the latest definition
 
 ## Subscriptions for streaming data
 
-The `SubscriptionService` provides real-time streaming updates for on-chain activity through gRPC server-side streaming APIs. For example, the `SubscribeCheckpoint` RPC lets you subscribe to the global stream of executed checkpoints. When a subscription is initialized, the stream begins at the latest checkpoint known to the server. Checkpoints are guaranteed to arrive in order and without gaps. This allows clients to track exactly which checkpoint they last processed.
+The `SubscriptionService` provides real-time streaming updates for onchain activity through gRPC server-side streaming APIs. For example, the `SubscribeCheckpoint` RPC lets you subscribe to the global stream of executed checkpoints. When a subscription is initialized, the stream begins at the latest checkpoint known to the server. Checkpoints are guaranteed to arrive in order and without gaps. This allows clients to track exactly which checkpoint they last processed.
 
 If the stream is interrupted due to client disconnect or network error, you can resume from the last known checkpoint using other APIs to backfill any missed data before resubscribing.
 

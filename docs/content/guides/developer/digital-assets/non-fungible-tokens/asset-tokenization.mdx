@@ -1,38 +1,95 @@
 ---
 draft: true
 title: Asset Tokenization
-description: Learn how to tokenize assets on the Sui blockchain. Asset tokenization refers to the process of representing real-world assets, such as real estate, art, commodities, stocks, or other valuable assets, as digital tokens on the blockchain network.
+description: Represent real-world assets as on-chain fractional tokens using the tokenized_asset module on Sui.
+keywords: [asset tokenization, fractionalization, NFT, fungible token, tokenized asset, Move, kiosk, burnability]
 ---
 
-Asset tokenization refers to the process of representing real-world assets, such as real estate, art, commodities, stocks, or other valuable assets, as digital tokens on the blockchain network. This involves converting the ownership or rights of an asset into digital tokens, which are then recorded and managed on the blockchain.
+Asset tokenization is the process of representing real-world assets, such as real estate, art, commodities, or stocks, as digital tokens on the blockchain. Each token represents ownership or a fraction of the underlying asset, recorded and managed on-chain.
 
-## High-level overview
+## Fractionalization
 
-The concept is to divide high-value assets into smaller, more affordable units, representing ownership or a fraction of the asset.
+The core idea behind asset tokenization is fractionalization: dividing a high-value asset into smaller units, each representing a share of the whole. This makes assets more accessible by allowing investors to hold a fraction rather than the entire asset. Common use cases include real estate, where a single property can be divided into thousands of tradeable shares, or fine art and collectibles, where fractional ownership allows multiple investors to hold a stake in a single high-value item.
+ 
+On Sui, the `tokenized_asset` module handles this. It operates similarly to the [`coin` library](/references/framework/sui-framework/coin): when it receives a new [One-Time Witness (OTW)](https://move-book.com/programmability/one-time-witness/) type, it creates a unique on-chain representation of a fractional asset. Each fraction is a `TokenizedAsset<T>` object with a balance that counts toward the asset's total supply.
+ 
+This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155) multi-token standard, with additional functionality. It is a suitable starting point for Solidity-based use cases you want to implement on Sui.
 
-This strategy enables wider participation from investors who might want to mitigate risk by investing in a portion of a digital asset rather than being the sole owner, thereby expanding accessibility to a broader range of investors.
+### Asset creation
 
-This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155) multi-token standard with additional functionality. This makes it a suitable choice for Solidity based use cases that one might want to implement on Sui.
+Each asset is fractionalized into a fixed total supply. When you create an asset, you define its metadata, including name, description, symbol, and icon URL. This metadata is shared across all fractions and stored in the `AssetMetadata<T>` object.
 
-- **Asset creation**
+Each fraction is a `TokenizedAsset<T>` with a balance that, across all fractions, adds up to the total supply.
 
-  Each asset is fractionalized into a total supply, with each fraction represented as either a non-fungible token (NFT) or fungible token (FT) type collectible. This ensures that each individual fraction maintains a balance equal to or greater than one, and when combined, all fractions collectively reach the total supply of the asset.
+### Non-fungible tokens vs fungible tokens
 
-  Besides the total supply, each asset is defined by various other fields such as name, description, and more. These fields collectively form the metadata for the asset, and they remain consistent across all fractions of the asset.
+The `tokenized_asset` module supports both non-fungible token (NFT) and fungible token (FT) fractions. Every fraction shares the same base metadata defined at asset creation time (name, description, symbol, and icon URL). The distinction between NFTs and FTs is determined at mint time by whether per-token metadata is also provided:
+ 
+- **NFT**: If per-token key-value metadata is provided when minting, the token is unique. Its balance is fixed at 1, and it represents a single distinct instance of the asset.
+- **FT**: If no per-token metadata is provided, the token is fungible. Its balance can exceed 1, and multiple identical instances can exist.
+ 
+FTs can be split into smaller units or joined together when the balance is greater than 1. Splitting lets a holder transfer part of their position without selling all of it — for example, selling 100 shares out of 500. Joining consolidates multiple FT objects of the same asset into one, which reduces the number of objects a holder manages and lowers gas costs over time. NFTs cannot be split or joined because their balance is fixed at 1.
+ 
+All fractions, whether NFTs or FTs, count toward the asset's total supply.
 
-- **NFTs vs FTs distinction**
+### Burnability
 
-  Each time a tokenized asset is minted, the system can create it with new metadata. If new metadata is incorporated, the tokenized asset becomes unique, transforming it into an NFT. In this case, its balance is limited to 1, signifying that only a single instance of this asset exists.
+When you create an asset, you define whether its fractions are burnable. Burning permanently removes a fraction from circulation.
 
-  If no additional metadata exists, the system categorizes the tokenized asset as an FT, allowing its balance to exceed 1, enabling multiple identical instances of the asset to exist.
+## Move packages
 
-  FTs possess the capability to merge (join) among themselves or be split when the balance is greater than 1. This functionality allows for the aggregation or division of units of the token, offering flexibility in handling varying quantities as needed.
+he asset tokenization implementation consists of 2 Move packages: `asset_tokenization` and `template`.
+ 
+:::info
+The packages described in this document use the [Kiosk standard](/standards/kiosk) to ensure that tokenized assets operate within their defined transfer policy. This supports marketable tokenized assets with rules like royalties and commissions.
+ 
+If Kiosk is not a requirement, you can exclude the `unlock` module and the transfer policy-related methods in `proxy`.
+:::
 
-  As previously mentioned, all the collectibles of tokenized assets, whether NFTs or FTs, when combined, can amount to the maximum total supply of the asset.
+### `asset_tokenization` package
 
-- **Burnability**
+The `asset_tokenization` package contains 3 modules: `tokenized_asset`, `proxy`, and `unlock`.
 
-  When you create the asset, you can define whether the fractions of the asset are eligible for removal or destruction from circulation. The process of removing or destroying assets is called burning.
+#### `tokenized_asset`
+ 
+The `tokenized_asset` module is the core of the implementation. It handles asset creation, minting, splitting, joining, and burning. It operates similarly to the [`coin` library](/references/framework/sui-framework/coin) on Sui:
+ 
+- Create a new asset representation using a [One-Time Witness](https://move-book.com/programmability/one-time-witness/) type, returning an `AssetCap<T>` and `AssetMetadata<T>`
+- Mint `TokenizedAsset<T>` fractions as either NFTs or FTs depending on whether metadata is provided
+- Split and join FT fractions
+- Burn fractions when the asset is configured as burnable
+ 
+For full struct and function details, see the [`tokenized_asset` source](https://github.com/MystenLabs/asset-tokenization/blob/main/move/asset_tokenization/sources/tokenized_asset.move).
 
-  If a tokenized asset is burnable, then burning a fraction causes the circulating supply to decrease by the balance of the burnt item. The total supply, however, remains constant, allowing you to mint the burned fractions again if needed, thus maintaining the predetermined total supply of the asset.
+#### `proxy`
+ 
+The `proxy` module manages publisher-related operations on behalf of the asset type owner. It controls access to transfer policy creation and management for tokenized assets:
+ 
+- Claim the [`Publisher`](/references/framework/sui-framework/package) object using a One-Time Witness and store it in a shared `Registry`
+- Create a [`TransferPolicy`](/standards/kiosk) and `TransferPolicyCap` for a given `TokenizedAsset<T>` type using `setup_tp`
+- Create an empty [`Display`](/references/framework/sui-framework/display) for a `TokenizedAsset<T>` type using `new_display`
+- Store an empty transfer policy in a shared `ProtectedTP<T>` object, used by the `unlock` module
+ 
+For full struct and function details, see the [`proxy` source](https://github.com/MystenLabs/asset-tokenization/blob/main/move/asset_tokenization/sources/proxy.move).
 
+#### `unlock`
+
+The `unlock` module enables burning and joining of tokenized assets that are locked in a kiosk, without requiring adherence to the standard transfer policy rules. This allows asset type creators to support these operations for kiosk assets in a controlled way.
+
+Key responsibilities:
+
+- Unlock a kiosk-locked asset for joining, returning a `JoinPromise` that enforces the balance is correctly merged before the operation completes
+- Unlock a kiosk-locked asset for burning, returning a `BurnPromise` that enforces the circulating supply is reduced
+
+For full struct and function details, see the [`unlock` source](https://github.com/MystenLabs/asset-tokenization/blob/main/move/asset_tokenization/sources/unlock.move).
+
+### `template` package
+
+The `template` package is an example use case package that enables asset creation through a browser using Rust WebAssembly (WASM). It serves as a starting point whenever a new asset type needs to be represented as a tokenized asset.
+
+The package contains 2 modules:
+
+- [`template`](https://github.com/MystenLabs/asset-tokenization/blob/main/move/template/sources/template.move): Defines a new asset by calling `tokenized_asset::new_asset`. Fields such as name, symbol, description, total supply, and burnability are defined as constants that the WASM library can modify at publish time.
+- [`genesis`](https://github.com/MystenLabs/asset-tokenization/blob/main/move/template/sources/genesis.move): A minimal module that includes a One-Time Witness so the sender can claim the publisher.
+
+For more information on WASM bytecode manipulation and how to deploy, see [Deploy a Tokenized Asset](/guides/developer/digital-assets/non-fungible-tokens/deploy-tokenized-asset.mdx).

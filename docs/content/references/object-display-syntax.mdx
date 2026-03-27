@@ -82,7 +82,7 @@ For `VecMap<K, V>`, the index matches against keys:
 
 ### Dynamic field access (`->`)
 
-Load a dynamic field from on-chain storage:
+Load a dynamic field from onchain storage:
 
 ```
 {parent->['key']}       — dynamic field with string key 'key'
@@ -107,7 +107,7 @@ Each `=>` access costs 2 object loads (1 for the wrapper `Field`, 1 for the obje
 
 ### Derived object access (`~>`)
 
-Load a derived object from on-chain storage using the parent object and a derived key:
+Load a derived object from onchain storage using the parent object and a derived key:
 
 ```
 {parent~>['key']}       — derived object with string key 'key'

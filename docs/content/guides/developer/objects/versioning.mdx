@@ -4,7 +4,7 @@ description: Versioning provides the ability to upgrade packages and objects on 
 keywords: [ object versioning, object versions, versioning objects, package versioning, package versions, versioning packages ]
 ---
 
-Every object stored on-chain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an on-chain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.
+Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.
 
 ```
 (I, v0) => ...
@@ -30,7 +30,7 @@ It is recommended to use [party objects](/guides/developer/objects/object-owners
 
 Fastpath objects can only be [address-owned](/guides/developer/objects/object-ownership/address-owned.mdx) or [immutable](/guides/developer/objects/object-ownership/immutable.mdx). Transactions using fastpath benefit from low latency and fast finality because they bypass consensus.
 
-Every fastpath transaction must lock the object's current version as input and use the output version as the reference for the next transaction. If a fastpath object is frequently used by multiple senders, there is a risk of equivocating or locking the object until the end of the epoch, so you must coordinate off-chain access carefully.
+Every fastpath transaction must lock the object's current version as input and use the output version as the reference for the next transaction. If a fastpath object is frequently used by multiple senders, there is a risk of equivocating or locking the object until the end of the epoch, so you must coordinate offchain access carefully.
 
 :::info
 
@@ -40,13 +40,13 @@ Only an object's owner can equivocate it. You can avoid equivocation by never at
 
 You must reference fastpath transaction inputs at a specific ID and version. When a validator signs a transaction with an address-owned input at a specific version, that version is locked to that transaction. Validators reject other transactions requiring the same input. [Immutable](/guides/developer/objects/object-ownership/immutable.mdx) objects are also referenced at a specific version, but do not need to be locked since their contents never change. Their version identifies the point at which they became immutable.
 
-Fastpath is a good fit for applications that are extremely sensitive to latency or gas costs, do not need complex multi-party transactions, or already rely on an off-chain coordination service.
+Fastpath is a good fit for applications that are extremely sensitive to latency or gas costs, do not need complex multi-party transactions, or already rely on an offchain coordination service.
 
 ## Consensus objects
 
 Consensus objects can be [address-owned](/guides/developer/objects/object-ownership/address-owned.mdx), owned by a [party](/guides/developer/objects/object-ownership/party.mdx), or [shared](/guides/developer/objects/object-ownership/shared.mdx). Transactions that access one or more consensus objects require consensus to sequence reads and writes, which means higher gas cost and latency compared to fastpath, but version management is simpler, especially for frequently accessed or multi-party objects.
 
-Transactions accessing multiple consensus objects or particularly popular objects may see increased latency due to contention. The trade-off is flexibility: multiple addresses can access the same object in a coordinated way without off-chain coordination.
+Transactions accessing multiple consensus objects or particularly popular objects may see increased latency due to contention. The trade-off is flexibility: multiple addresses can access the same object in a coordinated way without offchain coordination.
 
 You reference [shared](/guides/developer/objects/object-ownership/shared.mdx) transaction inputs by ID, the version the object was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise access version because consensus determines that during scheduling, one transaction's output version becomes the next transaction's input version. Immutably referenced shared objects participate in scheduling but don't increment the object's version.
 
@@ -62,7 +62,7 @@ Wrapped objects can be unwrapped, after which they are accessible by their ID ag
 
 ## Packages
 
-[Move packages](/guides/developer/packages/index.mdx) are also versioned and stored on-chain, but follow a different scheme because they are immutable from inception. Package transaction inputs are referenced by ID alone. They are always loaded at their latest version.
+[Move packages](/guides/developer/packages/index.mdx) are also versioned and stored onchain, but follow a different scheme because they are immutable from inception. Package transaction inputs are referenced by ID alone. They are always loaded at their latest version.
 
 ### User packages
 
@@ -98,9 +98,9 @@ Package manifest files include version fields in both the `[package]` section an
 | **Version input** | Must specify exact ID and version | Specify ID and shared-at version; consensus assigns access version |
 | **Latency** | Low | Higher |
 | **Gas cost** | Lower | Higher |
-| **Multi-party access** | Requires off-chain coordination | Handled on-chain |
+| **Multi-party access** | Requires offchain coordination | Handled onchain |
 | **Equivocation risk** | Yes, if same object used in two transactions | No |
-| **Best for** | Latency-sensitive, single-party, or off-chain-coordinated apps | Multi-party coordination, frequently shared objects |
+| **Best for** | Latency-sensitive, single-party, or offchain-coordinated apps | Multi-party coordination, frequently shared objects |
 
 ## Example: escrow swap
 

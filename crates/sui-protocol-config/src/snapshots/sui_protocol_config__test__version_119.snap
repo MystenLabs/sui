@@ -488,3 +488,5 @@ translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
 gasless_max_computation_units: 50000
 gasless_allowed_token_types: []
+gasless_max_unused_inputs: 1
+gasless_max_pure_input_bytes: 32

@@ -4,17 +4,17 @@ description: Details on how to use Nautilus with the reproducible build template
 keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
 ---
 
-[Nautilus](/guides/developer/nautilus/index.mdx) is a verifiable off-chain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/guides/developer/nautilus/community-dev-tools) while preserving trust on-chain through smart contract-based verification.
+[Nautilus](/guides/developer/nautilus/index.mdx) is a verifiable offchain compute layer on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) or a TEE marketplace like [Marlin Oyster](/guides/developer/nautilus/community-dev-tools) while preserving trust onchain through smart contract-based verification.
 
-The [Nautilus repo](https://github.com/MystenLabs/nautilus) provides scaffolding such as reproducible builds, signature formatting, and HTTPS traffic forwarding. This allows you to focus on implementing the off-chain computation logic inside the enclave.
+The [Nautilus repo](https://github.com/MystenLabs/nautilus) provides scaffolding such as reproducible builds, signature formatting, and HTTPS traffic forwarding. This allows you to focus on implementing the offchain computation logic inside the enclave.
 
-An on-chain template includes the minimal smart contract code required to register a Nautilus instance and its public key. 
+An onchain template includes the minimal smart contract code required to register a Nautilus instance and its public key. 
 
 :::important
 Nautilus is NOT just about running code in privacy-preserving manner in a TEE. Part of the overall value proposition is **on-chain verification** of computation integrity:
 
-1. PCRs (enclave measurements) must be registered and verified on-chain
-2. Every computation result could optionally be verified on-chain
+1. PCRs (enclave measurements) must be registered and verified onchain
+2. Every computation result could optionally be verified onchain
 :::
 
 ## Developer workflow 
@@ -25,15 +25,15 @@ To use Nautilus in your app:
 
 2. Deploy a Move smart contract that stores the expected platform configuration registers (PCRs) and allows updates by the contract deployer.
 
-3. Deploy the enclave instance on AWS and register it on-chain using its attestation document.
+3. Deploy the enclave instance on AWS and register it onchain using its attestation document.
 
-4. Upload signed responses from the registered enclave, verify them on-chain, and consume the results in your smart contract.
+4. Upload signed responses from the registered enclave, verify them onchain, and consume the results in your smart contract.
 
 This guide walks you through the following steps:
 
-1. Write and deploy a basic Nautilus off-chain instance using AWS Nitro Enclaves. The example instance runs a server that fetches weather data for a specific location.
+1. Write and deploy a basic Nautilus offchain instance using AWS Nitro Enclaves. The example instance runs a server that fetches weather data for a specific location.
 
-2. Write a Move smart contract that registers the enclave by verifying its attestation and public key, then verifies the Nautilus response (signature and payload) on-chain and mints an NFT with the location and temperature data.
+2. Write a Move smart contract that registers the enclave by verifying its attestation and public key, then verifies the Nautilus response (signature and payload) onchain and mints an NFT with the location and temperature data.
 
 :::info
 
@@ -181,8 +181,8 @@ View the contents of the Nautilus repository that you have downloaded or cloned.
 ```sh title="Repository structure"
 /move
   /enclave          # Utility functions for enclave config and public key registration
-  /weather-example  # Example on-chain logic using enclave functions
-  /twitter-example  # Alternative example on-chain logic
+  /weather-example  # Example onchain logic using enclave functions
+  /twitter-example  # Alternative example onchain logic
 
 /src
   /aws              # AWS boilerplate; does not require modification.
@@ -192,7 +192,7 @@ View the contents of the Nautilus repository that you have downloaded or cloned.
     /src
       /apps
         /weather-example    # Example directory. Replace with your own application logic as needed.
-          mod.rs            # Defines the process_data endpoint and related logic. Replace with your off-chain computation logic.
+          mod.rs            # Defines the process_data endpoint and related logic. Replace with your offchain computation logic.
           allowed_endpoints.yaml  # Lists all endpoints the enclave can access. By default, the enclave has no internet access. During configuration, this file generates code for traffic forwarding.
         /twitter-example    # Another example directory with a similar structure. 
     run.sh           # Runs the Rust server inside the enclave. Do not modify.
@@ -244,7 +244,7 @@ When the enclave starts, it generates a fresh key pair and exposes the following
 
 - `health_check`: Probes allowed domains inside the enclave. This logic is built into the template and does not require modification.
 
-- `get_attestation`: Returns a signed attestation document over the enclave public key. Use this during on-chain registration. This logic is built into the template and does not require modification.
+- `get_attestation`: Returns a signed attestation document over the enclave public key. Use this during onchain registration. This logic is built into the template and does not require modification.
 
 - `process_data`: Fetches weather data from an external API, signs it with the enclave key, and returns the result. You must implement this customizable logic.
 
@@ -343,7 +343,7 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
 
 Optionally, you can set up an application load balancer (ALB) for the EC2 instance with an SSL/TLS certificate from AWS Certificate Manager (ACM), and configure Amazon Route 53 for DNS routing. For more information, see the [ACM User Guide](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and the [ALB Guide](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html).
 
-###step Register the enclave on-chain
+###step Register the enclave onchain
 
 After finalizing the Rust code, the app administrator can register the enclave with the corresponding PCRs and public key.
 
@@ -394,13 +394,13 @@ $ echo $ENCLAVE_URL
 # The two steps that follow (update pcrs, register enclave) can be reused if enclave server is updated
 # =======
 
-# This calls the update_pcrs on-chain with the enclave cap and built PCRs, this can be reused to update PCRs if Rust server code is updated
+# This calls the update_pcrs onchain with the enclave cap and built PCRs, this can be reused to update PCRs if Rust server code is updated
 $ sui client call --function update_pcrs --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID 0x$PCR0 0x$PCR1 0x$PCR2
 
 # Optional, give it a name you like
 $ sui client call --function update_name --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID "weather enclave, updated 2025-05-13"
 
-# This script calls the get_attestation endpoint from your enclave url and uses it to call register_enclave on-chain to register the public key, resulting in the created enclave object
+# This script calls the get_attestation endpoint from your enclave url and uses it to call register_enclave onchain to register the public key, resulting in the created enclave object
 $ sh ../../register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
 # Record the created shared object ENCLAVE_OBJECT_ID as env var from register output
@@ -483,7 +483,7 @@ You can find the frontend code for the Twitter example [in this repository](http
 For non-production development, you can inject a private key instead of generating it inside the enclave and run the enclave in debug mode anywhere.
 
 1. Modify the code to [inject a deterministic private key](https://github.com/MystenLabs/nautilus/blob/main/src/nautilus-server/src/main.rs#L16) into the enclave. This allows you to run the server anywhere with the same private key without needing an AWS Nitro instance.
-2. Use `make run-debug` instead of `make run`. Debug mode produces all-zero PCR values. You can register the enclave on-chain with these all-zero PCRs once and reuse it for development without needing to update PCRs on-chain. 
+2. Use `make run-debug` instead of `make run`. Debug mode produces all-zero PCR values. You can register the enclave onchain with these all-zero PCRs once and reuse it for development without needing to update PCRs onchain. 
 
 :::danger
 

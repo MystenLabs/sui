@@ -61,7 +61,7 @@ Namespace (shared, singleton)
 └── Templates             ← derived from (namespace_id, TemplateKey)
 ```
 
-All objects use derived addresses (`sui::derived_object`), making them deterministic and queryable without on-chain lookups.
+All objects use derived addresses (`sui::derived_object`), making them deterministic and queryable without onchain lookups.
 
 ### Namespace
 
@@ -196,7 +196,7 @@ let auth = account::new_auth_as_object(&mut my_object_uid);
 
 ## Derived object addresses
 
-All PAS objects (Accounts, policies) use deterministic derived addresses. You can compute them off-chain:
+All PAS objects (Accounts, policies) use deterministic derived addresses. You can compute them offchain:
 
 ```move
 // Get the account address for an owner

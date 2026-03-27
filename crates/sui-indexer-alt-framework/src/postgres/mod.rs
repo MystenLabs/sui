@@ -161,7 +161,9 @@ pub mod tests {
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_ingestion_checkpoint, 0);
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.next_checkpoint, 0);
+        assert_eq!(indexer.next_sequential_checkpoint, None);
     }
 
     #[tokio::test]
@@ -183,7 +185,9 @@ pub mod tests {
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_ingestion_checkpoint, 11);
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.next_checkpoint, 11);
+        assert_eq!(indexer.next_sequential_checkpoint, None);
     }
 
     #[tokio::test]
@@ -217,11 +221,15 @@ pub mod tests {
             .concurrent_pipeline(ConcurrentPipeline2, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_ingestion_checkpoint, 21);
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.next_checkpoint, 21);
+        assert_eq!(indexer.next_sequential_checkpoint, None);
         indexer
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_ingestion_checkpoint, 11);
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.next_checkpoint, 11);
+        assert_eq!(indexer.next_sequential_checkpoint, None);
     }
 }

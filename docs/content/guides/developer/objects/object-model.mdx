@@ -4,7 +4,7 @@ description: Everything on the Sui blockchain is an object that has metadata, a 
 keywords: [ object model, objects on sui, sui move package, sui move object, move objects, move packages, objects, packages, referring to objects, object metadata, transaction-objects, transaction objects, relating objects and transactions ]
 ---
 
-An object is a fundamental unit of storage on the network. Every resource, asset, or piece of data on-chain is an object. Many other blockchains structure storage around accounts containing key-value stores. Sui's storage is structured around objects addressable by unique IDs on-chain.
+An object is a fundamental unit of storage on the network. Every resource, asset, or piece of data onchain is an object. Many other blockchains structure storage around accounts containing key-value stores. Sui's storage is structured around objects addressable by unique IDs onchain.
 
 Every object has the following components:
 
@@ -20,11 +20,11 @@ Every object has the following components:
 
 There are 3 types of objects:
 
-- **Sui object:** Every resource, asset, or piece of data. Sui objects are what transactions interact with, and are the building blocks for all on-chain state.
+- **Sui object:** Every resource, asset, or piece of data. Sui objects are what transactions interact with, and are the building blocks for all onchain state.
 
-- **Sui Move object:** An object defined using the Move language. To create a Move object, you must use `sui::object::new` to create a struct. This struct must have the `key` ability and include a field `id: UID` as the first defined field. The struct can also contain primitive types, such as integers and addresses, other objects, and non-object structs. This struct can be stored on-chain as a Sui object.
+- **Sui Move object:** An object defined using the Move language. To create a Move object, you must use `sui::object::new` to create a struct. This struct must have the `key` ability and include a field `id: UID` as the first defined field. The struct can also contain primitive types, such as integers and addresses, other objects, and non-object structs. This struct can be stored onchain as a Sui object.
 
-- **Sui Move package:** A smart contract that can manipulate other objects. Each Move package is a set of Sui Move bytecode modules. The modules within the package each have a name that's unique within the containing package. The combination of the package's on-chain ID and the name of a module uniquely identifies the module. When you publish smart contracts to Sui, a package is the unit of publishing. After you publish a package object, it is immutable and can never be changed or removed. A package object can depend on other package objects that were previously published to Sui.
+- **Sui Move package:** A smart contract that can manipulate other objects. Each Move package is a set of Sui Move bytecode modules. The modules within the package each have a name that's unique within the containing package. The combination of the package's onchain ID and the name of a module uniquely identifies the module. When you publish smart contracts to Sui, a package is the unit of publishing. After you publish a package object, it is immutable and can never be changed or removed. A package object can depend on other package objects that were previously published to Sui.
 
 ## Referring to objects 
 

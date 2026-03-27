@@ -4,7 +4,7 @@ description: Learn how zkLogin wallets work on Sui, explore examples like Enoki 
 keywords: [ zkLogin, zero-knowledge login, wallet, enoki, playtron, suiplay0x1, sponsored transactions, oauth, jwt, ephemeral key pair, dapp kit ]
 ---
 
-zkLogin wallets derive a Sui address from an OAuth credential rather than a traditional private key or recovery passphrase. The user signs in with a provider they already use (Google, Apple, Twitch, and others), and the wallet generates a Sui address tied to that credential. No seed phrase is created, and no persistent private key is stored by the OAuth provider. [zkLogin is a primitive native to Sui](/guides/developer/cryptography/zklogin-integration/zklogin), designed to remove the key management burden for users who are new to on-chain applications.
+zkLogin wallets derive a Sui address from an OAuth credential rather than a traditional private key or recovery passphrase. The user signs in with a provider they already use (Google, Apple, Twitch, and others), and the wallet generates a Sui address tied to that credential. No seed phrase is created, and no persistent private key is stored by the OAuth provider. [zkLogin is a primitive native to Sui](/guides/developer/cryptography/zklogin-integration/zklogin), designed to remove the key management burden for users who are new to onchain applications.
 
 ## How zkLogin wallets work
 
@@ -12,7 +12,7 @@ At a high level, a zkLogin wallet works as follows:
 
 1. The app generates an [ephemeral key pair](/guides/developer/cryptography/zklogin-integration/zklogin#how-zklogin-works), valid for a limited number of epochs.
 2. The user authenticates with an OAuth provider. The provider returns a [JSON Web Token (JWT)](/guides/developer/cryptography/zklogin-integration/zklogin#json-web-token-jwt) that contains a nonce derived from the ephemeral public key.
-3. The app or a proving service uses the JWT to generate a zero-knowledge proof (ZKP). The proof confirms the user holds a valid OAuth credential without revealing the credential on-chain.
+3. The app or a proving service uses the JWT to generate a zero-knowledge proof (ZKP). The proof confirms the user holds a valid OAuth credential without revealing the credential onchain.
 4. The app uses the JWT, a [per-user salt](/guides/developer/cryptography/zklogin-integration/zklogin#user-salt), and the issuer URL to [derive a stable Sui address](/guides/developer/cryptography/zklogin-integration/zklogin#address-definition) for the user. The same credential always produces the same address for a given app and salt.
 5. Transactions are signed with the [ephemeral private key](/guides/developer/cryptography/zklogin-integration/zklogin#ephemeral-private-key) and submitted alongside the ZKP. Validators verify the proof and execute the transaction.
 
