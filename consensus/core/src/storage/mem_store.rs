@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    ops::Bound::Included,
+    ops::Bound::{Excluded, Included},
 };
 
 use consensus_config::AuthorityIndex;
@@ -129,6 +129,36 @@ impl Store for MemStore {
             Included((author, Round::MAX, BlockDigest::MAX)),
         )) {
             refs.push(BlockRef::new(round, author, digest));
+        }
+        let results = self.read_blocks(refs.as_slice())?;
+        let mut blocks = vec![];
+        for (r, block) in refs.into_iter().zip(results.into_iter()) {
+            if let Some(block) = block {
+                blocks.push(block);
+            } else {
+                panic!("Block {:?} not found!", r);
+            }
+        }
+        Ok(blocks)
+    }
+
+    fn scan_blocks_by_author_in_range(
+        &self,
+        author: AuthorityIndex,
+        start_round: Round,
+        end_round: Round,
+        limit: usize,
+    ) -> ConsensusResult<Vec<VerifiedBlock>> {
+        let inner = self.inner.read();
+        let mut refs = vec![];
+        for &(author, round, digest) in inner.digests_by_authorities.range((
+            Included((author, start_round, BlockDigest::MIN)),
+            Excluded((author, end_round, BlockDigest::MIN)),
+        )) {
+            refs.push(BlockRef::new(round, author, digest));
+            if refs.len() >= limit {
+                break;
+            }
         }
         let results = self.read_blocks(refs.as_slice())?;
         let mut blocks = vec![];
