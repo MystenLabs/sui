@@ -21,15 +21,24 @@ const EUnsupportedVersion: u64 = 5;
 /// Verify a range proof over the Ristretto255 curve that all committed values are in the range [0, 2^bits).
 /// Currently, the only supported version is 0 which corresponds to the original Bulletproofs construction (https://eprint.iacr.org/2017/1066.pdf).
 /// In the future, we may add support for newer versions of Bulletproofs, such as Bulletproofs+ or Bulletproofs++.
-/// 
+///
 /// The format of the proof follows the specifications from https://github.com/dalek-cryptography/bulletproofs/blob/be67b6d5f5ad1c1f54d5511b52e6d645a1313d07/src/range_proof/mod.rs#L59-L76 serialized using BCS.
-/// 
+///
 /// The commitments are Pedersen commitments to the values used in the proof.
-/// 
+///
 /// The number of commitments times bits can be at most 256.
-public fun verify_bulletproofs_ristretto255(proof: &vector<u8>, bits: u8, commitments: &vector<Element<ristretto255::G>>, version: u8): bool {
+public fun verify_bulletproofs_ristretto255(
+    proof: &vector<u8>,
+    bits: u8,
+    commitments: &vector<Element<ristretto255::G>>,
+    version: u8,
+): bool {
     match (version) {
-        0 => verify_bulletproofs_ristretto255_internal(proof, bits, &commitments.map_ref!(|c| *c.bytes())),
+        0 => verify_bulletproofs_ristretto255_internal(
+            proof,
+            bits,
+            &commitments.map_ref!(|c| *c.bytes()),
+        ),
         _ => abort EUnsupportedVersion,
     }
 }

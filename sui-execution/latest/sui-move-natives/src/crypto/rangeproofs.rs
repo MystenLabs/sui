@@ -83,7 +83,7 @@ pub fn verify_bulletproofs_ristretto255(
         return Ok(NativeResult::err(context.gas_used(), INVALID_PROOF));
     }
 
-    let Ok(proof) = bcs::from_bytes::<RangeProof>(&proof_bytes) else {
+    let Ok(proof) = RangeProof::from_bytes(&proof_bytes) else {
         return Ok(NativeResult::err(context.gas_used(), INVALID_PROOF));
     };
 
