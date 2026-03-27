@@ -18,7 +18,7 @@ A Sui package consists of:
 
 For this reason, the `Move.lock` file should always be part of the package (don't add it to the `.gitignore` file). Use the [automated address management](/guides/developer/packages/automated-address-management.mdx) instead of the old `published-at` field in the manifest file.
 
-Optionally, you can add a `tests` directory to contain the tests for the package and an `examples` directory to provide use cases for the package. Neither directory is uploaded on-chain when you publish the package.
+Optionally, you can add a `tests` directory to contain the tests for the package and an `examples` directory to provide use cases for the package. Neither directory is uploaded onchain when you publish the package.
 
 ```
 sources/
@@ -83,7 +83,7 @@ module conventions::comments;
 // === Test Functions ===
 ```
 
-Here, public functions are the functions modifying state and view functions are often on-chain getters or off-chain helpers. The latter are not necessary because you can query objects to read their data. The `init` function should be the first function in the module, if it exists.
+Here, public functions are the functions modifying state and view functions are often onchain getters or offchain helpers. The latter are not necessary because you can query objects to read their data. The `init` function should be the first function in the module, if it exists.
 
 Try to sort your functions by their purpose and according to the user flow to improve readability. You can also use explicit function names like `admin_set_fees` to make it clear what the function does.
 

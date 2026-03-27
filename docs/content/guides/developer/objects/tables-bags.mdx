@@ -3,7 +3,7 @@ title: Table and Bag
 description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty.
 ---
 
-You can extend existing objects using [dynamic fields](/guides/developer/objects/dynamic-fields.mdx), and it is possible to delete an object that still has (potentially non-drop) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
+You can extend existing objects using [dynamic fields](/guides/developer/objects/dynamic-fields.mdx), and it is possible to delete an object that still has (potentially non-drop) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for onchain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
 
 This topic describes the collections table and bag, built using dynamic fields, but with additional support to count the number of entries they contain and protect against accidental deletion when non-empty.
 

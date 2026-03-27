@@ -58,7 +58,7 @@ Using coarse bucketing accomplishes two important goals:
 
 ## Storage units {#storage}
 
-Similarly, Sui transactions vary depending on the amount of new data written into on-chain storage. The variable storage units capture these differences by mapping the amount of bytes held in storage into storage units. The current Sui schedule is linear and maps each byte into 100 storage units. For example, a transaction that stores 25 bytes costs 2,500 storage units, while a transaction that stores 75 bytes costs 7,500 units.
+Similarly, Sui transactions vary depending on the amount of new data written into onchain storage. The variable storage units capture these differences by mapping the amount of bytes held in storage into storage units. The current Sui schedule is linear and maps each byte into 100 storage units. For example, a transaction that stores 25 bytes costs 2,500 storage units, while a transaction that stores 75 bytes costs 7,500 units.
 
 In the Sui [storage fund](/concepts/tokenomics#storage-fund) model, users pay up front for the cost of storing data in perpetuity but can also get a partial rebate on previously stored data if that data is deleted. Hence, the amount of storage fees that you pay can be split into a rebateable and non-rebateable amount. Initially, the rebateable amount equals 99% of the storage fees, while the non-rebateable amount equals the remaining 1%.
 
@@ -99,15 +99,15 @@ At the end of the epoch, the distribution of stake rewards across validators is 
 
 ## Storage gas prices {#storage-prices}
 
-The storage gas price $StoragePrice$ captures the costs of covering one unit of storage in perpetuity in SUI units. This price is set through governance proposals and is updated infrequently. The goal is to ensure Sui users pay for their use of on-chain data storage by depositing these fees into the storage fund and then redistributing these fees to future validators. In contrast to the computation gas price, storage prices are fixed and common for all transactions both within an epoch and across epochs until the storage price is updated.
+The storage gas price $StoragePrice$ captures the costs of covering one unit of storage in perpetuity in SUI units. This price is set through governance proposals and is updated infrequently. The goal is to ensure Sui users pay for their use of onchain data storage by depositing these fees into the storage fund and then redistributing these fees to future validators. In contrast to the computation gas price, storage prices are fixed and common for all transactions both within an epoch and across epochs until the storage price is updated.
 
-The $StoragePrice$ is set exogenously through the governance proposal with the goal of targeting the off-chain dollar cost of data storage. In the long run, as the costs of storage fall due to technological improvements and the dollar price of the SUI token evolves, governance proposals update the price in order to reflect the new dollar target price.
+The $StoragePrice$ is set exogenously through the governance proposal with the goal of targeting the offchain dollar cost of data storage. In the long run, as the costs of storage fall due to technological improvements and the dollar price of the SUI token evolves, governance proposals update the price in order to reflect the new dollar target price.
 
 ### Gas prices as a coordination mechanism {#coordination-mechanism}
 
 When you submit transactions with computation gas prices at or close to the current epoch $ReferencePrice$ and storage gas prices at the targeted $StoragePrice$, you have the best user experience. The Sui gas price mechanism provides you with credible reference prices for submitting your transactions. By incentivizing validators to elicit their true reservation prices and honor these quotes, you can credibly assume your transactions are processed in a timely manner.
 
-After Sui enables horizontal scaling, validators can add more workers as demand for on-chain activity scales. This increases their costs linearly at the same pace of network activity and lets them process more transactions at the same low gas prices. In cases of extreme network congestion where validators cannot scale fast enough, the tip presence provides a market-based congestion pricing mechanism that discourages further demand spikes by increasing the cost of transacting on the Sui platform.
+After Sui enables horizontal scaling, validators can add more workers as demand for onchain activity scales. This increases their costs linearly at the same pace of network activity and lets them process more transactions at the same low gas prices. In cases of extreme network congestion where validators cannot scale fast enough, the tip presence provides a market-based congestion pricing mechanism that discourages further demand spikes by increasing the cost of transacting on the Sui platform.
 
 In the long run, the Sui gas price mechanism creates incentives for validators to optimize their hardware and operations. Validators that invest in becoming more efficient are able to honor lower gas prices and obtain a stake reward boost. Sui validators are thus encouraged to innovate and improve the experience of end users.
 

@@ -106,7 +106,7 @@ To tamper with the object would require unlocking it, which consumes the key. Co
 	noComments
 />
 
-- The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx), so that it is still readable at its own ID off-chain.
+- The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx), so that it is still readable at its own ID offchain.
 - The corresponding `Key` type only stores its own `id`.
 
 The lock and key are made single-use by the signatures of the `lock` and `unlock` functions. `lock` accepts any object of type `T: store` (the `store` ability is necessary for storing it inside a `Locked<T>`), and creates both the `Locked<T>` and its corresponding `Key`:

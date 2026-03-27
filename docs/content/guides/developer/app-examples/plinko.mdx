@@ -1,12 +1,12 @@
 ---
 title: Plinko
 description: Learn Sui through an example implementation of the popular casino game, Plinko.
-keywords: [ example app, example app, on-chain randomness, enoki sponsorship, sponsored transactions, codegen, typescript codegen, example game, game app ]
+keywords: [ example app, example app, onchain randomness, enoki sponsorship, sponsored transactions, codegen, typescript codegen, example game, game app ]
 ---
 
-Plinko is an example implementation of the popular casino game. The Plinko game on Sui leverages on-chain randomness to ensure fairness and transparency. Players drop Plinko balls onto a pegged board, where they randomly fall into slots representing different multipliers. This document details the game's mechanics, on-chain randomness implementation, sponsored transactions through Enoki, and TypeScript integration using codegen.
+Plinko is an example implementation of the popular casino game. The Plinko game on Sui leverages onchain randomness to ensure fairness and transparency. Players drop Plinko balls onto a pegged board, where they randomly fall into slots representing different multipliers. This document details the game's mechanics, onchain randomness implementation, sponsored transactions through Enoki, and TypeScript integration using codegen.
 
-Building an on-chain Plinko game shares a lot of similarities with the [Coin Flip](./coin-flip.mdx) game and [Blackjack](./blackjack.mdx) game. For that reason, this example covers only the smart contracts (Move modules) and frontend logic.
+Building an onchain Plinko game shares a lot of similarities with the [Coin Flip](./coin-flip.mdx) game and [Blackjack](./blackjack.mdx) game. For that reason, this example covers only the smart contracts (Move modules) and frontend logic.
 
 <ImportContent source="prerequisites.mdx" mode="snippet" />
 
@@ -20,9 +20,9 @@ A version of the game is also deployed at [Mysten Plinko](https://plinko-poc.ver
 
 ## Gameplay
 
-The Plinko game, implemented through smart contracts on the Sui blockchain, leverages Sui's native on-chain randomness to ensure fairness and transparency. The game calculates the trace path for each ball using secure random values generated directly on-chain, determining the game's outcome based on the number of Plinko balls a player chooses to drop.
+The Plinko game, implemented through smart contracts on the Sui blockchain, leverages Sui's native onchain randomness to ensure fairness and transparency. The game calculates the trace path for each ball using secure random values generated directly onchain, determining the game's outcome based on the number of Plinko balls a player chooses to drop.
 
-The game mechanics involve a player starting a game by specifying the number of balls and staking a certain amount. The on-chain randomness is provided through Sui's Move randomness framework, which ensures each game's randomness is cryptographically secure and cannot be predicted or manipulated. The number of Plinko balls, chosen by the player, directly influences the game's complexity and potential payout, as each ball's final position is determined by the on-chain random values that dictate the ball's path through the pegged board.
+The game mechanics involve a player starting a game by specifying the number of balls and staking a certain amount. The onchain randomness is provided through Sui's Move randomness framework, which ensures each game's randomness is cryptographically secure and cannot be predicted or manipulated. The number of Plinko balls, chosen by the player, directly influences the game's complexity and potential payout, as each ball's final position is determined by the onchain random values that dictate the ball's path through the pegged board.
 
 ## Sequence diagram
 
@@ -65,7 +65,7 @@ sequenceDiagram
     BE->>+Enoki: POST /execute - Send digest + signature
     Note over Enoki: executeSponsoredTransaction()
     Enoki->>+Blockchain: Submit sponsored + signed transaction
-    Note over Blockchain: Executes plinko::finish_game,<br/>uses on-chain randomness to calculate outcome<br/>(ball trace paths, payments), emits GameFinished event
+    Note over Blockchain: Executes plinko::finish_game,<br/>uses onchain randomness to calculate outcome<br/>(ball trace paths, payments), emits GameFinished event
     Blockchain-->>-Enoki: Transaction result with trace
     Enoki-->>-BE: Returns execution digest
     BE->>BE: Extract trace from events
@@ -80,7 +80,7 @@ Follow the comments in each module's code to understand the logic each creates.
 
 ### `plinko::plinko`
 
-The `plinko::plinko` module combines various Sui blockchain features, such as coin handling, event emissions, on-chain randomness, and game logic, to create fair and transparent on-chain Plinko games.
+The `plinko::plinko` module combines various Sui blockchain features, such as coin handling, event emissions, onchain randomness, and game logic, to create fair and transparent onchain Plinko games.
 
 <details>
 <summary>
@@ -144,7 +144,7 @@ public fun start_game(coin: Coin<SUI>, house_data: &mut HouseData, ctx: &mut TxC
     id
 }
 
-/// finish_game Completes the game by calculating the outcome using on-chain randomness
+/// finish_game Completes the game by calculating the outcome using onchain randomness
 /// and transferring the funds to the player.
 /// It emits a GameFinished event with the game result and the trace path.
 entry fun finish_game(
@@ -339,7 +339,7 @@ Error handling is integral to the module, with specific codes indicating various
 #### Key functions
 
 - `start_game`: Initiates a new Plinko game session, accepting the player's stake coin, house data, and transaction context. Returns the game ID.
-- `finish_game`: Completes the game using on-chain randomness to calculate outcomes, traces the path each ball travels, and distributes the total winnings to the player. This is an entry function that takes the Random object from Sui's randomness framework.
+- `finish_game`: Completes the game using onchain randomness to calculate outcomes, traces the path each ball travels, and distributes the total winnings to the player. This is an entry function that takes the Random object from Sui's randomness framework.
 
 #### Accessors
 
@@ -822,7 +822,7 @@ import Matter, {
 } from "matter-js";
 ```
 
-The component receives ball paths (trace data) generated from on-chain randomness, emitted in the `GameFinished` event. Each path consists of 12 bytes per ball, where each byte determines whether the ball moves left (odd) or right (even) at each peg. `MatterSim` applies physics principles like gravity for natural ball descent while using custom forces to guide balls along their predetermined paths. The physics simulation provides smooth, realistic movement that matches the on-chain outcomes, creating an engaging visual experience where fairness is guaranteed by blockchain randomness.
+The component receives ball paths (trace data) generated from onchain randomness, emitted in the `GameFinished` event. Each path consists of 12 bytes per ball, where each byte determines whether the ball moves left (odd) or right (even) at each peg. `MatterSim` applies physics principles like gravity for natural ball descent while using custom forces to guide balls along their predetermined paths. The physics simulation provides smooth, realistic movement that matches the onchain outcomes, creating an engaging visual experience where fairness is guaranteed by blockchain randomness.
 
 ## Plinko settings component
 

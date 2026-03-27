@@ -4,7 +4,7 @@ description: Learn how to use the Move package manager system.
 keywords: [ move, move reference, package management, package manager, move packages, move package management ]
 ---
 
-A Move package is a collection of Move modules that you publish together as a single object on the Sui blockchain. Packages can depend on other packages and can be upgraded over time while maintaining their on-chain identity. The Move package manager helps you manage dependencies and publish packages to the network.
+A Move package is a collection of Move modules that you publish together as a single object on the Sui blockchain. Packages can depend on other packages and can be upgraded over time while maintaining their onchain identity. The Move package manager helps you manage dependencies and publish packages to the network.
 
 :::info
 
@@ -22,7 +22,7 @@ For example, the manifest might specify a dependency on a branch of a git reposi
 
 You should commit the `Move.lock` file to source control so that your collaborators, CI jobs, and users who want to verify the source code are all using the same dependency versions. The package system only repins the dependencies if your manifest file changes or if you run the `sui move update-deps` command. You should never edit `Move.lock` manually.
 
-The third file that the package management system uses is the publication file (`Published.toml`). Each time you publish your package, the package system updates this file with metadata about the publication, such as its on-chain address, upgrade capability address, and information about the compiler version used to build the package. The `Published.toml` file should be committed to source control.
+The third file that the package management system uses is the publication file (`Published.toml`). Each time you publish your package, the package system updates this file with metadata about the publication, such as its onchain address, upgrade capability address, and information about the compiler version used to build the package. The `Published.toml` file should be committed to source control.
 
 Finally, the `test-publish` command makes use of ephemeral publication files, typically named `Pub.<env-name>.toml`. These files contain information about temporary publications that are not intended to be shared, such as publications to local networks. These files should not be committed to source control.
 
@@ -51,7 +51,7 @@ use ascii::ascii;
 use ascii::char;
 ```
 
-When you build this package, the package system downloads and uses the source code for the ascii package. When published, the package links to the on-chain package object referenced from the ascii `Published.toml` file.
+When you build this package, the package system downloads and uses the source code for the ascii package. When published, the package links to the onchain package object referenced from the ascii `Published.toml` file.
 
 ### Dependency types
 
@@ -66,7 +66,7 @@ The remainder of this section describes these dependency types in detail.
 
 #### Move registry (`mvr`) dependencies (recommended)
 
-The preferred way to depend on another package is using the Move registry, called `mvr`. The [Move registry](https://moveregistry.com/) is an on-chain database linking published packages with their source code.
+The preferred way to depend on another package is using the Move registry, called `mvr`. The [Move registry](https://moveregistry.com/) is an onchain database linking published packages with their source code.
 
 To depend on a package with `mvr` name `@example/package`, add `example = { r.mvr = "@example/package" }` to your `[dependencies]` section.
 
@@ -315,7 +315,7 @@ Run `sui move update-deps` to repin all of your dependencies. This does not chan
 
 ### Publishing and upgrading
 
-During normal package publication and upgrades (`sui client publish` or `sui client upgrade`), the system rechecks that the dependencies are published on the given network and that the relevant chain IDs are consistent. The system also ensures that the additional on-chain linkage requirements are satisfied. For example, on-chain packages can have extra dependencies in their linkage that they do not actually use, so the system needs to include the on-chain linkages.
+During normal package publication and upgrades (`sui client publish` or `sui client upgrade`), the system rechecks that the dependencies are published on the given network and that the relevant chain IDs are consistent. The system also ensures that the additional onchain linkage requirements are satisfied. For example, onchain packages can have extra dependencies in their linkage that they do not actually use, so the system needs to include the onchain linkages.
 
 The system updates the publication file (`Published.toml`) to include the updated publication information. The publication file contains an entry for each environment that has a published version of the package. The entry contains the published address, original ID (the address of the first version of the package), the version number, the upgrade capability, and information about the build configuration that can be used for source validation. Here is an example publication file:
 

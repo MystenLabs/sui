@@ -12,7 +12,7 @@ zkLogin is designed with the following goals:
 - **Self-custody:** A zkLogin transaction requires user approval through the standard OAuth login process. The OAuth provider cannot transact on your behalf.
 - **Security:** zkLogin is a two-factor authentication scheme. Sending a transaction requires both a credential from a recent OAuth login and a salt not managed by the OAuth provider. An attacker who compromises an OAuth account cannot transact from your Sui address unless they also compromise the salt.
 - **Privacy:** Zero-knowledge proofs prevent third parties from linking a Sui address with its corresponding OAuth identifier.
-- **Optional verified identity:** You can opt in to verify the OAuth identifier used to derive a particular Sui address. This creates the foundation for a verifiable on-chain identity layer.
+- **Optional verified identity:** You can opt in to verify the OAuth identifier used to derive a particular Sui address. This creates the foundation for a verifiable onchain identity layer.
 - **Accessibility:** zkLogin integrates with other Sui primitives, such as sponsored transactions and multisig.
 - **Rigor:** The code for zkLogin has been independently [audited](https://github.com/sui-foundation/security-audits/blob/main/docs/zksecurity_zklogin-circuits.pdf) by two firms specializing in zero-knowledge. The public zkLogin ceremony for creating the common reference string included contributions from more than 100 participants.
 
@@ -22,7 +22,7 @@ The key differentiators that zkLogin brings to Sui are:
 
 1. Self-custodial without additional trust: Sui leverages the nonce field in JWT to commit to ephemeral public key, so no persistent private key management is required with any trusted parties. The JWK itself is an oracle agreed upon by the quorum of stakes by the validators without trusting any source of authority.
 
-1. Full privacy: Nothing is required to submit on-chain except the zero-knowledge proof and the ephemeral signature.
+1. Full privacy: Nothing is required to submit onchain except the zero-knowledge proof and the ephemeral signature.
 
 1. Compatible with existing identity providers: zkLogin is compatible with providers that adopt OpenID Connect, meaning you do no need to trust any intermediate identity issuers or verifiers other than the OAuth providers themselves.
 
@@ -87,7 +87,7 @@ The key claim used to derive your address, such as `sub` or `email`. Naturally, 
 
 3. `ext_eph_pk`: The byte representation of an ephemeral public key (`flag || eph_pk`). Size varies depending on the choice of the signature scheme (denoted by the flag, defined in [Signatures](/guides/developer/transactions/transaction-auth/auth-overview)).
 
-4. `user_salt`: A value introduced to unlink the OAuth identifier with the on-chain address.
+4. `user_salt`: A value introduced to unlink the OAuth identifier with the onchain address.
 
 5. `max_epoch`: The epoch at which the JWT expires. This is `u64` used in Sui.
 
@@ -103,7 +103,7 @@ The key claim used to derive your address, such as `sub` or `email`. Naturally, 
 
 2. Salt backup service: This is a backend service responsible for returning a salt per unique user. See [zkLogin Integration Guide](/guides/developer/cryptography/zklogin-integration/) for other strategies to maintain salt.
 
-3. Zero-knowledge proving service: This is a backend service responsible for generating zero-knowledge proofs based on JWT, JWT randomness, user salt, and max epoch. This proof is submitted on-chain along with the ephemeral signature for a zkLogin transaction.
+3. Zero-knowledge proving service: This is a backend service responsible for generating zero-knowledge proofs based on JWT, JWT randomness, user salt, and max epoch. This proof is submitted onchain along with the ephemeral signature for a zkLogin transaction.
 
 ## How zkLogin works {#how-zklogin-works}
 
@@ -113,9 +113,9 @@ At a high level, the zkLogin protocol works as follows:
 
 2. The wallet stores an ephemeral key pair, where the ephemeral public key is defined in the nonce. The ephemeral private key signs transactions for a short session. A Groth16 zero-knowledge proof is generated from the JWT, which conceals sensitive fields.
 
-3. A transaction is submitted on-chain with the ephemeral signature and the zero-knowledge proof. Sui authorities execute the transaction after verifying the ephemeral signature and the proof.
+3. A transaction is submitted onchain with the ephemeral signature and the zero-knowledge proof. Sui authorities execute the transaction after verifying the ephemeral signature and the proof.
 
-4. Instead of deriving the Sui address based on a public key, the zkLogin address is derived from `sub` (user identifier), `iss` (provider), `aud` (application), and `user_salt` (a value that unlinks the OAuth identifier from the on-chain address).
+4. Instead of deriving the Sui address based on a public key, the zkLogin address is derived from `sub` (user identifier), `iss` (provider), `aud` (application), and `user_salt` (a value that unlinks the OAuth identifier from the onchain address).
 
 ![zkLogin flow diagram](./images/zklogin-steps_zklogin_v1.png 'zkLogin steps 0-7')
 
@@ -163,7 +163,7 @@ The address is computed on the following inputs:
 
 1. `iss`: The OpenID Provider (OP) identifier.
 
-1. `user_salt`: A value introduced to unlink the OAuth identifier with the on-chain address.
+1. `user_salt`: A value introduced to unlink the OAuth identifier with the onchain address.
 
 Finally, Sui derives `zk_login_address = Blake2b_256(zk_login_flag, iss_L, iss, addr_seed)` where `addr_seed = Poseidon_BN254(kc_name_F, kc_value_F, aud_F, Poseidon_BN254(user_salt))`.
 
@@ -219,7 +219,7 @@ Obtaining the proof itself cannot create a valid zkLogin transaction because an 
 
 By default, there is no link between the OAuth subject identifier (for example, `sub`) and a Sui address. This is the purpose of the user salt. 
 
-The JWT is not published on-chain by default. The revealed values include `iss`, `aud` and `kid` so that the public input hash can be computed, any sensitive fields such as `sub` are used as private inputs when generating the proof.
+The JWT is not published onchain by default. The revealed values include `iss`, `aud` and `kid` so that the public input hash can be computed, any sensitive fields such as `sub` are used as private inputs when generating the proof.
 
 The ZK proving service and the salt service (if maintained) can link the user identity since the user salt and JWT are known, but the 2 services are stateless by design.
 
@@ -285,13 +285,13 @@ The ZK proving service and the salt service (if maintained) can link the user id
 
 - While providing social login with Web2 credentials for a Web3 wallet is not a new concept, the existing solutions have one or more of the trust assumptions:
 
-1. Trust a different network or parties to verify Web2 credentials other than the blockchain itself, usually involving a JWK oracle posted on-chain by a trusted party.
+1. Trust a different network or parties to verify Web2 credentials other than the blockchain itself, usually involving a JWK oracle posted onchain by a trusted party.
 1. Trust some parties to manage a persistent private key, whether it uses MPC, threshold cryptography, or secure enclaves.
-1. Rely on smart contracts to verify the JWT on-chain with revealing privacy fields, or to verify zero-knowledge proofs on-chain, which can be expensive.
+1. Rely on smart contracts to verify the JWT onchain with revealing privacy fields, or to verify zero-knowledge proofs onchain, which can be expensive.
 
 - Some of the existing deployed solutions rely on some of these assumptions. [Web3Auth](https://web3auth.io/) and [Auth0 social login](https://auth0.com/learn/social-login) requires deployment of custom OAuth verifiers to [Web3auth Auth Network](https://github.com/web3auth) nodes to verify the JWT. [Magic Wallet](https://wallet.magic.link/) and [Privy](https://privy.io/) also require custom OAuth identity issuer and verifiers to adopt the [DID standard](https://www.w3.org/TR/did-1.0/). All of the solutions still require persistent private key management, either with trusted parties like AWS through delegation, Shamir Secret Sharing, or MPC.
 
-#### How to verify a zkLogin signature off-chain?
+#### How to verify a zkLogin signature offchain?
 
 - The following options support a zkLogin signature over either transaction data or personal message using the JWK state on Sui and current epoch.
 
