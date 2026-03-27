@@ -1631,6 +1631,21 @@ mod test {
                 accum_read_stats.success_count > 0,
                 "expected at least one accumulator balance read"
             );
+
+            // Verify the coin reservation round-trip pattern works: an account achieving
+            // >= 2 successful withdrawals proves funds flowed back from its partner
+            // (first success drains seeded balance; second requires partner to have deposited).
+            let max_coin_res_successes = metrics.max_coin_reservation_success_count();
+            info!(
+                "coin reservation max successes per account: {}",
+                max_coin_res_successes
+            );
+            assert!(
+                max_coin_res_successes >= 2,
+                "expected at least one account to complete the coin reservation round-trip \
+                 (>= 2 withdrawals), but max was {}",
+                max_coin_res_successes
+            );
         } else {
             assert!(metrics_sum.success_count > 150);
             assert!(metrics_sum.permanent_failure_count > 50);
