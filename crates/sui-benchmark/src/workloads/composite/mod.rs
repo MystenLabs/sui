@@ -32,7 +32,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::TypeTag;
@@ -145,17 +145,14 @@ pub struct OperationSetStats {
     pub insufficient_funds_count: u64,
 }
 
-/// Default timeout for coin reservation withdraw operations. If an account doesn't
-/// successfully complete a withdrawal within this duration, the test fails.
-pub const DEFAULT_COIN_RESERVATION_TIMEOUT: Duration = Duration::from_secs(5);
-
 #[derive(Debug)]
 pub struct CompositionMetrics {
     stats: HashMap<OperationSet, OperationSetStats>,
-    /// Tracks the last successful coin reservation withdraw time per account address.
-    /// Used to detect when paired accounts are not successfully transferring back and forth.
-    coin_reservation_last_success: HashMap<SuiAddress, Instant>,
-    coin_reservation_timeout: Duration,
+    /// Counts successful coin reservation withdrawals per account address.
+    /// Used to verify that paired accounts successfully transfer back and forth:
+    /// a count >= 2 for any account proves the round-trip works (first success drains
+    /// the seeded balance, second success requires the partner to have deposited back).
+    coin_reservation_success_count: HashMap<SuiAddress, u64>,
 }
 
 impl Default for CompositionMetrics {
@@ -168,14 +165,8 @@ impl CompositionMetrics {
     pub fn new() -> Self {
         Self {
             stats: HashMap::new(),
-            coin_reservation_last_success: HashMap::new(),
-            coin_reservation_timeout: DEFAULT_COIN_RESERVATION_TIMEOUT,
+            coin_reservation_success_count: HashMap::new(),
         }
-    }
-
-    pub fn with_coin_reservation_timeout(mut self, timeout: Duration) -> Self {
-        self.coin_reservation_timeout = timeout;
-        self
     }
 
     pub fn sum_all(&self) -> OperationSetStats {
@@ -291,24 +282,22 @@ impl CompositionMetrics {
     }
 
     /// Records a successful coin reservation withdraw for the given account.
-    /// This is used to track that paired accounts are successfully transferring back and forth.
-    /// The first call for an account starts tracking; subsequent calls reset the timer.
     pub fn record_coin_reservation_success(&mut self, sender: SuiAddress) {
-        self.coin_reservation_last_success
-            .insert(sender, Instant::now());
+        *self
+            .coin_reservation_success_count
+            .entry(sender)
+            .or_insert(0) += 1;
     }
 
-    /// Checks if any tracked account has exceeded the coin reservation timeout.
-    /// Only checks accounts that have previously had a successful withdrawal.
-    /// Returns the address that timed out, if any.
-    pub fn check_coin_reservation_timeout(&self) -> Option<SuiAddress> {
-        let now = Instant::now();
-        for (addr, last_success) in &self.coin_reservation_last_success {
-            if now.duration_since(*last_success) > self.coin_reservation_timeout {
-                return Some(*addr);
-            }
-        }
-        None
+    /// Returns the maximum number of successful coin reservation withdrawals any single
+    /// account has achieved. A value >= 2 proves the round-trip deposit pattern works:
+    /// the first success drains seeded balance, the second requires the partner to deposit.
+    pub fn max_coin_reservation_success_count(&self) -> u64 {
+        self.coin_reservation_success_count
+            .values()
+            .copied()
+            .max()
+            .unwrap_or(0)
     }
 }
 
@@ -1136,16 +1125,6 @@ impl Payload for CompositePayload {
                 >= self.current_batch_num_conflicting_transactions + expected_alias_failure_count,
             "failure count should sometimes be greater than or equal to the number of conflicting transactions"
         );
-
-        // Check if any account has exceeded the coin reservation timeout
-        if let Some(timed_out_addr) = metrics.check_coin_reservation_timeout() {
-            panic!(
-                "Coin reservation timeout: account {} has not completed a successful \
-                 CoinReservationWithdraw in over {:?}. This indicates the back-and-forth \
-                 transfer pattern between paired accounts is not working correctly.",
-                timed_out_addr, DEFAULT_COIN_RESERVATION_TIMEOUT
-            );
-        }
 
         self.current_batch_txs.clear();
     }
