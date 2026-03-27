@@ -6,6 +6,33 @@ keywords: [ERC-721, NFT, non-fungible token, digital collectibles, tokenized ass
 ---
 
 On Sui, every object is unique and has an owner, properties that other blockchains like Ethereum require a dedicated standard such as [ERC-721](https://erc721.org/) to achieve.
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: '#298DFF'
+    primaryTextColor: '#FFFFFF'
+    primaryBorderColor: '#FFFFFF'
+    secondaryColor: '#6C7584'
+    tertiaryColor: '#FFFFFF'
+    lineColor: '#298DFF'
+    background: '#FFFFFF'
+    mainBkg: '#000000'
+    secondBkg: '#6C7584'
+    fontSize: '14px'
+    fontFamily: 'Inter, sans-serif'
+---
+sequenceDiagram
+    participant C as Caller
+    participant S as Smart contract
+    participant O as Off-chain storage
+    C->>S: NFT ID
+    S->>O: Fetch metadata
+    O-->>S: name value
+    S-->>C: name value
+```
  
 Imagine you create a Rare Reef Shark NFT collection on Sui and another blockchain that is not object based. To get an attribute like the shark's name on the other blockchain, you would need to interact with the smart contract that created the NFT to get that information (typically from off-chain storage) using the NFT ID. On Sui, the name attribute is a field on the object that defines the NFT itself. This construct provides a more direct process for accessing NFT metadata because the smart contract that needs the information can return the name directly from the object.
 
