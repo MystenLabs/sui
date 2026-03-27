@@ -416,10 +416,8 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     ) -> ConsensusResult<Vec<Bytes>> {
         fail_point_async!("consensus-rpc-response");
 
-        if block_refs.is_empty() {
-            if breadth_first || highest_accepted_rounds.is_empty() {
-                return Err(ConsensusError::InvalidFetchBlocksRequest("When no block refs are provided, highest_accepted_rounds must be provided and breadth_first must be false".to_string()));
-            }
+        if block_refs.is_empty() && (breadth_first || highest_accepted_rounds.is_empty()) {
+            return Err(ConsensusError::InvalidFetchBlocksRequest("When no block refs are provided, highest_accepted_rounds must be provided and breadth_first must be false".to_string()));
         }
         if !highest_accepted_rounds.is_empty()
             && highest_accepted_rounds.len() != self.context.committee.size()
@@ -431,11 +429,12 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         }
 
         // Finds the suitable limit of # of blocks to return.
-        let max_response_num_blocks = if breadth_first {
-            self.context.parameters.max_blocks_per_sync
-        } else {
-            self.context.parameters.max_blocks_per_fetch
-        };
+        let max_response_num_blocks =
+            if !highest_accepted_rounds.is_empty() && !block_refs.is_empty() {
+                self.context.parameters.max_blocks_per_sync
+            } else {
+                self.context.parameters.max_blocks_per_fetch
+            };
         if block_refs.len() > max_response_num_blocks {
             block_refs.truncate(max_response_num_blocks);
         }
@@ -1359,7 +1358,7 @@ mod tests {
             .collect();
         assert_eq!(blocks.len(), context.parameters.max_blocks_per_fetch);
         // Blocks should be from all authorities, within the expected round range.
-        for (block_ref, _) in &blocks {
+        for block_ref in blocks.keys() {
             let accepted = highest_accepted_rounds[block_ref.author];
             assert!(block_ref.round > accepted);
         }

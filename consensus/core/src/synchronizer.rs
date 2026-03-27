@@ -33,6 +33,7 @@ use crate::{
     BlockAPI,
     block::{ExtendedBlock, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
+    commit::CommitIndex,
     commit_vote_monitor::CommitVoteMonitor,
     context::Context,
     dag_state::DagState,
@@ -56,6 +57,12 @@ const MAX_AUTHORITIES_TO_FETCH_PER_BLOCK: usize = 2;
 
 // Max number of peers to request missing blocks concurrently in periodic sync.
 const MAX_PERIODIC_SYNC_PEERS: usize = 3;
+
+/// How long commit must be stalled before periodic sync kicks in as fallback.
+const COMMIT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How many commits must advance beyond the stall point to consider progress is made.
+const COMMIT_PROGRESS_RECOVERY: u32 = 10;
 
 struct BlocksGuard {
     map: Arc<InflightBlocksMap>,
@@ -250,6 +257,9 @@ pub(crate) struct Synchronizer<
     round_tracker: Arc<RwLock<RoundTracker>>,
     inflight_blocks_map: Arc<InflightBlocksMap>,
     commands_sender: Sender<Command>,
+    last_changed_commit_index: CommitIndex,
+    last_commit_change_time: Instant,
+    commit_sync_failover: bool,
 }
 
 impl<V, D, VC, OC> Synchronizer<V, D, VC, OC>
@@ -325,6 +335,9 @@ where
                 commands_sender: commands_sender_clone,
                 dag_state,
                 round_tracker,
+                last_changed_commit_index: 0,
+                last_commit_change_time: Instant::now(),
+                commit_sync_failover: false,
             };
             s.run().await;
         }));
@@ -919,9 +932,11 @@ where
         let dag_state = self.dag_state.clone();
         let round_tracker = self.round_tracker.clone();
 
-        // If we are commit lagging, then we don't want to enable the scheduler. As the node is sycnhronizing via the commit syncer, the certified commits
-        // will bring all the necessary blocks to run the commits. As the commits are certified, we are guaranteed that all the necessary causal history is present.
-        if self.is_commit_lagging() {
+        // If commit is lagging and commit sync is making progress, skip periodic sync.
+        // Commit syncer fetches certified commits with all necessary causal history.
+        // If commit sync stalls (no progress for COMMIT_PROGRESS_TIMEOUT), periodic sync
+        // resumes as a fallback.
+        if !self.should_run_periodic_sync() {
             return Ok(());
         }
 
@@ -997,12 +1012,57 @@ where
         Ok(())
     }
 
-    fn is_commit_lagging(&self) -> bool {
-        let last_commit_index = self.dag_state.read().last_commit_index();
+    fn should_run_periodic_sync(&mut self) -> bool {
+        let current_commit_index = self.dag_state.read().last_commit_index();
         let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
-        let commit_threshold = last_commit_index
+        let commit_threshold = current_commit_index
             + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER;
-        commit_threshold < quorum_commit_index
+        let now = Instant::now();
+
+        // Commit is not lagging.
+        if quorum_commit_index <= commit_threshold {
+            // Reset last commit state.
+            self.last_changed_commit_index = current_commit_index;
+            self.last_commit_change_time = now;
+            self.commit_sync_failover = false;
+            // Run periodic sync.
+            return true;
+        }
+        // Commit is lagging.
+
+        // When in commit sync failover, check if enough progress has been made.
+        if self.commit_sync_failover {
+            if current_commit_index <= self.last_changed_commit_index + COMMIT_PROGRESS_RECOVERY {
+                // Not enough progress has been made yet. Keep running periodic sync.
+                // Do not update last commit state yet.
+                // Run periodic sync.
+                return true;
+            } else {
+                // Enough progress has been made. Disable commit sync failover and reset last commit state.
+                self.last_changed_commit_index = current_commit_index;
+                self.last_commit_change_time = now;
+                self.commit_sync_failover = false;
+                // Skip periodic sync because of commit lag.
+                return false;
+            }
+        }
+
+        // The node is commit lagging and not in commit sync failover yet.
+        if current_commit_index == self.last_changed_commit_index {
+            // Enter commit sync failover if not enough progress has been made.
+            if now.duration_since(self.last_commit_change_time) >= COMMIT_PROGRESS_TIMEOUT {
+                self.commit_sync_failover = true;
+                // Run periodic sync.
+                return true;
+            }
+            // Do not update last commit state when commit index is not changing.
+        } else {
+            // Update last commit state.
+            self.last_changed_commit_index = current_commit_index;
+            self.last_commit_change_time = now;
+        }
+
+        false
     }
 
     /// Fetches the `missing_blocks` from peers. Requests the same number of authorities with missing blocks from each peer.
@@ -1221,7 +1281,8 @@ mod tests {
         network::{BlockStream, ObserverNetworkClient, SynchronizerClient, ValidatorNetworkClient},
         storage::mem_store::MemStore,
         synchronizer::{
-            FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT, InflightBlocksMap, Synchronizer,
+            COMMIT_PROGRESS_RECOVERY, COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY,
+            FETCH_REQUEST_TIMEOUT, InflightBlocksMap, Synchronizer,
         },
     };
     use crate::{
@@ -1810,6 +1871,222 @@ mod tests {
         expected_blocks.sort_by_key(|block| block.reference());
 
         assert_eq!(added_blocks, expected_blocks);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn synchronizer_periodic_sync_resumes_when_commit_sync_stalled() {
+        // GIVEN
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let mock_client = Arc::new(MockNetworkClient::default());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+
+        // AND create missing blocks to fetch
+        let sync_missing_block_round_threshold = context.parameters.commit_sync_batch_size;
+        let stub_blocks = (sync_missing_block_round_threshold * 2
+            ..sync_missing_block_round_threshold * 3)
+            .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
+            .collect::<Vec<_>>();
+        let missing_blocks = stub_blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<BTreeSet<_>>();
+        core_dispatcher
+            .stub_missing_blocks(missing_blocks.clone())
+            .await;
+
+        // AND stub the fetch responses for authority 1 & 2
+        let mut expected_blocks = stub_blocks
+            .iter()
+            .take(context.parameters.max_blocks_per_sync)
+            .cloned()
+            .collect::<Vec<_>>();
+        mock_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(1),
+                Some(FETCH_REQUEST_TIMEOUT),
+            )
+            .await;
+        mock_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(2),
+                None,
+            )
+            .await;
+
+        // AND create commit lag by observing high commit votes
+        let round = context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER * 2;
+        let commit_index: CommitIndex = round - 1;
+        let blocks = (0..4)
+            .map(|authority| {
+                let commit_votes = vec![CommitVote::new(commit_index, CommitDigest::MIN)];
+                let block = TestBlock::new(round, authority)
+                    .set_commit_votes(commit_votes)
+                    .build();
+                VerifiedBlock::new_for_test(block)
+            })
+            .collect::<Vec<_>>();
+        for block in blocks {
+            commit_vote_monitor.observe_block(&block);
+        }
+
+        // WHEN start the synchronizer
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
+        let _handle = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            block_verifier,
+            transaction_certifier,
+            round_tracker,
+            dag_state.clone(),
+            false,
+        );
+
+        // Wait past COMMIT_PROGRESS_TIMEOUT. The missing blocks stub gets consumed each
+        // 200ms cycle by get_missing_blocks(), so re-stub after the timeout elapses.
+        sleep(COMMIT_PROGRESS_TIMEOUT + Duration::from_millis(100)).await;
+        // No blocks should have been fetched yet (periodic sync was being skipped).
+        let added_blocks = core_dispatcher.get_add_blocks().await;
+        assert_eq!(added_blocks, vec![]);
+
+        // Now re-stub missing blocks and fetch responses for the next sync cycle.
+        core_dispatcher
+            .stub_missing_blocks(missing_blocks.clone())
+            .await;
+        mock_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(1),
+                Some(FETCH_REQUEST_TIMEOUT),
+            )
+            .await;
+        mock_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(2),
+                None,
+            )
+            .await;
+
+        // Wait for the fetch task to complete
+        sleep(2 * FETCH_REQUEST_TIMEOUT).await;
+
+        let mut added_blocks = core_dispatcher.get_add_blocks().await;
+        assert!(
+            !added_blocks.is_empty(),
+            "Expected periodic sync to resume after commit sync stall"
+        );
+        added_blocks.sort_by_key(|block| block.reference());
+        expected_blocks.sort_by_key(|block| block.reference());
+        assert_eq!(added_blocks, expected_blocks);
+
+        // AND advance commit index by a small amount (< COMMIT_PROGRESS_RECOVERY).
+        // Periodic sync should still run because failover is active and not enough progress.
+        core_dispatcher.get_add_blocks().await;
+        {
+            let current = dag_state.read().last_commit_index();
+            let mut d = dag_state.write();
+            for index in (current + 1)..=(current + COMMIT_PROGRESS_RECOVERY / 2) {
+                let commit =
+                    TrustedCommit::new_for_test(index, CommitDigest::MIN, 0, BlockRef::MIN, vec![]);
+                d.add_commit(commit);
+            }
+        }
+
+        // Re-stub and verify periodic sync still runs during failover with partial progress.
+        core_dispatcher
+            .stub_missing_blocks(missing_blocks.clone())
+            .await;
+        mock_client
+            .stub_fetch_blocks(
+                stub_blocks
+                    .iter()
+                    .take(context.parameters.max_blocks_per_sync)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                AuthorityIndex::new_for_test(1),
+                Some(FETCH_REQUEST_TIMEOUT),
+            )
+            .await;
+        mock_client
+            .stub_fetch_blocks(
+                stub_blocks
+                    .iter()
+                    .take(context.parameters.max_blocks_per_sync)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                AuthorityIndex::new_for_test(2),
+                None,
+            )
+            .await;
+
+        sleep(2 * FETCH_REQUEST_TIMEOUT).await;
+        let added_blocks = core_dispatcher.get_add_blocks().await;
+        assert!(
+            !added_blocks.is_empty(),
+            "Expected periodic sync to keep running during failover with partial progress"
+        );
+
+        // AND advance commit index enough to exceed COMMIT_PROGRESS_RECOVERY from stall start.
+        // This should resolve the failover and skip periodic sync again.
+        core_dispatcher.get_add_blocks().await;
+        {
+            let current = dag_state.read().last_commit_index();
+            let mut d = dag_state.write();
+            // Advance well past the recovery threshold.
+            for index in (current + 1)..=(current + COMMIT_PROGRESS_RECOVERY) {
+                let commit =
+                    TrustedCommit::new_for_test(index, CommitDigest::MIN, 0, BlockRef::MIN, vec![]);
+                d.add_commit(commit);
+            }
+        }
+
+        // Re-stub missing blocks and fetch response for another round of checking
+        core_dispatcher
+            .stub_missing_blocks(missing_blocks.clone())
+            .await;
+        mock_client
+            .stub_fetch_blocks(
+                stub_blocks
+                    .iter()
+                    .take(context.parameters.max_blocks_per_sync)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                AuthorityIndex::new_for_test(2),
+                None,
+            )
+            .await;
+
+        // Wait for a sync cycle — periodic sync should be skipped again since stall resolved
+        // but commit is still lagging
+        sleep(2 * FETCH_REQUEST_TIMEOUT).await;
+        let added_blocks = core_dispatcher.get_add_blocks().await;
+        assert_eq!(
+            added_blocks,
+            vec![],
+            "Expected periodic sync to be skipped after stall resolved"
+        );
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
