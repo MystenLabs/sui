@@ -38,55 +38,26 @@ $ cd setup && npm install
 <ImportContent source="initialize-sui-client-cli.mdx" mode="snippet" />
 
 ## Publishing
-
+ 
 You can publish the contracts manually using the Sui CLI, or use the provided bash script to automatically deploy and populate most of the `.env` fields.
-
-The `.env.template` file defines all required variables. Use the following as a reference:
-
-```
-SUI_NETWORK = rpc endpoint of the network of your choice | auto filled by publish script
-ASSET_TOKENIZATION_PACKAGE_ID = Created by publishing `asset_tokenization` package | auto filled by publish script
-REGISTRY = Created by publishing `asset_tokenization` package | auto filled by publish script
-
-TEMPLATE_PACKAGE_ID = Created by publishing `template` package
-ASSET_CAP_ID = Created by publishing `template` package
-ASSET_METADATA_ID = Created by publishing `template` package
-ASSET_PUBLISHER = Created by publishing `template` package
-
-PROTECTED_TP = Created by calling `setup_tp` function
-TRANSFER_POLICY = Created by calling `setup_tp` function
-
-OWNER_MNEMONIC_PHRASE = your mnemonic | can be exported locally in the terminal before publishing
-BUYER_MNEMONIC_PHRASE = buyer's mnemonic | can be exported locally in the terminal before publishing
-TARGET_KIOSK = kiosk id
-BUYER_KIOSK = kiosk id
-
-TOKENIZED_ASSET = tokenized asset id (created by minting)
-FT1 = tokenized asset id (to be joined)
-FT2 = tokenized asset id (to be joined)
-```
-
-For more details, see the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
+ 
+The [`setup/.env.template`](https://github.com/MystenLabs/asset-tokenization/blob/main/setup/.env.template) file defines all required variables. For more details, see the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
 
 ### Publishing packages
-
+ 
 Publish both packages in order: `asset_tokenization` first, then `template`.
-
+ 
 <ImportContent source="info-gas-budget.mdx" mode="snippet" />
-
+ 
 #### `asset_tokenization` package
  
-You can publish the `asset_tokenization` package manually or automatically using the provided bash script.
+You can publish the `asset_tokenization` package manually with `sui client publish` or automatically using the provided bash script (`npm run publish-asset-tokenization`), which also populates `SUI_NETWORK`, `ASSET_TOKENIZATION_PACKAGE_ID`, and `REGISTRY` in your `.env` file.
  
-##### Manually
- 
-In a terminal or console at the `move/asset_tokenization` directory of the project, run:
+To publish manually, run the following from the `move/asset_tokenization` directory:
  
 ```sh
 $ sui client publish --gas-budget <GAS-BUDGET>
 ```
- 
-For the gas budget, use a standard value such as `20000000`.
  
 The package should successfully deploy, and you then see:
  
@@ -98,33 +69,19 @@ BUILDING asset_tokenization
 Successfully verified dependencies on-chain against source.
 ```
  
-Store the `package ID` and `registry ID` from the created objects in your `.env` file. Then modify the `Move.toml` file: under the `[addresses]` section, replace `0x0` with the same `package ID`. Optionally, under the `[package]` section, add `published-at = <package ID>` (this step is not needed if you see a `Move.lock` file after running `sui client publish`).
- 
-##### Automatically
- 
-The fields that are automatically filled are: `SUI_NETWORK`, `ASSET_TOKENIZATION_PACKAGE_ID`, and `REGISTRY`.
- 
-```sh
-$ npm run publish-asset-tokenization
-```
- 
-After publishing, edit the `Move.toml` file as described in the manual flow above.
+Store the `package ID` and `registry ID` from the created objects in your `.env` file. Then modify `Move.toml`: under the `[addresses]` section, replace `0x0` with the same `package ID`. Optionally, under the `[package]` section, add `published-at = <package ID>` (this step is not needed if you see a `Move.lock` file after running `sui client publish`).
  
 For more details, see the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
  
 #### `template` package
  
-You can publish the `template` package manually or automatically through the WASM library.
+You can publish the `template` package manually with `sui client publish` or automatically through the WASM library using `npm run publish-template`. Before running the automatic flow, ensure the `asset_tokenization` package address is set in the `[addresses]` section of `asset_tokenization/Move.toml` and matches the original deployment. If no `Move.lock` file exists, also populate the `published-at` field with the latest package deployment address.
  
-##### Manually
- 
-In a terminal or console at the `move/template` directory of the project, run:
+To publish manually, run the following from the `move/template` directory:
  
 ```sh
 $ sui client publish --gas-budget <GAS-BUDGET>
 ```
- 
-For the gas budget, use a standard value such as `20000000`.
  
 The package should successfully deploy, and you then see:
  
@@ -138,20 +95,6 @@ Successfully verified dependencies on-chain against source.
 ```
  
 Store the `package ID`, `asset metadata ID`, `asset cap ID`, and `Publisher ID` from the created objects in your `.env` file.
- 
-##### Automatically
- 
-The automatic deployment for the `template` package publishes a new asset through the WASM library. Before running:
- 
-- Ensure that the `asset_tokenization` package address is set in the `[addresses]` section of `asset_tokenization/Move.toml` and matches the original deployment.
-- If a `Move.lock` file exists after running `sui client publish`, proceed to the next step. If not, ensure the `asset_tokenization/Move.toml` file has its `published-at` field populated with the address of the latest package deployment.
-- Make any changes to the template fields by updating the input parameters of the `publishNewAsset` function.
- 
-```sh
-$ npm run publish-template
-```
- 
-Store the `Template Package ID`, `asset metadata ID`, `asset cap ID`, and `publisher ID` from the created objects in your `.env` file.
  
 For more details, see the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
  
@@ -293,4 +236,3 @@ The `modules` array contains 2 elements: the edited template module and the gene
 ## TypeScript commands
  
 After publishing, use the TypeScript setup scripts to interact with your tokenized asset. For a full reference of available commands, see the [Asset Tokenization TypeScript CLI Reference](/references/ts-asset-tokenization).
- 
