@@ -151,6 +151,7 @@ fn decode_(context: &mut Context, buffer: &mut Vec<u8>, chars: Vec<char>) {
                                 | hex::FromHexError::InvalidStringLength,
                             ) => {
                                 // one or both chars are multi-byte UTF-8
+                                debug_assert!(!d0.is_ascii_hexdigit() || !d1.is_ascii_hexdigit());
                                 if !d0.is_ascii_hexdigit() {
                                     context.char_error(cur + 2, cur + 2, d0);
                                 }
