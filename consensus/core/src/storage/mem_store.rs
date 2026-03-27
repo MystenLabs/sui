@@ -122,24 +122,7 @@ impl Store for MemStore {
         author: AuthorityIndex,
         start_round: Round,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
-        let inner = self.inner.read();
-        let mut refs = vec![];
-        for &(author, round, digest) in inner.digests_by_authorities.range((
-            Included((author, start_round, BlockDigest::MIN)),
-            Included((author, Round::MAX, BlockDigest::MAX)),
-        )) {
-            refs.push(BlockRef::new(round, author, digest));
-        }
-        let results = self.read_blocks(refs.as_slice())?;
-        let mut blocks = vec![];
-        for (r, block) in refs.into_iter().zip(results.into_iter()) {
-            if let Some(block) = block {
-                blocks.push(block);
-            } else {
-                panic!("Block {:?} not found!", r);
-            }
-        }
-        Ok(blocks)
+        self.scan_blocks_by_author_in_range(author, start_round, Round::MAX, usize::MAX)
     }
 
     fn scan_blocks_by_author_in_range(

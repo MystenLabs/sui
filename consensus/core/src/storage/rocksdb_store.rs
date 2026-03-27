@@ -255,22 +255,7 @@ impl Store for RocksDBStore {
         author: AuthorityIndex,
         start_round: Round,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
-        let mut refs = vec![];
-        for kv in self.digests_by_authorities.safe_range_iter((
-            Included((author, start_round, BlockDigest::MIN)),
-            Included((author, Round::MAX, BlockDigest::MAX)),
-        )) {
-            let ((author, round, digest), _) = kv?;
-            refs.push(BlockRef::new(round, author, digest));
-        }
-        let results = self.read_blocks(refs.as_slice())?;
-        let mut blocks = Vec::with_capacity(refs.len());
-        for (r, block) in refs.into_iter().zip(results.into_iter()) {
-            blocks.push(
-                block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
-            );
-        }
-        Ok(blocks)
+        self.scan_blocks_by_author_in_range(author, start_round, Round::MAX, usize::MAX)
     }
 
     fn scan_blocks_by_author_in_range(

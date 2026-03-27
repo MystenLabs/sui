@@ -61,9 +61,6 @@ const MAX_PERIODIC_SYNC_PEERS: usize = 3;
 /// How long commit must be stalled before periodic sync kicks in as fallback.
 const COMMIT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// How many commits must advance beyond the stall point to consider progress is made.
-const COMMIT_PROGRESS_RECOVERY: u32 = 10;
-
 struct BlocksGuard {
     map: Arc<InflightBlocksMap>,
     block_refs: BTreeSet<BlockRef>,
@@ -928,123 +925,106 @@ where
         let commands_sender = self.commands_sender.clone();
         let dag_state = self.dag_state.clone();
         let round_tracker = self.round_tracker.clone();
-        let highest_accepted_rounds =
-            Self::get_highest_accepted_rounds(dag_state.clone(), &context);
 
         let mut missing_blocks = self
             .core_dispatcher
             .get_missing_blocks()
             .await
             .map_err(|_err| ConsensusError::Shutdown)?;
-        // Calling `should_run_periodic_sync()` have updated the `commit_sync_failover` flag.
         if self.commit_sync_failover {
-            // Filter missing blocks to those that cannot be fetched unless included in fetch request.
-            // When a fetch request has no missing block but has highest_accepted_rounds, missing blocks
-            // higher than the highest accepted rounds can still be fetched.
+            // Keep missing blocks to those that must be included in fetch request.
+            // Filtered out missing blocks that will eventually be fetched with highest accepted rounds.
+            let highest_accepted_rounds =
+                Self::get_highest_accepted_rounds(dag_state.clone(), &context);
             missing_blocks
                 .retain(|block| block.round <= highest_accepted_rounds[block.author.value()]);
-        } else {
-            // No reason to kick off the scheduler if there are no missing blocks and commit sync
-            // is not failing over to periodic sync.
-            if missing_blocks.is_empty() {
-                return Ok(());
-            }
+        } else if missing_blocks.is_empty() {
+            return Ok(());
         }
 
-        if missing_blocks.is_empty() {
-            if self.commit_sync_failover {
-                self.fetch_blocks_scheduler_task
-                    .spawn(monitored_future!(async move {
-                        let _scope = monitored_scope("FetchBlocksCommitSyncFailover");
-                        if let Err(err) = Self::fetch_blocks_with_highest_accepted_rounds(
-                            context,
-                            network_client,
-                            block_verifier,
-                            transaction_certifier,
-                            commit_vote_monitor,
-                            core_dispatcher,
-                            commands_sender,
-                            dag_state,
-                            round_tracker,
-                            blocks_to_fetch,
-                        )
-                        .await
-                        {
-                            debug!("Failed to fetch blocks with highest accepted rounds: {err}");
-                        }
-                    }));
-            }
-        } else {
-            self.fetch_blocks_scheduler_task
-                .spawn(monitored_future!(async move {
-                    let _scope = monitored_scope("FetchMissingBlocksScheduler");
-                    context
-                        .metrics
-                        .node_metrics
-                        .fetch_blocks_scheduler_inflight
-                        .inc();
-                    let total_requested = missing_blocks.len();
+        self.fetch_blocks_scheduler_task
+            .spawn(monitored_future!(async move {
+                let _scope = monitored_scope("FetchMissingBlocksScheduler");
+                context
+                    .metrics
+                    .node_metrics
+                    .fetch_blocks_scheduler_inflight
+                    .inc();
+                let total_requested = missing_blocks.len();
 
-                    fail_point_async!("consensus-delay");
-                    // Fetch blocks from peers
-                    let results = Self::fetch_blocks_from_authorities(
+                let results = if missing_blocks.is_empty() {
+                    let _scope = monitored_scope("BlockSync::Periodic::HighestAcceptedRounds");
+                    // Fetch blocks from a random peer using highest accepted rounds (commit sync failover)
+                    Self::fetch_blocks_with_highest_accepted_rounds(
+                        context.clone(),
+                        blocks_to_fetch.clone(),
+                        network_client,
+                        dag_state,
+                    )
+                    .await
+                } else {
+                    let _scope = monitored_scope("BlockSync::Periodic::MissingBlocks");
+                    // Fetch blocks from 1 to MAX_PERIODIC_SYNC_PEERS peers
+                    Self::fetch_blocks_from_authorities(
                         context.clone(),
                         blocks_to_fetch.clone(),
                         network_client,
                         missing_blocks,
                         dag_state,
                     )
-                    .await;
-                    context
-                        .metrics
-                        .node_metrics
-                        .fetch_blocks_scheduler_inflight
-                        .dec();
-                    if results.is_empty() {
-                        return;
+                    .await
+                };
+                context
+                    .metrics
+                    .node_metrics
+                    .fetch_blocks_scheduler_inflight
+                    .dec();
+                if results.is_empty() {
+                    return;
+                }
+
+                fail_point_async!("consensus-delay");
+
+                // Now process the returned results
+                let mut total_fetched = 0;
+                for (blocks_guard, fetched_blocks, peer) in results {
+                    total_fetched += fetched_blocks.len();
+
+                    if let Err(err) = Self::process_fetched_blocks(
+                        fetched_blocks,
+                        peer,
+                        blocks_guard,
+                        core_dispatcher.clone(),
+                        block_verifier.clone(),
+                        transaction_certifier.clone(),
+                        commit_vote_monitor.clone(),
+                        context.clone(),
+                        commands_sender.clone(),
+                        round_tracker.clone(),
+                        "periodic",
+                    )
+                    .await
+                    {
+                        warn!(
+                            "Error occurred while processing fetched blocks from peer {peer}: {err}"
+                        );
+                        context
+                            .metrics
+                            .node_metrics
+                            .synchronizer_process_fetched_failures
+                            .with_label_values(&[
+                                context.committee.authority(peer).hostname.as_str(),
+                                "periodic",
+                            ])
+                            .inc();
                     }
+                }
 
-                    // Now process the returned results
-                    let mut total_fetched = 0;
-                    for (blocks_guard, fetched_blocks, peer) in results {
-                        total_fetched += fetched_blocks.len();
-
-                        if let Err(err) = Self::process_fetched_blocks(
-                            fetched_blocks,
-                            peer,
-                            blocks_guard,
-                            core_dispatcher.clone(),
-                            block_verifier.clone(),
-                            transaction_certifier.clone(),
-                            commit_vote_monitor.clone(),
-                            context.clone(),
-                            commands_sender.clone(),
-                            round_tracker.clone(),
-                            "periodic",
-                        )
-                        .await
-                        {
-                            warn!(
-                                "Error occurred while processing fetched blocks from peer {peer}: {err}"
-                            );
-                            context
-                                .metrics
-                                .node_metrics
-                                .synchronizer_process_fetched_failures
-                                .with_label_values(&[
-                                    context.committee.authority(peer).hostname.as_str(),
-                                    "periodic",
-                                ])
-                                .inc();
-                        }
-                    }
-
-                    debug!(
-                        "Total blocks requested to fetch: {}, total fetched: {}",
-                        total_requested, total_fetched
-                    );
-                }));
-        };
+                debug!(
+                    "Total blocks requested to fetch: {}, total fetched: {}",
+                    total_requested, total_fetched
+                );
+            }));
 
         Ok(())
     }
@@ -1069,7 +1049,9 @@ where
 
         // When in commit sync failover, check if enough progress has been made.
         if self.commit_sync_failover {
-            if current_commit_index <= self.last_changed_commit_index + COMMIT_PROGRESS_RECOVERY {
+            if current_commit_index
+                < self.last_changed_commit_index + self.context.parameters.commit_sync_batch_size
+            {
                 // Not enough progress has been made yet. Keep running periodic sync.
                 // Do not update last commit state yet.
                 // Run periodic sync.
@@ -1106,16 +1088,10 @@ where
     /// Used during commit sync failover to make progress when commit sync is stalled.
     async fn fetch_blocks_with_highest_accepted_rounds(
         context: Arc<Context>,
+        inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
-        block_verifier: Arc<V>,
-        transaction_certifier: TransactionCertifier,
-        commit_vote_monitor: Arc<CommitVoteMonitor>,
-        core_dispatcher: Arc<D>,
-        commands_sender: Sender<Command>,
         dag_state: Arc<RwLock<DagState>>,
-        round_tracker: Arc<RwLock<RoundTracker>>,
-        inflight_blocks_map: Arc<InflightBlocksMap>,
-    ) -> ConsensusResult<()> {
+    ) -> Vec<(BlocksGuard, Vec<Bytes>, AuthorityIndex)> {
         let highest_accepted_rounds = Self::get_highest_accepted_rounds(dag_state, &context);
 
         // Pick a random peer (excluding self).
@@ -1149,34 +1125,21 @@ where
                 debug!(
                     "Failed to fetch blocks with highest accepted rounds from peer {peer}: {err}"
                 );
-                return Ok(());
+                return vec![];
             }
             Err(_) => {
                 debug!("Timed out fetching blocks with highest accepted rounds from peer {peer}");
-                return Ok(());
+                return vec![];
             }
         };
 
         let blocks_guard = BlocksGuard {
-            map: inflight_blocks_map,
+            map: inflight_blocks,
             block_refs: BTreeSet::new(),
             peer,
         };
 
-        Self::process_fetched_blocks(
-            serialized_blocks,
-            peer,
-            blocks_guard,
-            core_dispatcher,
-            block_verifier,
-            transaction_certifier,
-            commit_vote_monitor,
-            context,
-            commands_sender,
-            round_tracker,
-            "periodic",
-        )
-        .await
+        vec![(blocks_guard, serialized_blocks, peer)]
     }
 
     /// Fetches the `missing_blocks` from peers. Requests the same number of authorities with missing blocks from each peer.
@@ -1395,8 +1358,8 @@ mod tests {
         network::{BlockStream, ObserverNetworkClient, SynchronizerClient, ValidatorNetworkClient},
         storage::mem_store::MemStore,
         synchronizer::{
-            COMMIT_PROGRESS_RECOVERY, COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY,
-            FETCH_REQUEST_TIMEOUT, InflightBlocksMap, Synchronizer,
+            COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
+            InflightBlocksMap, Synchronizer,
         },
     };
     use crate::{
@@ -2116,14 +2079,14 @@ mod tests {
         expected_blocks.sort_by_key(|block| block.reference());
         assert_eq!(added_blocks, expected_blocks);
 
-        // AND advance commit index enough to exceed COMMIT_PROGRESS_RECOVERY from stall start.
+        // AND advance commit index enough to reach commit sync batch size from stall start.
         // This should resolve the failover and skip periodic sync again.
         core_dispatcher.get_add_blocks().await;
         {
             let current = dag_state.read().last_commit_index();
             let mut d = dag_state.write();
             // Advance well past the recovery threshold.
-            for index in (current + 1)..=(current + COMMIT_PROGRESS_RECOVERY) {
+            for index in (current + 1)..=(current + context.parameters.commit_sync_batch_size) {
                 let commit =
                     TrustedCommit::new_for_test(index, CommitDigest::MIN, 0, BlockRef::MIN, vec![]);
                 d.add_commit(commit);
