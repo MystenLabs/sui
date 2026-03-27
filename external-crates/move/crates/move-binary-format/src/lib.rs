@@ -128,40 +128,17 @@ impl fmt::Display for IndexKind {
     }
 }
 
-/// A macro which should be preferred in critical runtime paths for unwrapping an option
-/// if a `PartialVMError` is expected. In debug mode, this will panic. Otherwise
+/// A macro which should be preferred in critical runtime paths for unwrapping an `Option` or
+/// `Result` when a `PartialVMError` is expected. In debug mode, this will panic. Otherwise
 /// we return an Err.
+///
+/// Works on both `Option<T>` and `Result<T, E>` via the `SafeUnwrap` trait.
 #[macro_export]
 macro_rules! safe_unwrap {
     ($e:expr) => {{
-        match $e {
-            Some(x) => x,
-            None => {
-                let err = $crate::errors::PartialVMError::new(
-                    move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                )
-                .with_message(format!("{}:{} (none)", file!(), line!()));
-                if cfg!(debug_assertions) {
-                    panic!("{:?}", err);
-                } else {
-                    return Err(err);
-                }
-            }
-        }
-    }};
-}
-
-/// Similar as above but for Result
-#[macro_export]
-macro_rules! safe_unwrap_err {
-    ($e:expr) => {{
-        match $e {
+        match $crate::errors::SafeUnwrap::safe_unwrap_or_error($e, file!(), line!()) {
             Ok(x) => x,
-            Err(e) => {
-                let err = $crate::errors::PartialVMError::new(
-                    move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                )
-                .with_message(format!("{}:{} {:#}", file!(), line!(), e));
+            Err(err) => {
                 if cfg!(debug_assertions) {
                     panic!("{:?}", err);
                 } else {
