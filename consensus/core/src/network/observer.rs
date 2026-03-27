@@ -350,7 +350,7 @@ impl ObserverNetworkClient for TonicObserverClient {
             * self
                 .context
                 .protocol_config
-                .consensus_max_transactions_in_block_bytes() as usize
+                .max_transactions_in_block_bytes() as usize
             * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;

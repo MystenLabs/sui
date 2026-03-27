@@ -26,6 +26,8 @@ use tracing::{info, trace};
 
 #[derive(Clone)]
 pub struct Config {
+    // When this is an Observer node, then a dummy value is used not overlapping with the validator indices
+    // TODO: use a parameter for Observer nodes
     pub authority_index: AuthorityIndex,
     pub db_dir: Arc<TempDir>,
     pub committee: Committee,
@@ -34,6 +36,11 @@ pub struct Config {
     pub clock_drift: BlockTimestampMs,
     pub protocol_config: ConsensusProtocolConfig,
     pub transaction_verifier: Arc<dyn TransactionVerifier>,
+    pub parameters: Parameters,
+    /// Optional network keypair for Observer nodes (which are not part of the committee)
+    pub observer_network_keypair: Option<NetworkKeyPair>,
+    /// Optional pre-allocated IP for Observer nodes (allows controlled IP assignment in tests)
+    pub observer_ip: Option<String>,
 }
 
 pub struct AuthorityNode {
@@ -58,7 +65,12 @@ impl AuthorityNode {
 
     /// Start this Node
     pub async fn start(&self) -> Result<()> {
-        info!(index = %self.config.authority_index, "starting in-memory node");
+        let node_type = if self.config.observer_network_keypair.is_some() {
+            "Observer"
+        } else {
+            "Validator"
+        };
+        info!(index = %self.config.authority_index, node_type = node_type, "starting in-memory node");
         let config = self.config.clone();
         *self.inner.lock() = Some(AuthorityNodeInner::spawn(config).await);
         Ok(())
@@ -116,9 +128,14 @@ impl AuthorityNode {
 
     /// Stop this Node
     pub fn stop(&self) {
-        info!(index =% self.config.authority_index, "stopping in-memory node");
+        let node_type = if self.config.observer_network_keypair.is_some() {
+            "Observer"
+        } else {
+            "Validator"
+        };
+        info!(index =% self.config.authority_index, node_type = node_type, "stopping in-memory node");
         *self.inner.lock() = None;
-        info!(index =% self.config.authority_index, "node stopped");
+        info!(index =% self.config.authority_index, node_type = node_type, "node stopped");
     }
 
     /// If this Node is currently running
@@ -159,18 +176,35 @@ impl AuthorityNodeInner {
         let handle = sui_simulator::runtime::Handle::current();
         let builder = handle.create_node();
 
-        let authority = config.committee.authority(config.authority_index);
-        let socket_addr = to_socket_addr(&authority.address).unwrap();
-        let ip = match socket_addr {
-            SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
-            _ => panic!("unsupported protocol"),
+        // Determine IP address and node name based on whether this is an Observer node
+        let (ip, node_name) = if config.observer_network_keypair.is_some() {
+            // Observer node: use pre-allocated IP if provided, otherwise get a new one
+            let ip_str = if let Some(ref observer_ip) = config.observer_ip {
+                observer_ip.clone()
+            } else {
+                panic!("Observer IP not provided");
+            };
+            let ip: IpAddr = ip_str.parse().expect("Failed to parse IP address");
+
+            // For Observer nodes, use "Observer" as the name prefix
+            (ip, format!("Observer-{}", config.authority_index))
+        } else {
+            // Validator node: use the committee-defined address
+            let authority = config.committee.authority(config.authority_index);
+            let socket_addr = to_socket_addr(&authority.address).unwrap();
+            let ip = match socket_addr {
+                SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
+                _ => panic!("unsupported protocol"),
+            };
+            (ip, format!("{}", config.authority_index))
         };
+
         let init_receiver_swap = Arc::new(ArcSwapOption::empty());
         let int_receiver_swap_clone = init_receiver_swap.clone();
 
         let node = builder
             .ip(ip)
-            .name(format!("{}", config.authority_index))
+            .name(node_name)
             .init(move || {
                 info!("Node restarted");
                 let config = config.clone();
@@ -264,29 +298,31 @@ pub(crate) async fn make_authority(
 ) {
     let Config {
         authority_index,
-        db_dir,
+        db_dir: _,
         committee,
         keypairs,
         boot_counter,
         protocol_config,
         clock_drift,
         transaction_verifier,
+        parameters,
+        observer_network_keypair,
+        observer_ip: _, // Not used in make_authority, only used in spawn
     } = config;
 
     let registry = Registry::new();
 
-    // Cache less blocks to exercise commit sync.
-    let parameters = Parameters {
-        db_path: db_dir.path().to_path_buf(),
-        dag_state_cached_rounds: 5,
-        commit_sync_parallel_fetches: 2,
-        commit_sync_batch_size: 3,
-        sync_last_known_own_block_timeout: Duration::from_millis(2_000),
-        ..Default::default()
-    };
-
-    let protocol_keypair = keypairs[authority_index].1.clone();
-    let network_keypair = keypairs[authority_index].0.clone();
+    // Determine if this is an Observer node or a Validator node
+    let (protocol_keypair, network_keypair) =
+        if let Some(observer_keypair) = observer_network_keypair {
+            // Observer node: no protocol keypair, use the provided observer network keypair
+            (None, observer_keypair)
+        } else {
+            // Validator node: use keypairs from the committee
+            let protocol_keypair = keypairs[authority_index].1.clone();
+            let network_keypair = keypairs[authority_index].0.clone();
+            (Some(protocol_keypair), network_keypair)
+        };
 
     let (commit_consumer, commit_receiver) = CommitConsumerArgs::new(0, 0);
     let commit_consumer_monitor = commit_consumer.monitor();
@@ -297,7 +333,7 @@ pub(crate) async fn make_authority(
         committee,
         parameters,
         protocol_config,
-        Some(protocol_keypair),
+        protocol_keypair,
         network_keypair,
         Arc::new(Clock::new_for_test(clock_drift)),
         transaction_verifier,
@@ -308,4 +344,14 @@ pub(crate) async fn make_authority(
     .await;
 
     (authority, commit_receiver, commit_consumer_monitor)
+}
+
+pub fn default_parameters() -> Parameters {
+    Parameters {
+        dag_state_cached_rounds: 5,
+        commit_sync_parallel_fetches: 2,
+        commit_sync_batch_size: 3,
+        sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+        ..Default::default()
+    }
 }
