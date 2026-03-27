@@ -2032,6 +2032,8 @@
                 },
                 "transfer_party_transfer_internal_cost_base": null,
                 "transfer_receive_object_cost_base": null,
+                "transfer_receive_object_cost_per_byte": null,
+                "transfer_receive_object_type_cost_per_byte": null,
                 "transfer_share_object_cost_base": {
                   "u64": "52"
                 },

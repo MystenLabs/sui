@@ -1554,6 +1554,8 @@ pub struct ProtocolConfig {
     // Cost params for the Move native function
     // `receive_object<T: key>(p: &mut UID, recv: Receiving<T>T)`
     transfer_receive_object_cost_base: Option<u64>,
+    transfer_receive_object_cost_per_byte: Option<u64>,
+    transfer_receive_object_type_cost_per_byte: Option<u64>,
 
     // TxContext
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -3000,6 +3002,8 @@ impl ProtocolConfig {
             // Cost params for the Move native function `share_object<T: key>(obj: T)`
             transfer_share_object_cost_base: Some(52),
             transfer_receive_object_cost_base: None,
+            transfer_receive_object_type_cost_per_byte: None,
+            transfer_receive_object_cost_per_byte: None,
 
             // `tx_context` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -4737,6 +4741,8 @@ impl ProtocolConfig {
                     if chain == Chain::Testnet {
                         cfg.gasless_allowed_token_types = Some(vec![(TESTNET_USDC.to_string(), 0)]);
                     }
+                    cfg.transfer_receive_object_cost_per_byte = Some(1);
+                    cfg.transfer_receive_object_type_cost_per_byte = Some(2);
                 }
                 // Use this template when making changes:
                 //

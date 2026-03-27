@@ -603,6 +603,14 @@ impl NativesCostTable {
                     .transfer_receive_object_cost_base_as_option()
                     .unwrap_or(0)
                     .into(),
+                transfer_receive_object_internal_cost_per_byte: protocol_config
+                    .transfer_receive_object_cost_per_byte_as_option()
+                    .unwrap_or(0)
+                    .into(),
+                transfer_receive_object_internal_type_cost_per_byte: protocol_config
+                    .transfer_receive_object_type_cost_per_byte_as_option()
+                    .unwrap_or(0)
+                    .into(),
             },
             check_zklogin_id_cost_params: CheckZkloginIdCostParams {
                 check_zklogin_id_cost_base: protocol_config

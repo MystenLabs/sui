@@ -11,6 +11,7 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
 };
+use move_vm_runtime::shared::views::{SizeConfig, ValueView};
 use move_vm_runtime::{
     execution::Type, execution::values::Value, natives::functions::NativeResult, pop_arg,
 };
@@ -34,6 +35,8 @@ const E_NOT_SUPPORTED: u64 = 5;
 #[derive(Clone, Debug)]
 pub struct TransferReceiveObjectInternalCostParams {
     pub transfer_receive_object_internal_cost_base: InternalGas,
+    pub transfer_receive_object_internal_cost_per_byte: InternalGas,
+    pub transfer_receive_object_internal_type_cost_per_byte: InternalGas,
 }
 /***************************************************************************************************
 * native fun receive_object_internal
@@ -56,6 +59,12 @@ pub fn receive_object_internal(
         transfer_receive_object_internal_cost_params.transfer_receive_object_internal_cost_base
     );
     let child_ty = ty_args.pop().unwrap();
+    native_charge_gas_early_exit!(
+        context,
+        transfer_receive_object_internal_cost_params
+            .transfer_receive_object_internal_type_cost_per_byte
+            * u64::from(child_ty.size()?).into()
+    );
     let child_receiver_sequence_number: SequenceNumber = pop_arg!(args, u64).into();
     let child_receiver_object_id = args.pop_back().unwrap();
     let parent = pop_arg!(args, AccountAddress).into();
@@ -99,6 +108,17 @@ pub fn receive_object_internal(
         }
         Err(x) => return Err(x),
     };
+
+    let child_size = child.abstract_memory_size(&SizeConfig {
+        include_vector_size: true,
+        traverse_references: true,
+    })?;
+
+    native_charge_gas_early_exit!(
+        context,
+        transfer_receive_object_internal_cost_params.transfer_receive_object_internal_cost_per_byte
+            * u64::from(child_size).into()
+    );
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
 }
