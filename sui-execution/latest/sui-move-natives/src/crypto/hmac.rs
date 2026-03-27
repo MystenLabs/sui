@@ -3,6 +3,7 @@
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::{hmac, traits::ToFromBytes};
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::safe_unwrap_err;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     execution::{
@@ -72,8 +73,7 @@ pub fn hmac_sha3_256(
                     .into()
     );
 
-    let hmac_key = hmac::HmacKey::from_bytes(&key.as_bytes_ref()?)
-        .expect("HMAC key can be of any length and from_bytes should always succeed");
+    let hmac_key = safe_unwrap_err!(hmac::HmacKey::from_bytes(&key.as_bytes_ref()?));
     let cost = context.gas_used();
 
     Ok(NativeResult::ok(
