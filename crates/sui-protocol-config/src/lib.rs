@@ -317,6 +317,7 @@ const TESTNET_USDC: &str =
 // Version 120: Disallow unused jump tables
 // Version 121: Re-enable defer_unpaid_amplification (devnet + testnet).
 // Version 122: Framework update: vector::empty is deprecated.
+//              Enable bulletproofs verification on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4801,13 +4802,6 @@ impl ProtocolConfig {
                     }
                     cfg.transfer_receive_object_cost_per_byte = Some(1);
                     cfg.transfer_receive_object_type_cost_per_byte = Some(2);
-
-                    // Enable bulletproofs range proofs on devnet
-                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(30000);
-                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(6500);
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
-                    }
                 }
                 120 => {
                     cfg.feature_flags.disallow_jump_orphans = true;
@@ -4820,6 +4814,13 @@ impl ProtocolConfig {
                     }
                     cfg.feature_flags
                         .early_return_receive_object_mismatched_type = true;
+
+                    // Enable bulletproofs range proofs on devnet
+                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(30000);
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(6500);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
+                    }
                 }
                 122 => {}
                 // Use this template when making changes:
