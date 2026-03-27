@@ -225,6 +225,38 @@ public macro fun is_some_and<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
     o.is_some() && $f(o.borrow())
 }
 
+/// Return `true` if the value is `None`, or the predicate `f` returns `true` for the contained value.
+/// Equivalent to Rust's `t.is_none_or(f)`.
+public macro fun is_none_or<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
+    let o = $o;
+    o.is_none() || $f(o.borrow())
+}
+
+/// Consume the option and return `$none` if it is `None`, otherwise apply `$some` to the contained value.
+/// Equivalent to Rust's `t.map_or(default, f)` or a fold over an option.
+public macro fun fold<$T, $R>($o: Option<$T>, $none: $R, $some: |$T| -> $R): $R {
+    let o = $o;
+    if (o.is_some()) {
+        $some(o.destroy_some())
+    } else {
+        o.destroy_none();
+        $none
+    }
+}
+
+/// Apply `$some` to the borrowed value if `Some`, otherwise return `$none`.
+/// Original option is preserved.
+public macro fun fold_ref<$T, $R>($o: &Option<$T>, $none: $R, $some: |&$T| -> $R): $R {
+    let o = $o;
+    if (o.is_some()) $some(o.borrow()) else $none
+}
+
+/// Apply `$some` to the mutably borrowed value if `Some`, otherwise return `$none`.
+public macro fun fold_mut<$T, $R>($o: &mut Option<$T>, $none: $R, $some: |&mut $T| -> $R): $R {
+    let o = $o;
+    if (o.is_some()) $some(o.borrow_mut()) else $none
+}
+
 /// Extract the value inside `Option<T>` if it holds one, or `default` otherwise.
 /// Similar to `destroy_or`, but modifying the input `Option` via a mutable reference.
 public macro fun extract_or<$T>($o: &mut Option<$T>, $default: $T): $T {
