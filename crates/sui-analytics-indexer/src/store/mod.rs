@@ -34,6 +34,7 @@ use sui_indexer_alt_framework::store::SequentialConnection;
 use sui_indexer_alt_framework::store::SequentialStore;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_types::base_types::EpochId;
 use tokio::sync::mpsc;
 use tracing::debug;
@@ -624,6 +625,15 @@ impl SequentialStore for AnalyticsStore {
 
 #[async_trait]
 impl Connection for AnalyticsConnection<'_> {
+    async fn init_watermark(
+        &mut self,
+        pipeline_task: &str,
+        checkpoint_hi_inclusive: Option<u64>,
+    ) -> Result<Option<InitWatermark>> {
+        self.delegate_to_committer_watermark(pipeline_task, checkpoint_hi_inclusive)
+            .await
+    }
+
     async fn accepts_chain_id(
         &mut self,
         _pipeline_task: &str,

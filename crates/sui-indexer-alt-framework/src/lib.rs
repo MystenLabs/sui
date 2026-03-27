@@ -15,10 +15,8 @@ use ingestion::IngestionService;
 use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
 use prometheus::Registry;
-use sui_indexer_alt_framework_store_traits::ConcurrentConnection;
 use sui_indexer_alt_framework_store_traits::ConcurrentStore;
-use sui_indexer_alt_framework_store_traits::InitWatermark;
-use sui_indexer_alt_framework_store_traits::SequentialConnection;
+use sui_indexer_alt_framework_store_traits::Connection;
 use sui_indexer_alt_framework_store_traits::SequentialStore;
 use sui_indexer_alt_framework_store_traits::Store;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
@@ -322,12 +320,10 @@ impl<S: Store> Indexer<S> {
     /// calculated above.
     ///
     /// Returns `Ok(None)` if the pipeline is disabled.
-    async fn add_pipeline<'a, P, F>(&mut self, init: F) -> Result<Option<u64>>
-    where
-        P: Processor + 'static,
-        F: Send + 'a,
-        F: AsyncFnOnce() -> Result<u64>,
-    {
+    async fn add_pipeline<P: Processor + 'static>(
+        &mut self,
+        pipeline_task: String,
+    ) -> Result<Option<u64>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
             "Pipeline {:?} already added",
@@ -341,7 +337,25 @@ impl<S: Store> Indexer<S> {
             return Ok(None);
         }
 
-        let next_checkpoint = init().await?;
+        // Create a new record based on `proposed_next_checkpoint` if one does not exist.
+        // Otherwise, use the existing record and disregard the proposed value.
+        let proposed_next_checkpoint = self.first_checkpoint.unwrap_or(0);
+        let mut conn = self.store.connect().await?;
+        let init_watermark = conn
+            .init_watermark(&pipeline_task, proposed_next_checkpoint.checked_sub(1))
+            .await
+            .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
+
+        let next_checkpoint = if let Some(init_watermark) = init_watermark {
+            if let Some(checkpoint_hi_inclusive) = init_watermark.checkpoint_hi_inclusive {
+                checkpoint_hi_inclusive + 1
+            } else {
+                0
+            }
+        } else {
+            proposed_next_checkpoint
+        };
+
         self.next_checkpoint = next_checkpoint.min(self.next_checkpoint);
 
         Ok(Some(next_checkpoint))
@@ -360,28 +374,9 @@ impl<S: ConcurrentStore> Indexer<S> {
         handler: H,
         config: ConcurrentConfig,
     ) -> Result<()> {
-        let store = self.store.clone();
-        let task = self.task.clone();
-        // Create a new record based on `proposed_next_checkpoint` if one does not exist.
-        // Otherwise, use the existing record and disregard the proposed value.
-        let proposed_next_checkpoint = self.first_checkpoint.unwrap_or(0);
-        let Some(next_checkpoint) = self
-            .add_pipeline::<H, _>(async || {
-                let mut conn = store.concurrent_connect().await?;
-                let pipeline_task =
-                    pipeline_task::<S>(H::NAME, task.as_ref().map(|t| t.task.as_str()))?;
-                let InitWatermark {
-                    checkpoint_hi_inclusive,
-                    reader_lo,
-                } = conn
-                    .init_concurrent_watermark(&pipeline_task, proposed_next_checkpoint)
-                    .await
-                    .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
-
-                Ok(checkpoint_hi_inclusive.map_or(reader_lo, |c| c + 1))
-            })
-            .await?
-        else {
+        let pipeline_task =
+            pipeline_task::<S>(H::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
+        let Some(next_checkpoint) = self.add_pipeline::<H>(pipeline_task).await? else {
             return Ok(());
         };
 
@@ -423,22 +418,7 @@ impl<T: SequentialStore> Indexer<T> {
             );
         }
 
-        let store = self.store.clone();
-        // Create a new record based on `proposed_next_checkpoint` if one does not exist.
-        // Otherwise, use the existing record and disregard the proposed value.
-        let proposed_next_checkpoint = self.first_checkpoint.unwrap_or(0);
-        let Some(next_checkpoint) = self
-            .add_pipeline::<H, _>(async || {
-                let mut conn = store.sequential_connect().await?;
-                let checkpoint_hi_inclusive = conn
-                    .init_sequential_watermark(H::NAME, proposed_next_checkpoint.checked_sub(1))
-                    .await
-                    .with_context(|| format!("Failed to init watermark for {:?}", H::NAME))?;
-
-                Ok(checkpoint_hi_inclusive.map_or(proposed_next_checkpoint, |c| c + 1))
-            })
-            .await?
-        else {
+        let Some(next_checkpoint) = self.add_pipeline::<H>(H::NAME.to_owned()).await? else {
             return Ok(());
         };
 
@@ -723,7 +703,7 @@ mod tests {
 
         let mut conn = store.connect().await.unwrap();
 
-        conn.init_concurrent_watermark(A::NAME, 0).await.unwrap();
+        conn.init_watermark(A::NAME, Some(0)).await.unwrap();
         conn.set_committer_watermark(
             A::NAME,
             CommitterWatermark {
@@ -734,7 +714,7 @@ mod tests {
         .await
         .unwrap();
 
-        conn.init_concurrent_watermark(B::NAME, 0).await.unwrap();
+        conn.init_watermark(B::NAME, Some(0)).await.unwrap();
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
@@ -745,7 +725,7 @@ mod tests {
         .await
         .unwrap();
 
-        conn.init_concurrent_watermark(C::NAME, 0).await.unwrap();
+        conn.init_watermark(C::NAME, Some(0)).await.unwrap();
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
@@ -756,7 +736,7 @@ mod tests {
         .await
         .unwrap();
 
-        conn.init_concurrent_watermark(D::NAME, 0).await.unwrap();
+        conn.init_watermark(D::NAME, Some(0)).await.unwrap();
         conn.set_committer_watermark(
             D::NAME,
             CommitterWatermark {

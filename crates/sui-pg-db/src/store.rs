@@ -30,6 +30,39 @@ define_sql_function! {
 
 #[async_trait]
 impl store::Connection for Connection<'_> {
+    async fn init_watermark(
+        &mut self,
+        pipeline_task: &str,
+        checkpoint_hi_inclusive: Option<u64>,
+    ) -> anyhow::Result<Option<store::InitWatermark>> {
+        let checkpoint_hi_inclusive = checkpoint_hi_inclusive.map_or(-1, |c| c as i64);
+        let stored_watermark = StoredWatermark::for_init(
+            pipeline_task,
+            checkpoint_hi_inclusive,
+            checkpoint_hi_inclusive + 1,
+        );
+
+        use diesel::pg::upsert::excluded;
+        let (checkpoint_hi_inclusive, reader_lo): (i64, i64) =
+            diesel::insert_into(watermarks::table)
+                .values(&stored_watermark)
+                // If there is an existing row, return it without updating it.
+                .on_conflict(watermarks::pipeline)
+                // Use `do_update` instead of `do_nothing` to return the existing row with `returning`.
+                .do_update()
+                // When using `do_update`, at least one change needs to be set, so set the pipeline to itself (nothing changes).
+                // `excluded` is a virtual table containing the existing row that there was a conflict with.
+                .set(watermarks::pipeline.eq(excluded(watermarks::pipeline)))
+                .returning((watermarks::checkpoint_hi_inclusive, watermarks::reader_lo))
+                .get_result(self)
+                .await?;
+
+        Ok(Some(store::InitWatermark {
+            checkpoint_hi_inclusive: u64::try_from(checkpoint_hi_inclusive).ok(),
+            reader_lo: Some(reader_lo as u64),
+        }))
+    }
+
     async fn accepts_chain_id(
         &mut self,
         pipeline_task: &str,
@@ -107,38 +140,9 @@ impl store::Connection for Connection<'_> {
 
 #[async_trait]
 impl store::ConcurrentConnection for Connection<'_> {
-    async fn init_concurrent_watermark(
-        &mut self,
-        pipeline_task: &str,
-        reader_lo: u64,
-    ) -> anyhow::Result<store::InitWatermark> {
-        let reader_lo = reader_lo as i64;
-        let stored_watermark = StoredWatermark::for_init(pipeline_task, reader_lo - 1, reader_lo);
-
-        use diesel::pg::upsert::excluded;
-        let (checkpoint_hi_inclusive, reader_lo): (i64, i64) =
-            diesel::insert_into(watermarks::table)
-                .values(&stored_watermark)
-                // If there is an existing row, return it without updating it.
-                .on_conflict(watermarks::pipeline)
-                // Use `do_update` instead of `do_nothing` to return the existing row with `returning`.
-                .do_update()
-                // When using `do_update`, at least one change needs to be set, so set the pipeline to itself (nothing changes).
-                // `excluded` is a virtual table containing the existing row that there was a conflict with.
-                .set(watermarks::pipeline.eq(excluded(watermarks::pipeline)))
-                .returning((watermarks::checkpoint_hi_inclusive, watermarks::reader_lo))
-                .get_result(self)
-                .await?;
-
-        Ok(store::InitWatermark {
-            checkpoint_hi_inclusive: u64::try_from(checkpoint_hi_inclusive).ok(),
-            reader_lo: reader_lo as u64,
-        })
-    }
-
     async fn reader_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline: &str,
     ) -> anyhow::Result<Option<store::ReaderWatermark>> {
         let (checkpoint_hi_inclusive, reader_lo): (i64, i64) = watermarks::table
             .select((watermarks::checkpoint_hi_inclusive, watermarks::reader_lo))
@@ -214,41 +218,7 @@ impl store::ConcurrentConnection for Connection<'_> {
 }
 
 #[async_trait]
-impl store::SequentialConnection for Connection<'_> {
-    async fn init_sequential_watermark(
-        &mut self,
-        pipeline_task: &str,
-        checkpoint_hi_inclusive: Option<u64>,
-    ) -> anyhow::Result<Option<u64>> {
-        let checkpoint_hi_inclusive = checkpoint_hi_inclusive.map_or(-1, |c| c as i64);
-        let stored_watermark = StoredWatermark::for_init(
-            pipeline_task,
-            checkpoint_hi_inclusive,
-            checkpoint_hi_inclusive + 1,
-        );
-
-        use diesel::pg::upsert::excluded;
-        let checkpoint_hi_inclusive: i64 = diesel::insert_into(watermarks::table)
-            .values(&stored_watermark)
-            // If there is an existing row, return it without updating it.
-            .on_conflict(watermarks::pipeline)
-            // Use `do_update` instead of `do_nothing` to return the existing row with `returning`.
-            .do_update()
-            // When using `do_update`, at least one change needs to be set, so set the pipeline to itself (nothing changes).
-            // `excluded` is a virtual table containing the existing row that there was a conflict with.
-            .set(watermarks::pipeline.eq(excluded(watermarks::pipeline)))
-            .returning(watermarks::checkpoint_hi_inclusive)
-            .get_result(self)
-            .await?;
-
-        Ok(u64::try_from(checkpoint_hi_inclusive).ok())
-    }
-}
-
-#[async_trait]
-impl store::ConcurrentStore for Db {
-    type ConcurrentConnection<'c> = Connection<'c>;
-}
+impl store::SequentialConnection for Connection<'_> {}
 
 #[async_trait]
 impl store::Store for Db {
@@ -257,6 +227,11 @@ impl store::Store for Db {
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
         self.connect().await
     }
+}
+
+#[async_trait]
+impl store::ConcurrentStore for Db {
+    type ConcurrentConnection<'c> = Connection<'c>;
 }
 
 #[async_trait]

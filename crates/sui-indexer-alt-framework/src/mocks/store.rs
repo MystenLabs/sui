@@ -110,17 +110,38 @@ impl MockConnection<'_> {
     async fn get_watermark(
         &self,
         pipeline: &str,
-    ) -> anyhow::Result<Option<(Ref<'_, String, MockWatermark>, u64)>> {
+    ) -> anyhow::Result<Ref<'_, String, MockWatermark>> {
         let Some(watermark) = self.0.watermarks.get(pipeline) else {
             bail!("Pipeline {pipeline} not found");
         };
-
-        Ok(watermark.checkpoint_hi_inclusive.map(|cp| (watermark, cp)))
+        Ok(watermark)
     }
 }
 
 #[async_trait]
 impl Connection for MockConnection<'_> {
+    async fn init_watermark(
+        &mut self,
+        pipeline_task: &str,
+        checkpoint_hi_inclusive: Option<u64>,
+    ) -> anyhow::Result<Option<InitWatermark>> {
+        let watermark = self
+            .0
+            .watermarks
+            .entry(pipeline_task.to_string())
+            .or_insert_with(|| {
+                MockWatermark::for_init(
+                    checkpoint_hi_inclusive,
+                    checkpoint_hi_inclusive.map_or(0, |c| c + 1),
+                )
+            });
+
+        Ok(Some(InitWatermark {
+            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+            reader_lo: Some(watermark.reader_lo),
+        }))
+    }
+
     async fn accepts_chain_id(
         &mut self,
         pipeline_task: &str,
@@ -144,8 +165,8 @@ impl Connection for MockConnection<'_> {
         &mut self,
         pipeline_task: &str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
-        let Some((watermark, checkpoint_hi_inclusive)) = self.get_watermark(pipeline_task).await?
-        else {
+        let watermark = self.get_watermark(pipeline_task).await?;
+        let Some(checkpoint_hi_inclusive) = watermark.checkpoint_hi_inclusive else {
             return Ok(None);
         };
 
@@ -190,28 +211,12 @@ impl Connection for MockConnection<'_> {
 
 #[async_trait]
 impl ConcurrentConnection for MockConnection<'_> {
-    async fn init_concurrent_watermark(
-        &mut self,
-        pipeline_task: &str,
-        reader_lo: u64,
-    ) -> anyhow::Result<InitWatermark> {
-        let watermark = self
-            .0
-            .watermarks
-            .entry(pipeline_task.to_string())
-            .or_insert_with(|| MockWatermark::for_init(reader_lo.checked_sub(1), reader_lo));
-
-        Ok(InitWatermark {
-            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
-            reader_lo: watermark.reader_lo,
-        })
-    }
-
     async fn reader_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline: &str,
     ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
-        let Some((watermark, checkpoint_hi_inclusive)) = self.get_watermark(pipeline).await? else {
+        let watermark = self.get_watermark(pipeline).await?;
+        let Some(checkpoint_hi_inclusive) = watermark.checkpoint_hi_inclusive else {
             return Ok(None);
         };
 
@@ -226,9 +231,10 @@ impl ConcurrentConnection for MockConnection<'_> {
         pipeline: &'static str,
         delay: Duration,
     ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
-        let Some((watermark, _)) = self.get_watermark(pipeline).await? else {
+        let watermark = self.get_watermark(pipeline).await?;
+        if watermark.checkpoint_hi_inclusive.is_none() {
             return Ok(None);
-        };
+        }
 
         let elapsed_ms = watermark.pruner_timestamp as i64
             - SystemTime::now()
@@ -284,26 +290,7 @@ impl ConcurrentConnection for MockConnection<'_> {
 }
 
 #[async_trait]
-impl SequentialConnection for MockConnection<'_> {
-    async fn init_sequential_watermark(
-        &mut self,
-        pipeline_task: &str,
-        checkpoint_hi_inclusive: Option<u64>,
-    ) -> anyhow::Result<Option<u64>> {
-        let watermark = self
-            .0
-            .watermarks
-            .entry(pipeline_task.to_string())
-            .or_insert_with(|| {
-                MockWatermark::for_init(
-                    checkpoint_hi_inclusive,
-                    checkpoint_hi_inclusive.map_or(0, |cp| cp + 1),
-                )
-            });
-
-        Ok(watermark.checkpoint_hi_inclusive)
-    }
-}
+impl SequentialConnection for MockConnection<'_> {}
 
 #[async_trait]
 impl crate::store::ConcurrentStore for MockStore {
