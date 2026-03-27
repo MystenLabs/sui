@@ -1,0 +1,207 @@
+//# init --edition development
+
+// Addition: happy path
+//# run
+module 0x6.m {
+
+entry foo() {
+label b0:
+    assert(0i64 + 0i64 == 0i64, 1000);
+    assert(0i64 + 1i64 == 1i64, 1001);
+    assert(1i64 + 1i64 == 2i64, 1002);
+
+    assert(100000i64 + 200000i64 == 300000i64, 1100);
+    assert(0i64 + 9223372036854775807i64 == 9223372036854775807i64, 1200);
+
+    // Negative operands
+    assert(-1i64 + -1i64 == -2i64, 1300);
+    assert(0i64 + -9223372036854775808i64 == -9223372036854775808i64, 1302);
+
+    // Mixed signs
+    assert(1i64 + -1i64 == 0i64, 1400);
+    assert(9223372036854775807i64 + -9223372036854775807i64 == 0i64, 1403);
+    return;
+}
+
+}
+// Addition: overflow (positive)
+//# run
+module 0x7.m {
+
+entry foo() {
+label b0:
+    _ = 9223372036854775807i64 + 1i64;
+    return;
+}
+
+}
+// Addition: overflow (negative)
+//# run
+module 0x8.m {
+
+entry foo() {
+label b0:
+    _ = -9223372036854775808i64 + -1i64;
+    return;
+}
+
+}
+
+// Subtraction: happy path
+//# run
+module 0x9.m {
+
+entry foo() {
+label b0:
+    assert(0i64 - 0i64 == 0i64, 2000);
+    assert(1i64 - 0i64 == 1i64, 2001);
+    assert(1i64 - 1i64 == 0i64, 2002);
+
+    assert(500000i64 - 130000i64 == 370000i64, 2100);
+    assert(9223372036854775807i64 - 9223372036854775807i64 == 0i64, 2200);
+
+    // Negative operands
+    assert(-1i64 - -1i64 == 0i64, 2300);
+
+    // Mixed signs
+    assert(0i64 - 1i64 == -1i64, 2400);
+    assert(-1i64 - 9223372036854775807i64 == -9223372036854775808i64, 2501);
+    return;
+}
+
+}
+// Subtraction: overflow (positive)
+//# run
+module 0xa.m {
+
+entry foo() {
+label b0:
+    _ = 9223372036854775807i64 - -1i64;
+    return;
+}
+
+}
+// Subtraction: overflow (negative)
+//# run
+module 0x42.m {
+
+entry foo() {
+label b0:
+    _ = -9223372036854775808i64 - 1i64;
+    return;
+}
+
+}
+
+// Multiplication: happy path
+//# run
+module 0xb.m {
+
+entry foo() {
+label b0:
+    assert(0i64 * 0i64 == 0i64, 3000);
+    assert(1i64 * 0i64 == 0i64, 3001);
+    assert(1i64 * 1i64 == 1i64, 3002);
+
+    assert(6000i64 * 7000i64 == 42000000i64, 3100);
+
+    // Negative operands
+    assert(-1i64 * 1i64 == -1i64, 3200);
+    assert(-1i64 * -1i64 == 1i64, 3201);
+    assert(-6000i64 * 7000i64 == -42000000i64, 3202);
+
+    // Boundary
+    assert(1i64 * 9223372036854775807i64 == 9223372036854775807i64, 3300);
+    assert(1i64 * -9223372036854775808i64 == -9223372036854775808i64, 3302);
+    return;
+}
+
+}
+// Multiplication: overflow
+//# run
+module 0xc.m {
+
+entry foo() {
+label b0:
+    _ = 4611686018427387904i64 * 2i64;
+    return;
+}
+
+}
+
+// Division: happy path
+//# run
+module 0xe.m {
+
+entry foo() {
+label b0:
+    assert(0i64 / 1i64 == 0i64, 4000);
+    assert(1i64 / 1i64 == 1i64, 4001);
+    assert(6i64 / 3i64 == 2i64, 4100);
+
+    // Negative operands
+    assert(-6i64 / 3i64 == -2i64, 4200);
+    assert(6i64 / -3i64 == -2i64, 4201);
+    assert(-6i64 / -3i64 == 2i64, 4202);
+
+    // Truncation toward zero
+    assert(7i64 / 2i64 == 3i64, 4300);
+    assert(-7i64 / 2i64 == -3i64, 4301);
+
+    assert(9223372036854775807i64 / 9223372036854775807i64 == 1i64, 4400);
+    assert(-9223372036854775808i64 / 1i64 == -9223372036854775808i64, 4401);
+    return;
+}
+
+}
+// Division by zero
+//# run
+module 0x15.m {
+
+entry foo() {
+label b0:
+    _ = 0i64 / 0i64;
+    return;
+}
+
+}
+//# run
+module 0x16.m {
+
+entry foo() {
+label b0:
+    _ = 1i64 / 0i64;
+    return;
+}
+
+}
+
+// Modulo: happy path
+//# run
+module 0x18.m {
+
+entry foo() {
+label b0:
+    assert(0i64 % 1i64 == 0i64, 5000);
+    assert(1i64 % 1i64 == 0i64, 5001);
+    assert(8i64 % 3i64 == 2i64, 5100);
+
+    // Negative operands
+    assert(-8i64 % 3i64 == -2i64, 5200);
+    assert(8i64 % -3i64 == 2i64, 5201);
+    assert(-8i64 % -3i64 == -2i64, 5202);
+    return;
+}
+
+}
+// Modulo by zero
+//# run
+module 0x19.m {
+
+entry foo() {
+label b0:
+    _ = 0i64 % 0i64;
+    return;
+}
+
+}

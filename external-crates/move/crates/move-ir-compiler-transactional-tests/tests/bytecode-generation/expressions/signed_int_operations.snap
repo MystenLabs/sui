@@ -1,0 +1,180 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 3-36:
+//# print-bytecode
+// Move bytecode v8
+module 42.SignedI8Ops {
+
+ops() {
+L0:	x: i8
+L1:	y: i8
+L2:	z: i8
+B0:
+	0: LdI8(1)
+	1: StLoc[0](x: i8)
+	2: LdI8(2)
+	3: StLoc[1](y: i8)
+	4: MoveLoc[0](x: i8)
+	5: MoveLoc[1](y: i8)
+	6: Add
+	7: StLoc[2](z: i8)
+	8: LdI8(10)
+	9: StLoc[0](x: i8)
+	10: LdI8(3)
+	11: StLoc[1](y: i8)
+	12: MoveLoc[0](x: i8)
+	13: MoveLoc[1](y: i8)
+	14: Sub
+	15: StLoc[2](z: i8)
+	16: LdI8(4)
+	17: StLoc[0](x: i8)
+	18: LdI8(5)
+	19: StLoc[1](y: i8)
+	20: MoveLoc[0](x: i8)
+	21: MoveLoc[1](y: i8)
+	22: Mul
+	23: StLoc[2](z: i8)
+	24: LdI8(20)
+	25: StLoc[0](x: i8)
+	26: LdI8(4)
+	27: StLoc[1](y: i8)
+	28: MoveLoc[0](x: i8)
+	29: MoveLoc[1](y: i8)
+	30: Div
+	31: StLoc[2](z: i8)
+	32: LdI8(17)
+	33: StLoc[0](x: i8)
+	34: LdI8(5)
+	35: StLoc[1](y: i8)
+	36: MoveLoc[0](x: i8)
+	37: MoveLoc[1](y: i8)
+	38: Mod
+	39: StLoc[2](z: i8)
+	40: LdI8(7)
+	41: StLoc[0](x: i8)
+	42: LdI8(3)
+	43: StLoc[1](y: i8)
+	44: MoveLoc[0](x: i8)
+	45: MoveLoc[1](y: i8)
+	46: BitAnd
+	47: StLoc[2](z: i8)
+	48: LdI8(5)
+	49: StLoc[0](x: i8)
+	50: LdI8(3)
+	51: StLoc[1](y: i8)
+	52: MoveLoc[0](x: i8)
+	53: MoveLoc[1](y: i8)
+	54: BitOr
+	55: StLoc[2](z: i8)
+	56: LdI8(6)
+	57: StLoc[0](x: i8)
+	58: LdI8(3)
+	59: StLoc[1](y: i8)
+	60: MoveLoc[0](x: i8)
+	61: MoveLoc[1](y: i8)
+	62: Xor
+	63: StLoc[2](z: i8)
+	64: Ret
+}
+
+}
+
+
+task 2, lines 38-78:
+//# print-bytecode
+// Move bytecode v8
+module 42.SignedI64Ops {
+
+ops() {
+L0:	x: i64
+L1:	y: i64
+L2:	z: i64
+L3:	s: u8
+B0:
+	0: LdI64(100)
+	1: StLoc[0](x: i64)
+	2: LdI64(200)
+	3: StLoc[1](y: i64)
+	4: MoveLoc[0](x: i64)
+	5: MoveLoc[1](y: i64)
+	6: Add
+	7: StLoc[2](z: i64)
+	8: LdI64(500)
+	9: StLoc[0](x: i64)
+	10: LdI64(123)
+	11: StLoc[1](y: i64)
+	12: MoveLoc[0](x: i64)
+	13: MoveLoc[1](y: i64)
+	14: Sub
+	15: StLoc[2](z: i64)
+	16: LdI64(10)
+	17: StLoc[0](x: i64)
+	18: LdI64(20)
+	19: StLoc[1](y: i64)
+	20: MoveLoc[0](x: i64)
+	21: MoveLoc[1](y: i64)
+	22: Mul
+	23: StLoc[2](z: i64)
+	24: LdI64(100)
+	25: StLoc[0](x: i64)
+	26: LdI64(7)
+	27: StLoc[1](y: i64)
+	28: MoveLoc[0](x: i64)
+	29: MoveLoc[1](y: i64)
+	30: Div
+	31: StLoc[2](z: i64)
+	32: LdI64(100)
+	33: StLoc[0](x: i64)
+	34: LdI64(7)
+	35: StLoc[1](y: i64)
+	36: MoveLoc[0](x: i64)
+	37: MoveLoc[1](y: i64)
+	38: Mod
+	39: StLoc[2](z: i64)
+	40: LdI64(255)
+	41: StLoc[0](x: i64)
+	42: LdI64(15)
+	43: StLoc[1](y: i64)
+	44: MoveLoc[0](x: i64)
+	45: MoveLoc[1](y: i64)
+	46: BitAnd
+	47: StLoc[2](z: i64)
+	48: LdI64(240)
+	49: StLoc[0](x: i64)
+	50: LdI64(15)
+	51: StLoc[1](y: i64)
+	52: MoveLoc[0](x: i64)
+	53: MoveLoc[1](y: i64)
+	54: BitOr
+	55: StLoc[2](z: i64)
+	56: LdI64(255)
+	57: StLoc[0](x: i64)
+	58: LdI64(128)
+	59: StLoc[1](y: i64)
+	60: MoveLoc[0](x: i64)
+	61: MoveLoc[1](y: i64)
+	62: Xor
+	63: StLoc[2](z: i64)
+	64: LdI64(1)
+	65: StLoc[0](x: i64)
+	66: LdU8(4)
+	67: StLoc[3](s: u8)
+	68: MoveLoc[0](x: i64)
+	69: MoveLoc[3](s: u8)
+	70: Shl
+	71: StLoc[2](z: i64)
+	72: LdI64(16)
+	73: StLoc[0](x: i64)
+	74: LdU8(2)
+	75: StLoc[3](s: u8)
+	76: MoveLoc[0](x: i64)
+	77: MoveLoc[3](s: u8)
+	78: Shr
+	79: StLoc[2](z: i64)
+	80: Ret
+}
+
+}

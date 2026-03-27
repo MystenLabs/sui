@@ -1,0 +1,207 @@
+//# init --edition development
+
+// Addition: happy path
+//# run
+module 0x6.m {
+
+entry foo() {
+label b0:
+    assert(0i128 + 0i128 == 0i128, 1000);
+    assert(0i128 + 1i128 == 1i128, 1001);
+    assert(1i128 + 1i128 == 2i128, 1002);
+
+    assert(1000000i128 + 2000000i128 == 3000000i128, 1100);
+    assert(0i128 + 170141183460469231731687303715884105727i128 == 170141183460469231731687303715884105727i128, 1200);
+
+    // Negative operands
+    assert(-1i128 + -1i128 == -2i128, 1300);
+    assert(0i128 + -170141183460469231731687303715884105728i128 == -170141183460469231731687303715884105728i128, 1302);
+
+    // Mixed signs
+    assert(1i128 + -1i128 == 0i128, 1400);
+    assert(170141183460469231731687303715884105727i128 + -170141183460469231731687303715884105727i128 == 0i128, 1403);
+    return;
+}
+
+}
+// Addition: overflow (positive)
+//# run
+module 0x7.m {
+
+entry foo() {
+label b0:
+    _ = 170141183460469231731687303715884105727i128 + 1i128;
+    return;
+}
+
+}
+// Addition: overflow (negative)
+//# run
+module 0x8.m {
+
+entry foo() {
+label b0:
+    _ = -170141183460469231731687303715884105728i128 + -1i128;
+    return;
+}
+
+}
+
+// Subtraction: happy path
+//# run
+module 0x9.m {
+
+entry foo() {
+label b0:
+    assert(0i128 - 0i128 == 0i128, 2000);
+    assert(1i128 - 0i128 == 1i128, 2001);
+    assert(1i128 - 1i128 == 0i128, 2002);
+
+    assert(5000000i128 - 1300000i128 == 3700000i128, 2100);
+    assert(170141183460469231731687303715884105727i128 - 170141183460469231731687303715884105727i128 == 0i128, 2200);
+
+    // Negative operands
+    assert(-1i128 - -1i128 == 0i128, 2300);
+
+    // Mixed signs
+    assert(0i128 - 1i128 == -1i128, 2400);
+    assert(-1i128 - 170141183460469231731687303715884105727i128 == -170141183460469231731687303715884105728i128, 2501);
+    return;
+}
+
+}
+// Subtraction: overflow (positive)
+//# run
+module 0xa.m {
+
+entry foo() {
+label b0:
+    _ = 170141183460469231731687303715884105727i128 - -1i128;
+    return;
+}
+
+}
+// Subtraction: overflow (negative)
+//# run
+module 0x42.m {
+
+entry foo() {
+label b0:
+    _ = -170141183460469231731687303715884105728i128 - 1i128;
+    return;
+}
+
+}
+
+// Multiplication: happy path
+//# run
+module 0xb.m {
+
+entry foo() {
+label b0:
+    assert(0i128 * 0i128 == 0i128, 3000);
+    assert(1i128 * 0i128 == 0i128, 3001);
+    assert(1i128 * 1i128 == 1i128, 3002);
+
+    assert(60000i128 * 70000i128 == 4200000000i128, 3100);
+
+    // Negative operands
+    assert(-1i128 * 1i128 == -1i128, 3200);
+    assert(-1i128 * -1i128 == 1i128, 3201);
+    assert(-60000i128 * 70000i128 == -4200000000i128, 3202);
+
+    // Boundary
+    assert(1i128 * 170141183460469231731687303715884105727i128 == 170141183460469231731687303715884105727i128, 3300);
+    assert(1i128 * -170141183460469231731687303715884105728i128 == -170141183460469231731687303715884105728i128, 3302);
+    return;
+}
+
+}
+// Multiplication: overflow
+//# run
+module 0xc.m {
+
+entry foo() {
+label b0:
+    _ = 85070591730234615865843651857942052864i128 * 2i128;
+    return;
+}
+
+}
+
+// Division: happy path
+//# run
+module 0xe.m {
+
+entry foo() {
+label b0:
+    assert(0i128 / 1i128 == 0i128, 4000);
+    assert(1i128 / 1i128 == 1i128, 4001);
+    assert(6i128 / 3i128 == 2i128, 4100);
+
+    // Negative operands
+    assert(-6i128 / 3i128 == -2i128, 4200);
+    assert(6i128 / -3i128 == -2i128, 4201);
+    assert(-6i128 / -3i128 == 2i128, 4202);
+
+    // Truncation toward zero
+    assert(7i128 / 2i128 == 3i128, 4300);
+    assert(-7i128 / 2i128 == -3i128, 4301);
+
+    assert(170141183460469231731687303715884105727i128 / 170141183460469231731687303715884105727i128 == 1i128, 4400);
+    assert(-170141183460469231731687303715884105728i128 / 1i128 == -170141183460469231731687303715884105728i128, 4401);
+    return;
+}
+
+}
+// Division by zero
+//# run
+module 0x15.m {
+
+entry foo() {
+label b0:
+    _ = 0i128 / 0i128;
+    return;
+}
+
+}
+//# run
+module 0x16.m {
+
+entry foo() {
+label b0:
+    _ = 1i128 / 0i128;
+    return;
+}
+
+}
+
+// Modulo: happy path
+//# run
+module 0x18.m {
+
+entry foo() {
+label b0:
+    assert(0i128 % 1i128 == 0i128, 5000);
+    assert(1i128 % 1i128 == 0i128, 5001);
+    assert(8i128 % 3i128 == 2i128, 5100);
+
+    // Negative operands
+    assert(-8i128 % 3i128 == -2i128, 5200);
+    assert(8i128 % -3i128 == 2i128, 5201);
+    assert(-8i128 % -3i128 == -2i128, 5202);
+    return;
+}
+
+}
+// Modulo by zero
+//# run
+module 0x19.m {
+
+entry foo() {
+label b0:
+    _ = 0i128 % 0i128;
+    return;
+}
+
+}

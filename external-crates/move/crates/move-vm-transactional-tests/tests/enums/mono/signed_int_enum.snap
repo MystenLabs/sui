@@ -1,0 +1,16 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, lines 3-35:
+//# print-bytecode
+Error: ParserError: Invalid Token: expected Comma, not As
+
+task 2, lines 37-69:
+//# publish
+Error: ParserError: Invalid Token: expected Comma, not As
+
+task 3, lines 71-89:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term Minus
