@@ -158,6 +158,7 @@ feature_flags:
   split_checkpoints_in_consensus_handler: true
   consensus_always_accept_system_transactions: true
   validator_metadata_verify_v2: true
+  defer_unpaid_amplification: true
   randomize_checkpoint_tx_limit_in_tests: true
   gasless_transaction_drop_safety: true
   merge_randomness_into_checkpoint: true

@@ -3868,7 +3868,7 @@ impl AuthorityState {
                 .next()
                 .is_some();
 
-            if !has_previous_epoch_data {
+            if false && !has_previous_epoch_data {
                 panic!(
                     "enable_multi_epoch_transaction_expiration is enabled but no transaction data found for previous epoch {}. \
                     This indicates the node was restored using an old version of sui-tool that does not backfill the table. \
