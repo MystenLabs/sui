@@ -2755,7 +2755,9 @@ impl AuthorityState {
 
         let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
         let reference_gas_price = epoch_store.reference_gas_price();
-        let protocol_config = epoch_store.protocol_config();
+        let mut protocol_config = epoch_store.protocol_config().clone();
+        protocol_config.set_execution_version_for_testing(4);
+        let protocol_config = &protocol_config;
         let max_tx_gas = protocol_config.max_tx_gas();
 
         let price = gas_price.unwrap_or(reference_gas_price);
