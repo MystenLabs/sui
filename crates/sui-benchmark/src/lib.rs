@@ -489,8 +489,8 @@ impl LocalValidatorAggregatorProxy {
         let validators: Vec<_> = self
             .clients
             .values()
-            .cloned()
             .take(num_validators)
+            .cloned()
             .collect();
         let request = SubmitTxRequest::new_transaction(tx.clone());
 
@@ -1182,4 +1182,3 @@ pub fn convert_move_call_args(
         })
         .collect()
 }
-
