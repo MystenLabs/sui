@@ -2277,19 +2277,20 @@ impl AuthorityState {
         Option<ObjectID>,
     )> {
         // Cheap validity checks for a transaction, including input size limits.
-        transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
+        info!("Performing dry execution for transaction {}", transaction_digest);
+        // transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
 
-        sui_transaction_checks::deny::check_transaction_for_signing(
-            &transaction,
-            &[],
-            &input_object_kinds,
-            &receiving_object_refs,
-            &self.config.transaction_deny_config,
-            self.get_backing_package_store().as_ref(),
-        )?;
+        // sui_transaction_checks::deny::check_transaction_for_signing(
+        //     &transaction,
+        //     &[],
+        //     &input_object_kinds,
+        //     &receiving_object_refs,
+        //     &self.config.transaction_deny_config,
+        //     self.get_backing_package_store().as_ref(),
+        // )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             // We don't want to cache this transaction since it's a dry run.
@@ -2351,22 +2352,24 @@ impl AuthorityState {
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
-        let early_execution_error = get_early_execution_error(
-            &transaction_digest,
-            &checked_input_objects,
-            self.config.certificate_deny_config.certificate_deny_set(),
-            // TODO(address-balances): This does not currently support balance withdraws properly.
-            // For address balance withdraws, this cannot detect insufficient balance. We need to
-            // first check if the balance is sufficient, similar to how we schedule withdraws.
-            // For object balance withdraws, we need to handle the case where object balance is
-            // insufficient in the post-execution.
-            &FundsWithdrawStatus::MaybeSufficient,
-        );
-        let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
-        };
-
+        // let early_execution_error = get_early_execution_error(
+        //     &transaction_digest,
+        //     &checked_input_objects,
+        //     self.config.certificate_deny_config.certificate_deny_set(),
+        //     // TODO(address-balances): This does not currently support balance withdraws properly.
+        //     // For address balance withdraws, this cannot detect insufficient balance. We need to
+        //     // first check if the balance is sufficient, similar to how we schedule withdraws.
+        //     // For object balance withdraws, we need to handle the case where object balance is
+        //     // insufficient in the post-execution.
+        //     &FundsWithdrawStatus::MaybeSufficient,
+        // );
+        // let execution_params = match early_execution_error {
+        //     Some(error) => ExecutionOrEarlyError::Err(error),
+        //     None => ExecutionOrEarlyError::Ok(()),
+        // };
+        let start = std::time::Instant::now();
+        let execution_params = ExecutionOrEarlyError::Ok(());
+        info!("Starting execution for dry run of transaction {}", transaction_digest);
         let (inner_temp_store, _, effects, _timings, execution_error) = self
             .execute_transaction_to_effects(
                 executor.as_ref(),
@@ -2389,6 +2392,7 @@ impl AuthorityState {
                 // Use latest accumulator version for dry run/dev inspect
                 None,
             );
+        info!("Finished execution for dry run of transaction {} elapsed {}", transaction_digest, start.elapsed().as_millis());
 
         let tx_digest = *effects.transaction_digest();
 
@@ -2408,28 +2412,28 @@ impl AuthorityState {
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let balance_changes = Vec::new();
 
-        let written_with_kind = effects
-            .created()
-            .into_iter()
-            .map(|(oref, _)| (oref, WriteKind::Create))
-            .chain(
-                effects
-                    .unwrapped()
-                    .into_iter()
-                    .map(|(oref, _)| (oref, WriteKind::Unwrap)),
-            )
-            .chain(
-                effects
-                    .mutated()
-                    .into_iter()
-                    .map(|(oref, _)| (oref, WriteKind::Mutate)),
-            )
-            .map(|(oref, kind)| {
-                let obj = inner_temp_store.written.get(&oref.0).unwrap();
-                // TODO: Avoid clones.
-                (oref.0, (oref, obj.clone(), kind))
-            })
-            .collect();
+        // let written_with_kind = effects
+        //     .created()
+        //     .into_iter()
+        //     .map(|(oref, _)| (oref, WriteKind::Create))
+        //     .chain(
+        //         effects
+        //             .unwrapped()
+        //             .into_iter()
+        //             .map(|(oref, _)| (oref, WriteKind::Unwrap)),
+        //     )
+        //     .chain(
+        //         effects
+        //             .mutated()
+        //             .into_iter()
+        //             .map(|(oref, _)| (oref, WriteKind::Mutate)),
+        //     )
+        //     .map(|(oref, kind)| {
+        //         let obj = inner_temp_store.written.get(&oref.0).unwrap();
+        //         // TODO: Avoid clones.
+        //         (oref.0, (oref, obj.clone(), kind))
+        //     })
+        //     .collect();
 
         let execution_error_source = execution_error
             .as_ref()
@@ -2462,7 +2466,7 @@ impl AuthorityState {
                 balance_changes,
                 execution_error_source,
             },
-            written_with_kind,
+            BTreeMap::new(),
             effects,
             mock_gas,
         ))
@@ -2781,19 +2785,19 @@ impl AuthorityState {
             vec![]
         };
 
-        transaction.validity_check_no_gas_check(protocol_config)?;
+        // transaction.validity_check_no_gas_check(protocol_config)?;
 
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
 
-        sui_transaction_checks::deny::check_transaction_for_signing(
-            &transaction,
-            &[],
-            &input_object_kinds,
-            &receiving_object_refs,
-            &self.config.transaction_deny_config,
-            self.get_backing_package_store().as_ref(),
-        )?;
+        // sui_transaction_checks::deny::check_transaction_for_signing(
+        //     &transaction,
+        //     &[],
+        //     &input_object_kinds,
+        //     &receiving_object_refs,
+        //     &self.config.transaction_deny_config,
+        //     self.get_backing_package_store().as_ref(),
+        // )?;
 
         let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             // We don't want to cache this transaction since it's a dev inspect.
@@ -2873,17 +2877,21 @@ impl AuthorityState {
             transaction,
         );
         let transaction_digest = TransactionDigest::new(default_hash(&intent_msg.value));
-        let early_execution_error = get_early_execution_error(
-            &transaction_digest,
-            &checked_input_objects,
-            self.config.certificate_deny_config.certificate_deny_set(),
-            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &FundsWithdrawStatus::MaybeSufficient,
-        );
-        let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
-        };
+        let start = std::time::Instant::now();
+        info!("Starting dev inspect for transaction {}", transaction_digest);
+        // let early_execution_error = get_early_execution_error(
+        //     &transaction_digest,
+        //     &checked_input_objects,
+        //     self.config.certificate_deny_config.certificate_deny_set(),
+        //     // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+        //     &FundsWithdrawStatus::MaybeSufficient,
+        // );
+        // let execution_params = match early_execution_error {
+        //     Some(error) => ExecutionOrEarlyError::Err(error),
+        //     None => ExecutionOrEarlyError::Ok(()),
+        // };
+
+        let execution_params = ExecutionOrEarlyError::Ok(());
 
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
@@ -2905,6 +2913,7 @@ impl AuthorityState {
             transaction_digest,
             skip_checks,
         );
+        info!("Finished dev inspect for transaction {} elapsed {} {skip_checks}", transaction_digest, start.elapsed().as_millis());
 
         let raw_effects = if show_raw_txn_data_and_effects {
             bcs::to_bytes(&effects).map_err(|_| SuiErrorKind::TransactionSerializationError {

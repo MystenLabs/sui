@@ -289,34 +289,34 @@ impl TransactionExecutionApi {
     ) -> Result<DryRunTransactionBlockResponse, Error> {
         let (txn_data, txn_digest, input_objs) =
             self.prepare_dry_run_transaction_block(tx_bytes)?;
-        let sender = txn_data.sender();
+        // let sender = txn_data.sender();
         let (resp, written_objects, transaction_effects, mock_gas) = self
             .state
             .dry_exec_transaction(txn_data.clone(), txn_digest)
             .await?;
-        let object_cache = ObjectProviderCache::new_with_cache(self.state.clone(), written_objects);
-        let balance_changes = get_balance_changes_from_effect(
-            &object_cache,
-            &transaction_effects,
-            input_objs,
-            mock_gas,
-        )
-        .await?;
-        let object_changes = get_object_changes(
-            &object_cache,
-            &transaction_effects,
-            sender,
-            transaction_effects.modified_at_versions(),
-            transaction_effects.all_changed_objects(),
-            transaction_effects.all_removed_objects(),
-        )
-        .await?;
+        // let object_cache = ObjectProviderCache::new_with_cache(self.state.clone(), written_objects);
+        // let balance_changes = get_balance_changes_from_effect(
+        //     &object_cache,
+        //     &transaction_effects,
+        //     input_objs,
+        //     mock_gas,
+        // )
+        // .await?;
+        // let object_changes = get_object_changes(
+        //     &object_cache,
+        //     &transaction_effects,
+        //     sender,
+        //     transaction_effects.modified_at_versions(),
+        //     transaction_effects.all_changed_objects(),
+        //     transaction_effects.all_removed_objects(),
+        // )
+        // .await?;
 
         Ok(DryRunTransactionBlockResponse {
             effects: resp.effects,
             events: resp.events,
-            object_changes,
-            balance_changes,
+            object_changes: Vec::new(),
+            balance_changes: Vec::new(),
             input: resp.input,
             execution_error_source: resp.execution_error_source,
             suggested_gas_price: resp.suggested_gas_price,
