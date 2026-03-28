@@ -2502,7 +2502,7 @@ impl AuthorityState {
         }
 
         // Cheap validity checks for a transaction, including input size limits.
-        transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
+        // transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
@@ -2579,16 +2579,18 @@ impl AuthorityState {
         .expect("Creating an executor should not fail here");
 
         let (kind, signer, gas_data) = transaction.execution_parts();
-        let early_execution_error = get_early_execution_error(
-            &transaction.digest(),
-            &checked_input_objects,
-            self.config.certificate_deny_config.certificate_deny_set(),
-            &FundsWithdrawStatus::MaybeSufficient,
-        );
-        let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
-        };
+        // let early_execution_error = get_early_execution_error(
+        //     &transaction.digest(),
+        //     &checked_input_objects,
+        //     self.config.certificate_deny_config.certificate_deny_set(),
+        //     &FundsWithdrawStatus::MaybeSufficient,
+        // );
+        // let execution_params = match early_execution_error {
+        //     Some(error) => ExecutionOrEarlyError::Err(error),
+        //     None => ExecutionOrEarlyError::Ok(()),
+        // };
+
+        let execution_params = ExecutionOrEarlyError::Ok(());
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
@@ -2602,6 +2604,9 @@ impl AuthorityState {
             .epoch_start_config()
             .epoch_data()
             .epoch_start_timestamp();
+
+        let start = std::time::Instant::now();
+        info!("Starting simulate for tx {}", tx_digest);
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             &tracking_store,
             protocol_config,
@@ -2619,49 +2624,50 @@ impl AuthorityState {
             tx_digest,
             dev_inspect,
         );
+        info!("Finished execution for simulate of tx {} elapsed {} dev_inspect: {dev_inspect}", tx_digest, start.elapsed().as_millis());
 
-        // Post-execution: check object funds (non-address withdrawals discovered during execution).
-        let (inner_temp_store, effects, execution_result) = if execution_result.is_ok() {
-            let has_insufficient_object_funds = inner_temp_store
-                .accumulator_running_max_withdraws
-                .iter()
-                .filter(|(id, _)| !address_funds.contains(id))
-                .any(|(id, max_withdraw)| {
-                    let (balance, _) = self.get_account_funds_read().get_latest_account_amount(id);
-                    balance < *max_withdraw
-                });
+        // // Post-execution: check object funds (non-address withdrawals discovered during execution).
+        // let (inner_temp_store, effects, execution_result) = if execution_result.is_ok() {
+        //     let has_insufficient_object_funds = inner_temp_store
+        //         .accumulator_running_max_withdraws
+        //         .iter()
+        //         .filter(|(id, _)| !address_funds.contains(id))
+        //         .any(|(id, max_withdraw)| {
+        //             let (balance, _) = self.get_account_funds_read().get_latest_account_amount(id);
+        //             balance < *max_withdraw
+        //         });
 
-            if has_insufficient_object_funds {
-                let retry_gas_status = SuiGasStatus::new(
-                    cloned_gas.budget,
-                    cloned_gas.price,
-                    epoch_store.reference_gas_price(),
-                    protocol_config,
-                )?;
-                let (store, _, effects, result) = executor.dev_inspect_transaction(
-                    &tracking_store,
-                    protocol_config,
-                    self.metrics.limits_metrics.clone(),
-                    false,
-                    ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
-                    &epoch_id,
-                    epoch_timestamp_ms,
-                    cloned_input_objects,
-                    cloned_gas,
-                    retry_gas_status,
-                    cloned_kind,
-                    None, // rewritten_inputs
-                    signer,
-                    tx_digest,
-                    dev_inspect,
-                );
-                (store, effects, result)
-            } else {
-                (inner_temp_store, effects, execution_result)
-            }
-        } else {
-            (inner_temp_store, effects, execution_result)
-        };
+        //     if has_insufficient_object_funds {
+        //         let retry_gas_status = SuiGasStatus::new(
+        //             cloned_gas.budget,
+        //             cloned_gas.price,
+        //             epoch_store.reference_gas_price(),
+        //             protocol_config,
+        //         )?;
+        //         let (store, _, effects, result) = executor.dev_inspect_transaction(
+        //             &tracking_store,
+        //             protocol_config,
+        //             self.metrics.limits_metrics.clone(),
+        //             false,
+        //             ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
+        //             &epoch_id,
+        //             epoch_timestamp_ms,
+        //             cloned_input_objects,
+        //             cloned_gas,
+        //             retry_gas_status,
+        //             cloned_kind,
+        //             None, // rewritten_inputs
+        //             signer,
+        //             tx_digest,
+        //             dev_inspect,
+        //         );
+        //         (store, effects, result)
+        //     } else {
+        //         (inner_temp_store, effects, execution_result)
+        //     }
+        // } else {
+        //     (inner_temp_store, effects, execution_result)
+        // };
 
         let loaded_runtime_objects = tracking_store.into_read_objects();
         let unchanged_loaded_runtime_objects =

@@ -18,6 +18,7 @@ use sui_rpc::proto::sui::rpc::v2::ObjectSet;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
+use sui_rpc::proto::sui::rpc::v2::TransactionEffects;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::TransactionDataAPI;
@@ -178,16 +179,17 @@ pub fn simulate_transaction(
     let transaction = if let Some(submask) = read_mask.subtree("transaction") {
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
+        message.balance_changes = vec![];
 
-        message.balance_changes =
-            if submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
-                derive_balance_changes_2(&effects, &objects)
-                    .into_iter()
-                    .map(Into::into)
-                    .collect()
-            } else {
-                vec![]
-            };
+        // message.balance_changes =
+        //     if submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
+        //         derive_balance_changes_2(&effects, &objects)
+        //             .into_iter()
+        //             .map(Into::into)
+        //             .collect()
+        //     } else {
+        //         vec![]
+        //     };
 
         message.effects = submask
             .subtree(ExecutedTransaction::EFFECTS_FIELD)
@@ -231,26 +233,28 @@ pub fn simulate_transaction(
         None
     };
 
-    let outputs = if read_mask.contains(SimulateTransactionResponse::COMMAND_OUTPUTS_FIELD) {
-        execution_result
-            .into_iter()
-            .flatten()
-            .map(|(reference_outputs, return_values)| {
-                let mut message = CommandResult::default();
-                message.return_values = return_values
-                    .into_iter()
-                    .map(|(bcs, ty)| to_command_output(service, None, bcs, ty))
-                    .collect();
-                message.mutated_by_ref = reference_outputs
-                    .into_iter()
-                    .map(|(arg, bcs, ty)| to_command_output(service, Some(arg), bcs, ty))
-                    .collect();
-                message
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    // let outputs = if read_mask.contains(SimulateTransactionResponse::COMMAND_OUTPUTS_FIELD) {
+    //     execution_result
+    //         .into_iter()
+    //         .flatten()
+    //         .map(|(reference_outputs, return_values)| {
+    //             let mut message = CommandResult::default();
+    //             message.return_values = return_values
+    //                 .into_iter()
+    //                 .map(|(bcs, ty)| to_command_output(service, None, bcs, ty))
+    //                 .collect();
+    //             message.mutated_by_ref = reference_outputs
+    //                 .into_iter()
+    //                 .map(|(arg, bcs, ty)| to_command_output(service, Some(arg), bcs, ty))
+    //                 .collect();
+    //             message
+    //         })
+    //         .collect()
+    // } else {
+    //     Vec::new()
+    // };
+
+    let outputs = Vec::new();
 
     let mut response = SimulateTransactionResponse::default();
     response.transaction = transaction;
