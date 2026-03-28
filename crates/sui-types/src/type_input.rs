@@ -268,6 +268,10 @@ impl From<TypeTag> for TypeInput {
             TypeTag::U16 => TypeInput::U16,
             TypeTag::U32 => TypeInput::U32,
             TypeTag::U256 => TypeInput::U256,
+            TypeTag::I8 | TypeTag::I16 | TypeTag::I32
+            | TypeTag::I64 | TypeTag::I128 | TypeTag::I256 => {
+                unreachable!("signed integer types not yet supported in TypeInput")
+            }
         }
     }
 }

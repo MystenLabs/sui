@@ -312,6 +312,14 @@ pub fn type_tag_core_to_sdk(
         move_core_types::language_storage::TypeTag::U16 => TypeTag::U16,
         move_core_types::language_storage::TypeTag::U32 => TypeTag::U32,
         move_core_types::language_storage::TypeTag::U256 => TypeTag::U256,
+        move_core_types::language_storage::TypeTag::I8
+        | move_core_types::language_storage::TypeTag::I16
+        | move_core_types::language_storage::TypeTag::I32
+        | move_core_types::language_storage::TypeTag::I64
+        | move_core_types::language_storage::TypeTag::I128
+        | move_core_types::language_storage::TypeTag::I256 => {
+            return Err(SdkTypeConversionError("signed integer types not yet supported in SDK".to_string()))
+        }
     }
     .pipe(Ok)
 }

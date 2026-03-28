@@ -231,6 +231,24 @@ public(package) macro fun try_as_u128($x: _): Option<u128> {
     if (x > 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) option::none() else option::some(x as u128)
 }
 
+public(package) macro fun signed_num_to_string($x: _): String {
+    let mut x = $x;
+    if (x == 0) {
+        return b"0".to_string()
+    };
+    let negative = x < 0;
+    let mut buffer = vector[];
+    while (x != 0) {
+        let digit = x % 10;
+        let digit = if (digit < 0) -digit else digit;
+        buffer.push_back(((48 + digit) as u8));
+        x = x / 10;
+    };
+    if (negative) buffer.push_back(b"-"[0]);
+    buffer.reverse();
+    buffer.to_string()
+}
+
 /// Creates a fixed-point value from a quotient specified by its numerator and denominator.
 /// `$T` is the underlying integer type for the fixed-point value, where `$T` has `$t_bits` bits.
 /// `$U` is the type used for intermediate calculations, where `$U` is the next larger integer type.

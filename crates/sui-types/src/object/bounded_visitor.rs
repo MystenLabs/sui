@@ -131,6 +131,12 @@ impl BoundedVisitor {
                 | TT::U64
                 | TT::U128
                 | TT::U256
+                | TT::I8
+                | TT::I16
+                | TT::I32
+                | TT::I64
+                | TT::I128
+                | TT::I256
                 | TT::Address
                 | TT::Signer => self.debit(8)?,
 
