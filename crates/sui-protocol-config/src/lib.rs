@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 120;
+const MAX_PROTOCOL_VERSION: u64 = 121;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -311,6 +311,7 @@ const TESTNET_USDC: &str =
 // Version 118: Adds `transfer_migration_cap` to display registry
 // Version 119: Enable the new VM.
 // Version 120: Re-enable defer_unpaid_amplification (devnet + testnet).
+// Version 121: Enable deterministic object ID creation via object::new_with_salt (non-mainnet).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1041,6 +1042,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_gasless: bool,
+
+    // If true, enable deterministic object ID creation via object::new_with_salt.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_salted_object_ids: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1542,6 +1547,8 @@ pub struct ProtocolConfig {
     object_delete_impl_cost_base: Option<u64>,
     // Cost params for the Move native function `record_new_uid(id: address)`
     object_record_new_uid_cost_base: Option<u64>,
+    // Cost params for the Move native function `new_with_salt_impl(creator: address, salt: vector<u8>): address`
+    object_new_with_salt_cost_base: Option<u64>,
 
     // Transfer
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -2712,6 +2719,14 @@ impl ProtocolConfig {
         self.feature_flags.enable_gasless
     }
 
+    pub fn enable_salted_object_ids(&self) -> bool {
+        self.feature_flags.enable_salted_object_ids
+    }
+
+    pub fn enable_salted_object_ids_for_testing(&mut self) {
+        self.feature_flags.enable_salted_object_ids = true;
+    }
+
     pub fn gasless_allowed_token_types(&self) -> &[(String, u64)] {
         debug_assert!(self.gasless_allowed_token_types.is_some());
         self.gasless_allowed_token_types.as_deref().unwrap_or(&[])
@@ -3009,6 +3024,8 @@ impl ProtocolConfig {
             object_delete_impl_cost_base: Some(52),
             // Cost params for the Move native function `record_new_uid(id: address)`
             object_record_new_uid_cost_base: Some(52),
+            // Cost params for the Move native function `new_with_salt_impl(creator: address, salt: vector<u8>): address`
+            object_new_with_salt_cost_base: None,
 
             // `transfer` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -4773,6 +4790,12 @@ impl ProtocolConfig {
                     // Re-enable unpaid amplification deferral protection (testnet + devnet)
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.defer_unpaid_amplification = true;
+                    }
+                }
+                121 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_salted_object_ids = true;
+                        cfg.object_new_with_salt_cost_base = Some(260);
                     }
                 }
                 // Use this template when making changes:

@@ -240,6 +240,8 @@ pub trait Storage {
     ) -> DenyListResult;
 
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>);
+
+    fn record_salted_object_ids(&mut self, salted_ids: BTreeSet<ObjectID>);
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;

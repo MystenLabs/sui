@@ -194,4 +194,5 @@ pub(crate) mod private {
 pub enum HashingIntentScope {
     ChildObjectId = 0xf0,
     RegularObjectId = 0xf1,
+    SaltedObjectId = 0xf2,
 }

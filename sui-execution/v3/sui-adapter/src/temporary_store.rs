@@ -1274,6 +1274,10 @@ impl Storage for TemporaryStore<'_> {
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
         TemporaryStore::save_generated_object_ids(self, generated_ids)
     }
+
+    fn record_salted_object_ids(&mut self, _salted_ids: BTreeSet<ObjectID>) {
+        unreachable!("Salted object IDs are not supported in sui-execution v3")
+    }
 }
 
 impl BackingPackageStore for TemporaryStore<'_> {

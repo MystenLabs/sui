@@ -1626,6 +1626,17 @@ impl ObjectID {
         ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap()
     }
 
+    /// Derive a deterministic ObjectID from creator address and salt.
+    /// Hash(0xf2 || creator_bytes || salt) — same inputs always yield the same ID.
+    pub fn derive_id_with_salt(creator: SuiAddress, salt: &[u8]) -> Self {
+        let mut hasher = DefaultHash::default();
+        hasher.update([HashingIntentScope::SaltedObjectId as u8]);
+        hasher.update(creator.as_ref());
+        hasher.update(salt);
+        let hash = hasher.finalize();
+        ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap()
+    }
+
     /// Incremenent the ObjectID by usize IDs, assuming the ObjectID hex is a number represented as an array of bytes
     pub fn advance(&self, step: usize) -> Result<ObjectID, anyhow::Error> {
         let mut curr_vec = self.to_vec();

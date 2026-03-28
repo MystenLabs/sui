@@ -15,6 +15,7 @@ use move_vm_runtime::{
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 #[derive(Clone)]
 pub struct BorrowUidCostParams {
@@ -114,4 +115,50 @@ pub fn record_new_uid(
     let obj_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     obj_runtime.new_id(uid_bytes.into())?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
+}
+
+#[derive(Clone)]
+pub struct NewWithSaltCostParams {
+    pub object_new_with_salt_cost_base: InternalGas,
+}
+
+const E_SALTED_IDS_NOT_ENABLED: u64 = 1;
+
+/***************************************************************************************************
+ * native fun new_with_salt_impl
+ * Implementation of the Move native function `new_with_salt_impl(creator: address, salt: vector<u8>): address`
+ *   gas cost: object_new_with_salt_cost_base | derives a deterministic address from creator + salt
+ **************************************************************************************************/
+pub fn new_with_salt_impl(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 2);
+
+    let cost_params = get_extension!(context, NativesCostTable)?
+        .object_new_with_salt_cost_params
+        .clone();
+    native_charge_gas_early_exit!(context, cost_params.object_new_with_salt_cost_base);
+
+    let obj_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    if !obj_runtime.protocol_config.enable_salted_object_ids() {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_SALTED_IDS_NOT_ENABLED,
+        ));
+    }
+
+    let salt = pop_arg!(args, Vec<u8>);
+    let creator = pop_arg!(args, AccountAddress);
+
+    let id = ObjectID::derive_id_with_salt(SuiAddress::from(creator), &salt);
+    let obj_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    obj_runtime.new_salted_id(id)?;
+
+    Ok(NativeResult::ok(
+        context.gas_used(),
+        smallvec![Value::address(AccountAddress::from(id))],
+    ))
 }

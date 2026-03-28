@@ -1371,6 +1371,11 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
+            E::SaltedObjectIdAlreadyExists { id } => {
+                message.set_object_id(id.to_canonical_string(true));
+                // No proto enum variant yet; report as invariant violation.
+                ExecutionErrorKind::InvariantViolation
+            }
         };
 
         message.set_kind(kind);

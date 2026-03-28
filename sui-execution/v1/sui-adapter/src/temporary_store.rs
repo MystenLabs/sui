@@ -1147,6 +1147,10 @@ impl Storage for TemporaryStore<'_> {
             "Generated object IDs are not recorded in ExecutionResults in sui-execution v1"
         );
     }
+
+    fn record_salted_object_ids(&mut self, _salted_ids: BTreeSet<ObjectID>) {
+        unreachable!("Salted object IDs are not supported in sui-execution v1")
+    }
 }
 
 impl BackingPackageStore for TemporaryStore<'_> {

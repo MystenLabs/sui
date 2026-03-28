@@ -27,7 +27,7 @@ use self::{
         DynamicFieldHashTypeAndKeyCostParams, DynamicFieldRemoveChildObjectCostParams,
     },
     event::EventEmitCostParams,
-    object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
+    object::{BorrowUidCostParams, DeleteImplCostParams, NewWithSaltCostParams, RecordNewIdCostParams},
     transfer::{
         TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
     },
@@ -123,6 +123,7 @@ pub struct NativesCostTable {
     pub borrow_uid_cost_params: BorrowUidCostParams,
     pub delete_impl_cost_params: DeleteImplCostParams,
     pub record_new_id_cost_params: RecordNewIdCostParams,
+    pub object_new_with_salt_cost_params: NewWithSaltCostParams,
 
     // Transfer
     pub transfer_transfer_internal_cost_params: TransferInternalCostParams,
@@ -321,6 +322,12 @@ impl NativesCostTable {
             record_new_id_cost_params: RecordNewIdCostParams {
                 object_record_new_uid_cost_base: protocol_config
                     .object_record_new_uid_cost_base()
+                    .into(),
+            },
+            object_new_with_salt_cost_params: NewWithSaltCostParams {
+                object_new_with_salt_cost_base: protocol_config
+                    .object_new_with_salt_cost_base_as_option()
+                    .unwrap_or(0)
                     .into(),
             },
 
@@ -1090,6 +1097,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "object",
             "record_new_uid",
             make_native!(object::record_new_uid),
+        ),
+        (
+            "object",
+            "new_with_salt_impl",
+            make_native!(object::new_with_salt_impl),
         ),
         (
             "test_scenario",

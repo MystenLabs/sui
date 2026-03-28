@@ -77,6 +77,10 @@ pub struct TemporaryStore<'backing> {
     /// of created (but not deleted) IDs in the transaction.
     generated_runtime_ids: BTreeSet<ObjectID>,
 
+    /// The set of object IDs created via `object::new_with_salt` — these need a backing-store
+    /// collision check after execution to ensure no live object with that ID already exists.
+    salted_runtime_ids: BTreeSet<ObjectID>,
+
     // TODO: Now that we track epoch here, there are a few places we don't need to pass it around.
     /// The current epoch.
     cur_epoch: EpochId,
@@ -135,6 +139,7 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
             receiving_objects,
             generated_runtime_ids: BTreeSet::new(),
+            salted_runtime_ids: BTreeSet::new(),
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
         }
@@ -547,6 +552,27 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
         self.generated_runtime_ids.extend(generated_ids);
+    }
+
+    pub fn save_salted_object_ids(&mut self, ids: BTreeSet<ObjectID>) {
+        self.salted_runtime_ids.extend(ids);
+    }
+
+    /// Check that no salted object ID collides with a live object already in the backing store.
+    /// IDs that are already in `input_objects` are allowed (consumed this transaction).
+    pub fn check_salted_id_collisions(&self) -> Result<(), ExecutionError> {
+        for id in &self.salted_runtime_ids {
+            if self.input_objects.contains_key(id) {
+                // Object was an input to this transaction; not a collision.
+                continue;
+            }
+            if self.store.get_object(id).is_some() {
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::SaltedObjectIdAlreadyExists { id: *id },
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
@@ -1310,6 +1336,10 @@ impl Storage for TemporaryStore<'_> {
 
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
         TemporaryStore::save_generated_object_ids(self, generated_ids)
+    }
+
+    fn record_salted_object_ids(&mut self, salted_ids: BTreeSet<ObjectID>) {
+        TemporaryStore::save_salted_object_ids(self, salted_ids)
     }
 }
 

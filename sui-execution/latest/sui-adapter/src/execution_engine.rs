@@ -898,6 +898,9 @@ mod checked {
             .check_execution_results_consistency()
             // TODO push Mode::Error lower into the call stack and remove into()
             .map_err(|e| (e.into(), vec![]))?;
+        temporary_store
+            .check_salted_id_collisions()
+            .map_err(|e| (e.into(), vec![]))?;
         Ok(result)
     }
 

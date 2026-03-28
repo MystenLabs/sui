@@ -128,6 +128,8 @@ where
     let wrapped_object_containers = object_runtime!(context)?.wrapped_object_containers();
     // We record the generated object IDs for expensive invariant checks
     let generated_object_ids = object_runtime!(context)?.generated_object_ids();
+    // We record salted object IDs for collision detection
+    let salted_object_ids = object_runtime!(context)?.salted_object_ids();
 
     // apply changes
     let finished = context.finish::<Mode>();
@@ -139,6 +141,8 @@ where
     env.state_view.record_execution_results(finished?)?;
     env.state_view
         .record_generated_object_ids(generated_object_ids);
+    env.state_view
+        .record_salted_object_ids(salted_object_ids);
     Ok(mode_results)
 }
 

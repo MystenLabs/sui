@@ -97,6 +97,8 @@ pub(crate) struct ObjectRuntimeState {
     new_ids: Set<ObjectID>,
     // contains all ids generated in the txn including any new-and-subsequently-deleted ids
     generated_ids: Set<ObjectID>,
+    // subset of new_ids created via new_with_salt — need backing-store collision check
+    salted_ids: Set<ObjectID>,
     // ids passed to object::delete
     deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
@@ -196,6 +198,7 @@ impl<'a> ObjectRuntime<'a> {
                 input_objects: input_object_owners,
                 new_ids: Set::new(),
                 generated_ids: Set::new(),
+                salted_ids: Set::new(),
                 deleted_ids: Set::new(),
                 transfers: IndexMap::new(),
                 events: vec![],
@@ -241,6 +244,47 @@ impl<'a> ObjectRuntime<'a> {
             self.state.new_ids.insert(id);
         }
         Ok(())
+    }
+
+    pub fn new_salted_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
+        // Return error if this salted ID has already been generated in this transaction,
+        // indicating a duplicate salt was used.
+        if self.state.generated_ids.contains(&id) {
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!(
+                    "Salted object ID {id} was already generated in this transaction"
+                ))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
+                ));
+        }
+        // Apply the same limits as new_id
+        if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
+            self.is_metered,
+            self.state.new_ids.len(),
+            self.protocol_config.max_num_new_move_object_ids(),
+            self.protocol_config.max_num_new_move_object_ids_system_tx(),
+            self.metrics.excessive_new_move_object_ids
+        ) {
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!("Creating more than {} IDs is not allowed", lim))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
+                ));
+        };
+
+        let was_present = self.state.deleted_ids.shift_remove(&id);
+        if !was_present {
+            self.state.generated_ids.insert(id);
+            self.state.new_ids.insert(id);
+        }
+        self.state.salted_ids.insert(id);
+        Ok(())
+    }
+
+    /// Return the set of all object IDs created via `new_with_salt` during this transaction.
+    pub fn salted_object_ids(&self) -> BTreeSet<ObjectID> {
+        self.state.salted_ids.iter().cloned().collect()
     }
 
     pub fn delete_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
@@ -692,6 +736,7 @@ impl ObjectRuntimeState {
             input_objects: _,
             new_ids,
             generated_ids,
+            salted_ids: _,
             deleted_ids,
             transfers,
             events: user_events,

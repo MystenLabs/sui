@@ -58,6 +58,9 @@ const SUI_ADDRESS_ALIAS_STATE_ID: address = @0xa;
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
+/// Sender is not the creator address passed to `new_with_salt`.
+const ENotCreator: u64 = 2;
+
 /// An object ID. This is used to reference Sui Objects.
 /// This is *not* guaranteed to be globally unique--anyone can create an `ID` from a `UID` or
 /// from an object, and ID's can be freely copied and dropped.
@@ -271,6 +274,27 @@ public(package) fun new_uid_from_hash(bytes: address): UID {
     record_new_uid(bytes);
     UID { id: ID { bytes } }
 }
+
+/// Create a UID with a deterministic, predictable ID derived from the sender and `salt`.
+/// The same sender + salt always produce the same object ID.
+/// Aborts if a live object with the computed ID already exists on-chain.
+public fun new_with_salt(salt: vector<u8>, ctx: &mut TxContext): UID {
+    let id = new_with_salt_impl(ctx.sender(), salt);
+    UID { id: ID { bytes: id } }
+}
+
+/// Create a UID with a deterministic ID derived from `creator` and `salt`, authorized by `_proof`.
+/// The `_proof` must be the UID of an object whose address equals `creator` — possession of the
+/// object proves the right to occupy that address's salt namespace (factory pattern).
+/// Aborts if `_proof` does not match `creator`, or if a live object with the computed ID already
+/// exists on-chain.
+public fun new_with_salt_as(creator: address, _proof: &UID, salt: vector<u8>, _ctx: &mut TxContext): UID {
+    assert!(uid_to_address(_proof) == creator, ENotCreator);
+    let id = new_with_salt_impl(creator, salt);
+    UID { id: ID { bytes: id } }
+}
+
+native fun new_with_salt_impl(creator: address, salt: vector<u8>): address;
 
 // === internal functions ===
 

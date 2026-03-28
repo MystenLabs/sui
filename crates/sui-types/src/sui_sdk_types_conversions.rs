@@ -936,6 +936,10 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
             crate::execution_status::ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id } => {
                 Self::NonExclusiveWriteInputObjectModified { object: id.into() }
             }
+            crate::execution_status::ExecutionErrorKind::SaltedObjectIdAlreadyExists { .. } => {
+                // No SDK equivalent yet; treat as an invariant violation.
+                Self::InvariantViolation
+            }
         }
     }
 }
