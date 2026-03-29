@@ -24,6 +24,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
+use tracing::info;
 
 mod resolve;
 
@@ -52,31 +53,31 @@ pub fn simulate_transaction(
     let checks = TransactionChecks::from(request.checks());
 
     // TODO make this more efficient
-    let (reference_gas_price, protocol_config) = {
-        let system_state = service.reader.get_system_state_summary()?;
-        let protocol_config = ProtocolConfig::get_for_version_if_supported(
-            system_state.protocol_version.into(),
-            service.reader.inner().get_chain_identifier()?.chain(),
-        )
-        .ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                "unable to get current protocol config",
-            )
-        })?;
+    // let (reference_gas_price, protocol_config) = {
+    //     let system_state = service.reader.get_system_state_summary()?;
+    //     let protocol_config = ProtocolConfig::get_for_version_if_supported(
+    //         system_state.protocol_version.into(),
+    //         service.reader.inner().get_chain_identifier()?.chain(),
+    //     )
+    //     .ok_or_else(|| {
+    //         RpcError::new(
+    //             tonic::Code::Internal,
+    //             "unable to get current protocol config",
+    //         )
+    //     })?;
 
-        (system_state.reference_gas_price, protocol_config)
-    };
+    //     (system_state.reference_gas_price, protocol_config)
+    // };
 
     // Try to parse out a fully-formed transaction. If one wasn't provided then we will attempt to
     // perform transaction resolution.
-    let mut transaction = match sui_sdk_types::Transaction::try_from(transaction_proto) {
+    let transaction = match sui_sdk_types::Transaction::try_from(transaction_proto) {
         Ok(transaction) => sui_types::transaction::TransactionData::try_from(transaction)?,
 
         // If we weren't able to parse out a fully-formed transaction and the client provided BCS
         // TransactionData, then we'll error out early since we're unable to perform resolution
         // given a BCS payload
-        Err(e) if transaction_proto.bcs.is_some() => {
+        Err(e) => {
             return Err(FieldViolation::new("transaction")
                 .with_description(format!("invalid transaction: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
@@ -85,77 +86,79 @@ pub fn simulate_transaction(
 
         // We weren't able to parse out a fully-formed transaction so we'll attempt to perform
         // transaction resolution
-        _ => resolve::resolve_transaction(
-            service,
-            transaction_proto,
-            reference_gas_price,
-            &protocol_config,
-        )?,
+        // _ => resolve::resolve_transaction(
+        //     service,
+        //     transaction_proto,
+        //     reference_gas_price,
+        //     &protocol_config,
+        // )?,
     };
 
     // Perform budgest estimation and gas selection if requested and if TransactionChecks are enabled (it
     // makes no sense to do gas selection if checks are disabled because such a transaction can't
     // ever be committed to the chain).
-    if request.do_gas_selection() && checks.enabled() {
-        // At this point, the budget on the transaction can be set to one of the following:
-        // - The budget from the request, if specified.
-        // - The total balance of all of the gas payment coins (clamped to the protocol
-        //   MAX_GAS_BUDGET) in the request if the budget was not
-        //   specified but the gas payment coins were specified.
-        // - Protocol MAX_GAS_BUDGET if the request did not specified neither gas payment or budget.
-        //
-        // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
-        // overwrite the resolved budget with the more accurate estimate.
-        if request.transaction().gas_payment().budget.is_none()
-            && request.transaction().bcs_opt().is_none()
-        {
-            let mut estimation_transaction = transaction.clone();
-            estimation_transaction.gas_data_mut().payment = Vec::new();
-            estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
+    // if request.do_gas_selection() && checks.enabled() {
+    //     // At this point, the budget on the transaction can be set to one of the following:
+    //     // - The budget from the request, if specified.
+    //     // - The total balance of all of the gas payment coins (clamped to the protocol
+    //     //   MAX_GAS_BUDGET) in the request if the budget was not
+    //     //   specified but the gas payment coins were specified.
+    //     // - Protocol MAX_GAS_BUDGET if the request did not specified neither gas payment or budget.
+    //     //
+    //     // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
+    //     // overwrite the resolved budget with the more accurate estimate.
+    //     if request.transaction().gas_payment().budget.is_none()
+    //         && request.transaction().bcs_opt().is_none()
+    //     {
+    //         let mut estimation_transaction = transaction.clone();
+    //         estimation_transaction.gas_data_mut().payment = Vec::new();
+    //         estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
 
-            let simulation_result = executor
-                .simulate_transaction(
-                    estimation_transaction,
-                    TransactionChecks::Enabled,
-                    true, /* allow mock gas coin */
-                )
-                .map_err(anyhow::Error::from)?;
+    //         let simulation_result = executor
+    //             .simulate_transaction(
+    //                 estimation_transaction,
+    //                 TransactionChecks::Enabled,
+    //                 true, /* allow mock gas coin */
+    //             )
+    //             .map_err(anyhow::Error::from)?;
 
-            let estimate = estimate_gas_budget_from_gas_cost(
-                simulation_result.effects.gas_cost_summary(),
-                reference_gas_price,
-                request.transaction().gas_payment().objects.len(),
-                &protocol_config,
-            );
+    //         let estimate = estimate_gas_budget_from_gas_cost(
+    //             simulation_result.effects.gas_cost_summary(),
+    //             reference_gas_price,
+    //             request.transaction().gas_payment().objects.len(),
+    //             &protocol_config,
+    //         );
 
-            // If the request specified gas payment, then transaction.gas_data().budget should have been
-            // resolved to the cumulative balance of those coins. We don't want to return a resolved transaction
-            // where the gas payment can't satisfy the budget, so validate that balance can actually cover the
-            // estimated budget.
-            let gas_balance = transaction.gas_data().budget;
-            if gas_balance < estimate {
-                return Err(RpcError::new(
-                    tonic::Code::InvalidArgument,
-                    format!(
-                        "Insufficient gas balance to cover estimated transaction cost. \
-                        Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"
-                    ),
-                ));
-            }
-            transaction.gas_data_mut().budget = estimate;
-        }
+    //         // If the request specified gas payment, then transaction.gas_data().budget should have been
+    //         // resolved to the cumulative balance of those coins. We don't want to return a resolved transaction
+    //         // where the gas payment can't satisfy the budget, so validate that balance can actually cover the
+    //         // estimated budget.
+    //         let gas_balance = transaction.gas_data().budget;
+    //         if gas_balance < estimate {
+    //             return Err(RpcError::new(
+    //                 tonic::Code::InvalidArgument,
+    //                 format!(
+    //                     "Insufficient gas balance to cover estimated transaction cost. \
+    //                     Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"
+    //                 ),
+    //             ));
+    //         }
+    //         transaction.gas_data_mut().budget = estimate;
+    //         info!("Estimated gas budget for transaction {}: {estimate} MIST based on simulation results", transaction.digest());
+    //     }
 
-        if transaction.gas_data().payment.is_empty() {
-            select_gas(
-                service,
-                &mut transaction,
-                protocol_config.max_gas_payment_objects(),
-            )?;
-        }
-    }
+    //     if transaction.gas_data().payment.is_empty() {
+    //         info!("Performing gas selection for transaction {}", transaction.digest());
+    //         select_gas(
+    //             service,
+    //             &mut transaction,
+    //             protocol_config.max_gas_payment_objects(),
+    //         )?;
+    //     }
+    // }
 
     let allow_mock_gas_coin = checks.disabled() || !request.do_gas_selection();
-
+    info!("Simulating tx {} {checks:?} {allow_mock_gas_coin}", transaction.digest());
     let SimulateTransactionResult {
         effects,
         events,
@@ -179,6 +182,7 @@ pub fn simulate_transaction(
     let transaction = if let Some(submask) = read_mask.subtree("transaction") {
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
+        let digest = transaction.digest();
         message.balance_changes = vec![];
 
         // message.balance_changes =
@@ -227,6 +231,7 @@ pub fn simulate_transaction(
                         .collect(),
                 )
             });
+        info!("Returning message {:?} for transaction {}", message, digest);
 
         Some(message)
     } else {

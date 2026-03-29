@@ -347,7 +347,6 @@ impl Client {
             .into_parts();
 
         let digest = tx.digest();
-        info!("Simulate of {digest} response: {:?}", response);
 
         let (events, event_json) =
             executed_transaction_events_try_from_proto(response.transaction())

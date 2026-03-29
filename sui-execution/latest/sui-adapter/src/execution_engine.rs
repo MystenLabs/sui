@@ -149,6 +149,7 @@ mod checked {
         Vec<ExecutionTiming>,
         Result<Mode::ExecutionResults, Mode::Error>,
     ) {
+        info!("Executing transaction {}", transaction_digest);
         let input_objects = input_objects.into_inner();
         let mutable_inputs = if enable_expensive_checks {
             input_objects.all_mutable_inputs().keys().copied().collect()

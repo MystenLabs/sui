@@ -2533,7 +2533,7 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_object_refs,
         )?;
-        let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
+        // let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
         let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             // We don't want to cache this transaction since it's a simulation.
