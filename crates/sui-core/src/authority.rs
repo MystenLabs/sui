@@ -2527,12 +2527,12 @@ impl AuthorityState {
             None
         };
 
-        // let declared_withdrawals = self.pre_object_load_checks(
-        //     &transaction,
-        //     &[],
-        //     &input_object_kinds,
-        //     &receiving_object_refs,
-        // )?;
+        let declared_withdrawals = self.pre_object_load_checks(
+            &transaction,
+            &[],
+            &input_object_kinds,
+            &receiving_object_refs,
+        )?;
         // let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
         let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
