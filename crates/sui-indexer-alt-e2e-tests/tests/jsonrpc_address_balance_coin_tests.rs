@@ -323,7 +323,7 @@ async fn test_pagination_ab_coin_on_first_page() {
             .await
             .unwrap();
         assert!(fx.status().is_ok());
-        gas = fx.gas_object().0;
+        gas = fx.gas_object().unwrap().0;
         cluster
             .test_env
             .cluster
@@ -414,7 +414,7 @@ async fn test_pagination_ab_coin_trimmed_to_next_page() {
             .await
             .unwrap();
         assert!(fx.status().is_ok());
-        gas = fx.gas_object().0;
+        gas = fx.gas_object().unwrap().0;
         cluster
             .test_env
             .cluster
@@ -501,7 +501,7 @@ async fn test_pagination_ab_coin_on_second_page() {
             .await
             .unwrap();
         assert!(fx.status().is_ok());
-        gas = fx.gas_object().0;
+        gas = fx.gas_object().unwrap().0;
         cluster
             .test_env
             .cluster
@@ -587,7 +587,7 @@ async fn test_pagination_ab_coin_as_cursor() {
             .await
             .unwrap();
         assert!(fx.status().is_ok());
-        gas = fx.gas_object().0;
+        gas = fx.gas_object().unwrap().0;
         cluster
             .test_env
             .cluster
