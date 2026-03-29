@@ -33,8 +33,8 @@ use sui_types::object::Object;
 use tokio::join;
 
 use crate::context::Context;
-use crate::data::address_balance_coins::try_resolve_address_balance_object;
 use crate::data::load_live;
+use crate::data::try_resolve_address_balance_object;
 use crate::error::InternalContext;
 use crate::error::RpcError;
 use crate::error::rpc_bail;

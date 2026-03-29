@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) mod address_balance_coins;
+mod address_balance_coins;
 mod object;
-
-pub(crate) use object::{load_live, load_live_deserialized};
 
 use anyhow::Context as _;
 use diesel::ExpressionMethods;
@@ -13,6 +11,11 @@ use sui_indexer_alt_schema::schema::kv_epoch_starts;
 use sui_types::committee::EpochId;
 
 use crate::context::Context;
+
+pub(crate) use address_balance_coins::load_address_balance_coin;
+pub(crate) use address_balance_coins::try_resolve_address_balance_object;
+pub(crate) use object::load_live;
+pub(crate) use object::load_live_deserialized;
 
 /// Query the latest epoch from the database.
 pub(crate) async fn current_epoch(ctx: &Context) -> Result<EpochId, anyhow::Error> {

@@ -33,7 +33,7 @@ use sui_types::object::Owner;
 
 use crate::api::rpc_module::RpcModule;
 use crate::context::Context;
-use crate::data::address_balance_coins::load_address_balance_coin;
+use crate::data::load_address_balance_coin;
 use crate::data::load_live;
 use crate::error::InternalContext;
 use crate::error::RpcError;
@@ -174,6 +174,8 @@ impl CoinsApiServer for Coins {
             .context("Failed to get address balance coin")
             .map_err(RpcError::<Error>::from)?;
 
+        let mut has_next_page = results.has_next_page;
+
         // Pair each coin with its cursor token so we can derive the final cursor from
         // whichever coin ends up last on the page.
         let mut coins: Vec<(Coin, Vec<u8>)> = coin_results
@@ -182,18 +184,17 @@ impl CoinsApiServer for Coins {
             .map(|(r, id)| r.with_internal_context(|| format!("Failed to get object {id}")))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
-            .zip(results.results.iter().map(|e| e.token.clone()))
+            .zip(results.results.into_iter().map(|e| e.token))
             .collect();
 
-        let mut has_next_page = results.has_next_page;
-
         if let Some(ab_coin) = address_balance_coin {
-            let ab_token = ObjectByOwnerKey::encode_coin_key(
+            let ab_token = ObjectByOwnerKey::from_coin_parts(
                 &Owner::AddressOwner(owner),
                 object_type.clone(),
                 ab_coin.balance,
                 ab_coin.coin_object_id,
-            );
+            )
+            .encode();
 
             let include_ab_coin = page
                 .cursor
@@ -201,11 +202,7 @@ impl CoinsApiServer for Coins {
                 .is_none_or(|cursor| ab_token > cursor.0);
 
             if include_ab_coin {
-                let pos = coins.partition_point(|(c, _)| {
-                    c.balance > ab_coin.balance
-                        || (c.balance == ab_coin.balance
-                            && c.coin_object_id < ab_coin.coin_object_id)
-                });
+                let pos = coins.partition_point(|(_, t)| t < &ab_token);
                 coins.insert(pos, (ab_coin, ab_token));
             }
         }

@@ -9,7 +9,6 @@ use prometheus::Registry;
 use serde::Deserialize;
 use serde_json::json;
 use sui_indexer_alt_consistent_store::ObjectByOwnerKey;
-use sui_types::object::Owner;
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -22,6 +21,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GAS;
+use sui_types::object::Owner;
 use tempfile::TempDir;
 use test_cluster::addr_balance_test_env::TestEnv;
 use test_cluster::addr_balance_test_env::TestEnvBuilder;
@@ -58,6 +58,11 @@ impl FullCluster {
             .with_test_cluster_builder_cb(Box::new({
                 let dir = ingestion_dir.clone();
                 move |builder| builder.with_data_ingestion_dir(dir.clone())
+            }))
+            .with_proto_override_cb(Box::new(|_, mut cfg| {
+                cfg.enable_address_balance_gas_payments_for_testing();
+                cfg.enable_coin_reservation_for_testing();
+                cfg
             }))
             .build()
             .await;
@@ -630,12 +635,13 @@ async fn test_pagination_ab_coin_as_cursor() {
 
     // Construct cursor from the AB coin's encoded key
     // and check that it is equal to the returned next_cursor
-    let ab_key = ObjectByOwnerKey::encode_coin_key(
+    let ab_key = ObjectByOwnerKey::from_coin_parts(
         &Owner::AddressOwner(recipient),
         sui_types::coin::Coin::type_(GAS::type_tag()),
         ab_coin.balance,
         ab_coin.coin_object_id,
-    );
+    )
+    .encode();
     let ab_cursor = Base64::encode(bcs::to_bytes(&ab_key).unwrap());
     assert_eq!(
         ab_cursor,

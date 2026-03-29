@@ -57,19 +57,22 @@ impl Key {
         })
     }
 
-    pub fn encode_coin_key(
+    pub fn from_coin_parts(
         owner: &Owner,
         type_: StructTag,
         balance: u64,
         object_id: ObjectID,
-    ) -> Vec<u8> {
-        let key = Key {
+    ) -> Key {
+        Key {
             kind: OwnerKind::from_owner(owner),
             type_,
             balance: Some(!balance),
             object_id,
-        };
-        crate::db::key::encode(&key)
+        }
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        crate::db::key::encode(self)
     }
 }
 

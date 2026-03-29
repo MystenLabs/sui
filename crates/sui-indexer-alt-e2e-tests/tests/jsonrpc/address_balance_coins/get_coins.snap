@@ -12,7 +12,7 @@ task 1, lines 9-12:
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
 //> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
 mutated: object(0,0)
-accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 1000000000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 14-16:
