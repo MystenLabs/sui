@@ -34,6 +34,8 @@ pub fn simulate_transaction(
     service: &RpcService,
     request: SimulateTransactionRequest,
 ) -> Result<SimulateTransactionResponse> {
+    info!("Start simulating tx {}", request.transaction.as_ref().map(|t| t.digest()).unwrap_or_default());
+
     let executor = service
         .executor
         .as_ref()
@@ -159,7 +161,8 @@ pub fn simulate_transaction(
 
     let allow_mock_gas_coin = checks.disabled() || !request.do_gas_selection();
     let digest = transaction.digest();
-    info!("Simulating tx {} {checks:?} {allow_mock_gas_coin}", digest);
+    let start = std::time::Instant::now();
+    info!("Start simulating tx {} {checks:?} {allow_mock_gas_coin}", digest);
     let SimulateTransactionResult {
         effects,
         events,
@@ -171,7 +174,7 @@ pub fn simulate_transaction(
     } = executor
         .simulate_transaction(transaction.clone(), checks, allow_mock_gas_coin)
         .map_err(anyhow::Error::from)?;
-    info!("Finished simulating tx {}", digest);
+    info!("Finished simulating tx {} elapsed: {}", digest, start.elapsed().as_millis());
 
     if !allow_mock_gas_coin && mock_gas_id.is_some() {
         // If we don't allow for using a mock coin, but we still did, return a server error
