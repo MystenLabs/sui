@@ -8,7 +8,10 @@ use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
 };
 use smallvec::smallvec;
-use std::collections::VecDeque;
+use std::{
+    collections::{BTreeSet, VecDeque},
+    ops::Mul,
+};
 use sui_types::{base_types::ObjectID, digests::TransactionDigest};
 
 use crate::{
@@ -426,6 +429,8 @@ pub fn replace(
 // Attempt to get the most recent created object ID when none has been created.
 // Lifted out of Move into this native function.
 const E_NO_IDS_CREATED: u64 = 1;
+const E_STRUCTURAL_DIGEST_UNAVAILABLE: u64 = 2;
+const E_WILDCARD_INDEX_TOO_LARGE: u64 = 3;
 
 // use same protocol config and cost value as derive_id
 /***************************************************************************************************
@@ -468,12 +473,14 @@ pub fn last_created_id(
 #[derive(Clone)]
 pub struct TxContextStructuralDigestCostParams {
     pub tx_context_structural_digest_cost_base: InternalGas,
+    pub tx_context_structural_digest_cost_per_byte: InternalGas,
 }
 /***************************************************************************************************
  * native fun native_structural_digest
  * Implementation of the Move native function `fun native_structural_digest(): vector<u8>`
  * Returns the normalized structural digest of the current PTB (SIP-70).
- *   gas cost: tx_context_structural_digest_cost_base    | fixed size output
+ *   gas cost: tx_context_structural_digest_cost_base
+ *              + tx_context_structural_digest_cost_per_byte * pt_size
  **************************************************************************************************/
 pub fn structural_digest(
     context: &mut NativeContext,
@@ -491,8 +498,30 @@ pub fn structural_digest(
         tx_context_structural_digest_cost_params.tx_context_structural_digest_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
-    let digest = transaction_context.structural_digest();
+    let Some(gas_bytes) = ({
+        let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
+        transaction_context.structural_digest_gas_bytes()
+    }) else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_STRUCTURAL_DIGEST_UNAVAILABLE,
+        ));
+    };
+    native_charge_gas_early_exit!(
+        context,
+        tx_context_structural_digest_cost_params
+            .tx_context_structural_digest_cost_per_byte
+            .mul(gas_bytes.into())
+    );
+    let Some(digest) = ({
+        let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
+        transaction_context.structural_digest()
+    }) else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_STRUCTURAL_DIGEST_UNAVAILABLE,
+        ));
+    };
 
     Ok(NativeResult::ok(
         context.gas_used(),
@@ -503,12 +532,14 @@ pub fn structural_digest(
 #[derive(Clone)]
 pub struct TxContextStructuralDigestMaskedCostParams {
     pub tx_context_structural_digest_masked_cost_base: InternalGas,
+    pub tx_context_structural_digest_masked_cost_per_byte: InternalGas,
 }
 /***************************************************************************************************
  * native fun native_structural_digest_masked
  * Implementation of `fun native_structural_digest_masked(wildcard_pure_indices: vector<u64>): vector<u8>`
  * Returns the structural digest with specified Pure inputs treated as wildcards (SIP-70 v2).
- *   gas cost: tx_context_structural_digest_masked_cost_base    | recomputation cost
+ *   gas cost: tx_context_structural_digest_masked_cost_base
+ *              + tx_context_structural_digest_masked_cost_per_byte * pt_size
  **************************************************************************************************/
 pub fn structural_digest_masked(
     context: &mut NativeContext,
@@ -531,14 +562,38 @@ pub fn structural_digest_masked(
     // Validate: abort if any index exceeds u16::MAX (prevents silent truncation)
     for &v in &wildcard_vec {
         if v > u16::MAX as u64 {
-            return Ok(NativeResult::err(context.gas_used(), 0));
+            return Ok(NativeResult::err(
+                context.gas_used(),
+                E_WILDCARD_INDEX_TOO_LARGE,
+            ));
         }
     }
-    let wildcard_indices: std::collections::BTreeSet<u16> =
-        wildcard_vec.into_iter().map(|v| v as u16).collect();
+    let wildcard_indices: BTreeSet<u16> = wildcard_vec.into_iter().map(|v| v as u16).collect();
 
-    let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
-    let digest = transaction_context.structural_digest_masked(&wildcard_indices);
+    let Some(gas_bytes) = ({
+        let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
+        transaction_context.structural_digest_masked_gas_bytes()
+    }) else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_STRUCTURAL_DIGEST_UNAVAILABLE,
+        ));
+    };
+    native_charge_gas_early_exit!(
+        context,
+        cost_params
+            .tx_context_structural_digest_masked_cost_per_byte
+            .mul(gas_bytes.into())
+    );
+    let Some(digest) = ({
+        let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
+        transaction_context.structural_digest_masked(&wildcard_indices)
+    }) else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_STRUCTURAL_DIGEST_UNAVAILABLE,
+        ));
+    };
 
     Ok(NativeResult::ok(
         context.gas_used(),

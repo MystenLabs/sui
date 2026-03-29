@@ -25,10 +25,9 @@ pub fn transaction<Mode: ExecutionMode>(
     // which inputs are withdrawals that need to be converted to coins, must
     // be the same length as the inputs
     withdrawal_compatibility_inputs: Option<Vec<bool>>,
-    pt: P::ProgrammableTransaction,
+    pt: &P::ProgrammableTransaction,
 ) -> Result<L::Transaction, ExecutionError> {
     metering::pre_translation::meter(meter, &pt)?;
-    let P::ProgrammableTransaction { inputs, commands } = pt;
     // withdrawal_compatibility_inputs specified ==> the protocol config flag is set
     assert_invariant!(
         withdrawal_compatibility_inputs.is_none()
@@ -38,20 +37,22 @@ pub fn transaction<Mode: ExecutionMode>(
         "if withdrawal compatibility must be specified, then the flag is set in the protocol config"
     );
     let withdrawal_compatibility_inputs =
-        withdrawal_compatibility_inputs.unwrap_or_else(|| vec![false; inputs.len()]);
+        withdrawal_compatibility_inputs.unwrap_or_else(|| vec![false; pt.inputs.len()]);
     assert_invariant!(
-        inputs.len() == withdrawal_compatibility_inputs.len(),
+        pt.inputs.len() == withdrawal_compatibility_inputs.len(),
         "withdrawal compatibility inputs must be the same length as the inputs"
     );
     let inputs = withdrawal_compatibility_inputs
         .into_iter()
-        .zip(inputs)
+        .zip(pt.inputs.iter().cloned())
         .map(|(is_withdrawal_compatibility_input, arg)| {
             input::<Mode>(env, tx_context, is_withdrawal_compatibility_input, arg)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let commands = commands
-        .into_iter()
+    let commands = pt
+        .commands
+        .iter()
+        .cloned()
         .enumerate()
         .map(|(idx, cmd)| command(env, cmd).map_err(|e| e.with_command_index(idx)))
         .collect::<Result<Vec<_>, _>>()?;

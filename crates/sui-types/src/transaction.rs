@@ -984,6 +984,11 @@ impl ProgrammableTransaction {
         self.structural_digest_with_options(None, &BTreeSet::new())
     }
 
+    /// Returns a serialized-size proxy for gas metering structural digest work.
+    pub fn structural_digest_metered_bytes(&self) -> u64 {
+        u64::try_from(bcs::serialized_size(self).unwrap_or_default()).unwrap_or(u64::MAX)
+    }
+
     /// Compute structural digest with coin normalization and/or wildcard support.
     ///
     /// - `coin_info`: maps input index to (TypeTag, balance) for coin-type inputs.
@@ -1175,16 +1180,21 @@ impl ProgrammableTransaction {
                     hasher.update(bytes);
                 }
             }
-            CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
-                // Shared objects: ObjectID only (version-independent anchor)
+            CallArg::Object(ObjectArg::SharedObject { id, mutability, .. }) => {
+                // Shared objects: ObjectID plus mutability.
+                // Mutability changes the lock shape and available call surface.
                 hasher.update(&[0x02]);
                 hasher.update(id.as_ref());
+                let mutability_byte = match mutability {
+                    SharedObjectMutability::Immutable => 0x00,
+                    SharedObjectMutability::Mutable => 0x01,
+                    SharedObjectMutability::NonExclusiveWrite => 0x02,
+                };
+                hasher.update(&[mutability_byte]);
             }
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))) => {
                 // Check coin normalization first
-                if let Some((type_tag, balance)) =
-                    coin_info.and_then(|m| m.get(&input_idx))
-                {
+                if let Some((type_tag, balance)) = coin_info.and_then(|m| m.get(&input_idx)) {
                     hasher.update(&[0x08]); // coin-normalized
                     hasher.update(&bcs::to_bytes(type_tag).unwrap_or_default());
                     hasher.update(&balance.to_le_bytes());
@@ -1195,9 +1205,7 @@ impl ProgrammableTransaction {
                 }
             }
             CallArg::Object(ObjectArg::Receiving((id, _, _))) => {
-                if let Some((type_tag, balance)) =
-                    coin_info.and_then(|m| m.get(&input_idx))
-                {
+                if let Some((type_tag, balance)) = coin_info.and_then(|m| m.get(&input_idx)) {
                     hasher.update(&[0x09]); // coin-normalized receiving
                     hasher.update(&bcs::to_bytes(type_tag).unwrap_or_default());
                     hasher.update(&balance.to_le_bytes());
@@ -1220,8 +1228,31 @@ impl ProgrammableTransaction {
 /// the digest with wildcard inputs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructuralDigestData {
-    pub pt: ProgrammableTransaction,
+    pub pt: Arc<ProgrammableTransaction>,
     pub coin_info: BTreeMap<usize, (TypeTag, u64)>,
+    pub base_gas_bytes: u64,
+    pub masked_gas_bytes: u64,
+}
+
+impl StructuralDigestData {
+    pub fn new(
+        pt: Arc<ProgrammableTransaction>,
+        coin_info: BTreeMap<usize, (TypeTag, u64)>,
+    ) -> Self {
+        let base_gas_bytes = pt.structural_digest_metered_bytes();
+        let coin_info_bytes = coin_info.iter().fold(0u64, |acc, (_, (type_tag, _))| {
+            let type_tag_len = u64::try_from(bcs::to_bytes(type_tag).unwrap_or_default().len())
+                .unwrap_or(u64::MAX);
+            acc.saturating_add(type_tag_len).saturating_add(16)
+        });
+        let masked_gas_bytes = base_gas_bytes.saturating_add(coin_info_bytes);
+        Self {
+            pt,
+            coin_info,
+            base_gas_bytes,
+            masked_gas_bytes,
+        }
+    }
 }
 
 /// A single command in a programmable transaction.

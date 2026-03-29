@@ -44,7 +44,7 @@ pub fn execute<Mode: ExecutionMode>(
     gas_charger: &mut GasCharger,
     // which inputs are withdrawals that need to be converted to coins
     withdrawal_compatibility_inputs: Option<Vec<bool>>,
-    txn: ProgrammableTransaction,
+    txn: Arc<ProgrammableTransaction>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
     let package_store = CachedPackageStore::new(Box::new(package_store));
@@ -68,7 +68,7 @@ pub fn execute<Mode: ExecutionMode>(
             &env,
             &tx_context_ref,
             withdrawal_compatibility_inputs,
-            txn,
+            txn.as_ref(),
         )
         .map_err(|e| (e, vec![]))?
     };

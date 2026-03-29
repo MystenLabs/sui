@@ -86,12 +86,22 @@ fn test_structural_digest_is_deterministic() {
 
     let pt1 = make_pt(
         vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))],
-        vec![make_move_call(pkg, "module", "func", vec![Argument::Input(0)])],
+        vec![make_move_call(
+            pkg,
+            "module",
+            "func",
+            vec![Argument::Input(0)],
+        )],
     );
 
     let pt2 = make_pt(
         vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))],
-        vec![make_move_call(pkg, "module", "func", vec![Argument::Input(0)])],
+        vec![make_move_call(
+            pkg,
+            "module",
+            "func",
+            vec![Argument::Input(0)],
+        )],
     );
 
     assert_eq!(pt1.structural_digest(), pt2.structural_digest());
@@ -248,6 +258,32 @@ fn test_digest_stable_across_object_digest_change() {
     assert_eq!(pt1.structural_digest(), pt2.structural_digest());
 }
 
+#[test]
+fn test_digest_changes_with_shared_object_mutability() {
+    let pkg = ObjectID::random();
+    let shared_id = ObjectID::random();
+
+    let pt1 = make_pt(
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: shared_id,
+            initial_shared_version: SequenceNumber::from_u64(1),
+            mutability: crate::transaction::SharedObjectMutability::Mutable,
+        })],
+        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
+    );
+
+    let pt2 = make_pt(
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: shared_id,
+            initial_shared_version: SequenceNumber::from_u64(1),
+            mutability: crate::transaction::SharedObjectMutability::Immutable,
+        })],
+        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
+    );
+
+    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
+}
+
 // ============================================================================
 // Owned object version stability (Change 2: version dropped)
 // ============================================================================
@@ -311,12 +347,16 @@ fn test_digest_changes_with_different_owned_object() {
     let pkg = ObjectID::random();
 
     let pt1 = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(random_object_ref()))],
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+            random_object_ref(),
+        ))],
         vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
     );
 
     let pt2 = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(random_object_ref()))],
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+            random_object_ref(),
+        ))],
         vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
     );
 
@@ -425,7 +465,10 @@ fn test_digest_distinguishes_command_types() {
             CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)),
             CallArg::Pure(bcs::to_bytes(&100u64).unwrap()),
         ],
-        vec![Command::SplitCoins(Argument::Input(0), vec![Argument::Input(1)])],
+        vec![Command::SplitCoins(
+            Argument::Input(0),
+            vec![Argument::Input(1)],
+        )],
     );
 
     let pt2 = make_pt(
@@ -433,7 +476,10 @@ fn test_digest_distinguishes_command_types() {
             CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)),
             CallArg::Pure(bcs::to_bytes(&100u64).unwrap()),
         ],
-        vec![Command::MergeCoins(Argument::Input(0), vec![Argument::Input(1)])],
+        vec![Command::MergeCoins(
+            Argument::Input(0),
+            vec![Argument::Input(1)],
+        )],
     );
 
     assert_ne!(pt1.structural_digest(), pt2.structural_digest());
@@ -569,7 +615,9 @@ fn test_coin_normalized_digest_changes_with_different_balance() {
     let pkg = ObjectID::random();
 
     let pt = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(random_object_ref()))],
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+            random_object_ref(),
+        ))],
         vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
     );
 
@@ -589,7 +637,9 @@ fn test_coin_normalized_digest_changes_with_different_type() {
     let pkg = ObjectID::random();
 
     let pt = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(random_object_ref()))],
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+            random_object_ref(),
+        ))],
         vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
     );
 
@@ -618,7 +668,12 @@ fn test_wildcard_digest_stable_across_different_pure_values() {
             CallArg::Pure(bcs::to_bytes(&100u64).unwrap()), // input 0: amount (pinned)
             CallArg::Pure(bcs::to_bytes(&50u64).unwrap()),  // input 1: slippage (wildcard)
         ],
-        vec![make_move_call(pkg, "dex", "swap", vec![Argument::Input(0), Argument::Input(1)])],
+        vec![make_move_call(
+            pkg,
+            "dex",
+            "swap",
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
     );
 
     let pt2 = make_pt(
@@ -626,7 +681,12 @@ fn test_wildcard_digest_stable_across_different_pure_values() {
             CallArg::Pure(bcs::to_bytes(&100u64).unwrap()), // input 0: same amount
             CallArg::Pure(bcs::to_bytes(&999u64).unwrap()), // input 1: different slippage
         ],
-        vec![make_move_call(pkg, "dex", "swap", vec![Argument::Input(0), Argument::Input(1)])],
+        vec![make_move_call(
+            pkg,
+            "dex",
+            "swap",
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
     );
 
     // Without wildcards: different Pure values -> different digests
@@ -645,7 +705,12 @@ fn test_wildcard_digest_stable_across_different_pure_values() {
             CallArg::Pure(bcs::to_bytes(&200u64).unwrap()), // input 0: different amount
             CallArg::Pure(bcs::to_bytes(&50u64).unwrap()),  // input 1: same slippage
         ],
-        vec![make_move_call(pkg, "dex", "swap", vec![Argument::Input(0), Argument::Input(1)])],
+        vec![make_move_call(
+            pkg,
+            "dex",
+            "swap",
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
     );
 
     assert_ne!(
@@ -663,7 +728,12 @@ fn test_wildcard_only_applies_to_specified_indices() {
             CallArg::Pure(bcs::to_bytes(&100u64).unwrap()),
             CallArg::Pure(bcs::to_bytes(&200u64).unwrap()),
         ],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0), Argument::Input(1)])],
+        vec![make_move_call(
+            pkg,
+            "mod",
+            "func",
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
     );
 
     let pt2 = make_pt(
@@ -671,7 +741,12 @@ fn test_wildcard_only_applies_to_specified_indices() {
             CallArg::Pure(bcs::to_bytes(&100u64).unwrap()),
             CallArg::Pure(bcs::to_bytes(&999u64).unwrap()),
         ],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0), Argument::Input(1)])],
+        vec![make_move_call(
+            pkg,
+            "mod",
+            "func",
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
     );
 
     // Wildcard on input 0 only: input 1 still differentiates
@@ -703,7 +778,12 @@ fn test_wildcard_and_coin_normalization_combined() {
             ))),
             CallArg::Pure(bcs::to_bytes(&50u64).unwrap()), // slippage
         ],
-        vec![make_move_call(pkg, "dex", "swap", vec![Argument::Input(0), Argument::Input(1)])],
+        vec![make_move_call(
+            pkg,
+            "dex",
+            "swap",
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
     );
 
     let pt2 = make_pt(
@@ -715,7 +795,12 @@ fn test_wildcard_and_coin_normalization_combined() {
             ))),
             CallArg::Pure(bcs::to_bytes(&999u64).unwrap()), // different slippage
         ],
-        vec![make_move_call(pkg, "dex", "swap", vec![Argument::Input(0), Argument::Input(1)])],
+        vec![make_move_call(
+            pkg,
+            "dex",
+            "swap",
+            vec![Argument::Input(0), Argument::Input(1)],
+        )],
     );
 
     // Same coin type+balance, wildcard on slippage -> same digest

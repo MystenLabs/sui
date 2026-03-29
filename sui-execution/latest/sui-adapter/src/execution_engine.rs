@@ -309,7 +309,7 @@ mod checked {
             tx_context,
             &mut gas_charger,
             None,
-            pt,
+            Arc::new(pt),
             &mut None,
         )
         .map_err(|(e, _)| e)?;
@@ -731,23 +731,20 @@ mod checked {
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::ProgrammableTransaction(pt) => {
-                // SIP-70: Compute base structural digest (no coin normalization).
-                // This is identity-preserving: coins hash by ObjectID.
-                let structural_digest = pt.structural_digest();
+                let pt = Arc::new(pt);
 
                 // SIP-70 v2: Build coin_info for the masked variant.
                 // Coin normalization (TypeTag + balance) only applies to structural_digest_masked.
-                let coin_info = build_coin_info_map(&pt, temporary_store.objects(), store);
+                let coin_info = build_coin_info_map(pt.as_ref(), temporary_store.objects(), store);
 
                 {
                     let mut ctx = tx_ctx.borrow_mut();
-                    ctx.set_structural_digest(structural_digest);
-                    // Store PT + coin_info for masked digest recomputation
+                    // Store PT + coin_info for lazy structural digest computation.
                     ctx.set_structural_digest_data(
-                        sui_types::transaction::StructuralDigestData {
-                            pt: pt.clone(),
+                        sui_types::transaction::StructuralDigestData::new(
+                            Arc::clone(&pt),
                             coin_info,
-                        },
+                        ),
                     );
                 }
 
@@ -774,7 +771,7 @@ mod checked {
                     tx_ctx,
                     gas_charger,
                     None,
-                    pt,
+                    Arc::new(pt),
                     trace_builder_opt,
                 )?;
                 Ok((Mode::empty_results(), vec![]))
@@ -1079,7 +1076,7 @@ mod checked {
             tx_ctx.clone(),
             gas_charger,
             None,
-            advance_epoch_pt,
+            Arc::new(advance_epoch_pt),
             trace_builder_opt,
         );
 
@@ -1111,7 +1108,7 @@ mod checked {
                     tx_ctx.clone(),
                     gas_charger,
                     None,
-                    advance_epoch_safe_mode_pt,
+                    Arc::new(advance_epoch_safe_mode_pt),
                     trace_builder_opt,
                 )
                 .map_err(|(e, _)| e)
@@ -1190,7 +1187,7 @@ mod checked {
                     tx_ctx.clone(),
                     gas_charger,
                     None,
-                    publish_pt,
+                    Arc::new(publish_pt),
                     trace_builder_opt,
                 )
                 .map_err(|(e, _)| e)
@@ -1264,7 +1261,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             None,
-            pt,
+            Arc::new(pt),
             trace_builder_opt,
         )
         .map_err(|(e, _)| e)?;
@@ -1412,7 +1409,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             None,
-            pt,
+            Arc::new(pt),
             trace_builder_opt,
         )
         .map_err(|(e, _)| e)?;
@@ -1485,7 +1482,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             None,
-            pt,
+            Arc::new(pt),
             trace_builder_opt,
         )
         .map_err(|(e, _)| e)?;

@@ -47,7 +47,7 @@ Each PTB argument type is normalized before hashing:
 |---|---|---|---|
 | `GasCoin` | `0x00` | marker only | Gas coin ID is sender-dependent |
 | `Pure(bytes)` | `0x01` | BCS bytes | Exact parameter values |
-| `SharedObject` | `0x02` | ObjectID | Version-independent anchor |
+| `SharedObject` | `0x02` | ObjectID + mutability mode | Version-independent anchor plus lock semantics |
 | `ImmOrOwnedObject` | `0x03` | ObjectID | Version dropped — drifts between vote and execution |
 | `Receiving` | `0x04` | ObjectID | Version dropped |
 | `Result(n)` | `0x05` | command_index | Provenance, not runtime identity |
@@ -147,23 +147,27 @@ const digest = tx.computeStructuralDigest();
 5. **`sui-execution/latest/sui-move-natives/src/tx_context.rs`** — Two native function impls
 6. **`sui-execution/latest/sui-move-natives/src/lib.rs`** — Registration + cost params for both natives
 7. **`crates/sui-framework/packages/sui-framework/sources/tx_context.move`** — Move declarations for both functions
-8. **`crates/sui-protocol-config/src/lib.rs`** — Feature gate + gas costs (protocol v113)
+8. **`crates/sui-protocol-config/src/lib.rs`** — Feature gate + base/per-byte gas costs (protocol v113)
 
 ### Design Decisions
 
 1. **Version prefix (0x01):** Future changes to the digest scheme bump this byte. Contracts storing digests can check `digest[0]` for compatibility.
 
-2. **Owned object version dropped:** Version increments between proposal vote and execution. Hashing by ObjectID only (same as shared objects) makes the digest stable across this gap.
+2. **Owned object version dropped:** Version increments between proposal vote and execution. Hashing by ObjectID only keeps the digest stable across this gap.
 
-3. **Two-mode coin handling:** `structural_digest` preserves coin identity (ObjectID). `structural_digest_masked` normalizes coins to TypeTag + balance. This is because coin normalization erases object identity, which is correct for governance ("transfer 100 SUI to Bob") but incorrect for protocols that key on coin ObjectID. The base variant is the safe default; the masked variant opts into fungibility.
+3. **Shared object mutability preserved:** Shared object version is dropped for stability, but mutability mode is hashed alongside the ObjectID because immutable, mutable, and non-exclusive-write accesses imply different lock and execution semantics.
 
-4. **Coin normalization at execution engine level:** The `ProgrammableTransaction` struct doesn't carry object types/balances. The execution engine resolves coins from the loaded input objects (and receiving objects from the backing store) and passes a `coin_info` map to the digest function.
+4. **Two-mode coin handling:** `structural_digest` preserves coin identity (ObjectID). `structural_digest_masked` normalizes coins to TypeTag + balance. This is because coin normalization erases object identity, which is correct for governance ("transfer 100 SUI to Bob") but incorrect for protocols that key on coin ObjectID. The base variant is the safe default; the masked variant opts into fungibility.
 
-5. **Wildcard recomputation:** The full PT + coin_info is stored (transient, `#[serde(skip)]`) on TxContext so `structural_digest_masked` can recompute with wildcard substitution at runtime.
+5. **Coin normalization at execution engine level:** The `ProgrammableTransaction` struct doesn't carry object types/balances. The execution engine resolves coins from the loaded input objects (and receiving objects from the backing store) and passes a `coin_info` map to the digest function.
 
-6. **Length framing:** All variable-length fields are u32 LE length-prefixed before hashing to prevent concatenation collisions across field boundaries.
+6. **Wildcard recomputation:** The full PT + coin_info is stored transiently on `TxContext` so `structural_digest_masked` can recompute with wildcard substitution at runtime, while the base digest itself is computed lazily on first use.
 
-7. **Wildcard validation:** Wildcard indices are validated at the native layer. Values exceeding u16::MAX cause an abort to prevent silent truncation (e.g. 65536 aliasing index 0).
+7. **Length framing:** All variable-length fields are u32 LE length-prefixed before hashing to prevent concatenation collisions across field boundaries.
+
+8. **Wildcard validation:** Wildcard indices are validated at the native layer. Values exceeding u16::MAX cause an abort to prevent silent truncation (e.g. 65536 aliasing index 0).
+
+9. **Size-sensitive gas:** Both natives charge a base cost plus a per-byte charge derived from the normalized PTB size so recomputation work scales with transaction size.
 
 ### Security Considerations
 

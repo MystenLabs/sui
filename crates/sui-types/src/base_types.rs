@@ -1356,20 +1356,17 @@ impl TxContext {
     }
 
     /// Returns the normalized structural digest of the PTB (SIP-70).
-    pub fn structural_digest(&self) -> &[u8] {
-        &self.structural_digest
+    /// Lazily computes and caches the digest the first time it is requested.
+    pub fn structural_digest(&mut self) -> Option<Vec<u8>> {
+        if self.structural_digest.is_empty() {
+            let data = self.structural_digest_data.as_ref()?;
+            self.structural_digest = data.pt.structural_digest();
+        }
+        Some(self.structural_digest.clone())
     }
 
-    /// Sets the structural digest. Called by the execution engine before PTB execution.
-    pub fn set_structural_digest(&mut self, digest: Vec<u8>) {
-        self.structural_digest = digest;
-    }
-
-    /// Stores the PT + coin_info for masked digest recomputation (SIP-70 v2).
-    pub fn set_structural_digest_data(
-        &mut self,
-        data: crate::transaction::StructuralDigestData,
-    ) {
+    /// Stores the PT + coin_info for structural digest computation (SIP-70 v2).
+    pub fn set_structural_digest_data(&mut self, data: crate::transaction::StructuralDigestData) {
         self.structural_digest_data = Some(data);
     }
 
@@ -1377,15 +1374,26 @@ impl TxContext {
     pub fn structural_digest_masked(
         &self,
         wildcard_indices: &std::collections::BTreeSet<u16>,
-    ) -> Vec<u8> {
+    ) -> Option<Vec<u8>> {
         match &self.structural_digest_data {
-            Some(data) => data.pt.structural_digest_with_options(
-                Some(&data.coin_info),
-                wildcard_indices,
+            Some(data) => Some(
+                data.pt
+                    .structural_digest_with_options(Some(&data.coin_info), wildcard_indices),
             ),
-            // No PT data stored — fall back to the pre-computed full digest
-            None => self.structural_digest.clone(),
+            None => None,
         }
+    }
+
+    pub fn structural_digest_gas_bytes(&self) -> Option<u64> {
+        self.structural_digest_data
+            .as_ref()
+            .map(|data| data.base_gas_bytes)
+    }
+
+    pub fn structural_digest_masked_gas_bytes(&self) -> Option<u64> {
+        self.structural_digest_data
+            .as_ref()
+            .map(|data| data.masked_gas_bytes)
     }
 
     pub fn rgp(&self) -> u64 {

@@ -35,8 +35,7 @@ use self::{
         TxContextDeriveIdCostParams, TxContextEpochCostParams, TxContextEpochTimestampMsCostParams,
         TxContextFreshIdCostParams, TxContextGasBudgetCostParams, TxContextGasPriceCostParams,
         TxContextIdsCreatedCostParams, TxContextRGPCostParams, TxContextReplaceCostParams,
-        TxContextSenderCostParams, TxContextSponsorCostParams,
-        TxContextStructuralDigestCostParams,
+        TxContextSenderCostParams, TxContextSponsorCostParams, TxContextStructuralDigestCostParams,
         TxContextStructuralDigestMaskedCostParams,
     },
     types::TypesIsOneTimeWitnessCostParams,
@@ -460,13 +459,22 @@ impl NativesCostTable {
                     .tx_context_structural_digest_cost_base_as_option()
                     .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
                     .into(),
-            },
-            tx_context_structural_digest_masked_cost_params: TxContextStructuralDigestMaskedCostParams {
-                tx_context_structural_digest_masked_cost_base: protocol_config
-                    .tx_context_structural_digest_masked_cost_base_as_option()
+                tx_context_structural_digest_cost_per_byte: protocol_config
+                    .tx_context_structural_digest_cost_per_byte_as_option()
                     .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
                     .into(),
             },
+            tx_context_structural_digest_masked_cost_params:
+                TxContextStructuralDigestMaskedCostParams {
+                    tx_context_structural_digest_masked_cost_base: protocol_config
+                        .tx_context_structural_digest_masked_cost_base_as_option()
+                        .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
+                        .into(),
+                    tx_context_structural_digest_masked_cost_per_byte: protocol_config
+                        .tx_context_structural_digest_masked_cost_per_byte_as_option()
+                        .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
+                        .into(),
+                },
             type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams {
                 types_is_one_time_witness_cost_base: protocol_config
                     .types_is_one_time_witness_cost_base()

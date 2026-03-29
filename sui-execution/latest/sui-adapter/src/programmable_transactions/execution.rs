@@ -88,7 +88,7 @@ mod checked {
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
         withdrawal_compatibility_inputs: Option<Vec<bool>>,
-        pt: ProgrammableTransaction,
+        pt: Arc<ProgrammableTransaction>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         if protocol_config.enable_ptb_execution_v2() {
@@ -137,10 +137,9 @@ mod checked {
         state_view: &mut dyn ExecutionState,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
-        pt: ProgrammableTransaction,
+        pt: Arc<ProgrammableTransaction>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
-        let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
             protocol_config,
             metrics,
@@ -148,14 +147,14 @@ mod checked {
             state_view,
             tx_context,
             gas_charger,
-            inputs,
+            pt.inputs.clone(),
         )?;
 
-        trace_utils::trace_ptb_summary::<Mode>(&mut context, trace_builder_opt, &commands)?;
+        trace_utils::trace_ptb_summary::<Mode>(&mut context, trace_builder_opt, &pt.commands)?;
 
         // execute commands
         let mut mode_results = Mode::empty_results();
-        for (idx, command) in commands.into_iter().enumerate() {
+        for (idx, command) in pt.commands.iter().cloned().enumerate() {
             let start = Instant::now();
             if let Err(err) =
                 execute_command::<Mode>(&mut context, &mut mode_results, command, trace_builder_opt)
