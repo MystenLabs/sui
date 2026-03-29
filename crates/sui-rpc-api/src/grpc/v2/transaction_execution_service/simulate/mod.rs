@@ -158,7 +158,8 @@ pub fn simulate_transaction(
     // }
 
     let allow_mock_gas_coin = checks.disabled() || !request.do_gas_selection();
-    info!("Simulating tx {} {checks:?} {allow_mock_gas_coin}", transaction.digest());
+    let digest = transaction.digest();
+    info!("Simulating tx {} {checks:?} {allow_mock_gas_coin}", digest);
     let SimulateTransactionResult {
         effects,
         events,
@@ -170,6 +171,7 @@ pub fn simulate_transaction(
     } = executor
         .simulate_transaction(transaction.clone(), checks, allow_mock_gas_coin)
         .map_err(anyhow::Error::from)?;
+    info!("Finished simulating tx {}", digest);
 
     if !allow_mock_gas_coin && mock_gas_id.is_some() {
         // If we don't allow for using a mock coin, but we still did, return a server error
@@ -181,8 +183,8 @@ pub fn simulate_transaction(
 
     let transaction = if let Some(submask) = read_mask.subtree("transaction") {
         let mut message = ExecutedTransaction::default();
-        let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
-        let digest = transaction.digest();
+        // let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
+        // let digest = transaction.digest();
         message.balance_changes = vec![];
 
         // message.balance_changes =
@@ -212,9 +214,9 @@ pub fn simulate_transaction(
                 events.map(|events| service.render_events_to_proto(&events, &mask, &objects))
             });
 
-        message.transaction = submask
-            .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
-            .map(|mask| Transaction::merge_from(transaction, &mask));
+        // message.transaction = submask
+        //     .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
+        //     .map(|mask| Transaction::merge_from(transaction, &mask));
 
         message.objects = submask
             .subtree(
