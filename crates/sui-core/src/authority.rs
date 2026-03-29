@@ -2574,11 +2574,13 @@ impl AuthorityState {
 
         protocol_config.set_execution_version_for_testing(4);
         let protocol_config = &protocol_config;
-        let executor = sui_execution::executor(
-            protocol_config,
-            true, // silent
-        )
-        .expect("Creating an executor should not fail here");
+        // let executor = sui_execution::executor(
+        //     protocol_config,
+        //     true, // silent
+        // )
+        // .expect("Creating an executor should not fail here");
+
+        let executor = &**epoch_store.executor();
 
         let (kind, signer, gas_data) = transaction.execution_parts();
         // let early_execution_error = get_early_execution_error(
@@ -2875,8 +2877,9 @@ impl AuthorityState {
             }
         };
 
-        let executor = sui_execution::executor(protocol_config, /* silent */ true)
-            .expect("Creating an executor should not fail here");
+        // let executor = sui_execution::executor(protocol_config, /* silent */ true)
+        //     .expect("Creating an executor should not fail here");
+        let executor = &**epoch_store.executor();
         let gas_data = transaction.gas_data().clone();
         let intent_msg = IntentMessage::new(
             Intent {
@@ -2903,8 +2906,10 @@ impl AuthorityState {
 
         let execution_params = ExecutionOrEarlyError::Ok(());
 
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
-            self.get_backing_store().as_ref(),
+            &tracking_store,
             protocol_config,
             self.metrics.limits_metrics.clone(),
             /* expensive checks */ false,
