@@ -191,11 +191,11 @@ impl RpcService {
             message.contents = Some(bcs);
         }
 
-        if mask.contains(Event::JSON_FIELD) {
-            message.json = self
-                .render_json(&event.type_, &event.contents, output_objects)
-                .map(Box::new);
-        }
+        // if mask.contains(Event::JSON_FIELD) {
+        //     message.json = self
+        //         .render_json(&event.type_, &event.contents, output_objects)
+        //         .map(Box::new);
+        // }
 
         message
     }

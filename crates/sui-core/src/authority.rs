@@ -2527,12 +2527,12 @@ impl AuthorityState {
             None
         };
 
-        let declared_withdrawals = self.pre_object_load_checks(
-            &transaction,
-            &[],
-            &input_object_kinds,
-            &receiving_object_refs,
-        )?;
+        // let declared_withdrawals = self.pre_object_load_checks(
+        //     &transaction,
+        //     &[],
+        //     &input_object_kinds,
+        //     &receiving_object_refs,
+        // )?;
         // let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
         let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
@@ -2550,11 +2550,11 @@ impl AuthorityState {
             id
         });
 
-        let protocol_config = epoch_store.protocol_config();
+        let mut protocol_config = epoch_store.protocol_config().clone();
 
         let (gas_status, checked_input_objects) = if dev_inspect {
             sui_transaction_checks::check_dev_inspect_input(
-                protocol_config,
+                &protocol_config,
                 &transaction,
                 input_objects,
                 receiving_objects,
@@ -2572,7 +2572,8 @@ impl AuthorityState {
             )?
         };
 
-        // TODO see if we can spin up a VM once and reuse it
+        protocol_config.set_execution_version_for_testing(4);
+        let protocol_config = &protocol_config;
         let executor = sui_execution::executor(
             protocol_config,
             true, // silent
@@ -2596,9 +2597,9 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         // Clone inputs for potential retry if object funds check fails post-execution.
-        let cloned_input_objects = checked_input_objects.clone();
-        let cloned_gas = gas_data.clone();
-        let cloned_kind = kind.clone();
+        // let cloned_input_objects = checked_input_objects.clone();
+        // let cloned_gas = gas_data.clone();
+        // let cloned_kind = kind.clone();
         let tx_digest = transaction.digest();
         let epoch_id = epoch_store.epoch_start_config().epoch_data().epoch_id();
         let epoch_timestamp_ms = epoch_store
