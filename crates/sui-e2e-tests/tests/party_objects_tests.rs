@@ -581,7 +581,11 @@ async fn party_object_grpc() {
     let object_id_str = object_id.to_canonical_string(true);
     let object_initial_shared_version = object.1;
 
-    let channel = test_cluster.grpc_channel();
+    let channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
 
     let mut live_data_service_client = StateServiceClient::new(channel.clone());
     let mut ledger_service_client = LedgerServiceClient::new(channel);
@@ -718,7 +722,11 @@ async fn party_coin_grpc() {
     use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
 
     let cluster = TestClusterBuilder::new().build().await;
-    let channel = cluster.grpc_channel();
+    let channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
 
     let mut live_data_service_client = StateServiceClient::new(channel.clone());
     let mut execution_client = TransactionExecutionServiceClient::new(channel.clone());

@@ -15,7 +15,9 @@ async fn get_epoch() {
         .build()
         .await;
 
-    let mut client = LedgerServiceClient::new(test_cluster.grpc_channel());
+    let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
 
     let latest_epoch = client
         .get_epoch(GetEpochRequest::latest().with_read_mask(FieldMask::from_str("*")))

@@ -27,7 +27,9 @@ async fn execute_transaction_transfer() {
         .build()
         .await;
 
-    let mut client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut client = TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
     let address = SuiAddress::random_for_testing_only();
     let amount = 9;
 

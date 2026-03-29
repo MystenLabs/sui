@@ -21,7 +21,9 @@ async fn get_object() {
 
     let id: Address = "0x5".parse().unwrap();
 
-    let mut client = LedgerServiceClient::new(test_cluster.grpc_channel());
+    let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
 
     // Request with no provided read_mask
     let Object {
@@ -158,7 +160,9 @@ async fn batch_get_objects() {
         .build()
         .await;
 
-    let mut client = LedgerServiceClient::new(test_cluster.grpc_channel());
+    let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
 
     let BatchGetObjectsResponse { objects, .. } = client
         .batch_get_objects({
