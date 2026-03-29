@@ -2479,6 +2479,9 @@ impl AuthorityState {
         checks: TransactionChecks,
         allow_mock_gas_coin: bool,
     ) -> SuiResult<SimulateTransactionResult> {
+        let tx_digest = transaction.digest();
+        info!("Starting simulate for tx {}", tx_digest);
+        
         if transaction.kind().is_system_tx() {
             return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "simulate does not support system transactions".to_string(),
@@ -2527,12 +2530,12 @@ impl AuthorityState {
             None
         };
 
-        let declared_withdrawals = self.pre_object_load_checks(
-            &transaction,
-            &[],
-            &input_object_kinds,
-            &receiving_object_refs,
-        )?;
+        // let declared_withdrawals = self.pre_object_load_checks(
+        //     &transaction,
+        //     &[],
+        //     &input_object_kinds,
+        //     &receiving_object_refs,
+        // )?;
         // let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
         let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
@@ -2602,7 +2605,6 @@ impl AuthorityState {
         // let cloned_input_objects = checked_input_objects.clone();
         // let cloned_gas = gas_data.clone();
         // let cloned_kind = kind.clone();
-        let tx_digest = transaction.digest();
         let epoch_id = epoch_store.epoch_start_config().epoch_data().epoch_id();
         let epoch_timestamp_ms = epoch_store
             .epoch_start_config()
@@ -2610,7 +2612,7 @@ impl AuthorityState {
             .epoch_start_timestamp();
 
         let start = std::time::Instant::now();
-        info!("Starting simulate for tx {}", tx_digest);
+        info!("Starting dev inspect for tx {}", tx_digest);
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             &tracking_store,
             protocol_config,
