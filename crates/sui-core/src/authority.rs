@@ -2349,10 +2349,9 @@ impl AuthorityState {
         let (kind, signer, _) = transaction.execution_parts();
 
         let silent = true;
-        let executor = sui_execution::executor(protocol_config, silent)
-            .expect("Creating an executor should not fail here");
+        // let executor = sui_execution::executor(protocol_config, silent)
+        //     .expect("Creating an executor should not fail here");
 
-        let expensive_checks = false;
         // let early_execution_error = get_early_execution_error(
         //     &transaction_digest,
         //     &checked_input_objects,
@@ -2369,14 +2368,17 @@ impl AuthorityState {
         //     None => ExecutionOrEarlyError::Ok(()),
         // };
         let start = std::time::Instant::now();
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
         let execution_params = ExecutionOrEarlyError::Ok(());
         info!("Starting execution for dry run of transaction {}", transaction_digest);
         let (inner_temp_store, _, effects, _timings, execution_error) = self
             .execute_transaction_to_effects(
-                executor.as_ref(),
-                self.get_backing_store().as_ref(),
+                // executor.as_ref(),
+                &**epoch_store.executor(),
+                // self.get_backing_store().as_ref(),
+                &tracking_store,
                 protocol_config,
-                expensive_checks,
+                false,
                 execution_params,
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
@@ -2443,9 +2445,7 @@ impl AuthorityState {
 
         Ok((
             DryRunTransactionBlockResponse {
-                suggested_gas_price: self
-                    .congestion_tracker
-                    .get_suggested_gas_prices(&transaction),
+                suggested_gas_price: None,
                 input: SuiTransactionBlockData::try_from_with_module_cache(
                     transaction,
                     &module_cache,
