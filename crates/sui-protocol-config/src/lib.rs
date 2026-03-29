@@ -4,10 +4,7 @@
 use std::{
     cell::RefCell,
     collections::BTreeSet,
-    sync::{
-        Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use clap::*;
@@ -2770,13 +2767,6 @@ impl ProtocolConfig {
             }
         });
 
-        if let Some(override_fn) = GLOBAL_CONFIG_OVERRIDE.lock().unwrap().as_ref() {
-            warn!(
-                "overriding ProtocolConfig settings with global custom settings (you should not see this log outside of tests)"
-            );
-            ret = override_fn(version, ret);
-        }
-
         if std::env::var("SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE").is_ok() {
             warn!(
                 "overriding ProtocolConfig settings with custom settings; this may break non-local networks"
@@ -4953,18 +4943,6 @@ impl ProtocolConfig {
             OverrideGuard
         })
     }
-
-    /// Process-wide variant of [`apply_overrides_for_testing`]. Use this when the test spawns
-    /// separate OS threads (e.g. `TestCluster` validators each run their own tokio runtime on a
-    /// dedicated thread), where thread-local overrides are not visible.
-    pub fn apply_global_overrides_for_testing(
-        override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + Sync + 'static,
-    ) -> GlobalOverrideGuard {
-        let mut cur = GLOBAL_CONFIG_OVERRIDE.lock().unwrap();
-        assert!(cur.is_none(), "global config override already present");
-        *cur = Some(Box::new(override_fn));
-        GlobalOverrideGuard
-    }
 }
 
 // Setters for tests.
@@ -5257,20 +5235,6 @@ impl Drop for OverrideGuard {
         CONFIG_OVERRIDE.with(|ovr| {
             *ovr.borrow_mut() = None;
         });
-    }
-}
-
-type GlobalOverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync;
-
-static GLOBAL_CONFIG_OVERRIDE: Mutex<Option<Box<GlobalOverrideFn>>> = Mutex::new(None);
-
-#[must_use]
-pub struct GlobalOverrideGuard;
-
-impl Drop for GlobalOverrideGuard {
-    fn drop(&mut self) {
-        info!("restoring global override fn");
-        *GLOBAL_CONFIG_OVERRIDE.lock().unwrap() = None;
     }
 }
 

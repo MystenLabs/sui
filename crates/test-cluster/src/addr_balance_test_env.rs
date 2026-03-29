@@ -9,7 +9,7 @@ use std::{
 use crate::{TestCluster, TestClusterBuilder};
 use move_core_types::identifier::Identifier;
 use sui_keys::keystore::AccountKeystore;
-use sui_protocol_config::{GlobalOverrideGuard, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{OverrideGuard, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
@@ -38,7 +38,7 @@ pub struct TestEnvBuilder {
     num_validators: usize,
     test_cluster_builder_cb: Option<Box<dyn Fn(TestClusterBuilder) -> TestClusterBuilder + Send>>,
     proto_override_cb:
-        Option<Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync>>,
+        Option<Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send>>,
 }
 
 impl Default for TestEnvBuilder {
@@ -64,7 +64,7 @@ impl TestEnvBuilder {
 
     pub fn with_proto_override_cb(
         mut self,
-        cb: Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync>,
+        cb: Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send>,
     ) -> Self {
         self.proto_override_cb = Some(cb);
         self
@@ -81,7 +81,7 @@ impl TestEnvBuilder {
     pub async fn build(self) -> TestEnv {
         let _guard = self
             .proto_override_cb
-            .map(ProtocolConfig::apply_global_overrides_for_testing);
+            .map(ProtocolConfig::apply_overrides_for_testing);
 
         let mut test_cluster_builder =
             TestClusterBuilder::new().with_num_validators(self.num_validators);
@@ -110,7 +110,7 @@ impl TestEnvBuilder {
 
 pub struct TestEnv {
     pub cluster: TestCluster,
-    _guard: Option<GlobalOverrideGuard>,
+    _guard: Option<OverrideGuard>,
     pub rgp: u64,
     pub chain_id: ChainIdentifier,
     pub gas_objects: BTreeMap<SuiAddress, Vec<ObjectRef>>,
