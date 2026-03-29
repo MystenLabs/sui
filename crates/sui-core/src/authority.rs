@@ -47,6 +47,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use shared_object_version_manager::AssignedVersions;
 use shared_object_version_manager::Schedulable;
+use sui_types::full_checkpoint_content::ObjectSet;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs::File;
@@ -2669,44 +2670,46 @@ impl AuthorityState {
         //     (inner_temp_store, effects, execution_result)
         // };
 
-        let loaded_runtime_objects = tracking_store.into_read_objects();
-        let unchanged_loaded_runtime_objects =
-            crate::transaction_outputs::unchanged_loaded_runtime_objects(
-                &transaction,
-                &effects,
-                &loaded_runtime_objects,
-            );
+        // let loaded_runtime_objects = tracking_store.into_read_objects();
+        // let unchanged_loaded_runtime_objects =
+        //     crate::transaction_outputs::unchanged_loaded_runtime_objects(
+        //         &transaction,
+        //         &effects,
+        //         &loaded_runtime_objects,
+        //     );
 
-        let object_set = {
-            let objects = {
-                let mut objects = loaded_runtime_objects;
+        // let object_set = {
+        //     let objects = {
+        //         let mut objects = loaded_runtime_objects;
 
-                for o in inner_temp_store
-                    .input_objects
-                    .into_values()
-                    .chain(inner_temp_store.written.into_values())
-                {
-                    objects.insert(o);
-                }
+        //         for o in inner_temp_store
+        //             .input_objects
+        //             .into_values()
+        //             .chain(inner_temp_store.written.into_values())
+        //         {
+        //             objects.insert(o);
+        //         }
 
-                objects
-            };
+        //         objects
+        //     };
 
-            let object_keys = sui_types::storage::get_transaction_object_set(
-                &transaction,
-                &effects,
-                &unchanged_loaded_runtime_objects,
-            );
+        //     let object_keys = sui_types::storage::get_transaction_object_set(
+        //         &transaction,
+        //         &effects,
+        //         &unchanged_loaded_runtime_objects,
+        //     );
 
-            let mut set = sui_types::full_checkpoint_content::ObjectSet::default();
-            for k in object_keys {
-                if let Some(o) = objects.get(&k) {
-                    set.insert(o.clone());
-                }
-            }
+        //     let mut set = sui_types::full_checkpoint_content::ObjectSet::default();
+        //     for k in object_keys {
+        //         if let Some(o) = objects.get(&k) {
+        //             set.insert(o.clone());
+        //         }
+        //     }
 
-            set
-        };
+        //     set
+        // };
+
+        let object_set = ObjectSet::default();
 
         Ok(SimulateTransactionResult {
             objects: object_set,
@@ -2714,7 +2717,7 @@ impl AuthorityState {
             effects,
             execution_result,
             mock_gas_id,
-            unchanged_loaded_runtime_objects,
+            unchanged_loaded_runtime_objects: vec![],
             suggested_gas_price: None,
         })
     }
