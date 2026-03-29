@@ -7,6 +7,7 @@ use futures::stream::Stream;
 use futures::stream::TryStreamExt;
 use prost_types::FieldMask;
 use prost_types::value::Kind as ProtoValueKind;
+use tracing::info;
 use std::time::Duration;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::TryFromProtoError;
@@ -310,6 +311,51 @@ impl Client {
 
         Ok(SimulateTransactionResponse {
             transaction,
+            command_outputs: response.command_outputs,
+            suggested_gas_price: response.suggested_gas_price,
+        })
+    }
+
+    pub async fn simulate_transaction_events_only(
+        &self,
+        tx: &TransactionData,
+        checks: bool,
+        do_gas_selection: bool,
+    ) -> Result<SimulateTransactionEventsResponse> {
+        let mut request = proto::SimulateTransactionRequest::default();
+        request.set_checks(if checks {
+            proto::simulate_transaction_request::TransactionChecks::Enabled
+        } else {
+            proto::simulate_transaction_request::TransactionChecks::Disabled
+        });
+        request.set_do_gas_selection(do_gas_selection);
+        request.set_transaction(
+            proto::Transaction::default()
+                .with_bcs(proto::Bcs::serialize(&tx).map_err(|e| Status::from_error(e.into()))?),
+        );
+        
+        request.set_read_mask(FieldMask::from_paths([
+            "transaction.events.bcs"
+        ]));
+
+        let (metadata, response, _extentions) = self
+            .0
+            .clone()
+            .execution_client()
+            .simulate_transaction(request)
+            .await?
+            .into_parts();
+
+        let digest = tx.digest();
+        info!("Simulate of {digest} response: {:?}", response);
+
+        let (events, event_json) =
+            executed_transaction_events_try_from_proto(response.transaction())
+                .map_err(|e| status_from_error_with_metadata(e, metadata))?;
+
+        Ok(SimulateTransactionEventsResponse {
+            events,
+            event_json,
             command_outputs: response.command_outputs,
             suggested_gas_price: response.suggested_gas_price,
         })
@@ -764,6 +810,14 @@ pub struct SimulateTransactionResponse {
     pub suggested_gas_price: Option<u64>,
 }
 
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct SimulateTransactionEventsResponse {
+    pub events: Option<TransactionEvents>,
+    pub event_json: Vec<Option<serde_json::Value>>,
+    pub command_outputs: Vec<proto::CommandResult>,
+    pub suggested_gas_price: Option<u64>,
+}
+
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
 #[allow(clippy::result_large_err)]
 fn certified_checkpoint_summary_try_from_proto(
@@ -887,6 +941,31 @@ fn executed_transaction_try_from_proto(
         timestamp: executed_transaction.timestamp,
     }
     .pipe(Ok)
+}
+
+#[allow(clippy::result_large_err)]
+fn executed_transaction_events_try_from_proto(
+    executed_transaction: &proto::ExecutedTransaction,
+) -> Result<(Option<TransactionEvents>, Vec<Option<serde_json::Value>>), TryFromProtoError> {
+    let events = executed_transaction
+        .events
+        .as_ref()
+        .and_then(|events| events.bcs.as_ref())
+        .map(|bcs| bcs.deserialize())
+        .transpose()
+        .map_err(|e| TryFromProtoError::invalid("events.bcs", e))?;
+    let event_json = executed_transaction
+        .events_opt()
+        .map(|events| {
+            events
+                .events()
+                .iter()
+                .map(|event| event.json_opt().map(proto_value_to_json_value))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    Ok((events, event_json))
 }
 
 fn proto_value_to_json_value(proto: &prost_types::Value) -> serde_json::Value {

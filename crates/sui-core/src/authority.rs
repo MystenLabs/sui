@@ -2715,9 +2715,7 @@ impl AuthorityState {
             execution_result,
             mock_gas_id,
             unchanged_loaded_runtime_objects,
-            suggested_gas_price: self
-                .congestion_tracker
-                .get_suggested_gas_prices(&transaction),
+            suggested_gas_price: None,
         })
     }
 
