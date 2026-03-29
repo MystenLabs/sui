@@ -4,7 +4,7 @@ module 0x1.M1 {
     struct MyResource { b: bool }
     struct S<T> { t: T }
 
-    // verifer should reject; didn't move resource;
+    // verifier should reject; didn't move resource;
     public p(s: Self.S<Self.MyResource>) {
     label b0:
         return;
@@ -67,7 +67,7 @@ module 0x2.M1 {
     enum MyResource { V{ b: bool } }
     enum S<T> { V{ t: T } }
 
-    // verifer should reject; didn't move resource;
+    // verifier should reject; didn't move resource;
     public p(s: Self.S<Self.MyResource>) {
     label b0:
         return;
