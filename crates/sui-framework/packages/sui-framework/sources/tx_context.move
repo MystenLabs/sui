@@ -92,22 +92,6 @@ public fun structural_digest(_self: &TxContext): vector<u8> {
 }
 native fun native_structural_digest(): vector<u8>;
 
-/// Return the structural digest with coin normalization and optional wildcards (SIP-70 v2).
-/// Coins hash by TypeTag + balance instead of ObjectID (fungible across split/merge).
-/// Wildcarded inputs are hashed as a marker (0xFF) instead of their actual value,
-/// allowing governance contracts to verify PTB structure while letting the executor
-/// vary certain parameters (e.g. slippage tolerance, deadline timestamp).
-/// Pass empty vector for no wildcards (coin normalization only).
-/// `wildcard_pure_indices` contains the input indices to wildcard.
-/// Aborts if any index exceeds u16::MAX.
-public fun structural_digest_masked(
-    _self: &TxContext,
-    wildcard_pure_indices: vector<u64>,
-): vector<u8> {
-    native_structural_digest_masked(wildcard_pure_indices)
-}
-native fun native_structural_digest_masked(wildcard_pure_indices: vector<u64>): vector<u8>;
-
 // ==== test-only functions ====
 #[test_only]
 /// Return the number of id's created by the current transaction.

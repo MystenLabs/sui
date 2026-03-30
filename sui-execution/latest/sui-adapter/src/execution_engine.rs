@@ -588,38 +588,6 @@ mod checked {
         Ok(())
     }
 
-    /// SIP-70 v2: Build a map from PTB input index to (TypeTag, balance) for coin inputs.
-    /// This enables coin normalization — hashing coins by TypeName + Balance instead of ObjectID.
-    /// Looks up owned coins from input_objects and receiving coins from the backing store.
-    fn build_coin_info_map(
-        pt: &ProgrammableTransaction,
-        input_objects: &BTreeMap<sui_types::base_types::ObjectID, Object>,
-        store: &dyn sui_types::storage::BackingStore,
-    ) -> BTreeMap<usize, (move_core_types::language_storage::TypeTag, u64)> {
-        let mut coin_info = BTreeMap::new();
-        for (idx, input) in pt.inputs.iter().enumerate() {
-            let obj = match input {
-                CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))) => {
-                    input_objects.get(id).cloned()
-                }
-                CallArg::Object(ObjectArg::Receiving((id, version, _))) => {
-                    // Receiving objects aren't in input_objects — look up from store
-                    store.as_object_store().get_object_by_key(id, *version)
-                }
-                _ => None,
-            };
-            if let Some(obj) = obj {
-                if obj.is_coin() {
-                    if let Some(type_tag) = obj.coin_type_maybe() {
-                        let balance = obj.get_coin_value_unsafe();
-                        coin_info.insert(idx, (type_tag, balance));
-                    }
-                }
-            }
-        }
-        coin_info
-    }
-
     #[instrument(level = "debug", skip_all)]
     fn execution_loop<Mode: ExecutionMode>(
         store: &dyn BackingStore,
@@ -733,18 +701,11 @@ mod checked {
             TransactionKind::ProgrammableTransaction(pt) => {
                 let pt = Arc::new(pt);
 
-                // SIP-70 v2: Build coin_info for the masked variant.
-                // Coin normalization (TypeTag + balance) only applies to structural_digest_masked.
-                let coin_info = build_coin_info_map(pt.as_ref(), temporary_store.objects(), store);
-
                 {
                     let mut ctx = tx_ctx.borrow_mut();
-                    // Store PT + coin_info for lazy structural digest computation.
+                    // Store the PT for lazy structural digest computation.
                     ctx.set_structural_digest_data(
-                        sui_types::transaction::StructuralDigestData::new(
-                            Arc::clone(&pt),
-                            coin_info,
-                        ),
+                        sui_types::transaction::StructuralDigestData::new(Arc::clone(&pt)),
                     );
                 }
 

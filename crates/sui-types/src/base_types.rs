@@ -1239,7 +1239,7 @@ pub struct TxContext {
     // Normalized structural digest of the PTB (SIP-70)
     #[serde(default)]
     structural_digest: Vec<u8>,
-    // Data for structural_digest_masked recomputation (SIP-70 v2, not serialized)
+    // Data for lazy structural_digest recomputation (SIP-70, not serialized)
     #[serde(skip)]
     structural_digest_data: Option<crate::transaction::StructuralDigestData>,
 }
@@ -1355,7 +1355,7 @@ impl TxContext {
         self.sponsor.map(SuiAddress::from)
     }
 
-    /// Returns the normalized structural digest of the PTB (SIP-70).
+    /// Returns the structural digest of the PTB (SIP-70).
     /// Lazily computes and caches the digest the first time it is requested.
     pub fn structural_digest(&mut self) -> Option<Vec<u8>> {
         if self.structural_digest.is_empty() {
@@ -1365,35 +1365,15 @@ impl TxContext {
         Some(self.structural_digest.clone())
     }
 
-    /// Stores the PT + coin_info for structural digest computation (SIP-70 v2).
+    /// Stores the PT for lazy structural digest computation (SIP-70).
     pub fn set_structural_digest_data(&mut self, data: crate::transaction::StructuralDigestData) {
         self.structural_digest_data = Some(data);
-    }
-
-    /// Recompute the structural digest with the given Pure input indices wildcarded.
-    pub fn structural_digest_masked(
-        &self,
-        wildcard_indices: &std::collections::BTreeSet<u16>,
-    ) -> Option<Vec<u8>> {
-        match &self.structural_digest_data {
-            Some(data) => Some(
-                data.pt
-                    .structural_digest_with_options(Some(&data.coin_info), wildcard_indices),
-            ),
-            None => None,
-        }
     }
 
     pub fn structural_digest_gas_bytes(&self) -> Option<u64> {
         self.structural_digest_data
             .as_ref()
             .map(|data| data.base_gas_bytes)
-    }
-
-    pub fn structural_digest_masked_gas_bytes(&self) -> Option<u64> {
-        self.structural_digest_data
-            .as_ref()
-            .map(|data| data.masked_gas_bytes)
     }
 
     pub fn rgp(&self) -> u64 {

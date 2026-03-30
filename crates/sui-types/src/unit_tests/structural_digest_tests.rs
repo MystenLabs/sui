@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Tests for ProgrammableTransaction::structural_digest (SIP-70 v2).
+//! Tests for ProgrammableTransaction::structural_digest (SIP-70).
 //!
 //! Verifies that the structural digest is:
 //! - Deterministic (same PTB -> same digest)
@@ -10,16 +10,12 @@
 //! - Sensitive to argument changes (different Pure values, different objects)
 //! - Sensitive to Result redirection (changing which command output flows where)
 //! - Stable when only irrelevant metadata changes (e.g. object digest, object version)
-//! - Coin-normalizable (same TypeName + Balance -> same digest regardless of ObjectID)
-//! - Wildcard-capable (specified Pure inputs hash as marker, not value)
 
 use crate::base_types::{ObjectDigest, ObjectID, SequenceNumber, random_object_ref};
 use crate::transaction::{
     Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
 };
 use crate::type_input::TypeInput;
-use move_core_types::language_storage::{StructTag, TypeTag};
-use std::collections::{BTreeMap, BTreeSet};
 
 /// Helper: build a simple MoveCall command
 fn make_move_call(
@@ -40,26 +36,6 @@ fn make_move_call(
 /// Helper: build a ProgrammableTransaction from inputs and commands
 fn make_pt(inputs: Vec<CallArg>, commands: Vec<Command>) -> ProgrammableTransaction {
     ProgrammableTransaction { inputs, commands }
-}
-
-/// Helper: build a fake coin TypeTag (Coin<0x2::sui::SUI>)
-fn sui_coin_type() -> TypeTag {
-    TypeTag::Struct(Box::new(StructTag {
-        address: ObjectID::from_hex_literal("0x2").unwrap().into(),
-        module: move_core_types::identifier::Identifier::new("sui").unwrap(),
-        name: move_core_types::identifier::Identifier::new("SUI").unwrap(),
-        type_params: vec![],
-    }))
-}
-
-/// Helper: build a different coin TypeTag
-fn usdc_coin_type() -> TypeTag {
-    TypeTag::Struct(Box::new(StructTag {
-        address: ObjectID::from_hex_literal("0xdead").unwrap().into(),
-        module: move_core_types::identifier::Identifier::new("usdc").unwrap(),
-        name: move_core_types::identifier::Identifier::new("USDC").unwrap(),
-        type_params: vec![],
-    }))
 }
 
 // ============================================================================
@@ -566,257 +542,6 @@ fn test_empty_ptb_has_stable_digest() {
 }
 
 // ============================================================================
-// Coin normalization (Change 3)
-// ============================================================================
-
-#[test]
-fn test_coin_normalized_digest_stable_across_different_object_ids() {
-    // Two PTBs with different coin ObjectIDs but same TypeName + Balance
-    // should produce the same digest when coin_info is provided.
-    let pkg = ObjectID::random();
-    let coin_id_1 = ObjectID::random();
-    let coin_id_2 = ObjectID::random();
-
-    let pt1 = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
-            coin_id_1,
-            SequenceNumber::from_u64(1),
-            ObjectDigest::new([0xAA; 32]),
-        )))],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
-    );
-
-    let pt2 = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
-            coin_id_2,
-            SequenceNumber::from_u64(5),
-            ObjectDigest::new([0xBB; 32]),
-        )))],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
-    );
-
-    // Without coin_info: different ObjectIDs -> different digests
-    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
-
-    // With coin_info (same type + balance): same digest
-    let coin_info_1: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (sui_coin_type(), 1000))].into_iter().collect();
-    let coin_info_2: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (sui_coin_type(), 1000))].into_iter().collect();
-
-    assert_eq!(
-        pt1.structural_digest_with_options(Some(&coin_info_1), &BTreeSet::new()),
-        pt2.structural_digest_with_options(Some(&coin_info_2), &BTreeSet::new()),
-    );
-}
-
-#[test]
-fn test_coin_normalized_digest_changes_with_different_balance() {
-    let pkg = ObjectID::random();
-
-    let pt = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
-            random_object_ref(),
-        ))],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
-    );
-
-    let coin_info_1000: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (sui_coin_type(), 1000))].into_iter().collect();
-    let coin_info_2000: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (sui_coin_type(), 2000))].into_iter().collect();
-
-    assert_ne!(
-        pt.structural_digest_with_options(Some(&coin_info_1000), &BTreeSet::new()),
-        pt.structural_digest_with_options(Some(&coin_info_2000), &BTreeSet::new()),
-    );
-}
-
-#[test]
-fn test_coin_normalized_digest_changes_with_different_type() {
-    let pkg = ObjectID::random();
-
-    let pt = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
-            random_object_ref(),
-        ))],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
-    );
-
-    let sui_info: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (sui_coin_type(), 1000))].into_iter().collect();
-    let usdc_info: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (usdc_coin_type(), 1000))].into_iter().collect();
-
-    assert_ne!(
-        pt.structural_digest_with_options(Some(&sui_info), &BTreeSet::new()),
-        pt.structural_digest_with_options(Some(&usdc_info), &BTreeSet::new()),
-    );
-}
-
-// ============================================================================
-// Wildcard slots (Change 4)
-// ============================================================================
-
-#[test]
-fn test_wildcard_digest_stable_across_different_pure_values() {
-    // Two PTBs that differ only in a wildcarded Pure input should produce the same digest.
-    let pkg = ObjectID::random();
-
-    let pt1 = make_pt(
-        vec![
-            CallArg::Pure(bcs::to_bytes(&100u64).unwrap()), // input 0: amount (pinned)
-            CallArg::Pure(bcs::to_bytes(&50u64).unwrap()),  // input 1: slippage (wildcard)
-        ],
-        vec![make_move_call(
-            pkg,
-            "dex",
-            "swap",
-            vec![Argument::Input(0), Argument::Input(1)],
-        )],
-    );
-
-    let pt2 = make_pt(
-        vec![
-            CallArg::Pure(bcs::to_bytes(&100u64).unwrap()), // input 0: same amount
-            CallArg::Pure(bcs::to_bytes(&999u64).unwrap()), // input 1: different slippage
-        ],
-        vec![make_move_call(
-            pkg,
-            "dex",
-            "swap",
-            vec![Argument::Input(0), Argument::Input(1)],
-        )],
-    );
-
-    // Without wildcards: different Pure values -> different digests
-    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
-
-    // With wildcard on input 1: same digest
-    let wildcards: BTreeSet<u16> = [1].into_iter().collect();
-    assert_eq!(
-        pt1.structural_digest_with_options(None, &wildcards),
-        pt2.structural_digest_with_options(None, &wildcards),
-    );
-
-    // Non-wildcarded input (0) still differentiates
-    let pt3 = make_pt(
-        vec![
-            CallArg::Pure(bcs::to_bytes(&200u64).unwrap()), // input 0: different amount
-            CallArg::Pure(bcs::to_bytes(&50u64).unwrap()),  // input 1: same slippage
-        ],
-        vec![make_move_call(
-            pkg,
-            "dex",
-            "swap",
-            vec![Argument::Input(0), Argument::Input(1)],
-        )],
-    );
-
-    assert_ne!(
-        pt1.structural_digest_with_options(None, &wildcards),
-        pt3.structural_digest_with_options(None, &wildcards),
-    );
-}
-
-#[test]
-fn test_wildcard_only_applies_to_specified_indices() {
-    let pkg = ObjectID::random();
-
-    let pt1 = make_pt(
-        vec![
-            CallArg::Pure(bcs::to_bytes(&100u64).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&200u64).unwrap()),
-        ],
-        vec![make_move_call(
-            pkg,
-            "mod",
-            "func",
-            vec![Argument::Input(0), Argument::Input(1)],
-        )],
-    );
-
-    let pt2 = make_pt(
-        vec![
-            CallArg::Pure(bcs::to_bytes(&100u64).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&999u64).unwrap()),
-        ],
-        vec![make_move_call(
-            pkg,
-            "mod",
-            "func",
-            vec![Argument::Input(0), Argument::Input(1)],
-        )],
-    );
-
-    // Wildcard on input 0 only: input 1 still differentiates
-    let wildcards_0: BTreeSet<u16> = [0].into_iter().collect();
-    assert_ne!(
-        pt1.structural_digest_with_options(None, &wildcards_0),
-        pt2.structural_digest_with_options(None, &wildcards_0),
-    );
-
-    // Wildcard on input 1 only: input 0 is the same -> same digest
-    let wildcards_1: BTreeSet<u16> = [1].into_iter().collect();
-    assert_eq!(
-        pt1.structural_digest_with_options(None, &wildcards_1),
-        pt2.structural_digest_with_options(None, &wildcards_1),
-    );
-}
-
-#[test]
-fn test_wildcard_and_coin_normalization_combined() {
-    // Coin normalization and wildcards work together.
-    let pkg = ObjectID::random();
-
-    let pt1 = make_pt(
-        vec![
-            CallArg::Object(ObjectArg::ImmOrOwnedObject((
-                ObjectID::random(),
-                SequenceNumber::from_u64(1),
-                ObjectDigest::new([0xAA; 32]),
-            ))),
-            CallArg::Pure(bcs::to_bytes(&50u64).unwrap()), // slippage
-        ],
-        vec![make_move_call(
-            pkg,
-            "dex",
-            "swap",
-            vec![Argument::Input(0), Argument::Input(1)],
-        )],
-    );
-
-    let pt2 = make_pt(
-        vec![
-            CallArg::Object(ObjectArg::ImmOrOwnedObject((
-                ObjectID::random(), // different coin object
-                SequenceNumber::from_u64(99),
-                ObjectDigest::new([0xBB; 32]),
-            ))),
-            CallArg::Pure(bcs::to_bytes(&999u64).unwrap()), // different slippage
-        ],
-        vec![make_move_call(
-            pkg,
-            "dex",
-            "swap",
-            vec![Argument::Input(0), Argument::Input(1)],
-        )],
-    );
-
-    // Same coin type+balance, wildcard on slippage -> same digest
-    let coin_info_1: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (sui_coin_type(), 1000))].into_iter().collect();
-    let coin_info_2: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (sui_coin_type(), 1000))].into_iter().collect();
-    let wildcards: BTreeSet<u16> = [1].into_iter().collect();
-
-    assert_eq!(
-        pt1.structural_digest_with_options(Some(&coin_info_1), &wildcards),
-        pt2.structural_digest_with_options(Some(&coin_info_2), &wildcards),
-    );
-}
-
-// ============================================================================
 // Length framing (collision prevention)
 // ============================================================================
 
@@ -864,81 +589,6 @@ fn test_no_collision_different_arg_count() {
         )],
     );
 
-    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
-}
-
-// ============================================================================
-// Two-mode coin normalization: base vs masked
-// ============================================================================
-
-#[test]
-fn test_base_digest_uses_object_id_for_coins() {
-    // structural_digest() should hash coins by ObjectID (identity-preserving).
-    // Different coin ObjectIDs with same type+balance -> different base digests.
-    let pkg = ObjectID::random();
-    let coin_id_1 = ObjectID::random();
-    let coin_id_2 = ObjectID::random();
-
-    let pt1 = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
-            coin_id_1,
-            SequenceNumber::from_u64(1),
-            ObjectDigest::new([0xAA; 32]),
-        )))],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
-    );
-
-    let pt2 = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
-            coin_id_2,
-            SequenceNumber::from_u64(1),
-            ObjectDigest::new([0xAA; 32]),
-        )))],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
-    );
-
-    // Base digest: different coin IDs -> different digests
-    assert_ne!(pt1.structural_digest(), pt2.structural_digest());
-}
-
-#[test]
-fn test_masked_digest_normalizes_coins_by_type_and_balance() {
-    // structural_digest_with_options(Some(coin_info), ...) normalizes coins.
-    // Different ObjectIDs with same type+balance -> same masked digest.
-    let pkg = ObjectID::random();
-    let coin_id_1 = ObjectID::random();
-    let coin_id_2 = ObjectID::random();
-
-    let pt1 = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
-            coin_id_1,
-            SequenceNumber::from_u64(1),
-            ObjectDigest::new([0xAA; 32]),
-        )))],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
-    );
-
-    let pt2 = make_pt(
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject((
-            coin_id_2,
-            SequenceNumber::from_u64(5),
-            ObjectDigest::new([0xBB; 32]),
-        )))],
-        vec![make_move_call(pkg, "mod", "func", vec![Argument::Input(0)])],
-    );
-
-    let coin_info_1: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (sui_coin_type(), 1000))].into_iter().collect();
-    let coin_info_2: BTreeMap<usize, (TypeTag, u64)> =
-        [(0, (sui_coin_type(), 1000))].into_iter().collect();
-
-    // Masked with coin normalization: same type+balance -> same digest
-    assert_eq!(
-        pt1.structural_digest_with_options(Some(&coin_info_1), &BTreeSet::new()),
-        pt2.structural_digest_with_options(Some(&coin_info_2), &BTreeSet::new()),
-    );
-
-    // But base digest differs (identity-preserving)
     assert_ne!(pt1.structural_digest(), pt2.structural_digest());
 }
 

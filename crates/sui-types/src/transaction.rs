@@ -969,44 +969,21 @@ impl ProgrammableTransaction {
             .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
     }
 
-    /// Compute a deterministic structural digest of this PTB (SIP-70 v2).
+    /// Compute a deterministic structural digest of this PTB (SIP-70).
     ///
     /// The digest captures the logical structure of the transaction:
     /// - Which commands call which targets, in what order
     /// - How results flow between commands (provenance, not runtime identity)
     /// - What values are passed (Pure bytes, shared object IDs, owned object IDs)
     /// - Type arguments for each call
-    /// - Coins are normalized by TypeName + Balance (not ObjectID)
     ///
     /// Output format: [version_byte | blake2b256_hash]
     /// Version 0x01 = current scheme.
     pub fn structural_digest(&self) -> Vec<u8> {
-        self.structural_digest_with_options(None, &BTreeSet::new())
-    }
-
-    /// Returns a serialized-size proxy for gas metering structural digest work.
-    pub fn structural_digest_metered_bytes(&self) -> u64 {
-        u64::try_from(bcs::serialized_size(self).unwrap_or_default()).unwrap_or(u64::MAX)
-    }
-
-    /// Compute structural digest with coin normalization and/or wildcard support.
-    ///
-    /// - `coin_info`: maps input index to (TypeTag, balance) for coin-type inputs.
-    ///   When provided, coin inputs are hashed by TypeName + Balance instead of ObjectID,
-    ///   making the digest stable across coin split/merge.
-    /// - `wildcard_indices`: set of input indices whose Pure values are treated as wildcards.
-    ///   Wildcarded inputs hash as a 0xFF marker instead of their actual bytes, allowing
-    ///   the DAO to approve a PTB template while leaving certain parameters (e.g. slippage,
-    ///   deadline) to the executor's discretion.
-    pub fn structural_digest_with_options(
-        &self,
-        coin_info: Option<&BTreeMap<usize, (TypeTag, u64)>>,
-        wildcard_indices: &BTreeSet<u16>,
-    ) -> Vec<u8> {
         let mut outer_hasher = DefaultHash::default();
 
         for command in &self.commands {
-            let cmd_hash = self.hash_command_inner(command, coin_info, wildcard_indices);
+            let cmd_hash = self.hash_command_inner(command);
             outer_hasher.update(&cmd_hash);
         }
 
@@ -1018,6 +995,11 @@ impl ProgrammableTransaction {
         result
     }
 
+    /// Returns a serialized-size proxy for gas metering structural digest work.
+    pub fn structural_digest_metered_bytes(&self) -> u64 {
+        u64::try_from(bcs::serialized_size(self).unwrap_or_default()).unwrap_or(u64::MAX)
+    }
+
     /// Hash a length as a u32 LE prefix. Prevents concatenation collisions
     /// between adjacent variable-length fields (e.g. module "a" + function "bc"
     /// vs module "ab" + function "c").
@@ -1025,12 +1007,7 @@ impl ProgrammableTransaction {
         hasher.update(&(len as u32).to_le_bytes());
     }
 
-    fn hash_command_inner(
-        &self,
-        command: &Command,
-        coin_info: Option<&BTreeMap<usize, (TypeTag, u64)>>,
-        wildcard_indices: &BTreeSet<u16>,
-    ) -> [u8; 32] {
+    fn hash_command_inner(&self, command: &Command) -> [u8; 32] {
         let mut hasher = DefaultHash::default();
         match command {
             Command::MoveCall(call) => {
@@ -1050,31 +1027,31 @@ impl ProgrammableTransaction {
                 }
                 Self::hash_len(&mut hasher, call.arguments.len());
                 for arg in &call.arguments {
-                    self.hash_argument_inner(&mut hasher, arg, coin_info, wildcard_indices);
+                    self.hash_argument_inner(&mut hasher, arg);
                 }
             }
             Command::TransferObjects(objects, recipient) => {
                 hasher.update(&[0x01]);
                 Self::hash_len(&mut hasher, objects.len());
                 for obj in objects {
-                    self.hash_argument_inner(&mut hasher, obj, coin_info, wildcard_indices);
+                    self.hash_argument_inner(&mut hasher, obj);
                 }
-                self.hash_argument_inner(&mut hasher, recipient, coin_info, wildcard_indices);
+                self.hash_argument_inner(&mut hasher, recipient);
             }
             Command::SplitCoins(coin, amounts) => {
                 hasher.update(&[0x02]);
-                self.hash_argument_inner(&mut hasher, coin, coin_info, wildcard_indices);
+                self.hash_argument_inner(&mut hasher, coin);
                 Self::hash_len(&mut hasher, amounts.len());
                 for amt in amounts {
-                    self.hash_argument_inner(&mut hasher, amt, coin_info, wildcard_indices);
+                    self.hash_argument_inner(&mut hasher, amt);
                 }
             }
             Command::MergeCoins(target, sources) => {
                 hasher.update(&[0x03]);
-                self.hash_argument_inner(&mut hasher, target, coin_info, wildcard_indices);
+                self.hash_argument_inner(&mut hasher, target);
                 Self::hash_len(&mut hasher, sources.len());
                 for src in sources {
-                    self.hash_argument_inner(&mut hasher, src, coin_info, wildcard_indices);
+                    self.hash_argument_inner(&mut hasher, src);
                 }
             }
             Command::Publish(modules, deps) => {
@@ -1101,7 +1078,7 @@ impl ProgrammableTransaction {
                 }
                 Self::hash_len(&mut hasher, elements.len());
                 for elem in elements {
-                    self.hash_argument_inner(&mut hasher, elem, coin_info, wildcard_indices);
+                    self.hash_argument_inner(&mut hasher, elem);
                 }
             }
             Command::Upgrade(modules, deps, package_id, ticket) => {
@@ -1116,19 +1093,13 @@ impl ProgrammableTransaction {
                     hasher.update(dep.as_ref());
                 }
                 hasher.update(package_id.as_ref());
-                self.hash_argument_inner(&mut hasher, ticket, coin_info, wildcard_indices);
+                self.hash_argument_inner(&mut hasher, ticket);
             }
         }
         hasher.finalize().digest
     }
 
-    fn hash_argument_inner(
-        &self,
-        hasher: &mut DefaultHash,
-        arg: &Argument,
-        coin_info: Option<&BTreeMap<usize, (TypeTag, u64)>>,
-        wildcard_indices: &BTreeSet<u16>,
-    ) {
+    fn hash_argument_inner(&self, hasher: &mut DefaultHash, arg: &Argument) {
         match arg {
             Argument::GasCoin => {
                 hasher.update(&[0x00]);
@@ -1136,13 +1107,7 @@ impl ProgrammableTransaction {
             Argument::Input(idx) => {
                 let input_idx = *idx as usize;
                 if let Some(call_arg) = self.inputs.get(input_idx) {
-                    self.hash_call_arg_inner(
-                        hasher,
-                        call_arg,
-                        input_idx,
-                        coin_info,
-                        wildcard_indices,
-                    );
+                    self.hash_call_arg_inner(hasher, call_arg);
                 } else {
                     // Invalid input index — hash as-is for determinism
                     hasher.update(&[0x01]);
@@ -1161,24 +1126,12 @@ impl ProgrammableTransaction {
         }
     }
 
-    fn hash_call_arg_inner(
-        &self,
-        hasher: &mut DefaultHash,
-        call_arg: &CallArg,
-        input_idx: usize,
-        coin_info: Option<&BTreeMap<usize, (TypeTag, u64)>>,
-        wildcard_indices: &BTreeSet<u16>,
-    ) {
+    fn hash_call_arg_inner(&self, hasher: &mut DefaultHash, call_arg: &CallArg) {
         match call_arg {
             CallArg::Pure(bytes) => {
-                if wildcard_indices.contains(&(input_idx as u16)) {
-                    // Wildcard: hash marker instead of actual value
-                    hasher.update(&[0xFF]);
-                } else {
-                    hasher.update(&[0x01]);
-                    Self::hash_len(hasher, bytes.len());
-                    hasher.update(bytes);
-                }
+                hasher.update(&[0x01]);
+                Self::hash_len(hasher, bytes.len());
+                hasher.update(bytes);
             }
             CallArg::Object(ObjectArg::SharedObject { id, mutability, .. }) => {
                 // Shared objects: ObjectID plus mutability.
@@ -1193,27 +1146,14 @@ impl ProgrammableTransaction {
                 hasher.update(&[mutability_byte]);
             }
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))) => {
-                // Check coin normalization first
-                if let Some((type_tag, balance)) = coin_info.and_then(|m| m.get(&input_idx)) {
-                    hasher.update(&[0x08]); // coin-normalized
-                    hasher.update(&bcs::to_bytes(type_tag).unwrap_or_default());
-                    hasher.update(&balance.to_le_bytes());
-                } else {
-                    // Owned objects: ObjectID only (version drifts between vote and execution)
-                    hasher.update(&[0x03]);
-                    hasher.update(id.as_ref());
-                }
+                // Owned objects: ObjectID only (version drifts between vote and execution)
+                hasher.update(&[0x03]);
+                hasher.update(id.as_ref());
             }
             CallArg::Object(ObjectArg::Receiving((id, _, _))) => {
-                if let Some((type_tag, balance)) = coin_info.and_then(|m| m.get(&input_idx)) {
-                    hasher.update(&[0x09]); // coin-normalized receiving
-                    hasher.update(&bcs::to_bytes(type_tag).unwrap_or_default());
-                    hasher.update(&balance.to_le_bytes());
-                } else {
-                    // Receiving objects: ObjectID only
-                    hasher.update(&[0x04]);
-                    hasher.update(id.as_ref());
-                }
+                // Receiving objects: ObjectID only
+                hasher.update(&[0x04]);
+                hasher.update(id.as_ref());
             }
             CallArg::FundsWithdrawal(_) => {
                 hasher.update(&[0x07]);
@@ -1223,35 +1163,18 @@ impl ProgrammableTransaction {
     }
 }
 
-/// Data needed for structural_digest_masked recomputation at runtime (SIP-70 v2).
-/// Stored on TxContext during execution so the masked native can recompute
-/// the digest with wildcard inputs.
+/// Data needed for structural_digest recomputation at runtime (SIP-70).
+/// Stored on TxContext during execution so the native can compute the digest lazily.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructuralDigestData {
     pub pt: Arc<ProgrammableTransaction>,
-    pub coin_info: BTreeMap<usize, (TypeTag, u64)>,
     pub base_gas_bytes: u64,
-    pub masked_gas_bytes: u64,
 }
 
 impl StructuralDigestData {
-    pub fn new(
-        pt: Arc<ProgrammableTransaction>,
-        coin_info: BTreeMap<usize, (TypeTag, u64)>,
-    ) -> Self {
+    pub fn new(pt: Arc<ProgrammableTransaction>) -> Self {
         let base_gas_bytes = pt.structural_digest_metered_bytes();
-        let coin_info_bytes = coin_info.iter().fold(0u64, |acc, (_, (type_tag, _))| {
-            let type_tag_len = u64::try_from(bcs::to_bytes(type_tag).unwrap_or_default().len())
-                .unwrap_or(u64::MAX);
-            acc.saturating_add(type_tag_len).saturating_add(16)
-        });
-        let masked_gas_bytes = base_gas_bytes.saturating_add(coin_info_bytes);
-        Self {
-            pt,
-            coin_info,
-            base_gas_bytes,
-            masked_gas_bytes,
-        }
+        Self { pt, base_gas_bytes }
     }
 }
 

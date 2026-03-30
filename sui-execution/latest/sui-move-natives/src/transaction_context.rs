@@ -78,29 +78,13 @@ impl TransactionContext {
         self.tx_context.borrow_mut().fresh_id()
     }
 
-    /// Returns the normalized structural digest of the PTB (SIP-70).
+    /// Returns the structural digest of the PTB (SIP-70).
     pub fn structural_digest(&self) -> Option<Vec<u8>> {
         self.tx_context.borrow_mut().structural_digest()
     }
 
-    /// Returns the structural digest with specified Pure inputs wildcarded (SIP-70 v2).
-    pub fn structural_digest_masked(
-        &self,
-        wildcard_indices: &std::collections::BTreeSet<u16>,
-    ) -> Option<Vec<u8>> {
-        self.tx_context
-            .borrow()
-            .structural_digest_masked(wildcard_indices)
-    }
-
     pub fn structural_digest_gas_bytes(&self) -> Option<u64> {
         self.tx_context.borrow().structural_digest_gas_bytes()
-    }
-
-    pub fn structural_digest_masked_gas_bytes(&self) -> Option<u64> {
-        self.tx_context
-            .borrow()
-            .structural_digest_masked_gas_bytes()
     }
 
     //

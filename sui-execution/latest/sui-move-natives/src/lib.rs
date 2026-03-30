@@ -36,7 +36,6 @@ use self::{
         TxContextFreshIdCostParams, TxContextGasBudgetCostParams, TxContextGasPriceCostParams,
         TxContextIdsCreatedCostParams, TxContextRGPCostParams, TxContextReplaceCostParams,
         TxContextSenderCostParams, TxContextSponsorCostParams, TxContextStructuralDigestCostParams,
-        TxContextStructuralDigestMaskedCostParams,
     },
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
@@ -141,7 +140,6 @@ pub struct NativesCostTable {
     pub tx_context_ids_created_cost_params: TxContextIdsCreatedCostParams,
     pub tx_context_replace_cost_params: TxContextReplaceCostParams,
     pub tx_context_structural_digest_cost_params: TxContextStructuralDigestCostParams,
-    pub tx_context_structural_digest_masked_cost_params: TxContextStructuralDigestMaskedCostParams,
 
     // Type
     pub type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams,
@@ -464,17 +462,6 @@ impl NativesCostTable {
                     .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
                     .into(),
             },
-            tx_context_structural_digest_masked_cost_params:
-                TxContextStructuralDigestMaskedCostParams {
-                    tx_context_structural_digest_masked_cost_base: protocol_config
-                        .tx_context_structural_digest_masked_cost_base_as_option()
-                        .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
-                        .into(),
-                    tx_context_structural_digest_masked_cost_per_byte: protocol_config
-                        .tx_context_structural_digest_masked_cost_per_byte_as_option()
-                        .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
-                        .into(),
-                },
             type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams {
                 types_is_one_time_witness_cost_base: protocol_config
                     .types_is_one_time_witness_cost_base()
@@ -1274,11 +1261,6 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "tx_context",
             "native_structural_digest",
             make_native!(tx_context::structural_digest),
-        ),
-        (
-            "tx_context",
-            "native_structural_digest_masked",
-            make_native!(tx_context::structural_digest_masked),
         ),
         (
             "types",
