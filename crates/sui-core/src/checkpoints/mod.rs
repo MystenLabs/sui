@@ -13,7 +13,8 @@ use crate::authority_client::{AuthorityAPI, make_network_authority_clients_with_
 use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
 pub use crate::checkpoints::checkpoint_output::{
-    LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
+    CheckpointOutput as CheckpointOutputTrait, LogCheckpointOutput, ObserverCheckpointOutput,
+    SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;

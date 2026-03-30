@@ -43,6 +43,7 @@ use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::digests::ChainIdentifier;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::node_role::NodeRole;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
@@ -311,6 +312,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
+            NodeRole::Validator, // Tests assume validator role by default
             &path.join("store"),
             None,
             EpochMetrics::new(&registry),
@@ -434,7 +436,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 Arc::downgrade(&epoch_store),
                 consensus_client,
                 randomness::Handle::new_stub(),
-                config.protocol_key_pair(),
+                Some(config.protocol_key_pair()),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {

@@ -19,6 +19,7 @@ anyhow.workspace = true
 base64.workspace = true
 bcs.workspace = true
 clap.workspace = true
+consensus-config.workspace = true
 consensus-core.workspace = true
 prometheus.workspace = true
 tokio = { workspace = true, features = ["full"] }

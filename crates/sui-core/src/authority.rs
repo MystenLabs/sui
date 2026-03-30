@@ -973,11 +973,15 @@ pub struct AuthorityState {
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
     pub fn is_validator(&self, epoch_store: &AuthorityPerEpochStore) -> bool {
-        epoch_store.committee().authority_exists(&self.name)
+        epoch_store.is_validator()
     }
 
     pub fn is_fullnode(&self, epoch_store: &AuthorityPerEpochStore) -> bool {
-        !self.is_validator(epoch_store)
+        epoch_store.is_fullnode()
+    }
+
+    pub fn is_observer(&self, epoch_store: &AuthorityPerEpochStore) -> bool {
+        epoch_store.is_observer()
     }
 
     pub fn committee_store(&self) -> &Arc<CommitteeStore> {
@@ -2229,7 +2233,7 @@ impl AuthorityState {
         Option<ObjectID>,
     )> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
-        if !self.is_fullnode(&epoch_store) {
+        if !(self.is_fullnode(&epoch_store) || self.is_observer(&epoch_store)) {
             return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "dry-exec is only supported on fullnodes".to_string(),
             }
@@ -2495,7 +2499,7 @@ impl AuthorityState {
         }
 
         let epoch_store = self.load_epoch_store_one_call_per_task();
-        if !self.is_fullnode(&epoch_store) {
+        if !(self.is_fullnode(&epoch_store) || self.is_observer(&epoch_store)) {
             return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "simulate is only supported on fullnodes".to_string(),
             }
@@ -2767,7 +2771,7 @@ impl AuthorityState {
     ) -> SuiResult<DevInspectResults> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
 
-        if !self.is_fullnode(&epoch_store) {
+        if !(self.is_fullnode(&epoch_store) || self.is_observer(&epoch_store)) {
             return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "dev-inspect is only supported on fullnodes".to_string(),
             }

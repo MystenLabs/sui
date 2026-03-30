@@ -28,7 +28,7 @@ use prometheus::{
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use sui_types::base_types::AuthorityName;
-use sui_types::error::{SuiErrorKind, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::ConsensusTransactionKind;
@@ -227,9 +227,14 @@ impl ConsensusAdapter {
     }
 
     pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
-        // Send EndOfPublish if needed.
-        // This handles the case where the node crashed after setting reconfig lock state
-        // but before the EndOfPublish message was sent to consensus.
+        // Observer nodes should not resend transactions to consensus during recovery
+        if epoch_store.is_observer() {
+            info!(
+                "Observer node skipping transaction recovery - observers do not submit to consensus"
+            );
+            return;
+        }
+
         if epoch_store.should_send_end_of_publish() {
             let transaction = ConsensusTransaction::new_end_of_publish(self.authority);
             info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
@@ -271,6 +276,13 @@ impl ConsensusAdapter {
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
         submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
+        // Observer nodes should not submit transactions to consensus
+        if epoch_store.is_observer() {
+            return Err(SuiError::from(
+                "Observer nodes cannot submit transactions to consensus",
+            ));
+        }
+
         if transactions.len() > 1 {
             // Soft bundles must contain only UserTransactionV2 transactions.
             for transaction in transactions {

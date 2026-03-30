@@ -64,6 +64,7 @@ use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, TimestampMs,
     VersionedDkgConfirmation, check_total_jwk_size,
 };
+use sui_types::node_role::NodeRole;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -352,6 +353,9 @@ pub struct AuthorityPerEpochStore {
 
     /// Committee of validators for the current epoch.
     committee: Arc<Committee>,
+
+    /// The role of this node (Validator, Observer, or FullNode)
+    node_role: NodeRole,
 
     /// Holds the underlying per-epoch typed store tables.
     /// This is an ArcSwapOption because it needs to be used concurrently,
@@ -1053,6 +1057,7 @@ impl AuthorityPerEpochStore {
     pub fn new(
         name: AuthorityName,
         committee: Arc<Committee>,
+        node_role: NodeRole,
         parent_path: &Path,
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
@@ -1223,6 +1228,7 @@ impl AuthorityPerEpochStore {
         let s = Arc::new(Self {
             name,
             committee: committee.clone(),
+            node_role,
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
             consensus_output_cache,
@@ -1429,9 +1435,24 @@ impl AuthorityPerEpochStore {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
         self.record_epoch_total_duration_metric();
+        let is_validator = new_committee.authority_exists(&name);
+
+        // Figure out the node role for the new epoch by giving priority to validator role.
+        // If the node is not a validator, then check the current node role and return the closest match.
+        let node_role = if is_validator {
+            NodeRole::Validator
+        } else {
+            match self.node_role {
+                NodeRole::Validator | NodeRole::FullNode => NodeRole::FullNode,
+                // We assign the Observer role only when we are certain that this node has acted as an Observer before.
+                // TODO: to be more accurate we actually the need the node's configuration to determine the role.
+                NodeRole::Observer => NodeRole::Observer,
+            }
+        };
         Self::new(
             name,
             Arc::new(new_committee),
+            node_role,
             &self.parent_path,
             self.db_options.clone(),
             self.metrics.clone(),
@@ -3812,7 +3833,22 @@ impl AuthorityPerEpochStore {
 
     /// Whether this node is a validator in this epoch.
     pub fn is_validator(&self) -> bool {
-        self.committee.authority_exists(&self.name)
+        self.node_role.is_validator()
+    }
+
+    /// Whether this node is an observer in this epoch.
+    pub fn is_observer(&self) -> bool {
+        self.node_role.is_observer()
+    }
+
+    /// Whether this node is a full node in this epoch.
+    pub fn is_fullnode(&self) -> bool {
+        self.node_role.is_fullnode()
+    }
+
+    /// Get the node role for this epoch.
+    pub fn node_role(&self) -> NodeRole {
+        self.node_role
     }
 }
 

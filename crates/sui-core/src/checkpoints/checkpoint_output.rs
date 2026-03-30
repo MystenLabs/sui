@@ -56,6 +56,61 @@ impl LogCheckpointOutput {
     }
 }
 
+/// Observer checkpoint output that creates checkpoints locally without signing or
+/// submitting them to consensus. Used for Observer nodes that need to track
+/// checkpoint state without participating in consensus.
+pub struct ObserverCheckpointOutput {
+    pub metrics: Arc<CheckpointMetrics>,
+}
+
+#[async_trait]
+impl CheckpointOutput for ObserverCheckpointOutput {
+    async fn checkpoint_created(
+        &self,
+        summary: &CheckpointSummary,
+        contents: &CheckpointContents,
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
+        _checkpoint_store: &Arc<CheckpointStore>,
+    ) -> SuiResult {
+        let checkpoint_seq = summary.sequence_number;
+        let checkpoint_timestamp = summary.timestamp_ms;
+
+        debug!(
+            "Observer node created checkpoint at sequence {checkpoint_seq}, timestamp {checkpoint_timestamp}. \
+            Checkpoint will be processed locally without signing."
+        );
+
+        trace!(
+            "Observer checkpoint {} includes {} transactions",
+            checkpoint_seq,
+            contents.size()
+        );
+
+        // Update metrics for monitoring
+        self.metrics.checkpoint_creation_latency.observe(
+            summary
+                .timestamp()
+                .elapsed()
+                .unwrap_or_default()
+                .as_secs_f64(),
+        );
+        self.metrics.checkpoint_creation_latency_ms.observe(
+            summary
+                .timestamp()
+                .elapsed()
+                .unwrap_or_default()
+                .as_millis() as u64,
+        );
+
+        // Track that we processed this checkpoint locally
+        self.metrics
+            .last_sent_checkpoint_signature
+            .set(checkpoint_seq as i64);
+
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
     for SubmitCheckpointToConsensus<T>

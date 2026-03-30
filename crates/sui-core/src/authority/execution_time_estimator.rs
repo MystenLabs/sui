@@ -581,6 +581,12 @@ impl ExecutionTimeObserver {
             return;
         };
 
+        // Observer nodes should not submit execution time observations to consensus
+        if epoch_store.is_observer() {
+            debug!("Observer node - not submitting execution time observations to consensus");
+            return;
+        }
+
         let num_observations = to_share.len() as u64;
 
         // Enforce global observation-sharing rate limit.

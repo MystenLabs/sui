@@ -592,7 +592,7 @@ impl Swarm {
     pub fn fullnodes(&self) -> impl Iterator<Item = &Node> {
         self.nodes
             .values()
-            .filter(|node| node.config().consensus_config.is_none())
+            .filter(|node| (node.config().consensus_config.is_none() || node.config().consensus_config.as_ref().unwrap().parameters.as_ref().unwrap().tonic.observer_peers.len() > 0))
     }
 
     pub async fn spawn_new_node(&mut self, config: NodeConfig) -> SuiNodeHandle {

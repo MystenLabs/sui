@@ -565,17 +565,31 @@ impl CheckpointExecutor {
         // But in the future, fullnodes may follow the mysticeti dag and build their own checkpoints.
         self.insert_finalized_transactions(&tx_digests, sequence_number);
 
-        pipeline_handle.skip_to(PipelineStage::BuildDbBatch).await;
+        finish_stage!(pipeline_handle, FinalizeTransactions);
 
-        CheckpointExecutionState::new_with_global_state_hasher(
-            CheckpointExecutionData {
-                checkpoint,
-                checkpoint_contents,
-                tx_digests,
-                fx_digests,
-            },
-            state_hasher,
-        )
+        let ckpt_exec_data = CheckpointExecutionData {
+            checkpoint,
+            checkpoint_contents,
+            tx_digests,
+            fx_digests,
+        };
+
+        // Observer nodes need checkpoint data for the subscription service. Load
+        // transactions and effects from cache (cheap — already executed during consensus)
+        // and process the checkpoint data in the proper pipeline stage.
+        let full_data = if self.checkpoint_data_enabled() {
+            let tx_data = self.load_tx_data_from_cache(&ckpt_exec_data);
+            self.process_checkpoint_data(&ckpt_exec_data, &tx_data)
+        } else {
+            None
+        };
+
+        finish_stage!(pipeline_handle, ProcessCheckpointData);
+
+        let mut state =
+            CheckpointExecutionState::new_with_global_state_hasher(ckpt_exec_data, state_hasher);
+        state.full_data = full_data;
+        state
     }
 
     #[instrument(level = "info", skip_all)]
@@ -734,6 +748,50 @@ impl CheckpointExecutor {
         }
 
         Some(checkpoint)
+    }
+
+    /// Loads transactions and effects from cache for an already-executed checkpoint.
+    /// Used by the validator/observer fast path when checkpoint data is needed
+    /// (e.g. for the subscription service) without re-executing transactions.
+    fn load_tx_data_from_cache(
+        &self,
+        ckpt_data: &CheckpointExecutionData,
+    ) -> CheckpointTransactionData {
+        let epoch = ckpt_data.checkpoint.epoch;
+        let seq = ckpt_data.checkpoint.sequence_number;
+
+        let transactions = self
+            .transaction_cache_reader
+            .multi_get_transaction_blocks(&ckpt_data.tx_digests)
+            .into_iter()
+            .enumerate()
+            .map(|(i, tx)| {
+                let tx = tx.unwrap_or_else(|| {
+                    fatal!("transaction not found for {:?}", ckpt_data.tx_digests[i])
+                });
+                let tx = Arc::try_unwrap(tx).unwrap_or_else(|tx| (*tx).clone());
+                VerifiedExecutableTransaction::new_from_checkpoint(tx, epoch, seq)
+            })
+            .collect();
+        let effects = self
+            .transaction_cache_reader
+            .multi_get_effects(&ckpt_data.fx_digests)
+            .into_iter()
+            .enumerate()
+            .map(|(i, effect)| {
+                effect.unwrap_or_else(|| {
+                    fatal!(
+                        "checkpoint effect not found for {:?}",
+                        ckpt_data.fx_digests[i]
+                    )
+                })
+            })
+            .collect();
+        let executed_fx_digests = self
+            .transaction_cache_reader
+            .multi_get_executed_effects_digests(&ckpt_data.tx_digests);
+
+        CheckpointTransactionData::new(transactions, effects, executed_fx_digests)
     }
 
     // Load all required transaction and effects data for the checkpoint.
