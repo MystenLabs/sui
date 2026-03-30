@@ -16,7 +16,7 @@
 //!
 //! ## Store Implementations
 //!
-//! - [`stores::GraphQlStore`] - Remote GraphQL-backed store (mainnet/testnet/devnet/custom GraphQL
+//! - [`stores::GraphQLStore`] - Remote GraphQL-backed store (mainnet/testnet/devnet/custom GraphQL
 //!   endpoint)
 //! - [`stores::FileSystemStore`] - Persistent local disk cache
 //! - [`stores::InMemoryStore`] - Unbounded in-memory cache
