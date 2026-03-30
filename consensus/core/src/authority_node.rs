@@ -1197,29 +1197,6 @@ mod tests {
         protocol_config: ConsensusProtocolConfig,
         observer_server_port: Option<u16>,
     ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
-        make_authority_with_observer_server(
-            index,
-            db_dir,
-            committee,
-            keypairs,
-            network_type,
-            boot_counter,
-            protocol_config,
-            None, // No observer server port
-        )
-        .await
-    }
-
-    async fn make_authority_with_observer_server(
-        index: AuthorityIndex,
-        db_dir: &TempDir,
-        committee: Committee,
-        keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
-        network_type: NetworkType,
-        boot_counter: u64,
-        protocol_config: ProtocolConfig,
-        observer_server_port: Option<u16>,
-    ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
         let registry = Registry::new();
 
         // Cache less blocks to exercise commit sync.
