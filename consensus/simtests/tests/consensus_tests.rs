@@ -7,7 +7,8 @@ mod consensus_tests {
     use std::{sync::Arc, time::Duration};
 
     use consensus_config::{
-        Authority, AuthorityIndex, AuthorityName, Committee, ConsensusProtocolConfig, Epoch, NetworkKeyPair, Parameters, ProtocolKeyPair, Stake
+        Authority, AuthorityIndex, AuthorityName, Committee, ConsensusProtocolConfig, Epoch,
+        NetworkKeyPair, Parameters, ProtocolKeyPair, Stake,
     };
     use consensus_core::NoopTransactionVerifier;
     use consensus_core::{BlockAPI, BlockStatus, TransactionVerifier, ValidationError};
