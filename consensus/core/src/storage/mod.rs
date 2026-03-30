@@ -4,6 +4,9 @@
 pub mod mem_store;
 pub mod rocksdb_store;
 
+#[cfg(feature = "clickhouse-debug")]
+pub(crate) mod clickhouse_writer;
+
 #[cfg(test)]
 mod store_tests;
 

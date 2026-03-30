@@ -96,6 +96,9 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_use_fifo_compaction")]
     pub use_fifo_compaction: bool,
 
+    #[serde(default = "ClickHouseParameters::default")]
+    pub clickhouse: ClickHouseParameters,
+
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
@@ -227,6 +230,7 @@ impl Default for Parameters {
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             use_fifo_compaction: Parameters::default_use_fifo_compaction(),
+            clickhouse: ClickHouseParameters::default(),
             tonic: TonicParameters::default(),
             internal: InternalParameters::default(),
             listen_address_override: None,
@@ -338,6 +342,52 @@ impl Default for InternalParameters {
         Self {
             skip_equivocation_validation: InternalParameters::default_skip_equivocation_validation(
             ),
+        }
+    }
+}
+
+/// Configuration for the optional ClickHouse debug writer.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ClickHouseParameters {
+    #[serde(default)]
+    pub enabled: bool,
+
+    #[serde(default = "ClickHouseParameters::default_url")]
+    pub url: String,
+
+    #[serde(default = "ClickHouseParameters::default_database")]
+    pub database: String,
+
+    /// Includes full BCS-serialized block/commit bytes. ~10-50 TB per 2 epochs at mainnet load.
+    #[serde(default)]
+    pub include_raw_bytes: bool,
+
+    #[serde(default = "ClickHouseParameters::default_channel_capacity")]
+    pub channel_capacity: usize,
+}
+
+impl ClickHouseParameters {
+    fn default_url() -> String {
+        "http://localhost:8123".to_string()
+    }
+
+    fn default_database() -> String {
+        "consensus_debug".to_string()
+    }
+
+    fn default_channel_capacity() -> usize {
+        1024
+    }
+}
+
+impl Default for ClickHouseParameters {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            url: Self::default_url(),
+            database: Self::default_database(),
+            include_raw_bytes: false,
+            channel_capacity: Self::default_channel_capacity(),
         }
     }
 }
