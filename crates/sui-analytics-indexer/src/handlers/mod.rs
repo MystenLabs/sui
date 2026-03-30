@@ -10,6 +10,7 @@
 use crate::metrics::Metrics;
 
 pub mod handler;
+pub mod system_package_eviction;
 pub mod tables;
 
 pub use handler::AnalyticsHandler;

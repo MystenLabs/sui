@@ -655,7 +655,10 @@ impl Connection for AnalyticsConnection<'_> {
         &mut self,
         pipeline: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-        let output_prefix = self.pipeline_config(pipeline).output_prefix().to_string();
+        let Some(config) = self.store.config.get_pipeline_config(pipeline) else {
+            return Ok(None);
+        };
+        let output_prefix = config.output_prefix().to_string();
         match &self.store.mode {
             StoreMode::Live(store) => store.committer_watermark(&output_prefix).await,
             StoreMode::Migration(store) => store.committer_watermark(&output_prefix).await,

@@ -24,17 +24,20 @@ use sui_types::object::bounded_visitor::BoundedVisitor;
 use tap::tap::TapFallible;
 use tracing::warn;
 
+use sui_package_resolver::PackageStoreWithLruCache;
+use sui_package_resolver::Resolver;
+use sui_rpc_resolver::package_store::RpcPackageStore;
+
 use crate::Row;
-use crate::package_store::PackageCache;
 use crate::pipeline::Pipeline;
 use crate::tables::DynamicFieldRow;
 
 pub struct DynamicFieldProcessor {
-    package_cache: Arc<PackageCache>,
+    package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>,
 }
 
 impl DynamicFieldProcessor {
-    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+    pub fn new(package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>) -> Self {
         Self { package_cache }
     }
 }
@@ -56,9 +59,7 @@ impl DynamicFieldProcessor {
             return Ok(None);
         }
 
-        let layout = self
-            .package_cache
-            .resolver_for_epoch(epoch)
+        let layout = Resolver::new(self.package_cache.clone())
             .type_layout(move_object.type_().clone().into())
             .await?;
         let object_id = object.id();

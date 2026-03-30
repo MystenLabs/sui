@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cell::RefCell,
     collections::BTreeSet,
     sync::atomic::{AtomicBool, Ordering},
 };
+
+#[cfg(msim)]
+use std::cell::RefCell;
+#[cfg(not(msim))]
+use std::sync::Mutex;
 
 use clap::*;
 use fastcrypto::encoding::{Base58, Encoding, Hex};
@@ -305,11 +309,12 @@ const TESTNET_USDC: &str =
 // Version 115: Gasless transaction drop safety.
 //              Enable address aliases on mainnet.
 //              Relax ValidDuring requirement for transactions with owned inputs.
-//              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
+//              Disable defer_unpaid_amplification (debugging).
 // Version 117: Update Sui System metadata handling.
 // Version 118: Adds `transfer_migration_cap` to display registry
 // Version 119: Enable the new VM.
+// Version 120: Re-enable defer_unpaid_amplification (devnet + testnet).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2755,16 +2760,7 @@ impl ProtocolConfig {
         let mut ret = Self::get_for_version_impl(version, chain);
         ret.version = version;
 
-        ret = CONFIG_OVERRIDE.with(|ovr| {
-            if let Some(override_fn) = &*ovr.borrow() {
-                warn!(
-                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
-                );
-                override_fn(version, ret)
-            } else {
-                ret
-            }
-        });
+        ret = Self::apply_config_override(version, ret);
 
         if std::env::var("SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE").is_ok() {
             warn!(
@@ -4768,7 +4764,12 @@ impl ProtocolConfig {
                     cfg.transfer_receive_object_cost_per_byte = Some(1);
                     cfg.transfer_receive_object_type_cost_per_byte = Some(2);
                 }
-                120 => {}
+                120 => {
+                    // Re-enable unpaid amplification deferral protection (testnet + devnet)
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.defer_unpaid_amplification = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4927,6 +4928,20 @@ impl ProtocolConfig {
     /// Override one or more settings in the config, for testing.
     /// This must be called at the beginning of the test, before get_for_(min|max)_version is
     /// called, since those functions cache their return value.
+    #[cfg(not(msim))]
+    pub fn apply_overrides_for_testing(
+        override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + Sync + 'static,
+    ) -> OverrideGuard {
+        let mut cur = CONFIG_OVERRIDE.lock().unwrap();
+        assert!(cur.is_none(), "config override already present");
+        *cur = Some(Box::new(override_fn));
+        OverrideGuard
+    }
+
+    /// Override one or more settings in the config, for testing.
+    /// This must be called at the beginning of the test, before get_for_(min|max)_version is
+    /// called, since those functions cache their return value.
+    #[cfg(msim)]
     pub fn apply_overrides_for_testing(
         override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + 'static,
     ) -> OverrideGuard {
@@ -4935,6 +4950,31 @@ impl ProtocolConfig {
             assert!(cur.is_none(), "config override already present");
             *cur = Some(Box::new(override_fn));
             OverrideGuard
+        })
+    }
+
+    #[cfg(not(msim))]
+    fn apply_config_override(version: ProtocolVersion, mut ret: Self) -> Self {
+        if let Some(override_fn) = CONFIG_OVERRIDE.lock().unwrap().as_ref() {
+            warn!(
+                "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
+            );
+            ret = override_fn(version, ret);
+        }
+        ret
+    }
+
+    #[cfg(msim)]
+    fn apply_config_override(version: ProtocolVersion, ret: Self) -> Self {
+        CONFIG_OVERRIDE.with(|ovr| {
+            if let Some(override_fn) = &*ovr.borrow() {
+                warn!(
+                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
+                );
+                override_fn(version, ret)
+            } else {
+                ret
+            }
         })
     }
 }
@@ -5214,8 +5254,16 @@ impl ProtocolConfig {
     }
 }
 
+#[cfg(not(msim))]
+type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync;
+
+#[cfg(not(msim))]
+static CONFIG_OVERRIDE: Mutex<Option<Box<OverrideFn>>> = Mutex::new(None);
+
+#[cfg(msim)]
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
 
+#[cfg(msim)]
 thread_local! {
     static CONFIG_OVERRIDE: RefCell<Option<Box<OverrideFn>>> = RefCell::new(None);
 }
@@ -5223,6 +5271,15 @@ thread_local! {
 #[must_use]
 pub struct OverrideGuard;
 
+#[cfg(not(msim))]
+impl Drop for OverrideGuard {
+    fn drop(&mut self) {
+        info!("restoring override fn");
+        *CONFIG_OVERRIDE.lock().unwrap() = None;
+    }
+}
+
+#[cfg(msim)]
 impl Drop for OverrideGuard {
     fn drop(&mut self) {
         info!("restoring override fn");

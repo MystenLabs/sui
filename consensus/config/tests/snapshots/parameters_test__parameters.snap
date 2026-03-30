@@ -33,5 +33,6 @@ tonic:
   message_size_limit: 67108864
   observer_server_port: ~
   observer_allowlist: []
+  observer_peers: []
 internal:
   skip_equivocation_validation: false
