@@ -1934,8 +1934,8 @@ pub struct ProtocolConfig {
     /// When None, there is no limit (effectively unlimited).
     gasless_max_pure_input_bytes: Option<u64>,
 
-    /// Max tps for gasless transactions per validator. Unlimited when unset, zero when set to zero.
-    gasless_max_tps_per_validator: Option<u64>,
+    /// Max tps for gasless transactions. Unlimited when unset, zero when set to zero.
+    gasless_max_tps: Option<u64>,
 }
 
 /// An aliased address.
@@ -3323,7 +3323,7 @@ impl ProtocolConfig {
             gasless_allowed_token_types: None,
             gasless_max_unused_inputs: None,
             gasless_max_pure_input_bytes: None,
-            gasless_max_tps_per_validator: None,
+            gasless_max_tps: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4764,7 +4764,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_gasless = true;
                         cfg.gasless_max_computation_units = Some(50_000);
                         cfg.gasless_allowed_token_types = Some(vec![]);
-                        cfg.gasless_max_tps_per_validator = Some(50);
+                        cfg.gasless_max_tps = Some(50);
                         cfg.feature_flags.enable_coin_reservation_obj_refs = true;
                         cfg.feature_flags
                             .convert_withdrawal_compatibility_ptb_arguments = true;

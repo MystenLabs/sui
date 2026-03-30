@@ -1220,13 +1220,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             new_jwks,
         } = self.build_commit_handler_input(transactions);
 
-        let gasless_count = user_transactions
-            .iter()
-            .filter(|txn| txn.tx().transaction_data().is_gasless_transaction())
-            .count() as u64;
-        self.consensus_gasless_counter
-            .record_commit(commit_info.timestamp, gasless_count);
-
+        self.process_gasless_transactions(&commit_info, &user_transactions);
         self.process_jwks(&mut state, &commit_info, new_jwks);
         self.process_capability_notifications(capability_notifications);
         self.process_execution_time_observations(&mut state, execution_time_observations);
@@ -2346,6 +2340,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
 
         ret
+    }
+
+    fn process_gasless_transactions(
+        &self,
+        commit_info: &ConsensusCommitInfo,
+        user_transactions: &[VerifiedExecutableTransactionWithAliases],
+    ) {
+        let gasless_count = user_transactions
+            .iter()
+            .filter(|txn| txn.tx().transaction_data().is_gasless_transaction())
+            .count() as u64;
+        self.consensus_gasless_counter
+            .record_commit(commit_info.timestamp, gasless_count);
     }
 
     fn process_jwks(

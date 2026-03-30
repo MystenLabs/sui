@@ -402,7 +402,7 @@ impl ValidatorServiceMetrics {
             .unwrap(),
             gasless_rate_limited_count: register_int_counter_with_registry!(
                 "validator_service_gasless_rate_limited_count",
-                "Number of free tier transactions rejected by rate limiter",
+                "Number of gasless transactions rejected by rate limiter",
                 registry,
             )
             .unwrap(),
@@ -783,7 +783,7 @@ impl ValidatorService {
                 metrics.gasless_rate_limited_count.inc();
                 results[idx] = Some(SubmitTxResult::Rejected {
                     error: SuiErrorKind::ValidatorOverloadedRetryAfter {
-                        retry_after_secs: 0,
+                        retry_after_secs: 1,
                     }
                     .into(),
                 });

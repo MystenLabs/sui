@@ -6,6 +6,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use sui_protocol_config::ProtocolConfig;
 
+/// Tracks how many gasless transactions were included in consensus commits
+/// within the current 1-second window. Updated by the consensus handler on
+/// each commit, and read by the rate limiter to make admission decisions.
 pub struct ConsensusGaslessCounter {
     window_second: AtomicU64,
     count: AtomicU64,
@@ -39,6 +42,9 @@ impl ConsensusGaslessCounter {
     }
 }
 
+/// Per-validator rate limiter for gasless transactions. Uses the consensus-fed
+/// global counter to reject new gasless transactions when the network-wide TPS
+/// exceeds the configured `gasless_max_tps` threshold.
 #[derive(Clone)]
 pub struct GaslessRateLimiter {
     counter: Arc<ConsensusGaslessCounter>,
@@ -51,7 +57,7 @@ impl GaslessRateLimiter {
 
     pub fn try_acquire(&self, config: &ProtocolConfig) -> bool {
         let Some(max_tps) = config.gasless_max_tps_as_option() else {
-            return false;
+            return true;
         };
         let (_, count) = self.counter.current_count();
         count < max_tps
@@ -74,13 +80,21 @@ mod tests {
     }
 
     #[test]
-    fn test_unset_always_rejects() {
+    fn test_unset_is_unlimited() {
         let counter = Arc::new(ConsensusGaslessCounter::default());
         let limiter = GaslessRateLimiter::new(counter);
         let config = ProtocolConfig::get_for_version(
             ProtocolVersion::new(117),
             sui_protocol_config::Chain::Unknown,
         );
+        assert!(limiter.try_acquire(&config));
+    }
+
+    #[test]
+    fn test_zero_max_tps_always_rejects() {
+        let counter = Arc::new(ConsensusGaslessCounter::default());
+        let limiter = GaslessRateLimiter::new(counter);
+        let config = make_config(0);
         assert!(!limiter.try_acquire(&config));
     }
 
