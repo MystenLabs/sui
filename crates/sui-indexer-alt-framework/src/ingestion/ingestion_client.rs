@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -342,18 +343,17 @@ impl IngestionClient {
                     CheckpointError::NotFound => {
                         BE::permanent(IngestionError::NotFound(checkpoint))
                     }
-                    CheckpointError::Transient { reason, error } => self.metrics.inc_retry(
-                        checkpoint,
-                        reason,
-                        IngestionError::FetchError(checkpoint, error),
-                    ),
+                    CheckpointError::Transient { reason, error } => {
+                        self.metrics
+                            .inc_retry(checkpoint, reason, FetchError(checkpoint, error))
+                    }
                     CheckpointError::Permanent { reason, error } => {
                         error!(checkpoint, reason, "Permanent checkpoint error: {error}");
                         self.metrics
                             .total_ingested_permanent_errors
                             .with_label_values(&[reason])
                             .inc();
-                        BE::permanent(IngestionError::FetchError(checkpoint, error))
+                        BE::permanent(FetchError(checkpoint, error))
                     }
                 })?;
 
@@ -378,15 +378,8 @@ impl IngestionClient {
             }
         };
 
-        // Keep backing off until we are waiting for the max interval, but don't give up.
-        let backoff = ExponentialBackoff {
-            max_interval: MAX_TRANSIENT_RETRY_INTERVAL,
-            max_elapsed_time: None,
-            ..Default::default()
-        };
-
         let guard = self.metrics.ingested_checkpoint_latency.start_timer();
-        let data = backoff::future::retry(backoff, request).await?;
+        let data = backoff::future::retry(default_backoff(), request).await?;
         let elapsed = guard.stop_and_record();
 
         debug!(
@@ -415,67 +408,79 @@ impl IngestionClient {
             .total_ingested_objects
             .inc_by(data.object_set.len() as u64);
 
-        let chain_id = *self.get_or_init_chain_id(checkpoint).await?;
+        let client = self.client.clone();
+        let chain_id = *self
+            .chain_id
+            .get_or_try_init(|| {
+                retry_with_slow_monitor(
+                    "chain_id",
+                    move || {
+                        let client = client.clone();
+                        async move { client.chain_id().await }
+                    },
+                    move |err| FetchError(checkpoint, err),
+                )
+            })
+            .await?;
 
         Ok(CheckpointEnvelope {
             checkpoint: Arc::new(data),
             chain_id,
         })
     }
+}
 
-    async fn get_or_init_chain_id(&self, checkpoint: u64) -> IngestionResult<&ChainIdentifier> {
-        let chain_id_client = self.client.clone();
-        let chain_id = self
-            .chain_id
-            .get_or_try_init(|| {
-                let request = move || {
-                    let client = chain_id_client.clone();
-                    async move {
-                        let chain_id = with_slow_future_monitor(
-                            client.chain_id(),
-                            SLOW_OPERATION_WARNING_THRESHOLD,
-                            /* on_threshold_exceeded =*/
-                            || {
-                                warn!(
-                                    checkpoint,
-                                    threshold_ms = SLOW_OPERATION_WARNING_THRESHOLD.as_millis(),
-                                    "Slow chain_id operation detected"
-                                );
-                            },
-                        )
-                        .await
-                        .map_err(|err| {
-                            let reason = "chain_id";
-                            warn!(reason, "Retrying due to error: {err}");
-                            backoff::Error::transient(FetchError(checkpoint, err))
-                        })?;
-
-                        Ok::<ChainIdentifier, backoff::Error<IngestionError>>(chain_id)
-                    }
-                };
-
-                // Keep backing off until we are waiting for the max interval, but don't give up.
-                let backoff = ExponentialBackoff {
-                    max_interval: MAX_TRANSIENT_RETRY_INTERVAL,
-                    max_elapsed_time: None,
-                    ..Default::default()
-                };
-
-                backoff::future::retry(backoff, request)
-            })
-            .await?;
-        Ok(chain_id)
+/// Keep backing off until we are waiting for the max interval, but don't give up.
+fn default_backoff() -> ExponentialBackoff {
+    ExponentialBackoff {
+        max_interval: MAX_TRANSIENT_RETRY_INTERVAL,
+        max_elapsed_time: None,
+        ..Default::default()
     }
+}
+
+/// Retry an fallible async operation with exponential backoff and slow-operation monitoring.
+/// All errors are treated as transient and retried.
+async fn retry_with_slow_monitor<F, Fut, T>(
+    operation: &str,
+    make_future: F,
+    map_error: impl Fn(anyhow::Error) -> IngestionError + Clone,
+) -> IngestionResult<T>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = anyhow::Result<T>>,
+{
+    let request = || {
+        let fut = make_future();
+        let map_error = map_error.clone();
+        async move {
+            with_slow_future_monitor(fut, SLOW_OPERATION_WARNING_THRESHOLD, || {
+                warn!(
+                    operation,
+                    threshold_ms = SLOW_OPERATION_WARNING_THRESHOLD.as_millis(),
+                    "Slow operation detected"
+                );
+            })
+            .await
+            .map_err(|err| {
+                warn!(operation, "Retrying due to error: {err}");
+                backoff::Error::transient(map_error(err))
+            })
+        }
+    };
+
+    backoff::future::retry(default_backoff(), request).await
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
     use clap::Parser;
     use clap::error::ErrorKind;
     use dashmap::DashMap;
     use prometheus::Registry;
-    use std::sync::Arc;
-    use std::time::Duration;
     use sui_types::digests::CheckpointDigest;
     use tokio::time::timeout;
 
@@ -731,7 +736,7 @@ mod tests {
         mock.permanent_failures.insert(1, 1);
 
         let result = client.checkpoint(1).await;
-        assert!(matches!(result, Err(IngestionError::FetchError(1, _))));
+        assert!(matches!(result, Err(FetchError(1, _))));
 
         // Verify that the non-retryable error metric was incremented
         let errors = client
