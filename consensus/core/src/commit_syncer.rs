@@ -963,7 +963,7 @@ mod tests {
         async fn stream_blocks(
             &self,
             _peer: crate::network::PeerId,
-            _request_stream: crate::network::BlockRequestStream,
+            _highest_round_per_authority: Vec<u64>,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
             unimplemented!("Unimplemented")

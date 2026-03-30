@@ -6,7 +6,7 @@ use crate::{
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap, safe_unwrap_err};
+use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
@@ -206,10 +206,9 @@ fn emit_impl(
         stream_head_ty: _,
     }) = stream_ref
     {
-        let stream_id_addr: AccountAddress =
-            safe_unwrap_err!(stream_id.value_as::<AccountAddress>());
+        let stream_id_addr: AccountAddress = safe_unwrap!(stream_id.value_as::<AccountAddress>());
         let accumulator_id: ObjectID =
-            safe_unwrap_err!(accumulator_id.value_as::<AccountAddress>()).into();
+            safe_unwrap!(accumulator_id.value_as::<AccountAddress>()).into();
         let event_idx = obj_runtime
             .state
             .total_events_emitted()

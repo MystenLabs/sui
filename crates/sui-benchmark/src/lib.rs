@@ -486,19 +486,27 @@ impl LocalValidatorAggregatorProxy {
         use sui_types::messages_grpc::SubmitTxRequest;
 
         // Submit to multiple validators in parallel
-        let validators: Vec<_> = self.clients.values().take(num_validators).collect();
+        let validators: Vec<_> = self
+            .clients
+            .values()
+            .take(num_validators)
+            .cloned()
+            .collect();
         let request = SubmitTxRequest::new_transaction(tx.clone());
 
-        let futures: Vec<_> = validators
-            .iter()
-            .map(|client| {
-                let req = request.clone();
-                async move { client.submit_transaction(req, None).await }
-            })
-            .collect();
-
-        // Fire off all submissions but don't wait for responses
-        let _ = futures::future::join_all(futures).await;
+        // Fire off all submissions as spawned tasks - don't wait for responses.
+        // We just need to ensure the submissions are sent to trigger amplification.
+        // Add explicit 2s timeout to prevent unbounded task pile-up under load.
+        for client in validators {
+            let req = request.clone();
+            tokio::spawn(async move {
+                let _ = tokio::time::timeout(
+                    Duration::from_secs(2),
+                    client.submit_transaction(req, None),
+                )
+                .await;
+            });
+        }
 
         // Use the normal path to get the final result
         self.submit_transaction_block(tx).await

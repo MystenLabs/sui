@@ -9,7 +9,7 @@ use fastcrypto::groups::{
 };
 use fastcrypto::serde_helpers::ToFromByteArray;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::safe_unwrap_err;
+use move_binary_format::safe_unwrap;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -766,7 +766,7 @@ where
                 .map(|per_addition| base + per_addition * num_of_additions.into()))
         );
 
-        let r = safe_unwrap_err!(G::multi_scalar_mul(&scalars, &points));
+        let r = safe_unwrap!(G::multi_scalar_mul(&scalars, &points));
         Ok(NativeResult::ok(
             context.gas_used(),
             smallvec![Value::vector_u8(r.to_byte_array().to_vec())],

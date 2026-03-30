@@ -26,10 +26,12 @@ use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::service::Service;
 
+use sui_rpc_resolver::package_store::RpcPackageStore;
+
 use crate::config::IndexerConfig;
 use crate::config::OutputStoreConfig;
+use crate::handlers::system_package_eviction::SystemPackageEviction;
 use crate::metrics::Metrics;
-use crate::package_store::PackageCache;
 use crate::progress_monitoring::spawn_snowflake_monitors;
 use crate::store::AnalyticsStore;
 
@@ -55,31 +57,23 @@ pub async fn build_analytics_indexer(
         .find_checkpoint_range(indexer_args.first_checkpoint, indexer_args.last_checkpoint)
         .await?;
 
-    let work_dir = if let Some(ref work_dir) = config.work_dir {
-        tempfile::Builder::new()
-            .prefix("sui-analytics-indexer-")
-            .tempdir_in(work_dir)?
-            .keep()
-    } else {
-        tempfile::Builder::new()
-            .prefix("sui-analytics-indexer-")
-            .tempdir()?
-            .keep()
-    };
-
     let rpc_url = client_args
         .ingestion
         .rpc_api_url
         .as_ref()
         .map(|u| u.to_string())
         .unwrap_or_default();
-    let package_cache_path = work_dir.join("package_cache");
-    let package_cache = Arc::new(PackageCache::new(&package_cache_path, &rpc_url));
+    let package_cache = Arc::new(RpcPackageStore::new(&rpc_url).with_cache());
+
+    let mut pipeline_filter = indexer_args.pipeline;
+    if !pipeline_filter.is_empty() {
+        pipeline_filter.push("SystemPackageEviction".to_string());
+    }
 
     let adjusted_indexer_args = IndexerArgs {
         first_checkpoint: adjusted_first_checkpoint,
         last_checkpoint: adjusted_last_checkpoint,
-        pipeline: indexer_args.pipeline,
+        pipeline: pipeline_filter,
         task: indexer_args.task,
     };
 
@@ -113,11 +107,19 @@ pub async fn build_analytics_indexer(
                 &mut indexer,
                 pipeline_config,
                 package_cache.clone(),
+                &rpc_url,
                 metrics.clone(),
                 sequential,
             )
             .await?;
     }
+
+    indexer
+        .sequential_pipeline(
+            SystemPackageEviction::new(package_cache.clone()),
+            base_sequential.clone(),
+        )
+        .await?;
 
     // Spawn Snowflake monitors (if configured)
     let cancel = CancellationToken::new();

@@ -49,6 +49,72 @@ fun test_diff() {
 }
 
 #[test]
+fun test_mul_div() {
+    integer_tests::test_mul_div!<u8, u16>(MAX, CASES);
+}
+
+#[test]
+fun test_mul_div_ceil() {
+    integer_tests::test_mul_div_ceil!<u8, u16>(MAX, CASES);
+}
+
+#[test]
+fun test_mul_div_exhaustive() {
+    let step: u8 = 32;
+    let mut x = 0u8;
+    while (x < MAX) {
+        let mut y = 0u8;
+        while (y < MAX) {
+            let mut z = 0u8;
+            while (z < MAX) {
+                integer_tests::check_mul_div!<u8, u16>(MAX, x, y, z);
+                z = z.saturating_add(step);
+            };
+            y = y.saturating_add(step);
+        };
+        x = x.saturating_add(step);
+    }
+}
+
+#[test]
+fun test_mul_div_ceil_exhaustive() {
+    let step: u8 = 48;
+    let mut x = 0u8;
+    while (x < MAX) {
+        let mut y = 0u8;
+        while (y < MAX) {
+            let mut z = 0u8;
+            while (z < MAX) {
+                integer_tests::check_mul_div_ceil!<u8, u16>(MAX, x, y, z);
+                z = z.saturating_add(step);
+            };
+            y = y.saturating_add(step);
+        };
+        x = x.saturating_add(step);
+    }
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u8)]
+fun test_mul_div_div_by_zero() {
+    1u8.mul_div(1, 0);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u8)]
+fun test_mul_div_ceil_div_by_zero() {
+    1u8.mul_div_ceil(1, 0);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u8)]
+fun test_mul_div_overflow() {
+    MAX.mul_div(MAX, 1);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u8)]
+fun test_mul_div_ceil_overflow() {
+    MAX.mul_div_ceil(MAX, 1);
+}
+
+#[test]
 fun test_divide_and_round_up() {
     integer_tests::test_divide_and_round_up!(MAX, CASES);
 }

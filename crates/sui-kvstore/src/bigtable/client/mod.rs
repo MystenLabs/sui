@@ -204,8 +204,8 @@ impl BigTableClient {
             Some(p) => p,
             None => token_provider.project_id().await?.to_string(),
         };
-        let instance_name = format!("projects/{}/instances/{}/", project_id, instance_id);
-        let table_prefix = format!("{}tables/", instance_name);
+        let instance_name = format!("projects/{}/instances/{}", project_id, instance_id);
+        let table_prefix = format!("{}/tables/", instance_name);
         let primer = BigtablePrimer {
             instance_name,
             policy: policy.to_string(),
