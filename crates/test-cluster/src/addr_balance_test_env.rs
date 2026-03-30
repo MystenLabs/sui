@@ -38,7 +38,7 @@ pub struct TestEnvBuilder {
     num_validators: usize,
     test_cluster_builder_cb: Option<Box<dyn Fn(TestClusterBuilder) -> TestClusterBuilder + Send>>,
     proto_override_cb:
-        Option<Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send>>,
+        Option<Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync>>,
 }
 
 impl Default for TestEnvBuilder {
@@ -64,7 +64,7 @@ impl TestEnvBuilder {
 
     pub fn with_proto_override_cb(
         mut self,
-        cb: Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send>,
+        cb: Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync>,
     ) -> Self {
         self.proto_override_cb = Some(cb);
         self

@@ -15546,6 +15546,7 @@ dependencies = [
  "sui-default-config",
  "sui-display",
  "sui-futures",
+ "sui-indexer-alt-consistent-store",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
