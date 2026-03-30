@@ -590,34 +590,18 @@ impl<'backing> TemporaryStore<'backing> {
         let allowed_types =
             sui_types::transaction::get_gasless_allowed_token_types(self.protocol_config);
 
-        // Compute net amounts per (address, token_type): Merge adds, Split subtracts.
+        // Aggregate signed balance changes per (address, token_type).
         // Positive nets are recipient deposits that must meet the minimum transfer amount.
-        // Negative nets are sender withdrawals (expected). Zero nets are no-ops.
-        let net_totals = self
-            .execution_results
-            .accumulator_events
-            .iter()
-            .filter_map(|e| match e.write.value {
-                AccumulatorValue::Integer(amount) => Some((e, amount)),
-                _ => None,
-            })
-            .try_fold(
-                BTreeMap::<(SuiAddress, TypeTag), i128>::new(),
-                |mut totals, (event, amount)| {
-                    let inner_type = sui_types::balance::Balance::maybe_get_balance_type_param(
-                        &event.write.address.ty,
-                    )
-                    .ok_or_else(|| "Accumulator event type is not Balance<T>".to_string())?;
-                    let delta = match event.write.operation {
-                        AccumulatorOperation::Merge => amount as i128,
-                        AccumulatorOperation::Split => -(amount as i128),
-                    };
-                    *totals
-                        .entry((event.write.address.address, inner_type))
-                        .or_default() += delta;
-                    Ok::<_, String>(totals)
-                },
-            )?;
+        let net_totals = sui_types::balance_change::signed_balance_changes_from_events(
+            &self.execution_results.accumulator_events,
+        )
+        .fold(
+            BTreeMap::<(SuiAddress, TypeTag), i128>::new(),
+            |mut totals, (address, token_type, signed_amount)| {
+                *totals.entry((address, token_type)).or_default() += signed_amount;
+                totals
+            },
+        );
 
         for ((recipient, token_type), net_amount) in net_totals {
             if net_amount <= 0 {
