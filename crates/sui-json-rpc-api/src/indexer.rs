@@ -73,6 +73,14 @@ pub trait IndexerApi {
         filter: EventFilter,
     ) -> SubscriptionResult;
 
+    /// Subscribe to a stream of Sui event bundles
+    #[subscription(name = "subscribeEventBundle", item = Vec<SuiEvent>)]
+    fn subscribe_event_bundle(
+        &self,
+        /// The filter criteria of the event stream. See [Event filter](https://docs.sui.io/build/event_api#event-filters) documentation for examples.
+        filter: EventFilter,
+    ) -> SubscriptionResult;
+
     /// Subscribe to a stream of Sui transaction effects
     #[subscription(name = "subscribeTransaction", item = SuiTransactionBlockEffects)]
     fn subscribe_transaction(&self, filter: TransactionFilter) -> SubscriptionResult;

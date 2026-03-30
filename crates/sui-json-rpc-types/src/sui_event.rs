@@ -377,6 +377,12 @@ impl Filter<SuiEvent> for EventFilter {
     }
 }
 
+impl Filter<Vec<SuiEvent>> for EventFilter {
+    fn matches(&self, items: &Vec<SuiEvent>) -> bool {
+        true
+    }
+}
+
 pub trait Filter<T> {
     fn matches(&self, item: &T) -> bool;
 }

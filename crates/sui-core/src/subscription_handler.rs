@@ -70,6 +70,7 @@ impl SubscriptionMetrics {
 pub struct SubscriptionHandler {
     event_streamer: Streamer<SuiEvent, SuiEvent, EventFilter>,
     transaction_streamer: Streamer<EffectsWithInput, SuiTransactionBlockEffects, TransactionFilter>,
+    event_bundle_streamer: Streamer<Vec<SuiEvent>, Vec<SuiEvent>, EventFilter>,
 }
 
 impl SubscriptionHandler {
@@ -77,7 +78,8 @@ impl SubscriptionHandler {
         let metrics = Arc::new(SubscriptionMetrics::new(registry));
         Self {
             event_streamer: Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE, metrics.clone(), "event"),
-            transaction_streamer: Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE, metrics, "tx"),
+            transaction_streamer: Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE, metrics.clone(), "tx"),
+            event_bundle_streamer: Streamer::spawn(5 * EVENT_DISPATCH_BUFFER_SIZE, metrics, "event_bundle"),
         }
     }
 }
@@ -103,6 +105,10 @@ impl SubscriptionHandler {
             error!(error =? e, "Failed to send transaction to dispatch");
         }
 
+        if let Err(e) = self.event_bundle_streamer.try_send(events.data.clone()) {
+            error!(error =? e, "Failed to send event bundle to dispatch");
+        }
+
         // serially dispatch event processing to honor events' orders.
         for event in events.data.clone() {
             if let Err(e) = self.event_streamer.try_send(event) {
@@ -114,6 +120,10 @@ impl SubscriptionHandler {
 
     pub fn subscribe_events(&self, filter: EventFilter) -> impl Stream<Item = SuiEvent> + use<> {
         self.event_streamer.subscribe(filter)
+    }
+
+    pub fn subscribe_event_bundle(&self, filter: EventFilter) -> impl Stream<Item = Vec<SuiEvent>> + use<> {
+        self.event_bundle_streamer.subscribe(filter)
     }
 
     pub fn subscribe_transactions(

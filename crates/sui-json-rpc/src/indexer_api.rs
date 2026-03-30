@@ -324,6 +324,22 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         Ok(())
     }
 
+    fn subscribe_event_bundle(
+        &self,
+        sink: PendingSubscriptionSink,
+        filter: EventFilter,
+    ) -> SubscriptionResult {
+        let permit = self.acquire_subscribe_permit()?;
+        spawn_subscription(
+            sink,
+            self.state
+                .get_subscription_handler()
+                .subscribe_event_bundle(filter),
+            Some(permit),
+        );
+        Ok(())
+    }
+
     fn subscribe_transaction(
         &self,
         sink: PendingSubscriptionSink,
