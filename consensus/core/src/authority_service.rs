@@ -643,6 +643,40 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     }
 }
 
+#[async_trait]
+impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
+    async fn handle_stream_blocks(
+        &self,
+        _peer: NodeId,
+        _highest_round_per_authority: Vec<u64>,
+    ) -> ConsensusResult<ObserverBlockStream> {
+        // TODO: Implement observer block streaming
+        todo!("Observer block streaming not yet implemented")
+    }
+
+    async fn handle_fetch_blocks(
+        &self,
+        _peer: NodeId,
+        _block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        // TODO: implement observer fetch blocks, similar to validator fetch_blocks but
+        // without highest_accepted_rounds.
+        Err(ConsensusError::NetworkRequest(
+            "Observer fetch blocks not yet implemented".to_string(),
+        ))
+    }
+
+    async fn handle_fetch_commits(
+        &self,
+        _peer: NodeId,
+        _commit_range: CommitRange,
+    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+        // TODO: implement observer fetch commits, similar to validator fetch_commits.
+        Err(ConsensusError::NetworkRequest(
+            "Observer fetch commits not yet implemented".to_string(),
+        ))
+    }
+}
 struct Counter {
     count: usize,
     subscriptions_by_peer: BTreeMap<PeerId, usize>,
@@ -1016,6 +1050,14 @@ mod tests {
             _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn get_latest_rounds(
+            &self,
+            _peer: crate::network::PeerId,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
             unimplemented!("Unimplemented")
         }
     }

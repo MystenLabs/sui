@@ -123,6 +123,26 @@ where
         }
     }
 
+    pub async fn get_latest_rounds(
+        &self,
+        peer: PeerId,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+        if self.context.is_validator()
+            && let PeerId::Validator(authority) = peer
+        {
+            let client = self.validator_client.as_ref().ok_or_else(|| {
+                ConsensusError::NetworkConfig("Validator client not available".to_string())
+            })?;
+            client.get_latest_rounds(authority, timeout).await
+        } else {
+            let client = self.observer_client.as_ref().ok_or_else(|| {
+                ConsensusError::NetworkConfig("Observer client not available".to_string())
+            })?;
+            client.get_latest_rounds(peer, timeout).await
+        }
+    }
+
     pub async fn fetch_commits(
         &self,
         peer: PeerId,

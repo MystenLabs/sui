@@ -1404,6 +1404,14 @@ mod tests {
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Observer fetch_commits not implemented in mock")
         }
+
+        async fn get_latest_rounds(
+            &self,
+            _peer: crate::network::PeerId,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+            unimplemented!("Observer get_latest_rounds not implemented in mock")
+        }
     }
 
     #[test]

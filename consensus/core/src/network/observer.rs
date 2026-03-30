@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{NetworkKeyPair, NetworkPublicKey};
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockRef, Round};
 use futures::{Stream, StreamExt as _, stream};
 use mysten_network::{Multiaddr, callback::CallbackLayer};
 use parking_lot::RwLock;
@@ -89,6 +89,17 @@ pub(crate) struct FetchCommitsResponse {
     pub(crate) commits: Vec<Bytes>,
     #[prost(bytes = "bytes", repeated, tag = "2")]
     pub(crate) certifier_blocks: Vec<Bytes>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct GetLatestRoundsRequest {}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct GetLatestRoundsResponse {
+    #[prost(uint64, repeated, tag = "1")]
+    pub(crate) received_rounds: Vec<u64>,
+    #[prost(uint64, repeated, tag = "2")]
+    pub(crate) accepted_rounds: Vec<u64>,
 }
 
 /// Information about an observer peer connection, set in request extensions by the server.
@@ -316,6 +327,17 @@ impl ObserverNetworkClient for TonicObserverClient {
             "fetch_commits not yet implemented".to_string(),
         ))
     }
+
+    async fn get_latest_rounds(
+        &self,
+        _peer: PeerId,
+        _timeout: Duration,
+    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+        // TODO: Implement get_latest_rounds for observers
+        Err(ConsensusError::NetworkRequest(
+            "get_latest_rounds not yet implemented".to_string(),
+        ))
+    }
 }
 
 /// Proxies Observer Tonic requests to ObserverNetworkService.
@@ -419,6 +441,16 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
         // TODO: Implement fetch_commits for observer nodes
         Err(tonic::Status::unimplemented(
             "fetch_commits not yet implemented for observers",
+        ))
+    }
+
+    async fn get_latest_rounds(
+        &self,
+        _request: Request<GetLatestRoundsRequest>,
+    ) -> Result<Response<GetLatestRoundsResponse>, tonic::Status> {
+        // TODO: Implement get_latest_rounds for observer nodes
+        Err(tonic::Status::unimplemented(
+            "get_latest_rounds not yet implemented for observers",
         ))
     }
 }
