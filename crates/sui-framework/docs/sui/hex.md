@@ -92,7 +92,7 @@ Aborts if the hex string does not have an even number of characters (as each hex
 Aborts if the hex string contains non-valid hex characters (valid characters are 0 - 9, a - f, A - F)
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/hex.md#sui_hex_decode">decode</a>(<a href="../sui/hex.md#sui_hex">hex</a>: vector&lt;u8&gt;): vector&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/hex.md#sui_hex_decode">decode</a>(hex: vector&lt;u8&gt;): vector&lt;u8&gt;
 </code></pre>
 
 
@@ -101,11 +101,11 @@ Aborts if the hex string contains non-valid hex characters (valid characters are
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/hex.md#sui_hex_decode">decode</a>(<a href="../sui/hex.md#sui_hex">hex</a>: vector&lt;u8&gt;): vector&lt;u8&gt; {
-    <b>let</b> (<b>mut</b> i, <b>mut</b> r, l) = (0, vector[], <a href="../sui/hex.md#sui_hex">hex</a>.length());
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/hex.md#sui_hex_decode">decode</a>(hex: vector&lt;u8&gt;): vector&lt;u8&gt; {
+    <b>let</b> (<b>mut</b> i, <b>mut</b> r, l) = (0, vector[], hex.length());
     <b>assert</b>!(l % 2 == 0, <a href="../sui/hex.md#sui_hex_EInvalidHexLength">EInvalidHexLength</a>);
     <b>while</b> (i &lt; l) {
-        <b>let</b> decimal = <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[i]) * 16 + <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[i + 1]);
+        <b>let</b> decimal = <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(hex[i]) * 16 + <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(hex[i + 1]);
         r.push_back(decimal);
         i = i + 2;
     };
@@ -123,7 +123,7 @@ Aborts if the hex string contains non-valid hex characters (valid characters are
 
 
 
-<pre><code><b>fun</b> <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>: u8): u8
+<pre><code><b>fun</b> <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(hex: u8): u8
 </code></pre>
 
 
@@ -132,13 +132,13 @@ Aborts if the hex string contains non-valid hex characters (valid characters are
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>: u8): u8 {
-    <b>if</b> (48 &lt;= <a href="../sui/hex.md#sui_hex">hex</a> && <a href="../sui/hex.md#sui_hex">hex</a> &lt; 58) {
-        <a href="../sui/hex.md#sui_hex">hex</a> - 48
-    } <b>else</b> <b>if</b> (65 &lt;= <a href="../sui/hex.md#sui_hex">hex</a> && <a href="../sui/hex.md#sui_hex">hex</a> &lt; 71) {
-        10 + <a href="../sui/hex.md#sui_hex">hex</a> - 65
-    } <b>else</b> <b>if</b> (97 &lt;= <a href="../sui/hex.md#sui_hex">hex</a> && <a href="../sui/hex.md#sui_hex">hex</a> &lt; 103) {
-        10 + <a href="../sui/hex.md#sui_hex">hex</a> - 97
+<pre><code><b>fun</b> <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(hex: u8): u8 {
+    <b>if</b> (48 &lt;= hex && hex &lt; 58) {
+        hex - 48
+    } <b>else</b> <b>if</b> (65 &lt;= hex && hex &lt; 71) {
+        10 + hex - 65
+    } <b>else</b> <b>if</b> (97 &lt;= hex && hex &lt; 103) {
+        10 + hex - 97
     } <b>else</b> {
         <b>abort</b> <a href="../sui/hex.md#sui_hex_ENotValidHexCharacter">ENotValidHexCharacter</a>
     }

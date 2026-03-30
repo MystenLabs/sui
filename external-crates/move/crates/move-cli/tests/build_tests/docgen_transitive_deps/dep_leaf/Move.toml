@@ -1,0 +1,6 @@
+[package]
+name = "Leaf"
+edition = "2024"
+
+[addresses]
+leaf = "0x10"

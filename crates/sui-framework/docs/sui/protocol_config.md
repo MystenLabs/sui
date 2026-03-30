@@ -58,7 +58,7 @@ if (protocol_config::is_feature_enabled(b"enable_accumulators")) {
 ```
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/protocol_config.md#sui_protocol_config_is_feature_enabled">is_feature_enabled</a>(feature_flag_name: vector&lt;u8&gt;): bool
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/protocol_config.md#sui_protocol_config_is_feature_enabled">is_feature_enabled</a>(feature_flag_name: vector&lt;u8&gt;): bool
 </code></pre>
 
 
@@ -67,7 +67,7 @@ if (protocol_config::is_feature_enabled(b"enable_accumulators")) {
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/protocol_config.md#sui_protocol_config_is_feature_enabled">is_feature_enabled</a>(feature_flag_name: vector&lt;u8&gt;): bool;
+<pre><code><b>public</b>(package) <b>native</b> <b>fun</b> <a href="../sui/protocol_config.md#sui_protocol_config_is_feature_enabled">is_feature_enabled</a>(feature_flag_name: vector&lt;u8&gt;): bool;
 </code></pre>
 
 

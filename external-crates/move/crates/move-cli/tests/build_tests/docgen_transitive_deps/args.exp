@@ -1,0 +1,273 @@
+Command `build`:
+INCLUDING DEPENDENCY Leaf
+INCLUDING DEPENDENCY Mid
+BUILDING Root
+Command `docgen --output-directory doc`:
+INCLUDING DEPENDENCY Leaf
+INCLUDING DEPENDENCY Mid
+BUILDING Root
+Generated "doc/leaf/base.md"
+Generated "doc/mid/registry.md"
+Generated "doc/root/app.md"
+
+Documentation generation successful!
+External Command `find doc -type f | sort`:
+doc/leaf/base.md
+doc/mid/registry.md
+doc/root/app.md
+External Command `cat doc/root/app.md`:
+<a name="root_app"></a>
+
+# Module `root::app`
+
+
+<a name="@App_0"></a>
+
+## App
+
+
+Root application using types from both direct (Mid) and transitive (Leaf) dependencies.
+
+
+-  [App](#@App_0)
+-  [Function `create_and_read`](#root_app_create_and_read)
+
+
+<pre><code><b>use</b> <a href="../leaf/base.md#leaf_base">leaf::base</a>;
+<b>use</b> <a href="../mid/registry.md#mid_registry">mid::registry</a>;
+</code></pre>
+
+
+
+<a name="root_app_create_and_read"></a>
+
+## Function `create_and_read`
+
+Create an entry and return its inner id value.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../root/app.md#root_app_create_and_read">create_and_read</a>(v: u64, tag: u64): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../root/app.md#root_app_create_and_read">create_and_read</a>(v: u64, tag: u64): u64 {
+    <b>let</b> <b>entry</b>: Entry = registry::new_entry(v, tag);
+    <b>let</b> id = registry::entry_id(&<b>entry</b>);
+    base::inner(id)
+}
+</code></pre>
+
+
+
+</details>
+External Command `cat doc/mid/registry.md`:
+<a name="mid_registry"></a>
+
+# Module `mid::registry`
+
+
+<a name="@Registry_0"></a>
+
+## Registry
+
+
+A registry that maps <code><a href="../leaf/base.md#leaf_base_Id">leaf::base::Id</a></code> values to names.
+
+
+-  [Registry](#@Registry_0)
+-  [Struct `Entry`](#mid_registry_Entry)
+-  [Function `new_entry`](#mid_registry_new_entry)
+-  [Function `entry_id`](#mid_registry_entry_id)
+
+
+<pre><code><b>use</b> <a href="../leaf/base.md#leaf_base">leaf::base</a>;
+</code></pre>
+
+
+
+<a name="mid_registry_Entry"></a>
+
+## Struct `Entry`
+
+A named entry in the registry.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../mid/registry.md#mid_registry_Entry">Entry</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="../leaf/base.md#leaf_base_Id">leaf::base::Id</a></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>tag: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="mid_registry_new_entry"></a>
+
+## Function `new_entry`
+
+Create a new entry.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../mid/registry.md#mid_registry_new_entry">new_entry</a>(v: u64, tag: u64): <a href="../mid/registry.md#mid_registry_Entry">mid::registry::Entry</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../mid/registry.md#mid_registry_new_entry">new_entry</a>(v: u64, tag: u64): <a href="../mid/registry.md#mid_registry_Entry">Entry</a> {
+    <a href="../mid/registry.md#mid_registry_Entry">Entry</a> { id: base::new_id(v), tag }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="mid_registry_entry_id"></a>
+
+## Function `entry_id`
+
+Get the id of an entry.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../mid/registry.md#mid_registry_entry_id">entry_id</a>(e: &<a href="../mid/registry.md#mid_registry_Entry">mid::registry::Entry</a>): &<a href="../leaf/base.md#leaf_base_Id">leaf::base::Id</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../mid/registry.md#mid_registry_entry_id">entry_id</a>(e: &<a href="../mid/registry.md#mid_registry_Entry">Entry</a>): &Id {
+    &e.id
+}
+</code></pre>
+
+
+
+</details>
+External Command `cat doc/leaf/base.md`:
+<a name="leaf_base"></a>
+
+# Module `leaf::base`
+
+
+<a name="@Base_Types_0"></a>
+
+## Base Types
+
+
+Foundational types used throughout the dependency chain.
+
+
+-  [Base Types](#@Base_Types_0)
+-  [Struct `Id`](#leaf_base_Id)
+-  [Function `new_id`](#leaf_base_new_id)
+-  [Function `inner`](#leaf_base_inner)
+
+
+<pre><code></code></pre>
+
+
+
+<a name="leaf_base_Id"></a>
+
+## Struct `Id`
+
+A unique identifier.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../leaf/base.md#leaf_base_Id">Id</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code><a href="../leaf/base.md#leaf_base_inner">inner</a>: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="leaf_base_new_id"></a>
+
+## Function `new_id`
+
+Create a new Id.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../leaf/base.md#leaf_base_new_id">new_id</a>(v: u64): <a href="../leaf/base.md#leaf_base_Id">leaf::base::Id</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../leaf/base.md#leaf_base_new_id">new_id</a>(v: u64): <a href="../leaf/base.md#leaf_base_Id">Id</a> {
+    <a href="../leaf/base.md#leaf_base_Id">Id</a> { <a href="../leaf/base.md#leaf_base_inner">inner</a>: v }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="leaf_base_inner"></a>
+
+## Function `inner`
+
+Get the inner value.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../leaf/base.md#leaf_base_inner">inner</a>(id: &<a href="../leaf/base.md#leaf_base_Id">leaf::base::Id</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../leaf/base.md#leaf_base_inner">inner</a>(id: &<a href="../leaf/base.md#leaf_base_Id">Id</a>): u64 {
+    id.<a href="../leaf/base.md#leaf_base_inner">inner</a>
+}
+</code></pre>
+
+
+
+</details>

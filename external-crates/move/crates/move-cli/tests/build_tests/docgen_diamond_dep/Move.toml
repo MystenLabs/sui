@@ -1,0 +1,11 @@
+[package]
+name = "Diamond"
+edition = "2024"
+
+[dependencies]
+# Direct dep on Shared AND indirect dep through Middle → Shared
+Shared = { local = "dep_shared" }
+Middle = { local = "dep_middle" }
+
+[addresses]
+diamond = "0x42"

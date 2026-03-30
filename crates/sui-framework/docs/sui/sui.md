@@ -147,17 +147,17 @@ This should be called only once during genesis creation.
 <pre><code><b>fun</b> <a href="../sui/sui.md#sui_sui_new">new</a>(ctx: &<b>mut</b> TxContext): Balance&lt;<a href="../sui/sui.md#sui_sui_SUI">SUI</a>&gt; {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/sui.md#sui_sui_ENotSystemAddress">ENotSystemAddress</a>);
     <b>assert</b>!(ctx.epoch() == 0, <a href="../sui/sui.md#sui_sui_EAlreadyMinted">EAlreadyMinted</a>);
-    <b>let</b> (treasury, metadata) = <a href="../sui/coin.md#sui_coin_create_currency">coin::create_currency</a>(
+    <b>let</b> (treasury, metadata) = coin::create_currency(
         <a href="../sui/sui.md#sui_sui_SUI">SUI</a> {},
         9,
         b"<a href="../sui/sui.md#sui_sui_SUI">SUI</a>",
         b"Sui",
-        // TODO: add appropriate description and logo <a href="../sui/url.md#sui_url">url</a>
+        // TODO: add appropriate description and logo url
         b"",
         option::none(),
         ctx,
     );
-    <a href="../sui/transfer.md#sui_transfer_public_freeze_object">transfer::public_freeze_object</a>(metadata);
+    transfer::public_freeze_object(metadata);
     <b>let</b> <b>mut</b> supply = treasury.treasury_into_supply();
     <b>let</b> total_sui = supply.increase_supply(<a href="../sui/sui.md#sui_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>);
     supply.destroy_supply();
@@ -175,7 +175,7 @@ This should be called only once during genesis creation.
 
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>(c: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, recipient: <b>address</b>)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/sui.md#sui_sui_transfer">transfer</a>(c: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, recipient: <b>address</b>)
 </code></pre>
 
 
@@ -184,8 +184,8 @@ This should be called only once during genesis creation.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>(c: <a href="../sui/coin.md#sui_coin_Coin">coin::Coin</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">SUI</a>&gt;, recipient: <b>address</b>) {
-    <a href="../sui/transfer.md#sui_transfer_public_transfer">transfer::public_transfer</a>(c, recipient)
+<pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/sui.md#sui_sui_transfer">transfer</a>(c: coin::Coin&lt;<a href="../sui/sui.md#sui_sui_SUI">SUI</a>&gt;, recipient: <b>address</b>) {
+    transfer::public_transfer(c, recipient)
 }
 </code></pre>
 

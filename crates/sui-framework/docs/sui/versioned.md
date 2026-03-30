@@ -133,10 +133,10 @@ Create a new Versioned object that contains a initial value of type <code>T</cod
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/versioned.md#sui_versioned_create">create</a>&lt;T: store&gt;(init_version: u64, init_value: T, ctx: &<b>mut</b> TxContext): <a href="../sui/versioned.md#sui_versioned_Versioned">Versioned</a> {
     <b>let</b> <b>mut</b> self = <a href="../sui/versioned.md#sui_versioned_Versioned">Versioned</a> {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        id: object::new(ctx),
         <a href="../sui/versioned.md#sui_versioned_version">version</a>: init_version,
     };
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> self.id, init_version, init_value);
+    dynamic_field::add(&<b>mut</b> self.id, init_version, init_value);
     self
 }
 </code></pre>
@@ -188,7 +188,7 @@ If the type mismatch, the load will fail.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/versioned.md#sui_versioned_load_value">load_value</a>&lt;T: store&gt;(self: &<a href="../sui/versioned.md#sui_versioned_Versioned">Versioned</a>): &T {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, self.<a href="../sui/versioned.md#sui_versioned_version">version</a>)
+    dynamic_field::borrow(&self.id, self.<a href="../sui/versioned.md#sui_versioned_version">version</a>)
 }
 </code></pre>
 
@@ -213,7 +213,7 @@ Similar to load_value, but return a mutable reference.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/versioned.md#sui_versioned_load_value_mut">load_value_mut</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../sui/versioned.md#sui_versioned_Versioned">Versioned</a>): &<b>mut</b> T {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.<a href="../sui/versioned.md#sui_versioned_version">version</a>)
+    dynamic_field::borrow_mut(&<b>mut</b> self.id, self.<a href="../sui/versioned.md#sui_versioned_version">version</a>)
 }
 </code></pre>
 
@@ -240,9 +240,9 @@ and must be used when we upgrade.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/versioned.md#sui_versioned_remove_value_for_upgrade">remove_value_for_upgrade</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../sui/versioned.md#sui_versioned_Versioned">Versioned</a>): (T, <a href="../sui/versioned.md#sui_versioned_VersionChangeCap">VersionChangeCap</a>) {
     (
-        <a href="../sui/dynamic_field.md#sui_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> self.id, self.<a href="../sui/versioned.md#sui_versioned_version">version</a>),
+        dynamic_field::remove(&<b>mut</b> self.id, self.<a href="../sui/versioned.md#sui_versioned_version">version</a>),
         <a href="../sui/versioned.md#sui_versioned_VersionChangeCap">VersionChangeCap</a> {
-            versioned_id: <a href="../sui/object.md#sui_object_id">object::id</a>(self),
+            versioned_id: object::id(self),
             old_version: self.<a href="../sui/versioned.md#sui_versioned_version">version</a>,
         },
     )
@@ -277,9 +277,9 @@ by calling remove_value_for_upgrade.
     cap: <a href="../sui/versioned.md#sui_versioned_VersionChangeCap">VersionChangeCap</a>,
 ) {
     <b>let</b> <a href="../sui/versioned.md#sui_versioned_VersionChangeCap">VersionChangeCap</a> { versioned_id, old_version } = cap;
-    <b>assert</b>!(versioned_id == <a href="../sui/object.md#sui_object_id">object::id</a>(self), <a href="../sui/versioned.md#sui_versioned_EInvalidUpgrade">EInvalidUpgrade</a>);
+    <b>assert</b>!(versioned_id == object::id(self), <a href="../sui/versioned.md#sui_versioned_EInvalidUpgrade">EInvalidUpgrade</a>);
     <b>assert</b>!(old_version &lt; new_version, <a href="../sui/versioned.md#sui_versioned_EInvalidUpgrade">EInvalidUpgrade</a>);
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> self.id, new_version, new_value);
+    dynamic_field::add(&<b>mut</b> self.id, new_version, new_value);
     self.<a href="../sui/versioned.md#sui_versioned_version">version</a> = new_version;
 }
 </code></pre>
@@ -306,7 +306,7 @@ Destroy this Versioned container, and return the inner object.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/versioned.md#sui_versioned_destroy">destroy</a>&lt;T: store&gt;(self: <a href="../sui/versioned.md#sui_versioned_Versioned">Versioned</a>): T {
     <b>let</b> <a href="../sui/versioned.md#sui_versioned_Versioned">Versioned</a> { <b>mut</b> id, <a href="../sui/versioned.md#sui_versioned_version">version</a> } = self;
-    <b>let</b> ret = <a href="../sui/dynamic_field.md#sui_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> id, <a href="../sui/versioned.md#sui_versioned_version">version</a>);
+    <b>let</b> ret = dynamic_field::remove(&<b>mut</b> id, <a href="../sui/versioned.md#sui_versioned_version">version</a>);
     id.delete();
     ret
 }

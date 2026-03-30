@@ -159,7 +159,7 @@ Only available in devnet.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_scalar_from_bytes">scalar_from_bytes</a>(bytes: &vector&lt;u8&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, *bytes, <b>false</b>)
+    group_ops::from_bytes(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, *bytes, <b>false</b>)
 }
 </code></pre>
 
@@ -184,8 +184,8 @@ Only available in devnet.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_scalar_from_u64">scalar_from_u64</a>(x: u64): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt; {
     <b>let</b> scalar: u256 = x <b>as</b> u256;
-    <b>let</b> bytes = <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&scalar);
-    <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, bytes, <b>true</b>)
+    <b>let</b> bytes = bcs::to_bytes(&scalar);
+    group_ops::from_bytes(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, bytes, <b>true</b>)
 }
 </code></pre>
 
@@ -209,7 +209,7 @@ Only available in devnet.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_scalar_zero">scalar_zero</a>(): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_ZERO_BYTES">SCALAR_ZERO_BYTES</a>, <b>true</b>)
+    group_ops::from_bytes(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_ZERO_BYTES">SCALAR_ZERO_BYTES</a>, <b>true</b>)
 }
 </code></pre>
 
@@ -233,7 +233,7 @@ Only available in devnet.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_scalar_one">scalar_one</a>(): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_ONE_BYTES">SCALAR_ONE_BYTES</a>, <b>true</b>)
+    group_ops::from_bytes(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_ONE_BYTES">SCALAR_ONE_BYTES</a>, <b>true</b>)
 }
 </code></pre>
 
@@ -257,7 +257,7 @@ Only available in devnet.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_scalar_add">scalar_add</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_add">group_ops::add</a>(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, e1, e2)
+    group_ops::add(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, e1, e2)
 }
 </code></pre>
 
@@ -281,7 +281,7 @@ Only available in devnet.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_scalar_sub">scalar_sub</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_sub">group_ops::sub</a>(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, e1, e2)
+    group_ops::sub(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, e1, e2)
 }
 </code></pre>
 
@@ -305,7 +305,7 @@ Only available in devnet.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_scalar_mul">scalar_mul</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_mul">group_ops::mul</a>(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, e1, e2)
+    group_ops::mul(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, e1, e2)
 }
 </code></pre>
 
@@ -330,7 +330,7 @@ Returns e2/e1, fails if a is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_scalar_div">scalar_div</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_div">group_ops::div</a>(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, e1, e2)
+    group_ops::div(<a href="../sui/ristretto255.md#sui_ristretto255_SCALAR_TYPE">SCALAR_TYPE</a>, e1, e2)
 }
 </code></pre>
 
@@ -402,7 +402,7 @@ Returns e2/e1, fails if a is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_from_bytes">g_from_bytes</a>(bytes: &vector&lt;u8&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, *bytes, <b>false</b>)
+    group_ops::from_bytes(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, *bytes, <b>false</b>)
 }
 </code></pre>
 
@@ -426,7 +426,7 @@ Returns e2/e1, fails if a is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_identity">g_identity</a>(): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_IDENTITY_BYTES">IDENTITY_BYTES</a>, <b>true</b>)
+    group_ops::from_bytes(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_IDENTITY_BYTES">IDENTITY_BYTES</a>, <b>true</b>)
 }
 </code></pre>
 
@@ -450,7 +450,7 @@ Returns e2/e1, fails if a is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_generator">g_generator</a>(): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_from_bytes">group_ops::from_bytes</a>(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_GENERATOR_BYTES">GENERATOR_BYTES</a>, <b>true</b>)
+    group_ops::from_bytes(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, <a href="../sui/ristretto255.md#sui_ristretto255_GENERATOR_BYTES">GENERATOR_BYTES</a>, <b>true</b>)
 }
 </code></pre>
 
@@ -474,7 +474,7 @@ Returns e2/e1, fails if a is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_add">g_add</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_add">group_ops::add</a>(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, e1, e2)
+    group_ops::add(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, e1, e2)
 }
 </code></pre>
 
@@ -498,7 +498,7 @@ Returns e2/e1, fails if a is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_sub">g_sub</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_sub">group_ops::sub</a>(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, e1, e2)
+    group_ops::sub(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, e1, e2)
 }
 </code></pre>
 
@@ -522,7 +522,7 @@ Returns e2/e1, fails if a is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_mul">g_mul</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_mul">group_ops::mul</a>(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, e1, e2)
+    group_ops::mul(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, e1, e2)
 }
 </code></pre>
 
@@ -547,7 +547,7 @@ Returns e2 / e1, fails if scalar is zero.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/ristretto255.md#sui_ristretto255_g_div">g_div</a>(e1: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_Scalar">Scalar</a>&gt;, e2: &Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt;): Element&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">G</a>&gt; {
-    <a href="../sui/group_ops.md#sui_group_ops_div">group_ops::div</a>(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, e1, e2)
+    group_ops::div(<a href="../sui/ristretto255.md#sui_ristretto255_G_TYPE">G_TYPE</a>, e1, e2)
 }
 </code></pre>
 

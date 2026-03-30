@@ -133,7 +133,7 @@ Tries to create an object twice with the same parent-key combination.
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/derived_object.md#sui_derived_object_EObjectAlreadyExists">EObjectAlreadyExists</a>: vector&lt;u8&gt; = b"Derived <a href="../sui/object.md#sui_object">object</a> is already claimed.";
+<b>const</b> <a href="../sui/derived_object.md#sui_derived_object_EObjectAlreadyExists">EObjectAlreadyExists</a>: vector&lt;u8&gt; = b"Derived object is already claimed.";
 </code></pre>
 
 
@@ -159,7 +159,7 @@ Claim a deterministic UID, using the parent's UID & any key.
     <b>let</b> id = addr.to_id();
     <b>assert</b>!(!df::exists_(parent, <a href="../sui/derived_object.md#sui_derived_object_Claimed">Claimed</a>(id)), <a href="../sui/derived_object.md#sui_derived_object_EObjectAlreadyExists">EObjectAlreadyExists</a>);
     df::add(parent, <a href="../sui/derived_object.md#sui_derived_object_Claimed">Claimed</a>(id), ClaimedStatus::Reserved);
-    <a href="../sui/object.md#sui_object_new_uid_from_hash">object::new_uid_from_hash</a>(addr)
+    object::new_uid_from_hash(addr)
 }
 </code></pre>
 
@@ -172,7 +172,7 @@ Claim a deterministic UID, using the parent's UID & any key.
 ## Function `exists`
 
 Checks if a provided <code>key</code> has been claimed for the given parent.
-Note: If the UID has been deleted through <code><a href="../sui/object.md#sui_object_delete">object::delete</a></code>, this will always return true.
+Note: If the UID has been deleted through <code>object::delete</code>, this will always return true.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/derived_object.md#sui_derived_object_exists">exists</a>&lt;K: <b>copy</b>, drop, store&gt;(parent: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, key: K): bool

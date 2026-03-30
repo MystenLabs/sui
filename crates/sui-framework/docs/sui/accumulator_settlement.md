@@ -120,9 +120,9 @@ digest.
     _epoch: u64,
     _checkpoint_height: u64,
     _idx: u64,
-    // Total input <a href="../sui/sui.md#sui_sui">sui</a> received from user transactions
+    // Total input sui received from user transactions
     input_sui: u64,
-    // Total output <a href="../sui/sui.md#sui_sui">sui</a> withdrawn by user transactions
+    // Total output sui withdrawn by user transactions
     output_sui: u64,
     ctx: &TxContext,
 ) {
@@ -261,7 +261,7 @@ Called by the settlement transaction to track conservation of SUI.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_u256_from_bytes">u256_from_bytes</a>(bytes: vector&lt;u8&gt;): u256 {
-    <a href="../sui/bcs.md#sui_bcs_new">bcs::new</a>(bytes).peel_u256()
+    bcs::new(bytes).peel_u256()
 }
 </code></pre>
 
@@ -285,11 +285,11 @@ Called by the settlement transaction to track conservation of SUI.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_hash_two_to_one_u256">hash_two_to_one_u256</a>(left: u256, right: u256): u256 {
-    <b>let</b> left_bytes = <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&left);
-    <b>let</b> right_bytes = <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&right);
+    <b>let</b> left_bytes = bcs::to_bytes(&left);
+    <b>let</b> right_bytes = bcs::to_bytes(&right);
     <b>let</b> <b>mut</b> concatenated = left_bytes;
     vector::append(&<b>mut</b> concatenated, right_bytes);
-    <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_u256_from_bytes">u256_from_bytes</a>(<a href="../sui/hash.md#sui_hash_blake2b256">hash::blake2b256</a>(&concatenated))
+    <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement_u256_from_bytes">u256_from_bytes</a>(hash::blake2b256(&concatenated))
 }
 </code></pre>
 

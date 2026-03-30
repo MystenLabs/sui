@@ -83,7 +83,7 @@ a type originated from.
 <dd>
 </dd>
 <dt>
-<code><a href="../sui/package.md#sui_package">package</a>: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a></code>
+<code>package: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a></code>
 </dt>
 <dd>
 </dd>
@@ -120,7 +120,7 @@ Capability controlling the ability to upgrade a package.
 <dd>
 </dd>
 <dt>
-<code><a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>package: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  (Mutable) ID of the package that can be upgraded.
@@ -174,7 +174,7 @@ progress.
  (Immutable) ID of the <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code> this originated from.
 </dd>
 <dt>
-<code><a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>package: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  (Immutable) ID of the package that can be upgraded.
@@ -225,7 +225,7 @@ the end of the transaction that performed the upgrade.
  (Immutable) ID of the <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code> this originated from.
 </dd>
 <dt>
-<code><a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+<code>package: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
  (Immutable) ID of the package after it was upgraded.
@@ -343,11 +343,11 @@ but multiple per package (!).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="../sui/package.md#sui_package_Publisher">Publisher</a> {
-    <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="../sui/package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
+    <b>assert</b>!(types::is_one_time_witness(&otw), <a href="../sui/package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>);
     <b>let</b> type_name = type_name::with_original_ids&lt;OTW&gt;();
     <a href="../sui/package.md#sui_package_Publisher">Publisher</a> {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-        <a href="../sui/package.md#sui_package">package</a>: type_name.address_string(),
+        id: object::new(ctx),
+        package: type_name.address_string(),
         module_name: type_name.module_string(),
     }
 }
@@ -402,7 +402,7 @@ associated with it.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_burn_publisher">burn_publisher</a>(self: <a href="../sui/package.md#sui_package_Publisher">Publisher</a>) {
-    <b>let</b> <a href="../sui/package.md#sui_package_Publisher">Publisher</a> { id, <a href="../sui/package.md#sui_package">package</a>: _, module_name: _ } = self;
+    <b>let</b> <a href="../sui/package.md#sui_package_Publisher">Publisher</a> { id, package: _, module_name: _ } = self;
     id.delete();
 }
 </code></pre>
@@ -428,7 +428,7 @@ Check whether type belongs to the same package as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_from_package">from_package</a>&lt;T&gt;(self: &<a href="../sui/package.md#sui_package_Publisher">Publisher</a>): bool {
-    type_name::with_original_ids&lt;T&gt;().address_string() == self.<a href="../sui/package.md#sui_package">package</a>
+    type_name::with_original_ids&lt;T&gt;().address_string() == self.package
 }
 </code></pre>
 
@@ -454,7 +454,7 @@ Check whether a type belongs to the same module as the publisher object.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_from_module">from_module</a>&lt;T&gt;(self: &<a href="../sui/package.md#sui_package_Publisher">Publisher</a>): bool {
     <b>let</b> type_name = type_name::with_original_ids&lt;T&gt;();
-    (type_name.address_string() == self.<a href="../sui/package.md#sui_package">package</a>) && (type_name.module_string() == self.module_name)
+    (type_name.address_string() == self.package) && (type_name.module_string() == self.module_name)
 }
 </code></pre>
 
@@ -504,7 +504,7 @@ Read the package address string.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_published_package">published_package</a>(self: &<a href="../sui/package.md#sui_package_Publisher">Publisher</a>): &String {
-    &self.<a href="../sui/package.md#sui_package">package</a>
+    &self.package
 }
 </code></pre>
 
@@ -533,7 +533,7 @@ package.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_upgrade_package">upgrade_package</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>): ID {
-    cap.<a href="../sui/package.md#sui_package">package</a>
+    cap.package
 }
 </code></pre>
 
@@ -610,7 +610,7 @@ The package that this ticket is authorized to upgrade
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_ticket_package">ticket_package</a>(ticket: &<a href="../sui/package.md#sui_package_UpgradeTicket">UpgradeTicket</a>): ID {
-    ticket.<a href="../sui/package.md#sui_package">package</a>
+    ticket.package
 }
 </code></pre>
 
@@ -687,7 +687,7 @@ the package, as of the upgrade represented by this <code>receipt</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_receipt_package">receipt_package</a>(receipt: &<a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>): ID {
-    receipt.<a href="../sui/package.md#sui_package">package</a>
+    receipt.package
 }
 </code></pre>
 
@@ -867,7 +867,7 @@ Discard the <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap<
 
 
 <pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/package.md#sui_package_make_immutable">make_immutable</a>(cap: <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>) {
-    <b>let</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a> { id, <a href="../sui/package.md#sui_package">package</a>: _, <a href="../sui/package.md#sui_package_version">version</a>: _, policy: _ } = cap;
+    <b>let</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a> { id, package: _, <a href="../sui/package.md#sui_package_version">version</a>: _, policy: _ } = cap;
     id.delete();
 }
 </code></pre>
@@ -903,13 +903,13 @@ for the upgrade to succeed.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>, policy: u8, digest: vector&lt;u8&gt;): <a href="../sui/package.md#sui_package_UpgradeTicket">UpgradeTicket</a> {
     <b>let</b> id_zero = @0x0.to_id();
-    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package">package</a> != id_zero, <a href="../sui/package.md#sui_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
+    <b>assert</b>!(cap.package != id_zero, <a href="../sui/package.md#sui_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
     <b>assert</b>!(policy &gt;= cap.policy, <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>);
-    <b>let</b> <a href="../sui/package.md#sui_package">package</a> = cap.<a href="../sui/package.md#sui_package">package</a>;
-    cap.<a href="../sui/package.md#sui_package">package</a> = id_zero;
+    <b>let</b> package = cap.package;
+    cap.package = id_zero;
     <a href="../sui/package.md#sui_package_UpgradeTicket">UpgradeTicket</a> {
-        cap: <a href="../sui/object.md#sui_object_id">object::id</a>(cap),
-        <a href="../sui/package.md#sui_package">package</a>,
+        cap: object::id(cap),
+        package,
         policy,
         digest,
     }
@@ -938,10 +938,10 @@ the upgrade.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_commit_upgrade">commit_upgrade</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>, receipt: <a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>) {
-    <b>let</b> <a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a> { cap: cap_id, <a href="../sui/package.md#sui_package">package</a> } = receipt;
-    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(cap) == cap_id, <a href="../sui/package.md#sui_package_EWrongUpgradeCap">EWrongUpgradeCap</a>);
-    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package">package</a>.to_address() == @0x0, <a href="../sui/package.md#sui_package_ENotAuthorized">ENotAuthorized</a>);
-    cap.<a href="../sui/package.md#sui_package">package</a> = <a href="../sui/package.md#sui_package">package</a>;
+    <b>let</b> <a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a> { cap: cap_id, package } = receipt;
+    <b>assert</b>!(object::id(cap) == cap_id, <a href="../sui/package.md#sui_package_EWrongUpgradeCap">EWrongUpgradeCap</a>);
+    <b>assert</b>!(cap.package.to_address() == @0x0, <a href="../sui/package.md#sui_package_ENotAuthorized">ENotAuthorized</a>);
+    cap.package = package;
     cap.<a href="../sui/package.md#sui_package_version">version</a> = cap.<a href="../sui/package.md#sui_package_version">version</a> + 1;
 }
 </code></pre>

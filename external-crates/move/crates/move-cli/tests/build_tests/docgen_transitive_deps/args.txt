@@ -1,0 +1,10 @@
+build
+docgen --output-directory doc
+# Show generated directory structure: root + direct dep + transitive dep
+> find doc -type f | sort
+# Root package module
+> cat doc/root/app.md
+# Direct dependency (Mid)
+> cat doc/mid/registry.md
+# Transitive dependency (Leaf, pulled in through Mid)
+> cat doc/leaf/base.md

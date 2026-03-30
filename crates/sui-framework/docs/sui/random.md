@@ -268,10 +268,10 @@ Can only be called by genesis or change_epoch transactions.
         random_bytes: vector[],
     };
     <b>let</b> self = <a href="../sui/random.md#sui_random_Random">Random</a> {
-        id: <a href="../sui/object.md#sui_object_randomness_state">object::randomness_state</a>(),
-        inner: <a href="../sui/versioned.md#sui_versioned_create">versioned::create</a>(version, inner, ctx),
+        id: object::randomness_state(),
+        inner: versioned::create(version, inner, ctx),
     };
-    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(self);
+    transfer::share_object(self);
 }
 </code></pre>
 
@@ -295,8 +295,8 @@ Can only be called by genesis or change_epoch transactions.
 
 
 <pre><code><b>fun</b> <a href="../sui/random.md#sui_random_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="../sui/random.md#sui_random_Random">Random</a>): &<b>mut</b> <a href="../sui/random.md#sui_random_RandomInner">RandomInner</a> {
-    <b>let</b> version = <a href="../sui/versioned.md#sui_versioned_version">versioned::version</a>(&self.inner);
-    // Replace this with a lazy update function when we add a new version of the inner <a href="../sui/object.md#sui_object">object</a>.
+    <b>let</b> version = versioned::version(&self.inner);
+    // Replace this with a lazy update function when we add a new version of the inner object.
     <b>assert</b>!(version == <a href="../sui/random.md#sui_random_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>);
     <b>let</b> inner: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomInner">RandomInner</a> = self.inner.load_value_mut();
     <b>assert</b>!(inner.version == version, <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>);
@@ -325,7 +325,7 @@ Can only be called by genesis or change_epoch transactions.
 
 <pre><code><b>fun</b> <a href="../sui/random.md#sui_random_load_inner">load_inner</a>(self: &<a href="../sui/random.md#sui_random_Random">Random</a>): &<a href="../sui/random.md#sui_random_RandomInner">RandomInner</a> {
     <b>let</b> version = self.inner.version();
-    // Replace this with a lazy update function when we add a new version of the inner <a href="../sui/object.md#sui_object">object</a>.
+    // Replace this with a lazy update function when we add a new version of the inner object.
     <b>assert</b>!(version == <a href="../sui/random.md#sui_random_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>);
     <b>let</b> inner: &<a href="../sui/random.md#sui_random_RandomInner">RandomInner</a> = self.inner.load_value();
     <b>assert</b>!(inner.version == version, <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>);
@@ -441,7 +441,7 @@ Get the next block of 32 random bytes.
 
 <pre><code><b>fun</b> <a href="../sui/random.md#sui_random_derive_next_block">derive_next_block</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): vector&lt;u8&gt; {
     g.counter = g.counter + 1;
-    hmac_sha3_256(&g.seed, &<a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&g.counter))
+    hmac_sha3_256(&g.seed, &bcs::to_bytes(&g.counter))
 }
 </code></pre>
 
@@ -726,8 +726,8 @@ than the actual type used by the caller function to limit the bias by 2^{-64}).
     <b>let</b> max = $max;
     <b>assert</b>!(min &lt;= max, <a href="../sui/random.md#sui_random_EInvalidRange">EInvalidRange</a>);
     <b>if</b> (min == max) <b>return</b> min;
-    // Pick a <a href="../sui/random.md#sui_random">random</a> number in [0, max - min] by generating a <a href="../sui/random.md#sui_random">random</a> number that is larger than max-min, and taking
-    // the modulo of the <a href="../sui/random.md#sui_random">random</a> number by the range size. Then add the min to the result to get a number in
+    // Pick a random number in [0, max - min] by generating a random number that is larger than max-min, and taking
+    // the modulo of the random number by the range size. Then add the min to the result to get a number in
     // [min, max].
     <b>let</b> range_size = (max - min) <b>as</b> u256 + 1;
     <b>let</b> rand = <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!($g, $num_of_bytes);

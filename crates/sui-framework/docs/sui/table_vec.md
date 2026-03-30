@@ -104,7 +104,7 @@ Create an empty TableVec.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/table_vec.md#sui_table_vec_empty">empty</a>&lt;Element: store&gt;(ctx: &<b>mut</b> TxContext): <a href="../sui/table_vec.md#sui_table_vec_TableVec">TableVec</a>&lt;Element&gt; {
     <a href="../sui/table_vec.md#sui_table_vec_TableVec">TableVec</a> {
-        contents: <a href="../sui/table.md#sui_table_new">table::new</a>(ctx),
+        contents: table::new(ctx),
     }
 }
 </code></pre>
@@ -198,7 +198,7 @@ Acquire an immutable reference to the <code>i</code>th element of the TableVec <
 Aborts if <code>i</code> is out of bounds.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../sui/table_vec.md#sui_table_vec_TableVec">sui::table_vec::TableVec</a>&lt;Element&gt;, i: u64): &Element
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/table_vec.md#sui_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../sui/table_vec.md#sui_table_vec_TableVec">sui::table_vec::TableVec</a>&lt;Element&gt;, i: u64): &Element
 </code></pre>
 
 
@@ -207,7 +207,7 @@ Aborts if <code>i</code> is out of bounds.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../sui/table_vec.md#sui_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &Element {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/table_vec.md#sui_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../sui/table_vec.md#sui_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &Element {
     <b>assert</b>!(t.<a href="../sui/table_vec.md#sui_table_vec_length">length</a>() &gt; i, <a href="../sui/table_vec.md#sui_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     &t.contents[i]
 }

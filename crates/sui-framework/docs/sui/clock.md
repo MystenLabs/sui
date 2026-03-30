@@ -91,11 +91,11 @@ Sender is not @0x0 the system address.
 
 ## Function `timestamp_ms`
 
-The <code><a href="../sui/clock.md#sui_clock">clock</a></code>'s current timestamp as a running total of
+The <code>clock</code>'s current timestamp as a running total of
 milliseconds since an arbitrary point in the past.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>(<a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>(clock: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): u64
 </code></pre>
 
 
@@ -104,8 +104,8 @@ milliseconds since an arbitrary point in the past.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>(<a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">Clock</a>): u64 {
-    <a href="../sui/clock.md#sui_clock">clock</a>.<a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>(clock: &<a href="../sui/clock.md#sui_clock_Clock">Clock</a>): u64 {
+    clock.<a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>
 }
 </code></pre>
 
@@ -132,8 +132,8 @@ called exactly once, during genesis.
 
 <pre><code><b>fun</b> <a href="../sui/clock.md#sui_clock_create">create</a>(ctx: &TxContext) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/clock.md#sui_clock_ENotSystemAddress">ENotSystemAddress</a>);
-    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/clock.md#sui_clock_Clock">Clock</a> {
-        id: <a href="../sui/object.md#sui_object_clock">object::clock</a>(),
+    transfer::share_object(<a href="../sui/clock.md#sui_clock_Clock">Clock</a> {
+        id: object::clock(),
         // Initialised to zero, but set to a real timestamp by a
         // system transaction before it can be witnessed by a <b>move</b>
         // call.
@@ -152,7 +152,7 @@ called exactly once, during genesis.
 
 
 
-<pre><code><b>fun</b> <a href="../sui/clock.md#sui_clock_consensus_commit_prologue">consensus_commit_prologue</a>(<a href="../sui/clock.md#sui_clock">clock</a>: &<b>mut</b> <a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui/clock.md#sui_clock_consensus_commit_prologue">consensus_commit_prologue</a>(clock: &<b>mut</b> <a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -161,10 +161,10 @@ called exactly once, during genesis.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/clock.md#sui_clock_consensus_commit_prologue">consensus_commit_prologue</a>(<a href="../sui/clock.md#sui_clock">clock</a>: &<b>mut</b> <a href="../sui/clock.md#sui_clock_Clock">Clock</a>, <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>: u64, ctx: &TxContext) {
+<pre><code><b>fun</b> <a href="../sui/clock.md#sui_clock_consensus_commit_prologue">consensus_commit_prologue</a>(clock: &<b>mut</b> <a href="../sui/clock.md#sui_clock_Clock">Clock</a>, <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>: u64, ctx: &TxContext) {
     // Validator will make a special system call with sender set <b>as</b> 0x0.
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/clock.md#sui_clock_ENotSystemAddress">ENotSystemAddress</a>);
-    <a href="../sui/clock.md#sui_clock">clock</a>.<a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a> = <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>
+    clock.<a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a> = <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>
 }
 </code></pre>
 

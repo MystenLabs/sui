@@ -110,10 +110,10 @@ If more than 16 inputs are provided, the function will abort with ETooManyInputs
     <b>assert</b>!(data.length() &lt;= <a href="../sui/poseidon.md#sui_poseidon_MAX_INPUTS">MAX_INPUTS</a>, <a href="../sui/poseidon.md#sui_poseidon_ETooManyInputs">ETooManyInputs</a>);
     <b>let</b> b = data.map_ref!(|e| {
         <b>assert</b>!(*e &lt; <a href="../sui/poseidon.md#sui_poseidon_BN254_MAX">BN254_MAX</a>, <a href="../sui/poseidon.md#sui_poseidon_ENonCanonicalInput">ENonCanonicalInput</a>);
-        <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(e)
+        bcs::to_bytes(e)
     });
     <b>let</b> binary_output = <a href="../sui/poseidon.md#sui_poseidon_poseidon_bn254_internal">poseidon_bn254_internal</a>(&b);
-    <a href="../sui/bcs.md#sui_bcs_new">bcs::new</a>(binary_output).peel_u256()
+    bcs::new(binary_output).peel_u256()
 }
 </code></pre>
 

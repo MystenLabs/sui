@@ -283,7 +283,7 @@ Increase supply by <code><a href="../sui/balance.md#sui_balance_value">value</a>
 Burn a Balance<T> and decrease Supply<T>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;, balance: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -292,8 +292,8 @@ Burn a Balance<T> and decrease Supply<T>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;): u64 {
-    <b>let</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a> } = <a href="../sui/balance.md#sui_balance">balance</a>;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt;, balance: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;): u64 {
+    <b>let</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a> } = balance;
     <b>assert</b>!(self.<a href="../sui/balance.md#sui_balance_value">value</a> &gt;= <a href="../sui/balance.md#sui_balance_value">value</a>, <a href="../sui/balance.md#sui_balance_EOverflow">EOverflow</a>);
     self.<a href="../sui/balance.md#sui_balance_value">value</a> = self.<a href="../sui/balance.md#sui_balance_value">value</a> - <a href="../sui/balance.md#sui_balance_value">value</a>;
     <a href="../sui/balance.md#sui_balance_value">value</a>
@@ -336,7 +336,7 @@ Create a zero <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a><
 Join two balances together.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, balance: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -345,8 +345,8 @@ Join two balances together.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;): u64 {
-    <b>let</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a> } = <a href="../sui/balance.md#sui_balance">balance</a>;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, balance: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;): u64 {
+    <b>let</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a> } = balance;
     self.<a href="../sui/balance.md#sui_balance_value">value</a> = self.<a href="../sui/balance.md#sui_balance_value">value</a> + <a href="../sui/balance.md#sui_balance_value">value</a>;
     self.<a href="../sui/balance.md#sui_balance_value">value</a>
 }
@@ -416,7 +416,7 @@ Withdraw all balance. After this the remaining balance must be 0.
 Destroy a zero <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_zero">destroy_zero</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_zero">destroy_zero</a>&lt;T&gt;(balance: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -425,9 +425,9 @@ Destroy a zero <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_zero">destroy_zero</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;) {
-    <b>assert</b>!(<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/balance.md#sui_balance_value">value</a> == 0, <a href="../sui/balance.md#sui_balance_ENonZero">ENonZero</a>);
-    <b>let</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a>: _ } = <a href="../sui/balance.md#sui_balance">balance</a>;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_zero">destroy_zero</a>&lt;T&gt;(balance: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;) {
+    <b>assert</b>!(balance.<a href="../sui/balance.md#sui_balance_value">value</a> == 0, <a href="../sui/balance.md#sui_balance_ENonZero">ENonZero</a>);
+    <b>let</b> <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a>: _ } = balance;
 }
 </code></pre>
 
@@ -442,7 +442,7 @@ Destroy a zero <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a>
 Send a <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code> to an address's funds accumulator.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, recipient: <b>address</b>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>&lt;T&gt;(balance: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, recipient: <b>address</b>)
 </code></pre>
 
 
@@ -451,8 +451,8 @@ Send a <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code> 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, recipient: <b>address</b>) {
-    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_impl">sui::funds_accumulator::add_impl</a>(<a href="../sui/balance.md#sui_balance">balance</a>, recipient);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>&lt;T&gt;(balance: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, recipient: <b>address</b>) {
+    <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_impl">sui::funds_accumulator::add_impl</a>(balance, recipient);
 }
 </code></pre>
 
@@ -548,7 +548,7 @@ the current consensus commit. Can read either address-owned or object-owned bala
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_create_supply_internal">create_supply_internal</a>&lt;T&gt;(): <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/balance.md#sui_balance_create_supply_internal">create_supply_internal</a>&lt;T&gt;(): <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;
 </code></pre>
 
 
@@ -557,7 +557,7 @@ the current consensus commit. Can read either address-owned or object-owned bala
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_create_supply_internal">create_supply_internal</a>&lt;T&gt;(): <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/balance.md#sui_balance_create_supply_internal">create_supply_internal</a>&lt;T&gt;(): <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt; {
     <a href="../sui/balance.md#sui_balance_Supply">Supply</a> { <a href="../sui/balance.md#sui_balance_value">value</a>: 0 }
 }
 </code></pre>
@@ -637,7 +637,7 @@ and nowhere else.
 Destroy a <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a></code> preventing any further minting and burning.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui/balance.md#sui_balance_Supply">sui::balance::Supply</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -646,7 +646,7 @@ Destroy a <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a></code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt;): u64 {
     <b>let</b> <a href="../sui/balance.md#sui_balance_Supply">Supply</a> { <a href="../sui/balance.md#sui_balance_value">value</a> } = self;
     <a href="../sui/balance.md#sui_balance_value">value</a>
 }

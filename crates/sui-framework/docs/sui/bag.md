@@ -117,7 +117,7 @@ Creates a new, empty bag
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_new">new</a>(ctx: &<b>mut</b> TxContext): <a href="../sui/bag.md#sui_bag_Bag">Bag</a> {
     <a href="../sui/bag.md#sui_bag_Bag">Bag</a> {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        id: object::new(ctx),
         size: 0,
     }
 }
@@ -131,12 +131,12 @@ Creates a new, empty bag
 
 ## Function `add`
 
-Adds a key-value pair to the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>
+Adds a key-value pair to the bag <code>bag: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">sui::dynamic_field::EFieldAlreadyExists</a></code> if the bag already has an entry with
 that key <code>k: K</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_add">add</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K, v: V)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_add">add</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(bag: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K, v: V)
 </code></pre>
 
 
@@ -145,9 +145,9 @@ that key <code>k: K</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_add">add</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K, v: V) {
-    field::add(&<b>mut</b> <a href="../sui/bag.md#sui_bag">bag</a>.id, k, v);
-    <a href="../sui/bag.md#sui_bag">bag</a>.size = <a href="../sui/bag.md#sui_bag">bag</a>.size + 1;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_add">add</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(bag: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K, v: V) {
+    field::add(&<b>mut</b> bag.id, k, v);
+    bag.size = bag.size + 1;
 }
 </code></pre>
 
@@ -159,14 +159,14 @@ that key <code>k: K</code>.
 
 ## Function `borrow`
 
-Immutable borrows the value associated with the key in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>.
+Immutable borrows the value associated with the key in the bag <code>bag: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">sui::dynamic_field::EFieldDoesNotExist</a></code> if the bag does not have an entry with
 that key <code>k: K</code>.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">sui::dynamic_field::EFieldTypeMismatch</a></code> if the bag has an entry for the key, but
 the value does not have the specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): &V
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_borrow">borrow</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(bag: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): &V
 </code></pre>
 
 
@@ -175,8 +175,8 @@ the value does not have the specified type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): &V {
-    field::borrow(&<a href="../sui/bag.md#sui_bag">bag</a>.id, k)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_borrow">borrow</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(bag: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): &V {
+    field::borrow(&bag.id, k)
 }
 </code></pre>
 
@@ -188,14 +188,14 @@ the value does not have the specified type.
 
 ## Function `borrow_mut`
 
-Mutably borrows the value associated with the key in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>.
+Mutably borrows the value associated with the key in the bag <code>bag: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">sui::dynamic_field::EFieldDoesNotExist</a></code> if the bag does not have an entry with
 that key <code>k: K</code>.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">sui::dynamic_field::EFieldTypeMismatch</a></code> if the bag has an entry for the key, but
 the value does not have the specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_borrow_mut">borrow_mut</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): &<b>mut</b> V
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_borrow_mut">borrow_mut</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(bag: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): &<b>mut</b> V
 </code></pre>
 
 
@@ -204,8 +204,8 @@ the value does not have the specified type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_borrow_mut">borrow_mut</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): &<b>mut</b> V {
-    field::borrow_mut(&<b>mut</b> <a href="../sui/bag.md#sui_bag">bag</a>.id, k)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_borrow_mut">borrow_mut</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(bag: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): &<b>mut</b> V {
+    field::borrow_mut(&<b>mut</b> bag.id, k)
 }
 </code></pre>
 
@@ -217,14 +217,14 @@ the value does not have the specified type.
 
 ## Function `remove`
 
-Mutably borrows the key-value pair in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a></code> and returns the value.
+Mutably borrows the key-value pair in the bag <code>bag: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a></code> and returns the value.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">sui::dynamic_field::EFieldDoesNotExist</a></code> if the bag does not have an entry with
 that key <code>k: K</code>.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">sui::dynamic_field::EFieldTypeMismatch</a></code> if the bag has an entry for the key, but
 the value does not have the specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_remove">remove</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): V
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_remove">remove</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(bag: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): V
 </code></pre>
 
 
@@ -233,9 +233,9 @@ the value does not have the specified type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_remove">remove</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): V {
-    <b>let</b> v = field::remove(&<b>mut</b> <a href="../sui/bag.md#sui_bag">bag</a>.id, k);
-    <a href="../sui/bag.md#sui_bag">bag</a>.size = <a href="../sui/bag.md#sui_bag">bag</a>.size - 1;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_remove">remove</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(bag: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): V {
+    <b>let</b> v = field::remove(&<b>mut</b> bag.id, k);
+    bag.size = bag.size - 1;
     v
 }
 </code></pre>
@@ -248,10 +248,10 @@ the value does not have the specified type.
 
 ## Function `contains`
 
-Returns true iff there is an value associated with the key <code>k: K</code> in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>
+Returns true iff there is an value associated with the key <code>k: K</code> in the bag <code>bag: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_contains">contains</a>&lt;K: <b>copy</b>, drop, store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_contains">contains</a>&lt;K: <b>copy</b>, drop, store&gt;(bag: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): bool
 </code></pre>
 
 
@@ -260,8 +260,8 @@ Returns true iff there is an value associated with the key <code>k: K</code> in 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_contains">contains</a>&lt;K: <b>copy</b> + drop + store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): bool {
-    field::exists_&lt;K&gt;(&<a href="../sui/bag.md#sui_bag">bag</a>.id, k)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_contains">contains</a>&lt;K: <b>copy</b> + drop + store&gt;(bag: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): bool {
+    field::exists_&lt;K&gt;(&bag.id, k)
 }
 </code></pre>
 
@@ -273,11 +273,11 @@ Returns true iff there is an value associated with the key <code>k: K</code> in 
 
 ## Function `contains_with_type`
 
-Returns true iff there is an value associated with the key <code>k: K</code> in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>
+Returns true iff there is an value associated with the key <code>k: K</code> in the bag <code>bag: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a></code>
 with an assigned value of type <code>V</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_contains_with_type">contains_with_type</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_contains_with_type">contains_with_type</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(bag: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>, k: K): bool
 </code></pre>
 
 
@@ -286,8 +286,8 @@ with an assigned value of type <code>V</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_contains_with_type">contains_with_type</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): bool {
-    field::exists_with_type&lt;K, V&gt;(&<a href="../sui/bag.md#sui_bag">bag</a>.id, k)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_contains_with_type">contains_with_type</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(bag: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): bool {
+    field::exists_with_type&lt;K, V&gt;(&bag.id, k)
 }
 </code></pre>
 
@@ -302,7 +302,7 @@ with an assigned value of type <code>V</code>
 Returns the size of the bag, the number of key-value pairs
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_length">length</a>(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_length">length</a>(bag: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>): u64
 </code></pre>
 
 
@@ -311,8 +311,8 @@ Returns the size of the bag, the number of key-value pairs
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_length">length</a>(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>): u64 {
-    <a href="../sui/bag.md#sui_bag">bag</a>.size
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_length">length</a>(bag: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>): u64 {
+    bag.size
 }
 </code></pre>
 
@@ -327,7 +327,7 @@ Returns the size of the bag, the number of key-value pairs
 Returns true iff the bag is empty (if <code><a href="../sui/bag.md#sui_bag_length">length</a></code> returns <code>0</code>)
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_is_empty">is_empty</a>(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_is_empty">is_empty</a>(bag: &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>): bool
 </code></pre>
 
 
@@ -336,8 +336,8 @@ Returns true iff the bag is empty (if <code><a href="../sui/bag.md#sui_bag_lengt
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_is_empty">is_empty</a>(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>): bool {
-    <a href="../sui/bag.md#sui_bag">bag</a>.size == 0
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_is_empty">is_empty</a>(bag: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>): bool {
+    bag.size == 0
 }
 </code></pre>
 
@@ -353,7 +353,7 @@ Destroys an empty bag
 Aborts with <code><a href="../sui/bag.md#sui_bag_EBagNotEmpty">EBagNotEmpty</a></code> if the bag still contains values
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_destroy_empty">destroy_empty</a>(<a href="../sui/bag.md#sui_bag">bag</a>: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_destroy_empty">destroy_empty</a>(bag: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>)
 </code></pre>
 
 
@@ -362,8 +362,8 @@ Aborts with <code><a href="../sui/bag.md#sui_bag_EBagNotEmpty">EBagNotEmpty</a><
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_destroy_empty">destroy_empty</a>(<a href="../sui/bag.md#sui_bag">bag</a>: <a href="../sui/bag.md#sui_bag_Bag">Bag</a>) {
-    <b>let</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a> { id, size } = <a href="../sui/bag.md#sui_bag">bag</a>;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_destroy_empty">destroy_empty</a>(bag: <a href="../sui/bag.md#sui_bag_Bag">Bag</a>) {
+    <b>let</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a> { id, size } = bag;
     <b>assert</b>!(size == 0, <a href="../sui/bag.md#sui_bag_EBagNotEmpty">EBagNotEmpty</a>);
     id.delete()
 }

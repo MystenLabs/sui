@@ -1,0 +1,106 @@
+Command `build`:
+INCLUDING DEPENDENCY DepPkg
+BUILDING RootPkg
+Command `docgen --output-directory doc`:
+INCLUDING DEPENDENCY DepPkg
+BUILDING RootPkg
+Generated "doc/dep_addr/utils.md"
+Generated "doc/root_addr/utils.md"
+
+Documentation generation successful!
+External Command `find doc -type f | sort`:
+doc/dep_addr/utils.md
+doc/root_addr/utils.md
+External Command `cat doc/root_addr/utils.md`:
+<a name="root_addr_utils"></a>
+
+# Module `root_addr::utils`
+
+
+<a name="@Root_Utils_0"></a>
+
+## Root Utils
+
+
+Utility module in the root package — same module name as <code><a href="../dep_addr/utils.md#dep_addr_utils">dep_addr::utils</a></code>.
+
+
+-  [Root Utils](#@Root_Utils_0)
+-  [Function `combined`](#root_addr_utils_combined)
+
+
+<pre><code><b>use</b> <a href="../dep_addr/utils.md#dep_addr_utils">dep_addr::utils</a>;
+</code></pre>
+
+
+
+<a name="root_addr_utils_combined"></a>
+
+## Function `combined`
+
+Calls into the dependency's identically-named module.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../root_addr/utils.md#root_addr_utils_combined">combined</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../root_addr/utils.md#root_addr_utils_combined">combined</a>(): u64 {
+    dep_utils::dep_helper() + 1
+}
+</code></pre>
+
+
+
+</details>
+External Command `cat doc/dep_addr/utils.md`:
+<a name="dep_addr_utils"></a>
+
+# Module `dep_addr::utils`
+
+
+<a name="@Dep_Utils_0"></a>
+
+## Dep Utils
+
+
+Utility module in the dependency package.
+
+
+-  [Dep Utils](#@Dep_Utils_0)
+-  [Function `dep_helper`](#dep_addr_utils_dep_helper)
+
+
+<pre><code></code></pre>
+
+
+
+<a name="dep_addr_utils_dep_helper"></a>
+
+## Function `dep_helper`
+
+A helper value.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../dep_addr/utils.md#dep_addr_utils_dep_helper">dep_helper</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../dep_addr/utils.md#dep_addr_utils_dep_helper">dep_helper</a>(): u64 {
+    42
+}
+</code></pre>
+
+
+
+</details>

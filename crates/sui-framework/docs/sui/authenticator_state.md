@@ -447,11 +447,11 @@ Can only be called by genesis or change_epoch transactions.
         active_jwks: vector[],
     };
     <b>let</b> <b>mut</b> self = <a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">AuthenticatorState</a> {
-        id: <a href="../sui/object.md#sui_object_authenticator_state">object::authenticator_state</a>(),
+        id: object::authenticator_state(),
         version,
     };
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> self.id, version, inner);
-    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(self);
+    dynamic_field::add(&<b>mut</b> self.id, version, inner);
+    transfer::share_object(self);
 }
 </code></pre>
 
@@ -476,9 +476,9 @@ Can only be called by genesis or change_epoch transactions.
 
 <pre><code><b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">AuthenticatorState</a>): &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> {
     <b>let</b> version = self.version;
-    // replace this with a lazy update function when we add a new version of the inner <a href="../sui/object.md#sui_object">object</a>.
+    // replace this with a lazy update function when we add a new version of the inner object.
     <b>assert</b>!(version == <a href="../sui/authenticator_state.md#sui_authenticator_state_CurrentVersion">CurrentVersion</a>, <a href="../sui/authenticator_state.md#sui_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
-    <b>let</b> inner: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version);
+    <b>let</b> inner: &<b>mut</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> = dynamic_field::borrow_mut(&<b>mut</b> self.id, self.version);
     <b>assert</b>!(inner.version == version, <a href="../sui/authenticator_state.md#sui_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
 }
@@ -505,9 +505,9 @@ Can only be called by genesis or change_epoch transactions.
 
 <pre><code><b>fun</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_load_inner">load_inner</a>(self: &<a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorState">AuthenticatorState</a>): &<a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> {
     <b>let</b> version = self.version;
-    // replace this with a lazy update function when we add a new version of the inner <a href="../sui/object.md#sui_object">object</a>.
+    // replace this with a lazy update function when we add a new version of the inner object.
     <b>assert</b>!(version == <a href="../sui/authenticator_state.md#sui_authenticator_state_CurrentVersion">CurrentVersion</a>, <a href="../sui/authenticator_state.md#sui_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
-    <b>let</b> inner: &<a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, self.version);
+    <b>let</b> inner: &<a href="../sui/authenticator_state.md#sui_authenticator_state_AuthenticatorStateInner">AuthenticatorStateInner</a> = dynamic_field::borrow(&self.id, self.version);
     <b>assert</b>!(inner.version == version, <a href="../sui/authenticator_state.md#sui_authenticator_state_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
 }
@@ -645,7 +645,7 @@ indicate that the JWK has been validated in the current epoch and should not be 
         <b>let</b> jwk = &jwks[i];
         <b>if</b> (prev.is_none()) {
             prev.fill(jwk.jwk_id);
-        } <b>else</b> <b>if</b> (<a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_id_equal">jwk_id_equal</a>(prev.<a href="../sui/borrow.md#sui_borrow">borrow</a>(), &jwk.jwk_id)) {
+        } <b>else</b> <b>if</b> (<a href="../sui/authenticator_state.md#sui_authenticator_state_jwk_id_equal">jwk_id_equal</a>(prev.borrow(), &jwk.jwk_id)) {
             // skip duplicate jwks in input
             i = i + 1;
             <b>continue</b>
@@ -700,7 +700,7 @@ indicate that the JWK has been validated in the current epoch and should not be 
             prev_issuer.fill(*cur_iss);
             issuer_max_epochs.push_back(cur.epoch);
         } <b>else</b> {
-            <b>if</b> (cur_iss == prev_issuer.<a href="../sui/borrow.md#sui_borrow">borrow</a>()) {
+            <b>if</b> (cur_iss == prev_issuer.borrow()) {
                 <b>let</b> back = issuer_max_epochs.length() - 1;
                 <b>let</b> prev_max_epoch = &<b>mut</b> issuer_max_epochs[back];
                 *prev_max_epoch = (*prev_max_epoch).max(cur.epoch);
@@ -722,7 +722,7 @@ indicate that the JWK has been validated in the current epoch and should not be 
         <b>let</b> cur_iss = &jwk.jwk_id.iss;
         <b>if</b> (prev_issuer.is_none()) {
             prev_issuer.fill(*cur_iss);
-        } <b>else</b> <b>if</b> (cur_iss != prev_issuer.<a href="../sui/borrow.md#sui_borrow">borrow</a>()) {
+        } <b>else</b> <b>if</b> (cur_iss != prev_issuer.borrow()) {
             *prev_issuer.borrow_mut() = *cur_iss;
             j = j + 1;
         };
