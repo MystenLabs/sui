@@ -29,8 +29,10 @@ use crate::handlers::tables::TransactionBCSProcessor;
 use crate::handlers::tables::TransactionObjectsProcessor;
 use crate::handlers::tables::TransactionProcessor;
 use crate::handlers::tables::WrappedObjectProcessor;
+use sui_package_resolver::PackageStoreWithLruCache;
+use sui_rpc_resolver::package_store::RpcPackageStore;
+
 use crate::metrics::Metrics;
-use crate::package_store::PackageCache;
 use crate::store::AnalyticsStore;
 
 /// Register a sequential pipeline with the analytics handler.
@@ -125,7 +127,8 @@ impl Pipeline {
         &self,
         indexer: &mut Indexer<AnalyticsStore>,
         pipeline_config: &PipelineConfig,
-        package_cache: Arc<PackageCache>,
+        package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>,
+        rpc_url: &str,
         metrics: Metrics,
         sequential_config: SequentialConfig,
     ) -> Result<()> {
@@ -156,6 +159,7 @@ impl Pipeline {
                     indexer,
                     ObjectProcessor::new(
                         package_cache.clone(),
+                        rpc_url,
                         &pipeline_config.package_id_filter,
                         metrics,
                     ),

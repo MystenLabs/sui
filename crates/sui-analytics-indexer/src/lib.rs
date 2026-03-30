@@ -10,7 +10,6 @@ pub mod config;
 pub mod handlers;
 pub mod indexer;
 pub mod metrics;
-pub mod package_store;
 pub mod pipeline;
 pub mod progress_monitoring;
 pub mod schema;
