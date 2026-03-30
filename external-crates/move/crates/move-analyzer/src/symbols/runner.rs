@@ -207,10 +207,9 @@ impl SymbolicatorRunner {
                                 }
                             }
                         }
-                        if !fatal {
-                            if let Err(err) = sender.send(SymbolicatorMessage::SymbolicationEnd) {
+                        if !fatal && let Err(err) = sender.send(SymbolicatorMessage::SymbolicationEnd) {
                                 eprintln!("could not send symbolication end: {:?}", err);
-                            }
+
                         }
                     }
                 }
