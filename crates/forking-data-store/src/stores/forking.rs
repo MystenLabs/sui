@@ -1,18 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
-    FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, StoreSummary, TransactionInfo,
-    TransactionStore, TransactionStoreWriter,
-};
-use anyhow::{Error, Result};
 use std::io::Write;
+
+use anyhow::{Error, Result};
+
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Object,
     supported_protocol_versions::ProtocolConfig,
+};
+
+use crate::{
+    CheckpointData, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore,
+    EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, StoreSummary, TransactionInfo,
+    TransactionStore, TransactionStoreWriter,
 };
 
 /// A router that delegates each capability to a dedicated store.
@@ -133,11 +136,11 @@ where
     fn get_checkpoint_by_sequence_number(
         &self,
         _sequence: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointData>, Error> {
+    ) -> Result<Option<CheckpointData>, Error> {
         todo!("forking checkpoint routing is not implemented in the skeleton")
     }
 
-    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+    fn get_latest_checkpoint(&self) -> Result<Option<CheckpointData>, Error> {
         todo!("forking latest-checkpoint routing is not implemented in the skeleton")
     }
 
@@ -160,7 +163,7 @@ impl<Tx, Epoch, Obj, Ckpt> CheckpointStoreWriter for ForkingStore<Tx, Epoch, Obj
 where
     Ckpt: CheckpointStoreWriter,
 {
-    fn write_checkpoint(&self, _checkpoint: &FullCheckpointData) -> Result<(), Error> {
+    fn write_checkpoint(&self, _checkpoint: &CheckpointData) -> Result<(), Error> {
         todo!("forking checkpoint writes are not implemented in the skeleton")
     }
 }

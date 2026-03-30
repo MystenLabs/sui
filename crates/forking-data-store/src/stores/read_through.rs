@@ -1,18 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
-    FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
-    TransactionInfo, TransactionStore, TransactionStoreWriter,
-};
-use anyhow::{Error, Result};
 use std::io::Write;
+
+use anyhow::{Error, Result};
+
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Object,
     supported_protocol_versions::ProtocolConfig,
+};
+
+use crate::{
+    CheckpointData, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore,
+    EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
+    TransactionInfo, TransactionStore, TransactionStoreWriter,
 };
 
 /// Read-through cache over a primary and secondary store.
@@ -123,11 +126,11 @@ where
     fn get_checkpoint_by_sequence_number(
         &self,
         _sequence: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointData>, Error> {
+    ) -> Result<Option<CheckpointData>, Error> {
         todo!("read-through checkpoint reads are not implemented in the skeleton")
     }
 
-    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+    fn get_latest_checkpoint(&self) -> Result<Option<CheckpointData>, Error> {
         todo!("read-through latest-checkpoint lookup is not implemented in the skeleton")
     }
 
@@ -151,7 +154,7 @@ where
     P: CheckpointStoreWriter,
     S: CheckpointStore,
 {
-    fn write_checkpoint(&self, _checkpoint: &FullCheckpointData) -> Result<(), Error> {
+    fn write_checkpoint(&self, _checkpoint: &CheckpointData) -> Result<(), Error> {
         todo!("read-through checkpoint writes are not implemented in the skeleton")
     }
 }

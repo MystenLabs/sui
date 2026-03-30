@@ -5,9 +5,10 @@
 //!
 //! Defines the [`Node`] enum for specifying which Sui network to connect to
 //! (mainnet, testnet, devnet, or custom) and provides URL resolution for both
-//! GraphQL and JSON-RPC endpoints.
+//! GraphQL and gRPC endpoints.
 
 use std::str::FromStr;
+
 use sui_types::supported_protocol_versions::Chain;
 
 /// GraphQL endpoint for Sui mainnet.
@@ -16,11 +17,11 @@ pub const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
 pub const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
 /// GraphQL endpoint for Sui devnet.
 pub const DEVNET_GQL_URL: &str = "https://graphql.devnet.sui.io/graphql";
-/// JSON-RPC endpoint for Sui mainnet.
+/// gRPC endpoint for Sui mainnet.
 pub const MAINNET_RPC_URL: &str = "https://fullnode.mainnet.sui.io:443";
-/// JSON-RPC endpoint for Sui testnet.
+/// gRPC endpoint for Sui testnet.
 pub const TESTNET_RPC_URL: &str = "https://fullnode.testnet.sui.io:443";
-/// JSON-RPC endpoint for Sui devnet.
+/// gRPC endpoint for Sui devnet.
 pub const DEVNET_RPC_URL: &str = "https://fullnode.devnet.sui.io:443";
 
 /// Represents a Sui network node configuration.
@@ -69,7 +70,7 @@ impl Node {
         }
     }
 
-    /// Returns the JSON-RPC endpoint URL for this node.
+    /// Returns the gRPC endpoint URL for this node.
     pub fn node_url(&self) -> &str {
         match self {
             Node::Mainnet => MAINNET_RPC_URL,

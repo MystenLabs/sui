@@ -47,8 +47,8 @@
 //! - Epoch files in `epoch/<epoch_id>` store `EpochFileData` as BCS, capturing epoch metadata.
 //! - Object files in `objects/<object_id>/<version>` store the `Object` at the corresponding
 //!   version as BCS.
-//! - Checkpoint files in `checkpoint/<sequence>.binpb.zst` store the `FullCheckpointData` as a
-//!  compressed protobuf payload.
+//! - Checkpoint files in `checkpoint/<sequence>.binpb.zst` store the `CheckpointData` as a
+//!   compressed protobuf payload.
 //!
 //! # Version Mapping Files
 //!
@@ -69,19 +69,22 @@
 //! `VersionQuery::AtCheckpoint(_)` without requiring a full index; the store writes them as
 //! it learns the concrete versions.
 
-use crate::{
-    CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
-    FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
-    TransactionInfo, TransactionStore, TransactionStoreWriter, node::Node,
-};
-use anyhow::{Error, Result, anyhow};
 use std::{io::Write, path::PathBuf};
+
+use anyhow::{Error, Result, anyhow};
+
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Object,
     supported_protocol_versions::ProtocolConfig,
+};
+
+use crate::{
+    CheckpointData, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore,
+    EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
+    TransactionInfo, TransactionStore, TransactionStoreWriter, node::Node,
 };
 
 /// Directory name appended to the configured filesystem store root.
@@ -249,11 +252,11 @@ impl CheckpointStore for FileSystemStore {
     fn get_checkpoint_by_sequence_number(
         &self,
         _sequence: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointData>, Error> {
+    ) -> Result<Option<CheckpointData>, Error> {
         todo!("filesystem checkpoint reads are not implemented in the skeleton")
     }
 
-    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+    fn get_latest_checkpoint(&self) -> Result<Option<CheckpointData>, Error> {
         todo!("filesystem latest-checkpoint lookup is not implemented in the skeleton")
     }
 
@@ -273,7 +276,7 @@ impl CheckpointStore for FileSystemStore {
 }
 
 impl CheckpointStoreWriter for FileSystemStore {
-    fn write_checkpoint(&self, _checkpoint: &FullCheckpointData) -> Result<(), Error> {
+    fn write_checkpoint(&self, _checkpoint: &CheckpointData) -> Result<(), Error> {
         todo!("filesystem checkpoint writes are not implemented in the skeleton")
     }
 }

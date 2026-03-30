@@ -7,14 +7,16 @@
 //! No GQL type escapes this module. From here we return structures defined in this crate
 //! or bcs encoded data of runtime structures.
 //!
-//! This module is private to the `DataStore` and packaged in its own module for convenience.
+//! This module is private to the `GraphQLStore` and packaged in its own module for convenience.
 
 #![allow(unused)]
 
-use crate::{EpochData, stores::DataStore};
 use anyhow::{Context, Error, anyhow};
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
+
+use crate::EpochData;
+use crate::stores::GraphQLStore;
 
 // Register the schema which was loaded in the build.rs call.
 #[cynic::schema("rpc")]
@@ -59,7 +61,7 @@ pub(crate) mod epoch_query {
 
     pub(crate) async fn query(
         epoch_id: u64,
-        data_store: &DataStore,
+        data_store: &GraphQLStore,
     ) -> Result<Option<EpochData>, Error> {
         let query = Query::build(EpochDataArgs {
             epoch: Some(epoch_id),
@@ -137,7 +139,7 @@ pub(crate) mod txn_query {
 
     pub(crate) async fn query(
         digest: String,
-        data_store: &DataStore,
+        data_store: &GraphQLStore,
     ) -> Result<Option<(TransactionData, sui_types::effects::TransactionEffects, u64)>, Error> {
         let query = Query::build(TransactionDataArgs {
             digest: digest.clone(),
@@ -253,7 +255,7 @@ pub(crate) mod object_query {
 
     pub(crate) async fn query(
         keys: &[GqlObjectKey],
-        data_store: &DataStore,
+        data_store: &GraphQLStore,
     ) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let mut keys = keys
             .iter()
@@ -334,7 +336,7 @@ pub(crate) mod chain_id_query {
         chain_identifier: Option<String>,
     }
 
-    pub(crate) async fn query(data_store: &DataStore) -> Result<String, Error> {
+    pub(crate) async fn query(data_store: &GraphQLStore) -> Result<String, Error> {
         let query = Query::build(());
         let response = data_store.run_query(&query).await?;
         let Some(chain_id) = response.data.and_then(|data| data.chain_identifier) else {

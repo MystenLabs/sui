@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore, EpochStoreWriter,
-    FullCheckpointData, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
-    TransactionInfo, TransactionStore, TransactionStoreWriter, node::Node,
-};
-use anyhow::{Error, Result};
 use std::io::Write;
+
+use anyhow::{Error, Result};
+
 use sui_types::{
     base_types::ObjectID,
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Object,
     supported_protocol_versions::{Chain, ProtocolConfig},
+};
+
+use crate::{
+    CheckpointData, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore,
+    EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
+    TransactionInfo, TransactionStore, TransactionStoreWriter, node::Node,
 };
 
 /// Cheap summary of the in-memory caches.
@@ -72,7 +75,7 @@ impl InMemoryStore {
     }
 
     /// Add checkpoint data to the cache.
-    pub fn add_checkpoint_data(&self, _checkpoint: FullCheckpointData) {
+    pub fn add_checkpoint_data(&self, _checkpoint: CheckpointData) {
         todo!("in-memory checkpoint insertion is not implemented in the skeleton")
     }
 
@@ -138,11 +141,11 @@ impl CheckpointStore for InMemoryStore {
     fn get_checkpoint_by_sequence_number(
         &self,
         _sequence: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointData>, Error> {
+    ) -> Result<Option<CheckpointData>, Error> {
         todo!("in-memory checkpoint reads are not implemented in the skeleton")
     }
 
-    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+    fn get_latest_checkpoint(&self) -> Result<Option<CheckpointData>, Error> {
         todo!("in-memory latest-checkpoint lookup is not implemented in the skeleton")
     }
 
@@ -162,7 +165,7 @@ impl CheckpointStore for InMemoryStore {
 }
 
 impl CheckpointStoreWriter for InMemoryStore {
-    fn write_checkpoint(&self, _checkpoint: &FullCheckpointData) -> Result<(), Error> {
+    fn write_checkpoint(&self, _checkpoint: &CheckpointData) -> Result<(), Error> {
         todo!("in-memory checkpoint writes are not implemented in the skeleton")
     }
 }

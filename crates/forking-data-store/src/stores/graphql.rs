@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    CheckpointStore, EpochData, EpochStore, FullCheckpointData, ObjectKey, ObjectStore, SetupStore,
-    StoreSummary, TransactionInfo, TransactionStore, node::Node,
-};
+use std::io::Write;
+
 use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
-use std::io::Write;
+
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
@@ -15,16 +13,21 @@ use sui_types::{
     supported_protocol_versions::{Chain, ProtocolConfig},
 };
 
+use crate::{
+    CheckpointData, CheckpointStore, EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore,
+    StoreSummary, TransactionInfo, TransactionStore, node::Node,
+};
+
 /// Remote GraphQL-backed store.
 #[derive(Debug, Clone)]
-pub struct DataStore {
+pub struct GraphQLStore {
     client: reqwest::Client,
     rpc: reqwest::Url,
     node: Node,
     version: String,
 }
 
-impl DataStore {
+impl GraphQLStore {
     /// Create a new GraphQL-backed store.
     pub fn new(node: Node, version: &str) -> Result<Self, Error> {
         let rpc = reqwest::Url::parse(node.gql_url())
@@ -74,7 +77,7 @@ impl DataStore {
     }
 }
 
-impl TransactionStore for DataStore {
+impl TransactionStore for GraphQLStore {
     fn transaction_data_and_effects(
         &self,
         _tx_digest: &str,
@@ -83,7 +86,7 @@ impl TransactionStore for DataStore {
     }
 }
 
-impl EpochStore for DataStore {
+impl EpochStore for GraphQLStore {
     fn epoch_info(&self, _epoch: u64) -> Result<Option<EpochData>, Error> {
         todo!("GraphQL epoch reads are not implemented in the skeleton")
     }
@@ -93,21 +96,21 @@ impl EpochStore for DataStore {
     }
 }
 
-impl ObjectStore for DataStore {
+impl ObjectStore for GraphQLStore {
     fn get_objects(&self, _keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         todo!("GraphQL object reads are not implemented in the skeleton")
     }
 }
 
-impl CheckpointStore for DataStore {
+impl CheckpointStore for GraphQLStore {
     fn get_checkpoint_by_sequence_number(
         &self,
         _sequence: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointData>, Error> {
+    ) -> Result<Option<CheckpointData>, Error> {
         todo!("GraphQL checkpoint reads are not implemented in the skeleton")
     }
 
-    fn get_latest_checkpoint(&self) -> Result<Option<FullCheckpointData>, Error> {
+    fn get_latest_checkpoint(&self) -> Result<Option<CheckpointData>, Error> {
         todo!("GraphQL latest-checkpoint lookup is not implemented in the skeleton")
     }
 
@@ -126,13 +129,13 @@ impl CheckpointStore for DataStore {
     }
 }
 
-impl SetupStore for DataStore {
+impl SetupStore for GraphQLStore {
     fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, Error> {
         todo!("GraphQL setup is not implemented in the skeleton")
     }
 }
 
-impl StoreSummary for DataStore {
+impl StoreSummary for GraphQLStore {
     fn summary<W: Write>(&self, writer: &mut W) -> Result<()> {
         writeln!(
             writer,

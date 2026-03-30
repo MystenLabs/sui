@@ -5923,7 +5923,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
-name = "forking-store"
+name = "forking-data-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -5933,7 +5933,7 @@ dependencies = [
  "cynic",
  "cynic-codegen",
  "fastcrypto",
- "lru 0.10.1",
+ "lru 0.10.0",
  "prost 0.14.1",
  "reqwest",
  "serde",

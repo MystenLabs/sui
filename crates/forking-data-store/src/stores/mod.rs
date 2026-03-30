@@ -18,7 +18,7 @@ pub use filesystem::{
     TRANSACTION_DIR,
 };
 pub use forking::ForkingStore;
-pub use graphql::DataStore;
+pub use graphql::GraphQLStore;
 pub use in_memory::InMemoryStore;
 pub use in_memory_lru::LruMemoryStore;
 pub use read_through::ReadThroughStore;

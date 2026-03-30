@@ -16,8 +16,8 @@
 //!
 //! ## Store Implementations
 //!
-//! - [`stores::DataStore`] - Remote GraphQL-backed store (mainnet/testnet/devnet/custom GraphQL
-//! endpoint)
+//! - [`stores::GraphQlStore`] - Remote GraphQL-backed store (mainnet/testnet/devnet/custom GraphQL
+//!   endpoint)
 //! - [`stores::FileSystemStore`] - Persistent local disk cache
 //! - [`stores::InMemoryStore`] - Unbounded in-memory cache
 //! - [`stores::LruMemoryStore`] - Bounded LRU cache
@@ -28,7 +28,7 @@
 //! cache chains:
 //! - [`stores::ReadThroughStore`] - cache over read-only source
 //! - [`stores::WriteThroughStore`] - hot cache over writable backing store
-//! - [`stores::ForkingStore`] - route each capability to a different chain
+//! - [`stores::ForkingStore`] - route each capability to a different store
 
 mod gql_queries;
 pub mod node;
@@ -36,8 +36,10 @@ pub mod stores;
 
 pub use node::Node;
 
-use anyhow::{Error, Result};
 use std::{io::Write, ops::Deref, sync::Arc};
+
+use anyhow::{Error, Result};
+
 use sui_types::{
     base_types::ObjectID,
     digests::{CheckpointContentsDigest, CheckpointDigest},
@@ -48,6 +50,8 @@ use sui_types::{
     supported_protocol_versions::ProtocolConfig,
     transaction::TransactionData,
 };
+
+type CheckpointData = Checkpoint;
 
 // ============================================================================
 // Data store read traits
