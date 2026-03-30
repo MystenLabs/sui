@@ -28,7 +28,11 @@ use crate::{
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
+<<<<<<< HEAD
 /// to the observer service for processing. The `ObserverSubscriber` can only subscribe to one peer at a time.
+=======
+/// to the observer service for processing.
+>>>>>>> ff75b17002 ([fix] lint)
 #[allow(unused)]
 pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetworkService> {
     context: Arc<Context>,
