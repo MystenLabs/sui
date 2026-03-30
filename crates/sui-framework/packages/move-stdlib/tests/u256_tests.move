@@ -48,7 +48,7 @@ fun test_diff() {
     integer_tests::test_diff!(MAX, CASES);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_div_ceil() {
     integer_tests::test_div_ceil!(MAX, CASES);
 }

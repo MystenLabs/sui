@@ -98,13 +98,16 @@ public(package) macro fun check_div_ceil($x: _, $y: _) {
     let x = $x;
     let y = $y;
     if (y == 0) return;
-    assert_eq!(x.div_ceil(y), (x / y) + (x % y).min(1));
+    let r = x.div_ceil(y);
+    assert_eq!(r, (x / y) + (x % y).min(1));
+    assert_eq!(r, x.divide_and_round_up(y));
 }
 
 public(package) macro fun test_div_ceil($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
     assert_eq!(max.div_ceil(max), 1);
+    assert_eq!(max.divide_and_round_up(max), 1);
     check_div_ceil!(max, max);
     cases!(max, cases, |case_pred, case, case_succ| {
         check_div_ceil!(max, case);

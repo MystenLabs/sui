@@ -114,7 +114,7 @@ fun test_mul_div_ceil_overflow() {
     MAX.mul_div_ceil(MAX, 1);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_div_ceil() {
     integer_tests::test_div_ceil!(MAX, CASES);
 }
