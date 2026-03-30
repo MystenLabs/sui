@@ -1063,6 +1063,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// Any state computed here must be a pure function of the commits observed, it cannot depend on any
     /// state recorded in the epoch db.
     fn handle_prior_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        // Early return for Observer nodes - they should only observe commits, not process them
+        if !self.epoch_store.is_validator() {
+            debug!(
+                "Observer node skipping prior consensus commit processing for commit {:?}",
+                consensus_commit.commit_ref()
+            );
+            return;
+        }
+
         assert!(
             self.epoch_store
                 .protocol_config()
@@ -1094,6 +1103,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &mut self,
         consensus_commit: impl ConsensusCommitAPI,
     ) {
+        // Early return for Observer nodes - they should only observe commits, not process them
+        if !self.epoch_store.is_validator() {
+            debug!(
+                "Observer node skipping consensus commit processing for commit {:?}",
+                consensus_commit.commit_ref()
+            );
+            return;
+        }
+
         {
             let protocol_config = self.epoch_store.protocol_config();
 

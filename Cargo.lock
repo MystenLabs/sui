@@ -16274,6 +16274,7 @@ dependencies = [
  "bcs",
  "bin-version",
  "clap",
+ "consensus-config",
  "consensus-core",
  "fastcrypto",
  "fastcrypto-zkp",

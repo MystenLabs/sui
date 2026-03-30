@@ -120,7 +120,7 @@ impl AddressOverridesMap {
 /// Used by Sui validator to start consensus protocol for each epoch.
 pub struct ConsensusManager {
     consensus_config: ConsensusConfig,
-    protocol_keypair: ProtocolKeyPair,
+    protocol_keypair: Option<ProtocolKeyPair>, // None for observer nodes
     network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
     metrics: Arc<ConsensusManagerMetrics>,
@@ -158,15 +158,21 @@ impl ConsensusManager {
         consensus_config: &ConsensusConfig,
         registry_service: &RegistryService,
         consensus_client: Arc<UpdatableConsensusClient>,
+        protocol_keypair: Option<ProtocolKeyPair>,
     ) -> Self {
         let metrics = Arc::new(ConsensusManagerMetrics::new(
             &registry_service.default_registry(),
         ));
         let client = Arc::new(LazyMysticetiClient::new());
         let (consumer_monitor_sender, _) = broadcast::channel(1);
+
+        if protocol_keypair.is_none() {
+            info!("Starting ConsensusManager in Observer mode - no protocol keypair");
+        }
+
         Self {
             consensus_config: consensus_config.clone(),
-            protocol_keypair: ProtocolKeyPair::new(node_config.worker_key_pair().copy()),
+            protocol_keypair,
             network_keypair: NetworkKeyPair::new(node_config.network_key_pair().copy()),
             storage_base_path: consensus_config.db_path().to_path_buf(),
             metrics,
@@ -277,7 +283,7 @@ impl ConsensusManager {
             committee.clone(),
             parameters.clone(),
             protocol_config.clone(),
-            Some(self.protocol_keypair.clone()),
+            self.protocol_keypair.clone(), // Passing None for observers
             self.network_keypair.clone(),
             Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),

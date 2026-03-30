@@ -75,6 +75,7 @@ macro_rules! jwk_log {
     };
 }
 
+use consensus_config::ProtocolKeyPair;
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
 use mysten_metrics::{RegistryService, spawn_monitored_task};
@@ -466,8 +467,18 @@ impl SuiNode {
         }
 
         let run_with_range = config.run_with_range;
-        let is_validator = config.consensus_config().is_some();
-        let is_full_node = !is_validator;
+        // Check if node has consensus configuration
+        let has_consensus_config = config.consensus_config().is_some();
+        // Check if node has observer peers configured
+        let has_observer_peers = config
+            .consensus_config()
+            .and_then(|c| c.parameters.as_ref())
+            .map(|p| !p.tonic.observer_peers.is_empty())
+            .unwrap_or(false);
+
+        // Node type determination (will be refined later based on committee membership)
+        let is_validator_or_observer = has_consensus_config;
+        let is_full_node = !has_consensus_config;
         let prometheus_registry = registry_service.default_registry();
 
         info!(node =? config.protocol_public_key(),
@@ -506,16 +517,18 @@ impl SuiNode {
         Self::check_and_recover_forks(
             &checkpoint_store,
             &checkpoint_metrics,
-            is_validator,
+            is_validator_or_observer,
             config.fork_recovery.as_ref(),
         )
         .await?;
 
         // By default, only enable write stall on validators for perpetual db.
-        let enable_write_stall = config.enable_db_write_stall.unwrap_or(is_validator);
+        let enable_write_stall = config
+            .enable_db_write_stall
+            .unwrap_or(is_validator_or_observer);
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
-            is_validator,
+            is_validator: is_validator_or_observer,
         };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
@@ -868,7 +881,11 @@ impl SuiNode {
             .configured_max_protocol_version
             .set(config.supported_protocol_versions.unwrap().max.as_u64() as i64);
 
-        let validator_components = if state.is_validator(&epoch_store) {
+        // Determine if this node is a validator or observer
+        let is_validator_in_committee = state.is_validator(&epoch_store);
+        let is_observer = !is_validator_in_committee && has_consensus_config && has_observer_peers;
+
+        let validator_components = if is_validator_in_committee || is_observer {
             let mut components = Self::construct_validator_components(
                 config.clone(),
                 state.clone(),
@@ -883,16 +900,25 @@ impl SuiNode {
                 &registry_service,
                 sui_node_metrics.clone(),
                 checkpoint_metrics.clone(),
+                is_validator_in_committee, // Pass whether this is a validator or observer
             )
             .await?;
 
-            components.consensus_adapter.submit_recovered(&epoch_store);
+            if is_validator_in_committee {
+                components.consensus_adapter.submit_recovered(&epoch_store);
 
-            // Start the gRPC server
-            components.validator_server_handle = components.validator_server_handle.start().await;
+                // Start the gRPC server
+                components.validator_server_handle =
+                    components.validator_server_handle.start().await;
 
-            // Set the consensus address updater so that we can update the consensus peer addresses when requested.
-            endpoint_manager.set_consensus_address_updater(components.consensus_manager.clone());
+                // Set the consensus address updater so that we can update the consensus peer addresses when requested.
+                endpoint_manager
+                    .set_consensus_address_updater(components.consensus_manager.clone());
+            } else {
+                info!(
+                    "Starting node as Observer - will connect to configured peers and sync blocks"
+                );
+            }
 
             Some(components)
         } else {
@@ -1266,6 +1292,7 @@ impl SuiNode {
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
+        is_validator: bool, // true if validator, false if observer
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1284,11 +1311,20 @@ impl SuiNode {
             client.clone(),
             checkpoint_store.clone(),
         ));
+
+        // Only create protocol keypair for validators, not for observers
+        let protocol_keypair = if is_validator {
+            Some(ProtocolKeyPair::new(config.worker_key_pair().copy()))
+        } else {
+            None
+        };
+
         let consensus_manager = Arc::new(ConsensusManager::new(
             &config,
             consensus_config,
             registry_service,
             client,
+            protocol_keypair,
         ));
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
@@ -1345,6 +1381,7 @@ impl SuiNode {
             checkpoint_metrics,
             sui_node_metrics,
             sui_tx_validator_metrics,
+            is_validator,
         )
         .await
     }
@@ -1366,6 +1403,7 @@ impl SuiNode {
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
+        _is_validator: bool,
     ) -> Result<ValidatorComponents> {
         let checkpoint_service = Self::build_checkpoint_service(
             config,
@@ -1858,8 +1896,25 @@ impl SuiNode {
 
                 consensus_store_pruner.prune(next_epoch).await;
 
-                if self.state.is_validator(&new_epoch_store) {
-                    // Only restart consensus if this node is still a validator in the new epoch.
+                // Check if node is a validator or observer in the new epoch
+                let is_validator_in_new_epoch = self.state.is_validator(&new_epoch_store);
+                let has_observer_peers = self
+                    .config
+                    .consensus_config()
+                    .and_then(|c| c.parameters.as_ref())
+                    .map(|p| !p.tonic.observer_peers.is_empty())
+                    .unwrap_or(false);
+                let is_observer_in_new_epoch = !is_validator_in_new_epoch
+                    && self.config.consensus_config().is_some()
+                    && has_observer_peers;
+
+                if is_validator_in_new_epoch || is_observer_in_new_epoch {
+                    // Restart consensus if this node is still a validator or observer in the new epoch.
+                    if is_validator_in_new_epoch {
+                        info!("Node continues as validator in new epoch");
+                    } else {
+                        info!("Node continues as observer in new epoch");
+                    }
                     Some(
                         Self::start_epoch_specific_validator_components(
                             &self.config,
@@ -1878,11 +1933,12 @@ impl SuiNode {
                             checkpoint_metrics,
                             self.metrics.clone(),
                             sui_tx_validator_metrics,
+                            is_validator_in_new_epoch,
                         )
                         .await?,
                     )
                 } else {
-                    info!("This node is no longer a validator after reconfiguration");
+                    info!("This node is no longer a validator or observer after reconfiguration");
                     None
                 }
             } else {
@@ -1898,8 +1954,26 @@ impl SuiNode {
                 let weak_hasher = Arc::downgrade(&new_hasher);
                 *hasher_guard = Some(new_hasher);
 
-                if self.state.is_validator(&new_epoch_store) {
-                    info!("Promoting the node from fullnode to validator, starting grpc server");
+                // Check if node should become a validator or observer in the new epoch
+                let is_validator_in_new_epoch = self.state.is_validator(&new_epoch_store);
+                let has_observer_peers = self
+                    .config
+                    .consensus_config()
+                    .and_then(|c| c.parameters.as_ref())
+                    .map(|p| !p.tonic.observer_peers.is_empty())
+                    .unwrap_or(false);
+                let is_observer_in_new_epoch = !is_validator_in_new_epoch
+                    && self.config.consensus_config().is_some()
+                    && has_observer_peers;
+
+                if is_validator_in_new_epoch || is_observer_in_new_epoch {
+                    if is_validator_in_new_epoch {
+                        info!(
+                            "Promoting the node from fullnode to validator, starting grpc server"
+                        );
+                    } else {
+                        info!("Promoting the node from fullnode to observer");
+                    }
 
                     let mut components = Self::construct_validator_components(
                         self.config.clone(),
@@ -1915,15 +1989,18 @@ impl SuiNode {
                         &self.registry_service,
                         self.metrics.clone(),
                         self.checkpoint_metrics.clone(),
+                        is_validator_in_new_epoch,
                     )
                     .await?;
 
-                    components.validator_server_handle =
-                        components.validator_server_handle.start().await;
+                    if is_validator_in_new_epoch {
+                        components.validator_server_handle =
+                            components.validator_server_handle.start().await;
 
-                    // Set the consensus address updater as the full node got promoted now to a validator.
-                    self.endpoint_manager
-                        .set_consensus_address_updater(components.consensus_manager.clone());
+                        // Set the consensus address updater as the full node got promoted to a validator.
+                        self.endpoint_manager
+                            .set_consensus_address_updater(components.consensus_manager.clone());
+                    }
 
                     Some(components)
                 } else {

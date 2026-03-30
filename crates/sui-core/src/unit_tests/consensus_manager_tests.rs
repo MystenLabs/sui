@@ -21,6 +21,7 @@ use crate::{
     consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     global_state_hasher::GlobalStateHasher,
 };
+use consensus_config::ProtocolKeyPair;
 use mysten_network::Multiaddr;
 use sui_network::endpoint_manager::{AddressSource, ConsensusAddressUpdater};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -74,11 +75,15 @@ async fn test_consensus_manager() {
     let epoch_store = state.epoch_store_for_testing();
     let consensus_client = Arc::new(UpdatableConsensusClient::new());
 
+    // Create protocol keypair for validator
+    let protocol_keypair = Some(ProtocolKeyPair::new(config.worker_key_pair().copy()));
+
     let manager = ConsensusManager::new(
         config,
         consensus_config,
         &registry_service,
         consensus_client,
+        protocol_keypair,
     );
 
     let boot_counter = *manager.boot_counter.lock().await;
@@ -157,11 +162,15 @@ async fn test_consensus_manager_address_update() {
     let epoch_store = state.epoch_store_for_testing();
     let consensus_client = Arc::new(UpdatableConsensusClient::new());
 
+    // Create protocol keypair for validator
+    let protocol_keypair = Some(ProtocolKeyPair::new(config.worker_key_pair().copy()));
+
     let manager = Arc::new(ConsensusManager::new(
         config,
         consensus_config,
         &registry_service,
         consensus_client,
+        protocol_keypair,
     ));
 
     // Start consensus
