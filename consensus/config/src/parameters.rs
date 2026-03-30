@@ -358,6 +358,12 @@ pub struct ClickHouseParameters {
     #[serde(default = "ClickHouseParameters::default_database")]
     pub database: String,
 
+    #[serde(default)]
+    pub user: Option<String>,
+
+    #[serde(default)]
+    pub password: Option<String>,
+
     /// Includes full BCS-serialized block/commit bytes. ~10-50 TB per 2 epochs at mainnet load.
     #[serde(default)]
     pub include_raw_bytes: bool,
@@ -386,6 +392,8 @@ impl Default for ClickHouseParameters {
             enabled: false,
             url: Self::default_url(),
             database: Self::default_database(),
+            user: None,
+            password: None,
             include_raw_bytes: false,
             channel_capacity: Self::default_channel_capacity(),
         }

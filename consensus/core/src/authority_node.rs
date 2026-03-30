@@ -488,10 +488,17 @@ where
         self.subscriber.stop();
         self.network_manager.stop().await;
 
+        // The DualWriteStore sender is dropped when DagState and other components above are
+        // stopped, which causes the writer's recv() loop to exit naturally. We await with a
+        // timeout as a safety net, falling back to abort if it doesn't finish.
         #[cfg(feature = "clickhouse-debug")]
         if let Some(handle) = self.clickhouse_writer_handle {
-            handle.abort();
-            let _ = handle.await;
+            tokio::select! {
+                _ = handle => {}
+                _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+                    warn!("ClickHouse debug writer did not shut down within 5s");
+                }
+            }
         }
 
         self.context

@@ -130,6 +130,7 @@ impl DualWriteStore {
 
     fn extract_commit_row(&self, commit: &TrustedCommit) -> CommitRow {
         CommitRow {
+            // Commits don't carry epoch in their serialized form, so we use the epoch from context.
             epoch: self.epoch,
             commit_index: commit.index(),
             commit_digest: hex_encode(&commit.digest().into_inner()),
@@ -369,10 +370,16 @@ impl ClickHouseWriter {
         config: &ClickHouseParameters,
         receiver: mpsc::Receiver<ClickHouseWriteBatch>,
     ) -> Self {
-        let client = Client::default()
+        let mut client = Client::default()
             .with_url(&config.url)
             .with_database(&config.database)
             .with_compression(clickhouse::Compression::Lz4);
+        if let Some(user) = &config.user {
+            client = client.with_user(user);
+        }
+        if let Some(password) = &config.password {
+            client = client.with_password(password);
+        }
         Self { client, receiver }
     }
 
