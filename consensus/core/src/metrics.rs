@@ -146,6 +146,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
+    #[allow(unused)]
     pub(crate) observer_subscribed_blocks: IntCounter,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,

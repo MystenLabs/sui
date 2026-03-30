@@ -23,6 +23,7 @@ use crate::{
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
 /// to the observer service for processing.
+#[allow(unused)]
 pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetworkService> {
     context: Arc<Context>,
     network_client: Arc<C>,
@@ -31,6 +32,7 @@ pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetwor
     subscriptions: Arc<Mutex<BTreeMap<PeerId, Option<JoinHandle<()>>>>>,
 }
 
+#[allow(unused)]
 impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, S> {
     pub(crate) fn new(
         context: Arc<Context>,
