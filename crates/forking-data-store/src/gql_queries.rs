@@ -15,8 +15,8 @@ use anyhow::{Context, Error, anyhow};
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
 
-use crate::EpochData;
 use crate::stores::GraphQLStore;
+use crate::{CheckpointData, EpochData};
 
 // Register the schema which was loaded in the build.rs call.
 #[cynic::schema("rpc")]
@@ -343,5 +343,87 @@ pub(crate) mod chain_id_query {
             return Err(anyhow!("Missing chain identifier"));
         };
         Ok(chain_id)
+    }
+}
+
+pub(crate) mod checkpoint_query {
+    use super::*;
+
+    use sui_types::{
+        crypto::{AggregateAuthoritySignature, AuthorityStrongQuorumSignInfo},
+        full_checkpoint_content::ObjectSet,
+        messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary},
+    };
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "Base64")]
+    pub(crate) struct Base64(pub String);
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct CheckpointArgs {
+        pub sequence_number: Option<u64>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "CheckpointArgs")]
+    pub(crate) struct Query {
+        #[arguments(sequenceNumber: $sequence_number)]
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Checkpoint {
+        sequence_number: u64,
+        summary_bcs: Option<Base64>,
+        content_bcs: Option<Base64>,
+    }
+
+    pub(crate) async fn query(
+        sequence_number: Option<u64>,
+        data_store: &GraphQLStore,
+    ) -> Result<Option<CheckpointData>, Error> {
+        let query = Query::build(CheckpointArgs { sequence_number });
+        let response = data_store.run_query(&query).await?;
+
+        let Some(checkpoint) = response.data.and_then(|data| data.checkpoint) else {
+            return Ok(None);
+        };
+
+        let summary: CheckpointSummary = bcs::from_bytes(&CryptoBase64::decode(
+            &checkpoint
+                .summary_bcs
+                .ok_or_else(|| anyhow!("missing checkpoint summary bcs"))?
+                .0,
+        )?)
+        .context("failed to deserialize checkpoint summary")?;
+        let contents: CheckpointContents = bcs::from_bytes(&CryptoBase64::decode(
+            &checkpoint
+                .content_bcs
+                .ok_or_else(|| anyhow!("missing checkpoint contents bcs"))?
+                .0,
+        )?)
+        .context("failed to deserialize checkpoint contents")?;
+
+        if summary.sequence_number != checkpoint.sequence_number {
+            return Err(anyhow!(
+                "checkpoint sequence mismatch: summary={}, field={}",
+                summary.sequence_number,
+                checkpoint.sequence_number
+            ));
+        }
+
+        let dummy_sig = AuthorityStrongQuorumSignInfo {
+            epoch: summary.epoch,
+            signature: AggregateAuthoritySignature::default(),
+            signers_map: roaring::RoaringBitmap::new(),
+        };
+        let summary = CertifiedCheckpointSummary::new_from_data_and_sig(summary, dummy_sig);
+
+        Ok(Some(CheckpointData {
+            summary,
+            contents,
+            transactions: Vec::new(),
+            object_set: ObjectSet::default(),
+        }))
     }
 }

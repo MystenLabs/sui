@@ -5940,8 +5940,10 @@ dependencies = [
  "cynic-codegen",
  "fastcrypto",
  "lru 0.10.1",
+ "mockall",
  "prost 0.14.1",
  "reqwest",
+ "roaring 0.10.9",
  "serde",
  "sui-rpc",
  "sui-rpc-api",
@@ -15140,20 +15142,24 @@ dependencies = [
 
 [[package]]
 name = "sui-forking"
-version = "1.69.0"
+version = "1.70.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.8.3",
  "axum-extra 0.10.1",
  "bin-version",
+ "forking-data-store",
+ "mockall",
  "rand 0.8.5",
  "reqwest",
  "roaring 0.10.9",
  "simulacrum",
+ "sui-config",
  "sui-graphql",
  "sui-swarm-config",
  "sui-types",
+ "tempfile",
  "tokio",
  "tower-http 0.5.2",
  "tracing",

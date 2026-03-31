@@ -4,8 +4,9 @@
 //! Multi-tier caching data store for Sui blockchain data.
 //!
 //! This crate provides a flexible data store abstraction for retrieving and caching
-//! Sui blockchain data (transactions, checkpooints, epochs, objects). The stores are loosely
-//! modeled after the GQL schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
+//! Sui blockchain data. The trait surface covers transactions, checkpoints,
+//! epochs, and objects, while the concrete PR3 store implementations are scoped
+//! to the epoch/checkpoint paths required by `sui-forking` bootstrap.
 //!
 //! ## Core Traits
 //!
@@ -16,11 +17,10 @@
 //!
 //! ## Store Implementations
 //!
-//! - [`stores::GraphQLStore`] - Remote GraphQL-backed store (mainnet/testnet/devnet/custom GraphQL
-//!   endpoint)
-//! - [`stores::FileSystemStore`] - Persistent local disk cache
-//! - [`stores::InMemoryStore`] - Unbounded in-memory cache
-//! - [`stores::LruMemoryStore`] - Bounded LRU cache
+//! - [`stores::GraphQLStore`] - Remote GraphQL-backed epoch/checkpoint store
+//! - [`stores::FileSystemStore`] - Persistent local epoch/checkpoint cache
+//! - [`stores::InMemoryStore`] - Unbounded in-memory epoch/checkpoint cache
+//! - [`stores::LruMemoryStore`] - Bounded LRU epoch/checkpoint cache
 //!
 //! ## Composition
 //!
@@ -39,10 +39,12 @@ pub use node::Node;
 use std::{io::Write, ops::Deref, sync::Arc};
 
 use anyhow::{Error, Result};
+#[cfg(any(test, feature = "test-utils"))]
+use mockall::automock;
 
 use sui_types::{
     base_types::ObjectID,
-    digests::{CheckpointContentsDigest, CheckpointDigest},
+    digests::{ChainIdentifier, CheckpointContentsDigest, CheckpointDigest},
     effects::TransactionEffects,
     full_checkpoint_content::Checkpoint,
     messages_checkpoint::CheckpointSequenceNumber,
@@ -52,6 +54,18 @@ use sui_types::{
 };
 
 type CheckpointData = Checkpoint;
+
+/// Normalize a chain identifier into the short eight-hex-character form used on disk.
+pub(crate) fn normalize_chain_identifier(chain_id: &str) -> Result<String, Error> {
+    if chain_id.len() == 8 && chain_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Ok(chain_id.to_ascii_lowercase());
+    }
+
+    let digest: CheckpointDigest = chain_id
+        .parse()
+        .map_err(|err| anyhow::anyhow!("failed to parse chain identifier '{chain_id}': {err}"))?;
+    Ok(ChainIdentifier::from(digest).to_string())
+}
 
 // ============================================================================
 // Data store read traits
@@ -69,6 +83,7 @@ pub struct TransactionInfo {
 /// The data provided to `sui_execution::executor::Executor::execute_transaction_to_effects`
 /// must be available. Some of that data is not provided by the user. It is naturally available
 /// at runtime on a live system and later saved in effects and in the context of a checkpoint.
+#[cfg_attr(any(test, feature = "test-utils"), automock)]
 pub trait TransactionStore {
     /// Given a transaction digest, return transaction info including data, effects,
     /// and the checkpoint that transaction was executed in.
@@ -93,6 +108,7 @@ pub struct EpochData {
 /// Epoch data is collected by an indexer and it is not stored anywhere otherwise.
 /// This is a very small amount of information and could conceivably be saved locally
 /// and never hit a server.
+#[cfg_attr(any(test, feature = "test-utils"), automock)]
 pub trait EpochStore {
     /// Return the `EpochData` for a given epoch.
     fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error>;
@@ -126,6 +142,7 @@ pub enum VersionQuery {
 /// `crates/sui-indexer-alt-graphql/schema.graphql::multiGetObjects`.
 /// That query likely allows more than what most clients need, which is fairly limited in
 /// its usage.
+#[cfg_attr(any(test, feature = "test-utils"), automock)]
 pub trait ObjectStore {
     /// Retrieve objects by their keys, with different query options.
     ///
@@ -137,6 +154,7 @@ pub trait ObjectStore {
 }
 
 /// Retrieve checkpoint data and indexes.
+#[cfg_attr(any(test, feature = "test-utils"), automock)]
 pub trait CheckpointStore {
     /// Return a full checkpoint payload by sequence number.
     fn get_checkpoint_by_sequence_number(
@@ -171,6 +189,7 @@ pub trait CheckpointStore {
 /// A trait to set up the data store.
 /// This is used to setup internal state of the data store before use.
 /// At the moment is exclusively used by the FileSystemStore to map network to chain id.
+#[cfg_attr(any(test, feature = "test-utils"), automock)]
 pub trait SetupStore {
     /// Set up the data store.
     /// Returns the chain identifier if available, or None if not available.
@@ -366,3 +385,130 @@ macro_rules! impl_store_for_deref {
 impl_store_for_deref!(&T);
 impl_store_for_deref!(Box<T>);
 impl_store_for_deref!(Arc<T>);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::message_envelope::Message as _;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+    #[test]
+    fn checkpoint_store_mock_can_be_used_directly() {
+        let checkpoint = TestCheckpointBuilder::new(7)
+            .with_epoch(3)
+            .build_checkpoint();
+        let checkpoint_digest = checkpoint.summary.data().digest();
+        let contents_digest = *checkpoint.contents.digest();
+
+        let mut store = MockCheckpointStore::new();
+        store
+            .expect_get_checkpoint_by_sequence_number()
+            .times(1)
+            .return_once({
+                let checkpoint = checkpoint.clone();
+                move |sequence| {
+                    assert_eq!(sequence, 7);
+                    Ok(Some(checkpoint))
+                }
+            });
+        store
+            .expect_get_sequence_by_checkpoint_digest()
+            .times(1)
+            .return_once(move |digest| {
+                assert_eq!(digest, &checkpoint_digest);
+                Ok(Some(7))
+            });
+        store
+            .expect_get_sequence_by_contents_digest()
+            .times(1)
+            .return_once(move |digest| {
+                assert_eq!(digest, &contents_digest);
+                Ok(Some(7))
+            });
+        store
+            .expect_get_latest_checkpoint()
+            .times(0)
+            .returning(|| Ok(None));
+
+        assert!(
+            store
+                .get_checkpoint_by_sequence_number(7)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            store
+                .get_sequence_by_checkpoint_digest(&checkpoint_digest)
+                .unwrap(),
+            Some(7)
+        );
+        assert_eq!(
+            store
+                .get_sequence_by_contents_digest(&contents_digest)
+                .unwrap(),
+            Some(7)
+        );
+    }
+
+    #[test]
+    fn generated_mocks_can_be_composed_through_forking_store() {
+        let checkpoint = TestCheckpointBuilder::new(11)
+            .with_epoch(5)
+            .build_checkpoint();
+        let epoch_data = EpochData {
+            epoch_id: 5,
+            protocol_version: 1,
+            rgp: 1,
+            start_timestamp: 0,
+        };
+
+        let mut epoch_store = MockEpochStore::new();
+        epoch_store
+            .expect_epoch_info()
+            .times(1)
+            .return_once(move |epoch| {
+                assert_eq!(epoch, 5);
+                Ok(Some(epoch_data))
+            });
+        epoch_store
+            .expect_protocol_config()
+            .times(0)
+            .returning(|_| Ok(None));
+
+        let mut checkpoint_store = MockCheckpointStore::new();
+        checkpoint_store
+            .expect_get_checkpoint_by_sequence_number()
+            .times(1)
+            .return_once(move |sequence| {
+                assert_eq!(sequence, 11);
+                Ok(Some(checkpoint))
+            });
+        checkpoint_store
+            .expect_get_latest_checkpoint()
+            .times(0)
+            .returning(|| Ok(None));
+        checkpoint_store
+            .expect_get_sequence_by_checkpoint_digest()
+            .times(0)
+            .returning(|_| Ok(None));
+        checkpoint_store
+            .expect_get_sequence_by_contents_digest()
+            .times(0)
+            .returning(|_| Ok(None));
+
+        let store = stores::ForkingStore::new(
+            stores::InMemoryStore::new(Node::Mainnet),
+            epoch_store,
+            stores::InMemoryStore::new(Node::Mainnet),
+            checkpoint_store,
+        );
+
+        assert!(
+            store
+                .get_checkpoint_by_sequence_number(11)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(store.epoch_info(5).unwrap().unwrap().protocol_version, 1);
+    }
+}

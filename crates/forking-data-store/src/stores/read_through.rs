@@ -4,18 +4,15 @@
 use std::io::Write;
 
 use anyhow::{Error, Result};
-
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
-    object::Object,
     supported_protocol_versions::ProtocolConfig,
 };
 
 use crate::{
     CheckpointData, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore,
-    EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
-    TransactionInfo, TransactionStore, TransactionStoreWriter,
+    EpochStoreWriter, SetupStore, StoreSummary,
 };
 
 /// Read-through cache over a primary and secondary store.
@@ -42,44 +39,29 @@ impl<P, S> ReadThroughStore<P, S> {
     }
 }
 
-impl<P, S> TransactionStore for ReadThroughStore<P, S>
-where
-    P: TransactionStoreWriter,
-    S: TransactionStore,
-{
-    fn transaction_data_and_effects(
-        &self,
-        _tx_digest: &str,
-    ) -> Result<Option<TransactionInfo>, Error> {
-        todo!("read-through transaction reads are not implemented in the skeleton")
-    }
-}
-
-impl<P, S> TransactionStoreWriter for ReadThroughStore<P, S>
-where
-    P: TransactionStoreWriter,
-    S: TransactionStore,
-{
-    fn write_transaction(
-        &self,
-        _tx_digest: &str,
-        _transaction_info: TransactionInfo,
-    ) -> Result<(), Error> {
-        todo!("read-through transaction writes are not implemented in the skeleton")
-    }
-}
-
 impl<P, S> EpochStore for ReadThroughStore<P, S>
 where
     P: EpochStoreWriter,
     S: EpochStore,
 {
-    fn epoch_info(&self, _epoch: u64) -> Result<Option<EpochData>, Error> {
-        todo!("read-through epoch reads are not implemented in the skeleton")
+    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error> {
+        match self.primary.epoch_info(epoch)? {
+            Some(epoch_data) => Ok(Some(epoch_data)),
+            None => match self.secondary.epoch_info(epoch)? {
+                Some(epoch_data) => {
+                    self.primary.write_epoch_info(epoch, epoch_data.clone())?;
+                    Ok(Some(epoch_data))
+                }
+                None => Ok(None),
+            },
+        }
     }
 
-    fn protocol_config(&self, _epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
-        todo!("read-through protocol-config reads are not implemented in the skeleton")
+    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
+        match self.primary.protocol_config(epoch)? {
+            Some(config) => Ok(Some(config)),
+            None => self.secondary.protocol_config(epoch),
+        }
     }
 }
 
@@ -88,33 +70,8 @@ where
     P: EpochStoreWriter,
     S: EpochStore,
 {
-    fn write_epoch_info(&self, _epoch: u64, _epoch_data: EpochData) -> Result<(), Error> {
-        todo!("read-through epoch writes are not implemented in the skeleton")
-    }
-}
-
-impl<P, S> ObjectStore for ReadThroughStore<P, S>
-where
-    P: ObjectStoreWriter,
-    S: ObjectStore,
-{
-    fn get_objects(&self, _keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
-        todo!("read-through object reads are not implemented in the skeleton")
-    }
-}
-
-impl<P, S> ObjectStoreWriter for ReadThroughStore<P, S>
-where
-    P: ObjectStoreWriter,
-    S: ObjectStore,
-{
-    fn write_object(
-        &self,
-        _key: &ObjectKey,
-        _object: Object,
-        _actual_version: u64,
-    ) -> Result<(), Error> {
-        todo!("read-through object writes are not implemented in the skeleton")
+    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error> {
+        self.primary.write_epoch_info(epoch, epoch_data)
     }
 }
 
@@ -125,27 +82,51 @@ where
 {
     fn get_checkpoint_by_sequence_number(
         &self,
-        _sequence: CheckpointSequenceNumber,
+        sequence: CheckpointSequenceNumber,
     ) -> Result<Option<CheckpointData>, Error> {
-        todo!("read-through checkpoint reads are not implemented in the skeleton")
+        match self.primary.get_checkpoint_by_sequence_number(sequence)? {
+            Some(checkpoint) => Ok(Some(checkpoint)),
+            None => match self.secondary.get_checkpoint_by_sequence_number(sequence)? {
+                Some(checkpoint) => {
+                    self.primary.write_checkpoint(&checkpoint)?;
+                    Ok(Some(checkpoint))
+                }
+                None => Ok(None),
+            },
+        }
     }
 
     fn get_latest_checkpoint(&self) -> Result<Option<CheckpointData>, Error> {
-        todo!("read-through latest-checkpoint lookup is not implemented in the skeleton")
+        match self.primary.get_latest_checkpoint()? {
+            Some(checkpoint) => Ok(Some(checkpoint)),
+            None => match self.secondary.get_latest_checkpoint()? {
+                Some(checkpoint) => {
+                    self.primary.write_checkpoint(&checkpoint)?;
+                    Ok(Some(checkpoint))
+                }
+                None => Ok(None),
+            },
+        }
     }
 
     fn get_sequence_by_checkpoint_digest(
         &self,
-        _digest: &CheckpointDigest,
+        digest: &CheckpointDigest,
     ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("read-through checkpoint-digest lookups are not implemented in the skeleton")
+        match self.primary.get_sequence_by_checkpoint_digest(digest)? {
+            Some(sequence) => Ok(Some(sequence)),
+            None => self.secondary.get_sequence_by_checkpoint_digest(digest),
+        }
     }
 
     fn get_sequence_by_contents_digest(
         &self,
-        _digest: &CheckpointContentsDigest,
+        digest: &CheckpointContentsDigest,
     ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("read-through contents-digest lookups are not implemented in the skeleton")
+        match self.primary.get_sequence_by_contents_digest(digest)? {
+            Some(sequence) => Ok(Some(sequence)),
+            None => self.secondary.get_sequence_by_contents_digest(digest),
+        }
     }
 }
 
@@ -154,17 +135,20 @@ where
     P: CheckpointStoreWriter,
     S: CheckpointStore,
 {
-    fn write_checkpoint(&self, _checkpoint: &CheckpointData) -> Result<(), Error> {
-        todo!("read-through checkpoint writes are not implemented in the skeleton")
+    fn write_checkpoint(&self, checkpoint: &CheckpointData) -> Result<(), Error> {
+        self.primary.write_checkpoint(checkpoint)
     }
 }
 
 impl<P, S> SetupStore for ReadThroughStore<P, S>
 where
     P: SetupStore,
+    S: SetupStore,
 {
-    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, Error> {
-        todo!("read-through setup is not implemented in the skeleton")
+    fn setup(&self, chain_id: Option<String>) -> Result<Option<String>, Error> {
+        let resolved_chain_id = self.secondary.setup(chain_id)?;
+        self.primary.setup(resolved_chain_id.clone())?;
+        Ok(resolved_chain_id)
     }
 }
 

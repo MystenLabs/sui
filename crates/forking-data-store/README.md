@@ -3,8 +3,9 @@
 Multi-tier caching data store for Sui blockchain data.
 
 This crate provides a flexible data store abstraction for retrieving and caching
-Sui blockchain data (transactions, epochs, objects). The stores are loosely modeled
-after the GraphQL schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
+Sui blockchain data. The trait surface covers transactions, epochs, objects,
+and checkpoints, while the concrete PR3 store implementations are intentionally
+scoped to epoch/checkpoint support for `sui-forking` bootstrap.
 
 ## Capability Traits
 
@@ -20,10 +21,10 @@ transaction/epoch/object capability set.
 
 | Store | Description | Read | Write |
 |-------|-------------|------|-------|
-| `DataStore` | Remote GraphQL-backed store (mainnet/testnet) | Yes | No |
-| `FileSystemStore` | Persistent local disk cache | Yes | Yes |
-| `InMemoryStore` | Unbounded in-memory cache | Yes | Yes |
-| `LruMemoryStore` | Bounded LRU cache | Yes | Yes |
+| `DataStore` | Remote GraphQL-backed epoch/checkpoint store (mainnet/testnet) | Yes | No |
+| `FileSystemStore` | Persistent local epoch/checkpoint cache | Yes | Yes |
+| `InMemoryStore` | Unbounded in-memory epoch/checkpoint cache | Yes | Yes |
+| `LruMemoryStore` | Bounded LRU epoch/checkpoint cache | Yes | Yes |
 | `ReadThroughStore` | Read-through cache over a source | Yes | Primary only |
 | `WriteThroughStore` | Hot cache over a writable backing store | Yes | Yes |
 | `ForkingStore` | Routes each capability to a different chain | Yes | Yes |
@@ -45,39 +46,31 @@ transaction/epoch/object capability set.
 ## Composition Examples
 
 ```rust
-use sui_data_store::{
+use forking_data_store::{
     Node,
     stores::{
-        ForkingStore, DataStore, FileSystemStore, InMemoryStore, ReadThroughStore,
+        ForkingStore, FileSystemStore, GraphQLStore, InMemoryStore, ReadThroughStore,
         WriteThroughStore,
     },
 };
 
-// Filesystem -> GraphQL for object reads, persisting successful misses to disk.
-let graphql = DataStore::new(Node::Mainnet, "test-version")?;
+// Filesystem -> GraphQL for checkpoint reads, persisting successful misses to disk.
+let graphql = GraphQLStore::new(Node::Mainnet, "test-version")?;
 let disk = FileSystemStore::new(Node::Mainnet)?;
 let disk_then_graphql = ReadThroughStore::new(disk, graphql);
 
-// In-memory -> filesystem for generic writable caching.
+// In-memory -> filesystem for writable checkpoint caching.
 let memory = InMemoryStore::new(Node::Mainnet);
 let disk = FileSystemStore::new(Node::Mainnet)?;
 let hot_mem_fs = WriteThroughStore::new(memory, disk);
 
 // Route different capabilities to different chains.
-let transactions = hot_mem_fs;
-let epochs = /* another chain or the same chain */;
-let objects = /* e.g. WriteThroughStore<InMemoryStore, ReadThroughStore<FileSystemStore, DataStore>> */;
+let transactions = FileSystemStore::new(Node::Mainnet)?;
+let epochs = disk_then_graphql;
+let objects = FileSystemStore::new(Node::Mainnet)?;
 let checkpoints = /* another chain or the same chain */;
 let store = ForkingStore::new(transactions, epochs, objects, checkpoints);
 ```
-
-## Version Queries
-
-The `ObjectStore` trait supports three query modes via `VersionQuery`:
-
-- `Version(v)` - Request object at exact version `v`
-- `RootVersion(v)` - Request object at version `<= v` (for dynamic field roots)
-- `AtCheckpoint(c)` - Request object as it existed at checkpoint `c`
 
 ## Network Configuration
 
