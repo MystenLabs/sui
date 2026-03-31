@@ -22,7 +22,7 @@ use sui_types::{
 
 /// Persistent checkpoint adapter backing a forked network.
 ///
-/// `ServiceStore` keeps two composed [`ForkingStore`] values:
+/// `ServiceStore` keeps two composed `ForkingStore` values:
 /// - `historical_store` serves checkpoint reads up to and including the fork point
 /// - `local_store` serves post-fork checkpoint reads and all checkpoint writes
 pub struct ServiceStore<H, L> {
@@ -37,7 +37,7 @@ where
     H: CheckpointStore,
     L: CheckpointStore + CheckpointStoreWriter,
 {
-    /// Create a checkpoint-only service store over historical and local [`ForkingStore`] values.
+    /// Create a checkpoint-only service store over historical and local `ForkingStore` values.
     pub fn new(forked_at_checkpoint: u64, historical_store: H, local_store: L) -> Self {
         Self {
             forked_at_checkpoint,
