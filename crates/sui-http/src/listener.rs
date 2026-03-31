@@ -207,19 +207,11 @@ async fn handle_accept_error(e: std::io::Error) {
         return;
     }
 
-    // [From `hyper::Server` in 0.14](https://github.com/hyperium/hyper/blob/v0.14.27/src/server/tcp.rs#L186)
-    //
-    // > A possible scenario is that the process has hit the max open files
-    // > allowed, and so trying to accept a new connection will fail with
-    // > `EMFILE`. In some cases, it's preferable to just wait for some time, if
-    // > the application will likely close some files (or connections), and try
-    // > to accept the connection again. If this option is `true`, the error
-    // > will be logged at the `error` level, since it is still a big deal,
-    // > and then the listener will sleep for 1 second.
-    //
-    // hyper allowed customizing this but axum does not.
+    // Sleep briefly to avoid tight-looping on persistent errors (e.g., EMFILE) while
+    // not blocking the server event loop for too long — the serve loop needs to keep
+    // draining completed connections to free file descriptors.
     tracing::error!("accept error: {e}");
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_millis(5)).await;
 }
 
 fn is_connection_error(e: &std::io::Error) -> bool {

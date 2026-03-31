@@ -4,6 +4,8 @@
 use std::time::Duration;
 
 const DEFAULT_HTTP2_KEEPALIVE_TIMEOUT_SECS: u64 = 20;
+const DEFAULT_TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_MAX_PENDING_CONNECTIONS: usize = 4096;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -20,6 +22,8 @@ pub struct Config {
     pub(crate) accept_http1: bool,
     enable_connect_protocol: bool,
     pub(crate) max_connection_age: Option<Duration>,
+    pub(crate) tls_handshake_timeout: Duration,
+    pub(crate) max_pending_connections: usize,
     pub(crate) allow_insecure: bool,
 }
 
@@ -39,6 +43,8 @@ impl Default for Config {
             accept_http1: true,
             enable_connect_protocol: true,
             max_connection_age: None,
+            tls_handshake_timeout: DEFAULT_TLS_HANDSHAKE_TIMEOUT,
+            max_pending_connections: DEFAULT_MAX_PENDING_CONNECTIONS,
             allow_insecure: false,
         }
     }
@@ -187,14 +193,34 @@ impl Config {
         }
     }
 
-    /// Allow accepting insecure connections when a tls_config is provided.
+    /// Sets the timeout for TLS handshakes on incoming connections.
     ///
-    /// This will allow clients to connect both using TLS as well as without TLS on the same
-    /// network interface.
+    /// Connections that do not complete the TLS handshake within this duration are dropped.
     ///
-    /// Default is `false`.
+    /// Default is 5 seconds.
+    pub fn tls_handshake_timeout(self, timeout: Duration) -> Self {
+        Config {
+            tls_handshake_timeout: timeout,
+            ..self
+        }
+    }
+
+    /// Sets the maximum number of pending TLS handshakes.
     ///
-    /// NOTE: This presently will only work for `tokio::net::TcpStream` IO connections
+    /// When this limit is reached, new incoming connections are dropped until existing
+    /// handshakes complete or time out.
+    ///
+    /// Default is 4096.
+    pub fn max_pending_connections(self, max: usize) -> Self {
+        Config {
+            max_pending_connections: max,
+            ..self
+        }
+    }
+
+    /// Previously allowed accepting insecure connections when a tls_config is provided.
+    /// This is no longer supported and must be set to `false`.
+    #[deprecated(note = "allow_insecure is no longer supported and must be set to false")]
     pub fn allow_insecure(self, allow_insecure: bool) -> Self {
         Config {
             allow_insecure,
