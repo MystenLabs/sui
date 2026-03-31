@@ -11,6 +11,11 @@ use reqwest::Client;
 use serde_json::Value;
 use serde_json::json;
 use sui_futures::service::Service;
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::setup_indexer;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_jsonrpc::NodeArgs;
 use sui_indexer_alt_jsonrpc::RpcArgs;
 use sui_indexer_alt_jsonrpc::args::SystemPackageTaskArgs;
@@ -18,8 +23,8 @@ use sui_indexer_alt_jsonrpc::config::RpcConfig;
 use sui_indexer_alt_jsonrpc::start_rpc;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
-use sui_macros::sim_test;
 use sui_pg_db::DbArgs;
+use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
 use sui_swarm_config::genesis_config::AccountConfig;
 use test_cluster::TestCluster;
@@ -31,6 +36,8 @@ struct WriteTestCluster {
     rpc_url: Url,
     #[allow(unused)]
     service: Service,
+    #[allow(unused)]
+    database: TempDb,
     client: Client,
 }
 
@@ -51,15 +58,40 @@ impl WriteTestCluster {
 
         let fullnode_grpc_url = onchain_cluster.rpc_url().to_string();
 
+        let database = TempDb::new().context("Failed to create database")?;
+        let database_url = database.database().url().clone();
+
+        let client_args = ClientArgs {
+            ingestion: IngestionClientArgs {
+                rpc_api_url: Some(Url::parse(onchain_cluster.rpc_url()).expect("Invalid RPC URL")),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let registry = Registry::new();
+
+        let indexer = setup_indexer(
+            database_url.clone(),
+            DbArgs::default(),
+            IndexerArgs::default(),
+            client_args,
+            IndexerConfig::for_test(),
+            None,
+            &registry,
+        )
+        .await
+        .context("Failed to setup indexer")?;
+
+        let indexer_service = indexer.run().await.context("Failed to start indexer")?;
+
         let rpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
         let rpc_url = Url::parse(&format!("http://{}/", rpc_listen_address))
             .expect("Failed to parse RPC URL");
 
-        let registry = Registry::new();
-
-        let service = start_rpc(
-            None,
+        let rpc_service = start_rpc(
+            Some(database_url),
             None,
             DbArgs::default(),
             BigtableArgs::default(),
@@ -77,12 +109,13 @@ impl WriteTestCluster {
             &registry,
         )
         .await
-        .expect("Failed to start JSON-RPC server");
+        .context("Failed to start JSON-RPC server")?;
 
         Ok(Self {
             onchain_cluster,
             rpc_url,
-            service,
+            service: rpc_service.merge(indexer_service),
+            database,
             client: Client::new(),
         })
     }
@@ -146,7 +179,7 @@ impl WriteTestCluster {
     }
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_execute_transfer_correctness() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
@@ -176,12 +209,15 @@ async fn test_execute_transfer_correctness() {
         .unwrap();
 
     let result = &response["result"];
+    let sender_str = sender.to_string();
+    let recipient_str = recipient.to_string();
 
-    // Digest is correct.
     assert_eq!(result["digest"], tx_digest);
 
-    // Input: sender is correct and signatures are present.
-    assert_eq!(result["transaction"]["data"]["sender"], sender.to_string());
+    // -- input --
+    assert_eq!(result["transaction"]["data"]["sender"], sender_str);
+    let tx_kind = &result["transaction"]["data"]["transaction"];
+    assert_eq!(tx_kind["kind"].as_str().unwrap(), "ProgrammableTransaction");
     assert!(
         !result["transaction"]["txSignatures"]
             .as_array()
@@ -189,68 +225,129 @@ async fn test_execute_transfer_correctness() {
             .is_empty()
     );
 
-    // Raw input is a non-empty base64 string.
+    // -- raw input --
     assert!(!result["rawTransaction"].as_str().unwrap().is_empty());
 
-    // Effects: successful, gas costs present, digest matches.
+    // -- effects --
     let effects = &result["effects"];
     assert_eq!(effects["status"]["status"], "success");
     assert_eq!(effects["transactionDigest"], tx_digest);
-    assert!(
-        effects["gasUsed"]["computationCost"]
-            .as_str()
-            .unwrap()
-            .parse::<u64>()
-            .unwrap()
-            > 0
+
+    let gas_used = &effects["gasUsed"];
+    let computation: u64 = gas_used["computationCost"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let storage: u64 = gas_used["storageCost"].as_str().unwrap().parse().unwrap();
+    let rebate: u64 = gas_used["storageRebate"].as_str().unwrap().parse().unwrap();
+    let _non_refundable: u64 = gas_used["nonRefundableStorageFee"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(computation > 0);
+    assert!(storage > 0);
+
+    // Gas object reference belongs to sender.
+    let gas_obj = &effects["gasObject"];
+    assert_eq!(
+        gas_obj["owner"]["AddressOwner"].as_str().unwrap(),
+        sender_str
     );
 
-    // Raw effects is a non-empty byte array.
+    // Mutated set contains the gas coin.
+    let mutated = effects["mutated"].as_array().unwrap();
+    assert!(
+        mutated.iter().any(|m| m["owner"]["AddressOwner"]
+            .as_str()
+            .is_some_and(|a| a == sender_str)),
+        "mutated set should contain sender's gas coin"
+    );
+
+    // Created set contains the new coin for recipient.
+    let created = effects["created"].as_array().unwrap();
+    assert!(
+        created.iter().any(|c| c["owner"]["AddressOwner"]
+            .as_str()
+            .is_some_and(|a| a == recipient_str)),
+        "created set should contain recipient's new coin"
+    );
+
+    // -- raw effects --
     assert!(!result["rawEffects"].as_array().unwrap().is_empty());
 
-    // Balance changes: sender loses, recipient gains.
+    // -- balance changes --
     let balance_changes = result["balanceChanges"].as_array().unwrap();
-    let sender_str = sender.to_string();
-    let recipient_str = recipient.to_string();
+    assert_eq!(balance_changes.len(), 2);
 
-    let sender_amount: i128 = balance_changes
-        .iter()
-        .find(|bc| {
-            bc["owner"]["AddressOwner"]
-                .as_str()
-                .is_some_and(|a| a == sender_str)
-        })
-        .expect("sender should have a balance change")["amount"]
-        .as_str()
-        .unwrap()
-        .parse()
-        .unwrap();
-    assert!(sender_amount < 0);
+    let find_balance = |addr: &str| -> (i128, String) {
+        let bc = balance_changes
+            .iter()
+            .find(|bc| {
+                bc["owner"]["AddressOwner"]
+                    .as_str()
+                    .is_some_and(|a| a == addr)
+            })
+            .unwrap_or_else(|| panic!("balance change not found for {addr}"));
+        let amount: i128 = bc["amount"].as_str().unwrap().parse().unwrap();
+        let coin_type = bc["coinType"].as_str().unwrap().to_string();
+        (amount, coin_type)
+    };
 
-    let recipient_amount: i128 = balance_changes
-        .iter()
-        .find(|bc| {
-            bc["owner"]["AddressOwner"]
-                .as_str()
-                .is_some_and(|a| a == recipient_str)
-        })
-        .expect("recipient should have a balance change")["amount"]
-        .as_str()
-        .unwrap()
-        .parse()
-        .unwrap();
+    let (sender_amount, sender_coin) = find_balance(&sender_str);
+    let (recipient_amount, recipient_coin) = find_balance(&recipient_str);
+
+    assert_eq!(sender_coin, "0x2::sui::SUI");
+    assert_eq!(recipient_coin, "0x2::sui::SUI");
     assert_eq!(recipient_amount, 1_000);
 
-    // Object changes: at least one mutated (gas coin).
+    let gas_total = computation as i128 + storage as i128 - rebate as i128;
+    assert_eq!(sender_amount, -(1_000 + gas_total));
+
+    // -- object changes --
     let object_changes = result["objectChanges"].as_array().unwrap();
-    assert!(
-        object_changes
-            .iter()
-            .any(|c| c["type"].as_str() == Some("mutated"))
+    assert_eq!(object_changes.len(), 2);
+
+    let mutated_change = object_changes
+        .iter()
+        .find(|c| c["type"].as_str() == Some("mutated"))
+        .expect("should have a mutated object change");
+    assert_eq!(
+        mutated_change["owner"]["AddressOwner"].as_str().unwrap(),
+        sender_str
     );
+    assert!(
+        mutated_change["objectType"]
+            .as_str()
+            .unwrap()
+            .contains("Coin<0x2::sui::SUI>")
+    );
+    assert_eq!(mutated_change["sender"].as_str().unwrap(), sender_str);
+    assert!(!mutated_change["digest"].as_str().unwrap().is_empty());
+    assert!(mutated_change["version"].as_str().is_some());
+    assert!(mutated_change["previousVersion"].as_str().is_some());
+
+    let created_change = object_changes
+        .iter()
+        .find(|c| c["type"].as_str() == Some("created"))
+        .expect("should have a created object change");
+    assert_eq!(
+        created_change["owner"]["AddressOwner"].as_str().unwrap(),
+        recipient_str
+    );
+    assert!(
+        created_change["objectType"]
+            .as_str()
+            .unwrap()
+            .contains("Coin<0x2::sui::SUI>")
+    );
+    assert_eq!(created_change["sender"].as_str().unwrap(), sender_str);
+    assert!(!created_change["digest"].as_str().unwrap().is_empty());
+    assert!(created_change["version"].as_str().is_some());
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_execute_no_options_omits_fields() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
@@ -276,7 +373,7 @@ async fn test_execute_no_options_omits_fields() {
     assert!(result["balanceChanges"].is_null());
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_execute_aborted_tx() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
@@ -297,7 +394,7 @@ async fn test_execute_aborted_tx() {
     assert_eq!(response["result"]["effects"]["status"]["status"], "failure");
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_execute_deprecated_mode() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
@@ -318,7 +415,7 @@ async fn test_execute_deprecated_mode() {
     assert_eq!(response["error"]["code"], -32602);
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_execute_empty_sigs() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
@@ -335,10 +432,10 @@ async fn test_execute_empty_sigs() {
         .await
         .unwrap();
 
-    assert!(response["error"]["code"].is_number());
+    assert_eq!(response["error"]["code"], -32602);
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_dry_run_transfer_correctness() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
@@ -356,44 +453,129 @@ async fn test_dry_run_transfer_correctness() {
         .unwrap();
 
     let result = &response["result"];
-
-    // Effects are successful.
-    assert_eq!(result["effects"]["status"]["status"], "success");
-    assert!(
-        result["effects"]["gasUsed"]["computationCost"]
-            .as_str()
-            .unwrap()
-            .parse::<u64>()
-            .unwrap()
-            > 0
-    );
-
-    // Input sender is correct.
-    assert_eq!(result["input"]["sender"], sender.to_string());
-
-    // Balance changes: recipient gets 1000 MIST.
+    let sender_str = sender.to_string();
     let recipient_str = recipient.to_string();
-    let recipient_amount: i128 = result["balanceChanges"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|bc| {
-            bc["owner"]["AddressOwner"]
-                .as_str()
-                .is_some_and(|a| a == recipient_str)
-        })
-        .expect("recipient should have a balance change")["amount"]
+
+    // -- input --
+    assert_eq!(result["input"]["sender"], sender_str);
+    let tx_kind = &result["input"]["transaction"];
+    assert!(tx_kind["kind"].as_str().unwrap() == "ProgrammableTransaction");
+
+    // -- effects --
+    let effects = &result["effects"];
+    assert_eq!(effects["status"]["status"], "success");
+    assert!(!effects["transactionDigest"].as_str().unwrap().is_empty());
+
+    let gas_used = &effects["gasUsed"];
+    let computation: u64 = gas_used["computationCost"]
         .as_str()
         .unwrap()
         .parse()
         .unwrap();
+    let storage: u64 = gas_used["storageCost"].as_str().unwrap().parse().unwrap();
+    let rebate: u64 = gas_used["storageRebate"].as_str().unwrap().parse().unwrap();
+    let _non_refundable: u64 = gas_used["nonRefundableStorageFee"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(computation > 0);
+    assert!(storage > 0);
+
+    // Gas object reference belongs to sender.
+    let gas_obj = &effects["gasObject"];
+    assert_eq!(
+        gas_obj["owner"]["AddressOwner"].as_str().unwrap(),
+        sender_str
+    );
+
+    // Mutated set contains the gas coin.
+    let mutated = effects["mutated"].as_array().unwrap();
+    assert!(
+        mutated.iter().any(|m| m["owner"]["AddressOwner"]
+            .as_str()
+            .is_some_and(|a| a == sender_str)),
+        "mutated set should contain sender's gas coin"
+    );
+
+    // Created set contains the new coin for recipient.
+    let created = effects["created"].as_array().unwrap();
+    assert!(
+        created.iter().any(|c| c["owner"]["AddressOwner"]
+            .as_str()
+            .is_some_and(|a| a == recipient_str)),
+        "created set should contain recipient's new coin"
+    );
+
+    // -- balance changes --
+    let balance_changes = result["balanceChanges"].as_array().unwrap();
+    assert_eq!(balance_changes.len(), 2);
+
+    let find_balance = |addr: &str| -> (i128, String) {
+        let bc = balance_changes
+            .iter()
+            .find(|bc| {
+                bc["owner"]["AddressOwner"]
+                    .as_str()
+                    .is_some_and(|a| a == addr)
+            })
+            .unwrap_or_else(|| panic!("balance change not found for {addr}"));
+        let amount: i128 = bc["amount"].as_str().unwrap().parse().unwrap();
+        let coin_type = bc["coinType"].as_str().unwrap().to_string();
+        (amount, coin_type)
+    };
+
+    let (sender_amount, sender_coin) = find_balance(&sender_str);
+    let (recipient_amount, recipient_coin) = find_balance(&recipient_str);
+
+    assert_eq!(sender_coin, "0x2::sui::SUI");
+    assert_eq!(recipient_coin, "0x2::sui::SUI");
     assert_eq!(recipient_amount, 1_000);
 
-    // Object changes should be present.
-    assert!(!result["objectChanges"].as_array().unwrap().is_empty());
+    let gas_total = computation as i128 + storage as i128 - rebate as i128;
+    assert_eq!(sender_amount, -(1_000 + gas_total));
+
+    // -- object changes --
+    let object_changes = result["objectChanges"].as_array().unwrap();
+    assert_eq!(object_changes.len(), 2);
+
+    let mutated_change = object_changes
+        .iter()
+        .find(|c| c["type"].as_str() == Some("mutated"))
+        .expect("should have a mutated object change");
+    assert_eq!(
+        mutated_change["owner"]["AddressOwner"].as_str().unwrap(),
+        sender_str
+    );
+    assert!(
+        mutated_change["objectType"]
+            .as_str()
+            .unwrap()
+            .contains("Coin<0x2::sui::SUI>")
+    );
+    assert!(!mutated_change["digest"].as_str().unwrap().is_empty());
+    assert!(mutated_change["version"].as_str().is_some());
+    assert!(mutated_change["previousVersion"].as_str().is_some());
+
+    let created_change = object_changes
+        .iter()
+        .find(|c| c["type"].as_str() == Some("created"))
+        .expect("should have a created object change");
+    assert_eq!(
+        created_change["owner"]["AddressOwner"].as_str().unwrap(),
+        recipient_str
+    );
+    assert!(
+        created_change["objectType"]
+            .as_str()
+            .unwrap()
+            .contains("Coin<0x2::sui::SUI>")
+    );
+    assert!(!created_change["digest"].as_str().unwrap().is_empty());
+    assert!(created_change["version"].as_str().is_some());
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_dry_run_aborted_tx() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
@@ -407,17 +589,10 @@ async fn test_dry_run_aborted_tx() {
         .await
         .unwrap();
 
-    // The transaction either fails at execution (effects with failure status)
-    // or is rejected by the validator during simulation (error response).
-    let has_failure_effects = response["result"]["effects"]["status"]["status"] == "failure";
-    let has_error = response["error"].is_object();
-    assert!(
-        has_failure_effects || has_error,
-        "expected failure effects or error response, got: {response}"
-    );
+    assert_eq!(response["result"]["effects"]["status"]["status"], "failure");
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_dry_run_invalid_tx() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
@@ -433,7 +608,7 @@ async fn test_dry_run_invalid_tx() {
     assert_eq!(response["error"]["code"], -32602);
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_execute_and_dry_run_gas_costs_agree() {
     telemetry_subscribers::init_for_testing();
     let cluster = WriteTestCluster::new().await.unwrap();
