@@ -1,6 +1,5 @@
 ---
 title: "Create Fungible Tokens: Coin Standard"
-draft: true
 description: Learn how to create currencies and mint coins and tokens on the Sui network.
 keywords: [mint tokens, create tokens, use tokens, publish token, custom tokens, sui CLI, denylist, regulated coins, coin registry, currency registry]
 ---
@@ -25,6 +24,7 @@ Define the metadata for the coin, including its name, description, symbol, icon 
 	org="MystenLabs"
 	repo="sui-move-bootcamp"
 	lines="11-15"
+	branch="solution"
 />
 
 This example creates a coin with 9 decimals, the name Silver, a description, the symbol SILVER, and an icon URL for an asset stored on Walrus.
@@ -39,6 +39,7 @@ Create the coin using the `coin::create_currency` function:
 	org="MystenLabs"
 	repo="sui-move-bootcamp"
 	fun="create_currency"
+	branch="solution"
 />
 
 ##### Step 3: Mint the initial supply
@@ -51,6 +52,7 @@ Mint the initial supply of your coin:
 	org="MystenLabs"
 	repo="sui-move-bootcamp"
 	fun="mint"
+	branch="solution"
 />
 
 [View the full example](https://github.com/MystenLabs/sui-move-bootcamp/blob/main/I1) or learn more about the [Coin Standard](https://docs.sui.io/standards/coin).
@@ -72,7 +74,7 @@ Key advantages of address balances:
 
 The TypeScript SDK (v2+) uses address balances by default. When you use `coinWithBalance`, the SDK draws from address balances first and falls back to coin objects only when needed. For gas payment, pass an empty array to `setGasPayment` to pay from your address balance.
 
-See [Address Balances Migration Guide](/guides/developer/digital-assets/address-management/migrate-address-balances.mdx) for the full reference on using address balances, including withdrawal patterns, gas payment, sponsored transactions, and balance queries.
+See [Address Balances Migration Guide](/guides/developer/digital-assets/migrate-address-balances.mdx) for the full reference on using address balances, including withdrawal patterns, gas payment, sponsored transactions, and balance queries.
 
 ## Coin objects
 
@@ -92,7 +94,7 @@ For explicit coin manipulation within a PTB, use the `mergeCoins` command to com
 
 It is common to accumulate many coin objects over time, especially if you receive frequent transfers. Some scenarios require merging coins into a single object. For example, if no single coin holds enough value to cover a transaction, you must merge coins first.
 
-You can convert coin objects into an address balance at any time by calling `coin::send_funds` with your own address as the recipient. See [Converting Existing Coins to Address Balances](/guides/developer/digital-assets/address-management/migrate-address-balances.mdx#converting-existing-coins-to-address-balances) for instructions.
+You can convert coin objects into an address balance at any time by calling `coin::send_funds` with your own address as the recipient. See [Converting Existing Coins to Address Balances](/guides/developer/digital-assets/migrate-address-balances.mdx#converting-existing-coins-to-address-balances) for instructions.
 
 ## Gas smashing
 
