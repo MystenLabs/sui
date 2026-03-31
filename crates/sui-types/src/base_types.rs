@@ -1116,6 +1116,14 @@ pub const RESOLVED_UTF8_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
     STD_UTF8_STRUCT_NAME,
 );
 
+pub const STD_TYPE_NAME_MODULE_NAME: &IdentStr = ident_str!("type_name");
+pub const STD_TYPE_NAME_STRUCT_NAME: &IdentStr = ident_str!("TypeName");
+pub const RESOLVED_STD_TYPE_NAME: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_TYPE_NAME_MODULE_NAME,
+    STD_TYPE_NAME_STRUCT_NAME,
+);
+
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
 pub const RESOLVED_TX_CONTEXT: (&AccountAddress, &IdentStr, &IdentStr) = (
@@ -1171,6 +1179,21 @@ pub fn url_layout() -> A::MoveStructLayout {
         },
         fields: vec![A::MoveFieldLayout::new(
             ident_str!("url").to_owned(),
+            A::MoveTypeLayout::Struct(Box::new(move_ascii_str_layout())),
+        )],
+    }
+}
+
+pub fn type_name_layout() -> A::MoveStructLayout {
+    A::MoveStructLayout {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_TYPE_NAME_MODULE_NAME.to_owned(),
+            name: STD_TYPE_NAME_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        },
+        fields: vec![A::MoveFieldLayout::new(
+            ident_str!("name").into(),
             A::MoveTypeLayout::Struct(Box::new(move_ascii_str_layout())),
         )],
     }

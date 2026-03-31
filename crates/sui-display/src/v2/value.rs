@@ -23,6 +23,7 @@ use sui_types::base_types::RESOLVED_UTF8_STR;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::move_ascii_str_layout;
 use sui_types::base_types::move_utf8_str_layout;
+use sui_types::base_types::type_name_layout;
 use sui_types::base_types::url_layout;
 use sui_types::derived_object::derive_object_id;
 use sui_types::dynamic_field::DynamicFieldInfo;
@@ -807,6 +808,7 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                     if [
                         move_ascii_str_layout(),
                         move_utf8_str_layout(),
+                        type_name_layout(),
                         url_layout(),
                     ]
                     .contains(layout.as_ref()) =>
@@ -1362,9 +1364,11 @@ pub(crate) mod tests {
         let u256_bytes = bcs::to_bytes(&U256::from(42u64)).unwrap();
         let addr_bytes = bcs::to_bytes(&AccountAddress::from_str("0x42").unwrap()).unwrap();
         let str_bytes = bcs::to_bytes("hello").unwrap();
+        let type_name_bytes = bcs::to_bytes("0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>").unwrap();
         let vec_bytes = bcs::to_bytes(&vec![1u8, 2, 3]).unwrap();
 
         let str_layout = L::Struct(Box::new(move_utf8_str_layout()));
+        let type_name_layout = L::Struct(Box::new(type_name_layout()));
         let vec_layout = L::Vector(Box::new(L::U8));
 
         let values = vec![
@@ -1405,6 +1409,10 @@ pub(crate) mod tests {
                 bytes: &str_bytes,
             }),
             Value::Slice(Slice {
+                layout: &type_name_layout,
+                bytes: &type_name_bytes,
+            }),
+            Value::Slice(Slice {
                 layout: &vec_layout,
                 bytes: &vec_bytes,
             }),
@@ -1420,6 +1428,7 @@ pub(crate) mod tests {
             Atom::U256(U256::from(42u64)),
             Atom::Address(AccountAddress::from_str("0x42").unwrap()),
             Atom::Bytes(Cow::Borrowed("hello".as_bytes())),
+            Atom::Bytes(Cow::Borrowed("0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>".as_bytes())),
             Atom::Bytes(Cow::Borrowed(&[1, 2, 3])),
         ];
 
