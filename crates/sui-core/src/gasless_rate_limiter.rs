@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
+use parking_lot::Mutex;
 use sui_protocol_config::ProtocolConfig;
 
 /// Tracks how many gasless transactions were included in consensus commits
@@ -42,25 +44,61 @@ impl ConsensusGaslessCounter {
     }
 }
 
-/// Per-validator rate limiter for gasless transactions. Uses the consensus-fed
-/// global counter to reject new gasless transactions when the network-wide TPS
-/// exceeds the configured `gasless_max_tps` threshold.
+/// Per-validator fixed-window counter. Resets every second.
+struct FixedWindowCounter {
+    count: u64,
+    window_start: Instant,
+}
+
+impl FixedWindowCounter {
+    fn try_acquire(&mut self, max_tps: u64) -> bool {
+        if self.window_start.elapsed().as_secs() >= 1 {
+            self.count = 0;
+            self.window_start = Instant::now();
+        }
+        if self.count < max_tps {
+            self.count += 1;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Per-validator rate limiter for gasless transactions. Uses two layers:
+///
+/// 1. A local fixed-window counter to cap per-validator burst rate.
+/// 2. A consensus-fed global counter for sustained network-wide accuracy.
+///
+/// Both are checked against `gasless_max_tps`. A transaction is admitted
+/// only if both counters are under the limit.
 #[derive(Clone)]
 pub struct GaslessRateLimiter {
-    counter: Arc<ConsensusGaslessCounter>,
+    consensus_counter: Arc<ConsensusGaslessCounter>,
+    local: Arc<Mutex<FixedWindowCounter>>,
 }
 
 impl GaslessRateLimiter {
-    pub fn new(counter: Arc<ConsensusGaslessCounter>) -> Self {
-        Self { counter }
+    pub fn new(consensus_counter: Arc<ConsensusGaslessCounter>) -> Self {
+        Self {
+            consensus_counter,
+            local: Arc::new(Mutex::new(FixedWindowCounter {
+                count: 0,
+                window_start: Instant::now(),
+            })),
+        }
     }
 
     pub fn try_acquire(&self, config: &ProtocolConfig) -> bool {
         let Some(max_tps) = config.gasless_max_tps_as_option() else {
             return true;
         };
-        let (_, count) = self.counter.current_count();
-        count < max_tps
+        let (_, consensus_count) = self.consensus_counter.current_count();
+        if consensus_count >= max_tps {
+            return false;
+        }
+        // no single validator can admit more than max_tps burst
+        self.local.lock().try_acquire(max_tps)
     }
 }
 
@@ -79,24 +117,34 @@ mod tests {
         config
     }
 
+    fn make_limiter() -> (Arc<ConsensusGaslessCounter>, GaslessRateLimiter) {
+        let counter = Arc::new(ConsensusGaslessCounter::default());
+        let limiter = GaslessRateLimiter::new(counter.clone());
+        (counter, limiter)
+    }
+
+    // -- Config behavior tests --
+
     #[test]
     fn test_unset_is_unlimited() {
-        let counter = Arc::new(ConsensusGaslessCounter::default());
-        let limiter = GaslessRateLimiter::new(counter);
+        let (_, limiter) = make_limiter();
         let config = ProtocolConfig::get_for_version(
             ProtocolVersion::new(117),
             sui_protocol_config::Chain::Unknown,
         );
-        assert!(limiter.try_acquire(&config));
+        for _ in 0..100 {
+            assert!(limiter.try_acquire(&config));
+        }
     }
 
     #[test]
     fn test_zero_max_tps_always_rejects() {
-        let counter = Arc::new(ConsensusGaslessCounter::default());
-        let limiter = GaslessRateLimiter::new(counter);
+        let (_, limiter) = make_limiter();
         let config = make_config(0);
         assert!(!limiter.try_acquire(&config));
     }
+
+    // -- Consensus counter tests --
 
     #[test]
     fn test_record_commit_new_window_resets() {
@@ -124,29 +172,67 @@ mod tests {
         assert_eq!(counter.current_count(), (2, 10));
     }
 
+    // -- Local admission counter tests --
+
     #[test]
-    fn test_try_acquire_rejects_at_capacity() {
-        let counter = Arc::new(ConsensusGaslessCounter::default());
+    fn test_local_counter_prevents_burst() {
+        let (_, limiter) = make_limiter();
+        let config = make_config(5);
+        for _ in 0..5 {
+            assert!(limiter.try_acquire(&config));
+        }
+        assert!(!limiter.try_acquire(&config));
+    }
+
+    #[test]
+    fn test_local_window_resets() {
+        let (_, limiter) = make_limiter();
+        let config = make_config(5);
+        for _ in 0..5 {
+            assert!(limiter.try_acquire(&config));
+        }
+        assert!(!limiter.try_acquire(&config));
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        for _ in 0..5 {
+            assert!(limiter.try_acquire(&config));
+        }
+        assert!(!limiter.try_acquire(&config));
+    }
+
+    // -- Two-layer interaction tests --
+
+    #[test]
+    fn test_consensus_blocks_before_local_increment() {
+        let (counter, limiter) = make_limiter();
+        let config = make_config(5);
         counter.record_commit(1000, 5);
-        let limiter = GaslessRateLimiter::new(counter);
+        assert!(!limiter.try_acquire(&config));
+        counter.record_commit(2000, 0);
+        for _ in 0..5 {
+            assert!(limiter.try_acquire(&config));
+        }
+    }
+
+    #[test]
+    fn test_consensus_rejects_at_capacity() {
+        let (counter, limiter) = make_limiter();
+        counter.record_commit(1000, 5);
         let config = make_config(5);
         assert!(!limiter.try_acquire(&config));
     }
 
     #[test]
-    fn test_try_acquire_allows_under_capacity() {
-        let counter = Arc::new(ConsensusGaslessCounter::default());
+    fn test_consensus_allows_under_capacity() {
+        let (counter, limiter) = make_limiter();
         counter.record_commit(1000, 4);
-        let limiter = GaslessRateLimiter::new(counter);
         let config = make_config(5);
         assert!(limiter.try_acquire(&config));
     }
 
     #[test]
     fn test_window_resets_after_non_gasless_commit() {
-        let counter = Arc::new(ConsensusGaslessCounter::default());
+        let (counter, limiter) = make_limiter();
         counter.record_commit(1000, 5);
-        let limiter = GaslessRateLimiter::new(counter.clone());
         let config = make_config(5);
         assert!(!limiter.try_acquire(&config));
 

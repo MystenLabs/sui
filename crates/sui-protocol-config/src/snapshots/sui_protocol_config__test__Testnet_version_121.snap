@@ -489,3 +489,4 @@ gasless_allowed_token_types:
     - 0
 gasless_max_unused_inputs: 1
 gasless_max_pure_input_bytes: 32
+gasless_max_tps: 50

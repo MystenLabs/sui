@@ -4764,7 +4764,6 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_gasless = true;
                         cfg.gasless_max_computation_units = Some(50_000);
                         cfg.gasless_allowed_token_types = Some(vec![]);
-                        cfg.gasless_max_tps = Some(50);
                         cfg.feature_flags.enable_coin_reservation_obj_refs = true;
                         cfg.feature_flags
                             .convert_withdrawal_compatibility_ptb_arguments = true;
@@ -4784,6 +4783,7 @@ impl ProtocolConfig {
                     // Re-enable unpaid amplification deferral protection (testnet + devnet)
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.defer_unpaid_amplification = true;
+                        cfg.gasless_max_tps = Some(50);
                     }
                 }
                 // Use this template when making changes:
