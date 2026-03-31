@@ -255,7 +255,7 @@ async fn test_wait_for_effects_ping_rejected_with_reason() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Dropped);
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Rejected);
         epoch_store.set_rejection_vote_reason(
             tx_position,
             &SuiErrorKind::UserInputError {

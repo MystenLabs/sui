@@ -1168,27 +1168,65 @@ impl ValidatorService {
         };
         let tx_digests = [tx_digest];
 
-        let effects = self
-            .state
-            .get_transaction_cache_reader()
-            .notify_read_executed_effects_may_fail(
-                "AuthorityServer::wait_for_effects::notify_read_executed_effects_finalized",
-                &tx_digests,
-            )
-            .await?
-            .pop()
-            .unwrap();
-        let effects_digest = effects.digest();
-        let details = if request.include_details {
-            Some(self.complete_executed_data(effects).await?)
-        } else {
-            None
+        // When consensus_position is provided, also watch the consensus status cache
+        // so rejected/dropped transactions get a timely response instead of waiting
+        // forever for effects that will never be produced.
+        let consensus_status_future = async {
+            let consensus_position = match request.consensus_position {
+                Some(pos) => pos,
+                None => return futures::future::pending().await,
+            };
+            let consensus_tx_status_cache = epoch_store.consensus_tx_status_cache.as_ref().ok_or(
+                SuiErrorKind::UnsupportedFeatureError {
+                    error: "Consensus tx status cache".to_string(),
+                },
+            )?;
+            consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
+            match consensus_tx_status_cache
+                .notify_read_transaction_status(consensus_position)
+                .await
+            {
+                NotifyReadConsensusTxStatusResult::Status(
+                    ConsensusTxStatus::Rejected | ConsensusTxStatus::Dropped,
+                ) => Ok(WaitForEffectsResponse::Rejected {
+                    error: epoch_store.get_rejection_vote_reason(consensus_position),
+                }),
+                NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized) => {
+                    // Effects will be produced — yield to let the effects future win.
+                    futures::future::pending().await
+                }
+                NotifyReadConsensusTxStatusResult::Expired(round) => {
+                    Ok(WaitForEffectsResponse::Expired {
+                        epoch: epoch_store.epoch(),
+                        round: Some(round),
+                    })
+                }
+            }
         };
 
-        Ok(WaitForEffectsResponse::Executed {
-            effects_digest,
-            details,
-        })
+        tokio::select! {
+            effects_result = self.state
+                .get_transaction_cache_reader()
+                .notify_read_executed_effects_may_fail(
+                    "AuthorityServer::wait_for_effects::notify_read_executed_effects_finalized",
+                    &tx_digests,
+                ) => {
+                let effects = effects_result?.pop().unwrap();
+                let effects_digest = effects.digest();
+                let details = if request.include_details {
+                    Some(self.complete_executed_data(effects).await?)
+                } else {
+                    None
+                };
+                Ok(WaitForEffectsResponse::Executed {
+                    effects_digest,
+                    details,
+                })
+            }
+            status_response = consensus_status_future => {
+                status_response
+            }
+        }
     }
 
     #[instrument(level = "error", skip_all, err(level = "debug"))]
@@ -1238,13 +1276,14 @@ impl ValidatorService {
             .await;
         match status {
             NotifyReadConsensusTxStatusResult::Status(status) => match status {
-                ConsensusTxStatus::Rejected => Ok(WaitForEffectsResponse::Rejected { error: None }),
+                ConsensusTxStatus::Rejected | ConsensusTxStatus::Dropped => {
+                    Ok(WaitForEffectsResponse::Rejected {
+                        error: epoch_store.get_rejection_vote_reason(consensus_position),
+                    })
+                }
                 ConsensusTxStatus::Finalized => Ok(WaitForEffectsResponse::Executed {
                     effects_digest: TransactionEffectsDigest::ZERO,
                     details,
-                }),
-                ConsensusTxStatus::Dropped => Ok(WaitForEffectsResponse::Rejected {
-                    error: epoch_store.get_rejection_vote_reason(consensus_position),
                 }),
             },
             NotifyReadConsensusTxStatusResult::Expired(round) => {

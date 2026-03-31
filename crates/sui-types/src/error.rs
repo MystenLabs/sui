@@ -162,7 +162,7 @@ pub enum UserInputError {
         version: Option<SequenceNumber>,
     },
     #[error(
-        "Object ID {} Version {} Digest {} is not available for consumption, current version: {current_version}",
+        "Transaction needs to be rebuilt because object {} version {} ({}) is unavailable for consumption, current version: {current_version}",
         .provided_obj_ref.0, .provided_obj_ref.1, .provided_obj_ref.2
     )]
     ObjectVersionUnavailableForConsumption {
