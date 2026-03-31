@@ -128,11 +128,25 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
 
     // First element should be a coin reservation (identified by magic in digest)
     let first_payment = &gas_payment[0];
-    assert!(
-        ParsedDigest::is_coin_reservation_digest(&first_payment.2),
-        "First gas payment should be a coin reservation, got digest: {:?}",
-        first_payment.2
-    );
+
+    // Coin reservation is not enabled on mainnet yet, so if the override is enabled we should NOT
+    // see a coin reservation digest.
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        // Assert this here so that when it gets enabled in mainnet this will fail so you know to
+        // remove the override check and update the test expectations here.
+        assert!(
+            !ParsedDigest::is_coin_reservation_digest(&first_payment.2),
+            "Mainnet override should disable coin reservation, got digest: {:?}",
+            first_payment.2
+        );
+        return; // Skip the rest of the test since the mainnet override disables coin reservation
+    } else {
+        assert!(
+            ParsedDigest::is_coin_reservation_digest(&first_payment.2),
+            "First gas payment should be a coin reservation, got digest: {:?}",
+            first_payment.2
+        );
+    }
 
     // Verify the entire address balance is reserved, not just the gas budget
     // Note: The actual balance may be slightly less than ab_amount due to gas
@@ -693,11 +707,23 @@ async fn test_combined_ab_and_coins_needed() {
     );
 
     let response = result.unwrap();
-    assert!(
-        response.transaction.effects.status().is_ok(),
-        "Expected successful execution with combined funds, got: {:?}",
-        response.transaction.effects.status()
-    );
+
+    // Not enabled on mainnet yet, so mainnet override should still fail as the overrides above
+    // aren't applied to the RPC.
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        assert!(
+            response.transaction.effects.status().is_err(),
+            "Expected execution to fail due to insufficient funds with mainnet override, got: {:?}",
+            response.transaction.effects.status()
+        );
+        return; // Skip the rest of the test since the mainnet override disables coin reservation
+    } else {
+        assert!(
+            response.transaction.effects.status().is_ok(),
+            "Expected successful execution with combined funds, got: {:?}",
+            response.transaction.effects.status()
+        );
+    }
 
     // Verify coin reservation is used to combine both sources
     let gas_payment = response.transaction.transaction.gas_data().payment.clone();
