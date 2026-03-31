@@ -21,7 +21,7 @@ use crate::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
 };
-use crate::{dependency::FetchedDependency, schema::ReplacementDependency};
+use crate::{dependency::fetch, schema::ReplacementDependency};
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
@@ -77,7 +77,7 @@ impl<F: MoveFlavor> Package<F> {
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
         let flavor = &*config.flavor;
-        let path = FetchedDependency::fetch(&dep, config.allow_dirty).await?;
+        let path = fetch::fetch(&dep, config.allow_dirty).await?;
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)

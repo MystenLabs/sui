@@ -9,24 +9,23 @@ use sha2::{Digest, Sha256};
 use tracing::debug;
 
 use crate::{
-    dependency::{ResolvedDependency, combine::Combined, resolve::Resolved},
     errors::{FileHandle, PackageError, PackageResult, fmt_truncated},
     flavor::MoveFlavor,
     git::{GitCache, GitError, GitTree},
     package::paths::PackagePath,
     schema::{
         EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
-        LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
-        OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
+        LockfileDependencyInfo, LockfileGitDepInfo, ManifestDependencyInfo, ManifestGitDependency,
+        ModeName, OnChainDepInfo, PackageName, RenderToml, ResolverDependencyInfo, RootDepInfo,
     },
 };
 
-use super::{CombinedDependency, Dependency};
+use super::{CombinedDependency, DependencyContext, resolve::ResolvedDependency};
 
-/// [Dependency<Pinned>]s are guaranteed to always resolve to the same package source. For example,
-/// a git dependency with a branch or tag revision may change over time (and is thus not
-/// pinned), whereas a git dependency with a sha revision is always guaranteed to produce the same
-/// files.
+/// [PinnedDependencyInfo] wraps a [Pinned] with a [DependencyContext]. The [Pinned] value is
+/// guaranteed to always resolve to the same package source. For example, a git dependency with a
+/// branch or tag revision may change over time (and is thus not pinned), whereas a git dependency
+/// with a sha revision is always guaranteed to produce the same files.
 #[derive(Clone, Debug)]
 pub enum Pinned {
     Local(PinnedLocalDependency),
@@ -54,8 +53,12 @@ pub struct PinnedLocalDependency {
     relative_path_from_root_package: PathBuf,
 }
 
+/// A dependency that has been pinned to a specific version.
 #[derive(Debug, Clone)]
-pub struct PinnedDependencyInfo(pub(super) Dependency<Pinned>);
+pub struct PinnedDependencyInfo {
+    context: DependencyContext,
+    dep_info: Pinned,
+}
 
 impl PinnedDependencyInfo {
     /// Replace all dependencies in `deps` with their pinned versions:
@@ -78,14 +81,16 @@ impl PinnedDependencyInfo {
 
         // pinning - fix git shas and normalize local deps
         for dep in deps.into_iter() {
-            let transformed = match dep.0.dep_info {
-                Resolved::Local(ref loc) => loc.clone().pin(parent)?,
-                Resolved::Git(ref git) => git.pin().await?,
-                Resolved::OnChain(_) => todo!(),
+            let transformed = match dep.dep_info {
+                ResolverDependencyInfo::Local(ref loc) => loc.clone().pin(parent)?,
+                ResolverDependencyInfo::Git(ref git) => git.pin().await?,
+                ResolverDependencyInfo::OnChain(_) => todo!(),
             };
 
-            // TODO: can avoid clones above if we don't use `map` here
-            result.push(PinnedDependencyInfo(dep.0.map(|_| transformed)));
+            result.push(PinnedDependencyInfo {
+                context: dep.context,
+                dep_info: transformed,
+            });
         }
 
         Ok(result)
@@ -94,11 +99,14 @@ impl PinnedDependencyInfo {
     /// Transform a combined dependency into a pinned dependency using the provided pinned
     /// information
     pub fn from_combined(dep: CombinedDependency, pinned: Pinned) -> Self {
-        Self(dep.0.map(|_| pinned))
+        Self {
+            context: dep.context,
+            dep_info: pinned,
+        }
     }
 
-    /// partition `deps` into the system dependencies and the non-system dependencies; replace all
-    /// the system dependencies using `flavor`
+    /// Partition `deps` into the system dependencies and the non-system dependencies; replace all
+    /// the system dependencies using `flavor`.
     async fn replace_system_deps<F: MoveFlavor>(
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
@@ -115,7 +123,7 @@ impl PinnedDependencyInfo {
         let mut non_system_deps: Vec<CombinedDependency> = Vec::new();
 
         for dep in deps.into_iter() {
-            if let Combined::System(sys) = &dep.0.dep_info {
+            if let ManifestDependencyInfo::System(sys) = &dep.dep_info {
                 let lockfile_dep =
                     all_system_deps
                         .get(&sys.system)
@@ -123,11 +131,12 @@ impl PinnedDependencyInfo {
                             dep: sys.system.clone(),
                             valid: valid_list.to_string(),
                         })?;
-                let file = dep.0.containing_file;
-                let pinned_dep = PinnedDependencyInfo(dep.0.map(|_| {
-                    Pinned::from_lockfile(file, lockfile_dep)
-                        .expect("system dependencies are valid pins")
-                }));
+                let file = dep.context.containing_file;
+                let pinned_dep = PinnedDependencyInfo {
+                    context: dep.context,
+                    dep_info: Pinned::from_lockfile(file, lockfile_dep)
+                        .expect("system dependencies are valid pins"),
+                };
                 system_deps.push(pinned_dep);
             } else {
                 non_system_deps.push(dep);
@@ -138,36 +147,38 @@ impl PinnedDependencyInfo {
 
     /// The name for the dependency
     pub fn name(&self) -> &PackageName {
-        &self.0.name
+        &self.context.name
     }
 
     /// The `use-environment` field for this dependency
     pub fn use_environment(&self) -> &EnvironmentName {
-        self.0.use_environment()
+        &self.context.use_environment
     }
 
     /// The `override` flag for this dependency
     pub fn is_override(&self) -> bool {
-        self.0.is_override
+        self.context.is_override
     }
 
     /// The `rename-from` field for this dependency
     pub fn rename_from(&self) -> &Option<PackageName> {
-        self.0.rename_from()
+        &self.context.rename_from
     }
 
+    /// Whether this is the root dependency
     pub fn is_root(&self) -> bool {
-        self.0.dep_info.is_root()
+        self.dep_info.is_root()
     }
 
+    /// The `modes` field for this dependency
     pub fn modes(&self) -> &Option<Vec<ModeName>> {
-        &self.0.modes
+        &self.context.modes
     }
 }
 
 impl AsRef<Pinned> for PinnedDependencyInfo {
     fn as_ref(&self) -> &Pinned {
-        &self.0.dep_info
+        &self.dep_info
     }
 }
 
@@ -306,7 +317,7 @@ impl LocalDepInfo {
 
 impl From<PinnedDependencyInfo> for LockfileDependencyInfo {
     fn from(value: PinnedDependencyInfo) -> Self {
-        value.0.dep_info.into()
+        value.dep_info.into()
     }
 }
 
@@ -561,11 +572,11 @@ mod tests {
 
     impl<E: std::fmt::Debug> Helpers for Result<PinnedDependencyInfo, E> {
         fn unwrap_as_local(self) -> PinnedLocalDependency {
-            self.map(|dep| dep.0.dep_info).unwrap_as_local()
+            self.map(|dep| dep.dep_info).unwrap_as_local()
         }
 
         fn unwrap_as_git(self) -> PinnedGitDependency {
-            self.map(|dep| dep.0.dep_info).unwrap_as_git()
+            self.map(|dep| dep.dep_info).unwrap_as_git()
         }
     }
 
@@ -587,11 +598,11 @@ mod tests {
 
     impl Helpers for PinnedDependencyInfo {
         fn unwrap_as_local(self) -> PinnedLocalDependency {
-            self.0.dep_info.unwrap_as_local()
+            self.dep_info.unwrap_as_local()
         }
 
         fn unwrap_as_git(self) -> PinnedGitDependency {
-            self.0.dep_info.unwrap_as_git()
+            self.dep_info.unwrap_as_git()
         }
     }
 
