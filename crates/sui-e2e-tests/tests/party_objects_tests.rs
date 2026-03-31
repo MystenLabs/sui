@@ -520,6 +520,13 @@ async fn party_object_read() {
         .expect("Party object should be mutated");
     object_initial_shared_version = mutated_party.1.start_version().unwrap();
 
+    // Wait for the transfer to settle across the cluster before issuing reads with the
+    // new initial_shared_version. Without this, submit_and_execute may route the next
+    // read to a validator that hasn't executed the transfer yet, causing ObjectNotFound.
+    test_cluster
+        .wait_for_tx_settlement(&[*signed_transfer.digest()])
+        .await;
+
     // Make some more transactions that read the party object from the new owner.
     for gas_coin in gas_coins_account2.iter().take(num_reads / 2) {
         let transaction = test_cluster
