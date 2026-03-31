@@ -21,7 +21,7 @@ impl Coverage {
         build_config: BuildConfig,
     ) -> anyhow::Result<()> {
         self.coverage
-            .execute::<SuiFlavor>(path, build_config, Arc::new(SuiFlavor))
+            .execute::<SuiFlavor>(path, build_config, Arc::new(SuiFlavor::new()))
             .await?;
         Ok(())
     }

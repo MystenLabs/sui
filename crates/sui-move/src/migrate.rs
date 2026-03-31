@@ -17,7 +17,7 @@ pub struct Migrate {
 impl Migrate {
     pub async fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
         self.migrate
-            .execute::<SuiFlavor>(path, config, Arc::new(SuiFlavor))
+            .execute::<SuiFlavor>(path, config, Arc::new(SuiFlavor::new()))
             .await
     }
 }

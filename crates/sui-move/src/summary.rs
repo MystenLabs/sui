@@ -53,7 +53,7 @@ impl Summary {
         sui_package_metadata: PackageSummaryMetadata,
     ) -> anyhow::Result<()> {
         self.summary
-            .execute::<SuiFlavor, _>(path, build_config, Arc::new(SuiFlavor), Some(&sui_package_metadata))
+            .execute::<SuiFlavor, _>(path, build_config, Arc::new(SuiFlavor::new()), Some(&sui_package_metadata))
             .await
     }
 }

@@ -119,7 +119,7 @@ pub async fn run_move_unit_tests(
             report_stacktrace_on_abort: true,
             ..config
         },
-        Arc::new(sui_package_alt::SuiFlavor),
+        Arc::new(sui_package_alt::SuiFlavor::new()),
         SuiVMTestSetup::new(),
         compute_coverage,
         save_disassembly,

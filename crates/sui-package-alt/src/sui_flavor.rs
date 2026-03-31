@@ -14,18 +14,87 @@ use move_package_alt::{
 };
 
 use serde::{Deserialize, Serialize};
-use sui_package_management::system_package_versions::{SYSTEM_GIT_REPO, latest_system_packages};
+use sui_package_management::system_package_versions::{
+    SYSTEM_GIT_REPO, latest_system_packages, system_packages_for_protocol,
+};
 use sui_sdk::types::{base_types::ObjectID, is_system_package};
+use sui_protocol_config::ProtocolVersion;
+use tokio::sync::OnceCell;
+use tracing::warn;
 
 use crate::{mainnet_environment, testnet_environment};
 
 const EDITION: &str = "2024";
 const FLAVOR: &str = "sui";
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SuiFlavor;
+/// The Sui-specific implementation of the [MoveFlavor] trait.
+///
+/// Can be constructed in offline mode ([`SuiFlavor::new`]) or connected mode
+/// ([`SuiFlavor::with_rpc`]). In connected mode, queries the RPC endpoint to determine the
+/// network's protocol version for correct system dependency resolution.
+#[derive(Debug)]
+pub struct SuiFlavor {
+    /// The RPC endpoint for the target network. `None` for offline/test usage.
+    rpc_endpoint: Option<String>,
+    /// Lazily populated from RPC when needed.
+    protocol_version: OnceCell<ProtocolVersion>,
+}
 
 impl SuiFlavor {
+    /// Create a `SuiFlavor` in offline mode. Uses the latest known system packages.
+    pub fn new() -> Self {
+        Self {
+            rpc_endpoint: None,
+            protocol_version: OnceCell::new(),
+        }
+    }
+
+    /// Create a `SuiFlavor` connected to the given `rpc_endpoint`. Queries the network's protocol
+    /// version to resolve the correct system dependencies.
+    pub fn with_rpc(rpc_endpoint: String) -> Self {
+        Self {
+            rpc_endpoint: Some(rpc_endpoint),
+            protocol_version: OnceCell::new(),
+        }
+    }
+
+    /// Return the RPC endpoint, if configured.
+    pub fn rpc_endpoint(&self) -> Option<&str> {
+        self.rpc_endpoint.as_deref()
+    }
+
+    /// Return the protocol version for the target network. Lazily queries the RPC endpoint if
+    /// available, falling back to the latest known version.
+    async fn protocol_version(&self) -> ProtocolVersion {
+        *self
+            .protocol_version
+            .get_or_init(|| async {
+                if let Some(ref endpoint) = self.rpc_endpoint {
+                    match Self::query_protocol_version(endpoint).await {
+                        Ok(version) => version,
+                        Err(e) => {
+                            warn!(
+                                "Failed to query protocol version from {endpoint}: {e}. \
+                                 Falling back to latest known version."
+                            );
+                            ProtocolVersion::MAX
+                        }
+                    }
+                } else {
+                    ProtocolVersion::MAX
+                }
+            })
+            .await
+    }
+
+    /// Query the protocol version from the given RPC `endpoint`.
+    async fn query_protocol_version(endpoint: &str) -> anyhow::Result<ProtocolVersion> {
+        // TODO: implement actual RPC query
+        // For now, return MAX as a placeholder until we wire up the gRPC client
+        let _ = endpoint;
+        Ok(ProtocolVersion::MAX)
+    }
+
     /// A map between system package names in the old style (capitalized) to the new naming style
     /// (lowercase).
     fn system_deps_by_name() -> BTreeMap<String, SystemDepName> {
@@ -95,8 +164,18 @@ impl MoveFlavor for SuiFlavor {
         let mut deps = BTreeMap::new();
         let deps_to_skip = ["DeepBook".into()];
 
-        // TODO DVX-1814: we need to use packages for protocol version instead of latest
-        let packages = latest_system_packages();
+        let version = self.protocol_version().await;
+        let packages = match system_packages_for_protocol(version) {
+            Ok((pkgs, _)) => pkgs,
+            Err(e) => {
+                warn!(
+                    "Failed to resolve system packages for protocol version {}: {e}. \
+                     Falling back to latest.",
+                    version.as_u64()
+                );
+                latest_system_packages()
+            }
+        };
         let sha = &packages.git_revision;
         // filter out the packages that we want to skip
         let pkgs = packages

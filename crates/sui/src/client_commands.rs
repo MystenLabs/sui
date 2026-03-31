@@ -3732,7 +3732,7 @@ pub async fn load_root_pkg_for_publish_upgrade(
 
     Ok(build_config
         .package_loader(path, &env)
-        .load(Arc::new(SuiFlavor))
+        .load(Arc::new(SuiFlavor::new()))
         .await?)
 }
 
@@ -3750,7 +3750,7 @@ pub async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
         pubfile_path,
     )
     .modes(modes)
-    .load(Arc::new(SuiFlavor))
+    .load(Arc::new(SuiFlavor::new()))
     .await?)
 }
 

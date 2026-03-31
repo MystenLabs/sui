@@ -183,7 +183,7 @@ impl BuildConfig {
         let mut root_pkg = self
             .config
             .package_loader(path, &self.environment)
-            .load(Arc::new(SuiFlavor))
+            .load(Arc::new(SuiFlavor::new()))
             .await?;
 
         self.internal_build(&mut root_pkg)
@@ -203,7 +203,7 @@ impl BuildConfig {
         let mut root_pkg = self
             .config
             .package_loader(path, &self.environment)
-            .load_sync(Arc::new(SuiFlavor))?;
+            .load_sync(Arc::new(SuiFlavor::new()))?;
 
         self.internal_build(&mut root_pkg)
     }

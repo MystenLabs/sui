@@ -20,6 +20,7 @@ move-package-alt.workspace = true
 move-package-alt-compilation.workspace = true
 serde.workspace = true
 sui-package-management.workspace = true
+sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 sui-config.workspace = true
 sui-sdk.workspace = true

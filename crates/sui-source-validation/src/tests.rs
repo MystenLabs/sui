@@ -1007,7 +1007,7 @@ async fn write_published_toml(
     let chain_id = get_testnet_chain_identifier().to_string();
     let env = Environment::new(env_name, chain_id.clone());
     let mut root_pkg: RootPackage<SuiFlavor> = PackageLoader::new(pkg_path, env)
-        .load(std::sync::Arc::new(SuiFlavor))
+        .load(std::sync::Arc::new(SuiFlavor::new()))
         .await?;
     root_pkg.write_publish_data(move_package_alt::schema::Publication {
         chain_id,
