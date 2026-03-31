@@ -14,7 +14,7 @@ use move_unit_test::vm_test_setup::VMTestSetup;
 use crate::base::test::Test;
 use base::{
     build::Build, coverage::Coverage, decompile::Decompile, disassemble::Disassemble,
-    docgen::Docgen, migrate::Migrate, new::New, profile::Profile, summary::Summary,
+    docgen::Docgen, lint::Lint, migrate::Migrate, new::New, profile::Profile, summary::Summary,
 };
 
 use move_package_alt::MoveFlavor;
@@ -61,6 +61,7 @@ pub enum Command {
     Disassemble(Disassemble),
     Decompile(Decompile),
     Docgen(Docgen),
+    Lint(Lint),
     Migrate(Migrate),
     New(New),
     Test(Test),
@@ -103,6 +104,10 @@ pub async fn run_cli<F: MoveFlavor, V: VMTestSetup + Sync>(
                 .await
         }
         Command::Docgen(c) => {
+            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
+                .await
+        }
+        Command::Lint(c) => {
             c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
                 .await
         }
