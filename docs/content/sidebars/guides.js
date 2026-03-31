@@ -212,15 +212,15 @@ const guides = [
       },
       {
         type: 'category',
-        label: 'Non-Fungible Tokens',
+        label: 'Tokenized Assets',
         link: {
           type: 'doc',
           id: 'guides/developer/digital-assets/non-fungible-tokens/index',
         },
         items: [
-          'guides/developer/digital-assets/non-fungible-tokens/create-nft',
           'guides/developer/digital-assets/non-fungible-tokens/asset-tokenization',
           'guides/developer/digital-assets/non-fungible-tokens/deploy-tokenized-asset',
+          'guides/developer/digital-assets/non-fungible-tokens/create-nft',
         ],
       },
       'guides/developer/digital-assets/permissioned-assets',
