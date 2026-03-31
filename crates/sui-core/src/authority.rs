@@ -138,7 +138,7 @@ use sui_types::effects::{
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
 use sui_types::error::{ExecutionError, ExecutionErrorTrait, SuiErrorKind, UserInputError};
-use sui_types::event::{Event, EventID};
+use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};

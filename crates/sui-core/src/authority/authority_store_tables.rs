@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::storage::MarkerValue;
@@ -94,10 +93,6 @@ pub struct AuthorityPerpetualTables {
     /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
-
-    #[allow(dead_code)]
-    #[deprecated]
-    events: DBMap<(TransactionEventsDigest, usize), Event>,
 
     // Events keyed by the digest of the transaction that produced them.
     pub(crate) events_2: DBMap<TransactionDigest, TransactionEvents>,

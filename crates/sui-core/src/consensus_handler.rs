@@ -3809,7 +3809,6 @@ mod tests {
             blocks.clone(),
             leader_block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
-            true,
         );
 
         // Test that the consensus handler respects backpressure.
@@ -3985,7 +3984,6 @@ mod tests {
             vec![block.clone()],
             block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
-            true,
         );
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
@@ -4111,7 +4109,6 @@ mod tests {
             vec![block.clone()],
             block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
-            true,
         );
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
