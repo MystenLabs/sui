@@ -73,12 +73,12 @@ simple_visitor!(
             let rest = rest.join(", ");
             format!(
                 "Consider using receiver syntax: \
-                 'first_arg.{name}({rest})' instead of '{module}::{name}(first_arg, {rest})'",
+                 'arg0.{name}({rest})' instead of '{module}::{name}(arg0, {rest})'",
             )
         } else {
             format!(
                 "Consider using receiver syntax: \
-                 'first_arg.{name}()' instead of '{module}::{name}(first_arg)'",
+                 'arg0.{name}()' instead of '{module}::{name}(arg0)'",
             )
         };
         self.add_diag(diag!(
