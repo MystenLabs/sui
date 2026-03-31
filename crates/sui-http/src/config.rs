@@ -24,7 +24,6 @@ pub struct Config {
     pub(crate) max_connection_age: Option<Duration>,
     pub(crate) tls_handshake_timeout: Duration,
     pub(crate) max_pending_connections: usize,
-    pub(crate) allow_insecure: bool,
 }
 
 impl Default for Config {
@@ -45,7 +44,6 @@ impl Default for Config {
             max_connection_age: None,
             tls_handshake_timeout: DEFAULT_TLS_HANDSHAKE_TIMEOUT,
             max_pending_connections: DEFAULT_MAX_PENDING_CONNECTIONS,
-            allow_insecure: false,
         }
     }
 }
@@ -214,16 +212,6 @@ impl Config {
     pub fn max_pending_connections(self, max: usize) -> Self {
         Config {
             max_pending_connections: max,
-            ..self
-        }
-    }
-
-    /// Previously allowed accepting insecure connections when a tls_config is provided.
-    /// This is no longer supported and must be set to `false`.
-    #[deprecated(note = "allow_insecure is no longer supported and must be set to false")]
-    pub fn allow_insecure(self, allow_insecure: bool) -> Self {
-        Config {
-            allow_insecure,
             ..self
         }
     }

@@ -251,11 +251,6 @@ where
     L: Listener,
 {
     async fn serve(mut self) -> Result<(), BoxError> {
-        assert!(
-            !self.config.allow_insecure,
-            "allow_insecure is no longer supported and must be set to false"
-        );
-
         loop {
             tokio::select! {
                 _ = self.graceful_shutdown_token.cancelled() => {
