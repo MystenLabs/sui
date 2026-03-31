@@ -3,6 +3,7 @@
 
 use std::{collections::HashMap, hash::Hash};
 
+pub mod batching_gas_meter;
 pub mod binary_cache;
 pub mod constants;
 pub mod gas;
