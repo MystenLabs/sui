@@ -6,6 +6,7 @@ use std::{
     collections::BTreeMap,
     io::{BufRead, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use clap::ArgAction;
@@ -133,9 +134,10 @@ impl BuildConfig {
         &self,
         path: &Path,
         env: &Environment,
+        flavor: Arc<F>,
         writer: &mut W,
     ) -> anyhow::Result<CompiledPackage> {
-        let root_pkg: RootPackage<F> = self.package_loader(path, env).load().await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, env).load(flavor).await?;
         BuildPlan::create(&root_pkg, self)?.compile(writer, |compiler| compiler)
     }
 
@@ -153,12 +155,13 @@ impl BuildConfig {
         mut self,
         path: &Path,
         env: Environment,
+        flavor: Arc<F>,
         writer: &mut W,
         reader: &mut R,
     ) -> anyhow::Result<()> {
         // we set test to migrate all the code
         self.test_mode = true;
-        let root_pkg: RootPackage<F> = self.package_loader(path, &env).load().await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, &env).load(flavor).await?;
         let build_plan = BuildPlan::create(&root_pkg, &self)?;
 
         migrate(build_plan, writer, reader)?;
@@ -169,9 +172,10 @@ impl BuildConfig {
         &self,
         path: &Path,
         env: Environment,
+        flavor: Arc<F>,
         writer: &mut W,
     ) -> anyhow::Result<source_model::Model> {
-        let root_pkg: RootPackage<F> = self.package_loader(path, &env).load().await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, &env).load(flavor).await?;
         self.move_model_from_root_pkg(&root_pkg, writer).await
     }
 

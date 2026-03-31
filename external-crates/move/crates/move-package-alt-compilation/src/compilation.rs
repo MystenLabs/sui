@@ -14,7 +14,7 @@ use crate::{
     layout::CompiledPackageLayout,
     on_disk_package::{OnDiskCompiledPackage, OnDiskPackage},
 };
-use std::{collections::BTreeSet, path::Path};
+use std::{collections::BTreeSet, path::Path, sync::Arc};
 
 use anyhow::Result;
 use colored::Colorize;
@@ -44,9 +44,10 @@ pub async fn compile_package<W: Write + Send, F: MoveFlavor>(
     path: &Path,
     build_config: &BuildConfig,
     env: &Environment,
+    flavor: Arc<F>,
     writer: &mut W,
 ) -> anyhow::Result<CompiledPackage> {
-    let root_pkg: RootPackage<F> = build_config.package_loader(path, env).load().await?;
+    let root_pkg: RootPackage<F> = build_config.package_loader(path, env).load(flavor).await?;
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 

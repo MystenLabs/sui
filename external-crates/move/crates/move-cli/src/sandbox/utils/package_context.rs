@@ -15,6 +15,7 @@ use move_package_alt_compilation::{
     build_config::BuildConfig, compiled_package::CompiledPackage, find_env,
 };
 use move_vm_runtime::dev_utils::storage::StoredPackage;
+use std::sync::Arc;
 
 /// The PackageContext controls the package that the CLI is executing with respect to, and handles the
 /// creation of the `OnDiskStateView` with the package's dependencies.
@@ -27,9 +28,10 @@ impl PackageContext {
     pub async fn new<F: MoveFlavor>(
         path: &Option<PathBuf>,
         build_config: &BuildConfig,
+        flavor: Arc<F>,
     ) -> Result<Self> {
         let path = path.as_deref().unwrap_or_else(|| Path::new("."));
-        let env = find_env::<F>(path, build_config)?;
+        let env = find_env::<F>(path, build_config, &flavor)?;
         let build_dir = build_config
             .install_dir
             .as_ref()
@@ -37,7 +39,7 @@ impl PackageContext {
             .clone();
 
         let package = build_config
-            .compile_package::<F, _>(path, &env, &mut Vec::new())
+            .compile_package::<F, _>(path, &env, flavor, &mut Vec::new())
             .await?;
         Ok(PackageContext { package, build_dir })
     }

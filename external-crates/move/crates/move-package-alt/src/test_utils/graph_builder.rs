@@ -39,6 +39,7 @@ use std::{
     collections::BTreeMap,
     convert::identity,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use heck::CamelCase;
@@ -784,11 +785,12 @@ impl Scenario {
 
         let mtx = path.lock().unwrap();
 
-        PackageGraph::<Vanilla>::load_from_manifests(
+        PackageGraph::load_from_manifests(
             &path,
             &Vanilla::default_environment(),
             &mtx,
             &config,
+            &Vanilla,
         )
         .await
     }
@@ -823,7 +825,8 @@ impl Scenario {
         }
     }
 
-    /// Loads the root package for `package` in the default environment and with no modes
+    /// Loads the root package for `package` in the default environment and with no modes.
+    /// Uses `Vanilla` flavor by default.
     pub async fn try_root_package(
         &self,
         package: impl AsRef<str>,
@@ -833,7 +836,7 @@ impl Scenario {
             self.path_for(package),
             Vanilla::default_environment(),
         ))
-        .load()
+        .load(Arc::new(Vanilla))
         .await
     }
 

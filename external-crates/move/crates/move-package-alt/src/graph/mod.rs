@@ -63,8 +63,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         env: &Environment,
         mtx: &PackageSystemLock,
         config: &PackageConfig,
+        flavor: &F,
     ) -> PackageResult<Self> {
-        let builder = PackageGraphBuilder::<F>::new(config);
+        let builder = PackageGraphBuilder::new(config, flavor);
 
         if let Some(graph) = builder.load_from_lockfile(path, env, mtx).await? {
             debug!("successfully loaded lockfile");
@@ -82,8 +83,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         env: &Environment,
         mtx: &PackageSystemLock,
         config: &PackageConfig,
+        flavor: &F,
     ) -> PackageResult<Self> {
-        PackageGraphBuilder::new(config)
+        PackageGraphBuilder::new(config, flavor)
             .load_from_manifests(path, env, mtx)
             .await
     }
@@ -96,8 +98,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         env: &Environment,
         mtx: &PackageSystemLock,
         config: &PackageConfig,
+        flavor: &F,
     ) -> PackageResult<Option<Self>> {
-        PackageGraphBuilder::new(config)
+        PackageGraphBuilder::new(config, flavor)
             .load_from_lockfile_ignore_digests(path, env, mtx)
             .await
     }
@@ -128,7 +131,11 @@ impl<F: MoveFlavor> PackageGraph<F> {
     ///  - if `overrides` contains the package, we replace its publication
     ///  - if the package has a system address (see F::is_system_address), we keep it
     ///  - otherwise, we drop it
-    pub fn make_ephemeral(&mut self, overrides: BTreeMap<EphemeralDependencyInfo, Publication<F>>) {
+    pub fn make_ephemeral(
+        &mut self,
+        overrides: BTreeMap<EphemeralDependencyInfo, Publication<F>>,
+        flavor: &F,
+    ) {
         for (_, index) in &self.package_ids {
             let package = self.inner[*index].clone();
             let dep = package.dep_for_self().clone().into();
@@ -137,7 +144,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 // take from ephemeral file
                 Some(publish.clone())
             } else if let Some(original_publish) = package.publication()
-                && F::is_system_address(&original_publish.addresses.original_id)
+                && flavor.is_system_address(&original_publish.addresses.original_id)
             {
                 // keep system deps
                 Some(original_publish.clone())

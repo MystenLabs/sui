@@ -60,13 +60,15 @@ struct PackageCache<F: MoveFlavor> {
 pub struct PackageGraphBuilder<'a, F: MoveFlavor> {
     cache: PackageCache<F>,
     config: &'a PackageConfig,
+    flavor: &'a F,
 }
 
 impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
-    pub fn new(config: &'a PackageConfig) -> Self {
+    pub fn new(config: &'a PackageConfig, flavor: &'a F) -> Self {
         Self {
             cache: PackageCache::new(),
             config,
+            flavor,
         }
     }
 
@@ -117,7 +119,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
             let dep = Pinned::from_lockfile(lockfile.file(), &pin.source)?;
-            let package = self.cache.fetch(&dep, env, mtx, self.config).await?;
+            let package = self.cache.fetch(&dep, env, mtx, self.config, self.flavor).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
                 user_note!(
@@ -198,7 +200,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
 
         let root = self
             .cache
-            .fetch(&Pinned::Root(path.clone()), env, mtx, self.config)
+            .fetch(&Pinned::Root(path.clone()), env, mtx, self.config, self.flavor)
             .await?;
 
         // TODO: should we add `root` to `visited`? we may have a problem if there is a cyclic
@@ -290,10 +292,11 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         };
 
         // pin dependencies
-        let pinned = PinnedDependencyInfo::pin::<F>(
+        let pinned = PinnedDependencyInfo::pin(
             package.dep_for_self(),
             package.direct_deps().clone(),
             env.id(),
+            self.flavor,
         )
         .await
         .map_err(|err| PackageError::DepError {
@@ -312,7 +315,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
             let new_env = Environment::new(dep.use_environment().clone(), env.id().clone());
             let fetched = self
                 .cache
-                .fetch(dep.as_ref(), &new_env, mtx, self.config)
+                .fetch(dep.as_ref(), &new_env, mtx, self.config, self.flavor)
                 .await?;
 
             let future = self.add_transitive_manifest_deps(
@@ -349,13 +352,15 @@ impl<F: MoveFlavor> PackageCache<F> {
         }
     }
 
-    /// Return a reference to a cached [Package], loading it if necessary
+    /// Return a reference to a cached [Package], loading it if necessary.
+    /// `flavor` is passed through to [Package::load].
     pub async fn fetch(
         &self,
         dep: &Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
         config: &PackageConfig,
+        flavor: &F,
     ) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache
@@ -373,7 +378,7 @@ impl<F: MoveFlavor> PackageCache<F> {
         }
 
         // If not cached, load and cache
-        match Package::load(dep.clone(), env, mtx, config).await {
+        match Package::load(dep.clone(), env, mtx, config, flavor).await {
             Ok(package) => {
                 let node = Arc::new(package);
                 cell.get_or_init(async || Some(node.clone())).await;

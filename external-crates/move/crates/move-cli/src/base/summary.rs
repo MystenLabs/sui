@@ -23,6 +23,7 @@ use move_package_alt_compilation::{
     build_config::BuildConfig, compiled_package::BuildNamedAddresses, find_env,
 };
 use move_symbol_pool::Symbol;
+use std::sync::Arc;
 
 const COMMAND_NAME: &str = "summary";
 const DEFAULT_OUTPUT_DIRECTORY: &str = "package_summaries";
@@ -61,6 +62,7 @@ impl Summary {
         self,
         path: Option<&Path>,
         config: BuildConfig,
+        flavor: Arc<F>,
         additional_metadata: Option<&T>,
         // address_derivation_fn_opt: Option<F>,
     ) -> anyhow::Result<()> {
@@ -105,8 +107,9 @@ impl Summary {
             )
         } else {
             let path = reroot_path(path)?;
-            let env = find_env::<F>(&path, &config)?;
-            let root_pkg: RootPackage<F> = config.package_loader(&path, &env).load().await?;
+            let env = find_env::<F>(&path, &config, &flavor)?;
+            let root_pkg: RootPackage<F> =
+                config.package_loader(&path, &env).load(flavor).await?;
 
             // Get named addresses from the root package graph
             let named_addresses: BuildNamedAddresses =

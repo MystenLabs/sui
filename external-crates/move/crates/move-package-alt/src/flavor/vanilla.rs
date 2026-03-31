@@ -22,7 +22,7 @@ pub const DEFAULT_ENV_ID: &str = "_test_env_id";
 
 /// The [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 /// flavor-specific resolvers and stores no additional metadata in the lockfile.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Vanilla;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -43,31 +43,35 @@ impl MoveFlavor for Vanilla {
     type PackageMetadata = ();
     type AddressInfo = ();
 
-    fn name() -> String {
+    fn name(&self) -> String {
         "vanilla".to_string()
     }
 
-    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+    fn default_environments(&self) -> IndexMap<EnvironmentName, EnvironmentID> {
         let mut envs = IndexMap::new();
         envs.insert(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string());
         envs
     }
 
-    fn system_deps(_environment: &EnvironmentID) -> BTreeMap<String, LockfileDependencyInfo> {
+    async fn system_deps(
+        &self,
+        _environment: &EnvironmentID,
+    ) -> BTreeMap<String, LockfileDependencyInfo> {
         BTreeMap::new()
     }
 
-    fn implicit_dependencies(
+    async fn implicit_dependencies(
+        &self,
         _environment: &EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency> {
         BTreeMap::new()
     }
 
-    fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
+    fn validate_manifest(&self, _: &ParsedManifest) -> Result<(), String> {
         Ok(())
     }
 
-    fn is_system_address(address: &crate::schema::OriginalID) -> bool {
+    fn is_system_address(&self, address: &crate::schema::OriginalID) -> bool {
         address == &OriginalID::from(0xBEEF)
     }
 }

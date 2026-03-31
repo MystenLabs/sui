@@ -7,6 +7,7 @@ use move_package_alt_compilation::build_config::BuildConfig;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use sui_package_alt::SuiFlavor;
 use sui_types::{
@@ -52,7 +53,7 @@ impl Summary {
         sui_package_metadata: PackageSummaryMetadata,
     ) -> anyhow::Result<()> {
         self.summary
-            .execute::<SuiFlavor, _>(path, build_config, Some(&sui_package_metadata))
+            .execute::<SuiFlavor, _>(path, build_config, Arc::new(SuiFlavor), Some(&sui_package_metadata))
             .await
     }
 }

@@ -6,6 +6,7 @@ use clap::*;
 use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 use std::path::Path;
+use std::sync::Arc;
 
 /// Build the package at `path`. If no path is provided defaults to current directory.
 #[derive(Parser)]
@@ -17,12 +18,13 @@ impl Build {
         self,
         path: Option<&Path>,
         config: BuildConfig,
+        flavor: Arc<F>,
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
-        let env = find_env::<F>(&rerooted_path, &config)?;
+        let env = find_env::<F>(&rerooted_path, &config, &flavor)?;
 
         config
-            .compile_package::<F, _>(&rerooted_path, &env, &mut std::io::stdout())
+            .compile_package::<F, _>(&rerooted_path, &env, flavor, &mut std::io::stdout())
             .await?;
 
         Ok(())

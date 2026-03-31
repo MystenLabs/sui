@@ -210,6 +210,7 @@ impl AutoCompletionTest {
         packages_info: Arc<Mutex<CachedPackages>>,
         ide_files_root: VfsPath,
         project_path: &Path,
+        move_flavor: Arc<F>,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
@@ -220,6 +221,7 @@ impl AutoCompletionTest {
             packages_info,
             ide_files_root,
             project_path,
+            move_flavor,
             output,
             use_file_path,
             false, // not for auto-import
@@ -234,6 +236,7 @@ impl AutoImportTest {
         packages_info: Arc<Mutex<CachedPackages>>,
         ide_files_root: VfsPath,
         project_path: &Path,
+        move_flavor: Arc<F>,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
@@ -244,6 +247,7 @@ impl AutoImportTest {
             packages_info,
             ide_files_root,
             project_path,
+            move_flavor,
             output,
             use_file_path,
             true, // for auto-import
@@ -453,6 +457,7 @@ fn completion_test<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     project_path: &Path,
+    move_flavor: Arc<F>,
     output: &mut dyn std::io::Write,
     use_file_path: &Path,
     auto_import: bool,
@@ -470,6 +475,7 @@ fn completion_test<F: MoveFlavor>(
         packages_info,
         ide_files_root,
         project_path.to_path_buf(),
+        move_flavor,
         &cursor_path,
         use_pos,
     )?;
@@ -517,6 +523,7 @@ fn test_symbols_with_optional_modifications<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     project_path: PathBuf,
+    move_flavor: Arc<F>,
     file_modifications: Option<BTreeMap<PathBuf, String>>,
 ) -> anyhow::Result<(CompiledPkgInfo, Symbols)> {
     // Apply file modifications to VFS overlay if provided
@@ -548,6 +555,7 @@ fn test_symbols_with_optional_modifications<F: MoveFlavor>(
         ide_files_root,
         project_path.as_path(),
         LintLevel::None,
+        move_flavor,
         Some(Flavor::Sui),
         None, // No cursor file
     )?;
@@ -568,6 +576,7 @@ fn test_symbols_for_autocomplete<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     project_path: PathBuf,
+    move_flavor: Arc<F>,
     cursor_path: &PathBuf,
     cursor_pos: Position,
 ) -> anyhow::Result<Symbols> {
@@ -577,6 +586,7 @@ fn test_symbols_for_autocomplete<F: MoveFlavor>(
         ide_files_root,
         project_path.as_path(),
         LintLevel::None,
+        move_flavor,
         Some(Flavor::Sui),
         Some(cursor_path),
     )?;
@@ -597,6 +607,7 @@ fn test_symbols_for_autocomplete<F: MoveFlavor>(
 fn use_def_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<UseDefTest>>,
+    move_flavor: Arc<F>,
 ) -> datatest_stable::Result<String> {
     let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut project_path = base_path.clone();
@@ -610,6 +621,7 @@ fn use_def_test_suite<F: MoveFlavor>(
         packages_info.clone(),
         ide_files_root.clone(),
         project_path.clone(),
+        move_flavor.clone(),
         None,
     )?;
 
@@ -644,6 +656,7 @@ fn use_def_test_suite<F: MoveFlavor>(
                 packages_info.clone(),
                 ide_files_root.clone(),
                 project_path.clone(),
+                move_flavor.clone(),
                 Some(modifications),
             )?;
             symbols_opt = Some(incremental_symbols);
@@ -667,6 +680,7 @@ fn use_def_test_suite<F: MoveFlavor>(
 fn auto_completion_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<AutoCompletionTest>>,
+    move_flavor: Arc<F>,
 ) -> datatest_stable::Result<String> {
     // Create shared cache structure for all tests
     let packages_info = Arc::new(Mutex::new(CachedPackages::new()));
@@ -682,6 +696,7 @@ fn auto_completion_test_suite<F: MoveFlavor>(
         packages_info.clone(),
         ide_files_root.clone(),
         project_path.clone(),
+        move_flavor.clone(),
         None,
     )?;
 
@@ -706,6 +721,7 @@ fn auto_completion_test_suite<F: MoveFlavor>(
                 packages_info.clone(),
                 ide_files_root.clone(),
                 &project_path,
+                move_flavor.clone(),
                 writer,
                 &cpath,
             )?;
@@ -719,6 +735,7 @@ fn auto_completion_test_suite<F: MoveFlavor>(
 fn auto_import_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<AutoImportTest>>,
+    move_flavor: Arc<F>,
 ) -> datatest_stable::Result<String> {
     // Create shared cache structure for all tests
     let packages_info = Arc::new(Mutex::new(CachedPackages::new()));
@@ -734,6 +751,7 @@ fn auto_import_test_suite<F: MoveFlavor>(
         packages_info.clone(),
         ide_files_root.clone(),
         project_path.clone(),
+        move_flavor.clone(),
         None,
     )?;
 
@@ -758,6 +776,7 @@ fn auto_import_test_suite<F: MoveFlavor>(
                 packages_info.clone(),
                 ide_files_root.clone(),
                 &project_path,
+                move_flavor.clone(),
                 writer,
                 &cpath,
             )?;
@@ -771,6 +790,7 @@ fn auto_import_test_suite<F: MoveFlavor>(
 fn cursor_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<CursorTest>>,
+    move_flavor: Arc<F>,
 ) -> datatest_stable::Result<String> {
     let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut project_path = base_path.clone();
@@ -783,6 +803,7 @@ fn cursor_test_suite<F: MoveFlavor>(
         packages_info.clone(),
         ide_files_root,
         project_path.clone(),
+        move_flavor,
         None,
     )?;
 
@@ -811,6 +832,7 @@ fn cursor_test_suite<F: MoveFlavor>(
 fn hint_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<HintTest>>,
+    move_flavor: Arc<F>,
 ) -> datatest_stable::Result<String> {
     let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut project_path = base_path.clone();
@@ -824,6 +846,7 @@ fn hint_test_suite<F: MoveFlavor>(
         packages_info.clone(),
         ide_files_root.clone(),
         project_path.clone(),
+        move_flavor,
         None,
     )?;
 
@@ -853,6 +876,7 @@ fn hint_test_suite<F: MoveFlavor>(
 fn access_chain_quick_fix_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<AccessChainQuickFixTest>>,
+    move_flavor: Arc<F>,
 ) -> datatest_stable::Result<String> {
     let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut project_path = base_path.clone();
@@ -866,6 +890,7 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor>(
         packages_info.clone(),
         ide_files_root.clone(),
         project_path.clone(),
+        move_flavor,
         None,
     )?;
 
@@ -895,6 +920,7 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor>(
 fn references_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<ReferencesTest>>,
+    move_flavor: Arc<F>,
 ) -> datatest_stable::Result<String> {
     let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut project_path = base_path.clone();
@@ -907,6 +933,7 @@ fn references_test_suite<F: MoveFlavor>(
         packages_info.clone(),
         ide_files_root.clone(),
         project_path.clone(),
+        move_flavor,
         None,
     )?;
 
@@ -938,40 +965,41 @@ fn references_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
-fn move_ide_testsuite<F: MoveFlavor>(test_path: &Path) -> datatest_stable::Result<()> {
+fn move_ide_testsuite<F: MoveFlavor + Default>(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
     let suite: TestSuite = serde_json::from_reader(stripped)?;
+    let move_flavor = Arc::new(F::default());
 
     let output = match suite {
         TestSuite::UseDef {
             project,
             file_tests,
-        } => use_def_test_suite::<F>(project, file_tests),
+        } => use_def_test_suite::<F>(project, file_tests, move_flavor),
         TestSuite::AutoCompletion {
             project,
             file_tests,
-        } => auto_completion_test_suite::<F>(project, file_tests),
+        } => auto_completion_test_suite::<F>(project, file_tests, move_flavor),
         TestSuite::AutoImport {
             project,
             file_tests,
-        } => auto_import_test_suite::<F>(project, file_tests),
+        } => auto_import_test_suite::<F>(project, file_tests, move_flavor),
         TestSuite::Cursor {
             project,
             file_tests,
-        } => cursor_test_suite::<F>(project, file_tests),
+        } => cursor_test_suite::<F>(project, file_tests, move_flavor),
         TestSuite::Hint {
             project,
             file_tests,
-        } => hint_test_suite::<F>(project, file_tests),
+        } => hint_test_suite::<F>(project, file_tests, move_flavor),
         TestSuite::AccessChainQuickFixTest {
             project,
             file_tests,
-        } => access_chain_quick_fix_test_suite::<F>(project, file_tests),
+        } => access_chain_quick_fix_test_suite::<F>(project, file_tests, move_flavor),
         TestSuite::References {
             project,
             file_tests,
-        } => references_test_suite::<F>(project, file_tests),
+        } => references_test_suite::<F>(project, file_tests, move_flavor),
     }?;
 
     insta_assert! {

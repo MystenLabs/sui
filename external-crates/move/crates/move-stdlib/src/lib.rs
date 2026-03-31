@@ -12,6 +12,7 @@ use std::{
     fs,
     io::Stdout,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 #[cfg(test)]
@@ -75,6 +76,7 @@ pub async fn build_doc(output_directory: String) -> anyhow::Result<()> {
         .move_model_from_path::<Vanilla, Stdout>(
             Path::new(&modules_full_path()).parent().unwrap(),
             env,
+            Arc::new(Vanilla),
             &mut std::io::stdout(),
         )
         .await?;

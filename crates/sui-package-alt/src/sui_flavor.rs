@@ -56,7 +56,7 @@ pub struct PublishedMetadata {
 }
 
 impl MoveFlavor for SuiFlavor {
-    fn name() -> String {
+    fn name(&self) -> String {
         FLAVOR.to_string()
     }
 
@@ -66,13 +66,16 @@ impl MoveFlavor for SuiFlavor {
 
     type PackageMetadata = (); // TODO
 
-    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+    fn default_environments(&self) -> IndexMap<EnvironmentName, EnvironmentID> {
         let testnet = testnet_environment();
         let mainnet = mainnet_environment();
         IndexMap::from([(testnet.name, testnet.id), (mainnet.name, mainnet.id)])
     }
 
-    fn implicit_dependencies(_: &EnvironmentID) -> BTreeMap<PackageName, ReplacementDependency> {
+    async fn implicit_dependencies(
+        &self,
+        _: &EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency> {
         BTreeMap::from([
             (
                 PackageName::new("sui").expect("sui is a valid identifier"),
@@ -85,7 +88,10 @@ impl MoveFlavor for SuiFlavor {
         ])
     }
 
-    fn system_deps(_: &EnvironmentID) -> BTreeMap<SystemDepName, LockfileDependencyInfo> {
+    async fn system_deps(
+        &self,
+        _: &EnvironmentID,
+    ) -> BTreeMap<SystemDepName, LockfileDependencyInfo> {
         let mut deps = BTreeMap::new();
         let deps_to_skip = ["DeepBook".into()];
 
@@ -119,7 +125,7 @@ impl MoveFlavor for SuiFlavor {
         deps
     }
 
-    fn validate_manifest(manifest: &ParsedManifest) -> Result<(), String> {
+    fn validate_manifest(&self, manifest: &ParsedManifest) -> Result<(), String> {
         validate_modern_manifest_does_not_use_legacy_system_names(manifest)?;
         if manifest.package.edition == Some(Edition::DEVELOPMENT) {
             Err(Edition::DEVELOPMENT.unknown_edition_error().to_string())
@@ -128,7 +134,7 @@ impl MoveFlavor for SuiFlavor {
         }
     }
 
-    fn is_system_address(address: &move_package_alt::schema::OriginalID) -> bool {
+    fn is_system_address(&self, address: &move_package_alt::schema::OriginalID) -> bool {
         is_system_package(address.0)
     }
 }

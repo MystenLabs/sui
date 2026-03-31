@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::{
     errors::PackageResult,
@@ -10,6 +13,12 @@ use crate::{
 /// A Builder for the [RootPackage] type
 pub struct PackageLoader {
     config: PackageConfig,
+}
+
+/// A [PackageLoader] paired with a [MoveFlavor] instance, ready to load a package.
+pub struct FlavoredLoader<F: MoveFlavor> {
+    config: PackageConfig,
+    flavor: Arc<F>,
 }
 
 #[derive(Clone, Debug)]
@@ -131,19 +140,28 @@ impl PackageLoader {
         self
     }
 
+    /// Pair this loader with a [MoveFlavor] instance, returning a [FlavoredLoader] that can load
+    /// the package.
+    pub fn with_flavor<F: MoveFlavor>(self, flavor: Arc<F>) -> FlavoredLoader<F> {
+        FlavoredLoader {
+            config: self.config,
+            flavor,
+        }
+    }
+
     /// Load the root package. Note that loading does not write to the lockfile; you should call
     /// [RootPackage::write_pinned_deps] to save the results.
     ///
     /// By default `load` attempts to load the package from the lockfile, and repins if it is
     /// missing or out-of-date. However, this behavior can be changed using [Self::ignore_digests] and
     /// [Self::force_repin]
-    pub async fn load<F: MoveFlavor>(self) -> PackageResult<RootPackage<F>> {
-        RootPackage::validate_and_construct(self.config).await
+    pub async fn load<F: MoveFlavor>(self, flavor: Arc<F>) -> PackageResult<RootPackage<F>> {
+        RootPackage::validate_and_construct(self.config, flavor).await
     }
 
     /// Block the current thread and call [Self::load]
-    pub fn load_sync<F: MoveFlavor>(self) -> PackageResult<RootPackage<F>> {
-        block_on!(RootPackage::validate_and_construct(self.config))
+    pub fn load_sync<F: MoveFlavor>(self, flavor: Arc<F>) -> PackageResult<RootPackage<F>> {
+        block_on!(RootPackage::validate_and_construct(self.config, flavor))
     }
 
     pub(crate) fn config(&self) -> &PackageConfig {
@@ -163,6 +181,18 @@ impl PackageConfig {
             ignore_digests: false,
             allow_dirty: false,
         }
+    }
+}
+
+impl<F: MoveFlavor> FlavoredLoader<F> {
+    /// Load the root package using the configured flavor.
+    pub async fn load(self) -> PackageResult<RootPackage<F>> {
+        RootPackage::validate_and_construct(self.config, self.flavor).await
+    }
+
+    /// Block the current thread and call [Self::load]
+    pub fn load_sync(self) -> PackageResult<RootPackage<F>> {
+        block_on!(RootPackage::validate_and_construct(self.config, self.flavor))
     }
 }
 

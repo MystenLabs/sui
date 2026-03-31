@@ -299,7 +299,7 @@ impl PackageRebuilder {
         // Create build config (following build.rs pattern)
         let config = MoveBuildConfig::default();
 
-        let envs = RootPackage::<SuiFlavor>::environments(&self.source_path)?;
+        let envs = RootPackage::<SuiFlavor>::environments(&self.source_path, &SuiFlavor)?;
         let Some(env_id) = envs.get(&self.env) else {
             todo!()
         };

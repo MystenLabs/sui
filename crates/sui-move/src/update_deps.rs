@@ -7,7 +7,7 @@ use move_cli::base::{reroot_path, update_deps};
 use move_package_alt_compilation::build_config::BuildConfig;
 use sui_sdk::wallet_context::WalletContext;
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use sui_package_alt::{SuiFlavor, find_environment};
 
@@ -29,7 +29,7 @@ impl UpdateDeps {
         let environment =
             find_environment(&path, build_config.environment.clone(), wallet, false).await?;
         self.update_deps
-            .execute::<SuiFlavor>(Some(&path), &build_config, environment)
+            .execute::<SuiFlavor>(Some(&path), &build_config, environment, Arc::new(SuiFlavor))
             .await
     }
 }

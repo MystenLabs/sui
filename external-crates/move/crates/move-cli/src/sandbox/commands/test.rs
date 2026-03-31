@@ -12,6 +12,7 @@ use move_compiler::command_line::COLOR_MODE_ENV_VAR;
 use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules, TraceConsumer};
 
 use move_package_alt::{PackageLoader, RootPackage, SourcePackageLayout, Vanilla};
+use std::sync::Arc;
 use move_package_alt_compilation::{
     layout::CompiledPackageLayout, on_disk_package::OnDiskCompiledPackage,
 };
@@ -147,7 +148,7 @@ fn package_paths(pkg_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let root_pkg: RootPackage<Vanilla> =
         PackageLoader::new(pkg_dir, Vanilla::default_environment())
             .modes(vec!["test".into()])
-            .load_sync()?;
+            .load_sync(Arc::new(Vanilla))?;
 
     let packages = root_pkg.packages();
 

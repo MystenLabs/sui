@@ -9,6 +9,7 @@ use std::{
 
 use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::{build_config::BuildConfig, find_env};
+use std::sync::Arc;
 
 use super::reroot_path;
 
@@ -22,12 +23,13 @@ impl Migrate {
         self,
         path: Option<&Path>,
         config: BuildConfig,
+        flavor: Arc<F>,
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
-        let env = find_env::<F>(&rerooted_path, &config.clone())?;
+        let env = find_env::<F>(&rerooted_path, &config.clone(), &flavor)?;
         let mut reader: Box<dyn BufRead + Send> = Box::new(BufReader::new(io::stdin()));
         config
-            .migrate_package::<F, _, _>(&rerooted_path, env, &mut io::stdout(), &mut reader)
+            .migrate_package::<F, _, _>(&rerooted_path, env, flavor, &mut io::stdout(), &mut reader)
             .await?;
         Ok(())
     }

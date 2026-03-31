@@ -95,7 +95,7 @@ mod compatibility_tests {
                     .join(&package.path);
 
                 let root_pkg = PackageLoader::new(&package_path, testnet_environment())
-                    .load::<SuiFlavor>()
+                    .load(std::sync::Arc::new(SuiFlavor))
                     .await
                     .expect("can load system packages");
 

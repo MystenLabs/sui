@@ -11,7 +11,7 @@ use tempfile::TempDir;
 use move_package_alt::{RootPackage, Vanilla};
 use move_package_alt_compilation::{build_config::BuildConfig, model_builder};
 
-use std::{collections::BTreeSet, io::BufRead, path::Path};
+use std::{collections::BTreeSet, io::BufRead, path::Path, sync::Arc};
 
 fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     let pkg_dir = file_path.parent().unwrap();
@@ -27,7 +27,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     // Block on the async function
     let env = Vanilla::default_environment();
-    let root_pkg: RootPackage<Vanilla> = config.package_loader(pkg_dir, &env).load_sync()?;
+    let root_pkg: RootPackage<Vanilla> = config.package_loader(pkg_dir, &env).load_sync(Arc::new(Vanilla))?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()

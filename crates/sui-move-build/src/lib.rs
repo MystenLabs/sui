@@ -32,6 +32,7 @@ use move_package_alt_compilation::{
 };
 use move_symbol_pool::Symbol;
 
+use std::sync::Arc;
 use sui_package_alt::{SuiFlavor, testnet_environment};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
@@ -182,7 +183,7 @@ impl BuildConfig {
         let mut root_pkg = self
             .config
             .package_loader(path, &self.environment)
-            .load()
+            .load(Arc::new(SuiFlavor))
             .await?;
 
         self.internal_build(&mut root_pkg)
@@ -202,7 +203,7 @@ impl BuildConfig {
         let mut root_pkg = self
             .config
             .package_loader(path, &self.environment)
-            .load_sync()?;
+            .load_sync(Arc::new(SuiFlavor))?;
 
         self.internal_build(&mut root_pkg)
     }

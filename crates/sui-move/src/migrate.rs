@@ -4,7 +4,7 @@
 use clap::Parser;
 use move_cli::base::migrate;
 use move_package_alt_compilation::build_config::BuildConfig;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 use sui_package_alt::SuiFlavor;
 
 #[derive(Parser)]
@@ -16,6 +16,8 @@ pub struct Migrate {
 
 impl Migrate {
     pub async fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
-        self.migrate.execute::<SuiFlavor>(path, config).await
+        self.migrate
+            .execute::<SuiFlavor>(path, config, Arc::new(SuiFlavor))
+            .await
     }
 }

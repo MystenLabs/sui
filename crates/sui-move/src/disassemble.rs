@@ -12,6 +12,7 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use sui_package_alt::SuiFlavor;
 
 #[derive(Parser)]
@@ -55,7 +56,7 @@ impl Disassemble {
                 debug: self.debug,
                 bytecode_map: self.bytecode_map,
             }
-            .execute::<SuiFlavor>(package_path, build_config)
+            .execute::<SuiFlavor>(package_path, build_config, Arc::new(SuiFlavor))
             .await?;
             return Ok(());
         }

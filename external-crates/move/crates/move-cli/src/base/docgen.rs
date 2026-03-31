@@ -12,6 +12,7 @@ use crate::base::reroot_path;
 use move_docgen::{DocgenFlags, DocgenOptions};
 use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::{build_config::BuildConfig, find_env};
+use std::sync::Arc;
 
 /// Generate Rust style documentation for Move packages
 #[derive(Parser)]
@@ -40,11 +41,12 @@ impl Docgen {
         self,
         path: Option<&Path>,
         config: BuildConfig,
+        flavor: Arc<F>,
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
-        let env = find_env::<F>(&rerooted_path, &config)?;
+        let env = find_env::<F>(&rerooted_path, &config, &flavor)?;
         let model = config
-            .move_model_from_path::<F, _>(&rerooted_path, env, &mut std::io::stdout())
+            .move_model_from_path::<F, _>(&rerooted_path, env, flavor, &mut std::io::stdout())
             .await?;
 
         let mut options = DocgenOptions {

@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt, path::Path};
+use std::{collections::BTreeMap, fmt, path::Path, sync::Arc};
 
 use indexmap::IndexMap;
 use tracing::debug;
@@ -60,10 +60,11 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
 impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     pub fn environments(
         path: impl AsRef<Path>,
+        flavor: &F,
     ) -> PackageResult<IndexMap<EnvironmentName, EnvironmentID>> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let mtx = package_path.lock()?;
-        let mut environments = F::default_environments();
+        let mut environments = flavor.default_environments();
 
         if let Ok(modern_manifest) = Manifest::read_from_file(&package_path, &mtx) {
             environments.extend(modern_manifest.environments());
@@ -84,7 +85,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// This helps validate:
     /// 1. TODO: Fill this in! (deduplicate nodes etc)
-    pub(crate) async fn validate_and_construct(mut config: PackageConfig) -> PackageResult<Self> {
+    pub(crate) async fn validate_and_construct(
+        mut config: PackageConfig,
+        flavor: Arc<F>,
+    ) -> PackageResult<Self> {
         let input_path = PackagePath::new(config.input_path.clone())?;
         let mutex = input_path.lock()?;
 
@@ -107,20 +111,22 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         debug!("loading unfiltered graph");
         let unfiltered_graph = if config.force_repin {
-            PackageGraph::<F>::load_from_manifests(&input_path, &env, &mutex, &config).await?
+            PackageGraph::load_from_manifests(&input_path, &env, &mutex, &config, &*flavor).await?
         } else if config.ignore_digests {
-            PackageGraph::<F>::load_from_lockfile_ignore_digests(&input_path, &env, &mutex, &config)
-                .await?
-                .unwrap()
+            PackageGraph::load_from_lockfile_ignore_digests(
+                &input_path, &env, &mutex, &config, &*flavor,
+            )
+            .await?
+            .unwrap()
         } else {
-            PackageGraph::<F>::load(&input_path, &env, &mutex, &config).await?
+            PackageGraph::load(&input_path, &env, &mutex, &config, &*flavor).await?
         };
 
         debug!("filtering graph");
         let mut filtered_graph = unfiltered_graph.filter_for_mode(&config.modes).linkage()?;
         if let Some(ephemeral_pubs) = ephemeral_pubs {
             debug!("adding overrides");
-            filtered_graph.make_ephemeral(localpubs_to_publications(&ephemeral_pubs)?);
+            filtered_graph.make_ephemeral(localpubs_to_publications(&ephemeral_pubs)?, &*flavor);
         }
 
         debug!("checking rename-from");

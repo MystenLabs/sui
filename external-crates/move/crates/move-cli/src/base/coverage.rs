@@ -12,6 +12,7 @@ use move_disassembler::disassembler::Disassembler;
 use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 
 use move_package_alt::{MoveFlavor, schema::Environment};
+use std::sync::Arc;
 use move_trace_format::format::MoveTraceReader;
 use move_unit_test::TRACE_DIR;
 use std::{
@@ -77,18 +78,20 @@ impl Coverage {
         self,
         path: Option<&Path>,
         config: BuildConfig,
+        flavor: Arc<F>,
     ) -> anyhow::Result<()> {
         let path = reroot_path(path)?;
-        let env = find_env::<F>(&path, &config)?;
+        let env = find_env::<F>(&path, &config, &flavor)?;
 
         // We treat lcov-format coverage differently because it requires traces to be present, and
         // we don't use the old trace format for it.
         if let CoverageSummaryOptions::Lcov { differential, test } = self.options {
-            return Self::output_lcov_coverage::<F>(path, &env, config, differential, test).await;
+            return Self::output_lcov_coverage::<F>(path, &env, config, flavor, differential, test)
+                .await;
         }
 
         let package = config
-            .compile_package::<F, _>(&path, &env, &mut Vec::new())
+            .compile_package::<F, _>(&path, &env, flavor, &mut Vec::new())
             .await?;
         let modules = package.root_modules().map(|unit| &unit.unit.module);
         let coverage_map = CoverageMap::from_binary_file(path.join(".coverage_map.mvcov"))?;
@@ -145,13 +148,14 @@ impl Coverage {
         path: PathBuf,
         env: &Environment,
         mut config: BuildConfig,
+        flavor: Arc<F>,
         differential: Option<String>,
         test: Option<String>,
     ) -> anyhow::Result<()> {
         // Make sure we always compile the package in test mode so we get correct source maps.
         config.test_mode = true;
         let package = config
-            .compile_package::<F, _>(&path, env, &mut Vec::new())
+            .compile_package::<F, _>(&path, env, flavor, &mut Vec::new())
             .await?;
         let units: Vec<_> = package
             .all_compiled_units_with_source()

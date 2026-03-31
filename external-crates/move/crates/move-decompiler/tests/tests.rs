@@ -10,7 +10,7 @@ use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
 
-use std::{collections::BTreeSet, io::BufRead, path::Path};
+use std::{collections::BTreeSet, io::BufRead, path::Path, sync::Arc};
 
 // -------------------------------------------------------------------------------------------------
 // Structuring Unit Tests
@@ -42,7 +42,7 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     let mut writer = Vec::new();
     let env = Vanilla::default_environment();
-    let root_pkg: RootPackage<Vanilla> = config.package_loader(pkg_dir, &env).load_sync()?;
+    let root_pkg: RootPackage<Vanilla> = config.package_loader(pkg_dir, &env).load_sync(Arc::new(Vanilla))?;
 
     let model = model_builder::build(&mut writer, &root_pkg, &config)?;
 
@@ -91,7 +91,7 @@ fn run_full_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     let mut writer = Vec::new();
     let env = Vanilla::default_environment();
-    let loaded_root_pkg: RootPackage<Vanilla> = config.package_loader(pkg_dir, &env).load_sync()?;
+    let loaded_root_pkg: RootPackage<Vanilla> = config.package_loader(pkg_dir, &env).load_sync(Arc::new(Vanilla))?;
     let root_pkg_info = loaded_root_pkg.package_info();
     let root_pkg = root_pkg_info.display_name();
 

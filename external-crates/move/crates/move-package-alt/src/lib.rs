@@ -28,5 +28,7 @@ pub use flavor::{MoveFlavor, Vanilla};
 pub use graph::{NamedAddress, PackageInfo};
 pub use package::layout::SourcePackageLayout;
 pub use package::{
-    RootPackage, package_impl::cache_package, package_loader::PackageLoader, paths::PackagePath,
+    RootPackage, package_impl::cache_package,
+    package_loader::{FlavoredLoader, PackageLoader},
+    paths::PackagePath,
 };

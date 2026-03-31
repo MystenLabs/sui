@@ -8,6 +8,7 @@ use move_package_alt_compilation::build_config::BuildConfig;
 use move_package_alt_compilation::model_builder;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::TempDir;
 
 const ROOT_DOC_TEMPLATE_NAME: &str = "root_template.md";
@@ -54,7 +55,7 @@ fn test_impl(toml_path: &Path, flags: DocgenFlags, test_case: &str) -> datatest_
     let env = Vanilla::default_environment();
     let root_pkg: RootPackage<Vanilla> = config
         .package_loader(toml_path.parent().unwrap(), &env)
-        .load_sync()?;
+        .load_sync(Arc::new(Vanilla))?;
     let model = model_builder::build(&mut w, &root_pkg, &config)?;
     let root_doc_template: PathBuf = test_dir.join(ROOT_DOC_TEMPLATE_NAME);
     let root_doc_template = if root_doc_template.is_file() {

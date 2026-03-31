@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::bail;
 use clap::{ArgAction, Parser};
@@ -37,7 +37,8 @@ impl UpdateDeps {
     pub async fn execute(&self) -> anyhow::Result<()> {
         let path = self.path.clone().unwrap_or(PathBuf::from("."));
 
-        let envs = RootPackage::<Vanilla>::environments(&path)?;
+        let flavor = Vanilla;
+        let envs = RootPackage::<Vanilla>::environments(&path, &flavor)?;
 
         let Some(chain_id) = envs.get(&self.environment) else {
             bail!("Environment {} not found", self.environment);
@@ -48,7 +49,7 @@ impl UpdateDeps {
         let mut root_package: RootPackage<Vanilla> = PackageLoader::new(&path, environment)
             .modes(self.modes.clone())
             .force_repin(true)
-            .load()
+            .load(Arc::new(flavor))
             .await?;
 
         root_package.save_lockfile_to_disk()?;
