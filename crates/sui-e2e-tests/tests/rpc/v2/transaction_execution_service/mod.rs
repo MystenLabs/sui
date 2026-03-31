@@ -183,7 +183,9 @@ async fn execute_transaction_too_many_signatures() {
         .build()
         .await;
 
-    let mut client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut client = TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
 
     let txn =
         make_transfer_sui_transaction(&test_cluster.wallet, Some(SuiAddress::ZERO), None).await;
