@@ -23,7 +23,7 @@ use crate::package::package_loader::PackageConfig;
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{EphemeralDependencyInfo, ModeName, Publication};
 use crate::{
-    dependency::PinnedDependencyInfo,
+    dependency::PinnedDependency,
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{Package, paths::PackagePath},
@@ -50,7 +50,7 @@ pub(crate) struct PackageGraph<F: MoveFlavor> {
     package_ids: BiBTreeMap<PackageID, NodeIndex>,
 
     /// The actual nodes and edges of the graph
-    inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo>,
+    inner: DiGraph<Arc<Package<F>>, PinnedDependency>,
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {

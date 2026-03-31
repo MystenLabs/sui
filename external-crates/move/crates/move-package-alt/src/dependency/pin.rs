@@ -15,14 +15,18 @@ use crate::{
     package::paths::PackagePath,
     schema::{
         EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
-        LockfileDependencyInfo, LockfileGitDepInfo, ManifestDependencyInfo, ManifestGitDependency,
-        ModeName, OnChainDepInfo, PackageName, RenderToml, ResolverDependencyInfo, RootDepInfo,
+        LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
+        OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
     },
 };
 
-use super::{CombinedDependency, DependencyContext, resolve::ResolvedDependency};
+use super::{
+    CombinedDependency, DependencyContext,
+    combine::Combined,
+    resolve::{Resolved, ResolvedDependency},
+};
 
-/// [PinnedDependencyInfo] wraps a [Pinned] with a [DependencyContext]. The [Pinned] value is
+/// [PinnedDependency] wraps a [Pinned] with a [DependencyContext]. The [Pinned] value is
 /// guaranteed to always resolve to the same package source. For example, a git dependency with a
 /// branch or tag revision may change over time (and is thus not pinned), whereas a git dependency
 /// with a sha revision is always guaranteed to produce the same files.
@@ -34,7 +38,7 @@ pub enum Pinned {
     Root(PackagePath),
 }
 
-/// Invariant: if a PinnedDependencyInfo has `dep_info` `Root`, then its `containing_file` is either a
+/// Invariant: if a PinnedDependency has `dep_info` `Root`, then its `containing_file` is either a
 /// manifest or a lockfile in the directory containing the root package
 #[derive(Clone, Debug)]
 pub struct PinnedGitDependency {
@@ -55,12 +59,12 @@ pub struct PinnedLocalDependency {
 
 /// A dependency that has been pinned to a specific version.
 #[derive(Debug, Clone)]
-pub struct PinnedDependencyInfo {
+pub struct PinnedDependency {
     context: DependencyContext,
     dep_info: Pinned,
 }
 
-impl PinnedDependencyInfo {
+impl PinnedDependency {
     /// Replace all dependencies in `deps` with their pinned versions:
     ///  - first, all external dependencies are resolved (in environment `environment_id`)
     ///  - next, the revisions for git dependencies are replaced with 40-character shas
@@ -70,7 +74,7 @@ impl PinnedDependencyInfo {
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
         flavor: &F,
-    ) -> PackageResult<Vec<PinnedDependencyInfo>> {
+    ) -> PackageResult<Vec<PinnedDependency>> {
         debug!("pinning dependencies");
         // replace all system dependencies using the flavor
         let (non_system_deps, mut result) =
@@ -82,12 +86,12 @@ impl PinnedDependencyInfo {
         // pinning - fix git shas and normalize local deps
         for dep in deps.into_iter() {
             let transformed = match dep.dep_info {
-                ResolverDependencyInfo::Local(ref loc) => loc.clone().pin(parent)?,
-                ResolverDependencyInfo::Git(ref git) => git.pin().await?,
-                ResolverDependencyInfo::OnChain(_) => todo!(),
+                Resolved::Local(ref loc) => loc.clone().pin(parent)?,
+                Resolved::Git(ref git) => git.pin().await?,
+                Resolved::OnChain(_) => todo!(),
             };
 
-            result.push(PinnedDependencyInfo {
+            result.push(PinnedDependency {
                 context: dep.context,
                 dep_info: transformed,
             });
@@ -111,7 +115,7 @@ impl PinnedDependencyInfo {
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
         flavor: &F,
-    ) -> PackageResult<(Vec<CombinedDependency>, Vec<PinnedDependencyInfo>)> {
+    ) -> PackageResult<(Vec<CombinedDependency>, Vec<PinnedDependency>)> {
         let all_system_deps = flavor.system_deps(environment_id).await;
         let valid_list = move_compiler::format_oxford_list!(
             "and",
@@ -119,11 +123,11 @@ impl PinnedDependencyInfo {
             all_system_deps.keys().collect::<Vec<&String>>()
         );
 
-        let mut system_deps: Vec<PinnedDependencyInfo> = Vec::new();
+        let mut system_deps: Vec<PinnedDependency> = Vec::new();
         let mut non_system_deps: Vec<CombinedDependency> = Vec::new();
 
         for dep in deps.into_iter() {
-            if let ManifestDependencyInfo::System(sys) = &dep.dep_info {
+            if let Combined::System(sys) = &dep.dep_info {
                 let lockfile_dep =
                     all_system_deps
                         .get(&sys.system)
@@ -132,7 +136,7 @@ impl PinnedDependencyInfo {
                             valid: valid_list.to_string(),
                         })?;
                 let file = dep.context.containing_file;
-                let pinned_dep = PinnedDependencyInfo {
+                let pinned_dep = PinnedDependency {
                     context: dep.context,
                     dep_info: Pinned::from_lockfile(file, lockfile_dep)
                         .expect("system dependencies are valid pins"),
@@ -176,7 +180,7 @@ impl PinnedDependencyInfo {
     }
 }
 
-impl AsRef<Pinned> for PinnedDependencyInfo {
+impl AsRef<Pinned> for PinnedDependency {
     fn as_ref(&self) -> &Pinned {
         &self.dep_info
     }
@@ -315,8 +319,8 @@ impl LocalDepInfo {
     }
 }
 
-impl From<PinnedDependencyInfo> for LockfileDependencyInfo {
-    fn from(value: PinnedDependencyInfo) -> Self {
+impl From<PinnedDependency> for LockfileDependencyInfo {
+    fn from(value: PinnedDependency) -> Self {
         value.dep_info.into()
     }
 }
@@ -570,7 +574,7 @@ mod tests {
         }
     }
 
-    impl<E: std::fmt::Debug> Helpers for Result<PinnedDependencyInfo, E> {
+    impl<E: std::fmt::Debug> Helpers for Result<PinnedDependency, E> {
         fn unwrap_as_local(self) -> PinnedLocalDependency {
             self.map(|dep| dep.dep_info).unwrap_as_local()
         }
@@ -596,7 +600,7 @@ mod tests {
         }
     }
 
-    impl Helpers for PinnedDependencyInfo {
+    impl Helpers for PinnedDependency {
         fn unwrap_as_local(self) -> PinnedLocalDependency {
             self.dep_info.unwrap_as_local()
         }

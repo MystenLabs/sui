@@ -22,7 +22,7 @@ pub(super) type Combined = ManifestDependencyInfo;
 
 /// A [CombinedDependency] contains dependency information from the `[dependencies]` and
 /// `[dep-replacements]` sections of a Move.toml file. System dependencies may be present
-/// temporarily but are filtered out during pinning (see [PinnedDependencyInfo::replace_system_deps]).
+/// temporarily but are filtered out during pinning (see [PinnedDependency::replace_system_deps]).
 #[derive(Debug, Clone)]
 pub struct CombinedDependency {
     pub(super) context: DependencyContext,

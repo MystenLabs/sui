@@ -23,12 +23,12 @@ use crate::{
     logging::user_info,
     package::{EnvironmentID, EnvironmentName},
     schema::{
-        EXTERNAL_RESOLVE_ARG, ManifestDependencyInfo, PackageName, ResolveRequest, ResolveResponse,
-        ResolverDependencyInfo, ResolverName,
+        EXTERNAL_RESOLVE_ARG, PackageName, ResolveRequest, ResolveResponse, ResolverDependencyInfo,
+        ResolverName,
     },
 };
 
-use super::{CombinedDependency, DependencyContext};
+use super::{CombinedDependency, DependencyContext, combine::Combined};
 
 /// The dep_info type for the resolved stage.
 pub(super) type Resolved = ResolverDependencyInfo;
@@ -96,7 +96,7 @@ impl ResolvedDependency {
             BTreeMap::new();
 
         for dep in deps.iter() {
-            if let ManifestDependencyInfo::External(ext) = &dep.dep_info {
+            if let Combined::External(ext) = &dep.dep_info {
                 requests.entry(ext.resolver.clone()).or_default().insert(
                     dep.context.name.clone(),
                     ResolveRequest {
@@ -125,13 +125,13 @@ impl ResolvedDependency {
             result.push(ResolvedDependency {
                 context: dep.context,
                 dep_info: match dep.dep_info {
-                    ManifestDependencyInfo::Local(loc) => Resolved::Local(loc),
-                    ManifestDependencyInfo::Git(git) => Resolved::Git(git),
-                    ManifestDependencyInfo::OnChain(onchain) => Resolved::OnChain(onchain),
-                    ManifestDependencyInfo::External(_) => {
+                    Combined::Local(loc) => Resolved::Local(loc),
+                    Combined::Git(git) => Resolved::Git(git),
+                    Combined::OnChain(onchain) => Resolved::OnChain(onchain),
+                    Combined::External(_) => {
                         ext.expect("resolve_single outputs same keys as input")
                     }
-                    ManifestDependencyInfo::System(_) => panic!(
+                    Combined::System(_) => panic!(
                         "invariant violation; all system dependencies should already be transformed"
                     ),
                 },

@@ -23,7 +23,7 @@ use crate::{
 };
 use crate::{dependency::fetch, schema::ReplacementDependency};
 use crate::{
-    dependency::{CombinedDependency, PinnedDependencyInfo},
+    dependency::{CombinedDependency, PinnedDependency},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::manifest::Digest,
@@ -337,7 +337,7 @@ pub async fn cache_package<F: MoveFlavor>(
     // pin
     let root = Pinned::Root(dummy_path.clone());
     let flavor = Arc::new(flavor);
-    let deps = PinnedDependencyInfo::pin(&root, vec![combined], env.id(), &*flavor).await?;
+    let deps = PinnedDependency::pin(&root, vec![combined], env.id(), &*flavor).await?;
 
     // load
     let package = Package::<F>::load(
