@@ -314,12 +314,8 @@ impl SubmitTxRequest {
     }
 
     pub fn tx_type(&self) -> TxType {
-        if let Some(ping_type) = self.ping_type {
-            return if ping_type == PingType::FastPath {
-                TxType::SingleWriter
-            } else {
-                TxType::SharedObject
-            };
+        if self.ping_type.is_some() {
+            return TxType::SharedObject;
         }
         let transaction = self.transaction.as_ref().unwrap();
         if transaction.is_consensus_tx() {
@@ -474,15 +470,11 @@ pub enum PingType {
     /// Measures the end to end latency from when a transaction is included by a proposed block,
     /// to when the block is committed by consensus.
     Consensus = 0,
-    /// Measures the end to end latency from when a transaction is included by a proposed block,
-    /// to when the block is certified.
-    FastPath = 1,
 }
 
 impl PingType {
     pub fn as_str(&self) -> &str {
         match self {
-            PingType::FastPath => "fastpath",
             PingType::Consensus => "consensus",
         }
     }
@@ -1094,7 +1086,7 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
 #[cfg(test)]
 mod tests {
     use crate::{
-        messages_grpc::{PingType, SubmitTxRequest, SubmitTxType},
+        messages_grpc::{SubmitTxRequest, SubmitTxType},
         transaction::{Transaction, TransactionData},
     };
 

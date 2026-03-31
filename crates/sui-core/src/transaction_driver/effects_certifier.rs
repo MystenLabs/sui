@@ -114,7 +114,7 @@ impl EffectsCertifier {
         };
 
         let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, vec![], vec![]);
-        let ping_type = get_ping_type(&tx_digest, tx_type);
+        let ping_type = get_ping_type(&tx_digest);
 
         // Channel for wait_for_acknowledgments to notify which validators have acked.
         // These validators are known to have executed the transaction, making them good
@@ -241,14 +241,14 @@ impl EffectsCertifier {
         &self,
         client: Arc<SafeClient<A>>,
         tx_digest: Option<TransactionDigest>,
-        tx_type: TxType,
+        _tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
     ) -> FullEffectsResult
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let ping_type = get_ping_type(&tx_digest, tx_type);
+        let ping_type = get_ping_type(&tx_digest);
         let request = WaitForEffectsRequest {
             transaction_digest: tx_digest,
             consensus_position,
@@ -395,7 +395,7 @@ impl EffectsCertifier {
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let ping_type = get_ping_type(&tx_digest, tx_type);
+        let ping_type = get_ping_type(&tx_digest);
         let ping_label = if tx_digest.is_none() { "true" } else { "false" };
         self.metrics
             .certified_effects_ack_attempts
@@ -759,12 +759,9 @@ impl EffectsCertifier {
     }
 }
 
-fn get_ping_type(tx_digest: &Option<TransactionDigest>, tx_type: TxType) -> Option<PingType> {
+fn get_ping_type(tx_digest: &Option<TransactionDigest>) -> Option<PingType> {
     if tx_digest.is_none() {
-        Some(match tx_type {
-            TxType::SingleWriter => PingType::FastPath,
-            TxType::SharedObject => PingType::Consensus,
-        })
+        Some(PingType::Consensus)
     } else {
         None
     }

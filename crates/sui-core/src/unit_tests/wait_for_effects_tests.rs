@@ -439,7 +439,7 @@ async fn test_wait_for_effects_ping() {
             transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
-            ping_type: Some(PingType::FastPath),
+            ping_type: Some(PingType::Consensus),
         };
 
         let state_clone = test_context.state.clone();

@@ -138,8 +138,7 @@ impl ClientObservedStats {
             return MAX_LATENCY;
         };
 
-        // Both single writer and shared object transactions now go through consensus
-        let operation = OperationType::Consensus;
+        let operation = OperationType::SharedObjectFinality;
         let Some(latency) = stats.average_latencies.get(&operation) else {
             // For the target validator and operation type, no latency data has been recorded yet.
             return MAX_LATENCY;

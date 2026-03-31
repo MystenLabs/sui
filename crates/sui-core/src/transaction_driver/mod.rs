@@ -362,9 +362,9 @@ where
                     authority_name: name,
                     display_name: auth_agg.get_display_name(&name),
                     operation: if tx_type == TxType::SingleWriter {
-                        OperationType::FastPath
+                        OperationType::SingleWriterFinality
                     } else {
-                        OperationType::Consensus
+                        OperationType::SharedObjectFinality
                     },
                     ping_type,
                     result: Ok(start_time.elapsed()),

@@ -852,7 +852,7 @@ impl ValidatorService {
                             let executed_result = SubmitTxResult::Executed {
                                 effects_digest,
                                 details: Some(executed_data),
-                                    };
+                            };
                             results[idx] = Some(executed_result);
                             continue;
                         }
@@ -1243,11 +1243,9 @@ impl ValidatorService {
                     effects_digest: TransactionEffectsDigest::ZERO,
                     details,
                 }),
-                ConsensusTxStatus::Dropped => {
-                    Ok(WaitForEffectsResponse::Rejected {
-                        error: epoch_store.get_rejection_vote_reason(consensus_position),
-                    })
-                }
+                ConsensusTxStatus::Dropped => Ok(WaitForEffectsResponse::Rejected {
+                    error: epoch_store.get_rejection_vote_reason(consensus_position),
+                }),
             },
             NotifyReadConsensusTxStatusResult::Expired(round) => {
                 Ok(WaitForEffectsResponse::Expired {
