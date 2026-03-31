@@ -510,7 +510,8 @@ async fn party_object_read() {
         .submit_and_execute(signed_transfer.clone(), None)
         .await
         .unwrap();
-    all_digests.push(*signed_transfer.digest());
+    let transfer_digest = *signed_transfer.digest();
+    all_digests.push(transfer_digest);
 
     // Find the party object in the mutated objects and get its new start version
     let mutated_party = transfer_effects
@@ -519,6 +520,20 @@ async fn party_object_read() {
         .find(|obj| matches!(obj.1, Owner::ConsensusAddressOwner { .. }))
         .expect("Party object should be mutated");
     object_initial_shared_version = mutated_party.1.start_version().unwrap();
+
+    // Wait for all validators to execute the transfer before submitting reads with the
+    // new initial_shared_version. Without this, a validator that hasn't processed the
+    // transfer yet will reject the read (full_id mismatch on start_version).
+    for handle in test_cluster.all_node_handles() {
+        handle
+            .with_async(|node| async move {
+                node.state()
+                    .get_transaction_cache_reader()
+                    .notify_read_executed_effects("", &[transfer_digest])
+                    .await;
+            })
+            .await;
+    }
 
     // Make some more transactions that read the party object from the new owner.
     for gas_coin in gas_coins_account2.iter().take(num_reads / 2) {
