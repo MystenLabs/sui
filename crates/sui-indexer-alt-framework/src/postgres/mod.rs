@@ -167,6 +167,7 @@ pub mod tests {
         assert_eq!(indexer.last_checkpoint, None);
         assert_eq!(indexer.next_checkpoint, 0);
         assert_eq!(indexer.next_sequential_checkpoint, None);
+        assert_eq!(indexer.reader_lo, Some(0));
     }
 
     #[tokio::test]
@@ -191,6 +192,7 @@ pub mod tests {
         assert_eq!(indexer.last_checkpoint, None);
         assert_eq!(indexer.next_checkpoint, 11);
         assert_eq!(indexer.next_sequential_checkpoint, None);
+        assert_eq!(indexer.reader_lo, Some(0));
     }
 
     #[tokio::test]
@@ -227,6 +229,7 @@ pub mod tests {
         assert_eq!(indexer.last_checkpoint, None);
         assert_eq!(indexer.next_checkpoint, 21);
         assert_eq!(indexer.next_sequential_checkpoint, None);
+        assert_eq!(indexer.reader_lo, Some(0));
         indexer
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
@@ -234,5 +237,6 @@ pub mod tests {
         assert_eq!(indexer.last_checkpoint, None);
         assert_eq!(indexer.next_checkpoint, 11);
         assert_eq!(indexer.next_sequential_checkpoint, None);
+        assert_eq!(indexer.reader_lo, Some(0));
     }
 }

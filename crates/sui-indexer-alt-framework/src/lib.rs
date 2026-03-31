@@ -15,11 +15,12 @@ use ingestion::IngestionService;
 use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
 use prometheus::Registry;
-use sui_indexer_alt_framework_store_traits::ConcurrentStore;
 use sui_indexer_alt_framework_store_traits::Connection;
 use sui_indexer_alt_framework_store_traits::SequentialStore;
 use sui_indexer_alt_framework_store_traits::Store;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
+use sui_indexer_alt_framework_store_traits::ConcurrentStore;
+use sui_indexer_alt_framework_store_traits::InitWatermark;
 use tracing::info;
 
 use crate::metrics::IngestionMetrics;
@@ -135,6 +136,10 @@ pub struct Indexer<S: Store> {
     /// the regulator to prevent ingestion from running too far ahead of sequential pipelines.
     next_sequential_checkpoint: Option<u64>,
 
+    /// The maximum `reader_lo` across all concurrent pipelines, sourced from
+    /// `InitWatermark::reader_lo` during pipeline initialization.
+    reader_lo: Option<u64>,
+
     /// An optional task name for this indexer. When set, pipelines will record watermarks using the
     /// delimiter defined on the store. This allows the same pipelines to run under multiple
     /// indexers (e.g. for backfills or temporary workflows) while maintaining separate watermark
@@ -228,6 +233,7 @@ impl<S: Store> Indexer<S> {
             last_checkpoint,
             next_checkpoint: u64::MAX,
             next_sequential_checkpoint: None,
+            reader_lo: None,
             task: task.into_task(),
             enabled_pipelines: if pipeline.is_empty() {
                 None
@@ -319,11 +325,12 @@ impl<S: Store> Indexer<S> {
     /// Update the starting ingestion checkpoint as the minimum across all the next checkpoints
     /// calculated above.
     ///
-    /// Returns `Ok(None)` if the pipeline is disabled.
+    /// Returns `Ok(None)` if the pipeline is disabled. Otherwise returns `(next_checkpoint,
+    /// reader_lo)` from the initialized watermark.
     async fn add_pipeline<P: Processor + 'static>(
         &mut self,
         pipeline_task: String,
-    ) -> Result<Option<u64>> {
+    ) -> Result<Option<(u64, Option<u64>)>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
             "Pipeline {:?} already added",
@@ -346,19 +353,19 @@ impl<S: Store> Indexer<S> {
             .await
             .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
 
-        let next_checkpoint = if let Some(init_watermark) = init_watermark {
-            if let Some(checkpoint_hi_inclusive) = init_watermark.checkpoint_hi_inclusive {
-                checkpoint_hi_inclusive + 1
-            } else {
-                0
-            }
+        let (next_checkpoint, reader_lo) = if let Some(InitWatermark {
+            checkpoint_hi_inclusive,
+            reader_lo,
+        }) = init_watermark
+        {
+            (checkpoint_hi_inclusive.map_or(0, |cp| cp + 1), reader_lo)
         } else {
-            proposed_next_checkpoint
+            (proposed_next_checkpoint, None)
         };
 
         self.next_checkpoint = next_checkpoint.min(self.next_checkpoint);
 
-        Ok(Some(next_checkpoint))
+        Ok(Some((next_checkpoint, reader_lo)))
     }
 }
 
@@ -376,9 +383,19 @@ impl<S: ConcurrentStore> Indexer<S> {
     ) -> Result<()> {
         let pipeline_task =
             pipeline_task::<S>(H::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
-        let Some(next_checkpoint) = self.add_pipeline::<H>(pipeline_task).await? else {
+        let Some((next_checkpoint, reader_lo)) =
+            self.add_pipeline::<H>(pipeline_task).await?
+        else {
             return Ok(());
         };
+
+        let reader_lo = reader_lo.with_context(|| {
+            format!(
+                "Concurrent pipeline {} missing reader_lo from init watermark",
+                H::NAME
+            )
+        })?;
+        self.reader_lo = Some(self.reader_lo.map_or(reader_lo, |r| r.max(reader_lo)));
 
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
@@ -418,7 +435,9 @@ impl<T: SequentialStore> Indexer<T> {
             );
         }
 
-        let Some(next_checkpoint) = self.add_pipeline::<H>(H::NAME.to_owned()).await? else {
+        let Some((next_checkpoint, _reader_lo)) =
+            self.add_pipeline::<H>(H::NAME.to_owned()).await?
+        else {
             return Ok(());
         };
 
@@ -458,6 +477,7 @@ mod tests {
     use crate::config::ConcurrencyConfig;
     use crate::ingestion::ingestion_client::IngestionClientArgs;
     use crate::mocks::store::MockStore;
+    use crate::mocks::store::MockWatermark;
     use crate::pipeline::CommitterConfig;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::ConcurrentConfig;
@@ -788,6 +808,7 @@ mod tests {
         assert_eq!(indexer.last_checkpoint, None);
         assert_eq!(indexer.next_checkpoint, 2);
         assert_eq!(indexer.next_sequential_checkpoint, Some(2));
+        assert_eq!(indexer.reader_lo, Some(1));
     }
 
     /// next_checkpoint is 0 when at least one pipeline has no watermark.
@@ -817,6 +838,7 @@ mod tests {
         assert_eq!(indexer.last_checkpoint, None);
         assert_eq!(indexer.next_checkpoint, 0);
         assert_eq!(indexer.next_sequential_checkpoint, Some(0));
+        assert_eq!(indexer.reader_lo, Some(0));
     }
 
     /// next_checkpoint is 1 when smallest committer watermark is 0.
@@ -845,6 +867,7 @@ mod tests {
         add_sequential(&mut indexer, D).await;
 
         assert_eq!(indexer.next_checkpoint, 1);
+        assert_eq!(indexer.reader_lo, Some(0));
     }
 
     /// next_checkpoint is first_checkpoint when at least one pipeline has no
@@ -879,6 +902,7 @@ mod tests {
         assert_eq!(indexer.last_checkpoint, None);
         assert_eq!(indexer.next_checkpoint, 5);
         assert_eq!(indexer.next_sequential_checkpoint, Some(5));
+        assert_eq!(indexer.reader_lo, Some(5));
     }
 
     /// next_checkpoint is smallest among existing watermarks + 1 if
@@ -909,6 +933,7 @@ mod tests {
         assert_eq!(indexer.last_checkpoint, None);
         assert_eq!(indexer.next_checkpoint, 11);
         assert_eq!(indexer.next_sequential_checkpoint, Some(11));
+        assert_eq!(indexer.reader_lo, Some(0));
     }
 
     /// If the first_checkpoint is being considered, because pipelines are missing watermarks, it
@@ -942,6 +967,87 @@ mod tests {
         assert_eq!(indexer.last_checkpoint, None);
         assert_eq!(indexer.next_checkpoint, 11);
         assert_eq!(indexer.next_sequential_checkpoint, Some(11));
+        assert_eq!(indexer.reader_lo, Some(24));
+    }
+
+    /// reader_lo is the maximum across concurrent pipelines, ignoring sequential pipelines.
+    #[tokio::test]
+    async fn test_reader_lo_is_max_across_concurrent_pipelines() {
+        let registry = Registry::new();
+
+        test_pipeline!(A, "concurrent_a");
+        test_pipeline!(B, "concurrent_b");
+        test_pipeline!(C, "sequential_c");
+
+        let store = MockStore::default()
+            .with_watermark(
+                A::NAME,
+                MockWatermark {
+                    checkpoint_hi_inclusive: Some(100),
+                    reader_lo: 10,
+                    ..Default::default()
+                },
+            )
+            .with_watermark(
+                B::NAME,
+                MockWatermark {
+                    checkpoint_hi_inclusive: Some(50),
+                    reader_lo: 30,
+                    ..Default::default()
+                },
+            )
+            .with_watermark(
+                C::NAME,
+                MockWatermark {
+                    checkpoint_hi_inclusive: Some(20),
+                    reader_lo: 50,
+                    ..Default::default()
+                },
+            );
+
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store, IndexerArgs::default(), &registry, None).await;
+
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+
+        assert_eq!(indexer.reader_lo, Some(30));
+    }
+
+    /// reader_lo is None when only sequential pipelines are present.
+    #[tokio::test]
+    async fn test_reader_lo_none_with_only_sequential_pipelines() {
+        let registry = Registry::new();
+
+        test_pipeline!(C, "sequential_c");
+        test_pipeline!(D, "sequential_d");
+
+        let store = MockStore::default()
+            .with_watermark(
+                C::NAME,
+                MockWatermark {
+                    checkpoint_hi_inclusive: Some(10),
+                    reader_lo: 5,
+                    ..Default::default()
+                },
+            )
+            .with_watermark(
+                D::NAME,
+                MockWatermark {
+                    checkpoint_hi_inclusive: Some(20),
+                    reader_lo: 15,
+                    ..Default::default()
+                },
+            );
+
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store, IndexerArgs::default(), &registry, None).await;
+
+        add_sequential(&mut indexer, C).await;
+        add_sequential(&mut indexer, D).await;
+
+        assert_eq!(indexer.reader_lo, None);
     }
 
     // test ingestion, all pipelines have watermarks, no first_checkpoint provided
