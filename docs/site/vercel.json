@@ -502,7 +502,7 @@
     },
     {
       "source": "/guides/developer/advanced/asset-tokenization",
-      "destination": "/guides/developer/nft/asset-tokenization",
+      "destination": "/guides/developer/digital-assets/non-fungible-tokens/create-nft/asset-tokenization",
       "permanent": true
     },
     {
@@ -3831,7 +3831,7 @@
     },
     {
       "source": "/guides/developer/nft-index",
-      "destination": "/guides/developer/nft",
+      "destination": "/guides/developer/digital-assets/non-fungible-tokens/create-nft",
       "permanent": true
     },
     {
@@ -3891,12 +3891,12 @@
     },
     {
       "source": "/guides/developer/nft/nft-rental",
-      "destination": "/guides/developer/nft",
+      "destination": "/guides/developer/digital-assets/non-fungible-tokens/create-nft",
       "permanent": true
     },
     {
       "source": "/guides/developer/nft/nft-soulbound",
-      "destination": "/guides/developer/nft",
+      "destination": "/guides/developer/digital-assets/non-fungible-tokens/create-nft",
       "permanent": true
     },
     {

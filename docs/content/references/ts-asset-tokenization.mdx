@@ -1,121 +1,394 @@
 ---
-draft: true
-title: Asset Tokenization TypeScript CLI Reference
-description: Reference for the npm run call commands available in the asset tokenization setup scripts.
-keywords: [asset tokenization, TypeScript, CLI, mint, burn, join, kiosk, transfer policy]
+title: Asset Tokenization Reference
+description: Represent real-world assets as onchain fractional tokens using the tokenized_asset module on Sui.
+keywords: [asset tokenization, fractionalization, NFT, fungible token, tokenized asset, Move, kiosk, burnability]
 ---
 
-The asset tokenization setup scripts expose a set of commands for interacting with deployed tokenized assets. Run all commands from the `setup` directory. Commands are defined in [`setup/src/calls.ts`](https://github.com/MystenLabs/asset-tokenization/blob/main/setup/src/calls.ts) and implemented in [`setup/src/functions`](https://github.com/MystenLabs/asset-tokenization/tree/main/setup/src/functions).
+<Tabs groupId="modules">
 
-Before running any commands, make sure you have [deployed the packages and populated your `.env` file](/guides/developer/digital-assets/non-fungible-tokens/deploy-tokenized-asset).
+<TabItem label="tokenized_asset" value="tokenized_asset">
 
-## `create-tp`
+The `tokenized_asset` module operates in a manner similar to the `coin` library.
 
-Creates a `TransferPolicy` and a `ProtectedTP` for the tokenized asset type. Store the `TransferPolicy ID` and `ProtectedTP ID` from the transaction output in your `.env` file.
+When it receives a new One-Time Witness type, it creates a unique representation of a fractional asset. This module uses implementations similar to some methods found in the `Coin` module. It encompasses functionalities pertinent to asset tokenization, including new asset creation, minting, splitting, joining, and burning. See [One-Time Witness](https://move-book.com/programmability/one-time-witness.html) in The Move Book for more information.
 
-```sh
-$ npm run call create-tp
-```
+#### Structs
 
-## `tp-rules`
+- `AssetCap`
 
-Adds transfer rules to the existing `TransferPolicy`. Edit `transferPolicyRules.ts` to define which rules to apply. Available rules include floor price, lock, royalty, and personal kiosk. Rules are chainable:
+  Generates an `AssetCap` for each new asset represented as a fractional NFT. In most scenarios, create it as an owned object, which you can then transfer to the platform administrator for access-restricted method invocation.
 
-```ts
-tpTx
-  .addFloorPriceRule('1000')
-  .addLockRule()
-  .addRoyaltyRule(percentageToBasisPoints(10), 0)
-```
+  ```rust
+  struct AssetCap<phantom T> {
+      id: UID,
+      // the current supply in circulation
+      supply: Supply<T>,
+      // the total max supply allowed to exist at any time
+      total_supply: u64,
+      // Determines if the asset can be burned or not
+      burnable: bool
+  }
+  ```
 
-```sh
-$ npm run call tp-rules
-```
+- `AssetMetadata`
 
-## `mint`
+  The `AssetMetadata` struct defines the metadata representing the entire asset to fractionalize. This should be a shared object.
 
-Mints a new tokenized asset and transfers it to the owner address. Edit the `getVecMapValues` function in `mint.ts` before running: providing key-value pairs mints an NFT with a balance of 1; leaving the arrays empty mints an FT with a configurable balance. Store the returned object ID in `TOKENIZED_ASSET` in your `.env` file.
+  ```rust
+  struct AssetMetadata<phantom T> has key, store {
+          id: UID,
+          /// Name of the asset
+          name: String,
+          // the total max supply allowed to exist at any time
+          total_supply: u64,
+          /// Symbol for the asset
+          symbol: ascii::String,
+          /// Description of the asset
+          description: String,
+          /// URL for the asset logo
+          icon_url: Option<Url>
+      }
+  ```
 
-```sh
-$ npm run call mint
-```
+- `TokenizedAsset`
 
-## `mint-lock`
+  The `TokenizedAsset` is minted with a specified balance that is less than or equal to the remaining supply. If the `VecMap` of an asset is populated with values (indicating multiple unique entries), it is considered an NFT. If the `VecMap` of an asset is not populated (indicating an absence of individual entries), it is considered an FT.
 
-Mints a new tokenized asset and immediately locks it in the kiosk in a single transaction. Equivalent to running `mint` then `lock` in sequence.
+  ```rust
+  struct TokenizedAsset<phantom T> has key, store {
+          id: UID,
+          /// The balance of the tokenized asset
+          balance: Balance<T>,
+          /// If the VecMap is populated, it is considered an NFT, else the asset is considered an FT.
+          metadata: VecMap<String, String>,
+          /// URL for the asset image (optional)
+          image_url: Option<Url>,
+      }
+  ```
 
-```sh
-$ npm run call mint-lock
-```
+- `PlatformCap`
 
-## `select-kiosk`
+  The `PlatformCap` is the capability issued to the address that deploys the contract. This capability grants specific permissions related to the platform functionalities, allowing the deployer certain controlled actions or access rights within the deployed contract.
 
-Selects the personal kiosk to use for this project. The setup requires a single kiosk per owner. Store the returned kiosk ID in `TARGET_KIOSK` in your `.env` file.
+  ```rust
+  /// Capability that is issued to the one deploying the contract
+  struct PlatformCap has key, store { id: UID }
+  ```
 
-```sh
-$ npm run call select-kiosk
-```
+#### Functions
 
-## `lock`
+- `init`
 
-Locks a tokenized asset in the kiosk, preventing usage outside the defined transfer policy. Populate `TOKENIZED_ASSET` in your `.env` file before running.
+  Creates a `PlatformCap` and transfers it to the transaction sender.
 
-```sh
-$ npm run call lock
-```
+  ```rust
+  fun init(ctx: &mut TxContext) {}
+  ```
 
-## `list`
+- `new_asset`
 
-Lists a locked tokenized asset for sale in the kiosk. Edit the sale price in `listItem.ts` before running.
+  Creates a fresh representation of an asset with its crucial attributes. Returns 2 distinct objects: the `AssetCap` and `AssetMetadata`. These objects encapsulate the necessary information and characteristics that define the asset within the system.
 
-```sh
-$ npm run call list
-```
+  ```rust
+  public fun new_asset<T: drop>(
+          witness: T,
+          total_supply: u64,
+          symbol: ascii::String,
+          name: String,
+          description: String,
+          icon_url: Option<Url>,
+          burnable: bool,
+          ctx: &mut TxContext
+      ): (AssetCap<T>, AssetMetadata<T>) {}
+  ```
 
-## `purchase`
+- `mint`
 
-Purchases a listed tokenized asset from a kiosk. Edit `purchaseItem.ts` to set the item ID, price, and seller kiosk ID before running.
+  Mints a tokenized asset. If new metadata is introduced during this process, the tokenized asset becomes unique, resulting in the creation of an NFT with a balance set to 1. If no new metadata is added, the system classifies the tokenized asset as an FT, permitting its balance to exceed 1 as specified by a provided argument. Returns the tokenized asset object.
 
-```sh
-$ npm run call purchase
-```
+  ```rust
+  public fun mint<T>(
+          cap: &mut AssetCap<T>,
+          keys: vector<String>,
+          values: vector<String>,
+          value: u64,
+          ctx: &mut TxContext
+      ): TokenizedAsset<T> {}
+  ```
 
-## `join`
+- `split`
 
-Merges 2 FT tokenized assets. The balance of `FT2` is added to `FT1`, and `FT2` is burned. Only FT type assets can be joined. Populate `FT1` and `FT2` in your `.env` file before running.
+  Receives a tokenized asset of the FT type with a balance greater than 1 and a value less than the object balance, then performs a split operation. The operation divides the existing tokenized asset into 2 separate tokenized assets. The newly created tokenized asset has a balance equal to the given value, while the balance of the provided object decreases by the specified value. Returns the newly created tokenized asset. This function does not accept tokenized assets of the NFT type.
 
-```sh
-$ npm run call join
-```
+  ```rust
+  public fun split<T>(
+          self: &mut TokenizedAsset<T>,
+          split_amount: u64,
+          ctx: &mut TxContext
+      ): TokenizedAsset<T> {}
+  ```
 
-## `burn`
+- `join`
 
-Permanently destroys a tokenized asset and decreases the circulating supply by its balance. Only works if the asset was created with `burnable` set to `true`. Populate `TOKENIZED_ASSET` in your `.env` file before running.
+  Receives 2 tokenized assets of the FT type and merges them. The operation increases the balance of the first tokenized asset by the balance of the second one. The system then burns the second tokenized asset. Returns the ID of the burned tokenized asset. This function does not accept tokenized assets of the NFT type.
 
-```sh
-$ npm run call burn
-```
+  ```rust
+  public fun join<T>(
+          self: &mut TokenizedAsset<T>,
+          other: TokenizedAsset<T>
+      ): ID {}
+  ```
 
-## `get-balance`
+- `burn`
 
-Returns the balance of a specified tokenized asset. Populate `TOKENIZED_ASSET` in your `.env` file before running.
+  Requires the `AssetCap` as a parameter, restricting invocation to the platform admin. Accepts a tokenized asset and burns it. The circulating supply decreases by the balance of the burned item. Requires a tokenized asset that is burnable.
 
-```sh
-$ npm run call get-balance
-```
+  ```rust
+  public fun burn<T>(
+          cap: &mut AssetCap<T>,
+          tokenized_asset: TokenizedAsset<T>
+      )
+  ```
 
-## `get-supply`
+- `total_supply`
 
-Returns the current circulating supply of the asset.
+  Returns the maximum supply of the asset.
 
-```sh
-$ npm run call get-supply
-```
+  ```rust
+  public fun total_supply<T>(cap: &AssetCap<T>): u64 {}
+  ```
 
-## `get-total-supply`
+- `supply`
 
-Returns the maximum total supply of the asset as defined at creation time.
+  Returns the current circulating supply of the asset.
 
-```sh
-$ npm run call get-total-supply
-```
+  ```rust
+  public fun supply<T>(cap: &AssetCap<T>): u64 {}
+  ```
+
+- `value`
+
+  Returns the balance of a tokenized asset.
+
+  ```rust
+  public fun value<T>(tokenized_asset: &TokenizedAsset<T>): u64 {}
+  ```
+
+- `create_vec_map_from_arrays`
+
+  An internal helper function that populates a `VecMap<String, String>`. It assists in the process of filling key-value pairs within the `VecMap` data structure.
+
+  ```rust
+  fun create_vec_map_from_arrays(
+          keys: vector<String>,
+          values: vector<String>
+      ): VecMap<String, String> {}
+  ```
+
+</TabItem>
+
+<TabItem label="proxy" value="proxy">
+
+The `proxy` module contains methods that the type owner uses to execute publisher-related operations.
+
+#### Structs
+
+- `Proxy`
+
+  The `PROXY` struct represents the One-Time Witness to claim the publisher.
+
+  ```rust
+  struct PROXY has drop {}
+  ```
+
+- `Registry`
+
+  A shared object that serves as a repository for the `Publisher` object, specifically intended to control and restrict access to the creation and management of transfer policies for tokenized assets. Mutable access to this object is exclusively granted to the actual publisher.
+
+  ```rust
+  struct Registry has key {
+          id: UID,
+          publisher: Publisher
+      }
+  ```
+
+- `ProtectedTP`
+
+  A shared object that stores an empty transfer policy. You must create one per type `<T>` generated by a user. The unlock module uses this object.
+
+  ```rust
+  struct ProtectedTP<phantom T> has key, store {
+          id: UID,
+          policy_cap: TransferPolicyCap<T>,
+          transfer_policy: TransferPolicy<T>
+      }
+  ```
+
+#### Functions
+
+- `init`
+
+  Creates the `Publisher` object, encapsulates it within the registry, and shares the `Registry` object.
+
+  ```rust
+  fun init(otw: PROXY, ctx: &mut TxContext) {}
+  ```
+
+- `setup_tp`
+
+  Uses the publisher nested within the registry and the sender publisher. Generates and returns a transfer policy and the associated transfer policy cap specific to `TokenizedAsset<T>`. The type `T` is derived from the `Publisher` object.
+
+  Also generates an empty transfer policy wrapped in a `ProtectedTP<T>` object, which is shared. You can use this functionality under specific conditions to override the Kiosk lock rule.
+
+  ```rust
+  public fun setup_tp<T: drop>(
+          registry: &Registry,
+          publisher: &Publisher,
+          ctx: &mut TxContext
+      ): (TransferPolicy<TokenizedAsset<T>>,
+          TransferPolicyCap<TokenizedAsset<T>>) {}
+  ```
+
+- `new_display`
+
+  Uses the publisher nested within the registry and the sender publisher to generate and return an empty `Display` for the type `TokenizedAsset<T>`, where `T` is encapsulated within the `Publisher` object.
+
+  ```rust
+  public fun new_display<T: drop>(
+          registry: &Registry,
+          publisher: &Publisher,
+          ctx: &mut TxContext
+      ): Display<TokenizedAsset<T>> {}
+  ```
+
+- `transfer_policy`
+
+  Given the `ProtectedTP`, returns the transfer policy for the type `TokenizedAsset<T>`.
+
+  ```rust
+  public(friend) fun transfer_policy<T>(
+          protected_tp: &ProtectedTP<T>
+      ): &TransferPolicy<T> {}
+  ```
+
+- `publisher_mut`
+
+  Only accessible by the owner of the platform cap. Requires the registry as an argument to obtain a mutable reference to the publisher.
+
+  ```rust
+  public fun publisher_mut(
+      _: &PlatformCap,
+      registry: &mut Registry
+  ): &mut Publisher {}
+  ```
+
+</TabItem>
+
+<TabItem label="unlock" value="unlock">
+
+The `unlock` module facilitates the unlocking of a tokenized asset for authorized burning and joining.
+
+It allows tokenized asset type creators to enable these operations for kiosk assets without requiring adherence to the default set of requirements, such as rules or policies.
+
+#### Structs
+
+- `JoinPromise`
+
+  A promise object established to prevent attempts of permanently unlocking an object beyond the intended scope of joining.
+
+  ```rust
+  struct JoinPromise {
+      /// the item where the balance of the burnt tokenized asset will be added.
+      item: ID,
+      /// burned is the id of the tokenized asset that will be burned
+      burned: ID,
+      /// the expected final balance of the item after merging
+      expected_balance: u64
+  }
+  ```
+
+- `BurnPromise`
+
+  A promise object created to ensure the permanent burning of a specified object.
+
+  ```rust
+  struct BurnPromise {
+    expected_supply: u64
+  }
+  ```
+
+#### Functions
+
+- `asset_from_kiosk_to_join`
+
+  A helper function that facilitates the joining of tokenized assets locked in a kiosk. It unlocks the tokenized asset set for burning and ensures that another tokenized asset of the same type eventually contains its balance by returning a `JoinPromise`.
+
+  ```rust
+  public fun asset_from_kiosk_to_join<T>(
+    self: &TokenizedAsset<T>, // A
+    to_burn: &TokenizedAsset<T>, // B
+    protected_tp: &ProtectedTP<TokenizedAsset<T>>, // unlocker
+    transfer_request: TransferRequest<TokenizedAsset<T>> // transfer request for b
+  ): JoinPromise {}
+  ```
+
+- `prove_join`
+
+  Demonstrates that the unlocked tokenized asset is successfully burned and its balance is incorporated into an existing tokenized asset.
+
+  ```rust
+  public fun prove_join<T>(
+    self: &TokenizedAsset<T>,
+    promise: JoinPromise,
+    proof: ID) {
+  }
+  ```
+
+- `asset_from_kiosk_to_burn`
+
+  A helper function that facilitates the burning of tokenized assets locked in a kiosk. It assists in unlocking them while ensuring a promise that the circulating supply is reduced, achieved by returning a `BurnPromise`.
+
+  ```rust
+  public fun asset_from_kiosk_to_burn<T>(
+      to_burn: &TokenizedAsset<T>,
+      asset_cap: &AssetCap<T>,
+      protected_tp: &ProtectedTP<TokenizedAsset<T>>,
+      transfer_request: TransferRequest<TokenizedAsset<T>>,
+    ): BurnPromise {
+  }
+  ```
+
+- `prove_burn`
+
+  Ensures that the circulating supply of the asset cap is reduced by the balance of the burned tokenized asset.
+
+  ```rust
+  public fun prove_burn<T>(
+    asset_cap: &AssetCap<T>,
+    promise: BurnPromise) {
+  }
+  ```
+
+</TabItem>
+
+</Tabs>
+
+### `template` package
+
+An example use case package that enables Rust WASM functionality to support seamless asset creation in the browser.
+
+This is similar to the launchpad approach and serves as the template package whenever a new asset requires representation as a tokenized asset. It effectively allows you to edit fields of this template contract on the fly and publish it with the edits included. This package implements two essential modules, each catering to distinct functionalities required for asset tokenization. More details on how Rust WASM was implemented can be found in the [WebAssembly and template package](#webassembly-wasm-and-template-package) section.
+
+The package contains the following modules:
+
+- `template`: This module supports defining a new asset. When you need to represent a new asset as a fractional asset, modify this module to `<template>::<TEMPLATE>`, with the `<template>` (in capitals) being the One-Time Witness of this new asset. This module calls the `asset_tokenization::tokenized_asset::new_asset(...)` method, which facilitates the declaration of new fields for the asset:
+  - `witness`: The One-Time Witness `NEW_ASSET`
+  - `total_supply`: The total supply allowed to exist at any time
+  - `symbol`: The symbol for the asset
+  - `name`: The name of the asset
+  - `description`: The description of the asset
+  - `icon_url`: The URL for the asset logo (optional)
+  - `burnable`: Boolean that defines if the asset can be burned by an admin
+
+- `genesis`: A genesis type of module that includes a One-Time Witness so that the sender can claim the publisher.
+
