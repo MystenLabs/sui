@@ -15973,7 +15973,6 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-config",
- "sui-data-ingestion-core",
  "sui-package-resolver",
  "sui-rpc",
  "sui-rpc-api",
