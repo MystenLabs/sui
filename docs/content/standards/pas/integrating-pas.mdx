@@ -81,11 +81,11 @@ See the [KYC example `kyc_registry`](https://github.com/MystenLabs/pas/blob/main
 
 ## Set template commands
 
-Templates store pre-built Move call command structures on-chain for client-side automation. They allow SDKs to construct the correct Move calls for approval resolution without hardcoding package IDs or function signatures.
+Templates store pre-built Move call command structures onchain for client-side automation. They allow SDKs to construct the correct Move calls for approval resolution without hardcoding package IDs or function signatures.
 
 :::tip
 
-Templates are purely an off-chain utility. They do not affect on-chain execution or security. They describe which Move calls an SDK should make. This is what allows a single generic SDK to support any PAS-managed asset, regardless of its specific approval logic.
+Templates are purely an offchain utility. They do not affect onchain execution or security. They describe which Move calls an SDK should make. This is what allows a single generic SDK to support any PAS-managed asset, regardless of its specific approval logic.
 
 :::
 
@@ -97,9 +97,9 @@ Templates are useful because when a transfer happens, the PAS SDK needs to know:
 
 3. What type parameters to use
 
-Templates store this information as an on-chain `Command` object keyed by the approval witness type.
+Templates store this information as an onchain `Command` object keyed by the approval witness type.
 
-When an issuer upgrades their approval logic (for example, from `TransferApproval` to `TransferApprovalV2`), they update the template on-chain. All clients automatically pick up the new resolution path without client-side updates, redeployments, or coordination across wallets and frontends.
+When an issuer upgrades their approval logic (for example, from `TransferApproval` to `TransferApprovalV2`), they update the template onchain. All clients automatically pick up the new resolution path without client-side updates, redeployments, or coordination across wallets and frontends.
 
 ### Setting a template
 
@@ -152,9 +152,9 @@ templates.set_template_command(internal::permit<MyTransferApproval>(), cmd);
 
 | **Constructor** | **Description** |
 |---|---|
-| `ptb::ext_input<T>(name)` | Custom input resolved off-chain by the SDK, namespaced by type `T`. |
-| `ptb::object_by_id(id)` | Object resolved off-chain by its ID. |
-| `ptb::receiving_object_by_id(id)` | Receiving object resolved off-chain by its ID. |
+| `ptb::ext_input<T>(name)` | Custom input resolved offchain by the SDK, namespaced by type `T`. |
+| `ptb::object_by_id(id)` | Object resolved offchain by its ID. |
+| `ptb::receiving_object_by_id(id)` | Receiving object resolved offchain by its ID. |
 | `ptb::pure(value)` | BCS-encoded pure value. |
 
 For the full list of `ptb` constructors (including system shorthands and fully-resolved refs), see the PTB package.

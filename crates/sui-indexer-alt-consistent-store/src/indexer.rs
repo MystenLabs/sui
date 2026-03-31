@@ -6,13 +6,13 @@ use std::path::Path;
 use anyhow::Context as _;
 use anyhow::ensure;
 use prometheus::Registry;
+use sui_indexer_alt_framework as framework;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::pipeline::sequential::{self};
 use sui_indexer_alt_framework::service::Service;
-use sui_indexer_alt_framework::{self as framework};
 
 use crate::config::ConsistencyConfig;
 use crate::db::config::DbConfig;

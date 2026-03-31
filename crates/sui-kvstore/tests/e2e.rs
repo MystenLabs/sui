@@ -7,18 +7,11 @@
 //! creates the required tables, and tears everything down when done.
 //! Tests require `gcloud`, `cbt`, and the BigTable emulator on PATH.
 
-use std::io::BufRead;
-use std::path::PathBuf;
-use std::process::Child;
-use std::process::Command;
-use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use anyhow::bail;
 use futures::TryStreamExt;
-use futures::future::try_join_all;
 use prost_types::FieldMask;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -33,6 +26,11 @@ use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
+use sui_kvstore::tables::{checkpoints, epochs, transactions};
+use sui_kvstore::testing::BigTableEmulator;
+use sui_kvstore::testing::INSTANCE_ID;
+use sui_kvstore::testing::create_tables;
+use sui_kvstore::testing::require_bigtable_emulator;
 use sui_protocol_config::Chain;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
@@ -55,171 +53,8 @@ use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
 use test_cluster::{TestCluster, TestClusterBuilder};
-use tokio::process::Command as TokioCommand;
 use tokio::time::interval;
 use url::Url;
-
-const INSTANCE_ID: &str = "bigtable_test_instance";
-const TABLES: &[&str] = &[
-    sui_kvstore::tables::objects::NAME,
-    sui_kvstore::tables::transactions::NAME,
-    sui_kvstore::tables::checkpoints::NAME,
-    sui_kvstore::tables::checkpoints_by_digest::NAME,
-    sui_kvstore::tables::watermarks::NAME,
-    sui_kvstore::tables::epochs::NAME,
-    sui_kvstore::tables::protocol_configs::NAME,
-    sui_kvstore::tables::packages::NAME,
-    sui_kvstore::tables::packages_by_id::NAME,
-    sui_kvstore::tables::packages_by_checkpoint::NAME,
-    sui_kvstore::tables::system_packages::NAME,
-];
-
-/// Resolve the path to `cbtemulator` relative to the gcloud SDK root.
-/// Works regardless of whether gcloud was installed via apt, brew, or the standalone installer.
-fn cbtemulator_path() -> PathBuf {
-    let output = Command::new("gcloud")
-        .args(["info", "--format=value(installation.sdk_root)"])
-        .output()
-        .expect("gcloud not found on PATH — install the Google Cloud SDK to run these tests");
-    assert!(output.status.success(), "failed to query gcloud sdk root");
-
-    let sdk_root = String::from_utf8(output.stdout)
-        .expect("non-utf8 gcloud sdk root")
-        .trim()
-        .to_string();
-
-    let path = PathBuf::from(sdk_root).join("platform/bigtable-emulator/cbtemulator");
-    assert!(
-        path.exists(),
-        "cbtemulator not found at {path:?} — run: gcloud components install bigtable"
-    );
-    path
-}
-
-fn require_bigtable_emulator() {
-    cbtemulator_path();
-    assert!(
-        Command::new("cbt").arg("-version").output().is_ok(),
-        "cbt not found on PATH — run: gcloud components install cbt"
-    );
-}
-
-/// A self-contained BigTable emulator process.
-/// Spawns the emulator on a random port.
-/// The emulator process is killed when this struct is dropped.
-struct BigTableEmulator {
-    child: Child,
-    host: String,
-    // Keep stdout open so the emulator doesn't get SIGPIPE and die.
-    _stdout_drain: std::thread::JoinHandle<()>,
-}
-
-impl BigTableEmulator {
-    fn start() -> Result<Self> {
-        let mut child = Command::new(cbtemulator_path())
-            .arg("-port=0")
-            .stderr(Stdio::null())
-            .stdout(Stdio::piped())
-            .spawn()
-            .context("Failed to spawn BigTable emulator")?;
-
-        let stdout = child.stdout.take().expect("stdout was piped");
-        let mut reader = std::io::BufReader::new(stdout);
-
-        let mut host = None;
-        let mut line_buf = String::new();
-        loop {
-            line_buf.clear();
-            let n = reader
-                .read_line(&mut line_buf)
-                .context("Failed to read emulator stderr")?;
-            if n == 0 {
-                break;
-            }
-            // cbtemulator prints: Cloud Bigtable emulator running on 127.0.0.1:PORT
-            if line_buf.contains("Cloud Bigtable emulator running on") {
-                if let Some(addr) = line_buf.rsplit("running on ").next() {
-                    let addr = addr.trim();
-                    if let Some(port) = addr.rsplit(':').next() {
-                        host = Some(format!("localhost:{port}"));
-                    }
-                }
-                break;
-            }
-        }
-
-        let host = host.context("Failed to parse emulator host:port from stdout")?;
-
-        // Drain remaining stdout in a background thread to prevent SIGPIPE.
-        let stdout_drain = std::thread::spawn(move || {
-            let _ = std::io::copy(&mut reader, &mut std::io::sink());
-        });
-
-        Ok(Self {
-            child,
-            host,
-            _stdout_drain: stdout_drain,
-        })
-    }
-
-    fn host(&self) -> &str {
-        &self.host
-    }
-}
-
-impl Drop for BigTableEmulator {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-/// Create all required BigTable tables in parallel using async subprocesses.
-async fn create_tables(host: &str, instance_id: &str) -> Result<()> {
-    let futures: Vec<_> = TABLES
-        .iter()
-        .map(|table| {
-            let host = host.to_string();
-            let instance_id = instance_id.to_string();
-            let table = *table;
-            async move {
-                let output = TokioCommand::new("cbt")
-                    .args(["-instance", &instance_id, "-project", "emulator"])
-                    .arg("createtable")
-                    .arg(table)
-                    .env("BIGTABLE_EMULATOR_HOST", &host)
-                    .output()
-                    .await
-                    .with_context(|| format!("Failed to run cbt createtable {table}"))?;
-                if !output.status.success() {
-                    bail!(
-                        "cbt createtable {table} failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
-
-                let output = TokioCommand::new("cbt")
-                    .args(["-instance", &instance_id, "-project", "emulator"])
-                    .args(["createfamily", table, "sui"])
-                    .env("BIGTABLE_EMULATOR_HOST", &host)
-                    .output()
-                    .await
-                    .with_context(|| format!("Failed to run cbt createfamily {table}"))?;
-                if !output.status.success() {
-                    bail!(
-                        "cbt createfamily {table} failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
-
-                Ok(())
-            }
-        })
-        .collect();
-
-    try_join_all(futures).await?;
-    Ok(())
-}
 
 /// Get all coin objects for an address using gRPC list_owned_objects.
 async fn get_all_coins(client: &mut GrpcClient, address: SuiAddress) -> Result<Vec<Object>> {
@@ -518,33 +353,34 @@ async fn test_indexer_e2e() -> Result<()> {
 
     // -- Column-filtered partial reads --
     // Fetch with only effects + checkpoint columns — no td, sg, ev, or bc.
-    {
-        use sui_kvstore::tables::transactions::col;
-        let partial = harness
-            .bigtable_client()
-            .get_transactions_filtered(
-                &tx_digests,
-                Some(&[col::EFFECTS, col::CHECKPOINT_NUMBER, col::TIMESTAMP]),
-            )
-            .await?;
-        assert_eq!(partial.len(), tx_digests.len());
-        for tx in &partial {
-            // digest comes from the row key, always present
-            assert!(tx_digests.contains(&tx.digest));
-            // td was not fetched
-            assert!(tx.transaction_data.is_none(), "td should be absent");
-            // sg was not fetched
-            assert!(tx.signatures.is_none(), "sg should be absent");
-            // ef was fetched
-            assert!(tx.effects.is_some(), "ef should be present");
-            // ev was not fetched
-            assert!(tx.events.is_none(), "ev should be absent");
-            // bc was not fetched
-            assert!(tx.balance_changes.is_empty(), "bc should be empty");
-            // metadata always present
-            assert!(tx.checkpoint_number > 0);
-            assert!(tx.timestamp > 0);
-        }
+    let partial = harness
+        .bigtable_client()
+        .get_transactions_filtered(
+            &tx_digests,
+            Some(&[
+                transactions::col::EFFECTS,
+                transactions::col::CHECKPOINT_NUMBER,
+                transactions::col::TIMESTAMP,
+            ]),
+        )
+        .await?;
+    assert_eq!(partial.len(), tx_digests.len());
+    for tx in &partial {
+        // digest comes from the row key, always present
+        assert!(tx_digests.contains(&tx.digest));
+        // td was not fetched
+        assert!(tx.transaction_data.is_none(), "td should be absent");
+        // sg was not fetched
+        assert!(tx.signatures.is_none(), "sg should be absent");
+        // ef was fetched
+        assert!(tx.effects.is_some(), "ef should be present");
+        // ev was not fetched
+        assert!(tx.events.is_none(), "ev should be absent");
+        // bc was not fetched
+        assert!(tx.balance_changes.is_empty(), "bc should be empty");
+        // metadata always present
+        assert!(tx.checkpoint_number > 0);
+        assert!(tx.timestamp > 0);
     }
 
     // -- Balance changes parity with fullnode gRPC batch_get_transactions --
@@ -642,21 +478,23 @@ async fn test_indexer_e2e() -> Result<()> {
         .await?;
     assert_eq!(checkpoints.len(), checkpoint_numbers.len());
     for cp in &checkpoints {
-        assert!(checkpoint_numbers.contains(&cp.summary.sequence_number));
-        assert!(cp.summary.epoch == 0);
+        let summary = cp.summary.as_ref().unwrap();
+        let contents = cp.contents.as_ref().unwrap();
+        assert!(checkpoint_numbers.contains(&summary.sequence_number));
+        assert!(summary.epoch == 0);
 
-        let content_digests: Vec<_> = cp.contents.iter().map(|ed| ed.transaction).collect();
+        let content_digests: Vec<_> = contents.iter().map(|ed| ed.transaction).collect();
         let expected: Vec<_> = tx_digests
             .iter()
             .zip(&tx_checkpoints)
-            .filter(|(_, cp_num)| **cp_num == cp.summary.sequence_number)
+            .filter(|(_, cp_num)| **cp_num == summary.sequence_number)
             .map(|(d, _)| *d)
             .collect();
         for d in &expected {
             assert!(
                 content_digests.contains(d),
                 "checkpoint {} should contain txn {}",
-                cp.summary.sequence_number,
+                summary.sequence_number,
                 d,
             );
         }
@@ -664,15 +502,16 @@ async fn test_indexer_e2e() -> Result<()> {
 
     // -- Checkpoint-by-digest reverse index --
     for cp in &checkpoints {
-        let digest = cp.summary.digest();
+        let summary = cp.summary.as_ref().unwrap();
+        let digest = summary.digest();
         let found = harness
             .bigtable_client()
             .get_checkpoint_by_digest(digest)
             .await?;
         assert!(found.is_some(), "checkpoint by digest should exist");
         assert_eq!(
-            found.unwrap().summary.sequence_number,
-            cp.summary.sequence_number
+            found.unwrap().summary.as_ref().unwrap().sequence_number,
+            summary.sequence_number
         );
     }
 
@@ -816,6 +655,81 @@ async fn test_indexer_e2e() -> Result<()> {
     let latest = harness.bigtable_client().get_latest_epoch().await?;
     assert!(latest.is_some());
     assert!(latest.unwrap().epoch.unwrap() >= 1);
+
+    // -- Column-filtered checkpoint partial reads --
+    // Fetch with only summary column — no signatures or contents.
+    let partial = harness
+        .bigtable_client()
+        .get_checkpoints_filtered(&checkpoint_numbers, Some(&[checkpoints::col::SUMMARY]))
+        .await?;
+    assert_eq!(partial.len(), checkpoint_numbers.len());
+    for cp in &partial {
+        assert!(cp.summary.is_some(), "summary should be present");
+        assert!(cp.signatures.is_none(), "signatures should be absent");
+        assert!(cp.contents.is_none(), "contents should be absent");
+    }
+
+    // Fetch checkpoint by digest with only summary — verify two-step lookup works with filter.
+    let first_cp = checkpoints.first().unwrap();
+    let digest = first_cp.summary.as_ref().unwrap().digest();
+    let partial = harness
+        .bigtable_client()
+        .get_checkpoint_by_digest_filtered(digest, Some(&[checkpoints::col::SUMMARY]))
+        .await?
+        .expect("checkpoint by digest should exist");
+    assert!(partial.summary.is_some(), "summary should be present");
+    assert!(partial.signatures.is_none(), "signatures should be absent");
+    assert!(partial.contents.is_none(), "contents should be absent");
+
+    // -- Column-filtered epoch partial reads --
+    // Fetch epoch with only small scalar columns — no system_state.
+    let partial = harness
+        .bigtable_client()
+        .get_epochs_filtered(
+            &[0],
+            Some(&[
+                epochs::col::EPOCH,
+                epochs::col::START_CHECKPOINT,
+                epochs::col::PROTOCOL_VERSION,
+            ]),
+        )
+        .await?;
+    assert_eq!(partial.len(), 1);
+    let ep = &partial[0];
+    assert_eq!(ep.epoch, Some(0));
+    assert!(
+        ep.start_checkpoint.is_some(),
+        "start_checkpoint should be present"
+    );
+    assert!(
+        ep.protocol_version.is_some(),
+        "protocol_version should be present"
+    );
+    assert!(ep.system_state.is_none(), "system_state should be absent");
+    assert!(
+        ep.reference_gas_price.is_none(),
+        "reference_gas_price should be absent"
+    );
+
+    // Fetch latest epoch with column filter.
+    let partial = harness
+        .bigtable_client()
+        .get_latest_epoch_filtered(Some(&[epochs::col::EPOCH, epochs::col::START_TIMESTAMP]))
+        .await?
+        .expect("latest epoch should exist");
+    assert!(partial.epoch.is_some());
+    assert!(
+        partial.start_timestamp_ms.is_some(),
+        "start_timestamp should be present"
+    );
+    assert!(
+        partial.system_state.is_none(),
+        "system_state should be absent"
+    );
+    assert!(
+        partial.end_checkpoint.is_none(),
+        "end_checkpoint should be absent"
+    );
 
     Ok(())
 }

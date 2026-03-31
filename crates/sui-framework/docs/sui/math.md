@@ -191,7 +191,7 @@ DEPRECATED, use <code><a href="../std/u64.md#std_u64_divide_and_round_up">std::u
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/math.md#sui_math_divide_and_round_up">divide_and_round_up</a>(x: u64, y: u64): u64 {
-    x.<a href="../sui/math.md#sui_math_divide_and_round_up">divide_and_round_up</a>(y)
+    x.div_ceil(y)
 }
 </code></pre>
 

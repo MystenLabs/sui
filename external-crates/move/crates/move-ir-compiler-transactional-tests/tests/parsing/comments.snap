@@ -5,7 +5,7 @@ processed 6 tasks
 
 task 0, lines 1-8:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 6.m {
 
 entry foo() {
@@ -18,7 +18,7 @@ B0:
 
 task 1, lines 10-18:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 7.m {
 
 entry foo() {
@@ -31,7 +31,7 @@ B0:
 
 task 2, lines 20-26:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 8.m {
 
 entry foo() {
@@ -44,7 +44,7 @@ B0:
 
 task 3, lines 28-35:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 9.m {
 
 entry foo() {
@@ -61,7 +61,7 @@ Error: ParserError: Invalid Token: invalid token kind for statement Slash
 
 task 5, lines 48-58:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module b.m {
 
 entry foo() {

@@ -12,7 +12,7 @@ use tracing::warn;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::concurrent::Handler;
 use crate::pipeline::concurrent::PrunerConfig;
-use crate::store::Connection;
+use crate::store::ConcurrentConnection;
 use crate::store::Store;
 
 /// The reader watermark task is responsible for updating the `reader_lo` and `pruner_timestamp`
@@ -25,7 +25,7 @@ use crate::store::Store;
 /// indexer or the reader), to avoid issues with drift between clocks.
 ///
 /// If there is no pruner configuration, this task will immediately exit.
-pub(super) fn reader_watermark<H: Handler + 'static>(
+pub(super) fn reader_watermark<H: Handler>(
     config: Option<PrunerConfig>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
@@ -201,6 +201,7 @@ mod tests {
             reader_lo: 0, // Initial reader_lo
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
         let polling_interval_ms = 100;
         let connection_failure_attempts = 0;
@@ -233,6 +234,7 @@ mod tests {
             reader_lo: 7, // Initial reader_lo
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
         let polling_interval_ms = 100;
         let connection_failure_attempts = 0;
@@ -269,6 +271,7 @@ mod tests {
             reader_lo: 0, // Initial reader_lo
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
         let polling_interval_ms = 1_000; // Long interval for testing retry
         let connection_failure_attempts = 1;
@@ -321,6 +324,7 @@ mod tests {
             reader_lo: 0, // Initial reader_lo
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
         let polling_interval_ms = 1_000; // Long interval for testing retry
         let connection_failure_attempts = 0;

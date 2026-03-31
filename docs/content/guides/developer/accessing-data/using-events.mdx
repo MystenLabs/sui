@@ -1,7 +1,7 @@
 ---
 title: Using Events
-description: Use events to notify on-chain assets of activity your smart contracts initiate and query events from other packages to trigger logic based on emitted events.
-keywords: [ using events, notify events, notify assets, notify on-chain assets, activity events, events for activities, move events, events in move, query events, sui RPC, graphql, move, filter events, rust, typescript ]
+description: Use events to notify onchain assets of activity your smart contracts initiate and query events from other packages to trigger logic based on emitted events.
+keywords: [ using events, notify events, notify assets, notify onchain assets, activity events, events for activities, move events, events in move, query events, sui RPC, graphql, move, filter events, rust, typescript ]
 ---
 
 Move code can interact with objects stored on Sui. Some applications might want to track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates. 
@@ -58,7 +58,7 @@ When you process events, each event object contains the following attributes:
 
 ### Querying events with RPC
 
-The Sui RPC provides a [`queryEvents`](/sui-api-ref#suix_queryEvents) method to query on-chain packages and return available events. As an example, the following `curl` command queries the DeepBookV3 package on Mainnet for a specific type of event:
+The Sui RPC provides a [`queryEvents`](/sui-api-ref#suix_queryEvents) method to query onchain packages and return available events. As an example, the following `curl` command queries the DeepBookV3 package on Mainnet for a specific type of event:
 
 ```sh
 $ curl -X POST https://fullnode.mainnet.sui.io:443 \

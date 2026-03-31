@@ -228,6 +228,9 @@ function collectLinks(
     // Skip self-links
     if (normalized === normalizePath(currentPath)) continue;
 
+    // Skip /tooling links
+    if (normalized.includes("/tooling")) continue;
+
     // Skip duplicates by path
     if (seenPaths.has(normalized)) continue;
 

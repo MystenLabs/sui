@@ -10,7 +10,7 @@ task 1, lines 6-21:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5183200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 22:
 //# run Test::M1::create --sender A --args 0 @A
@@ -52,11 +52,11 @@ Response: {
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "Aqmqdaarwh66v7JMYZWpv5Ym4qoQzj4tsg1p5SrvaexW",
+              "digest": "BZco8iRvrg6ZgJqLXkszWCRWzr4ve5oh6ontNF1gSUan",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 1,
-                  "digest": "767Q7rD5zLMNTDpiS5NqnvULLo7veWV3Q7J2f6ckmLyL"
+                  "digest": "oEx8W4wQompmUitPcFxYgXdyRjTyGxRjUx6czV5Pixr"
                 }
               }
             }
@@ -64,11 +64,11 @@ Response: {
           {
             "cursor": "NA==",
             "node": {
-              "digest": "DmQibQeaVLbDs22SWF2dkLpN3hrHBwrz4eBDWGq981US",
+              "digest": "7tbJHKiGyg82kASXTaNQbs4kY8Z2dL2dQNtkkc4A1FvN",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
-                  "digest": "9SG8gasDKkd3xdJyECjPoQgyXw1Y243z7pHRDPDLNJ4E"
+                  "digest": "99hAzD5ticxYFSZ2XfFq8L47ALKq9DsEvynLpv3u5dfF"
                 }
               }
             }
@@ -82,11 +82,11 @@ Response: {
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "Aqmqdaarwh66v7JMYZWpv5Ym4qoQzj4tsg1p5SrvaexW",
+              "digest": "BZco8iRvrg6ZgJqLXkszWCRWzr4ve5oh6ontNF1gSUan",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 1,
-                  "digest": "767Q7rD5zLMNTDpiS5NqnvULLo7veWV3Q7J2f6ckmLyL"
+                  "digest": "oEx8W4wQompmUitPcFxYgXdyRjTyGxRjUx6czV5Pixr"
                 }
               }
             }
@@ -94,11 +94,11 @@ Response: {
           {
             "cursor": "NA==",
             "node": {
-              "digest": "DmQibQeaVLbDs22SWF2dkLpN3hrHBwrz4eBDWGq981US",
+              "digest": "7tbJHKiGyg82kASXTaNQbs4kY8Z2dL2dQNtkkc4A1FvN",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
-                  "digest": "9SG8gasDKkd3xdJyECjPoQgyXw1Y243z7pHRDPDLNJ4E"
+                  "digest": "99hAzD5ticxYFSZ2XfFq8L47ALKq9DsEvynLpv3u5dfF"
                 }
               }
             }
@@ -124,11 +124,11 @@ Response: {
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "Aqmqdaarwh66v7JMYZWpv5Ym4qoQzj4tsg1p5SrvaexW",
+              "digest": "BZco8iRvrg6ZgJqLXkszWCRWzr4ve5oh6ontNF1gSUan",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 1,
-                  "digest": "767Q7rD5zLMNTDpiS5NqnvULLo7veWV3Q7J2f6ckmLyL"
+                  "digest": "oEx8W4wQompmUitPcFxYgXdyRjTyGxRjUx6czV5Pixr"
                 }
               }
             }
@@ -136,11 +136,11 @@ Response: {
           {
             "cursor": "NA==",
             "node": {
-              "digest": "DmQibQeaVLbDs22SWF2dkLpN3hrHBwrz4eBDWGq981US",
+              "digest": "7tbJHKiGyg82kASXTaNQbs4kY8Z2dL2dQNtkkc4A1FvN",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
-                  "digest": "9SG8gasDKkd3xdJyECjPoQgyXw1Y243z7pHRDPDLNJ4E"
+                  "digest": "99hAzD5ticxYFSZ2XfFq8L47ALKq9DsEvynLpv3u5dfF"
                 }
               }
             }
@@ -148,11 +148,11 @@ Response: {
           {
             "cursor": "Ng==",
             "node": {
-              "digest": "6phCUtGFwMYQDUpkcB7kdwwLW7B55bTi92Acpvs3JULT",
+              "digest": "FhVSABRkmUHTV2Woo9p5aer7yS6mFZcbfpzTqHrStru8",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 3,
-                  "digest": "7z8VAibU4td65eQ3mLQqRJQJiPZujDLKRDLnfgmQMfzT"
+                  "digest": "Apn9pmegq2CtERrtWRTaTwxdAMsQuHnB3a3ycuWqu5Sf"
                 }
               }
             }
@@ -166,11 +166,11 @@ Response: {
           {
             "cursor": "Ng==",
             "node": {
-              "digest": "6phCUtGFwMYQDUpkcB7kdwwLW7B55bTi92Acpvs3JULT",
+              "digest": "FhVSABRkmUHTV2Woo9p5aer7yS6mFZcbfpzTqHrStru8",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 3,
-                  "digest": "7z8VAibU4td65eQ3mLQqRJQJiPZujDLKRDLnfgmQMfzT"
+                  "digest": "Apn9pmegq2CtERrtWRTaTwxdAMsQuHnB3a3ycuWqu5Sf"
                 }
               }
             }
@@ -196,11 +196,11 @@ Response: {
           {
             "cursor": "NA==",
             "node": {
-              "digest": "DmQibQeaVLbDs22SWF2dkLpN3hrHBwrz4eBDWGq981US",
+              "digest": "7tbJHKiGyg82kASXTaNQbs4kY8Z2dL2dQNtkkc4A1FvN",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
-                  "digest": "9SG8gasDKkd3xdJyECjPoQgyXw1Y243z7pHRDPDLNJ4E"
+                  "digest": "99hAzD5ticxYFSZ2XfFq8L47ALKq9DsEvynLpv3u5dfF"
                 }
               }
             }
@@ -208,11 +208,11 @@ Response: {
           {
             "cursor": "Ng==",
             "node": {
-              "digest": "6phCUtGFwMYQDUpkcB7kdwwLW7B55bTi92Acpvs3JULT",
+              "digest": "FhVSABRkmUHTV2Woo9p5aer7yS6mFZcbfpzTqHrStru8",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 3,
-                  "digest": "7z8VAibU4td65eQ3mLQqRJQJiPZujDLKRDLnfgmQMfzT"
+                  "digest": "Apn9pmegq2CtERrtWRTaTwxdAMsQuHnB3a3ycuWqu5Sf"
                 }
               }
             }
@@ -226,11 +226,11 @@ Response: {
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "Aqmqdaarwh66v7JMYZWpv5Ym4qoQzj4tsg1p5SrvaexW",
+              "digest": "BZco8iRvrg6ZgJqLXkszWCRWzr4ve5oh6ontNF1gSUan",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 1,
-                  "digest": "767Q7rD5zLMNTDpiS5NqnvULLo7veWV3Q7J2f6ckmLyL"
+                  "digest": "oEx8W4wQompmUitPcFxYgXdyRjTyGxRjUx6czV5Pixr"
                 }
               }
             }
@@ -238,11 +238,11 @@ Response: {
           {
             "cursor": "NA==",
             "node": {
-              "digest": "DmQibQeaVLbDs22SWF2dkLpN3hrHBwrz4eBDWGq981US",
+              "digest": "7tbJHKiGyg82kASXTaNQbs4kY8Z2dL2dQNtkkc4A1FvN",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
-                  "digest": "9SG8gasDKkd3xdJyECjPoQgyXw1Y243z7pHRDPDLNJ4E"
+                  "digest": "99hAzD5ticxYFSZ2XfFq8L47ALKq9DsEvynLpv3u5dfF"
                 }
               }
             }

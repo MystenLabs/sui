@@ -358,7 +358,7 @@ impl SuiNSCluster {
 
         let data = TransactionData::new_programmable(
             sender,
-            vec![fx.gas_object().0],
+            vec![fx.gas_object().unwrap().0],
             builder.finish(),
             DEFAULT_GAS_BUDGET,
             sim.reference_gas_price(),
@@ -389,7 +389,7 @@ impl SuiNSCluster {
 
         let data = TransactionData::new_programmable(
             sender,
-            vec![fx.gas_object().0],
+            vec![fx.gas_object().unwrap().0],
             builder.finish(),
             DEFAULT_GAS_BUDGET,
             sim.reference_gas_price(),

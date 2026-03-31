@@ -10,7 +10,7 @@ task 1, lines 9-77:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 9659600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9728000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 79:
 //# run test::m::mint_s --sender A

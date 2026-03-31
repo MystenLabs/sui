@@ -10,7 +10,7 @@ task 1, lines 7-33:
 //# publish
 created: object(1,0), object(1,1)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 7759600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 7782400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 35:
 //# view-object 1,0
@@ -59,9 +59,9 @@ Response: {
           {
             "node": {
               "object": {
-                "address": "0x8bdbb99968123f0ec15567ed286394357d6de5bcf992c59cb82419f743e3993d",
+                "address": "0x7c22875f7e243bb92e432f05b20441a29c46f7bc37733fdccae1de8299764159",
                 "version": 2,
-                "digest": "ArqWvdapf2kJZSnosA25g8hS9Vtx9VUpTvWzLpcfrCcZ"
+                "digest": "38kP97vkPDU12qxzHN8irW8j9KZ3pzUTSCuwbyKffmUV"
               }
             }
           }
@@ -93,9 +93,9 @@ Response: {
           {
             "node": {
               "object": {
-                "address": "0x8bdbb99968123f0ec15567ed286394357d6de5bcf992c59cb82419f743e3993d",
+                "address": "0x7c22875f7e243bb92e432f05b20441a29c46f7bc37733fdccae1de8299764159",
                 "version": 4,
-                "digest": "3i82PG8dpatyPLzVCjrgeqTjrwjdQgAGBd5E1zVvZa11"
+                "digest": "BKD1wetyMseNCzdriXYYL5yaHV7wGFa38XpjBVahCfCk"
               }
             }
           }

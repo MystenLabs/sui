@@ -10,7 +10,7 @@ task 1, lines 8-39:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 8352400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 8382800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 41:
 //# run a::m::create_parent --sender A

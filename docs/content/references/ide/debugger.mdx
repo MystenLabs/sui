@@ -4,9 +4,9 @@ description: Debug Move execution traces directly in VS Code to understand how y
 keywords: [ move trace debugger, debug move execution traces, debug move traces, move execution traces, vs code, debug in vs code, visual studio code, move extension, vs code extension, move vs code extension, debugging, debug interface, replay ]
 ---
 
-The [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension for Visual Studio Code provides a familiar [debugging interface](https://code.visualstudio.com/docs/debugtest/debugging) for Move unit tests and on-chain transactions, including [PTB](/guides/developer/transactions/ptbs/prog-txn-blocks) debugging support. You can inspect the state of PTB commands, step through code execution, track local variable values, and set line breakpoints for Move code, either in unit tests or in on-chain Move calls.
+The [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension for Visual Studio Code provides a familiar [debugging interface](https://code.visualstudio.com/docs/debugtest/debugging) for Move unit tests and onchain transactions, including [PTB](/guides/developer/transactions/ptbs/prog-txn-blocks) debugging support. You can inspect the state of PTB commands, step through code execution, track local variable values, and set line breakpoints for Move code, either in unit tests or in onchain Move calls.
 
-Debugging is enabled via trace generation: traces can be generated during [unit test execution](#debugging-unit-tests) or during on-chain [transaction replay](#debugging-on-chain-transactions).
+Debugging is enabled via trace generation: traces can be generated during [unit test execution](#debugging-unit-tests) or during onchain [transaction replay](#debugging-on-chain-transactions).
 
 ## Install
 
@@ -18,11 +18,11 @@ The Move Trace Debugger extension is available in the Visual Studio Code Marketp
 
 Alternatively, run `code --install-extension mysten.move-trace-debug` to install the extension from the command line.
 
-To generate unit execution traces that enable unit test and on-chain transaction debugging, you need the `sui` binary installed with the `tracing` feature flag enabled. The `sui` binaries included in release tarballs, Homebrew, and Chocolatey installations have this feature enabled. See [Install Sui](/guides/developer/getting-started/sui-install) for more information.
+To generate unit execution traces that enable unit test and onchain transaction debugging, you need the `sui` binary installed with the `tracing` feature flag enabled. The `sui` binaries included in release tarballs, Homebrew, and Chocolatey installations have this feature enabled. See [Install Sui](/guides/developer/getting-started/sui-install) for more information.
 
 ## Features
 
-The debugger provides a common set of features for all Move code debugging, whether you're debugging Move unit tests or on-chain Move calls. When debugging on-chain transactions, a Move call is just one of many PTB commands. The debugger supports inspecting not only the Move call itself, but also the state and execution of all remaining native PTB commands.
+The debugger provides a common set of features for all Move code debugging, whether you're debugging Move unit tests or onchain Move calls. When debugging onchain transactions, a Move call is just one of many PTB commands. The debugger supports inspecting not only the Move call itself, but also the state and execution of all remaining native PTB commands.
 
 ### Move code debugging features
 
@@ -34,13 +34,13 @@ Source code for debugging unit tests is available by definition, and when starti
 
 ![Source view](./images/source_view.png)
 
-When debugging an on-chain transaction, the source code for Move calls executed within the transaction is not available by default, as it is not stored on-chain. A debug session will start in the disassembly view where Move code is represented by disassembled bytecode.
+When debugging an onchain transaction, the source code for Move calls executed within the transaction is not available by default, as it is not stored onchain. A debug session will start in the disassembly view where Move code is represented by disassembled bytecode.
 
 ![Disassembly view](./images/disassembly_view.png)
 
 This is a lower level representation of the Move code that is still quite useful to improve one's understanding of the Move code behavior and execution flow. It also has one advantage over the source view: it is a much better match to what is recorded in the execution trace. In presence of Move compiler optimizations, disassembly view is the ultimate source of truth. For example, some variables present in the source may no longer be present in the trace, which you can verify in the disassembly view.
 
-You can still provide [source code for on-chain transactions by hand](#source-level-debugging-for-on-chain-transactions) to enable source view. Support for automating source-level debugging for on-chain transactions will be available in the future.
+You can still provide [source code for onchain transactions by hand](#source-level-debugging-for-on-chain-transactions) to enable source view. Support for automating source-level debugging for onchain transactions will be available in the future.
 
 If both source code and disassembled bytecode are available, you can toggle between source view and disassembly view via `Move: Toggle source view` and `Move: Toggle disassembly view` commands from the command palette. You can open these with <kbd>Shift</kbd> + <kbd>⌘</kbd> + <kbd>P</kbd> on macOS, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> on Windows/Linux).
 
@@ -92,7 +92,7 @@ There is no stepping "through" native commands. Once the state is inspected, you
 
 ## Usage
 
-Use the debugger to debug unit tests and existing on-chain transactions (including [PTB](/guides/developer/transactions/ptbs/prog-txn-blocks) debugging support) with the help of the [replay tool](/references/cli/replay).
+Use the debugger to debug unit tests and existing onchain transactions (including [PTB](/guides/developer/transactions/ptbs/prog-txn-blocks) debugging support) with the help of the [replay tool](/references/cli/replay).
 
 ### Debugging unit tests
 
@@ -144,9 +144,9 @@ Debugging a Move unit test is a two-step process:
       </div>
 
 
-### Debugging on-chain transactions
+### Debugging onchain transactions
 
-Debugging an on-chain transaction is a two-step process:
+Debugging an onchain transaction is a two-step process:
 
 **1. Generate execution trace**
 
@@ -173,13 +173,13 @@ Debugging an on-chain transaction is a two-step process:
         The first time you run this command you may be asked to select a debugger type. Select **Move Debugger**.
       :::
 
-## Source-level debugging for on-chain transactions
+## Source-level debugging for onchain transactions
 
 Data downloaded from the network for debugging a transaction does not contain the source code for Move calls executed throughout the transaction. You can, however, provide the sources along with additional debugging metadata yourself to enable source-level debugging. If you have access to the source code of packages used throughout the transaction, you can build the packages to generate the debugging metadata and make the location of this data visible to the replay tool.
 
-The source code version of each package should be the same version that was used to build the package used in the transaction. Otherwise, a discrepancy between execution trace (generated from on-chain data) and package debugging metadata (generated locally), might result in debugging failures.
+The source code version of each package should be the same version that was used to build the package used in the transaction. Otherwise, a discrepancy between execution trace (generated from onchain data) and package debugging metadata (generated locally), might result in debugging failures.
 
-For example, consider a situation when an on-chain transaction executes a call to some public function `foo` which then calls some private function `bar`. The package's source code used to generate the debugging metadata still has public function `foo` but `foo` not longer calls `bar`. When attempting to do source-level debugging in such case, if a call to `bar` was part of the execution trace, the debugger would have no source for function `bar` to display when the call is reached during the debugging session.
+For example, consider a situation when an onchain transaction executes a call to some public function `foo` which then calls some private function `bar`. The package's source code used to generate the debugging metadata still has public function `foo` but `foo` not longer calls `bar`. When attempting to do source-level debugging in such case, if a call to `bar` was part of the execution trace, the debugger would have no source for function `bar` to display when the call is reached during the debugging session.
 
 Using the newest version of a package might still work, particularly for packages whose existing functionality is largely stabilized and its source code rarely changes, such as Sui framework package. Below are the instructions on how to handle this simplified case, followed by instructions on how to locate precise versions of packages.
 
@@ -295,7 +295,7 @@ Proceed to building a correct version of this package to generate debugging meta
     git checkout v3.0.0
     ```
 
-    If tags are not found, you can proceed directly to the next step, but there is no guarantee that the most recent version of source code in the repository corresponds to the version of the package on-chain, which may affect debugging capabilities.
+    If tags are not found, you can proceed directly to the next step, but there is no guarantee that the most recent version of source code in the repository corresponds to the version of the package onchain, which may affect debugging capabilities.
 
 - Build the package and copying the debugging metadata.
 
@@ -316,7 +316,7 @@ Proceed to building a correct version of this package to generate debugging meta
 
 If you cannot locate sources for a user package, you can still locate source code and its correct version for system packages that the user package depends on. This allows you to at least view the source of system packages during the debugging session.
 
-System packages in Sui (the Sui framework package in particular), might only change when the protocol version for Sui changes. These changes [are tracked](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework-snapshot/manifest.json) and include information about protocol version numbers (starting with 3) and corresponding git revisions that represent the exact version of the Sui framework package's source code at a given protocol version. This allows you to locate which protocol version was in effect when the user package was published on-chain.
+System packages in Sui (the Sui framework package in particular), might only change when the protocol version for Sui changes. These changes [are tracked](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework-snapshot/manifest.json) and include information about protocol version numbers (starting with 3) and corresponding git revisions that represent the exact version of the Sui framework package's source code at a given protocol version. This allows you to locate which protocol version was in effect when the user package was published onchain.
 
 Run the following query against Mainnet's GraphQL [endpoint](https://graphql.mainnet.sui.io/graphql) where the `address` parameter is the ID of the user package (`0xb29d83c26cdd2a64959263abbcfc4a6937f0c9fccaf98580ca56faded65be244` in this example).
 

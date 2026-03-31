@@ -5347,7 +5347,13 @@ min
 diff
 	public fun
 	0x1::u128
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u128
+mul_div_ceil
+	public fun
+	0x1::u128
+div_ceil
 	public fun
 	0x1::u128
 pow
@@ -5407,6 +5413,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u128
+divide_and_round_up
+	public fun
+	0x1::u128
 bitwise_not
 	public fun
 	0x1::u16
@@ -5419,7 +5428,13 @@ min
 diff
 	public fun
 	0x1::u16
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u16
+mul_div_ceil
+	public fun
+	0x1::u16
+div_ceil
 	public fun
 	0x1::u16
 pow
@@ -5470,6 +5485,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u16
+divide_and_round_up
+	public fun
+	0x1::u16
 bitwise_not
 	public fun
 	0x1::u256
@@ -5482,7 +5500,7 @@ min
 diff
 	public fun
 	0x1::u256
-divide_and_round_up
+div_ceil
 	public fun
 	0x1::u256
 pow
@@ -5536,6 +5554,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u256
+divide_and_round_up
+	public fun
+	0x1::u256
 bitwise_not
 	public fun
 	0x1::u32
@@ -5548,7 +5569,13 @@ min
 diff
 	public fun
 	0x1::u32
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u32
+mul_div_ceil
+	public fun
+	0x1::u32
+div_ceil
 	public fun
 	0x1::u32
 pow
@@ -5602,6 +5629,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u32
+divide_and_round_up
+	public fun
+	0x1::u32
 bitwise_not
 	public fun
 	0x1::u64
@@ -5614,7 +5644,13 @@ min
 diff
 	public fun
 	0x1::u64
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u64
+mul_div_ceil
+	public fun
+	0x1::u64
+div_ceil
 	public fun
 	0x1::u64
 pow
@@ -5671,6 +5707,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u64
+divide_and_round_up
+	public fun
+	0x1::u64
 bitwise_not
 	public fun
 	0x1::u8
@@ -5683,7 +5722,13 @@ min
 diff
 	public fun
 	0x1::u8
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u8
+mul_div_ceil
+	public fun
+	0x1::u8
+div_ceil
 	public fun
 	0x1::u8
 pow
@@ -5729,6 +5774,9 @@ lossless_shr
 	public fun
 	0x1::u8
 lossless_div
+	public fun
+	0x1::u8
+divide_and_round_up
 	public fun
 	0x1::u8
 UQ32_32

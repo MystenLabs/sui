@@ -130,7 +130,7 @@ impl BenchmarkContext {
                 .next()
                 .unwrap();
             root_objects.insert(owner, root_object);
-            let gas_object = effects.gas_object().0;
+            let gas_object = effects.gas_object().unwrap().0;
             new_gas_objects.insert(gas_object.0, gas_object);
         }
         self.refresh_gas_objects(new_gas_objects);
@@ -189,7 +189,7 @@ impl BenchmarkContext {
                 .next()
                 .unwrap();
             shared_objects.push(shared_object);
-            let gas_object = effects.gas_object().0;
+            let gas_object = effects.gas_object().unwrap().0;
             new_gas_objects.insert(gas_object.0, gas_object);
             // Make sure to commit them to DB. This is needed by both the execution-only mode
             // and the checkpoint-executor mode. For execution-only mode, we iterate through all

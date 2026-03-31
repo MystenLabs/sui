@@ -11,7 +11,7 @@ task 1, lines 6-53:
 created: object(1,0), object(1,1), object(1,2), object(1,3)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 15048000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 15078400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 55:
 //# view-object 1,1

@@ -4,11 +4,11 @@ description: Learn what Sui wallets are, how they work, and which wallet types a
 keywords: [ wallet, wallets, self-custodial, zkLogin, Slush, Phantom, Ledger, key pair, transaction fees, gas, staking ]
 ---
 
-A wallet stores the cryptographic keys that prove ownership of your on-chain assets and signs the transactions you submit to the Sui network.
+A wallet stores the cryptographic keys that prove ownership of your onchain assets and signs the transactions you submit to the Sui network.
 
 ## How wallets work
 
-A Sui **account** is a public key and its derived on-chain address — this is what holds your assets on-chain. The corresponding private key is stored and managed by your **wallet**, which can hold one or more accounts. When you send SUI, transfer an object, or interact with a smart contract, the wallet uses the private key of the active account to sign the transaction. Sui validators verify that signature before processing anything.
+A Sui **account** is a public key and its derived onchain address — this is what holds your assets onchain. The corresponding private key is stored and managed by your **wallet**, which can hold one or more accounts. When you send SUI, transfer an object, or interact with a smart contract, the wallet uses the private key of the active account to sign the transaction. Sui validators verify that signature before processing anything.
  
 Keeping those private keys secure is the central responsibility of any wallet. How a wallet stores and manages them is what distinguishes one wallet type from another:
 
@@ -23,11 +23,11 @@ Both hot and cold wallets can be **self-custodial**, meaning you hold the privat
 
 [**Self-custodial wallets**](/guides/developer/wallets/self-custody): A wallet that stores your private key on your device or hardware. Common self-custodial options include browser extension wallets such as [Phantom](https://phantom.com/) and hardware wallets such as [Ledger](https://www.ledger.com/), which keep the key isolated on a dedicated device. Self-custodial wallets require you to safely back up your recovery passphrase. If you lose both the device and the passphrase, access to your assets is permanently lost.
 
-[**zkLogin wallets**](/guides/developer/wallets/zk-login-wallets) A wallet that leverages [zero-knowledge login (zkLogin)](/guides/developer/cryptography/zklogin-integration/zklogin), a Sui primitive that lets you authorize transactions using an OAuth credential without exposing that credential on-chain. A zero-knowledge proof (ZKP) verifies that you are the rightful account owner without linking your Sui address to your OAuth identity. zkLogin wallets are useful for onboarding users who are unfamiliar with key management.
+[**zkLogin wallets**](/guides/developer/wallets/zk-login-wallets) A wallet that leverages [zero-knowledge login (zkLogin)](/guides/developer/cryptography/zklogin-integration/zklogin), a Sui primitive that lets you authorize transactions using an OAuth credential without exposing that credential onchain. A zero-knowledge proof (ZKP) verifies that you are the rightful account owner without linking your Sui address to your OAuth identity. zkLogin wallets are useful for onboarding users who are unfamiliar with key management.
 
 ## Transaction fees
 
-Every transaction on Sui requires a [gas fee](/concepts/tokenomics/gas-in-sui) paid in SUI. The fee covers two costs: computation (processing the transaction) and storage (the on-chain data the transaction creates or mutates). Validators agree on a network-wide reference gas price at the start of each epoch, giving you a reliable anchor when setting your gas budget. If a transaction deletes on-chain data, you receive a partial storage rebate.
+Every transaction on Sui requires a [gas fee](/concepts/tokenomics/gas-in-sui) paid in SUI. The fee covers two costs: computation (processing the transaction) and storage (the onchain data the transaction creates or mutates). Validators agree on a network-wide reference gas price at the start of each epoch, giving you a reliable anchor when setting your gas budget. If a transaction deletes onchain data, you receive a partial storage rebate.
 
 ## Staking
 

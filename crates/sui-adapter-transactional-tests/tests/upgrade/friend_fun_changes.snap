@@ -10,25 +10,25 @@ task 1, lines 6-20:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 7668400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 7683600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 21-35:
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 7683600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 7698800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 3, lines 36-60:
 //# upgrade --package V1 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 8907200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 8937600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 4, lines 61-83:
 //# upgrade --package V2 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 9834400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 9864800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 5, line 85:
 //# run V3::friend_module::call_friend

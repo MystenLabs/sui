@@ -45,7 +45,7 @@ public(package) fun set_voting_power(validators: &mut vector<Validator>, total_s
     // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
     // have 100%. So we bound the threshold_pct to be always enough to find a solution.
     let total_voting_power = TOTAL_VOTING_POWER;
-    let average_voting_power = total_voting_power.divide_and_round_up(validators.length());
+    let average_voting_power = total_voting_power.div_ceil(validators.length());
     let threshold = total_voting_power.min(MAX_VOTING_POWER.max(average_voting_power));
     let (mut info_list, remaining_power) = init_voting_power_info(
         validators,
@@ -101,7 +101,7 @@ fun adjust_voting_power(
     while (i < len && remaining_power > 0) {
         let v = &mut info_list[i];
         // planned is the amount of extra power we want to distribute to this validator.
-        let planned = remaining_power.divide_and_round_up(len - i);
+        let planned = remaining_power.div_ceil(len - i);
         // target is the targeting power this validator will reach, capped by threshold.
         let target = threshold.min(v.voting_power + planned);
         // actual is the actual amount of power we will be distributing to this validator.

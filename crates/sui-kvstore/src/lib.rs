@@ -6,6 +6,7 @@ pub mod config;
 mod handlers;
 mod rate_limiter;
 pub mod tables;
+pub mod testing;
 
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -123,9 +124,9 @@ pub struct BigTableIndexer {
 
 #[derive(Clone, Debug)]
 pub struct CheckpointData {
-    pub summary: CheckpointSummary,
-    pub contents: CheckpointContents,
-    pub signatures: AuthorityStrongQuorumSignInfo,
+    pub summary: Option<CheckpointSummary>,
+    pub contents: Option<CheckpointContents>,
+    pub signatures: Option<AuthorityStrongQuorumSignInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -315,7 +316,7 @@ impl BigTableIndexer {
             indexer_args,
             client_args,
             ingestion_config.into(),
-            None,
+            Some("kvstore_alt_indexer"),
             registry,
         )
         .await?;

@@ -1072,10 +1072,20 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                 deleted: to_sui_object_ref(effect.deleted().to_vec()),
                 unwrapped_then_deleted: to_sui_object_ref(effect.unwrapped_then_deleted().to_vec()),
                 wrapped: to_sui_object_ref(effect.wrapped().to_vec()),
-                gas_object: OwnedObjectRef {
-                    owner: effect.gas_object().1,
-                    reference: effect.gas_object().0.into(),
-                },
+                gas_object: effect.gas_object().map_or_else(
+                    || OwnedObjectRef {
+                        owner: Owner::AddressOwner(SuiAddress::default()),
+                        reference: SuiObjectRef {
+                            object_id: ObjectID::ZERO,
+                            version: SequenceNumber::default(),
+                            digest: ObjectDigest::MIN,
+                        },
+                    },
+                    |(obj_ref, owner)| OwnedObjectRef {
+                        owner,
+                        reference: obj_ref.into(),
+                    },
+                ),
                 events_digest: effect.events_digest().copied(),
                 dependencies: effect.dependencies().to_vec(),
                 abort_error: effect

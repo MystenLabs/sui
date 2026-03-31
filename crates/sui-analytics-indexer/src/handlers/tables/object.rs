@@ -13,6 +13,12 @@ use sui_types::base_types::ObjectID;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Object;
 
+use sui_package_resolver::PackageStoreWithLruCache;
+use sui_package_resolver::Resolver;
+use sui_package_resolver::error::Error as ResolverError;
+use sui_rpc_api::Client;
+use sui_rpc_resolver::package_store::RpcPackageStore;
+
 use crate::Row;
 use crate::handlers::tables::ObjectStatusTracker;
 use crate::handlers::tables::get_is_consensus;
@@ -21,30 +27,48 @@ use crate::handlers::tables::get_owner_address;
 use crate::handlers::tables::get_owner_type;
 use crate::handlers::tables::initial_shared_version;
 use crate::metrics::Metrics;
-use crate::package_store::PackageCache;
 use crate::pipeline::Pipeline;
 use crate::tables::ObjectRow;
 use crate::tables::ObjectStatus;
 
 pub struct ObjectProcessor {
-    package_cache: Arc<PackageCache>,
+    package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>,
+    rpc_client: Client,
     package_filter: Option<ObjectID>,
     metrics: Metrics,
 }
 
 impl ObjectProcessor {
     pub fn new(
-        package_cache: Arc<PackageCache>,
+        package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>,
+        rpc_url: &str,
         package_filter: &Option<String>,
         metrics: Metrics,
     ) -> Self {
         Self {
             package_cache,
+            rpc_client: Client::new(rpc_url).expect("invalid rpc url"),
             package_filter: package_filter
                 .clone()
                 .map(|x| ObjectID::from_hex_literal(&x).unwrap()),
             metrics,
         }
+    }
+
+    async fn get_original_package_id(
+        &self,
+        id: move_core_types::account_address::AccountAddress,
+    ) -> anyhow::Result<ObjectID> {
+        let object = self
+            .rpc_client
+            .clone()
+            .get_object(ObjectID::from(id))
+            .await
+            .map_err(|_| ResolverError::PackageNotFound(id))?;
+        let sui_types::object::Data::Package(p) = &object.data else {
+            return Err(ResolverError::NotAPackage(id).into());
+        };
+        Ok(p.original_package_id())
     }
 
     async fn check_type_hierarchy(
@@ -71,11 +95,21 @@ impl ObjectProcessor {
         }
 
         // Resolve original package IDs in parallel
-        let mut original_ids = JoinSet::new();
+        let mut original_ids: JoinSet<anyhow::Result<ObjectID>> = JoinSet::new();
 
         for id in package_ids {
-            let package_cache = self.package_cache.clone();
-            original_ids.spawn(async move { package_cache.get_original_package_id(id).await });
+            let client = self.rpc_client.clone();
+            original_ids.spawn(async move {
+                let object = client
+                    .clone()
+                    .get_object(ObjectID::from(id))
+                    .await
+                    .map_err(|_| ResolverError::PackageNotFound(id))?;
+                let sui_types::object::Data::Package(p) = &object.data else {
+                    anyhow::bail!("not a package: {id}");
+                };
+                Ok(p.original_package_id())
+            });
         }
 
         // Check if any resolved ID matches our target
@@ -104,12 +138,7 @@ impl ObjectProcessor {
             .struct_tag()
             .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
         {
-            match get_move_struct(
-                &tag,
-                contents,
-                &self.package_cache.resolver_for_epoch(epoch),
-            )
-            .await
+            match get_move_struct(&tag, contents, &Resolver::new(self.package_cache.clone())).await
             {
                 Ok(move_struct) => Some(move_struct),
                 Err(err)
@@ -150,10 +179,7 @@ impl ObjectProcessor {
 
         let is_match = if let Some(package_id) = self.package_filter {
             if let Some(object_type) = object_type {
-                let original_package_id = self
-                    .package_cache
-                    .get_original_package_id(package_id.into())
-                    .await?;
+                let original_package_id = self.get_original_package_id(package_id.into()).await?;
 
                 let type_tag: TypeTag = object_type.clone().into();
                 self.check_type_hierarchy(&type_tag, original_package_id)

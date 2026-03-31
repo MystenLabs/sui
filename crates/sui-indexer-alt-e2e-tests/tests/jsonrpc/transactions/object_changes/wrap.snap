@@ -10,7 +10,7 @@ task 1, lines 8-26:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5836800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5852000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 28-30:
 //# programmable --sender A --inputs @A
@@ -39,25 +39,25 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "digest": "8AeNyDVU6q7CMVai21qWJhoYSVkiCU8U43r6G921XkoS",
+    "digest": "7xTokw4CWViwDFDQBTVQ3nYjWNRXTsLjShM7ZDaEW7vC",
     "objectChanges": [
+      {
+        "type": "wrapped",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "objectType": "0x32d04f45af84c316d8a7ceeff0f88ec294a029dbdfe3b8a47e79613500da3d8a::M::I",
+        "objectId": "0x53b5e4dec21fc7df049d902ca13c3af4fe01315907ed6b7c4f14843aa71ed8bc",
+        "version": "3"
+      },
       {
         "type": "created",
         "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
         "owner": {
           "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
         },
-        "objectType": "0xa3fa45c7a4494ab87d14750900b99a5088f1a0bc5c306498c2f554cba0c4ed38::M::O",
-        "objectId": "0x4941c34b32e6cf05aa6783cfb332147dac96876564ffb40419a70804478798ed",
+        "objectType": "0x32d04f45af84c316d8a7ceeff0f88ec294a029dbdfe3b8a47e79613500da3d8a::M::O",
+        "objectId": "0x68bf6a04735ba374a49bc7eb9cc83b20646a138e96527705562789647b043326",
         "version": "3",
-        "digest": "6TFBwNNNxivjigLcDksFjAzAnC4cb8Xb5DPJ9rzViQvf"
-      },
-      {
-        "type": "wrapped",
-        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-        "objectType": "0xa3fa45c7a4494ab87d14750900b99a5088f1a0bc5c306498c2f554cba0c4ed38::M::I",
-        "objectId": "0x651b8c9b37a4ecf56fcca3fcb20bcd80bdb455567bcae49b348591a8e34013a6",
-        "version": "3"
+        "digest": "8BiMCNxAZAkNKaQfepeepjPkV3M2w7BfwPEkBfM2UB9N"
       },
       {
         "type": "mutated",
@@ -69,7 +69,7 @@ Response: {
         "objectId": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
         "version": "3",
         "previousVersion": "2",
-        "digest": "12KxMfXTq2XWoYGhmYjRX2kK2uPTe3W4hwLyVzz8fQ6z"
+        "digest": "HTb9DVQPEvF2JkAfHH3bBwW9wusuKsXB5CKPvJqcfiSn"
       }
     ],
     "timestampMs": "0",

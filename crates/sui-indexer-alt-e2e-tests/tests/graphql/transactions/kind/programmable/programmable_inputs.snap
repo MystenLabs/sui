@@ -10,7 +10,7 @@ task 1, lines 6-48:
 //# publish
 created: object(1,0), object(1,1)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 8990800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9036400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 49-51:
 //# programmable --sender A --inputs 42u64 @A
@@ -76,7 +76,7 @@ task 12, lines 84-103:
 Response: {
   "data": {
     "pureInputTest": {
-      "digest": "Bttkcbw8wwg8zCEHvvNB7G6E33j6BkdnsN3EZ8V8R69w",
+      "digest": "5LzDM5eQumKbRqe4oRFisPr8Ac7g9bx9DZ3Kbko7drUp",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -101,14 +101,14 @@ task 13, lines 105-126:
 Response: {
   "data": {
     "sharedInputTest": {
-      "digest": "9SPTGEs8zccU9wmKqySDLQ6mNwFp1PXmzeo6TXbvxNcF",
+      "digest": "A4pwYGvGBtGzcEjQuZnZSCH1hjDbsazHNLJexATQg9sL",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
           "nodes": [
             {
               "__typename": "SharedInput",
-              "address": "0xdac85611bd8b757d3f83e856fc3d1b3410efe3564ba6ab2fa1bd5da010ce66bb",
+              "address": "0x6efabd895ffd324d60bcffd16fefc12b8019357444fb318338a55c838f0fa0ba",
               "initialSharedVersion": 2,
               "mutable": true
             },
@@ -127,7 +127,7 @@ task 14, lines 128-151:
 Response: {
   "data": {
     "ownedOrImmutableTest": {
-      "digest": "A2nbHCsBb5RHdgMJayftB8LBk95JJ7Aihyw8Tp3dS1t4",
+      "digest": "5NQrues5DqGT2TnBssic3s6LcvxWVz9iTuwSDyTjFrsX",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -135,9 +135,9 @@ Response: {
             {
               "__typename": "OwnedOrImmutable",
               "object": {
-                "address": "0xf7ada3a469c1494d73bba789173d5579b2b87259021e5f3b33e081be0b8bc32e",
+                "address": "0xfc6958b9c843379a3b412e17eadf49b033c98e10dade1e05a5bd5f2ac7343122",
                 "version": 2,
-                "digest": "Aa6EyPZHdjMqLNxFahtvLBhb4UVz1vFVWKkeBJQxqLn2"
+                "digest": "AeTDMJVbfk2CXee9ij3LJtenniYqRrj5PwoRkfY7fPeu"
               }
             }
           ]
@@ -152,7 +152,7 @@ task 15, lines 153-176:
 Response: {
   "data": {
     "receivingInputTest": {
-      "digest": "JBV3ka46ujUGJ9q3K3rC2xexK6iYDdXXApADX7Ktmjpc",
+      "digest": "5qnWWyFfja2MJhbJzcSevFWYekDLMLsEXoYi7gq88uwK",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -163,9 +163,9 @@ Response: {
             {
               "__typename": "Receiving",
               "object": {
-                "address": "0x9eb4542cc46f70bcd3332b74783e0d0a9e5a41371d664345e5c2a11facc7d9ff",
+                "address": "0x7ff22016dd7eef6dc2ff2d80ecc8f040b5deec8104adbf003979891287ccc775",
                 "version": 6,
-                "digest": "C3WBk3KF77FLVSEcQDQxo6rfUs17ziEMXx5o6eXkiTP8"
+                "digest": "F4wwLhrBr5wYUhrfE4PrUoSxY2oR1ShAX2EYXP47szoM"
               }
             },
             {

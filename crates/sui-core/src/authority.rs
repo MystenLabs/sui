@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::accumulators::coin_reservations::CoinReservationResolver;
+use crate::accumulators::coin_reservations::CachingCoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
@@ -124,7 +124,10 @@ use sui_json_rpc_types::{
 use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
+use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::authenticator_state::get_authenticator_state;
+use sui_types::balance::Balance;
+use sui_types::coin_reservation;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{AuthoritySignInfo, Signer, default_hash};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
@@ -134,7 +137,7 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorTrait, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -251,6 +254,7 @@ pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod congestion_log;
 pub mod consensus_tx_status_cache;
+pub(crate) mod epoch_marker_key;
 pub mod epoch_start_configuration;
 pub mod execution_time_estimator;
 pub mod shared_object_congestion_tracker;
@@ -888,7 +892,7 @@ pub struct AuthorityState {
     /// The database
     input_loader: TransactionInputLoader,
     execution_cache_trait_pointers: ExecutionCacheTraitPointers,
-    coin_reservation_resolver: Arc<CoinReservationResolver>,
+    coin_reservation_resolver: Arc<CachingCoinReservationResolver>,
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
@@ -995,7 +999,7 @@ impl AuthorityState {
         tx_signatures: &[GenericSignature],
         input_object_kinds: &[InputObjectKind],
         receiving_objects_refs: &[ObjectRef],
-    ) -> SuiResult<BTreeMap<AccumulatorObjId, u64>> {
+    ) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
         // Note: the deny checks may do redundant package loads but:
         // - they only load packages when there is an active package deny map
         // - the loads are cached anyway
@@ -1072,13 +1076,17 @@ impl AuthorityState {
         receiving_objects: &ReceivingObjects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
-        let funds_withdraw_types = tx_data
-            .get_funds_withdrawals()
-            .into_iter()
-            .filter_map(|withdraw| {
-                withdraw
-                    .type_arg
-                    .get_balance_type_param()
+        use sui_types::balance::Balance;
+
+        let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+        )?;
+
+        let funds_withdraw_types = declared_withdrawals
+            .values()
+            .filter_map(|(_, type_tag)| {
+                Balance::maybe_get_balance_type_param(type_tag)
                     .map(|ty| ty.to_canonical_string(false))
             })
             .collect::<BTreeSet<_>>();
@@ -1909,6 +1917,7 @@ impl AuthorityState {
         mut kind: TransactionKind,
         signer: SuiAddress,
         tx_digest: TransactionDigest,
+        accumulator_version: Option<SequenceNumber>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -1921,10 +1930,12 @@ impl AuthorityState {
             &*self.coin_reservation_resolver,
             sender,
             &mut kind,
+            accumulator_version,
         );
 
         let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
-            .execute_transaction_to_effects(
+            // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
+            .execute_transaction_to_effects_and_execution_error(
                 store,
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
@@ -2043,6 +2054,7 @@ impl AuthorityState {
                 kind,
                 signer,
                 tx_digest,
+                execution_env.assigned_versions.accumulator_version,
             );
 
         let object_funds_checker = self.object_funds_checker.load();
@@ -2374,6 +2386,8 @@ impl AuthorityState {
                 kind,
                 signer,
                 transaction_digest,
+                // Use latest accumulator version for dry run/dev inspect
+                None,
             );
 
         let tx_digest = *effects.transaction_digest();
@@ -2420,7 +2434,7 @@ impl AuthorityState {
         let execution_error_source = execution_error
             .as_ref()
             .err()
-            .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
+            .and_then(|e| e.source_ref().as_ref().map(|e| e.to_string()));
 
         Ok((
             DryRunTransactionBlockResponse {
@@ -3785,7 +3799,7 @@ impl AuthorityState {
                 .expect("Failed to initialize fork recovery state")
         });
 
-        let coin_reservation_resolver = Arc::new(CoinReservationResolver::new(
+        let coin_reservation_resolver = Arc::new(CachingCoinReservationResolver::new(
             execution_cache_trait_pointers.child_object_resolver.clone(),
         ));
 
@@ -4763,6 +4777,82 @@ impl AuthorityState {
             })
             .transpose()?;
         Ok(layout)
+    }
+
+    /// Returns a fake ObjectRef representing an address balance, along with the balance value
+    /// and the previous transaction digest. The ObjectRef can be returned to JSON-RPC clients
+    /// that don't understand address balances.
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_address_balance_coin_info(
+        &self,
+        owner: SuiAddress,
+        balance_type: TypeTag,
+    ) -> SuiResult<Option<(ObjectRef, u64, TransactionDigest)>> {
+        let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)?;
+        let accumulator_obj = AccumulatorValue::load_object_by_id(
+            self.get_child_object_resolver().as_ref(),
+            None,
+            *accumulator_id.inner(),
+        )?;
+
+        let Some(accumulator_obj) = accumulator_obj else {
+            return Ok(None);
+        };
+
+        // Extract the currency type from balance_type (e.g., SUI from Balance<SUI>).
+        // get_balance expects the currency type, not the balance type.
+        let currency_type =
+            Balance::maybe_get_balance_type_param(&balance_type).unwrap_or(balance_type);
+
+        let balance = crate::accumulators::balances::get_balance(
+            owner,
+            self.get_child_object_resolver().as_ref(),
+            currency_type,
+        )?;
+
+        if balance == 0 {
+            return Ok(None);
+        };
+
+        let object_ref = coin_reservation::encode_object_ref(
+            accumulator_obj.id(),
+            accumulator_obj.version(),
+            self.load_epoch_store_one_call_per_task().epoch(),
+            balance,
+            self.get_chain_identifier(),
+        );
+
+        Ok(Some((
+            object_ref,
+            balance,
+            accumulator_obj.previous_transaction,
+        )))
+    }
+
+    /// Returns fake ObjectRefs for all address balances of an owner, keyed by coin type string.
+    /// Used by get_all_coins to include fake coins for each coin type.
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_all_address_balance_coin_infos(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiResult<std::collections::HashMap<String, (ObjectRef, u64, TransactionDigest)>> {
+        let indexes = self
+            .indexes
+            .as_ref()
+            .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
+
+        let mut result = std::collections::HashMap::new();
+        for currency_type in indexes.get_address_balance_coin_types_iter(owner) {
+            let balance_type = sui_types::balance::Balance::type_tag(currency_type.clone());
+            if let Some((obj_ref, balance, prev_tx)) =
+                self.get_address_balance_coin_info(owner, balance_type)?
+            {
+                // Use currency_type.to_string() to match the format in CoinIndexKey2
+                // (e.g., "0x2::sui::SUI", not "0x2::coin::Coin<0x2::sui::SUI>")
+                result.insert(currency_type.to_string(), (obj_ref, balance, prev_tx));
+            }
+        }
+        Ok(result)
     }
 
     fn get_owner_at_version(

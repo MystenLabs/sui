@@ -91,7 +91,7 @@ Another example: you discover a shared object in your package has flawed logic. 
 
 ### Versioned shared objects
 
-When you create packages that involve shared objects, think about upgrades and versioning from the start because all prior versions of a package still exist on-chain. A useful pattern is to introduce versioning to the shared object and use a version check to guard access to functions in the package. This limits access to the shared object to the latest package version.
+When you create packages that involve shared objects, think about upgrades and versioning from the start because all prior versions of a package still exist onchain. A useful pattern is to introduce versioning to the shared object and use a version check to guard access to functions in the package. This limits access to the shared object to the latest package version.
 
 Using the earlier `counter` example:
 
@@ -302,7 +302,7 @@ $ sui client publish
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING my_first_package
-Successfully verified dependencies on-chain against source.
+Successfully verified dependencies onchain against source.
 Transaction Digest: GPSpH264CjQPaXQPpMHpkzyGidZnQFvd1yUH5s9ncesi
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Transaction Data                                                                                             │
@@ -476,7 +476,7 @@ If your package has not [adopted automated address management](/guides/developer
 
 To make sure your other packages can use this package as a dependency, you must update the `Move.toml` manifest file for your package to include published information.
 
-Update the alias address and add a new `published-at` entry in the `[package]` section by setting both to the value of the on-chain ID:
+Update the alias address and add a new `published-at` entry in the `[package]` section by setting both to the value of the onchain ID:
 
 ```toml
 [package]
@@ -688,7 +688,7 @@ If the package was published or upgraded with a Sui version prior to `v1.29.0`, 
 
 <TabItem value="manual-address-management" label="Manual Addresses">
 
-For that packages that depend on your `sui_package` to know where to find the on-chain bytecode for verification, edit your manifest again. Provide the upgraded package ID for the `published-at` value and return the original `sui_package` ID value in the `[addresses]` section:
+For that packages that depend on your `sui_package` to know where to find the onchain bytecode for verification, edit your manifest again. Provide the upgraded package ID for the `published-at` value and return the original `sui_package` ID value in the `[addresses]` section:
 
 ```toml
 [package]

@@ -155,6 +155,10 @@ async fn test_alias_changes() {
 
     let enable_effects = submit_and_wait_for_effects(&client, enable_tx).await;
     assert!(enable_effects.status().is_ok());
+    // Wait for all validators to execute the `enable` tx.
+    test_cluster
+        .wait_for_tx_settlement(&[*enable_effects.transaction_digest()])
+        .await;
 
     // Get the AddressAliases object created by enable
     let address_aliases_ref = enable_effects

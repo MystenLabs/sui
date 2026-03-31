@@ -73,7 +73,7 @@ impl TestEnv {
             .unwrap()
             .0
             .0;
-        let gas = effects.gas_object().0;
+        let gas = effects.gas_object().unwrap().0;
 
         let tx = TestTransactionBuilder::new(sender, gas, rgp)
             .move_call(package_id, "object_balance", "new_owned", vec![])

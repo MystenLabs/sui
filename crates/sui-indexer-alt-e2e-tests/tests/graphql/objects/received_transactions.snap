@@ -10,7 +10,7 @@ task 1, lines 6-22:
 //# publish
 created: object(1,0), object(1,1)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 6931200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6946400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 24-26:
 //# create-checkpoint
@@ -45,7 +45,7 @@ Response: {
         "edges": [
           {
             "node": {
-              "digest": "LtgS7BqjVPYBK6Q3ZAqiyDYq4uvn3sTEwC43NYhGXcN",
+              "digest": "EE6C3DvGAaP5JLPzdWog8x9kHjkN95q1TxvuogSpFVfG",
               "sender": {
                 "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
               },
@@ -58,7 +58,7 @@ Response: {
           },
           {
             "node": {
-              "digest": "FphGT31rkYKo5KMjiNupk5xtr8aFHtL44hvtvoGttaB3",
+              "digest": "3Z5czdET4UVHv83uv2R1MHLs8E1DYKERFJpVwvVqceTa",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               },
@@ -71,7 +71,7 @@ Response: {
           },
           {
             "node": {
-              "digest": "3fbkDLKrsbWw4H483jENXoRwLKKaJNEZceAhhPsShpb6",
+              "digest": "H2xkpvGqs1vPpJduJhTf4L7jnfeuoJVZj8mnMev9jPsw",
               "sender": {
                 "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
               },
@@ -88,7 +88,7 @@ Response: {
         "edges": [
           {
             "node": {
-              "digest": "FphGT31rkYKo5KMjiNupk5xtr8aFHtL44hvtvoGttaB3",
+              "digest": "3Z5czdET4UVHv83uv2R1MHLs8E1DYKERFJpVwvVqceTa",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -100,7 +100,7 @@ Response: {
         "edges": [
           {
             "node": {
-              "digest": "FphGT31rkYKo5KMjiNupk5xtr8aFHtL44hvtvoGttaB3",
+              "digest": "3Z5czdET4UVHv83uv2R1MHLs8E1DYKERFJpVwvVqceTa",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }

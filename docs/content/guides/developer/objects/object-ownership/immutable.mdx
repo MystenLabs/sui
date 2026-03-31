@@ -37,9 +37,9 @@ This function creates a new `ColorObject` and immediately makes it immutable bef
 
 ## When to use immutable objects
 
-After an object becomes immutable, the rules of who can use this object in Sui Move calls change:
+After an object becomes immutable, the rules of who can use this object in Move calls change:
 
-1. You can only pass an immutable object as a read-only, immutable reference to Sui Move entry functions as `&T`.
+1. You can only pass an immutable object as a read-only, immutable reference to Move functions as `&T`.
 
 2. All network participants can access immutable objects.
 
@@ -62,7 +62,7 @@ $ export ADDR=`sui client active-address`
 $ sui client objects $ADDR
 ```
 
-Publish the `ColorObject` code on-chain using the Sui CLI:
+Publish the `ColorObject` code onchain using the Sui CLI:
 
 <ImportContent source="info-gas-budget.mdx" mode="snippet" />
 

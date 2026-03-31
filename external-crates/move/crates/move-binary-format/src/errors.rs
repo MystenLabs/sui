@@ -497,3 +497,35 @@ impl std::error::Error for PartialVMError {
         None
     }
 }
+
+/// Trait enabling `safe_unwrap!` to work on both `Option<T>` and `Result<T, E>`.
+pub trait SafeUnwrap {
+    type Output;
+    fn safe_unwrap_or_error(self, file: &str, line: u32) -> Result<Self::Output, PartialVMError>;
+}
+
+impl<T> SafeUnwrap for Option<T> {
+    type Output = T;
+    fn safe_unwrap_or_error(self, file: &str, line: u32) -> Result<T, PartialVMError> {
+        match self {
+            Some(x) => Ok(x),
+            None => Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("{file}:{line} (none)")),
+            ),
+        }
+    }
+}
+
+impl<T, E: std::fmt::Display> SafeUnwrap for Result<T, E> {
+    type Output = T;
+    fn safe_unwrap_or_error(self, file: &str, line: u32) -> Result<T, PartialVMError> {
+        match self {
+            Ok(x) => Ok(x),
+            Err(e) => Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("{file}:{line} {e:#}")),
+            ),
+        }
+    }
+}

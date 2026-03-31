@@ -90,7 +90,6 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         std::fs::read_to_string(path)?,
         output.status.success(),
         output.status.code().unwrap_or(!0),
-        // Convert windows path outputs on the snapshot to regular linux ones.
         String::from_utf8_lossy(&output.stdout)
             .replace(r"\\", "/")
             .replace(r"\", "/"),

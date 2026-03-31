@@ -6,7 +6,7 @@ keywords: [ Object Display, object, display, display properties, object properti
 
 Object Display is a way to render any object on Sui using templating syntax. It renders Sui Move object values into human-readable strings, JSON, or encoded representations. A Display object defines a set of key-value pairs where both keys and values are format strings.
 
-Object Display enables on-chain management of off-chain representation for a type. You can create fully composable and dynamic NFTs by substituting data for an object into a template string.
+Object Display enables onchain management of offchain representation for a type. You can create fully composable and dynamic NFTs by substituting data for an object into a template string.
 
 Check out the [interactive preview application](/guides/developer/objects/display/display-preview) to see how you can use Object Display. 
 
@@ -18,7 +18,7 @@ Object Display V2 will be available in Sui v1.68. Check the [release schedule](h
 
 :::
 
-Object Display V1 will be supported by RPCs that already have support for it (JSON-RPC, GraphQL) until the **end of July 2026**. After that, on-chain V1 display code will be decommissioned and will start aborting.
+Object Display V1 will be supported by RPCs that already have support for it (JSON-RPC, GraphQL) until the **end of July 2026**. After that, onchain V1 display code will be decommissioned and will start aborting.
 
 Use the `sui::display_registry` APIs when creating display from Move code. For the intermediate phase, use the `migrate_v1_to_v2` function to migrate a legacy display and receive the V2 `Display<T>` and `DisplayCap<T>`.
 

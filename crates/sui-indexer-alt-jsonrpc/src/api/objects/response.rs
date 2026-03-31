@@ -34,6 +34,7 @@ use tokio::join;
 
 use crate::context::Context;
 use crate::data::load_live;
+use crate::data::try_resolve_address_balance_object;
 use crate::error::InternalContext;
 use crate::error::RpcError;
 use crate::error::rpc_bail;
@@ -49,10 +50,17 @@ pub(super) async fn live_object(
     object_id: ObjectID,
     options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectResponse, RpcError> {
-    let Some(object) = load_live(ctx, object_id)
+    let object = if let Some(object) = load_live(ctx, object_id)
         .await
         .context("Failed to load latest object")?
-    else {
+    {
+        object
+    } else if let Some(object) = try_resolve_address_balance_object(ctx, object_id)
+        .await
+        .context("Failed to resolve address balance object")?
+    {
+        object
+    } else {
         return Ok(SuiObjectResponse::new_with_error(
             SuiObjectResponseError::NotExists { object_id },
         ));

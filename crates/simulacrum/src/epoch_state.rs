@@ -150,8 +150,9 @@ impl EpochState {
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
-        let (inner_temp_store, gas_status, effects, _timings, result) =
-            self.executor.execute_transaction_to_effects(
+        let (inner_temp_store, gas_status, effects, _timings, result) = self
+            .executor
+            .execute_transaction_to_effects_and_execution_error(
                 store.backing_store(),
                 &self.protocol_config,
                 self.limits_metrics.clone(),

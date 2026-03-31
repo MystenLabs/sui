@@ -197,7 +197,7 @@ pub async fn submit_and_execute_with_error(
 
     // Execute
     let env = ExecutionEnv::new().with_assigned_versions(assigned_versions.clone());
-    let (result, execution_error_opt) = authority
+    let (result, mut execution_error_opt) = authority
         .try_execute_executable_for_test(&executable, env.clone())
         .await;
 
@@ -211,11 +211,12 @@ pub async fn submit_and_execute_with_error(
     state.union(&effects_acc);
     assert_eq!(state_after.digest(), state.digest());
 
-    // Execute on fullnode if provided
+    // Execute on fullnode if provided, use its error which includes source error
     if let Some(fullnode) = fullnode {
-        fullnode
+        let (_, fullnode_execution_error_opt) = fullnode
             .try_execute_executable_for_test(&executable, env)
             .await;
+        execution_error_opt = fullnode_execution_error_opt;
     }
 
     Ok((executable, result.into_inner(), execution_error_opt))

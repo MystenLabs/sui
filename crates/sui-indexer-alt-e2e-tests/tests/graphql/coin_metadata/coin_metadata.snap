@@ -10,7 +10,7 @@ task 1, lines 6-18:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 10624800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 20:
 //# create-checkpoint
@@ -38,13 +38,6 @@ Response: {
           {
             "outputState": {
               "asMoveObject": {
-                "asCoinMetadata": null
-              }
-            }
-          },
-          {
-            "outputState": {
-              "asMoveObject": {
                 "asCoinMetadata": {
                   "decimals": 2,
                   "name": "",
@@ -56,6 +49,13 @@ Response: {
                   "regulatedState": "UNREGULATED",
                   "allowGlobalPause": false
                 }
+              }
+            }
+          },
+          {
+            "outputState": {
+              "asMoveObject": {
+                "asCoinMetadata": null
               }
             }
           }

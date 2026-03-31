@@ -623,7 +623,9 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 ///
 /// It extends both ObjectStore and ReadStore by adding functionality that may require more
 /// detailed underlying databases or indexes to support.
-pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
+pub trait RpcStateReader:
+    ObjectStore + ReadStore + super::ChildObjectResolver + Send + Sync
+{
     /// Lowest available checkpoint for which object data can be requested.
     ///
     /// Specifically this is the lowest checkpoint for which input/output object data will be

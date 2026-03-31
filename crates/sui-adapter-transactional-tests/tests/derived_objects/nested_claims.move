@@ -52,4 +52,4 @@ entry fun claim_and_receive_nested(
 
 //# run a::m::setup --sender A
 
-//# run a::m::claim_and_receive_nested --sender A --args object(2,2) receiving(2,1) receiving(2,0)
+//# run a::m::claim_and_receive_nested --sender A --args object(2,2) receiving(2,0) receiving(2,1)

@@ -70,7 +70,7 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 /// The `main_reader_lo` tracks the lowest checkpoint that can be committed by this pipeline.
 ///
 /// This task will shutdown if any of its channels are closed.
-pub(super) fn collector<H: Handler + 'static>(
+pub(super) fn collector<H: Handler>(
     handler: Arc<H>,
     config: CommitterConfig,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
@@ -325,7 +325,7 @@ mod tests {
     }
 
     /// Wait for a timeout on the channel, expecting this operation to timeout.
-    async fn expect_timeout<H: Handler + 'static>(
+    async fn expect_timeout<H: Handler>(
         rx: &mut mpsc::Receiver<BatchedRows<H>>,
         duration: Duration,
     ) {
@@ -337,7 +337,7 @@ mod tests {
 
     /// Receive from the channel with a given timeout, panicking if the timeout is reached or the
     /// channel is closed.
-    async fn recv_with_timeout<H: Handler + 'static>(
+    async fn recv_with_timeout<H: Handler>(
         rx: &mut mpsc::Receiver<BatchedRows<H>>,
         timeout: Duration,
     ) -> BatchedRows<H> {

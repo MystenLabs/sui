@@ -10,7 +10,7 @@ use crate::{
 };
 use anemo::{PeerId, Request};
 use anyhow::anyhow;
-use std::io::Write;
+use prost::Message;
 use std::num::NonZeroUsize;
 use std::{
     collections::HashMap,
@@ -19,7 +19,9 @@ use std::{
 use sui_config::node::ArchiveReaderConfig;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_config::p2p::StateSyncConfig;
-use sui_storage::blob::{Blob, BlobEncoding};
+use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc;
 use sui_swarm_config::test_utils::{CommitteeFixture, empty_contents};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
@@ -294,9 +296,18 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
             checkpoint_contents: ordered_contents[idx].clone().into_checkpoint_contents(),
             transactions: vec![],
         };
-        let file_path = temp_dir.join(format!("{}.chk", summary.sequence_number));
-        let mut file = std::fs::File::create(file_path)?;
-        file.write_all(&Blob::encode(&chk, BlobEncoding::Bcs)?.to_bytes())?;
+        let checkpoint: sui_types::full_checkpoint_content::Checkpoint = chk.into();
+        let mask = FieldMask::from_paths([
+            rpc::v2::Checkpoint::path_builder().sequence_number(),
+            rpc::v2::Checkpoint::path_builder().summary().bcs().value(),
+            rpc::v2::Checkpoint::path_builder().signature().finish(),
+            rpc::v2::Checkpoint::path_builder().contents().bcs().value(),
+        ]);
+        let proto_checkpoint = rpc::v2::Checkpoint::merge_from(&checkpoint, &mask.into());
+        let proto_bytes = proto_checkpoint.encode_to_vec();
+        let compressed = zstd::encode_all(&proto_bytes[..], 3)?;
+        let file_path = temp_dir.join(format!("{}.binpb.zst", summary.sequence_number));
+        std::fs::write(file_path, compressed)?;
     }
     let archive_reader_config = ArchiveReaderConfig {
         remote_store_config: ObjectStoreConfig::default(),

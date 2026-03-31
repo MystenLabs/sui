@@ -7,11 +7,12 @@ use std::{
 };
 
 use crate::{TestCluster, TestClusterBuilder};
+use move_core_types::identifier::Identifier;
 use sui_keys::keystore::AccountKeystore;
 use sui_protocol_config::{OverrideGuard, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
-    TypeTag,
+    SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_metadata::get_accumulator_object_count,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
@@ -21,8 +22,13 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
     gas_coin::GAS,
+    object::Owner,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ChildObjectResolver,
-    transaction::{CallArg, ObjectArg, TransactionData},
+    transaction::{
+        CallArg, FundsWithdrawalArg, GasData, ObjectArg, TransactionData, TransactionDataV1,
+        TransactionExpiration, TransactionKind,
+    },
 };
 
 // TODO: Some of this code may be useful for tests other than address balance tests,
@@ -32,7 +38,7 @@ pub struct TestEnvBuilder {
     num_validators: usize,
     test_cluster_builder_cb: Option<Box<dyn Fn(TestClusterBuilder) -> TestClusterBuilder + Send>>,
     proto_override_cb:
-        Option<Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send>>,
+        Option<Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync>>,
 }
 
 impl Default for TestEnvBuilder {
@@ -58,7 +64,7 @@ impl TestEnvBuilder {
 
     pub fn with_proto_override_cb(
         mut self,
-        cb: Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send>,
+        cb: Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync>,
     ) -> Self {
         self.proto_override_cb = Some(cb);
         self
@@ -142,7 +148,7 @@ impl TestEnv {
             .await
             .unwrap();
         // update the gas object we used.
-        self.gas_objects.get_mut(&address).unwrap()[0] = effects.gas_object().0;
+        self.gas_objects.get_mut(&address).unwrap()[0] = effects.gas_object().unwrap().0;
         self.cluster.wait_for_tx_settlement(&[digest]).await;
     }
 
@@ -227,6 +233,125 @@ impl TestEnv {
         let package_ref = resp.get_new_package_obj().unwrap();
         self.update_all_gas().await;
         package_ref.0
+    }
+
+    pub async fn setup_custom_coin(&mut self) -> (SuiAddress, TypeTag) {
+        let (publisher, package_id, _) = self.publish_coins_package().await;
+        let coin_a_type: TypeTag = format!("{}::coin_a::COIN_A", package_id).parse().unwrap();
+        (publisher, coin_a_type)
+    }
+
+    /// Publish the coins package and return (publisher, package_id, coin_type, treasury_cap_ref).
+    /// The MINTABLE_COIN TreasuryCap is unfrozen so new Coin objects can be minted.
+    pub async fn setup_mintable_coin(&mut self) -> (SuiAddress, ObjectID, TypeTag, ObjectRef) {
+        let (publisher, package_id, effects) = self.publish_coins_package().await;
+        let coin_type: TypeTag = format!("{}::mintable_coin::MINTABLE_COIN", package_id)
+            .parse()
+            .unwrap();
+        let treasury_cap_ref = self.find_created_treasury_cap(&effects).await;
+        (publisher, package_id, coin_type, treasury_cap_ref)
+    }
+
+    /// Publish the coins test package and return (publisher, package_id, effects).
+    async fn publish_coins_package(&mut self) -> (SuiAddress, ObjectID, TransactionEffects) {
+        let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.extend(["..", "sui-e2e-tests", "tests", "data", "coins"]);
+        let (publisher, gas) = self
+            .cluster
+            .wallet
+            .get_one_gas_object()
+            .await
+            .unwrap()
+            .unwrap();
+        let tx = TestTransactionBuilder::new(publisher, gas, self.rgp)
+            .publish_async(path)
+            .await
+            .build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+        assert!(
+            effects.status().is_ok(),
+            "Publish failed: {:?}",
+            effects.status()
+        );
+        let package_id = self.find_created_package(&effects).await;
+        (publisher, package_id, effects)
+    }
+
+    async fn find_created_package(&self, effects: &TransactionEffects) -> ObjectID {
+        for (obj_ref, owner) in effects.created() {
+            if owner.is_immutable()
+                && let Some(obj) = self
+                    .cluster
+                    .get_object_from_fullnode_store(&obj_ref.0)
+                    .await
+                && obj.is_package()
+            {
+                return obj_ref.0;
+            }
+        }
+        panic!("Package should exist among created objects");
+    }
+
+    async fn find_created_treasury_cap(&self, effects: &TransactionEffects) -> ObjectRef {
+        for (obj_ref, owner) in effects.created() {
+            if matches!(owner, Owner::AddressOwner(_))
+                && let Some(obj) = self
+                    .cluster
+                    .get_object_from_fullnode_store(&obj_ref.0)
+                    .await
+                && obj
+                    .data
+                    .try_as_move()
+                    .is_some_and(|m| m.type_().is_treasury_cap())
+            {
+                return obj_ref;
+            }
+        }
+        panic!("TreasuryCap should exist among created objects");
+    }
+
+    /// Mint a `Coin<T>` of the given amount to the recipient using the `TreasuryCap`.
+    /// Returns the updated `TreasuryCap` ref and the new `Coin` object ref.
+    pub async fn mint_coin(
+        &mut self,
+        publisher: SuiAddress,
+        package_id: ObjectID,
+        treasury_cap_ref: ObjectRef,
+        amount: u64,
+        recipient: SuiAddress,
+    ) -> (ObjectRef, ObjectRef) {
+        let tx = self
+            .tx_builder(publisher)
+            .move_call(
+                package_id,
+                "mintable_coin",
+                "mint_and_transfer",
+                vec![
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap_ref)),
+                    CallArg::Pure(bcs::to_bytes(&amount).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&recipient).unwrap()),
+                ],
+            )
+            .build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
+        assert!(
+            effects.status().is_ok(),
+            "Mint failed: {:?}",
+            effects.status()
+        );
+        let new_treasury_cap_ref = effects
+            .mutated()
+            .into_iter()
+            .find(|(obj_ref, _)| obj_ref.0 == treasury_cap_ref.0)
+            .unwrap()
+            .0;
+        let coin_ref = effects
+            .created()
+            .into_iter()
+            .find(|(_, owner)| matches!(owner, Owner::AddressOwner(addr) if *addr == recipient))
+            .unwrap()
+            .0;
+        (new_treasury_cap_ref, coin_ref)
     }
 
     pub fn encode_coin_reservation(
@@ -384,6 +509,64 @@ impl TestEnv {
         self.cluster.trigger_reconfiguration().await;
     }
 
+    pub fn create_gasless_transaction(
+        &self,
+        amount: u64,
+        token_type: TypeTag,
+        sender: SuiAddress,
+        recipient: SuiAddress,
+        nonce: u32,
+        epoch: u64,
+    ) -> TransactionData {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let withdraw_arg = FundsWithdrawalArg::balance_from_sender(amount, token_type.clone());
+        let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+        let balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![token_type.clone()],
+            vec![withdraw_arg],
+        );
+        let recipient_arg = builder.pure(recipient).unwrap();
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec![token_type],
+            vec![balance, recipient_arg],
+        );
+        let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+        self.gasless_transaction_data(tx_kind, sender, nonce, epoch)
+    }
+
+    pub fn gasless_transaction_data(
+        &self,
+        tx_kind: TransactionKind,
+        sender: SuiAddress,
+        nonce: u32,
+        epoch: u64,
+    ) -> TransactionData {
+        TransactionData::V1(TransactionDataV1 {
+            kind: tx_kind,
+            sender,
+            gas_data: GasData {
+                payment: vec![],
+                owner: sender,
+                price: 0,
+                budget: 0,
+            },
+            expiration: TransactionExpiration::ValidDuring {
+                min_epoch: Some(epoch),
+                max_epoch: Some(epoch),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: self.chain_id,
+                nonce,
+            },
+        })
+    }
+
     /// Publishes the `object_balance` example package, creates an owned vault object,
     /// and funds it with the given amount. Returns (package_id, vault_id).
     pub async fn setup_funded_object_balance_vault(&mut self, amount: u64) -> (ObjectID, ObjectID) {
@@ -423,50 +606,59 @@ impl TestEnv {
         (package_id, vault_id)
     }
 
-    /// Publishes the trusted_coin package and mints coins to the sender's address balance.
-    /// Returns the package ID and the coin type tag.
-    pub async fn publish_and_mint_trusted_coin(
+    /// Publish the trusted_coin package and return (package_id, coin_type, treasury_cap).
+    pub async fn publish_trusted_coin(
         &mut self,
         sender: SuiAddress,
-        amount: u64,
-    ) -> (ObjectID, TypeTag) {
-        let test_tx_builder = self.tx_builder(sender);
-
+    ) -> (ObjectID, TypeTag, ObjectRef) {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.pop(); // go up from test-cluster to crates
+        path.pop();
         path.extend(["sui-e2e-tests", "tests", "rpc", "data", "trusted_coin"]);
-        let coin_publish = test_tx_builder.publish_async(path).await.build();
 
-        let (_, effects) = self.exec_tx_directly(coin_publish).await.unwrap();
+        let tx = self.tx_builder(sender).publish_async(path).await.build();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
 
-        // Find the treasury cap object
-        let treasury_cap = {
-            let mut treasury_cap = None;
-            for (obj_ref, owner) in effects.created() {
-                if owner.is_address_owned() {
-                    let object = self
-                        .cluster
-                        .fullnode_handle
-                        .sui_node
-                        .with_async(|node| async move {
-                            node.state().get_object(&obj_ref.0).await.unwrap()
-                        })
-                        .await;
-                    if object.type_().unwrap().name().as_str() == "TreasuryCap" {
-                        treasury_cap = Some(obj_ref);
-                        break;
-                    }
+        let package_id = effects.published_packages().into_iter().next().unwrap();
+        let coin_type: TypeTag = format!("{}::trusted_coin::TRUSTED_COIN", package_id)
+            .parse()
+            .unwrap();
+
+        // Find the treasury cap by checking object type
+        let mut treasury_cap = None;
+        for (obj_ref, owner) in effects.created() {
+            if owner.is_address_owned() {
+                let object = self
+                    .cluster
+                    .fullnode_handle
+                    .sui_node
+                    .with_async(
+                        |node| async move { node.state().get_object(&obj_ref.0).await.unwrap() },
+                    )
+                    .await;
+                if object.type_().unwrap().name().as_str() == "TreasuryCap" {
+                    treasury_cap = Some(obj_ref);
+                    break;
                 }
             }
-            treasury_cap.expect("Treasury cap not found")
-        };
+        }
 
-        // extract the newly published package id.
-        let package_id = effects.published_packages().into_iter().next().unwrap();
+        (
+            package_id,
+            coin_type,
+            treasury_cap.expect("Treasury cap not found"),
+        )
+    }
 
-        // call trusted_coin::mint to mint coins
-        let test_tx_builder = self.tx_builder(sender);
-        let mint_tx = test_tx_builder
+    /// Mint a trusted coin. Returns (coin_ref, updated_treasury_cap).
+    pub async fn mint_trusted_coin(
+        &mut self,
+        sender: SuiAddress,
+        package_id: ObjectID,
+        treasury_cap: ObjectRef,
+        amount: u64,
+    ) -> (ObjectRef, ObjectRef) {
+        let tx = self
+            .tx_builder(sender)
             .move_call(
                 package_id,
                 "trusted_coin",
@@ -477,38 +669,120 @@ impl TestEnv {
                 ],
             )
             .build();
-        let (_, mint_effects) = self.exec_tx_directly(mint_tx).await.unwrap();
+        let (_, effects) = self.exec_tx_directly(tx).await.unwrap();
 
-        // the trusted coin is the only address-owned object created.
-        let trusted_coin_ref = mint_effects
+        let coin_ref = effects
             .created()
             .iter()
             .find(|(_, owner)| owner.is_address_owned())
             .unwrap()
             .0;
 
-        let coin_type: TypeTag = format!("{}::trusted_coin::TRUSTED_COIN", package_id)
-            .parse()
+        let new_treasury_cap = effects
+            .mutated()
+            .iter()
+            .find(|(obj_ref, _)| obj_ref.0 == treasury_cap.0)
+            .map(|(obj_ref, _)| *obj_ref)
             .unwrap();
 
-        // Transfer the coins to the sender's address balance
-        let send_tx = self
+        (coin_ref, new_treasury_cap)
+    }
+
+    /// Transfer a coin to recipient.
+    pub async fn transfer_coin(
+        &mut self,
+        sender: SuiAddress,
+        coin: ObjectRef,
+        recipient: SuiAddress,
+    ) {
+        let tx = self
             .tx_builder(sender)
-            .transfer_funds_to_address_balance(
-                FundSource::Coin(trusted_coin_ref),
-                vec![(amount, sender)],
-                coin_type.clone(),
-            )
+            .transfer(FullObjectRef::from_fastpath_ref(coin), recipient)
             .build();
-        let (_, send_effects) = self.exec_tx_directly(send_tx).await.unwrap();
-        assert!(
-            send_effects.status().is_ok(),
-            "Transaction should succeed, got: {:?}",
-            send_effects.status()
-        );
+        self.exec_tx_directly(tx).await.unwrap();
+    }
+
+    /// Transfer SUI from sender's gas to recipient.
+    pub async fn transfer_sui(&mut self, sender: SuiAddress, recipient: SuiAddress, amount: u64) {
+        let tx = self
+            .tx_builder(sender)
+            .transfer_sui(Some(amount), recipient)
+            .build();
+        self.exec_tx_directly(tx).await.unwrap();
+    }
+
+    /// Transfer SUI from sender's gas to recipient's address balance.
+    pub async fn transfer_sui_to_address_balance(
+        &mut self,
+        sender: SuiAddress,
+        recipient: SuiAddress,
+        amount: u64,
+    ) {
+        let gas = self.gas_objects[&sender][0];
+        let tx = TestTransactionBuilder::new(sender, gas, self.rgp)
+            .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(amount, recipient)])
+            .build();
+        self.exec_tx_directly(tx).await.unwrap();
+    }
+
+    /// Convenience: publish trusted_coin and set up coins for recipient per config.
+    pub async fn publish_trusted_coin_and_setup(
+        &mut self,
+        funder: SuiAddress,
+        recipient: SuiAddress,
+        config: &CoinTypeConfig,
+        coin_amount: u64,
+    ) -> (ObjectID, TypeTag) {
+        let (package_id, coin_type, mut treasury_cap) = self.publish_trusted_coin(funder).await;
+
+        for _ in 0..config.real_coins {
+            let (coin, new_cap) = self
+                .mint_trusted_coin(funder, package_id, treasury_cap, coin_amount)
+                .await;
+            treasury_cap = new_cap;
+            self.transfer_coin(funder, coin, recipient).await;
+        }
+
+        if config.has_address_balance {
+            let (coin, _) = self
+                .mint_trusted_coin(funder, package_id, treasury_cap, coin_amount)
+                .await;
+            let tx = self
+                .tx_builder(funder)
+                .transfer_funds_to_address_balance(
+                    FundSource::Coin(coin),
+                    vec![(coin_amount, recipient)],
+                    coin_type.clone(),
+                )
+                .build();
+            self.exec_tx_directly(tx).await.unwrap();
+        }
 
         (package_id, coin_type)
     }
+
+    /// Legacy: publish trusted_coin with one real coin and address balance for sender.
+    pub async fn publish_and_mint_trusted_coin(
+        &mut self,
+        sender: SuiAddress,
+        amount: u64,
+    ) -> (ObjectID, TypeTag) {
+        let config = CoinTypeConfig {
+            real_coins: 1,
+            has_address_balance: true,
+        };
+        self.publish_trusted_coin_and_setup(sender, sender, &config, amount)
+            .await
+    }
+}
+
+/// Configuration for a single coin type in a test scenario.
+#[derive(Clone, Debug)]
+pub struct CoinTypeConfig {
+    /// Number of real coins to create for this type.
+    pub real_coins: usize,
+    /// Whether to create an address balance (fake coin) for this type.
+    pub has_address_balance: bool,
 }
 
 pub fn get_sui_accumulator_object_id(sender: SuiAddress) -> ObjectID {

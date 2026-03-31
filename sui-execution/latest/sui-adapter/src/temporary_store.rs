@@ -564,6 +564,62 @@ impl<'backing> TemporaryStore<'backing> {
             .fold(0, |sum, obj| sum + obj.object_size_for_gas_metering())
     }
 
+    /// Validates gasless post-execution invariants:
+    /// - No new objects were created or existing objects mutated (written_objects is empty)
+    /// - The set of deleted objects exactly equals the set of input Coin objects
+    /// - Each recipient receives at least the minimum transfer amount per token type
+    pub fn check_gasless_execution_requirements(&self) -> Result<(), String> {
+        if !self.execution_results.written_objects.is_empty() {
+            return Err("Gasless transactions cannot create or mutate objects".to_string());
+        }
+
+        let input_coin_ids: BTreeSet<ObjectID> = self
+            .input_objects
+            .iter()
+            .filter(|(_, obj)| obj.coin_type_maybe().is_some())
+            .map(|(id, _)| *id)
+            .collect();
+        if self.execution_results.deleted_object_ids != input_coin_ids {
+            return Err(format!(
+                "Gasless transaction must destroy exactly its input Coins. \
+                 Expected: {input_coin_ids:?}, deleted: {:?}",
+                self.execution_results.deleted_object_ids
+            ));
+        }
+
+        let allowed_types =
+            sui_types::transaction::get_gasless_allowed_token_types(self.protocol_config);
+
+        // Aggregate signed balance changes per (address, token_type).
+        // Positive nets are recipient deposits that must meet the minimum transfer amount.
+        let net_totals = sui_types::balance_change::signed_balance_changes_from_events(
+            &self.execution_results.accumulator_events,
+        )
+        .fold(
+            BTreeMap::<(SuiAddress, TypeTag), i128>::new(),
+            |mut totals, (address, token_type, signed_amount)| {
+                *totals.entry((address, token_type)).or_default() += signed_amount;
+                totals
+            },
+        );
+
+        for ((recipient, token_type), net_amount) in net_totals {
+            if net_amount <= 0 {
+                continue;
+            }
+            if let Some(&min_amount) = allowed_types.get(&token_type)
+                && net_amount < i128::from(min_amount)
+            {
+                return Err(format!(
+                    "Gasless transfer of {net_amount} to {recipient} is below \
+                     minimum {min_amount} for token type {token_type}"
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     /// If there are unmetered storage rebate (due to system transaction), we put them into
     /// the storage rebate of 0x5 object.
     /// TODO: This will not work for potential future new system transactions if 0x5 is not in the input.
@@ -1241,7 +1297,9 @@ impl Storage for TemporaryStore<'_> {
 
         // It's important to merge instead of override results because it's
         // possible to execute PT more than once during tx execution.
-        self.execution_results.merge_results(results);
+        self.execution_results.merge_results(
+            results, /* consistent_merge */ true, /* invariant_checks */ true,
+        )?;
 
         Ok(())
     }

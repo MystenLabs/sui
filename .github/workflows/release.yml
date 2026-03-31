@@ -173,6 +173,9 @@ jobs:
         shell: bash
         run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
 
+      - name: Register cargo problem matcher
+        run: echo "::add-matcher::.github/matchers/cargo.json"
+
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_existing_archive == '' }}
         shell: bash

@@ -12,8 +12,12 @@ import * as vscode from 'vscode';
 import * as lc from 'vscode-languageclient/node';
 import * as semver from 'semver';
 import { log } from './log';
+import { ServerActivityMonitor } from './activity_monitor';
 import { assert } from 'console';
 import { IndentAction } from 'vscode';
+
+// Must match PROGRESS_TOKEN in analyzer.rs
+const PROGRESS_TOKEN = 'symbolication';
 
 function version(path: string, args?: readonly string[]): string | null {
     const versionString = childProcess.spawnSync(
@@ -76,6 +80,15 @@ function shouldInstall(bundledVersionString: string | null,
 export class Context {
     private client: lc.LanguageClient | undefined;
 
+    private activityMonitor: ServerActivityMonitor | undefined;
+
+    // Create the output channel and pass it to every LanguageClient
+    // via clientOptions.outputChannel. This prevents the client from disposing and
+    // recreating the channel on each stop/start cycle — the same tab and its history
+    // persist across server restarts. (If we let the client create its own, it sets
+    // an internal _disposeOutputChannel=true flag and destroys the channel on stop().)
+    private readonly moveOutputChannel: vscode.OutputChannel;
+
     configuration: Configuration;
 
     private lintLevel: string;
@@ -113,6 +126,7 @@ export class Context {
         this.resolvedServerPath = this.configuration.serverPath;
         // Default to no additional args but may change during server installation
         this.resolvedServerArgs = [];
+        this.moveOutputChannel = vscode.window.createOutputChannel('Move');
         this.traceOutputChannel = vscode.window.createOutputChannel(
             'Move Language Server Trace',
         );
@@ -170,6 +184,29 @@ export class Context {
     }
 
     /**
+     * Initialize the `move-analyzer` activity monitor in the status bar
+     * that:
+     *  - shows server status,
+     *  - when clicked, shows the `Move` output channel.
+     *  - when hovered, shows the extension and server versions, as well
+     *    additiona commands to execute.
+     *
+     * @param extensionVersion - The version of the extension.
+     * @param serverVersion - The version of the server.
+     */
+    initActivityMonitor(extensionVersion: string, serverVersion: string): void {
+        // Register a command that shows the move-analyzer (`Move`) output channel.
+        const showOutputCmd = 'move.showOutput';
+        const disposable = vscode.commands.registerCommand(showOutputCmd, () => {
+            this.moveOutputChannel.show();
+        });
+        this.extensionContext.subscriptions.push(disposable);
+
+        this.activityMonitor = new ServerActivityMonitor(extensionVersion, serverVersion, showOutputCmd);
+        this.extensionContext.subscriptions.push(this.activityMonitor);
+    }
+
+    /**
      * Configures and starts the client that interacts with the language server.
      *
      * The "client" is an object that sends messages to the language server, which in Move's case is
@@ -197,12 +234,20 @@ export class Context {
         this.traceOutputChannel.clear();
         const clientOptions: lc.LanguageClientOptions = {
             documentSelector: [{ scheme: 'file', language: 'move' }],
+            outputChannel: this.moveOutputChannel,
             traceOutputChannel: this.traceOutputChannel,
             initializationOptions: {
                 lintLevel: this.lintLevel,
                 autoImports: this.autoImports,
                 inlayHintsType: this.inlayHintsType,
                 inlayHintsParam: this.inlayHintsParam,
+            },
+            // Don't auto-restart on fatal errors — let the user restart manually
+            // via the activity monitor tooltip. By default, it would restart automatically
+            // a few times which is noisy and annoying.
+            errorHandler: {
+                error: () => ({ action: lc.ErrorAction.Continue }),
+                closed: () => ({ action: lc.CloseAction.DoNotRestart }),
             },
         };
 
@@ -212,6 +257,38 @@ export class Context {
             serverOptions,
             clientOptions,
         );
+        // Wire activity monitor to the new client. The activityMonitor instance persists
+        // across client restarts; only the listeners are re-attached each time.
+        if (this.activityMonitor) {
+            const activityMonitor = this.activityMonitor;
+            client.onDidChangeState(e => {
+                activityMonitor.onClientStateChange(e.oldState, e.newState);
+            });
+            // Listen for server-sent $/progress notifications to detect compilation state.
+            // The 'begin'/'end' kind values come from the LSP spec's WorkDoneProgress wire format.
+            client.onNotification('$/progress', (params: { token: string; value: { kind: string } }) => {
+                if (params.token === PROGRESS_TOKEN) {
+                    if (params.value.kind === 'begin') {
+                        activityMonitor.onCompilationStart();
+                    } else if (params.value.kind === 'end') {
+                        activityMonitor.onCompilationEnd();
+                    }
+                }
+            });
+            // Wrap sendRequest to track individual LSP request latency (hover,
+            // completion, go-to-def, etc.) as a secondary busy/slow signal.
+            const originalSendRequest = client.sendRequest.bind(client);
+            client.sendRequest = async function (method: any, ...args: any[]) {
+                const trackingId = `${Date.now()}-${Math.random()}`;
+                activityMonitor.onRequestSent(trackingId);
+                try {
+                    return await originalSendRequest(method, ...args);
+                } finally {
+                    activityMonitor.onResponseReceived(trackingId);
+                }
+            } as any;
+        }
+
         log.info('Starting client...');
         const res = client.start();
         this.extensionContext.subscriptions.push({ dispose: async () => client.stop() });

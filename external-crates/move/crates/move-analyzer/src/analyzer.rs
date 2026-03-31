@@ -2,20 +2,20 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
 use crossbeam::channel::{bounded, select};
-use lsp_server::{Connection, Message, Notification, Request, Response};
+use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
 use lsp_types::{
-    CodeActionKind, CodeActionOptions, CodeActionProviderCapability, CompletionOptions, Diagnostic,
-    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TypeDefinitionProviderCapability, WorkDoneProgressOptions, notification::Notification as _,
-    request::Request as _,
+    CodeActionKind, CodeActionOptions, CodeActionProviderCapability, CompletionOptions,
+    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, NumberOrString, OneOf,
+    ProgressParams, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
+    TextDocumentSyncOptions, TypeDefinitionProviderCapability, WorkDoneProgress,
+    WorkDoneProgressBegin, WorkDoneProgressEnd, WorkDoneProgressOptions,
+    notification::Notification as _,
+    request::{Request as _, WorkDoneProgressCreate},
 };
 use move_compiler::{editions::Flavor, linters::LintLevel};
 use std::{
     collections::BTreeMap,
-    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -30,7 +30,7 @@ use crate::{
             on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
             on_hover_request, on_references_request,
         },
-        runner::SymbolicatorRunner,
+        runner::{SymbolicatorMessage, SymbolicatorRunner},
     },
     vfs::on_text_document_sync_notification,
 };
@@ -41,6 +41,10 @@ use vfs::{VfsPath, impls::memory::MemoryFS};
 const LINT_NONE: &str = "none";
 const LINT_DEFAULT: &str = "default";
 const LINT_ALL: &str = "all";
+
+/// Token shared between server and client to correlate $/progress
+/// notifications with the compilation activity.
+const PROGRESS_TOKEN: &str = "symbolication";
 
 #[allow(deprecated)]
 pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
@@ -129,7 +133,7 @@ pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
     })
     .expect("could not serialize server capabilities");
 
-    let (diag_sender, diag_receiver) = bounded::<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>(0);
+    let (diag_sender, diag_receiver) = bounded::<SymbolicatorMessage>(0);
     let initialize_params: lsp_types::InitializeParams =
         serde_json::from_value(client_response).expect("could not deserialize client capabilities");
 
@@ -201,14 +205,33 @@ pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
         )
         .expect("could not finish connection initialization");
 
+    // Ask the client to create a progress token for symbolication. The client
+    // uses this token to match subsequent $/progress begin/end notifications
+    // to the compilation activity.
+    let create_progress = Request::new(
+        RequestId::from(1),
+        WorkDoneProgressCreate::METHOD.to_string(),
+        serde_json::json!({ "token": PROGRESS_TOKEN }),
+    );
+    if let Err(err) = context
+        .connection
+        .sender
+        .send(Message::Request(create_progress))
+    {
+        eprintln!("could not send progress token create request: {:?}", err);
+    }
+
+    let progress_token = NumberOrString::String(PROGRESS_TOKEN.to_string());
+
     let mut shutdown_req_received = false;
     loop {
         select! {
             recv(diag_receiver) -> message => {
                 match message {
-                    Ok(result) => {
-                        match result {
-                            Ok(diags) => {
+                    Ok(msg) => {
+                        match msg {
+                            // Forward compilation diagnostics to the client
+                            SymbolicatorMessage::Diagnostics(diags) => {
                                 for (k, v) in diags {
                                     let url = Url::from_file_path(k).unwrap();
                                     let params = lsp_types::PublishDiagnosticsParams::new(url, v, None);
@@ -221,23 +244,94 @@ pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
                                         };
                                 }
                             },
-                            Err(err) => {
-                                let typ = lsp_types::MessageType::ERROR;
-                                let message = format!("{err}");
-                                    // report missing manifest only once to avoid re-generating
-                                    // user-visible error in cases when the developer decides to
-                                    // keep editing a file that does not belong to a packages
-                                    let params = lsp_types::ShowMessageParams { typ, message };
-                                let notification = Notification::new(lsp_types::notification::ShowMessage::METHOD.to_string(), params);
+                            // Non-fatal error (e.g. missing manifest) — show to user, server continues
+                            SymbolicatorMessage::Error(err) => {
+                                let params = lsp_types::ShowMessageParams {
+                                    typ: lsp_types::MessageType::ERROR,
+                                    message: format!("{err}"),
+                                };
+                                let notification = Notification::new(
+                                    lsp_types::notification::ShowMessage::METHOD.to_string(),
+                                    params,
+                                );
                                 if let Err(err) = context
                                     .connection
                                     .sender
                                     .send(lsp_server::Message::Notification(notification)) {
-                                        eprintln!("could not send compiler error response: {:?}", err);
+                                        eprintln!("could not send error notification: {:?}", err);
+                                    };
+                            },
+                            // Fatal error (e.g. dep download failure) — show error and exit.
+                            // The client detects the process death as State.Stopped (red indicator).
+                            SymbolicatorMessage::FatalError(err) => {
+                                eprintln!("fatal symbolication error: {:?}", err);
+                                let params = lsp_types::ShowMessageParams {
+                                    typ: lsp_types::MessageType::ERROR,
+                                    message: format!("{err}"),
+                                };
+                                let notification = Notification::new(
+                                    lsp_types::notification::ShowMessage::METHOD.to_string(),
+                                    params,
+                                );
+                                if let Err(err) = context
+                                    .connection
+                                    .sender
+                                    .send(lsp_server::Message::Notification(notification)) {
+                                        eprintln!("could not send fatal error notification: {:?}", err);
+                                    };
+                                // Exit immediately — a clean `break` would block on
+                                // io_threads.join() since the stdin reader is still
+                                // waiting for client input.
+                                std::process::exit(1);
+                            },
+                            // Notify client that compilation started
+                            SymbolicatorMessage::SymbolicationStart => {
+                                let params = ProgressParams {
+                                    token: progress_token.clone(),
+                                    value: lsp_types::ProgressParamsValue::WorkDone(
+                                        WorkDoneProgress::Begin(WorkDoneProgressBegin {
+                                            title: "Symbolicating".to_string(),
+                                            cancellable: Some(false),
+                                            message: None,
+                                            percentage: None,
+                                        }),
+                                    ),
+                                };
+                                let notification = Notification::new(
+                                    lsp_types::notification::Progress::METHOD.to_string(),
+                                    params,
+                                );
+                                if let Err(err) = context
+                                    .connection
+                                    .sender
+                                    .send(lsp_server::Message::Notification(notification)) {
+                                        eprintln!("could not send progress begin: {:?}", err);
+                                    };
+                            },
+                            // Notify client that compilation finished (status bar → idle)
+                            SymbolicatorMessage::SymbolicationEnd => {
+                                let params = ProgressParams {
+                                    token: progress_token.clone(),
+                                    value: lsp_types::ProgressParamsValue::WorkDone(
+                                        WorkDoneProgress::End(WorkDoneProgressEnd {
+                                            message: None,
+                                        }),
+                                    ),
+                                };
+                                let notification = Notification::new(
+                                    lsp_types::notification::Progress::METHOD.to_string(),
+                                    params,
+                                );
+                                if let Err(err) = context
+                                    .connection
+                                    .sender
+                                    .send(lsp_server::Message::Notification(notification)) {
+                                        eprintln!("could not send progress end: {:?}", err);
                                     };
                             },
                         }
                     },
+                    // Channel disconnected — symbolication thread crashed
                     Err(error) => {
                         eprintln!("symbolicator message error: {:?}", error);
                         // if the analyzer crashes in a separate thread, this error will keep

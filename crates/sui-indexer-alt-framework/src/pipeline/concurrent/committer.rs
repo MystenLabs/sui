@@ -38,7 +38,7 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// watermark task.
 ///
 /// This task will shutdown if its receiver or sender channels are closed.
-pub(super) fn committer<H: Handler + 'static>(
+pub(super) fn committer<H: Handler>(
     handler: Arc<H>,
     config: CommitterConfig,
     rx: mpsc::Receiver<BatchedRows<H>>,

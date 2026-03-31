@@ -56,12 +56,12 @@ title: Module `sui_system::storage_fund`
 
 Struct representing the storage fund, containing two <code>Balance</code>s:
 - <code><a href="../sui_system/storage_fund.md#sui_system_storage_fund_total_object_storage_rebates">total_object_storage_rebates</a></code> has the invariant that it's the sum of <code>storage_rebate</code> of
-all objects currently stored on-chain. To maintain this invariant, the only inflow of this
-balance is storage charges collected from transactions, and the only outflow is storage rebates
-of transactions, including both the portion refunded to the transaction senders as well as
-the non-refundable portion taken out and put into <code>non_refundable_balance</code>.
+   all objects currently stored on-chain. To maintain this invariant, the only inflow of this
+   balance is storage charges collected from transactions, and the only outflow is storage rebates
+   of transactions, including both the portion refunded to the transaction senders as well as
+   the non-refundable portion taken out and put into <code>non_refundable_balance</code>.
 - <code>non_refundable_balance</code> contains any remaining inflow of the storage fund that should not
-be taken out of the fund.
+   be taken out of the fund.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui_system/storage_fund.md#sui_system_storage_fund_StorageFund">StorageFund</a> <b>has</b> store

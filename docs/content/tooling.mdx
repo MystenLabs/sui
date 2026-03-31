@@ -1,0 +1,1524 @@
+---
+title: Sui Developer Tools
+description: A catalog of developer tools for building, testing, deploying, and auditing Move packages on Sui.
+keywords: [developer tools, sui CLI, suiup, move-analyzer, MVR, debugger, linting, testing, deployment, SDK, indexer, explorer, oracle]
+---
+
+import React from 'react';
+
+Browse the tools available for developing on Sui. Each tool includes a description, installation command, and link to its source.
+
+:::caution
+
+Tools tagged as Community are maintained by third-party developers. Mysten Labs, Sui Foundation, and Walrus Foundation do not guarantee their functionality, security, or compatibility with the latest platform updates.
+
+:::
+
+export const SearchCtx = React.createContext({ query: '', setQuery: () => {} });
+
+export const SearchProvider = ({ children }) => {
+  const [query, setQuery] = React.useState('');
+  const ref = React.useRef(null);
+  const resultsRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!ref.current) return;
+    const container = ref.current;
+    if (query) {
+      Array.from(container.children).forEach((child) => {
+        if (child.classList.contains('tool-search') || child === resultsRef.current) return;
+        child.style.display = 'none';
+      });
+      if (!resultsRef.current) {
+        const div = document.createElement('div');
+        div.className = 'tool-grid';
+        container.appendChild(div);
+        resultsRef.current = div;
+      }
+      const results = resultsRef.current;
+      results.style.display = '';
+      results.innerHTML = '';
+      const q = query.toLowerCase();
+      container.querySelectorAll('.tool-card[data-search]').forEach((card) => {
+        if (card.closest('.tool-grid') === results) return;
+        const text = card.getAttribute('data-search').toLowerCase();
+        if (text.includes(q)) {
+          const clone = card.cloneNode(true);
+          results.appendChild(clone);
+        }
+      });
+      if (results.children.length === 0) {
+        results.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--ifm-color-emphasis-600)">No tools found.</p>';
+      }
+    } else {
+      Array.from(container.children).forEach((child) => {
+        if (child === resultsRef.current) {
+          child.style.display = 'none';
+          return;
+        }
+        child.style.display = '';
+      });
+    }
+  }, [query]);
+  return (
+    <SearchCtx.Provider value={{ query, setQuery }}>
+      <div ref={ref}>
+        {children}
+      </div>
+    </SearchCtx.Provider>
+  );
+};
+
+export const SearchBar = () => {
+  const { query, setQuery } = React.useContext(SearchCtx);
+  return (
+    <div className="tool-search" style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      marginBottom: '24px',
+      padding: '10px 16px',
+      background: 'var(--ifm-background-color)',
+      border: '1px solid var(--ifm-color-emphasis-300)',
+      borderRadius: '8px',
+    }}>
+      <svg style={{ flexShrink: 0, color: 'var(--ifm-color-emphasis-500)' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input
+        type="text"
+        placeholder="Filter tools..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        style={{
+          flex: 1,
+          border: 'none',
+          outline: 'none',
+          background: 'transparent',
+          fontSize: '0.95rem',
+          color: 'var(--ifm-font-color-base)',
+        }}
+      />
+      {query && (
+        <button
+          onClick={() => setQuery('')}
+          aria-label="Clear search"
+          style={{
+            border: 'none',
+            background: 'transparent',
+            fontSize: '1.25rem',
+            cursor: 'pointer',
+            color: 'var(--ifm-color-emphasis-600)',
+            padding: '0 4px',
+            lineHeight: 1,
+          }}
+        >&#215;</button>
+      )}
+    </div>
+  );
+};
+
+export const GitHubIcon = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+  </svg>
+);
+
+export const DocsIcon = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+    <polyline points="10 9 9 9 8 9"/>
+  </svg>
+);
+
+export const WebIcon = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="2" y1="12" x2="22" y2="12"/>
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+  </svg>
+);
+
+export const IconButton = ({ href, title, external, children }) => (
+  <a
+    className="tool-card__icon-btn"
+    href={href}
+    target={external ? "_blank" : undefined}
+    rel={external ? "noopener noreferrer" : undefined}
+    title={title}
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '32px',
+      height: '32px',
+      borderRadius: '50%',
+      backgroundColor: 'var(--ifm-color-emphasis-200)',
+      color: 'var(--ifm-color-emphasis-800)',
+      transition: 'background-color 0.2s',
+    }}
+    onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--ifm-color-emphasis-300)'}
+    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--ifm-color-emphasis-200)'}
+  >
+    {children}
+  </a>
+);
+
+export const ToolCard = ({ name, description, github, install, notes, docs, website, community, language, category }) => {
+  const searchText = [name, description, notes, language, category, community ? 'community' : ''].filter(Boolean).join(' ');
+  const hasBadges = community || language;
+  return (
+    <div className="tool-card" data-search={searchText} style={{
+      border: '1px solid var(--ifm-color-emphasis-300)',
+      borderRadius: '8px',
+      padding: '20px',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      backgroundColor: 'var(--ifm-color-emphasis-100)',
+      position: 'relative',
+    }}>
+      {hasBadges && (
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          display: 'flex',
+          gap: '6px',
+        }}>
+          {language && (
+            <span className="tool-card__badge tool-card__badge--lang" style={{
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              color: 'var(--ifm-color-emphasis-800)',
+              backgroundColor: 'var(--ifm-color-emphasis-200)',
+              border: '1px solid var(--ifm-color-emphasis-300)',
+              borderRadius: '12px',
+              padding: '2px 8px',
+              lineHeight: '1.4',
+            }}>{language}</span>
+          )}
+          {community && (
+            <span className="tool-card__badge" style={{
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              color: 'var(--ifm-color-primary-darker)',
+              backgroundColor: 'var(--ifm-color-primary-lightest)',
+              border: '1px solid var(--ifm-color-primary-light)',
+              borderRadius: '12px',
+              padding: '2px 8px',
+              lineHeight: '1.4',
+            }}>Community</span>
+          )}
+        </div>
+      )}
+      <h4 style={{ margin: '0 0 8px 0', paddingRight: hasBadges ? (community && language ? '160px' : '80px') : '0' }}>{name}</h4>
+      <div style={{ flex: '1' }}>
+        <p style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: 'var(--ifm-color-emphasis-700)' }}>{description}</p>
+        {notes && <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--ifm-color-emphasis-600)' }}>{notes}</p>}
+      </div>
+      {install && install !== 'N/A' && (
+        <pre style={{
+          margin: '0 0 8px 0',
+          padding: '8px 12px',
+          borderRadius: '6px',
+          fontSize: '0.75rem',
+          overflowX: 'auto',
+          backgroundColor: 'var(--ifm-background-surface-color)',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
+        }}>
+          <code>{install}</code>
+        </pre>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '4px', gap: '8px' }}>
+        {docs && (
+          <IconButton href={docs} title="View documentation">
+            <DocsIcon />
+          </IconButton>
+        )}
+        {website && (
+          <IconButton href={website} title="Visit website" external>
+            <WebIcon />
+          </IconButton>
+        )}
+        {github && github !== 'N/A' && (
+          <IconButton href={github.split('  ')[0]} title="View on GitHub" external>
+            <GitHubIcon />
+          </IconButton>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const ToolGrid = ({ children }) => (
+  <div className="tool-grid">
+    {children}
+  </div>
+);
+
+<style>{`
+  .tool-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 996px) {
+    .tool-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+  }
+  @media (max-width: 576px) {
+    .tool-grid {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .tool-card {
+      padding: 16px !important;
+    }
+    .tool-card pre {
+      font-size: 0.7rem !important;
+    }
+    .tool-card__icon-btn {
+      width: 36px !important;
+      height: 36px !important;
+    }
+  }
+`}</style>
+
+<SearchProvider>
+<SearchBar />
+
+## Fundamentals
+
+<ToolGrid>
+<ToolCard
+  name="suiup"
+  description="Installer and version manager for the Sui toolchain. Installs and manages sui, mvr, move-analyzer, walrus, and other Sui binaries."
+  github="https://github.com/MystenLabs/suiup"
+  install="curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh"
+  docs="/guides/developer/getting-started/sui-install"
+/>
+
+<ToolCard
+  name="Sui CLI"
+  description="The core Sui command-line interface. Includes sui move, sui client, sui replay, and other subcommands."
+  github="https://github.com/MystenLabs/sui"
+  install="suiup install sui@testnet or suiup install sui@mainnet"
+  notes="Also available through brew install sui or cargo install. Use suiup for version pinning."
+  docs="/references/cli"
+/>
+
+<ToolCard
+  name="Play Move"
+  description="Move web IDE for quick experimentation without any downloads."
+  website="https://www.playmove.dev/"
+/>
+
+</ToolGrid>
+
+## Writing Move
+
+IDEs, editor extensions, and language tools for writing Move smart contracts.
+
+<ToolGrid>
+
+<ToolCard
+  name="Move Analyzer"
+  description="Move Language Server providing code completion, go-to-definition, hover information, and diagnostics."
+  github="https://github.com/MystenLabs/sui"
+  install="suiup install move-analyzer"
+  notes="VS Code extension: mysten.move"
+  docs="/references/ide/move"
+  website="https://marketplace.visualstudio.com/items?itemName=mysten.move"
+/>
+
+<ToolCard
+  name="Prettier Move Plugin"
+  description="Official Move code formatter using a Prettier plugin backed by tree-sitter."
+  github="https://github.com/MystenLabs/sui/tree/main/external-crates/move/crates/move-analyzer/prettier-plugin"
+  install="npm i -D prettier @mysten/prettier-plugin-move"
+  notes="VS Code extension: mysten.prettier-move"
+  website="https://marketplace.visualstudio.com/items?itemName=mysten.prettier-move"
+/>
+
+<ToolCard
+  name="Tree Sitter Move"
+  description="Tree-sitter grammar for the Move language, enabling syntax highlighting and code analysis in supported editors."
+  github="https://github.com/MystenLabs/sui/tree/main/external-crates/move/tooling/tree-sitter"
+/>
+
+<ToolCard
+  name="Move Registry CLI (MVR)"
+  description="On-chain package manager for Sui with human-readable names, versioning, and dependency resolution."
+  github="https://github.com/MystenLabs/mvr"
+  install="suiup install mvr"
+  notes="Usage: mvr add @deepbook/core, mvr resolve. Integrates with sui move build."
+  docs="https://docs.suins.io/move-registry"
+/>
+
+<ToolCard
+  name="Move Registry"
+  description="Web portal for the Move Registry. Browse, search, and manage Move packages."
+  github="https://github.com/MystenLabs/mvr"
+  notes="Provides package analytics, name registration, and deployment management."
+  website="https://www.moveregistry.com/"
+/>
+
+<ToolCard
+  name="IntelliJ Sui Move Language Plugin"
+  description="IntelliJ-based plugin for Move on Sui development."
+  github="https://github.com/movefuns/intellij-move"
+  website="https://plugins.jetbrains.com/plugin/23301-sui-move-language"
+  community
+/>
+
+<ToolCard
+  name="Emacs move-mode"
+  description="Emacs major-mode for editing smart contracts written in the Move programming language."
+  github="https://github.com/amnn/move-mode"
+  community
+/>
+
+<ToolCard
+  name="Move.vim"
+  description="Vim syntax highlighting that supports the Move 2024 edition."
+  github="https://github.com/yanganto/move.vim"
+  community
+/>
+
+<ToolCard
+  name="Zed Move Extension"
+  description="Move language support for the Zed editor."
+  github="https://github.com/Tzal3x/move-zed-extension"
+  community
+/>
+
+<ToolCard
+  name="BitsLab IDE"
+  description="Online Move code editor that requires no configuration. Supports Move syntax highlighting and interacting with Sui."
+  website="https://ide.bitslab.xyz/"
+  docs="https://www.youtube.com/watch?v=-9-WkqQwtu8"
+  community
+/>
+
+<ToolCard
+  name="ChainIDE"
+  description="Cloud-powered Move development platform for Sui."
+  docs="https://chainide.gitbook.io/chainide-english-1/ethereum-ide-1/9.-sui-ide"
+  website="https://chainide.com/s/sui"
+  community
+/>
+
+<ToolCard
+  name="Sui Extension (zktx.io)"
+  description="VS Code extension for compiling, deploying, and testing Sui smart contracts directly within the editor."
+  github="https://github.com/zktx-io/sui-extension"
+  docs="https://docs.zktx.io/vsce/sui/"
+  website="https://marketplace.visualstudio.com/items?itemName=zktxio.sui-extension"
+  community
+/>
+
+<ToolCard
+  name="Sui TUI"
+  description="Terminal UI tool for Sui."
+  github="https://github.com/wbbradley/suitui"
+  install="cargo install suitui"
+  docs="https://crates.io/crates/suitui"
+  community
+/>
+</ToolGrid>
+
+## Building apps
+
+Frontend toolkits, wallet integration, authentication, and app scaffolding.
+
+<ToolGrid>
+<ToolCard
+  name="@mysten/create-dapp"
+  description="CLI tool for creating Sui apps."
+  docs="https://sdk.mystenlabs.com/dapp-kit/create-dapp"
+/>
+
+<ToolCard
+  name="Sui dApp Kit"
+  description="React components, hooks, and utilities for building apps on Sui."
+  github="https://github.com/MystenLabs/ts-sdks/tree/main/packages/dapp-kit"
+  docs="https://sdk.mystenlabs.com/dapp-kit"
+/>
+
+<ToolCard
+  name="SuiLink"
+  description="Securely link wallet addresses from different blockchains to a Sui wallet address. Receive a soulbound NFT as proof of ownership."
+  website="https://www.suilink.io/"
+/>
+
+<ToolCard
+  name="SAGAT"
+  description="Multisig wallet management platform for proposing, signing, and managing multi-party transactions."
+  github="https://github.com/MystenLabs/sagat"
+  install="Self-host (Bun + TypeScript + PostgreSQL)"
+  notes="Includes API backend, React frontend, and TypeScript SDK."
+  docs="/standards/sagat"
+  website="https://sagat.mystenlabs.com/"
+/>
+
+<ToolCard
+  name="@mysten/signers"
+  description="The Sui KMS Signers package provides a set of tools for securely signing transactions using Key Management Services (KMS) like AWS KMS and GCP KMS."
+  docs="https://www.npmjs.com/package/@mysten/signers"
+  install="npm i @mysten/signers"
+/>
+
+<ToolCard
+  name="YubiSui"
+  description="Create a Sui wallet inside a YubiKey and sign Sui transactions with it."
+  github="https://github.com/MystenLabs/yubigen"
+/>
+
+<ToolCard
+  name="Sui dApp Starter"
+  description="Full-stack boilerplate for scaffolding Sui projects with React."
+  github="https://github.com/suiware/sui-dapp-starter"
+  docs="https://sui-dapp-starter.dev/docs/"
+  website="https://demo.sui-dapp-starter.dev/"
+  community
+/>
+
+<ToolCard
+  name="Suiet Wallet Kit"
+  description="React toolkit for apps to interact with all wallet types in Sui easily."
+  github="https://github.com/suiet/wallet-kit"
+  docs="https://kit.suiet.app/docs/QuickStart"
+  community
+/>
+
+<ToolCard
+  name="@suiware/kit"
+  description="Opinionated React components and hooks for Sui apps."
+  github="https://github.com/suiware/kit"
+  docs="https://github.com/suiware/kit/tree/main/packages/kit#readme"
+  website="https://kit.suiware.io/"
+  community
+/>
+
+<ToolCard
+  name="Sui Suitcase (Polymedia)"
+  description="Sui utilities for TypeScript, Node, and React."
+  github="https://github.com/juzybits/polymedia-suitcase"
+  community
+/>
+
+<ToolCard
+  name="Sui dApp Scaffold (Bucket Protocol)"
+  description="Frontend scaffold for a decentralized app on Sui."
+  github="https://github.com/Bucket-Protocol/sui-dapp-scaffold-v1"
+  community
+/>
+
+<ToolCard
+  name="Wormhole Kit (zktx.io)"
+  description="React library that enables instant integration of Wormhole into your app."
+  github="https://github.com/zktx-io/wormhole-kit-monorepo"
+  community
+/>
+
+<ToolCard
+  name="create-dubhe (Dubhe Engine)"
+  description="Create a new Dubhe project on Sui."
+  github="https://github.com/0xobelisk/dubhe/tree/main/packages/create-dubhe"
+  docs="https://dubhe.obelisk.build/dubhe/sui/quick-start"
+  community
+/>
+
+<ToolCard
+  name="sui-dapp-kit-theme-creator"
+  description="Build custom Sui dApp Kit themes."
+  website="https://sui-dapp-kit-theme-creator.app/"
+  community
+/>
+
+<ToolCard
+  name="PTB Studio"
+  description="Visual Programmable Transaction Block builder."
+  docs="https://suicookbook.com/ptb-studio.html"
+  website="https://ptb.studio"
+  community
+/>
+
+</ToolGrid>
+
+### zkLogin
+
+<ToolGrid>
+<ToolCard
+  name="useSuiZkLogin"
+  description="React hook and functions for seamless zkLogin integration on Sui."
+  github="https://github.com/pixelbrawlgames/use-sui-zklogin"
+  community
+/>
+
+<ToolCard
+  name="React ZK Login Kit"
+  description="Ready-to-use component with hook for sign-in and sign-transaction."
+  github="https://github.com/denyskozak/react-sui-zk-login-kit"
+  community
+/>
+
+<ToolCard
+  name="zkLogin Demo (Polymedia)"
+  description="Demo implementation of zkLogin."
+  github="https://github.com/juzybits/polymedia-zklogin-demo"
+  community
+/>
+
+<ToolCard
+  name="zkLogin Demo (jovicheng)"
+  description="Demo implementation of Sui zkLogin."
+  github="https://github.com/jovicheng/sui-zklogin-demo"
+  community
+/>
+
+<ToolCard
+  name="zkWallet Demo (ronanyeah)"
+  description="Demo implementation of a Sui zk wallet."
+  github="https://github.com/ronanyeah/sui-zk-wallet"
+  community
+/>
+</ToolGrid>
+
+## Testing and debugging
+
+Tools for unit testing, replaying transactions, and debugging Move execution locally.
+
+<ToolGrid>
+<ToolCard
+  name="sui replay"
+  description="Locally re-executes any past on-chain transaction and compares effects."
+  github="https://github.com/MystenLabs/sui"
+  notes="Usage: sui replay --digest <TX_DIGEST>. Use --trace for debugger input."
+  docs="/references/cli/replay"
+/>
+
+<ToolCard
+  name="Move Trace Debugger"
+  description="Step-through debugger for Move execution traces with variable inspection and breakpoints."
+  github="https://github.com/MystenLabs/sui"
+  notes="Works on traces from sui move test --trace-execution and sui replay --trace.VS Code extension: mysten.move-trace-debug"
+  docs="/references/ide/debugger"
+  website="https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug"
+/>
+
+<ToolCard
+  name="Object Display V2 Templates"
+  description="Build and preview Display templates for on-chain objects."
+  docs="https://docs.sui.io/guides/developer/objects/display/display-preview"
+  website="https://docs.sui.io/guides/developer/objects/display/display-preview"
+/>
+
+<ToolCard
+  name="SuiBase"
+  description="Create workdirs, each defining a distinct development environment targeting a network."
+  github="https://github.com/chainmovers/suibase"
+  docs="https://suibase.io/"
+  community
+/>
+
+<ToolCard
+  name="Sentio Debugger"
+  description="Shows the trace of a transaction. Mainnet only."
+  docs="https://docs.sentio.xyz/docs/debugger"
+  website="https://app.sentio.xyz/explorer"
+  community
+/>
+
+</ToolGrid>
+
+### Faucets 
+
+Obtain testing tokens for Testnet deployment.
+
+<ToolGrid>
+<ToolCard
+  name="Sui Faucet"
+  description="Request Testnet or Devnet SUI tokens for development and testing."
+  website="https://faucet.sui.io/"
+/>
+
+<ToolCard
+  name="N1 Stake Faucet"
+  description="Community-provided faucet for obtaining Testnet SUI tokens."
+  website="http://faucet.n1stake.com/"
+  community
+/>
+
+<ToolCard
+  name="SuiLearn Faucet"
+  description="Community-provided faucet for obtaining Testnet SUI tokens."
+  website="http://faucet.suilearn.io/"
+  community
+/>
+</ToolGrid>
+
+## Security and auditing
+
+Formal verification, source verification, linting, and phishing protection.
+
+<ToolGrid>
+<ToolCard
+  name="Sui Prover"
+  description="Prover for doing formal verification of Move on Sui code."
+  website="https://info.asymptotic.tech/sui-prover"
+  community
+/>
+
+<ToolCard
+  name="Package Source Code Verification"
+  description="Verify your package source code on Suiscan, powered by WELLDONE Studio and Blockberry."
+  docs="https://docs.blockberry.one/docs/contract-verification"
+  website="https://suiscan.xyz/mainnet/package-verification"
+  community
+/>
+
+<ToolCard
+  name="SuiSecBlockList"
+  description="Block malicious websites and packages. Identify and hide phishing objects."
+  github="https://github.com/SuiSec/SuiSecBlockList"
+  community
+/>
+
+<ToolCard
+  name="Guardians"
+  description="Phishing website protection for Sui."
+  github="https://github.com/suiet/guardians"
+  community
+/>
+
+<ToolCard
+  name="HoneyPotDetectionOnSui"
+  description="Detect honeypot scams on Sui."
+  github="https://github.com/SuiSec/HoneyPotDetectionOnSui"
+  community
+/>
+
+<ToolCard
+  name="Sui RPC Proxy"
+  description="Monitor and analyze the network requests made by wallet applications and Sui apps."
+  github="https://github.com/SuiSec/sui-rpc-proxy"
+  community
+/>
+</ToolGrid>
+
+## Data and indexing
+
+Indexers, data APIs, and analytics services for querying on-chain state.
+
+<ToolGrid>
+
+<ToolCard
+  name="Sui GraphQL RPC"
+  description="Rich data query interface for Sui."
+  notes="Mainnet: https://graphql.mainnet.sui.io/graphql, Testnet: https://graphql.testnet.sui.io/graphql, Devnet: https://graphql.devnet.sui.io/graphql"
+/>
+
+<ToolCard
+  name="ZettaBlock"
+  description="Generate custom GraphQL or REST APIs from SQL queries and incorporate private off-chain data."
+  docs="https://docs.zettablock.com"
+  website="https://zettablock.com/"
+  community
+/>
+
+<ToolCard
+  name="Sentio Indexer"
+  description="Transform raw indexed data into meaningful queryable data by writing custom processor logic."
+  docs="https://docs.sentio.xyz/docs/sui"
+  website="https://www.sentio.xyz/indexer/"
+  community
+/>
+
+<ToolCard
+  name="BlockVision"
+  description="Pre-built APIs for Sui indexed data including tokens, NFTs, and DeFi."
+  docs="https://docs.blockvision.org/reference/welcome-to-blockvision"
+  website="https://blockvision.org/"
+  community
+/>
+
+<ToolCard
+  name="Blockberry (Suiscan)"
+  description="API providing endpoints for significant entities on Sui, including NFTs, domains, collections, coins, and market data."
+  docs="https://docs.blockberry.one/reference/sui-quickstart"
+  website="https://blockberry.one/"
+  community
+/>
+
+<ToolCard
+  name="Space and Time (SxT)"
+  description="Verifiable compute layer for AI and blockchain. Decentralized data warehouse with sub-second ZK proof."
+  docs="https://docs.spaceandtime.io/"
+  website="https://www.spaceandtime.io/"
+  community
+/>
+
+<ToolCard
+  name="Birdeye Data Services"
+  description="Crypto market data APIs on Sui."
+  docs="https://docs.birdeye.so/reference/intro/authentication"
+  website="https://bds.birdeye.so/"
+  community
+/>
+
+<ToolCard
+  name="Indexer.xyz (TradePort)"
+  description="Toolkit for accessing NFT data and integrating trading functionality on Sui."
+  docs="https://tradeport.xyz/docs"
+  website="https://www.indexer.xyz/"
+  community
+/>
+
+<ToolCard
+  name="Dubhe Indexer (Dubhe Engine)"
+  description="Automatic indexing of all events based on Dubhe Engine configuration files."
+  github="https://github.com/0xobelisk/dubhe/tree/main/crates/dubhe-indexer"
+  docs="https://dubhe-docs.obelisk.build/dubhe/sui/indexer"
+  community
+/>
+
+<ToolCard
+  name="Surflux"
+  description="Developer infrastructure for Sui. Build production-ready apps with APIs, indexing, and real-time data streams."
+  docs="https://docs.surflux.dev/"
+  website="https://surflux.dev/"
+  community
+/>
+
+<ToolCard
+  name="Indexer Generator"
+  description="Code generator that creates an indexer for all events in a given smart contract. Uses TypeScript and Prisma."
+  website="https://www.npmjs.com/package/sui-events-indexer"
+  community
+/>
+
+<ToolCard
+  name="OKLink"
+  description="Explorer and data APIs for Sui."
+  website="https://www.oklink.com/sui"
+  community
+/>
+</ToolGrid>
+
+## Explorers
+
+Block explorers and network monitoring dashboards.
+
+<ToolGrid>
+<ToolCard
+  name="SuiVision"
+  description="Data analytics covering transactions, wallets, staking, and validators."
+  docs="https://docs.blockvision.org/reference/integrate-suivision-into-your-dapp"
+  website="https://suivision.xyz/"
+  community
+/>
+
+<ToolCard
+  name="Suiscan"
+  description="Explorer and analytics platform for Sui."
+  docs="https://docs.blockberry.one/reference/welcome-to-blockberry-api"
+  website="https://suiscan.xyz/mainnet/home"
+  community
+/>
+
+<ToolCard
+  name="Polymedia Explorer"
+  description="Community fork of the discontinued Sui Explorer from Mysten Labs. Available to build locally or use online."
+  github="https://github.com/juzybits/polymedia-explorer"
+  website="https://explorer.polymedia.app"
+  community
+/>
+
+<ToolCard
+  name="Local Sui Explorer"
+  description="Sui Explorer for your localnet."
+  github="https://github.com/suiware/sui-explorer"
+  community
+/>
+
+<ToolCard
+  name="Suimon"
+  description="Command-line tool providing detailed dashboards for monitoring the Sui network."
+  github="https://github.com/bartosian/suimon"
+  community
+/>
+
+<ToolCard
+  name="RPC Tools (Polymedia)"
+  description="Web app that helps users find the fastest RPC endpoint for their location."
+  github="https://github.com/juzybits/polymedia-rpcs"
+  website="https://rpcs.polymedia.app/"
+  community
+/>
+</ToolGrid>
+
+## Oracles
+
+Price feeds and off-chain data delivery for on-chain contracts.
+
+<ToolGrid>
+<ToolCard
+  name="Pyth Network"
+  description="Oracle protocol that connects the owners of market data to applications on multiple blockchains including Sui."
+  docs="https://docs.pyth.network/price-feeds/use-real-time-data/sui"
+  website="https://www.pyth.network/"
+  community
+/>
+
+<ToolCard
+  name="Supra Oracles"
+  description="Oracle protocol providing reliable data feeds through pull and push models."
+  docs="https://docs.supra.com/oracles/data-feeds/pull-oracle#sui"
+  website="https://supra.com/"
+  community
+/>
+
+<ToolCard
+  name="Switchboard"
+  description="Data feed customization and management for Sui."
+  docs="https://docs.switchboard.xyz/docs-by-chain/sui"
+  community
+/>
+</ToolGrid>
+
+## AI
+
+Autonomous agents, verifiable inference, and TEE infrastructure.
+
+<ToolGrid>
+<ToolCard
+  name="Talus"
+  description="Build autonomous digital economy powered by Sui."
+  github="https://github.com/Talus-Network"
+  docs="https://docs.talus.network/"
+  community
+/>
+
+<ToolCard
+  name="Atoma"
+  description="Developer-focused infrastructure for private, verifiable, and customized AI experiences."
+  website="https://atoma.network/"
+  community
+/>
+
+<ToolCard
+  name="Eliza"
+  description="Framework for building autonomous agents."
+  github="https://github.com/elizaOS/eliza"
+  community
+/>
+
+</ToolGrid>
+
+## Sui stack tooling 
+
+Tooling for other pieces of the Sui stack, including Walrus, Seal, and Nautilus.
+
+<ToolGrid>
+<ToolCard
+  name="Walrus CLI"
+  description="CLI for interacting with the Walrus platform for configuration, orchestration, and environment setup."
+  docs="https://docs.wal.app/docs/getting-started/advanced-setup"
+  install="suiup install walrus"
+/>
+
+<ToolCard
+  name="Walrus site-builder"
+  description="CLI tool that lets you create, edit, and publish Walrus Sites."
+  docs="https://docs.wal.app/docs/sites/getting-started/installing-the-site-builder"
+  install="suiup install site-builder"
+/>
+
+<ToolCard
+  name="Seal CLI"
+  description="Command-line interface for Seal encryption and access control."
+  github="https://github.com/MystenLabs/seal/tree/main/crates/seal-cli"
+/>
+
+<ToolCard
+  name="Nautilus Ops"
+  description="Operations tooling for Nautilus."
+  github="https://github.com/Ashwin-3cS/nautilus-ops"
+  community
+/>
+
+<ToolCard
+  name="Nautilus TypeScript"
+  description="TypeScript utilities for Nautilus."
+  github="https://github.com/unconfirmedlabs/nautilus-ts"
+  community
+/>
+
+<ToolCard
+  name="Marlin Oyster and Nautilus"
+  description="Trusted execution environment (TEE) infrastructure for AI and blockchain workloads on Sui."
+  docs="https://docs.marlin.org/oyster/build-cvm/guides/sui-oyster/"
+/>
+
+</ToolGrid>
+
+## SDKs
+
+SDKs for building on Sui, grouped by language. Use the filter bar to search by language name.
+
+### TypeScript
+
+<ToolGrid>
+<ToolCard
+  name="Sui TypeScript SDK"
+  description="Modular library of tools for interacting with Sui, maintained by Mysten Labs."
+  github="https://github.com/MystenLabs/ts-sdks/tree/main/packages/typescript"
+  docs="https://sdk.mystenlabs.com/typescript"
+  website="https://sdk.mystenlabs.com/sui"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Enoki TypeScript SDK"
+  description="TypeScript SDK for Enoki."
+  docs="https://docs.enoki.mystenlabs.com/ts-sdk"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Enoki Connect SDK"
+  description="TypeScript SDK for Enoki Connect integration."
+  docs="https://docs.enoki.mystenlabs.com/enoki-connect"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Seal SDK"
+  description="TypeScript SDK for Seal, providing encryption and access control on Sui."
+  docs="https://seal-docs.wal.app/GettingStarted/"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="zkSend SDK"
+  description="TypeScript SDK for sending assets through zkSend on Sui."
+  docs="https://sdk.mystenlabs.com/zksend"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="DeepBookV3 SDK"
+  description="TypeScript SDK for integrating with DeepBook V3."
+  github="https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3"
+  website="https://www.npmjs.com/package/@mysten/deepbook-v3"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Slush Wallet SDK"
+  description="TypeScript SDK for integrating Slush Wallet into your app."
+  docs="https://sdk.mystenlabs.com/slush-wallet/dapp"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Kiosk SDK"
+  description="TypeScript SDK for building with Sui Kiosk, the decentralized commerce primitive."
+  docs="https://sdk.mystenlabs.com/kiosk"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Walrus SDK"
+  description="TypeScript SDK for integrating with Walrus decentralized storage."
+  docs="https://sdk.mystenlabs.com/walrus"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="PAS TypeScript SDK"
+  description="Programmable Asset Standard TypeScript package."
+  website="https://www.npmjs.com/package/@mysten/pas"
+  github="https://github.com/MystenLabs/pas"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Sui Wallet Standard"
+  description="Standard TypeScript utilities for implementing wallets and libraries based on the Wallet Standard."
+  github="https://github.com/MystenLabs/ts-sdks/tree/main/packages/wallet-standard"
+  docs="/standards/wallet-standard"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="BCS TypeScript"
+  description="Binary Canonical Serialization library for TypeScript."
+  docs="https://sdk.mystenlabs.com/bcs"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Codegen"
+  description="Code generation utilities for the Sui TypeScript SDK."
+  docs="https://sdk.mystenlabs.com/codegen"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Payment Kit"
+  description="SDK for handling payments on Sui."
+  docs="https://sdk.mystenlabs.com/payment-kit"
+  language="TypeScript"
+/>
+
+<ToolCard
+  name="Sui Kit (Scallop)"
+  description="Toolkit for interacting with the Sui network in TypeScript."
+  github="https://github.com/scallop-io/sui-kit"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="Sui Client Gen (Kuna Labs)"
+  description="Generate TypeScript SDKs for Sui Move smart contracts. Works with source code and on-chain packages, no IDLs or ABIs required."
+  github="https://github.com/kunalabs-io/sui-client-gen"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="TypeMove (Sentio)"
+  description="Generate TypeScript bindings for Sui contracts."
+  github="https://github.com/sentioxyz/typemove/blob/main/packages/sui/Readme.md"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="CoinMeta (Polymedia)"
+  description="Library for fetching coin metadata for Sui coins."
+  github="https://github.com/juzybits/polymedia-coinmeta"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="Dubhe Client"
+  description="Multi-platform client supporting browsers, Node.js, and game engines for interacting with Sui Move contracts."
+  github="https://github.com/0xobelisk/dubhe/tree/main/packages/sui-client"
+  docs="https://dubhe-docs.obelisk.build/"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="Dubhe Client BCS Decoding"
+  description="Automatic parsing of BCS types based on contract metadata with automatic conversion formatting."
+  github="https://github.com/0xobelisk/dubhe-docs/blob/main/pages/dubhe/sui/client.mdx#bcs-data-decoding"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="dApp Kit (Vue)"
+  description="Sui dApp Kit for the Vue framework."
+  github="https://github.com/SuiFansCN/suiue"
+  language="TypeScript"
+  community
+/>
+</ToolGrid>
+
+### Rust
+
+<ToolGrid>
+<ToolCard
+  name="Sui Rust SDK"
+  description="Rust SDK for interacting with Sui. Supports gRPC and GraphQL."
+  github="https://github.com/MystenLabs/sui-rust-sdk"
+  docs="https://docs.rs/sui-graphql/latest/sui_graphql/"
+  language="Rust"
+/>
+
+<ToolCard
+  name="Walrus Rust SDK"
+  description="Rust SDK for interacting with Walrus."
+  github="https://github.com/MystenLabs/walrus/tree/main/crates/walrus-core"
+  language="Rust"
+/>
+
+<ToolCard
+  name="Legacy Sui Rust SDK"
+  description="Legacy Rust SDK with JSON RPC support. Forward and backward compatible with the current Sui Rust SDK."
+  github="https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk"
+  docs="https://mystenlabs.github.io/sui/sui_sdk/index.html"
+  language="Rust"
+/>
+
+<ToolCard
+  name="Rust External Signers"
+  description="Rust-based external signer implementations for Sui."
+  github="https://github.com/MystenLabs/rust-signers"
+  language="Rust"
+/>
+
+<ToolCard
+  name="BCS Rust"
+  description="BCS serialization and deserialization in Rust."
+  github="https://github.com/zefchain/bcs"
+  language="Rust"
+  community
+/>
+</ToolGrid>
+
+### Python
+
+<ToolGrid>
+<ToolCard
+  name="Pysui"
+  description="Python SDK for interacting with Sui."
+  github="https://github.com/FrankC01/pysui"
+  docs="https://pysui.readthedocs.io/en/latest/index.html"
+  language="Python"
+/>
+</ToolGrid>
+
+### Go
+
+<ToolGrid>
+<ToolCard
+  name="Sui Go SDK (SuiVision)"
+  description="Golang SDK to interact with Sui."
+  github="https://github.com/block-vision/sui-go-sdk"
+  docs="https://pkg.go.dev/github.com/block-vision/sui-go-sdk"
+  language="Go"
+  community
+/>
+
+<ToolCard
+  name="Sui Go SDK (Pattonkan)"
+  description="Golang SDK with PTB and devInspect support."
+  github="https://github.com/pattonkan/sui-go"
+  docs="https://pkg.go.dev/github.com/pattonkan/sui-go"
+  language="Go"
+  community
+/>
+</ToolGrid>
+
+### Kotlin
+
+<ToolGrid>
+<ToolCard
+  name="Sui Kotlin SDK (Ksui)"
+  description="Kotlin Multiplatform SDK for integrating with Sui."
+  github="https://github.com/mcxross/ksui"
+  docs="https://suicookbook.com"
+  language="Kotlin"
+  community
+/>
+
+<ToolCard
+  name="BCS Kotlin"
+  description="BCS serialization and deserialization in Kotlin."
+  github="https://github.com/mcxross/kotlinx-serialization-bcs"
+  docs="https://suicookbook.com/bcs.html"
+  language="Kotlin"
+  community
+/>
+</ToolGrid>
+
+### Swift
+
+<ToolGrid>
+<ToolCard
+  name="SuiKit"
+  description="Swift SDK natively designed for developing on Sui."
+  github="https://github.com/opendive/suikit"
+  language="Swift"
+  community
+/>
+
+<ToolCard
+  name="BCS Swift"
+  description="BCS serialization and deserialization in Swift."
+  github="https://github.com/OpenDive/SuiKit/tree/main/Sources/SuiKit/Utils/BCS"
+  language="Swift"
+  community
+/>
+</ToolGrid>
+
+### Dart
+
+<ToolGrid>
+<ToolCard
+  name="Sui Dart SDK"
+  description="A cross-platform Dart SDK to interact with Sui."
+  github="https://github.com/mofalabs/sui"
+  docs="https://pub.dev/documentation/sui/latest/"
+  language="Dart"
+  community
+/>
+
+<ToolCard
+  name="BCS Dart"
+  description="BCS serialization and deserialization in Dart."
+  github="https://github.com/mofalabs/bcs"
+  language="Dart"
+  community
+/>
+</ToolGrid>
+
+### C# and Unity
+
+<ToolGrid>
+<ToolCard
+  name="Sui Unity SDK (OpenDive)"
+  description="Fully featured Unity SDK with offline transaction building."
+  github="https://github.com/OpenDive/Sui-Unity-SDK"
+  language="C#"
+  community
+/>
+
+<ToolCard
+  name="BCS Unity"
+  description="BCS serialization and deserialization in Unity C#."
+  github="https://github.com/OpenDive/Sui-Unity-SDK/tree/main/Assets/Sui-Unity-SDK/Code/OpenDive.BCS"
+  language="C#"
+  community
+/>
+</ToolGrid>
+
+### DeFi protocol SDKs
+
+These SDKs are built and maintained by their respective protocol teams for integrating with specific DeFi protocols on Sui.
+
+<ToolGrid>
+<ToolCard
+  name="NAVI Protocol SDK"
+  description="TypeScript SDK for interacting with NAVI Protocol on Sui."
+  github="https://github.com/naviprotocol/navi-sdk"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="Bucket Protocol SDK"
+  description="TypeScript SDK for interacting with Bucket Protocol."
+  github="https://github.com/Bucket-Protocol/bucket-protocol-sdk"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="Suilend SDK"
+  description="TypeScript SDK for interacting with the Suilend program."
+  github="https://github.com/suilend/suilend-fe-public/tree/main/sdk"
+  website="https://www.npmjs.com/package/@suilend/sdk"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="Scallop SDK"
+  description="TypeScript SDK for interacting with the Scallop lending protocol on Sui."
+  github="https://github.com/scallop-io/sui-scallop-sdk"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="Cetus CLMM SDK"
+  description="SDK for integration with Cetus-CLMM on Sui."
+  github="https://github.com/CetusProtocol/cetus-clmm-sui-sdk"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="Aftermath SDK"
+  description="TypeScript SDK for interacting with Aftermath Protocol."
+  github="https://github.com/AftermathFinance/aftermath-ts-sdk"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="FlowX SDK"
+  description="TypeScript SDK for interacting with FlowX protocols."
+  github="https://github.com/FlowX-Finance/sdk"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="7k Aggregator SDK"
+  description="TypeScript SDK for interacting with 7k Aggregator protocol."
+  github="https://github.com/7k-ag/7k-sdk-ts"
+  language="TypeScript"
+  community
+/>
+
+<ToolCard
+  name="Hop Aggregator SDK"
+  description="TypeScript SDK for interacting with Hop Aggregator."
+  docs="https://docs.hop.ag/hop-sdk"
+  language="TypeScript"
+  community
+/>
+</ToolGrid>
+
+## APIs
+
+<ToolGrid>
+<ToolCard
+  name="Sui gRPC API"
+  description="gRPC API definitions and protocol buffers for Sui."
+  github="https://github.com/MystenLabs/sui-apis/tree/main"
+/>
+
+<ToolCard
+  name="Enoki API"
+  description="REST API for zkLogin and sponsored transactions."
+  docs="https://docs.enoki.mystenlabs.com/"
+/>
+</ToolGrid>
+
+## Misc
+
+<ToolGrid>
+
+<ToolCard
+  name="OpenZeppelin Contracts for Sui"
+  description="Audited libraries including deterministic arithmetic, decimal scaling, and ownership-transfer wrappers."
+  docs="https://docs.openzeppelin.com/contracts-sui"
+/>
+
+<ToolCard
+  name="Minting Server"
+  description="A scalable system architecture that processes multiple Sui transactions in parallel using a producer-consumer worker scheme."
+  github="https://github.com/MystenLabs/minting-server"
+/>
+
+<ToolCard
+  name="Docker Sui Node Image"
+  description="Official Docker image for running a Sui node."
+  website="https://hub.docker.com/r/mysten/sui-node"
+/>
+
+<ToolCard
+  name="Sui Terraform Modules"
+  description="All-in-one solution for deploying, monitoring, and managing Sui infrastructure."
+  github="https://github.com/bartosian/sui-terraform-modules"
+  community
+/>
+
+<ToolCard
+  name="Sui Tears (Interest Protocol)"
+  description="Open source, production-ready Sui Move library for new and experienced developers."
+  docs="https://docs.interestprotocol.com/overview/sui-tears"
+  community
+/>
+
+<ToolCard
+  name="Sui Codec"
+  description="Encoding solution for Sui."
+  github="https://github.com/sui-potatoes/app/tree/main/packages/codec"
+  community
+/>
+
+<ToolCard
+  name="SkipList (Cetus)"
+  description="A skip list implementation in Move on Sui."
+  github="https://github.com/CetusProtocol/move-stl"
+  community
+/>
+
+<ToolCard
+  name="IntegerMate (Cetus)"
+  description="Move module providing signed integer and integer math functions."
+  github="https://github.com/CetusProtocol/integer-mate"
+  community
+/>
+
+<ToolCard
+  name="Cetus CLMM Contracts"
+  description="Open source Cetus CLMM DEX contracts."
+  github="https://github.com/CetusProtocol/cetus-contracts/tree/main/packages/cetus_clmm"
+  community
+/>
+
+<ToolCard
+  name="SuiDouble Metadata"
+  description="Move library and tools to store, retrieve, and manage primitive data as chunks in a vector without dependencies."
+  github="https://github.com/suidouble/suidouble_metadata"
+  community
+/>
+
+<ToolCard
+  name="SuiGPT Decompiler"
+  description="Uses generative AI to convert Move bytecode back to source code."
+  website="https://suigpt.tools/decompile"
+  community
+/>
+
+<ToolCard
+  name="Revela"
+  description="Decompile Sui smart contracts to recover Move source code."
+  website="https://revela.verichains.io/"
+  community
+/>
+
+<ToolCard
+  name="Sui Token CLI"
+  description="Rust-based CLI tool and RPC service for generating and verifying Sui token smart contracts."
+  github="https://github.com/otter-sec/sui-token-gen"
+  community
+/>
+
+<ToolCard
+  name="Dubhe Engine (Obelisk Labs)"
+  description="Open source toolchain for building intent-centric worlds with Move applications."
+  github="https://github.com/0xobelisk/dubhe"
+  docs="https://dubhe.obelisk.build/"
+  community
+/>
+
+<ToolCard
+  name="Dubhe CLI (Dubhe Engine)"
+  description="CLI for building and managing apps built on Dubhe Engine in Sui."
+  github="https://github.com/0xobelisk/dubhe/tree/main/packages/sui-cli"
+  docs="https://dubhe-docs.obelisk.build/dubhe/sui/cli"
+  community
+/>
+
+<ToolCard
+  name="Sui Protocol Config"
+  description="Transaction limits and protocol configuration values for Sui."
+  github="https://github.com/MystenLabs/sui/blob/main/crates/sui-protocol-config/src/lib.rs"
+/>
+
+<ToolCard
+  name="Polymedia Commando"
+  description="Command-line tools for Sui airdrops, data gathering from RPCs and indexers, and more."
+  github="https://github.com/juzybits/polymedia-commando"
+  community
+/>
+
+<ToolCard
+  name="sui-tool"
+  description="Internal diagnostic utility for Sui network operations."
+  github="https://github.com/MystenLabs/sui/tree/main/crates/sui-tool"
+/>
+</ToolGrid>
+
+</SearchProvider>

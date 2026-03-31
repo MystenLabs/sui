@@ -706,6 +706,8 @@ impl ValidatorService {
         let mut results: Vec<Option<SubmitTxResult>> = vec![None; request.transactions.len()];
         // Total size of all transactions in the request.
         let mut total_size_bytes = 0;
+        // Traffic control spam weight to use for the transaction.
+        let mut spam_weight = Weight::zero();
 
         let req_type = if is_ping_request {
             "ping"
@@ -736,6 +738,15 @@ impl ValidatorService {
 
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+
+            if transaction
+                .data()
+                .transaction_data()
+                .is_gasless_transaction()
+            {
+                // Gasless transactions count for traffic control, since they have no economic cost.
+                spam_weight = Weight::one();
+            }
 
             let overload_check_res = state.check_system_overload(
                 consensus_adapter,
@@ -912,7 +923,7 @@ impl ValidatorService {
         }
 
         if consensus_transactions.is_empty() && !is_ping_request {
-            return Ok((Self::try_from_submit_tx_response(results)?, Weight::zero()));
+            return Ok((Self::try_from_submit_tx_response(results)?, spam_weight));
         }
 
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
@@ -1016,7 +1027,7 @@ impl ValidatorService {
             }
         }
 
-        Ok((Self::try_from_submit_tx_response(results)?, Weight::zero()))
+        Ok((Self::try_from_submit_tx_response(results)?, spam_weight))
     }
 
     fn try_from_submit_tx_response(

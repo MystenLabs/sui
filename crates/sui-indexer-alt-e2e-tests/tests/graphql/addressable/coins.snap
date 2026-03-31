@@ -11,7 +11,7 @@ task 1, lines 6-26:
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 16864400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 16872000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 28:
 //# create-checkpoint
@@ -73,13 +73,13 @@ Response: {
         },
         "nodes": [
           {
-            "address": "0xef5a7ec258273ff064fdd722bd9d20d811ea459aad1436f096be26b6481ea772",
+            "address": "0x33e330ca09d8da2d2a7ce19c66ffba584843c2b61bab8090fb21b53ccd20a9cd",
             "contents": {
               "type": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::bag::Bag"
               },
               "json": {
-                "id": "0xef5a7ec258273ff064fdd722bd9d20d811ea459aad1436f096be26b6481ea772",
+                "id": "0x33e330ca09d8da2d2a7ce19c66ffba584843c2b61bab8090fb21b53ccd20a9cd",
                 "size": "0"
               }
             }
@@ -92,66 +92,66 @@ Response: {
               },
               "json": {
                 "id": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
-                "balance": "299999973785996"
+                "balance": "299999973778396"
               }
             }
           },
           {
-            "address": "0x77e12fc740054c1e8eb2a50ca536da588e57782b69b0b9c1478abcfc459effe5",
+            "address": "0x0bc261f90a93e8509bf6863aeca159fba7127319329667adf70977d09931d4fa",
             "contents": {
               "type": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
               },
               "json": {
-                "id": "0x77e12fc740054c1e8eb2a50ca536da588e57782b69b0b9c1478abcfc459effe5",
+                "id": "0x0bc261f90a93e8509bf6863aeca159fba7127319329667adf70977d09931d4fa",
                 "balance": "500"
               }
             }
           },
           {
-            "address": "0xd3ecc9bbada9a805607b77f7fa2568c36485c76b79cca31cfa6ca7653cfd7c3d",
+            "address": "0xf2c93ca1dd7dec2ec3cd2443d17068a2eef41a76af74b195bb6cf9e5e9dc573b",
             "contents": {
               "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
               },
               "json": {
-                "id": "0xd3ecc9bbada9a805607b77f7fa2568c36485c76b79cca31cfa6ca7653cfd7c3d",
+                "id": "0xf2c93ca1dd7dec2ec3cd2443d17068a2eef41a76af74b195bb6cf9e5e9dc573b",
+                "balance": "1000000"
+              }
+            }
+          },
+          {
+            "address": "0xe949a5568077aabad5ed88ed66246e8ca94d10bb7d20c62366187ab5a04096a8",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
+              },
+              "json": {
+                "id": "0xe949a5568077aabad5ed88ed66246e8ca94d10bb7d20c62366187ab5a04096a8",
                 "balance": "500000"
               }
             }
           },
           {
-            "address": "0x4f376d0e3919cf473fec48b9cce572a0ed93ade16194beff270d1b644bc543c6",
+            "address": "0x9a1bbbc96508705668908b6149f0977cf182567855b1f0c70a58ca380cbab769",
             "contents": {
               "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
               },
               "json": {
-                "id": "0x4f376d0e3919cf473fec48b9cce572a0ed93ade16194beff270d1b644bc543c6",
+                "id": "0x9a1bbbc96508705668908b6149f0977cf182567855b1f0c70a58ca380cbab769",
                 "balance": "250000"
               }
             }
           },
           {
-            "address": "0xaded07562805c4c983009e1572dbeb1ec61e266472e89c90ce60678cd995fb5e",
+            "address": "0x0a94a29c47a06401b0c34e7d1de25667458b3c2882fea6e1c912b059142891d0",
             "contents": {
               "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::TreasuryCap<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
               },
               "json": {
-                "id": "0xaded07562805c4c983009e1572dbeb1ec61e266472e89c90ce60678cd995fb5e",
-                "balance": "100000"
-              }
-            }
-          },
-          {
-            "address": "0xbc86a7e937051a8b02891a9aa693330183d036b2e14b9036b248b4f265abc060",
-            "contents": {
-              "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::TreasuryCap<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
-              },
-              "json": {
-                "id": "0xbc86a7e937051a8b02891a9aa693330183d036b2e14b9036b248b4f265abc060",
+                "id": "0x0a94a29c47a06401b0c34e7d1de25667458b3c2882fea6e1c912b059142891d0",
                 "total_supply": {
                   "value": "1850000"
                 }
@@ -173,55 +173,55 @@ Response: {
               },
               "json": {
                 "id": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
-                "balance": "299999973785996"
+                "balance": "299999973778396"
               }
             }
           },
           {
-            "address": "0x77e12fc740054c1e8eb2a50ca536da588e57782b69b0b9c1478abcfc459effe5",
+            "address": "0x0bc261f90a93e8509bf6863aeca159fba7127319329667adf70977d09931d4fa",
             "contents": {
               "type": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
               },
               "json": {
-                "id": "0x77e12fc740054c1e8eb2a50ca536da588e57782b69b0b9c1478abcfc459effe5",
+                "id": "0x0bc261f90a93e8509bf6863aeca159fba7127319329667adf70977d09931d4fa",
                 "balance": "500"
               }
             }
           },
           {
-            "address": "0xd3ecc9bbada9a805607b77f7fa2568c36485c76b79cca31cfa6ca7653cfd7c3d",
+            "address": "0xf2c93ca1dd7dec2ec3cd2443d17068a2eef41a76af74b195bb6cf9e5e9dc573b",
             "contents": {
               "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
               },
               "json": {
-                "id": "0xd3ecc9bbada9a805607b77f7fa2568c36485c76b79cca31cfa6ca7653cfd7c3d",
+                "id": "0xf2c93ca1dd7dec2ec3cd2443d17068a2eef41a76af74b195bb6cf9e5e9dc573b",
+                "balance": "1000000"
+              }
+            }
+          },
+          {
+            "address": "0xe949a5568077aabad5ed88ed66246e8ca94d10bb7d20c62366187ab5a04096a8",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
+              },
+              "json": {
+                "id": "0xe949a5568077aabad5ed88ed66246e8ca94d10bb7d20c62366187ab5a04096a8",
                 "balance": "500000"
               }
             }
           },
           {
-            "address": "0x4f376d0e3919cf473fec48b9cce572a0ed93ade16194beff270d1b644bc543c6",
+            "address": "0x9a1bbbc96508705668908b6149f0977cf182567855b1f0c70a58ca380cbab769",
             "contents": {
               "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
               },
               "json": {
-                "id": "0x4f376d0e3919cf473fec48b9cce572a0ed93ade16194beff270d1b644bc543c6",
+                "id": "0x9a1bbbc96508705668908b6149f0977cf182567855b1f0c70a58ca380cbab769",
                 "balance": "250000"
-              }
-            }
-          },
-          {
-            "address": "0xaded07562805c4c983009e1572dbeb1ec61e266472e89c90ce60678cd995fb5e",
-            "contents": {
-              "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
-              },
-              "json": {
-                "id": "0xaded07562805c4c983009e1572dbeb1ec61e266472e89c90ce60678cd995fb5e",
-                "balance": "100000"
               }
             }
           }
@@ -233,38 +233,38 @@ Response: {
         },
         "nodes": [
           {
-            "address": "0xd3ecc9bbada9a805607b77f7fa2568c36485c76b79cca31cfa6ca7653cfd7c3d",
+            "address": "0xf2c93ca1dd7dec2ec3cd2443d17068a2eef41a76af74b195bb6cf9e5e9dc573b",
             "contents": {
               "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
               },
               "json": {
-                "id": "0xd3ecc9bbada9a805607b77f7fa2568c36485c76b79cca31cfa6ca7653cfd7c3d",
+                "id": "0xf2c93ca1dd7dec2ec3cd2443d17068a2eef41a76af74b195bb6cf9e5e9dc573b",
+                "balance": "1000000"
+              }
+            }
+          },
+          {
+            "address": "0xe949a5568077aabad5ed88ed66246e8ca94d10bb7d20c62366187ab5a04096a8",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
+              },
+              "json": {
+                "id": "0xe949a5568077aabad5ed88ed66246e8ca94d10bb7d20c62366187ab5a04096a8",
                 "balance": "500000"
               }
             }
           },
           {
-            "address": "0x4f376d0e3919cf473fec48b9cce572a0ed93ade16194beff270d1b644bc543c6",
+            "address": "0x9a1bbbc96508705668908b6149f0977cf182567855b1f0c70a58ca380cbab769",
             "contents": {
               "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
               },
               "json": {
-                "id": "0x4f376d0e3919cf473fec48b9cce572a0ed93ade16194beff270d1b644bc543c6",
+                "id": "0x9a1bbbc96508705668908b6149f0977cf182567855b1f0c70a58ca380cbab769",
                 "balance": "250000"
-              }
-            }
-          },
-          {
-            "address": "0xaded07562805c4c983009e1572dbeb1ec61e266472e89c90ce60678cd995fb5e",
-            "contents": {
-              "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
-              },
-              "json": {
-                "id": "0xaded07562805c4c983009e1572dbeb1ec61e266472e89c90ce60678cd995fb5e",
-                "balance": "100000"
               }
             }
           }
@@ -283,18 +283,18 @@ Response: {
               },
               "json": {
                 "id": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
-                "balance": "299999973785996"
+                "balance": "299999973778396"
               }
             }
           },
           {
-            "address": "0x77e12fc740054c1e8eb2a50ca536da588e57782b69b0b9c1478abcfc459effe5",
+            "address": "0x0bc261f90a93e8509bf6863aeca159fba7127319329667adf70977d09931d4fa",
             "contents": {
               "type": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
               },
               "json": {
-                "id": "0x77e12fc740054c1e8eb2a50ca536da588e57782b69b0b9c1478abcfc459effe5",
+                "id": "0x0bc261f90a93e8509bf6863aeca159fba7127319329667adf70977d09931d4fa",
                 "balance": "500"
               }
             }
@@ -303,15 +303,15 @@ Response: {
       },
       "testBalance": {
         "coinType": {
-          "repr": "0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST"
+          "repr": "0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST"
         },
-        "totalBalance": "850000"
+        "totalBalance": "1750000"
       },
       "suiBalance": {
         "coinType": {
           "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
         },
-        "totalBalance": "299999973786496"
+        "totalBalance": "299999973778896"
       },
       "emptyBalance": {
         "coinType": {
@@ -322,15 +322,15 @@ Response: {
       "multiGetBalances": [
         {
           "coinType": {
-            "repr": "0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST"
+            "repr": "0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST"
           },
-          "totalBalance": "850000"
+          "totalBalance": "1750000"
         },
         {
           "coinType": {
             "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
           },
-          "totalBalance": "299999973786496"
+          "totalBalance": "299999973778896"
         },
         {
           "coinType": {
@@ -348,13 +348,13 @@ Response: {
             "coinType": {
               "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
             },
-            "totalBalance": "299999973786496"
+            "totalBalance": "299999973778896"
           },
           {
             "coinType": {
-              "repr": "0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST"
+              "repr": "0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST"
             },
-            "totalBalance": "850000"
+            "totalBalance": "1750000"
           }
         ]
       }
@@ -385,26 +385,26 @@ Response: {
             }
           },
           {
-            "address": "0xbffc5985db34af7eeec7b4859f539cd9288750c1d8f60b7907c82eefcef6711d",
+            "address": "0x66185ff96ff0e38da4668a41e9876b69b4d6d2409cd7b73a59593ec5cb7e7b80",
             "contents": {
               "type": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
               },
               "json": {
-                "id": "0xbffc5985db34af7eeec7b4859f539cd9288750c1d8f60b7907c82eefcef6711d",
+                "id": "0x66185ff96ff0e38da4668a41e9876b69b4d6d2409cd7b73a59593ec5cb7e7b80",
                 "balance": "1000"
               }
             }
           },
           {
-            "address": "0x0705e6106ebd288ad88f2ee256ff6a2e1f50eca5beee1a29734e62a47696b52a",
+            "address": "0x285b048cdcaafdda591ba3bbd67ee17ba4ac1d8ef81b123bb74fb8404a9f260b",
             "contents": {
               "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
               },
               "json": {
-                "id": "0x0705e6106ebd288ad88f2ee256ff6a2e1f50eca5beee1a29734e62a47696b52a",
-                "balance": "1000000"
+                "id": "0x285b048cdcaafdda591ba3bbd67ee17ba4ac1d8ef81b123bb74fb8404a9f260b",
+                "balance": "100000"
               }
             }
           }
@@ -416,14 +416,14 @@ Response: {
         },
         "nodes": [
           {
-            "address": "0x0705e6106ebd288ad88f2ee256ff6a2e1f50eca5beee1a29734e62a47696b52a",
+            "address": "0x285b048cdcaafdda591ba3bbd67ee17ba4ac1d8ef81b123bb74fb8404a9f260b",
             "contents": {
               "type": {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
               },
               "json": {
-                "id": "0x0705e6106ebd288ad88f2ee256ff6a2e1f50eca5beee1a29734e62a47696b52a",
-                "balance": "1000000"
+                "id": "0x285b048cdcaafdda591ba3bbd67ee17ba4ac1d8ef81b123bb74fb8404a9f260b",
+                "balance": "100000"
               }
             }
           }
@@ -447,13 +447,13 @@ Response: {
             }
           },
           {
-            "address": "0xbffc5985db34af7eeec7b4859f539cd9288750c1d8f60b7907c82eefcef6711d",
+            "address": "0x66185ff96ff0e38da4668a41e9876b69b4d6d2409cd7b73a59593ec5cb7e7b80",
             "contents": {
               "type": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
               },
               "json": {
-                "id": "0xbffc5985db34af7eeec7b4859f539cd9288750c1d8f60b7907c82eefcef6711d",
+                "id": "0x66185ff96ff0e38da4668a41e9876b69b4d6d2409cd7b73a59593ec5cb7e7b80",
                 "balance": "1000"
               }
             }
@@ -462,9 +462,9 @@ Response: {
       },
       "testBalance": {
         "coinType": {
-          "repr": "0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST"
+          "repr": "0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST"
         },
-        "totalBalance": "1000000"
+        "totalBalance": "100000"
       },
       "suiBalance": {
         "coinType": {
@@ -481,9 +481,9 @@ Response: {
       "multiGetBalances": [
         {
           "coinType": {
-            "repr": "0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST"
+            "repr": "0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST"
           },
-          "totalBalance": "1000000"
+          "totalBalance": "100000"
         },
         {
           "coinType": {
@@ -511,9 +511,9 @@ Response: {
           },
           {
             "coinType": {
-              "repr": "0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST"
+              "repr": "0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST"
             },
-            "totalBalance": "1000000"
+            "totalBalance": "100000"
           }
         ]
       }
@@ -541,78 +541,78 @@ Response: {
                   },
                   "json": {
                     "id": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
-                    "balance": "299999975828860"
+                    "balance": "299999975821260"
                   }
                 }
               },
               {
-                "address": "0xbffc5985db34af7eeec7b4859f539cd9288750c1d8f60b7907c82eefcef6711d",
+                "address": "0x66185ff96ff0e38da4668a41e9876b69b4d6d2409cd7b73a59593ec5cb7e7b80",
                 "contents": {
                   "type": {
                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
                   },
                   "json": {
-                    "id": "0xbffc5985db34af7eeec7b4859f539cd9288750c1d8f60b7907c82eefcef6711d",
+                    "id": "0x66185ff96ff0e38da4668a41e9876b69b4d6d2409cd7b73a59593ec5cb7e7b80",
                     "balance": "1000"
                   }
                 }
               },
               {
-                "address": "0x77e12fc740054c1e8eb2a50ca536da588e57782b69b0b9c1478abcfc459effe5",
+                "address": "0x0bc261f90a93e8509bf6863aeca159fba7127319329667adf70977d09931d4fa",
                 "contents": {
                   "type": {
                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
                   },
                   "json": {
-                    "id": "0x77e12fc740054c1e8eb2a50ca536da588e57782b69b0b9c1478abcfc459effe5",
+                    "id": "0x0bc261f90a93e8509bf6863aeca159fba7127319329667adf70977d09931d4fa",
                     "balance": "500"
                   }
                 }
               },
               {
-                "address": "0x0705e6106ebd288ad88f2ee256ff6a2e1f50eca5beee1a29734e62a47696b52a",
+                "address": "0xf2c93ca1dd7dec2ec3cd2443d17068a2eef41a76af74b195bb6cf9e5e9dc573b",
                 "contents": {
                   "type": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
                   },
                   "json": {
-                    "id": "0x0705e6106ebd288ad88f2ee256ff6a2e1f50eca5beee1a29734e62a47696b52a",
+                    "id": "0xf2c93ca1dd7dec2ec3cd2443d17068a2eef41a76af74b195bb6cf9e5e9dc573b",
                     "balance": "1000000"
                   }
                 }
               },
               {
-                "address": "0xd3ecc9bbada9a805607b77f7fa2568c36485c76b79cca31cfa6ca7653cfd7c3d",
+                "address": "0xe949a5568077aabad5ed88ed66246e8ca94d10bb7d20c62366187ab5a04096a8",
                 "contents": {
                   "type": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
                   },
                   "json": {
-                    "id": "0xd3ecc9bbada9a805607b77f7fa2568c36485c76b79cca31cfa6ca7653cfd7c3d",
+                    "id": "0xe949a5568077aabad5ed88ed66246e8ca94d10bb7d20c62366187ab5a04096a8",
                     "balance": "500000"
                   }
                 }
               },
               {
-                "address": "0x4f376d0e3919cf473fec48b9cce572a0ed93ade16194beff270d1b644bc543c6",
+                "address": "0x9a1bbbc96508705668908b6149f0977cf182567855b1f0c70a58ca380cbab769",
                 "contents": {
                   "type": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
                   },
                   "json": {
-                    "id": "0x4f376d0e3919cf473fec48b9cce572a0ed93ade16194beff270d1b644bc543c6",
+                    "id": "0x9a1bbbc96508705668908b6149f0977cf182567855b1f0c70a58ca380cbab769",
                     "balance": "250000"
                   }
                 }
               },
               {
-                "address": "0xaded07562805c4c983009e1572dbeb1ec61e266472e89c90ce60678cd995fb5e",
+                "address": "0x285b048cdcaafdda591ba3bbd67ee17ba4ac1d8ef81b123bb74fb8404a9f260b",
                 "contents": {
                   "type": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST>"
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST>"
                   },
                   "json": {
-                    "id": "0xaded07562805c4c983009e1572dbeb1ec61e266472e89c90ce60678cd995fb5e",
+                    "id": "0x285b048cdcaafdda591ba3bbd67ee17ba4ac1d8ef81b123bb74fb8404a9f260b",
                     "balance": "100000"
                   }
                 }
@@ -628,11 +628,11 @@ Response: {
                 "coinType": {
                   "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
                 },
-                "totalBalance": "299999975830360"
+                "totalBalance": "299999975822760"
               },
               {
                 "coinType": {
-                  "repr": "0x92429b2a76a9384fbbae957f895640e7a3a776f4b6d28296bca81a721b43e2dc::test::TEST"
+                  "repr": "0x42650c2a2c9866575de3694cd14bc0b5738d9d5bb0e7486d8bf6bba076ff1b34::test::TEST"
                 },
                 "totalBalance": "1850000"
               }

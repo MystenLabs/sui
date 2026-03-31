@@ -61,6 +61,8 @@ mod checked {
         if transaction.kind().is_system_tx() {
             Ok(SuiGasStatus::new_unmetered())
         } else {
+            let is_gasless =
+                protocol_config.enable_gasless() && transaction.is_gasless_transaction();
             check_gas(
                 objects,
                 protocol_config,
@@ -68,6 +70,7 @@ mod checked {
                 gas,
                 transaction,
                 gas_ownership_checks,
+                is_gasless,
             )
         }
     }
@@ -233,6 +236,10 @@ mod checked {
         check_objects(transaction, input_objects, protocol_config)?;
         check_replay_protection(transaction, input_objects)?;
 
+        if protocol_config.enable_gasless() && transaction.is_gasless_transaction() {
+            check_gasless_object_inputs(input_objects, protocol_config)?;
+        }
+
         Ok(gas_status)
     }
 
@@ -392,13 +399,20 @@ mod checked {
         gas: &[ObjectRef],
         transaction: &TransactionData,
         gas_ownership_checks: bool,
+        is_gasless: bool,
     ) -> SuiResult<SuiGasStatus> {
         let gas_budget = transaction.gas_budget();
         let gas_price = transaction.gas_price();
         let gas_paid_from_address_balance = transaction.is_gas_paid_from_address_balance();
 
-        let gas_status =
-            SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
+        let gas_status = if is_gasless {
+            debug_assert_ne!(reference_gas_price, 0);
+            let rgp = reference_gas_price.max(1);
+            let compute_cap = protocol_config.gasless_max_computation_units() * rgp;
+            SuiGasStatus::new(compute_cap, rgp, reference_gas_price, protocol_config)?
+        } else {
+            SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?
+        };
 
         // check balance and coins consistency
         // load all gas coins (skip coin reservations - they're not loaded as input objects)
@@ -429,10 +443,16 @@ mod checked {
             (gas_objects, available_address_balance_gas)
         };
 
-        if gas_ownership_checks {
-            gas_status.check_gas_objects(&gas_objects)?;
+        if !is_gasless {
+            if gas_ownership_checks {
+                gas_status.check_gas_objects(&gas_objects)?;
+            }
+            gas_status.check_gas_balance(
+                &gas_objects,
+                gas_budget,
+                available_address_balance_gas,
+            )?;
         }
-        gas_status.check_gas_balance(&gas_objects, gas_budget, available_address_balance_gas)?;
         Ok(gas_status)
     }
 
@@ -654,6 +674,49 @@ mod checked {
                 }
             }
         };
+        Ok(())
+    }
+
+    /// Verify that all Move object inputs in a gasless transaction are Coin<T>
+    /// where T is in the allowlist.
+    fn check_gasless_object_inputs(
+        input_objects: &InputObjects,
+        protocol_config: &ProtocolConfig,
+    ) -> UserInputResult<()> {
+        let allowed_token_types =
+            sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
+
+        for obj_read in input_objects.iter() {
+            let Some(object) = obj_read.as_object() else {
+                continue;
+            };
+            if object.is_package() {
+                continue;
+            }
+            match object.owner() {
+                Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => (),
+                Owner::Immutable | Owner::Shared { .. } | Owner::ObjectOwner(_) => {
+                    return Err(UserInputError::Unsupported(
+                        "Gasless transactions only support owned object inputs".to_string(),
+                    ));
+                }
+            }
+            // Every non-package Move object input must be Coin<T> with T allowlisted
+            let coin_type = object.coin_type_maybe().ok_or_else(|| {
+                UserInputError::Unsupported(
+                    "Gasless transactions can only use Coin<T> object inputs, \
+                     but found a non-Coin object"
+                        .to_string(),
+                )
+            })?;
+            fp_ensure!(
+                allowed_token_types.contains_key(&coin_type),
+                UserInputError::Unsupported(
+                    "Gasless transactions only support allowlisted types for Coin inputs"
+                        .to_string()
+                )
+            );
+        }
         Ok(())
     }
 

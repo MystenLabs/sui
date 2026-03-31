@@ -7,9 +7,11 @@ use crate::{
     object_runtime, sp,
     static_programmable_transactions::{
         env::Env,
-        execution::context::{Context, CtxValue},
-        execution::trace_utils,
-        typing::ast as T,
+        execution::{
+            context::{Context, CtxValue, GasCoinTransfer},
+            trace_utils,
+        },
+        typing::{ast as T, verify::input_arguments::is_coin_send_funds},
     },
 };
 use move_core_types::account_address::AccountAddress;
@@ -168,6 +170,14 @@ fn execute_command<Mode: ExecutionMode>(
                 function,
                 arguments,
             } = *move_call;
+            // Detect send_funds with gas coin
+            let is_gas_coin_send_funds = is_coin_send_funds(&function)
+                && arguments.first().is_some_and(|arg| {
+                    matches!(
+                        &arg.value.0,
+                        T::Argument__::Use(T::Usage::Move(T::Location::GasCoin))
+                    )
+                });
             if Mode::TRACK_EXECUTION {
                 args_to_update.extend(
                     arguments
@@ -176,12 +186,27 @@ fn execute_command<Mode: ExecutionMode>(
                         .cloned(),
                 )
             }
-            let arguments = context.arguments(arguments)?;
+            let arguments: Vec<CtxValue> = context.arguments(arguments)?;
+            if is_gas_coin_send_funds {
+                assert_invariant!(arguments.len() == 2, "coin::send_funds should have 2 args");
+                let recipient = arguments.last().unwrap().to_address()?;
+                context.record_gas_coin_transfer(GasCoinTransfer::SendFunds { recipient })?;
+            }
             let res = context.vm_move_call(function, arguments, trace_builder_opt);
             trace_utils::trace_move_call_end(trace_builder_opt);
             res?
         }
         T::Command__::TransferObjects(objects, recipient) => {
+            // Check if any object is the gas coin moved by value before consuming
+            let has_gas_coin_move = objects.iter().any(|arg| {
+                matches!(
+                    &arg.value.0,
+                    T::Argument__::Use(T::Usage::Move(T::Location::GasCoin))
+                )
+            });
+            if has_gas_coin_move {
+                context.record_gas_coin_transfer(GasCoinTransfer::TransferObjects)?;
+            }
             let object_tys = objects
                 .iter()
                 .map(|sp!(_, (_, ty))| ty.clone())

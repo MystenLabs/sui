@@ -2202,7 +2202,7 @@ This function should be called at the end of an epoch, and advances the system t
 It does the following things:
 1. Add storage charge to the storage fund.
 2. Burn the storage rebates from the storage fund. These are already refunded to transaction sender's
-gas coins.
+   gas coins.
 3. Distribute computation charge to validator stake.
 4. Update all validators.
 

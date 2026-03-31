@@ -327,6 +327,12 @@ impl MoveTraceBuilder {
         }
     }
 
+    /// Whether the tracer wants effect events. If false, the VM tracer can skip the expensive
+    /// value conversion work needed to build effects.
+    pub fn wants_effects(&self) -> bool {
+        self.tracer.wants_effects()
+    }
+
     /// Consume the `MoveTraceBuilder` and return the `MoveTrace` that has been built by it.
     pub fn into_trace(self) -> MoveTrace {
         self.trace

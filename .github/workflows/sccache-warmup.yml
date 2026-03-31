@@ -93,6 +93,9 @@ jobs:
 
       - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
 
+      - name: Register cargo problem matcher
+        run: echo "::add-matcher::.github/matchers/cargo.json"
+
       # All platforms: release builds (matches release.yml)
       - name: Build release binaries
         shell: bash

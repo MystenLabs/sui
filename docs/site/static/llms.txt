@@ -12,10 +12,13 @@
       contracts, object creation and transfer, capability patterns, witness patterns, and hot
       potato patterns. Essential reference for all Move smart contract development on Sui.
 
+## Top Level Navigation
+
+- [Tooling — Tooling](https://docs.sui.io/tooling.md)
+
 ## Concepts
 
 - [Concepts](https://docs.sui.io/concepts.md)
-- [Coin Mgt](https://docs.sui.io/concepts/coin-mgt.md)
 - [Cryptography Index](https://docs.sui.io/concepts/cryptography/index.md)
 - [Passkeys](https://docs.sui.io/concepts/cryptography/passkeys.md)
 - [Checkpoint

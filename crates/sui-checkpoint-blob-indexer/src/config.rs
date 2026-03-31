@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
+use sui_indexer_alt_framework as framework;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
-use sui_indexer_alt_framework::{self as framework};
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]

@@ -281,6 +281,8 @@ transfer_party_transfer_internal_cost_base: 52
 transfer_freeze_object_cost_base: 52
 transfer_share_object_cost_base: 52
 transfer_receive_object_cost_base: 52
+transfer_receive_object_cost_per_byte: 1
+transfer_receive_object_type_cost_per_byte: 2
 tx_context_derive_id_cost_base: 52
 tx_context_fresh_id_cost_base: 52
 tx_context_sender_cost_base: 30
@@ -669,3 +671,5 @@ translation_per_type_node_charge: 1
 translation_per_reference_node_charge: 1
 translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
+gasless_max_unused_inputs: 1
+gasless_max_pure_input_bytes: 32

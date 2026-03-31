@@ -6,7 +6,7 @@ use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
     digests::CheckpointContentsDigest,
-    execution_status::{CommandArgumentError, CommandIndex, ExecutionErrorKind},
+    execution_status::{CommandArgumentError, CommandIndex, ExecutionErrorKind, ExecutionFailure},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
@@ -1157,7 +1157,25 @@ impl std::fmt::Debug for SuiError {
     }
 }
 
-type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+/// A trait for execution errors that provides common methods for accessing error information and creating new errors.
+pub trait ExecutionErrorTrait:
+    From<ExecutionError> + Debug + std::error::Error + Send + Sync + Sized
+{
+    fn with_command_index(self, command: CommandIndex) -> Self;
+    fn kind(&self) -> &ExecutionErrorKind;
+    fn command(&self) -> Option<CommandIndex>;
+    // TODO remove, source ref should be used before instantiating this trait or after making it concrete
+    fn source_ref(&self) -> Option<&(dyn std::error::Error + 'static)>;
+
+    fn to_execution_failure(&self) -> ExecutionFailure {
+        ExecutionFailure {
+            error: self.kind().clone(),
+            command: self.command(),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct ExecutionError {
@@ -1216,6 +1234,24 @@ impl ExecutionError {
     }
 }
 
+impl ExecutionErrorTrait for ExecutionError {
+    fn with_command_index(self, command: CommandIndex) -> Self {
+        self.with_command_index(command)
+    }
+
+    fn kind(&self) -> &ExecutionErrorKind {
+        self.kind()
+    }
+
+    fn command(&self) -> Option<CommandIndex> {
+        self.command()
+    }
+
+    fn source_ref(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source.as_deref().map(|e| e as _)
+    }
+}
+
 impl std::fmt::Display for ExecutionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ExecutionError: {:?}", self)
@@ -1231,6 +1267,18 @@ impl std::error::Error for ExecutionError {
 impl From<ExecutionErrorKind> for ExecutionError {
     fn from(kind: ExecutionErrorKind) -> Self {
         Self::from_kind(kind)
+    }
+}
+
+impl From<ExecutionFailure> for ExecutionError {
+    fn from(value: ExecutionFailure) -> Self {
+        let ExecutionFailure { error, command } = value;
+        let err = ExecutionError::from_kind(error);
+        if let Some(command) = command {
+            err.with_command_index(command)
+        } else {
+            err
+        }
     }
 }
 

@@ -487,14 +487,25 @@ pub fn compile_module<'a>(
 }
 
 fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
-    // If a version override is provide always respect that no matter what.
+    // If a version override is provided always respect that no matter what.
     if let Some(version) = version.or_else(get_bytecode_version_from_env) {
         module.version = version;
         return;
     }
+    module.version = select_version(module);
+}
 
-    // Leave this const, and the const assertion here as a reminder to update this code if the
-    // version changes
+/// Selects the bytecode version to use for a compiled module when no explicit version override
+/// is provided. This is the place to decide whether a new version should be the universal
+/// default or should be gated behind feature detection on the compiled module.
+///
+/// When `VERSION_MAX` is bumped, the const assertion below will fail, forcing you to come here
+/// and decide: should the new version be emitted for all modules, or only for modules that use
+/// new features? To gate it, add a `uses_version_N_features` check (following the pattern of the
+/// version 7 check below) and return `PRE_MAX_VERSION` for modules that don't need it.
+fn select_version(module: &CompiledModule) -> u32 {
+    // Leave this const and the const assertion here as a reminder to update this code if the
+    // version changes.
     #[allow(clippy::assertions_on_constants)]
     const PRE_MAX_VERSION: u32 = {
         assert!(
@@ -503,21 +514,20 @@ fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
         );
         VERSION_MAX - 1
     };
-    let version = if module.enum_defs.is_empty()
-        && module.enum_def_instantiations.is_empty()
-        && module.variant_handles.is_empty()
-        && module.variant_instantiation_handles.is_empty()
-        && module.function_defs.iter().all(|f| {
-            f.code
-                .as_ref()
-                .map(|c| c.jump_tables.is_empty())
-                .unwrap_or(true)
-        }) {
-        PRE_MAX_VERSION
-    } else {
-        VERSION_MAX
-    };
-    module.version = version;
+    let _ = PRE_MAX_VERSION;
+
+    // Version 7 introduced enums. Previously this was gated so that only modules using enum
+    // features would get version 7, but version 7 is now the universal default.
+    let _uses_version_7_features = !module.enum_defs.is_empty()
+        || !module.enum_def_instantiations.is_empty()
+        || !module.variant_handles.is_empty()
+        || !module.variant_instantiation_handles.is_empty()
+        || module
+            .function_defs
+            .iter()
+            .any(|f| f.code.as_ref().is_some_and(|c| !c.jump_tables.is_empty()));
+
+    VERSION_MAX
 }
 
 // Note: DO NOT try to recover from this function as it zeros out the `outer_contexts` dependencies

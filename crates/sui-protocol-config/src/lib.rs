@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cell::RefCell,
     collections::BTreeSet,
     sync::atomic::{AtomicBool, Ordering},
 };
+
+#[cfg(msim)]
+use std::cell::RefCell;
+#[cfg(not(msim))]
+use std::sync::Mutex;
 
 use clap::*;
 use fastcrypto::encoding::{Base58, Encoding, Hex};
@@ -24,7 +28,10 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 119;
+const MAX_PROTOCOL_VERSION: u64 = 120;
+
+const TESTNET_USDC: &str =
+    "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
 
 // Record history of protocol version allocations here:
 //
@@ -302,11 +309,12 @@ const MAX_PROTOCOL_VERSION: u64 = 119;
 // Version 115: Gasless transaction drop safety.
 //              Enable address aliases on mainnet.
 //              Relax ValidDuring requirement for transactions with owned inputs.
-//              Disable defer_unpaid_amplification (debugging).
 // Version 116: Enable Display Registry.
+//              Disable defer_unpaid_amplification (debugging).
 // Version 117: Update Sui System metadata handling.
 // Version 118: Adds `transfer_migration_cap` to display registry
 // Version 119: Enable the new VM.
+// Version 120: Re-enable defer_unpaid_amplification (devnet + testnet).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1034,6 +1042,9 @@ struct FeatureFlags {
     // If true, use coin party owner information.
     #[serde(skip_serializing_if = "is_false")]
     use_coin_party_owner: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    enable_gasless: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1548,6 +1559,8 @@ pub struct ProtocolConfig {
     // Cost params for the Move native function
     // `receive_object<T: key>(p: &mut UID, recv: Receiving<T>T)`
     transfer_receive_object_cost_base: Option<u64>,
+    transfer_receive_object_cost_per_byte: Option<u64>,
+    transfer_receive_object_type_cost_per_byte: Option<u64>,
 
     // TxContext
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -1901,6 +1914,21 @@ pub struct ProtocolConfig {
 
     /// The maximum number of updates per settlement transaction.
     max_updates_per_settlement_txn: Option<u32>,
+
+    /// Maximum computation units allowed for a gasless transaction.
+    gasless_max_computation_units: Option<u64>,
+
+    /// Allowed token types for gasless transactions, with minimum transfer sizes per token.
+    gasless_allowed_token_types: Option<Vec<(String, u64)>>,
+
+    /// Maximum number of unused Pure inputs allowed in a gasless transaction.
+    /// Object and FundsWithdrawal inputs must always be used.
+    /// When None, there is no limit (effectively unlimited).
+    gasless_max_unused_inputs: Option<u64>,
+
+    /// Maximum size in bytes of each Pure input in a gasless transaction.
+    /// When None, there is no limit (effectively unlimited).
+    gasless_max_pure_input_bytes: Option<u64>,
 }
 
 /// An aliased address.
@@ -2683,6 +2711,23 @@ impl ProtocolConfig {
     pub fn use_coin_party_owner(&self) -> bool {
         self.feature_flags.use_coin_party_owner
     }
+
+    pub fn enable_gasless(&self) -> bool {
+        self.feature_flags.enable_gasless
+    }
+
+    pub fn gasless_allowed_token_types(&self) -> &[(String, u64)] {
+        debug_assert!(self.gasless_allowed_token_types.is_some());
+        self.gasless_allowed_token_types.as_deref().unwrap_or(&[])
+    }
+
+    pub fn get_gasless_max_unused_inputs(&self) -> u64 {
+        self.gasless_max_unused_inputs.unwrap_or(u64::MAX)
+    }
+
+    pub fn get_gasless_max_pure_input_bytes(&self) -> u64 {
+        self.gasless_max_pure_input_bytes.unwrap_or(u64::MAX)
+    }
 }
 
 #[cfg(not(msim))]
@@ -2715,16 +2760,7 @@ impl ProtocolConfig {
         let mut ret = Self::get_for_version_impl(version, chain);
         ret.version = version;
 
-        ret = CONFIG_OVERRIDE.with(|ovr| {
-            if let Some(override_fn) = &*ovr.borrow() {
-                warn!(
-                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
-                );
-                override_fn(version, ret)
-            } else {
-                ret
-            }
-        });
+        ret = Self::apply_config_override(version, ret);
 
         if std::env::var("SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE").is_ok() {
             warn!(
@@ -2979,6 +3015,8 @@ impl ProtocolConfig {
             // Cost params for the Move native function `share_object<T: key>(obj: T)`
             transfer_share_object_cost_base: Some(52),
             transfer_receive_object_cost_base: None,
+            transfer_receive_object_type_cost_per_byte: None,
+            transfer_receive_object_cost_per_byte: None,
 
             // `tx_context` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -3269,6 +3307,11 @@ impl ProtocolConfig {
             translation_per_linkage_entry_charge: None,
 
             max_updates_per_settlement_txn: None,
+
+            gasless_max_computation_units: None,
+            gasless_allowed_token_types: None,
+            gasless_max_unused_inputs: None,
+            gasless_max_pure_input_bytes: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4705,6 +4748,27 @@ impl ProtocolConfig {
                     cfg.execution_version = Some(4);
                     cfg.feature_flags.address_balance_gas_reject_gas_coin_arg = false;
                     cfg.feature_flags.merge_randomness_into_checkpoint = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_gasless = true;
+                        cfg.gasless_max_computation_units = Some(50_000);
+                        cfg.gasless_allowed_token_types = Some(vec![]);
+                        cfg.feature_flags.enable_coin_reservation_obj_refs = true;
+                        cfg.feature_flags
+                            .convert_withdrawal_compatibility_ptb_arguments = true;
+                    }
+                    cfg.gasless_max_unused_inputs = Some(1);
+                    cfg.gasless_max_pure_input_bytes = Some(32);
+                    if chain == Chain::Testnet {
+                        cfg.gasless_allowed_token_types = Some(vec![(TESTNET_USDC.to_string(), 0)]);
+                    }
+                    cfg.transfer_receive_object_cost_per_byte = Some(1);
+                    cfg.transfer_receive_object_type_cost_per_byte = Some(2);
+                }
+                120 => {
+                    // Re-enable unpaid amplification deferral protection (testnet + devnet)
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.defer_unpaid_amplification = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -4864,6 +4928,20 @@ impl ProtocolConfig {
     /// Override one or more settings in the config, for testing.
     /// This must be called at the beginning of the test, before get_for_(min|max)_version is
     /// called, since those functions cache their return value.
+    #[cfg(not(msim))]
+    pub fn apply_overrides_for_testing(
+        override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + Sync + 'static,
+    ) -> OverrideGuard {
+        let mut cur = CONFIG_OVERRIDE.lock().unwrap();
+        assert!(cur.is_none(), "config override already present");
+        *cur = Some(Box::new(override_fn));
+        OverrideGuard
+    }
+
+    /// Override one or more settings in the config, for testing.
+    /// This must be called at the beginning of the test, before get_for_(min|max)_version is
+    /// called, since those functions cache their return value.
+    #[cfg(msim)]
     pub fn apply_overrides_for_testing(
         override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + 'static,
     ) -> OverrideGuard {
@@ -4872,6 +4950,31 @@ impl ProtocolConfig {
             assert!(cur.is_none(), "config override already present");
             *cur = Some(Box::new(override_fn));
             OverrideGuard
+        })
+    }
+
+    #[cfg(not(msim))]
+    fn apply_config_override(version: ProtocolVersion, mut ret: Self) -> Self {
+        if let Some(override_fn) = CONFIG_OVERRIDE.lock().unwrap().as_ref() {
+            warn!(
+                "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
+            );
+            ret = override_fn(version, ret);
+        }
+        ret
+    }
+
+    #[cfg(msim)]
+    fn apply_config_override(version: ProtocolVersion, ret: Self) -> Self {
+        CONFIG_OVERRIDE.with(|ovr| {
+            if let Some(override_fn) = &*ovr.borrow() {
+                warn!(
+                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
+                );
+                override_fn(version, ret)
+            } else {
+                ret
+            }
         })
     }
 }
@@ -5025,6 +5128,15 @@ impl ProtocolConfig {
         self.feature_flags.enable_coin_reservation_obj_refs = true;
         self.feature_flags
             .convert_withdrawal_compatibility_ptb_arguments = true;
+        // Ensure execution_version >= 4 so new_vm_enabled() returns true,
+        // which is required for enable_coin_reservation_obj_refs() to return true.
+        self.execution_version = Some(self.execution_version.map_or(4, |v| v.max(4)));
+    }
+
+    pub fn disable_coin_reservation_for_testing(&mut self) {
+        self.feature_flags.enable_coin_reservation_obj_refs = false;
+        self.feature_flags
+            .convert_withdrawal_compatibility_ptb_arguments = false;
     }
 
     pub fn create_root_accumulator_object_for_testing(&mut self) {
@@ -5046,6 +5158,23 @@ impl ProtocolConfig {
 
     pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
         self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
+    pub fn enable_gasless_for_testing(&mut self) {
+        self.enable_address_balance_gas_payments_for_testing();
+        self.feature_flags.enable_gasless = true;
+        self.gasless_max_computation_units = Some(50_000);
+        self.gasless_allowed_token_types = Some(vec![]);
+    }
+
+    pub fn disable_gasless_for_testing(&mut self) {
+        self.feature_flags.enable_gasless = false;
+        self.gasless_max_computation_units = None;
+        self.gasless_allowed_token_types = None;
+    }
+
+    pub fn set_gasless_allowed_token_types_for_testing(&mut self, types: Vec<(String, u64)>) {
+        self.gasless_allowed_token_types = Some(types);
     }
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {
@@ -5125,8 +5254,16 @@ impl ProtocolConfig {
     }
 }
 
+#[cfg(not(msim))]
+type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync;
+
+#[cfg(not(msim))]
+static CONFIG_OVERRIDE: Mutex<Option<Box<OverrideFn>>> = Mutex::new(None);
+
+#[cfg(msim)]
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
 
+#[cfg(msim)]
 thread_local! {
     static CONFIG_OVERRIDE: RefCell<Option<Box<OverrideFn>>> = RefCell::new(None);
 }
@@ -5134,6 +5271,15 @@ thread_local! {
 #[must_use]
 pub struct OverrideGuard;
 
+#[cfg(not(msim))]
+impl Drop for OverrideGuard {
+    fn drop(&mut self) {
+        info!("restoring override fn");
+        *CONFIG_OVERRIDE.lock().unwrap() = None;
+    }
+}
+
+#[cfg(msim)]
 impl Drop for OverrideGuard {
     fn drop(&mut self) {
         info!("restoring override fn");

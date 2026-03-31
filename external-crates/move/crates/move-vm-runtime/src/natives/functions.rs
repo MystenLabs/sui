@@ -339,12 +339,11 @@ impl<'b> NativeContext<'_, 'b, '_> {
 #[macro_export]
 macro_rules! native_charge_gas_early_exit {
     ($native_context:ident, $cost:expr) => {{
-        use move_core_types::vm_status::sub_status::NFE_OUT_OF_GAS;
         if !$native_context.charge_gas($cost)? {
             // Exhausted all in budget. terminate early
-            return Ok(NativeResult::err(
+            return Ok($crate::natives::functions::NativeResult::err(
                 $native_context.gas_budget(),
-                NFE_OUT_OF_GAS,
+                ::move_core_types::vm_status::sub_status::NFE_OUT_OF_GAS,
             ));
         }
     }};

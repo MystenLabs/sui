@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Utc;
@@ -12,14 +13,26 @@ use scoped_futures::ScopedBoxFuture;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// Returns the `InitWatermark` based on the existing watermark if it exists.
-    /// Otherwise, initializes a new watermark record with `InitWatermark` and returns
-    /// the value passed in.
+    /// Initializes a watermark by either returning the existing watermark or, if the impl supports it, attempting to create it.
+    /// Returns `Ok(Some(_))` if a watermark existed or was created by this impl.
+    /// Returns `Ok(None)` if a watermark does not exist and this impl does not attempt to create one.
+    /// Returns `Err(_)` if the store encountered an error while trying to read or create the watermark.
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        init_watermark: InitWatermark,
-    ) -> anyhow::Result<InitWatermark>;
+        checkpoint_hi_inclusive: Option<u64>,
+    ) -> anyhow::Result<Option<InitWatermark>>;
+
+    /// Checks if the store can accept a `chain_id`.
+    /// Returns `Ok(true)` if the store accepts this `chain_id` thereby allowing processing to continue.
+    /// Returns `Ok(false)` if the store does not accept the `chain_id` thereby halting processing with an error.
+    /// Returns `Err(_)` if the store encountered an error while trying to determine if it could accept
+    /// the `chain_id` which will cause `accepts_chain_id` to be retried.
+    async fn accepts_chain_id(
+        &mut self,
+        pipeline_task: &str,
+        chain_id: [u8; 32],
+    ) -> anyhow::Result<bool>;
 
     /// Given a `pipeline_task` representing either a pipeline name or a pipeline with an associated
     /// task (formatted as `{pipeline}{Store::DELIMITER}{task}`), return the committer watermark
@@ -30,12 +43,39 @@ pub trait Connection: Send {
         pipeline_task: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
+    /// Upsert the high watermark for the `pipeline_task` - representing either a pipeline name or a
+    /// pipeline with an associated task (formatted as `{pipeline}{Store::DELIMITER}{task}`) - as
+    /// long as it raises the watermark stored in the database. Returns a boolean indicating whether
+    /// the watermark was actually updated or not.
+    async fn set_committer_watermark(
+        &mut self,
+        pipeline_task: &str,
+        watermark: CommitterWatermark,
+    ) -> anyhow::Result<bool>;
+}
+
+/// Extension of [`Connection`] for concurrent pipeline watermark operations.
+#[async_trait]
+pub trait ConcurrentConnection: Connection {
+    /// Helper to call in [`Connection::init_watermark`] impl that delegates to
+    /// [`ConcurrentConnection::reader_watermark`] if impl does not attempt to write data.
+    async fn delegate_to_reader_watermark(
+        &mut self,
+        pipeline_task: &str,
+    ) -> anyhow::Result<Option<InitWatermark>> {
+        Ok(self
+            .reader_watermark(pipeline_task)
+            .await?
+            .map(|w| InitWatermark {
+                checkpoint_hi_inclusive: Some(w.checkpoint_hi_inclusive),
+                reader_lo: Some(w.reader_lo),
+            }))
+    }
+
     /// Given a pipeline, return the reader watermark from the database. This is used by the indexer
     /// to determine the new `reader_lo` or inclusive lower bound of available data.
-    async fn reader_watermark(
-        &mut self,
-        pipeline: &'static str,
-    ) -> anyhow::Result<Option<ReaderWatermark>>;
+    async fn reader_watermark(&mut self, pipeline: &str)
+    -> anyhow::Result<Option<ReaderWatermark>>;
 
     /// Get the bounds for the region that the pruner is allowed to prune, and the time in
     /// milliseconds the pruner must wait before it can begin pruning data for the given `pipeline`.
@@ -48,16 +88,6 @@ pub trait Connection: Send {
         pipeline: &'static str,
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>>;
-
-    /// Upsert the high watermark for the `pipeline_task` - representing either a pipeline name or a
-    /// pipeline with an associated task (formatted as `{pipeline}{Store::DELIMITER}{task}`) - as
-    /// long as it raises the watermark stored in the database. Returns a boolean indicating whether
-    /// the watermark was actually updated or not.
-    async fn set_committer_watermark(
-        &mut self,
-        pipeline_task: &str,
-        watermark: CommitterWatermark,
-    ) -> anyhow::Result<bool>;
 
     /// Update the `reader_lo` of an existing watermark entry only if it raises `reader_lo`. Readers
     /// will reference this as the inclusive lower bound of available data for the corresponding
@@ -86,6 +116,26 @@ pub trait Connection: Send {
     ) -> anyhow::Result<bool>;
 }
 
+/// Extension of [`Connection`] for sequential pipeline operations.
+#[async_trait]
+pub trait SequentialConnection: Connection {
+    /// Helper to call in [`Connection::init_watermark`] impl that delegates to
+    /// [`Connection::committer_watermark`] if impl does not attempt to write data.
+    async fn delegate_to_committer_watermark(
+        &mut self,
+        pipeline_task: &str,
+        _checkpoint_hi_inclusive: Option<u64>,
+    ) -> anyhow::Result<Option<InitWatermark>> {
+        Ok(self
+            .committer_watermark(pipeline_task)
+            .await?
+            .map(|w| InitWatermark {
+                checkpoint_hi_inclusive: Some(w.checkpoint_hi_inclusive),
+                reader_lo: None,
+            }))
+    }
+}
+
 /// A storage-agnostic interface that provides database connections for both watermark management
 /// and arbitrary writes. The indexer framework accepts this `Store` implementation to manage
 /// watermarks operations through its associated `Connection` type. This store is also passed to the
@@ -96,17 +146,37 @@ pub trait Store: Send + Sync + 'static + Clone {
     where
         Self: 'c;
 
-    /// Delimiter used to separate pipeline names from task identifiers when reading or writing the
-    /// committer watermark.
-    const DELIMITER: &'static str = "@";
-
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>>;
 }
 
-/// Extends the Store trait with transactional capabilities, to be used within the framework for
-/// atomic or transactional writes.
+/// Extension of [`Store`] for stores that support concurrent pipeline operations, including
+/// task-based pipeline watermark tracking.
 #[async_trait]
-pub trait TransactionalStore: Store {
+pub trait ConcurrentStore: for<'c> Store<Connection<'c> = Self::ConcurrentConnection<'c>> {
+    type ConcurrentConnection<'c>: ConcurrentConnection
+    where
+        Self: 'c;
+
+    /// Delimiter used to separate pipeline names from task identifiers when reading or writing the
+    /// committer watermark.
+    const DELIMITER: &'static str = "@";
+}
+
+/// Extension of [`Store`] for stores that support sequential pipeline operations, including
+/// transactional capabilities used within the framework for atomic or transactional writes.
+#[async_trait]
+pub trait SequentialStore: for<'c> Store<Connection<'c> = Self::SequentialConnection<'c>> {
+    type SequentialConnection<'c>: SequentialConnection
+    where
+        Self: 'c;
+
+    async fn sequential_connect<'c>(&'c self) -> anyhow::Result<Self::SequentialConnection<'c>> {
+        Ok(self
+            .connect()
+            .await
+            .context("Failed to establish sequential connection to store")?)
+    }
+
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,
@@ -116,13 +186,16 @@ pub trait TransactionalStore: Store {
         ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>;
 }
 
-/// Used during watermark initialization to set and return state.
+/// Ingested checkpoint range during pipeline initialization.
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct InitWatermark {
-    /// Calculated by the framework as `default_next_checkpoint.checked_sub(1)`.
+    /// Some -> checkpoint_hi_inclusive can be represented as u64
+    /// None -> checkpoint_hi_inclusive cannot be represented as u64. This occurs during pipeline
+    /// initialization if `reader_lo == 0 && checkpoint_hi_inclusive < reader_lo`
     pub checkpoint_hi_inclusive: Option<u64>,
-    /// Calculated by the framework as `default_next_checkpoint`.
-    pub reader_lo: u64,
+    /// Some -> pipeline has a trailing edge checkpoint (concurrent pipeline)
+    /// None -> pipeline does not have a trailing edge checkpoint (sequential pipeline)
+    pub reader_lo: Option<u64>,
 }
 
 /// Represents the highest checkpoint for some pipeline that has been processed by the indexer
@@ -207,27 +280,10 @@ impl PrunerWatermark {
     }
 }
 
-/// A utility function for connections that do not have special initialization logic. These
-/// connections delegate initialization to `Connection::committer_watermark`.
-pub async fn init_with_committer_watermark(
-    connection: &mut impl Connection,
-    pipeline_task: &str,
-    init_watermark: InitWatermark,
-) -> anyhow::Result<InitWatermark> {
-    let checkpoint_hi_inclusive = connection
-        .committer_watermark(pipeline_task)
-        .await?
-        .map(|w| w.checkpoint_hi_inclusive);
-    Ok(InitWatermark {
-        checkpoint_hi_inclusive,
-        ..init_watermark
-    })
-}
-
 /// Check that the pipeline name does not contain the store's delimiter, and construct the string
 /// used for tracking a pipeline's watermarks in the store. This is either the pipeline name itself,
-/// or `{pipeline}{Store::DELIMITER}{task}` if a task name is provided.
-pub fn pipeline_task<S: Store>(
+/// or `{pipeline}{ConcurrentStore::DELIMITER}{task}` if a task name is provided.
+pub fn pipeline_task<S: ConcurrentStore>(
     pipeline_name: &'static str,
     task_name: Option<&str>,
 ) -> anyhow::Result<String> {

@@ -793,7 +793,7 @@ impl LocalExec {
             None => ExecutionOrEarlyError::Ok(()),
         };
         let (inner_store, gas_status, effects, _timings, result) = executor
-            .execute_transaction_to_effects(
+            .execute_transaction_to_effects_and_execution_error(
                 &self,
                 protocol_config,
                 metrics.clone(),
@@ -987,23 +987,24 @@ impl LocalExec {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (_, _, effects, _timings, exec_res) = executor.execute_transaction_to_effects(
-            &store,
-            &protocol_config,
-            Arc::new(LimitsMetrics::new(&Registry::new())),
-            true,
-            execution_params,
-            &executed_epoch,
-            epoch_start_timestamp,
-            input_objects,
-            gas_data,
-            gas_status,
-            kind,
-            None, // compat_args
-            signer,
-            *executable.digest(),
-            &mut None,
-        );
+        let (_, _, effects, _timings, exec_res) = executor
+            .execute_transaction_to_effects_and_execution_error(
+                &store,
+                &protocol_config,
+                Arc::new(LimitsMetrics::new(&Registry::new())),
+                true,
+                execution_params,
+                &executed_epoch,
+                epoch_start_timestamp,
+                input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                None, // compat_args
+                signer,
+                *executable.digest(),
+                &mut None,
+            );
 
         let effects =
             SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;

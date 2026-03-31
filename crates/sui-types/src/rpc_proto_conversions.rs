@@ -3098,8 +3098,10 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
                 }
             }
 
-            if mask.contains(Self::GAS_OBJECT_FIELD.name) {
-                let gas_object_id = value.gas_object().0.0.to_canonical_string(true);
+            if mask.contains(Self::GAS_OBJECT_FIELD.name)
+                && let Some(((gas_id, _, _), _)) = value.gas_object()
+            {
+                let gas_object_id = gas_id.to_canonical_string(true);
                 self.gas_object = changed_objects
                     .iter()
                     .find(|object| object.object_id() == gas_object_id)

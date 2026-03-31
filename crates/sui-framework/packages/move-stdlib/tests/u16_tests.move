@@ -49,13 +49,43 @@ fun test_diff() {
 }
 
 #[test]
-fun test_divide_and_round_up() {
-    integer_tests::test_divide_and_round_up!(MAX, CASES);
+fun test_mul_div() {
+    integer_tests::test_mul_div!<u16, u32>(MAX, CASES);
+}
+
+#[test]
+fun test_mul_div_ceil() {
+    integer_tests::test_mul_div_ceil!<u16, u32>(MAX, CASES);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u16)]
+fun test_mul_div_div_by_zero() {
+    1u16.mul_div(1, 0);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u16)]
+fun test_mul_div_ceil_div_by_zero() {
+    1u16.mul_div_ceil(1, 0);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u16)]
+fun test_mul_div_overflow() {
+    MAX.mul_div(MAX, 1);
+}
+
+#[test, expected_failure(arithmetic_error, location = std::u16)]
+fun test_mul_div_ceil_overflow() {
+    MAX.mul_div_ceil(MAX, 1);
+}
+
+#[test, allow(deprecated_usage)]
+fun test_div_ceil() {
+    integer_tests::test_div_ceil!(MAX, CASES);
 }
 
 #[test, expected_failure(arithmetic_error, location = std::u8)]
-fun test_divide_and_round_up_error() {
-    1u8.divide_and_round_up(0);
+fun test_div_ceil_error() {
+    1u8.div_ceil(0);
 }
 
 #[test]

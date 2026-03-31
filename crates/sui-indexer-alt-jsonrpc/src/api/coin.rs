@@ -10,6 +10,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use sui_indexer_alt_consistent_store::ObjectByOwnerKey;
 use sui_indexer_alt_reader::consistent_reader::proto::Balance as ProtoBalance;
 use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
 use sui_json_rpc_types::Balance;
@@ -28,9 +29,11 @@ use sui_types::coin::CoinMetadata;
 use sui_types::coin_registry::Currency;
 use sui_types::gas_coin::GAS;
 use sui_types::object::Object;
+use sui_types::object::Owner;
 
 use crate::api::rpc_module::RpcModule;
 use crate::context::Context;
+use crate::data::load_address_balance_coin;
 use crate::data::load_live;
 use crate::error::InternalContext;
 use crate::error::RpcError;
@@ -120,7 +123,7 @@ impl CoinsApiServer for Coins {
             address: SUI_FRAMEWORK_ADDRESS,
             module: COIN_MODULE_NAME.to_owned(),
             name: COIN_STRUCT_NAME.to_owned(),
-            type_params: vec![inner],
+            type_params: vec![inner.clone()],
         };
 
         let Self(ctx) = self;
@@ -159,27 +162,67 @@ impl CoinsApiServer for Coins {
             .map(|obj_ref| obj_ref.value.0)
             .collect();
 
-        let next_cursor = results
-            .results
+        let coin_futures = coin_ids.iter().map(|id| coin_response(ctx, *id));
+
+        // Fetch real coins and address balance coin concurrently.
+        let (coin_results, address_balance_coin) = tokio::join!(
+            future::join_all(coin_futures),
+            address_balance_coin_response(ctx, owner, inner),
+        );
+
+        let address_balance_coin = address_balance_coin
+            .context("Failed to get address balance coin")
+            .map_err(RpcError::<Error>::from)?;
+
+        let mut has_next_page = results.has_next_page;
+
+        // Pair each coin with its cursor token so we can derive the final cursor from
+        // whichever coin ends up last on the page.
+        let mut coins: Vec<(Coin, Vec<u8>)> = coin_results
+            .into_iter()
+            .zip(&coin_ids)
+            .map(|(r, id)| r.with_internal_context(|| format!("Failed to get object {id}")))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .zip(results.results.into_iter().map(|e| e.token))
+            .collect();
+
+        if let Some(ab_coin) = address_balance_coin {
+            let ab_token = ObjectByOwnerKey::from_coin_parts(
+                &Owner::AddressOwner(owner),
+                object_type.clone(),
+                ab_coin.balance,
+                ab_coin.coin_object_id,
+            )
+            .encode();
+
+            let include_ab_coin = page
+                .cursor
+                .as_ref()
+                .is_none_or(|cursor| ab_token > cursor.0);
+
+            if include_ab_coin {
+                let pos = coins.partition_point(|(_, t)| t < &ab_token);
+                coins.insert(pos, (ab_coin, ab_token));
+            }
+        }
+
+        has_next_page = has_next_page || coins.len() > page.limit as usize;
+        coins.truncate(page.limit as usize);
+
+        let next_cursor = coins
             .last()
-            .map(|edge| BcsCursor(edge.token.clone()).encode())
+            .map(|(_, token)| BcsCursor(token.clone()).encode())
             .transpose()
             .context("Failed to encode cursor")
             .map_err(RpcError::<Error>::from)?;
 
-        let coin_futures = coin_ids.iter().map(|id| coin_response(ctx, *id));
-
-        let coins = future::join_all(coin_futures)
-            .await
-            .into_iter()
-            .zip(coin_ids)
-            .map(|(r, id)| r.with_internal_context(|| format!("Failed to get object {id}")))
-            .collect::<Result<Vec<_>, _>>()?;
+        let data = coins.into_iter().map(|(coin, _)| coin).collect();
 
         Ok(PageResponse {
-            data: coins,
+            data,
             next_cursor,
-            has_next_page: results.has_next_page,
+            has_next_page,
         })
     }
 
@@ -391,6 +434,27 @@ async fn coin_metadata_response(
         bcs::from_bytes(move_object.contents()).context("Failed to parse Currency object")?;
 
     Ok(Some(coin_metadata.into()))
+}
+
+/// Query the address balance for this owner/coin_type and synthesize an address balance coin if
+/// the balance is non-zero.
+async fn address_balance_coin_response(
+    ctx: &Context,
+    owner: SuiAddress,
+    coin_type: TypeTag,
+) -> Result<Option<Coin>, anyhow::Error> {
+    let balance_response = ctx
+        .consistent_reader()
+        .get_balance(
+            None,
+            owner.to_string(),
+            coin_type.to_canonical_string(/* with_prefix */ true),
+        )
+        .await?;
+
+    let address_balance = balance_response.address_balance.unwrap_or(0);
+
+    load_address_balance_coin(ctx, owner, coin_type, address_balance).await
 }
 
 async fn object_with_coin_data(

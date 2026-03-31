@@ -23,7 +23,9 @@ async fn get_checkpoint() {
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
     let transaction_digest = stake_with_validator(&test_cluster).await;
 
-    let mut client = LedgerServiceClient::new(test_cluster.grpc_channel());
+    let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
 
     // Request with no provided read_mask
     let Checkpoint {

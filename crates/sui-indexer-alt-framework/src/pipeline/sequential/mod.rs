@@ -17,8 +17,8 @@ use crate::pipeline::CommitterConfig;
 use crate::pipeline::Processor;
 use crate::pipeline::processor::processor;
 use crate::pipeline::sequential::committer::committer;
+use crate::store::SequentialStore;
 use crate::store::Store;
-use crate::store::TransactionalStore;
 
 mod committer;
 
@@ -41,7 +41,7 @@ mod committer;
 /// checkpoints that can be received before the next checkpoint.
 #[async_trait]
 pub trait Handler: Processor {
-    type Store: TransactionalStore;
+    type Store: SequentialStore;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
@@ -123,11 +123,11 @@ pub struct SequentialConfig {
 /// channels are created to communicate between its various components. The pipeline will shutdown
 /// if any of its input or output channels close, any of its independent tasks fail, or if it is
 /// signalled to shutdown through the returned service handle.
-pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
+pub(crate) fn pipeline<H: Handler>(
     handler: H,
     next_checkpoint: u64,
     config: SequentialConfig,
-    db: H::Store,
+    store: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
@@ -162,6 +162,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_tx,
         metrics.clone(),
         concurrency,
+        store.clone(),
     );
 
     let s_committer = committer::<H>(
@@ -170,7 +171,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         next_checkpoint,
         committer_rx,
         commit_hi_tx,
-        db,
+        store,
         metrics.clone(),
         min_eager_rows,
         max_batch_checkpoints,

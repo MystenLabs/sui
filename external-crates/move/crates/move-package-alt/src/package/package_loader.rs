@@ -43,6 +43,24 @@ pub struct PackageConfig {
     pub allow_dirty: bool,
 }
 
+#[derive(Clone, Debug)]
+pub enum LoadType {
+    Persistent {
+        env: EnvironmentName,
+    },
+    Ephemeral {
+        /// The environment to build for. If it is `None`, the value in `ephemeral_file` will be
+        /// used; if that file also doesn't exist, then the load will fail
+        build_env: Option<EnvironmentName>,
+
+        /// The ephemeral file to use for addresses, relative to the current working directory (not
+        /// to `input_path`). This file will be written if the package is published (i.e. if
+        /// [RootPackage::write_publish_data] is called). It does not have to exist a priori, but
+        /// if it does, the addresses will be used.
+        ephemeral_file: PathBuf,
+    },
+}
+
 impl PackageLoader {
     /// A loader that loads the root package from `root_dir` for `env`
     pub fn new(root_dir: impl AsRef<Path>, env: Environment) -> Self {
@@ -131,24 +149,6 @@ impl PackageLoader {
     pub(crate) fn config(&self) -> &PackageConfig {
         &self.config
     }
-}
-
-#[derive(Clone, Debug)]
-pub enum LoadType {
-    Persistent {
-        env: EnvironmentName,
-    },
-    Ephemeral {
-        /// The environment to build for. If it is `None`, the value in `ephemeral_file` will be
-        /// used; if that file also doesn't exist, then the load will fail
-        build_env: Option<EnvironmentName>,
-
-        /// The ephemeral file to use for addresses, relative to the current working directory (not
-        /// to `input_path`). This file will be written if the package is published (i.e. if
-        /// [RootPackage::write_publish_data] is called). It does not have to exist a priori, but
-        /// if it does, the addresses will be used.
-        ephemeral_file: PathBuf,
-    },
 }
 
 impl PackageConfig {

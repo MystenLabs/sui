@@ -10,19 +10,19 @@ task 1, lines 6-16:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5935600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 18-28:
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A --policy compatible
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5935600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 3, lines 30-42:
 //# upgrade --package V1 --upgrade-capability 1,1 --sender A --policy additive
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5935600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 4, lines 44-54:
 //# upgrade --package V2 --upgrade-capability 1,1 --sender A --policy additive
@@ -38,22 +38,22 @@ task 6, lines 69-87:
 //# upgrade --package V2 --upgrade-capability 1,1 --sender A --policy additive
 created: object(6,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6368800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6384000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7, lines 88-103:
 //# upgrade --package V3 --upgrade-capability 1,1 --sender A --policy additive
 created: object(7,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6292800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6308000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 8, lines 104-118:
 //# upgrade --package V4 --upgrade-capability 1,1 --sender A --policy dep_only
 created: object(8,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6209200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6224400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 9, lines 119-132:
 //# upgrade --package V5 --upgrade-capability 1,1 --sender A --policy dep_only
 created: object(9,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6292800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6308000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

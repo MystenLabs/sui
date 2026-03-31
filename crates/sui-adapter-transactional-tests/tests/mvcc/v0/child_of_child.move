@@ -3,7 +3,7 @@
 
 // tests accessing the versions of a child of a child
 
-//# init --addresses test=0x0 --accounts A --protocol-version 16
+//# init --addresses test=0x0 --accounts A --protocol-version 16 --file-format 6
 
 //# publish
 

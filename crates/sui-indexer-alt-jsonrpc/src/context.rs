@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use async_graphql::dataloader::DataLoader;
+use diesel::QueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
@@ -14,7 +16,10 @@ use sui_indexer_alt_reader::package_resolver::DbPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
+use sui_indexer_alt_schema::schema::kv_genesis;
 use sui_package_resolver::Resolver;
+use sui_types::digests::ChainIdentifier;
+use sui_types::digests::CheckpointDigest;
 use url::Url;
 
 use crate::config::RpcConfig;
@@ -47,6 +52,10 @@ pub(crate) struct Context {
 
     /// Access to the RPC's configuration.
     config: Arc<RpcConfig>,
+
+    /// The chain identifier, derived from the genesis checkpoint digest. This is `None` if no
+    /// database is configured.
+    chain_identifier: Option<ChainIdentifier>,
 }
 
 impl Context {
@@ -64,6 +73,7 @@ impl Context {
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
     ) -> Result<Self, anyhow::Error> {
+        let has_database = database_url.is_some();
         let pg_reader = PgReader::new(None, database_url, db_args, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
@@ -91,6 +101,29 @@ impl Context {
             ConsistentReader::new(Some("jsonrpc_consistent"), consistent_reader_args, registry)
                 .await?;
 
+        let chain_identifier = if has_database {
+            use kv_genesis::dsl as g;
+
+            let mut conn = pg_reader
+                .connect()
+                .await
+                .context("Failed to connect to the database")?;
+
+            let genesis_digest_bytes: Vec<u8> = conn
+                .first(g::kv_genesis.select(g::genesis_digest))
+                .await
+                .context("Failed to fetch genesis digest")?;
+
+            let bytes: [u8; 32] = genesis_digest_bytes
+                .try_into()
+                .ok()
+                .context("Invalid genesis digest length")?;
+
+            Some(ChainIdentifier::from(CheckpointDigest::new(bytes)))
+        } else {
+            None
+        };
+
         Ok(Self {
             consistent_reader,
             pg_reader,
@@ -99,6 +132,7 @@ impl Context {
             package_resolver,
             metrics,
             config: Arc::new(config),
+            chain_identifier,
         })
     }
 
@@ -136,5 +170,10 @@ impl Context {
     /// Access to the RPC configuration.
     pub(crate) fn config(&self) -> &RpcConfig {
         self.config.as_ref()
+    }
+
+    /// The chain identifier.
+    pub(crate) fn chain_identifier(&self) -> Option<ChainIdentifier> {
+        self.chain_identifier
     }
 }
