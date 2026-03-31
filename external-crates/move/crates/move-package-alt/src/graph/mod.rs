@@ -62,9 +62,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         path: &PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
-        config: &PackageConfig,
+        config: &PackageConfig<F>,
     ) -> PackageResult<Self> {
-        let builder = PackageGraphBuilder::<F>::new(config);
+        let builder = PackageGraphBuilder::new(config);
 
         if let Some(graph) = builder.load_from_lockfile(path, env, mtx).await? {
             debug!("successfully loaded lockfile");
@@ -81,7 +81,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         path: &PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
-        config: &PackageConfig,
+        config: &PackageConfig<F>,
     ) -> PackageResult<Self> {
         PackageGraphBuilder::new(config)
             .load_from_manifests(path, env, mtx)
@@ -95,7 +95,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         path: &PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
-        config: &PackageConfig,
+        config: &PackageConfig<F>,
     ) -> PackageResult<Option<Self>> {
         PackageGraphBuilder::new(config)
             .load_from_lockfile_ignore_digests(path, env, mtx)
@@ -128,7 +128,11 @@ impl<F: MoveFlavor> PackageGraph<F> {
     ///  - if `overrides` contains the package, we replace its publication
     ///  - if the package has a system address (see F::is_system_address), we keep it
     ///  - otherwise, we drop it
-    pub fn make_ephemeral(&mut self, overrides: BTreeMap<EphemeralDependencyInfo, Publication<F>>) {
+    pub fn make_ephemeral(
+        &mut self,
+        overrides: BTreeMap<EphemeralDependencyInfo, Publication<F>>,
+        flavor: &F,
+    ) {
         for (_, index) in &self.package_ids {
             let package = self.inner[*index].clone();
             let dep = package.dep_for_self().clone().into();
@@ -137,7 +141,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 // take from ephemeral file
                 Some(publish.clone())
             } else if let Some(original_publish) = package.publication()
-                && F::is_system_address(&original_publish.addresses.original_id)
+                && flavor.is_system_address(&original_publish.addresses.original_id)
             {
                 // keep system deps
                 Some(original_publish.clone())
@@ -207,6 +211,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 mod tests {
     use std::collections::BTreeMap;
 
+    use crate::Vanilla;
     use test_log::test;
 
     use crate::{
@@ -369,7 +374,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -410,7 +415,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -453,7 +458,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -491,7 +496,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert!(graph.get_package(&"a".to_string()).published().is_none());
     }
 
@@ -513,7 +518,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert!(graph.get_package(&"a".to_string()).published().is_none());
     }
 
@@ -537,7 +542,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert_eq!(
             graph
                 .get_package(&"a".to_string())

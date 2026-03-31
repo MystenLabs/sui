@@ -44,9 +44,13 @@ pub async fn compile_package<W: Write + Send, F: MoveFlavor>(
     path: &Path,
     build_config: &BuildConfig,
     env: &Environment,
+    flavor: F,
     writer: &mut W,
 ) -> anyhow::Result<CompiledPackage> {
-    let root_pkg: RootPackage<F> = build_config.package_loader(path, env).load().await?;
+    let root_pkg: RootPackage<F> = build_config
+        .package_loader(path, env, flavor)
+        .load()
+        .await?;
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 

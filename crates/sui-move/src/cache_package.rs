@@ -37,7 +37,7 @@ impl CachePackage {
             name: self.environment_name.clone(),
             id: self.environment_id.clone(),
         };
-        let info = cache_package::<SuiFlavor>(&env, &dep.dep).await?;
+        let info = cache_package(&env, &dep.dep, SuiFlavor::new()).await?;
         println!("{}", serde_json::to_string(&info)?);
 
         Ok(())

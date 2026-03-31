@@ -66,10 +66,12 @@ impl PinnedDependencyInfo {
         parent: &Pinned,
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
+        flavor: &F,
     ) -> PackageResult<Vec<PinnedDependencyInfo>> {
         debug!("pinning dependencies");
         // replace all system dependencies using the flavor
-        let (non_system_deps, mut result) = Self::replace_system_deps::<F>(deps, environment_id)?;
+        let (non_system_deps, mut result) =
+            Self::replace_system_deps(deps, environment_id, flavor).await?;
 
         // resolution - replace all externally resolved dependencies with internal dependencies
         let deps = ResolvedDependency::resolve(non_system_deps, environment_id).await?;
@@ -96,12 +98,13 @@ impl PinnedDependencyInfo {
     }
 
     /// partition `deps` into the system dependencies and the non-system dependencies; replace all
-    /// the system dependencies using `F`
-    fn replace_system_deps<F: MoveFlavor>(
+    /// the system dependencies using `flavor`
+    async fn replace_system_deps<F: MoveFlavor>(
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
+        flavor: &F,
     ) -> PackageResult<(Vec<CombinedDependency>, Vec<PinnedDependencyInfo>)> {
-        let all_system_deps = F::system_deps(environment_id);
+        let all_system_deps = flavor.system_deps(environment_id).await;
         let valid_list = move_compiler::format_oxford_list!(
             "and",
             "{}",

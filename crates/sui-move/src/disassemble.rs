@@ -55,7 +55,7 @@ impl Disassemble {
                 debug: self.debug,
                 bytecode_map: self.bytecode_map,
             }
-            .execute::<SuiFlavor>(package_path, build_config)
+            .execute(package_path, build_config, SuiFlavor::new())
             .await?;
             return Ok(());
         }

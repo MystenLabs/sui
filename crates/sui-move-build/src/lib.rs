@@ -181,7 +181,7 @@ impl BuildConfig {
     pub async fn build_async(self, path: &Path) -> anyhow::Result<CompiledPackage> {
         let mut root_pkg = self
             .config
-            .package_loader(path, &self.environment)
+            .package_loader(path, &self.environment, SuiFlavor::new())
             .load()
             .await?;
 
@@ -201,7 +201,7 @@ impl BuildConfig {
         // we need to block here to compile the package, which requires to fetch dependencies
         let mut root_pkg = self
             .config
-            .package_loader(path, &self.environment)
+            .package_loader(path, &self.environment, SuiFlavor::new())
             .load_sync()?;
 
         self.internal_build(&mut root_pkg)

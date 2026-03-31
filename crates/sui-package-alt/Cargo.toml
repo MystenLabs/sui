@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 indexmap.workspace = true
 move-compiler.workspace = true
 move-package-alt.workspace = true

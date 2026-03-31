@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use derive_where::derive_where;
 use sha2::{Digest as _, Sha256};
@@ -12,10 +12,11 @@ use tracing::debug;
 use super::manifest::Manifest;
 use super::package_lock::PackageSystemLock;
 use super::paths::PackagePath;
+use crate::errors::FileHandle;
 use crate::{
     compatibility::legacy::LegacyData,
     dependency::Pinned,
-    package::{manifest::ManifestError, package_loader::PackageLoader},
+    package::{manifest::ManifestError, package_loader::PackageConfig},
     schema::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
@@ -28,7 +29,6 @@ use crate::{
     package::manifest::Digest,
     schema::{Environment, OriginalID, PackageMetadata, PackageName},
 };
-use crate::{errors::FileHandle, package::package_loader::PackageConfig};
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -67,30 +67,34 @@ pub struct Package<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Package<F> {
-    /// Fetch [dep] (relative to [self]) and load a package from the fetched source
-    /// Makes a best effort to translate old-style packages into the current format,
+    /// Fetch `dep` (relative to `self`) and load a package from the fetched source.
+    /// Makes a best effort to translate old-style packages into the current format.
     pub async fn load(
         dep: Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
-        config: &PackageConfig,
+        config: &PackageConfig<F>,
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
+        let flavor = &*config.flavor;
         let path = FetchedDependency::fetch(&dep, config.allow_dirty).await?;
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
-        let legacy_manifest = path.read_legacy_manifest::<F>(env, dep.is_root(), mtx)?;
+        let legacy_manifest = path
+            .read_legacy_manifest::<F>(env, dep.is_root(), mtx, flavor)
+            .await?;
         let (file_handle, manifest) = if let Some(result) = legacy_manifest {
             result
         } else {
             let manifest = Manifest::read_from_file(&path, mtx)?;
-            check_for_environment::<F>(&manifest, &env.name)?;
+            check_for_environment(&manifest, &env.name, flavor)?;
 
             (*manifest.file_handle(), manifest.into_parsed())
         };
 
-        F::validate_manifest(&manifest)
+        flavor
+            .validate_manifest(&manifest)
             .map_err(|msg| ManifestError::flavor_rejected_manifest(file_handle, msg))?;
 
         // try to load the address from the modern lockfile
@@ -107,7 +111,7 @@ impl<F: MoveFlavor> Package<F> {
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
         //     (adding system deps)
 
-        let deps = Self::deps_from_manifest(&file_handle, &manifest, env).await?;
+        let deps = Self::deps_from_manifest(&file_handle, &manifest, env, flavor).await?;
 
         // Fail if any of the deps has the same name as the package
         if deps
@@ -237,20 +241,21 @@ impl<F: MoveFlavor> Package<F> {
         Ok(Some(publish.clone()))
     }
 
-    /// Compute the direct dependencies for the given environment by combining the default
-    /// dependencies, system dependencies, and dep-replacements from the manifest and then pinning
-    /// the results
+    /// Compute the direct dependencies for the given `env` by combining the default dependencies,
+    /// system dependencies, and dep-replacements from `manifest` and then pinning the results.
+    /// `flavor` is used to determine implicit/system dependencies.
     async fn deps_from_manifest(
         file_handle: &FileHandle,
         manifest: &ParsedManifest,
         env: &Environment,
+        flavor: &F,
     ) -> PackageResult<Vec<CombinedDependency>> {
-        let implicits = F::implicit_dependencies(env.id());
+        let implicits = flavor.implicit_dependencies(env.id()).await;
         let is_implicit = implicits.contains_key(manifest.package.name.as_ref());
 
         let system_dependencies = if manifest.package.implicit_dependencies && !is_implicit {
             debug!("adding implicit dependencies");
-            F::implicit_dependencies(env.id())
+            implicits
         } else {
             debug!("no implicit dependencies");
             BTreeMap::new()
@@ -299,10 +304,11 @@ impl<F: MoveFlavor> Package<F> {
 }
 
 /// Ensure that the dependency given by `dep_info` is cached on disk, and return information
-/// about its publication in `env`
+/// about its publication in `env`. `flavor` is used for system dep resolution and validation.
 pub async fn cache_package<F: MoveFlavor>(
     env: &Environment,
     manifest_dep: &ManifestDependencyInfo,
+    flavor: F,
 ) -> PackageResult<CachedPackageInfo> {
     // We need some file handles and things to give context to the dep loading system
     let tempdir = tempdir().expect("can create a temporary directory");
@@ -330,14 +336,15 @@ pub async fn cache_package<F: MoveFlavor>(
 
     // pin
     let root = Pinned::Root(dummy_path.clone());
-    let deps = PinnedDependencyInfo::pin::<F>(&root, vec![combined], env.id()).await?;
+    let flavor = Arc::new(flavor);
+    let deps = PinnedDependencyInfo::pin(&root, vec![combined], env.id(), &*flavor).await?;
 
     // load
     let package = Package::<F>::load(
         deps[0].as_ref().clone(),
         env,
         &mtx,
-        PackageLoader::new(dummy_path.path(), env.clone()).config(),
+        &PackageConfig::persistent(dummy_path.path(), env.clone(), vec![], flavor),
     )
     .await?;
 
@@ -349,12 +356,14 @@ pub async fn cache_package<F: MoveFlavor>(
     })
 }
 
-/// Check that `env` is defined in `manifest`, returning an error if it isn't
+/// Check that `env` is defined in `manifest`, returning an error if it isn't.
+/// Uses `flavor` to determine the default environments.
 fn check_for_environment<F: MoveFlavor>(
     manifest: &Manifest,
     env: &EnvironmentName,
+    flavor: &F,
 ) -> PackageResult<()> {
-    let mut known_environments = F::default_environments();
+    let mut known_environments = flavor.default_environments();
     let manifest_envs = manifest.environments();
 
     if let Some((name, _)) = manifest_envs
@@ -406,7 +415,9 @@ mod tests {
     };
 
     use super::*;
+    use crate::package::package_loader::PackageLoader;
 
+    use async_trait::async_trait;
     use indexmap::IndexMap;
     use insta::assert_snapshot;
     use test_log::test;
@@ -414,21 +425,25 @@ mod tests {
     #[derive(Debug)]
     struct TestFlavor;
 
+    #[async_trait]
     impl MoveFlavor for TestFlavor {
         type PublishedMetadata = ();
         type PackageMetadata = ();
         type AddressInfo = String;
 
-        fn name() -> String {
+        fn name(&self) -> String {
             "test".to_string()
         }
 
-        fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+        fn default_environments(&self) -> IndexMap<EnvironmentName, EnvironmentID> {
             IndexMap::from([(DEFAULT_ENV_NAME.into(), DEFAULT_ENV_ID.into())])
         }
 
         // Our test flavor has `[foo, bar, baz]` system dependencies.
-        fn system_deps(_env: &EnvironmentID) -> BTreeMap<SystemDepName, LockfileDependencyInfo> {
+        async fn system_deps(
+            &self,
+            _env: &EnvironmentID,
+        ) -> BTreeMap<SystemDepName, LockfileDependencyInfo> {
             let mut deps = BTreeMap::new();
             deps.insert(
                 "FOO".into(),
@@ -452,7 +467,8 @@ mod tests {
         }
 
         // In this flavor, only `[foo, bar]` are enabled by default.
-        fn implicit_dependencies(
+        async fn implicit_dependencies(
+            &self,
             _env: &EnvironmentID,
         ) -> BTreeMap<PackageName, ReplacementDependency> {
             let mut result = BTreeMap::new();
@@ -470,11 +486,11 @@ mod tests {
             result
         }
 
-        fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
+        fn validate_manifest(&self, _: &ParsedManifest) -> Result<(), String> {
             Ok(())
         }
 
-        fn is_system_address(_: &OriginalID) -> bool {
+        fn is_system_address(&self, _: &OriginalID) -> bool {
             false
         }
     }
@@ -485,10 +501,14 @@ mod tests {
     async fn test_default_implicit_deps() {
         let scenario = TestPackageGraph::new(["root", "foo", "bar", "baz"]).build();
 
-        let root = PackageLoader::new(scenario.path_for("root"), Vanilla::default_environment())
-            .load::<TestFlavor>()
-            .await
-            .unwrap();
+        let root = PackageLoader::new(
+            scenario.path_for("root"),
+            Vanilla::default_environment(),
+            TestFlavor,
+        )
+        .load()
+        .await
+        .unwrap();
 
         assert_eq!(
             root.package_info()
@@ -522,8 +542,8 @@ mod tests {
             .add_package("a", |a| a.implicit_deps(false))
             .build();
 
-        let root = PackageLoader::new(scenario.path_for("a"), default_environment())
-            .load::<TestFlavor>()
+        let root = PackageLoader::new(scenario.path_for("a"), default_environment(), TestFlavor)
+            .load()
             .await
             .unwrap();
 
@@ -537,8 +557,8 @@ mod tests {
             .add_dep("a", "b", |dep| dep.name("foo").rename_from("b"))
             .build();
 
-        let err = PackageLoader::new(scenario.path_for("a"), default_environment())
-            .load::<TestFlavor>()
+        let err = PackageLoader::new(scenario.path_for("a"), default_environment(), TestFlavor)
+            .load()
             .await
             .unwrap_err();
 
@@ -559,8 +579,8 @@ mod tests {
             .add_dep("a", "b", |dep| dep.name("foo").rename_from("b"))
             .build();
 
-        PackageLoader::new(scenario.path_for("a"), default_environment())
-            .load::<TestFlavor>()
+        PackageLoader::new(scenario.path_for("a"), default_environment(), TestFlavor)
+            .load()
             .await
             .unwrap();
     }
@@ -581,7 +601,7 @@ mod tests {
         let env = default_environment();
         let dep = &ManifestDependencyInfo::Local(LocalDepInfo { local: path });
 
-        let info = cache_package::<Vanilla>(&env, dep).await.unwrap();
+        let info = cache_package::<Vanilla>(&env, dep, Vanilla).await.unwrap();
 
         let CachedPackageInfo {
             name,

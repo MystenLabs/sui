@@ -75,10 +75,11 @@ pub struct LegacyPackageMetadata {
 /// the unsupported sections: `[addresses]`, `[dev-addresses]`, or `[dev-dependencies]`. Although
 /// these fields are not technically required in the old system, we want to process manifests that
 /// don't have them using the modern parser.
-pub fn try_load_legacy_manifest<F: MoveFlavor>(
+pub async fn try_load_legacy_manifest<F: MoveFlavor>(
     path: &PackagePath,
     default_env: &Environment,
     is_root: bool,
+    flavor: &F,
 ) -> anyhow::Result<Option<(FileHandle, ParsedManifest)>> {
     let Ok(file_handle) = FileHandle::new(path.path().join("Move.toml")) else {
         debug!("failed to load legacy file");
@@ -105,7 +106,7 @@ pub fn try_load_legacy_manifest<F: MoveFlavor>(
     }
 
     debug!("parsing legacy manifest");
-    let manifest = parse_source_manifest::<F>(parsed, is_root, path, default_env)?;
+    let manifest = parse_source_manifest::<F>(parsed, is_root, path, default_env, flavor).await?;
     debug!("successfully parsed");
     Ok(Some((file_handle, manifest)))
 }
@@ -114,11 +115,12 @@ fn parse_move_manifest_string(manifest_string: &str) -> Result<TV> {
     toml::from_str::<TV>(manifest_string).context("Unable to parse Move package manifest")
 }
 
-fn parse_source_manifest<F: MoveFlavor>(
+async fn parse_source_manifest<F: MoveFlavor>(
     tval: TV,
     is_root: bool,
     path: &PackagePath,
     env: &Environment,
+    flavor: &F,
 ) -> Result<ParsedManifest> {
     match tval {
         TV::Table(mut table) => {
@@ -195,13 +197,15 @@ fn parse_source_manifest<F: MoveFlavor>(
                 programmatic_addresses.insert(name, addr);
             }
 
-            let implicit_dependencies = check_implicits::<F>(
+            let implicit_dependencies = check_implicits(
                 metadata.legacy_name.as_str(),
                 is_root,
                 &dependencies,
                 metadata.implicit_deps,
                 env,
-            );
+                flavor,
+            )
+            .await;
 
             // We create a normalized legacy name, to make sure we can always use a package
             // as an Identifier.
@@ -250,21 +254,22 @@ fn parse_source_manifest<F: MoveFlavor>(
 }
 
 /// Returns true if implicit dependencies should be added. This is true unless either:
-///  - implicit_deps_flag is false,
-///  - name is a system dep name,
-///  - deps or contains a system dep name
-fn check_implicits<F: MoveFlavor>(
+///  - `implicit_deps_flag` is false,
+///  - `name` is a system dep name,
+///  - `deps` contains a system dep name
+async fn check_implicits<F: MoveFlavor>(
     name: &str,
     is_root: bool,
     deps: &BTreeMap<Identifier, DefaultDependency>,
     implicit_deps_flag: bool,
     env: &Environment,
+    flavor: &F,
 ) -> bool {
     if !implicit_deps_flag {
         return false;
     }
 
-    let system_deps = F::system_deps(env.id());
+    let system_deps = flavor.system_deps(env.id()).await;
     let system_deps_names = system_deps.keys().collect::<BTreeSet<_>>();
 
     if is_legacy_system_dep_name(name, &system_deps_names) {

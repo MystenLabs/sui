@@ -786,7 +786,7 @@ impl SuiCommand {
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
-                analyzer::run::<SuiFlavor>(Some(Flavor::Sui));
+                analyzer::run::<SuiFlavor>(Arc::new(SuiFlavor::new()), Some(Flavor::Sui));
                 Ok(())
             }
             SuiCommand::AnalyzeTrace {
