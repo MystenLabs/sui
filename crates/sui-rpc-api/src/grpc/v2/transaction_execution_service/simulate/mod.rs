@@ -145,11 +145,7 @@ pub fn simulate_transaction(
         }
 
         if transaction.gas_data().payment.is_empty() {
-            select_gas(
-                service,
-                &mut transaction,
-                protocol_config.max_gas_payment_objects(),
-            )?;
+            select_gas(service, &mut transaction, &protocol_config)?;
         }
     }
 
@@ -364,7 +360,7 @@ fn round_up_to_nearest(value: u64, step: u64) -> u64 {
 fn select_gas(
     service: &RpcService,
     transaction: &mut sui_types::transaction::TransactionData,
-    max_gas_payment_objects: u32,
+    protocol_config: &ProtocolConfig,
 ) -> Result<()> {
     use sui_types::accumulator_root::AccumulatorValue;
     use sui_types::balance::Balance;
@@ -459,7 +455,7 @@ fn select_gas(
                     .ok()
                     .map(|coin| (object.compute_object_reference(), coin.value()))
             })
-            .take(max_gas_payment_objects as usize);
+            .take(protocol_config.max_gas_payment_objects() as usize);
 
         let mut selected_gas = vec![];
         let mut selected_gas_value = 0;
@@ -473,7 +469,8 @@ fn select_gas(
 
         // When GasCoin is used and there's address balance, prepend a coin reservation
         // to make all SUI in the account available (coins + address balance)
-        if gas_coin_used
+        if protocol_config.enable_coin_reservation_obj_refs()
+            && gas_coin_used
             && let Some(ab_value) = address_balance
             && ab_value > 0
         {
