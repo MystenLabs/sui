@@ -213,6 +213,13 @@ public macro fun map_ref<$T, $U>($o: &Option<$T>, $f: |&$T| -> $U): Option<$U> {
     if (o.is_some()) some($f(o.borrow())) else none()
 }
 
+/// Map an `Option<T>` value to `Option<U>` by applying a function to a contained value by mutable
+/// reference. Original `Option<T>` is preserved, although potentially modified.
+public macro fun map_mut<$T, $U>($o: &mut Option<$T>, $f: |&mut $T| -> $U): Option<$U> {
+    let o = $o;
+    if (o.is_some()) some($f(o.borrow_mut())) else none()
+}
+
 /// Return `None` if the value is `None`, otherwise return `Option<T>` if the predicate `f` returns true.
 public macro fun filter<$T: drop>($o: Option<$T>, $f: |&$T| -> bool): Option<$T> {
     let o = $o;
@@ -225,15 +232,15 @@ public macro fun is_some_and<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
     o.is_some() && $f(o.borrow())
 }
 
-/// Return `true` if the value is `None`, or the predicate `f` returns `true` for the contained value.
-/// Equivalent to Rust's `t.is_none_or(f)`.
+/// Return `true` if the value is `None`, or the predicate `f` returns `true` for the contained
+/// value.
 public macro fun is_none_or<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
     let o = $o;
     o.is_none() || $f(o.borrow())
 }
 
-/// Consume the option and return `$none` if it is `None`, otherwise apply `$some` to the contained value.
-/// Equivalent to Rust's `t.map_or(default, f)` or a fold over an option.
+/// Consume the option and return `$none` if it is `None`, otherwise apply `$some` to the contained
+/// value.
 public macro fun fold<$T, $R>($o: Option<$T>, $none: $R, $some: |$T| -> $R): $R {
     let o = $o;
     if (o.is_some()) {

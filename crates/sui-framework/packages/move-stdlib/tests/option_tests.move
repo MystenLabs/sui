@@ -215,6 +215,16 @@ fun map_map_ref() {
 }
 
 #[test]
+fun map_mut() {
+    let mut opt = option::some(5u64);
+    assert_eq!(opt.map_mut!(|x| { *x = 100; vector[*x] }), option::some(vector[100]));
+    assert_eq!(*opt.borrow(), 100);
+
+    let mut none = option::none<u64>();
+    assert_eq!(none.map_mut!(|x| { *x = 100; vector[*x] }), option::none());
+}
+
+#[test]
 fun map_no_drop() {
     let none = option::none<NoDrop>().map!(|el| {
         let NoDrop {} = el;
