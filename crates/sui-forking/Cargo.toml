@@ -11,6 +11,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 axum-extra.workspace = true
+forking-data-store = { path = "../forking-data-store", features = ["test-utils"] }
 rand.workspace = true
 reqwest.workspace = true
 roaring.workspace = true
@@ -23,9 +24,14 @@ url.workspace = true
 bin-version.workspace = true
 
 simulacrum.workspace = true
+sui-config.workspace = true
 sui-swarm-config.workspace = true
 sui-types.workspace = true
 sui-graphql.workspace = true
+
+[dev-dependencies]
+mockall.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

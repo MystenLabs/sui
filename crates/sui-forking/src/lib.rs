@@ -3,12 +3,10 @@
 
 //! Forking tool for Sui.
 
-pub(crate) mod graphql;
 mod network;
 mod service_store;
 mod startup;
 
-pub use graphql::{ForkDataProvider, GraphQLQueryClient};
 pub use network::Network;
 pub use service_store::ServiceStore;
-pub use startup::start_server;
+pub use startup::{StartupContext, resolve_resume_fork_checkpoint, start_server};
