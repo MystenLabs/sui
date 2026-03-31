@@ -52,6 +52,9 @@ impl TransactionExecutionService for RpcService {
 }
 
 pub const EXECUTE_TRANSACTION_READ_MASK_DEFAULT: &str = "effects";
+// Current maximum number of supported UserSignature's,
+// one for the sender and one for an optional sponsor
+const MAX_NUMBER_OF_SIGNATURES: usize = 2;
 
 #[tracing::instrument(skip(service, executor))]
 pub async fn execute_transaction(
@@ -69,6 +72,17 @@ pub async fn execute_transaction(
                 .with_description(format!("invalid transaction: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
+
+    if request.signatures.len() > MAX_NUMBER_OF_SIGNATURES {
+        return Err(FieldViolation::new("signatures")
+            .with_description(format!(
+                "{} provided signatures exceeds the maximum allowed of {}",
+                request.signatures.len(),
+                MAX_NUMBER_OF_SIGNATURES
+            ))
+            .with_reason(ErrorReason::FieldInvalid)
+            .into());
+    }
 
     let signatures = request
         .signatures

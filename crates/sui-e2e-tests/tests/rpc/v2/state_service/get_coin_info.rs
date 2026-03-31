@@ -30,7 +30,7 @@ async fn get_coin_info_sui() {
         .build()
         .await;
 
-    let mut grpc_client = get_grpc_client(&test_cluster);
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let coin_type_sdk: TypeTag = "0x2::sui::SUI".parse().unwrap();
     let mut request = GetCoinInfoRequest::default();
@@ -88,7 +88,7 @@ async fn test_get_coin_info_registry_coin() {
         .build()
         .await;
 
-    let mut grpc_client = get_grpc_client(&test_cluster);
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address = test_cluster.get_address_0();
 
@@ -296,7 +296,7 @@ async fn test_get_coin_info_burnonly_coin() {
         .build()
         .await;
 
-    let mut grpc_client = get_grpc_client(&test_cluster);
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address = test_cluster.get_address_0();
 
@@ -438,7 +438,7 @@ async fn test_get_coin_info_regulated_coin() {
         .build()
         .await;
 
-    let mut grpc_client = get_grpc_client(&test_cluster);
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address = test_cluster.get_address_0();
 
@@ -491,7 +491,7 @@ async fn test_get_coin_info_non_otw_coin() {
         .build()
         .await;
 
-    let mut grpc_client = get_grpc_client(&test_cluster);
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address = test_cluster.get_address_0();
 
@@ -576,7 +576,7 @@ async fn test_get_coin_info_legacy_coin() {
         .build()
         .await;
 
-    let mut grpc_client = get_grpc_client(&test_cluster);
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     let address = test_cluster.get_address_0();
 
@@ -898,7 +898,9 @@ async fn publish_non_otw_coin(
     let registry_obj_response = {
         let mut ledger_client = {
             use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-            LedgerServiceClient::new(test_cluster.grpc_channel())
+            LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+                .await
+                .expect("Failed to connect to ledger service")
         };
 
         use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
@@ -999,7 +1001,9 @@ async fn finalize_registration(
     use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, ListOwnedObjectsRequest};
     use sui_types::base_types::SequenceNumber;
 
-    let mut ledger_client = LedgerServiceClient::new(test_cluster.grpc_channel());
+    let mut ledger_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .expect("Failed to connect to ledger service");
 
     // Get the CoinRegistry object info to find its initial version
     let registry_obj_response = ledger_client
@@ -1026,7 +1030,7 @@ async fn finalize_registration(
         .expect("CoinRegistry should be a shared object with an initial version");
 
     // Now find the Currency object that was transferred to the CoinRegistry
-    let mut grpc_client = get_grpc_client(test_cluster);
+    let mut grpc_client = get_grpc_client(test_cluster).await;
 
     let registry_owned = grpc_client
         .list_owned_objects({
@@ -1142,7 +1146,7 @@ async fn test_invalid_coin_type() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut grpc_client = get_grpc_client(&test_cluster);
+    let mut grpc_client = get_grpc_client(&test_cluster).await;
 
     // Test with malformed coin type
     let mut request = GetCoinInfoRequest::default();
@@ -1168,8 +1172,10 @@ async fn test_invalid_coin_type() {
     assert!(error.message().contains("not found"));
 }
 
-fn get_grpc_client(
+async fn get_grpc_client(
     test_cluster: &test_cluster::TestCluster,
 ) -> StateServiceClient<tonic::transport::Channel> {
-    StateServiceClient::new(test_cluster.grpc_channel())
+    StateServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap()
 }

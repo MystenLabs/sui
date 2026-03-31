@@ -19,7 +19,9 @@ async fn subscribe_checkpoint() {
 
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
 
-    let mut client = SubscriptionServiceClient::new(test_cluster.grpc_channel());
+    let mut client = SubscriptionServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
 
     let mut request = SubscribeCheckpointsRequest::default();
     request.read_mask = Some(FieldMask::from_str("sequence_number"));

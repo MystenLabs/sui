@@ -29,7 +29,9 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
     test_cluster.wait_for_epoch(Some(1)).await;
     test_cluster.wait_for_authenticator_state_update().await;
 
-    let mut client = SignatureVerificationServiceClient::new(test_cluster.grpc_channel());
+    let mut client = SignatureVerificationServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
 
     // Construct a valid zkLogin transaction data, signature.
     let (kp, pk_zklogin, inputs) = &sui_types::utils::load_test_vectors(

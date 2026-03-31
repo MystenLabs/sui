@@ -66,7 +66,10 @@ async fn resolve_transaction_simple_transfer() {
         .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
     let recipient = SuiAddress::random_for_testing_only();
 
     let (sender, mut gas) = test_cluster.wallet.get_one_account().await.unwrap();
@@ -126,7 +129,10 @@ async fn resolve_transaction_transfer_with_sponsor() {
         .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
     let recipient = SuiAddress::random_for_testing_only();
 
     let (sender, gas) = test_cluster.wallet.get_one_account().await.unwrap();
@@ -207,7 +213,10 @@ async fn resolve_transaction_borrowed_shared_object() {
         .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
 
     let sender = test_cluster.wallet.get_addresses()[0];
 
@@ -258,7 +267,10 @@ async fn resolve_transaction_mutable_shared_object() {
         .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
 
     let (sender, mut gas) = test_cluster.wallet.get_one_account().await.unwrap();
     gas.sort_by_key(|object_ref| object_ref.0);
@@ -328,7 +340,10 @@ async fn resolve_transaction_insufficient_gas() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut alpha_client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
 
     // Test the case where we don't have enough coins/gas for the required budget
     let mut unresolved_transaction = Transaction::default();
@@ -376,7 +391,10 @@ async fn resolve_transaction_gas_budget_clamping() {
         .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
 
     let (sender, gas_coins) = test_cluster.wallet.get_one_account().await.unwrap();
 
@@ -447,7 +465,10 @@ async fn resolve_transaction_insufficient_gas_with_payment_objects() {
         .with_num_validators(1)
         .build()
         .await;
-    let mut alpha_client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
 
     let (sender, gas_coins) = test_cluster.wallet.get_one_account().await.unwrap();
 
@@ -591,7 +612,10 @@ async fn resolve_transaction_shared_object_with_generic_type_parameter() {
         .await;
 
     let mut client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
 
     // Create a party object (which is a shared object with ConsensusAddressOwner)
     let (package, party_object) =

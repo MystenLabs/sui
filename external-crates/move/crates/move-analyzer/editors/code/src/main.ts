@@ -167,6 +167,15 @@ export async function activate(extensionContext: Readonly<vscode.ExtensionContex
         return;
     }
 
+    // Initialize activity monitor with version info.
+    const serverVersionResult = childProcess.spawnSync(
+        context.resolvedServerPath,
+        context.resolvedServerArgs.concat(['--version']),
+        { encoding: 'utf8' },
+    );
+    const serverVersionString = serverVersionResult.stdout.trim() || 'unknown';
+    context.initActivityMonitor(extension.version, serverVersionString);
+
     // Register handlers for VS Code commands that the user explicitly issues.
     context.registerCommand('serverVersion', serverVersion);
     context.registerCommand('serverRestart', serverRestart);

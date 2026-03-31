@@ -62,7 +62,6 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
-#[cfg(debug_assertions)]
 use std::sync::RwLock;
 use std::time::Duration;
 use std::{
