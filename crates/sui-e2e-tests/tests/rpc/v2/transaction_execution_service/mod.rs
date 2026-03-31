@@ -174,6 +174,53 @@ async fn execute_transaction_publish_with_event_json() {
     );
 }
 
+#[sim_test]
+async fn execute_transaction_too_many_signatures() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let mut client = TransactionExecutionServiceClient::new(test_cluster.grpc_channel());
+
+    let txn =
+        make_transfer_sui_transaction(&test_cluster.wallet, Some(SuiAddress::ZERO), None).await;
+
+    let signatures: Vec<UserSignature> = txn
+        .tx_signatures()
+        .iter()
+        .map(|s| {
+            let mut message = UserSignature::default();
+            message.bcs = Some(Bcs::from(s.as_ref().to_owned()));
+            message
+        })
+        .collect();
+
+    // Provide 3 copies of the signature to exceed the limit of 2.
+    let too_many_signatures = vec![signatures[0].clone(); 3];
+
+    let error = client
+        .execute_transaction({
+            let mut message = ExecuteTransactionRequest::default();
+            message.transaction = Some({
+                let mut message = Transaction::default();
+                message.bcs = Some(Bcs::serialize(txn.transaction_data()).unwrap());
+                message
+            });
+            message.signatures = too_many_signatures;
+            message
+        })
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert!(
+        error.message().contains("exceeds the maximum allowed"),
+        "unexpected error message: {}",
+        error.message()
+    );
+}
+
 /// Test that object JSON is rendered correctly for objects created by a newly published package.
 ///
 /// This is a regression test for a bug where object JSON rendering would fail with a LINKER_ERROR
