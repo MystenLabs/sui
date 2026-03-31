@@ -9,6 +9,7 @@ Commands:
   disassemble  Disassemble the Move bytecode pointed to
   decompile    Decompile Move bytecode into Move source code
   docgen       Generate Rust style documentation for Move packages
+  lint         Run Move linters on the package at `path`. If no path is provided defaults to current directory
   migrate      Migrate to Move 2024 for the package at `path`. If no path is provided defaults to current directory
   new          Create a new Move package with name `name` at `path`. If `path` is not provided the package will be created in the directory `name`
   test         Run Move unit tests in this package
