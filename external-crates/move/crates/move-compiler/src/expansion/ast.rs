@@ -649,8 +649,8 @@ impl ModuleIdent_ {
         a.is(address) && m == module.as_ref()
     }
 
-    /// Indicates this identifer matches the provided address and module name, as
-    /// `address::module`. Returns false is the address does not have a sybmol name.
+    /// Indicates this identifier matches the provided address and module name, as
+    /// `address::module`. Returns false is the address does not have a symbol name.
     pub fn named_address_is(&self, address: impl AsRef<str>, module: impl AsRef<str>) -> bool {
         let Some(self_address) = self.address.name() else {
             return false;

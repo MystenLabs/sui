@@ -1,0 +1,67 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: true
+---
+warning[Lint W04013]: consider using receiver (method) syntax
+   ┌─ tests/linter/move_2024/use_receiver_syntax.move:22:5
+   │
+22 │     vector::push_back(&mut v, 4);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Consider using receiver syntax: 'first_arg.push_back(arg1)' instead of 'std::vector::push_back(first_arg, arg1)'
+   │
+   = This warning can be suppressed with '#[allow(lint(use_receiver_syntax))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: consider using receiver (method) syntax
+   ┌─ tests/linter/move_2024/use_receiver_syntax.move:24:5
+   │
+24 │     drop(new());
+   │     ^^^^^^^^^^^ Consider using receiver syntax: 'first_arg.drop()' instead of '0x42::m::drop(first_arg)'
+   │
+   = This warning can be suppressed with '#[allow(lint(use_receiver_syntax))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: consider using receiver (method) syntax
+   ┌─ tests/linter/move_2024/use_receiver_syntax.move:28:13
+   │
+28 │     let _ = std::u64::max(1, 2);
+   │             ^^^^^^^^^^^^^^^^^^^ Consider using receiver syntax: 'first_arg.max(arg1)' instead of 'std::u64::max(first_arg, arg1)'
+   │
+   = This warning can be suppressed with '#[allow(lint(use_receiver_syntax))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: consider using receiver (method) syntax
+   ┌─ tests/linter/move_2024/use_receiver_syntax.move:29:13
+   │
+29 │     let _ = std::u16::pow(2, 3);
+   │             ^^^^^^^^^^^^^^^^^^^ Consider using receiver syntax: 'first_arg.pow(arg1)' instead of 'std::u16::pow(first_arg, arg1)'
+   │
+   = This warning can be suppressed with '#[allow(lint(use_receiver_syntax))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: consider using receiver (method) syntax
+   ┌─ tests/linter/move_2024/use_receiver_syntax.move:33:13
+   │  
+33 │       let _ = vector::length(&{
+   │ ╭─────────────^
+34 │ │         let mut v = vector[1u64, 2, 3];
+35 │ │         v.push_back(4);
+36 │ │         v
+37 │ │     });
+   │ ╰──────^ Consider using receiver syntax: 'first_arg.length()' instead of 'std::vector::length(first_arg)'
+   │  
+   = This warning can be suppressed with '#[allow(lint(use_receiver_syntax))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: consider using receiver (method) syntax
+   ┌─ tests/linter/move_2024/use_receiver_syntax.move:42:13
+   │
+42 │     assert!(option::is_some(&o));
+   │             ^^^^^^^^^^^^^^^^^^^ Consider using receiver syntax: 'first_arg.is_some()' instead of 'std::option::is_some(first_arg)'
+   │
+   = This warning can be suppressed with '#[allow(lint(use_receiver_syntax))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: consider using receiver (method) syntax
+   ┌─ tests/linter/move_2024/use_receiver_syntax.move:43:13
+   │
+43 │     let _ = option::destroy_some(o);
+   │             ^^^^^^^^^^^^^^^^^^^^^^^ Consider using receiver syntax: 'first_arg.destroy_some()' instead of 'std::option::destroy_some(first_arg)'
+   │
+   = This warning can be suppressed with '#[allow(lint(use_receiver_syntax))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
