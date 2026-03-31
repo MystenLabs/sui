@@ -58,6 +58,11 @@ pub(crate) async fn display_v2(
     let object_id = display_registry::display_object_id(type_.into())
         .context("Failed to derive Display V2 object ID")?;
 
+    // Display registry objects are global objects, not children of the value being rendered.
+    // Ignore any root-version bound inherited from the value so a newer Display v2 object can
+    // still be resolved for older objects.
+    let scope = scope.without_root_bound();
+
     let Some(object) = Object::latest(ctx, scope, object_id.into()).await? else {
         return Ok(None);
     };
