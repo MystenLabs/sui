@@ -124,6 +124,7 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
 // === Macro Functions ===
 
 /// Immutably borrow the field value, adding it with `$default` if it doesn't exist.
+/// Note that `$default` is evaluated only if the field does not already exist.
 public macro fun borrow_or_add<$Name: copy + drop + store, $Value: store>(
     $object: &mut UID,
     $name: $Name,
@@ -136,6 +137,7 @@ public macro fun borrow_or_add<$Name: copy + drop + store, $Value: store>(
 }
 
 /// Mutably borrow the field value, adding it with `$default` if it doesn't exist.
+/// Note that `$default` is evaluated only if the field does not already exist.
 public macro fun borrow_mut_or_add<$Name: copy + drop + store, $Value: store>(
     $object: &mut UID,
     $name: $Name,
@@ -148,6 +150,7 @@ public macro fun borrow_mut_or_add<$Name: copy + drop + store, $Value: store>(
 }
 
 /// If the field exists, call `$f` on an immutable reference to the value.
+/// This is like getting an `Option<&Value>` then calling `std::option::do`.
 public macro fun get_do<$Name: copy + drop + store, $Value: store, $R: drop>(
     $object: &UID,
     $name: $Name,
@@ -159,6 +162,7 @@ public macro fun get_do<$Name: copy + drop + store, $Value: store, $R: drop>(
 }
 
 /// If the field exists, call `$f` on a mutable reference to the value.
+/// This is like getting an `Option<&mut Value>` then calling `std::option::do`.
 public macro fun get_mut_do<$Name: copy + drop + store, $Value: store, $R: drop>(
     $object: &mut UID,
     $name: $Name,
@@ -171,6 +175,7 @@ public macro fun get_mut_do<$Name: copy + drop + store, $Value: store, $R: drop>
 
 /// If the field exists, apply `$some` to an immutable reference to the value; otherwise return
 /// `$none`.
+/// This is like getting an `Option<&Value>` then calling `std::option::fold`.
 public macro fun get_fold<$Name: copy + drop + store, $Value: store, $R>(
     $object: &UID,
     $name: $Name,
@@ -184,6 +189,7 @@ public macro fun get_fold<$Name: copy + drop + store, $Value: store, $R>(
 
 /// If the field exists, apply `$some` to a mutable reference to the value; otherwise return
 /// `$none`.
+/// This is like getting an `Option<&mut Value>` then calling `std::option::fold`.
 public macro fun get_mut_fold<$Name: copy + drop + store, $Value: store, $R>(
     $object: &mut UID,
     $name: $Name,
