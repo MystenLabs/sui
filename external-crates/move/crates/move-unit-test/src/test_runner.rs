@@ -549,6 +549,7 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
                         )
                     }
                     None if err.major_status() == StatusCode::OUT_OF_GAS => {
+                        // TODO should we just implementa new error: OUT_OF_GAS, suggesting gas limit can be increased?
                         // Ran out of ticks, report a test timeout and log a test failure
                         output.timeout(function_name);
                         stats.test_failure(
