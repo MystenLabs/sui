@@ -21,7 +21,7 @@ type BootstrapStore = ForkingStore<
 type HistoricalStore = ForkingStore<
     FileSystemStore,
     FileSystemStore,
-    FileSystemStore,
+    ReadThroughStore<FileSystemStore, GraphQLStore>,
     ReadThroughStore<FileSystemStore, GraphQLStore>,
 >;
 
@@ -79,7 +79,10 @@ fn historical_store(node: &Node) -> Result<HistoricalStore> {
     Ok(ForkingStore::new(
         filesystem_store(node, None)?,
         filesystem_store(node, None)?,
-        filesystem_store(node, None)?,
+        ReadThroughStore::new(
+            filesystem_store(node, None)?,
+            GraphQLStore::new(node.clone(), env!("CARGO_PKG_VERSION"))?,
+        ),
         ReadThroughStore::new(
             filesystem_store(node, None)?,
             GraphQLStore::new(node.clone(), env!("CARGO_PKG_VERSION"))?,

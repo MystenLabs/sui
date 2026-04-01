@@ -5,6 +5,7 @@ use std::fs;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow};
 use axum::Router;
@@ -14,6 +15,7 @@ use forking_data_store::stores::{
 };
 use forking_data_store::{CheckpointStore, EpochData, EpochStore, SetupStore};
 use rand::rngs::OsRng;
+use tokio::sync::RwLock;
 use tokio::sync::oneshot;
 use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
@@ -21,11 +23,15 @@ use tracing::{info, warn};
 use simulacrum::Simulacrum;
 use simulacrum::store::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
+use sui_rpc_api::grpc::Services as GrpcServices;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::full_checkpoint_content::Checkpoint as CheckpointData;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
+
+use crate::grpc::ledger_service::ForkingLedgerService;
 
 mod endpoints {
     pub const HEALTH: &str = "/health";
@@ -129,7 +135,7 @@ pub async fn start_server<S, B>(
     ready_sender: Option<oneshot::Sender<SocketAddr>>,
 ) -> Result<()>
 where
-    S: SimulatorStore,
+    S: SimulatorStore + Send + Sync + 'static,
     B: CheckpointStore + EpochStore + SetupStore,
 {
     let chain_id = bootstrap_store
@@ -149,8 +155,12 @@ where
     };
     let config = build_network_config(context.epoch_data.protocol_version);
     let store = store_factory(&context, &config)?;
-    let _simulacrum = setup_simulacrum(verified_checkpoint, &config, store)?;
-    let app = build_router();
+    let simulacrum = Arc::new(RwLock::new(setup_simulacrum(
+        verified_checkpoint,
+        &config,
+        store,
+    )?));
+    let app = build_router(simulacrum);
     serve(app, host, server_port, shutdown_receiver, ready_sender).await
 }
 
@@ -221,10 +231,20 @@ fn fetch_system_state(config: &NetworkConfig) -> SuiSystemState {
     config.genesis.sui_system_object()
 }
 
-pub(crate) fn build_router() -> Router {
+pub(crate) fn build_router<S>(simulacrum: Arc<RwLock<Simulacrum<OsRng, S>>>) -> Router
+where
+    S: SimulatorStore + Send + Sync + 'static,
+{
+    let grpc_router = GrpcServices::new()
+        .add_service(LedgerServiceServer::new(ForkingLedgerService::new(
+            simulacrum,
+        )))
+        .into_router();
+
     Router::new()
         .route(endpoints::HEALTH, get(health))
         .route(endpoints::STATUS, get(get_status))
+        .merge(grpc_router)
         .layer(CorsLayer::permissive())
 }
 

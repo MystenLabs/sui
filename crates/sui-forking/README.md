@@ -44,3 +44,24 @@ The table below summarizes when to use each option:
 - If it forks at checkpoint X, you cannot depend on objects created after checkpoint X from the actual real network. You'll need to restart the network at that checkpoint or a later one.
 - Sequential execution: Transactions are executed one at a time, no parallelism.
 
+## Object gRPC Support
+
+The object portion of the gRPC `LedgerService` surface is supported:
+
+- `get_object`
+- `batch_get_objects`
+
+These reads are served through `ServiceStore`, which prefers locally available
+post-fork objects and falls back to historical source-chain data cached via the
+filesystem and GraphQL stores.
+
+### Exact-Version Fork Rule
+
+Exact-version object reads are constrained by the selected fork checkpoint.
+
+- If a requested exact version exists locally, it is returned.
+- If it is not local, `sui-forking` first resolves the object's version at the fork checkpoint.
+- Historical exact versions at or before that fork-visible version may be fetched remotely.
+- Versions that would require source-chain state created after the fork checkpoint are rejected.
+
+StateService-owned object listing and other non-object gRPC APIs are not yet implemented.
