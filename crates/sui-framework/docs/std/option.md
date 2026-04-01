@@ -930,6 +930,7 @@ value.
 
 Consume the option and return <code>$<a href="../std/option.md#std_option_none">none</a></code> if it is <code>None</code>, otherwise apply <code>$<a href="../std/option.md#std_option_some">some</a></code> to the contained
 value.
+Note <code>$<a href="../std/option.md#std_option_none">none</a></code> is evaluated only if the option is <code>None</code>.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_fold">fold</a>&lt;$T, $R&gt;($o: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $<a href="../std/option.md#std_option_none">none</a>: $R, $<a href="../std/option.md#std_option_some">some</a>: |$T| -&gt; $R): $R
@@ -962,6 +963,7 @@ value.
 
 Apply <code>$<a href="../std/option.md#std_option_some">some</a></code> to the borrowed value if <code>Some</code>, otherwise return <code>$<a href="../std/option.md#std_option_none">none</a></code>.
 Original option is preserved.
+Note <code>$<a href="../std/option.md#std_option_none">none</a></code> is evaluated only if the option is <code>None</code>.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_fold_ref">fold_ref</a>&lt;$T, $R&gt;($o: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $<a href="../std/option.md#std_option_none">none</a>: $R, $<a href="../std/option.md#std_option_some">some</a>: |&$T| -&gt; $R): $R
@@ -988,6 +990,7 @@ Original option is preserved.
 ## Macro function `fold_mut`
 
 Apply <code>$<a href="../std/option.md#std_option_some">some</a></code> to the mutably borrowed value if <code>Some</code>, otherwise return <code>$<a href="../std/option.md#std_option_none">none</a></code>.
+Note <code>$<a href="../std/option.md#std_option_none">none</a></code> is evaluated only if the option is <code>None</code>.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_fold_mut">fold_mut</a>&lt;$T, $R&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $<a href="../std/option.md#std_option_none">none</a>: $R, $<a href="../std/option.md#std_option_some">some</a>: |&<b>mut</b> $T| -&gt; $R): $R

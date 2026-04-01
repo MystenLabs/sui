@@ -241,6 +241,7 @@ public macro fun is_none_or<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
 
 /// Consume the option and return `$none` if it is `None`, otherwise apply `$some` to the contained
 /// value.
+/// Note `$none` is evaluated only if the option is `None`.
 public macro fun fold<$T, $R>($o: Option<$T>, $none: $R, $some: |$T| -> $R): $R {
     let o = $o;
     if (o.is_some()) {
@@ -253,12 +254,14 @@ public macro fun fold<$T, $R>($o: Option<$T>, $none: $R, $some: |$T| -> $R): $R 
 
 /// Apply `$some` to the borrowed value if `Some`, otherwise return `$none`.
 /// Original option is preserved.
+/// Note `$none` is evaluated only if the option is `None`.
 public macro fun fold_ref<$T, $R>($o: &Option<$T>, $none: $R, $some: |&$T| -> $R): $R {
     let o = $o;
     if (o.is_some()) $some(o.borrow()) else $none
 }
 
 /// Apply `$some` to the mutably borrowed value if `Some`, otherwise return `$none`.
+/// Note `$none` is evaluated only if the option is `None`.
 public macro fun fold_mut<$T, $R>($o: &mut Option<$T>, $none: $R, $some: |&mut $T| -> $R): $R {
     let o = $o;
     if (o.is_some()) $some(o.borrow_mut()) else $none
