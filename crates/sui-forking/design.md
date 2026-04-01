@@ -1,4 +1,4 @@
-# Forking Tool Design, Implementation, & PR execution
+# Forking Tool Design, Implementation, & PR execution - POC
 
 `sui-forking` allows developers to start a local network in lock-step mode and execute transactions against some initial state derived from the live Sui network. This enables you to:
 
@@ -13,7 +13,7 @@ Important to note: the forking tool spins up a network that is not generating ch
 
 ### **High level diagram**
 
-![image.png](image.png)
+![architecture.png](architecture.png)
 
 ### gRPC Interfaces
 
@@ -51,75 +51,134 @@ When a transaction execution request comes in from gRPC, it will be routed by th
 
 Ultimately, the goal is to get to something like this for this store:
 
-```jsx
+```rust
 pub struct ServiceStore {
     /// Capability-routed composite store:
-    /// - transactions/epochs/checkpoints: memory -> filesystem (note in POC there is no historical data provided)
+    /// - transactions/epochs/checkpoints: memory -> filesystem (note in POC there is no historical paginated (e.g., live objects, transactions) data provided)
     /// - objects: memory -> filesystem -> GraphQL
     store: ForkDataStore,
 
     // The checkpoint at which this forked network was forked
     forked_at_checkpoint: u64,
-
-    /// Optional validator-set override used when building epoch state for checkpoint production.
-    /// This keeps the committee aligned with locally available validator keys in forking mode.
-    validator_set_override: Option<ValidatorSetV1>,
 }
-
 ```
 
-**Store Layer Composition**
+**Store Layer (forking-data-store)**
 
-The `CompositeStore` is a store defined in `forking-data-store` that routes each data capability to a store type. The building blocks come from the `forking-data-store` crate:
-
-- `WriteThroughStore<Primary, Secondary>`: writes to both; reads from primary first, falls back to secondary, writes to secondary, and then writes to primary.
-- `ReadThroughStore<Primary, Fallback>`: reads from primary, falls back to secondary and caches result into primary.
-
-The concrete layers:
+In the initial POC, the store will be an in-memory store with a GraphQL client as the backing source for historical data (checkpoints, epochs, objects, transactions).
 
 ```rust
-MemFs             = WriteThroughStore<InMemoryStore, FileSystemStore>
-DiskThenGraphql   = ReadThroughStore<FileSystemStore, DataStore(GraphQL)>
-HotObjects        = WriteThroughStore<InMemoryStore, DiskThenGraphql>
+pub type StoredCheckpoint = Checkpoint;
+pub type StoredTransaction = Transaction;
+pub type StoredObject = Object;
 
-ForkDataStore    = CompositeStore<
-transactions: MemFs,      // mem → fs (2 tiers)
-epochs:       MemFs,      // mem → fs (2 tiers)
-objects:      HotObjects, // mem → fs → GraphQL (3 tiers)
-checkpoints:  MemFs,      // mem → fs (2 tiers)
->
+pub trait CheckpointReader {
+    fn get(&self, sequence_number: u64) -> Result<Option<StoredCheckpoint>, StoreError>;
+    fn get_latest(&self) -> Result<Option<StoredCheckpoint>, StoreError>;
+}
+
+pub trait CheckpointWriter {
+    fn put(&self, checkpoint: StoredCheckpoint) -> Result<(), StoreError>;
+}
+
+pub struct StoredObject {
+    pub object: Object,
+}
+
+pub enum ObjectVersion {
+    Version(Option<u64>),
+    RootVersion(u64),
+    AtCheckpoint(u64),
+}
+
+pub trait ObjectReader {
+    fn get(
+        &self,
+        object_id: ObjectID,
+        version: ObjectVersion,
+    ) -> Result<Option<StoredObject>, StoreError>;
+}
+
+pub trait ObjectWriter {
+    fn put(&self, object_id: ObjectID, object: StoredObject) -> Result<(), StoreError>;
+}
+
+
+
+pub trait TransactionReader {
+    fn get(&self, digest: &str) -> Result<Option<StoredTransaction>, StoreError>;
+}
+
+pub trait TransactionWriter {
+    fn put(&self, tx: StoredTransaction) -> Result<(), StoreError>;
+}
+
+pub struct StoredEpoch {
+    pub epoch: u64,
+    pub protocol_version: u64,
+    pub reference_gas_price: u64,
+    pub start_timestamp_ms: u64,
+}
+
+pub trait EpochReader {
+    fn get(&self, epoch: u64) -> Result<Option<StoredEpoch>, StoreError>;
+}
+
+pub trait EpochWriter {
+    fn put(&self, epoch: StoredEpoch) -> Result<(), StoreError>;
+}
 ```
 
-Objects have a third tier (GraphQL) because they are fetched on-demand from the
-live network when not found locally. Transactions, epochs, and checkpoints are
-only produced locally (or fetched once at startup via gRPC), so two tiers suffice.
+For this design, we can express that shape as a `ForkStore` capability bundle:
 
-**Filesystem Layout**
-
-The user has the option to specify where to store the network’s state through a `--data-dir` flag at startup. If none is provided, the default `~/.forking_store` will be used.
-
-```bash
- <data_dir>/forking/<network>/forked_at_checkpoint_<N>
-	 objects
-	 checkpoints
-	 transactions
+```rust
+pub trait ForkStore:
+    CheckpointReader
+    + CheckpointWriter
+    + ObjectReader
+    + ObjectWriter
+    + TransactionReader
+    + TransactionWriter
+    + EpochReader
+    + EpochWriter
+    + Send
+    + Sync
+{
+}
 ```
 
-Storing data on filesystem enables resuming a previously forked session — on restart, if the user provides a checkpoint to fork from that was previously used, the tool will resume from that state that should exist on the filesystem.
-In the case that the user wants to fork from that checkpoint again on a fresh & clean state, the tool provides a `--reset` flag to remove that directory and start fresh.
+
+Expected object read behavior:
+- check memory first
+- on miss, fetch from backing source at requested version/query
+- cache the hit in memory
+- return `None` if data does not exist at or before the fork checkpoint
+
+The same read-through/write-back flow applies to transactions, checkpoints, and epochs.
+Updates produced by local transaction execution write to the in-memory store immediately.
 
 ### **Startup object seeding**
 
-At startup, the user has the choice to seed addresses or objects, to make the forked network “aware” of them. There are two different modes on how this works, due to the data-limitations that we have in GraphQL:
+At startup, the user has the choice to seed addresses or objects, to make the forked network “aware” of them.
 
-- `--accounts`: discover owned objects through GraphQL at startup time for checkpoints not older than 1h.
-- `--objects`: provide explicit object IDs to prefetch at startup time, required for checkpoints older than 1h.
+`--address` adds an address for seeding (works in the consistent range), loads that address's objects and adds them to the seed.
+`--object` add the object by ID directly to the seed.
 
-note that these two args are mutually exclusive.
+Note that seeding can also be done from a file:
+```json
+{
+    "network": "testnet",
+    "checkpoint": "12345678",
+    "addresses": [
+        "0x1234567890abcdef1234567890abcdef12345678",
+        "0xabcdef1234567890abcdef1234567890abcdef12"
+    ],
+    "objects": [
+        "0xabcdef1234567890abcdef1234567890abcdef12
+    ]
+```
 
-### Validators
-
-In a forked network, we do not have access to the private keys of the real validators. The tool must overwrite the validator set at startup with a custom generated one from a new genesis. That way, when epoch changes happen, we can safely load these validators as we have their private keys.
+At statup, the tool will also dump this information to generated_{network}_{checkpoint}.json for future reference. This file can be used to restart the same forked network with the same seed, which is useful for debugging or CI purposes.
 
 ### Starting a Local Forked Network
 
@@ -138,22 +197,14 @@ This command:
 The command accepts a checkpoint to fork from. This must not larger than the latest known checkpoint the RPC is aware of. It will error if the user requests a checkpoint that is not available.
 
 - `-checkpoint <number>`: The checkpoint to fork from
-- `-network <network>`: Network to fork from: `mainnet (default)`, `testnet`, `devnet`, or a custom one (`-network <CUSTOM-GRAPHQL-ENDPOINT> --fullnode-url <URL>` ). The latter is useful for “forking” from a custom local network  / private network. It requires to have a GraphQL service running and a fullnode as well.
+- `-network <network>`: Network to fork from: `mainnet (default)`, `testnet`, `devnet`, or a custom one (`-network <CUSTOM-GRAPHQL-ENDPOINT>` ). The latter is useful for “forking” from a custom local network  / private network. It requires to have a GraphQL service running and a fullnode as well.
 
 **The startup flow**
+- Initialize store layer (forking-data-store)
+- Fetch the latest checkpoint (or the checkpoint specified by the user)
+- Wait for commands to advance checkpoint, clock, or to execute transactions
 
-1. Fetch latest checkpoint number via GraphQL (or use specified checkpoint)
-2. Fetch protocol version via GraphQL
-3. Compose the three-layer forking-data-store from filesystem + in-memory + GraphQL
-4. Create a single-validator config
-5. Load startup checkpoint and cache epoch transition outputs
-6. Seed startup objects
-7. Build initial system state with validator set override
-8. Fetch system packages at the forked checkpoint time
-9. Initialize simulacrum with the composed store, initial system state, startup checkpoint
-10. Bind both gRPC and HTTP listeners
-
-### CLI
+### POC CLI
 
 The forking tool provides a CLI to interact with the forking-server for various actions. In addition to the `sui-forking start` command explained previously, there are a few other commands available:
 
@@ -179,14 +230,6 @@ sui-forking advance-clock [--milliseconds <ms>]
 
 Advances the clock of the local network by 1 millisecond, or by the specified amount of milliseconds if the `--milliseconds` flag is provided.
 
-**Advance Epoch**
-
-```bash
-sui-forking advance-epoch
-```
-
-Advances the epoch of the local network by 1.
-
 **Check Status**
 
 ```bash
@@ -194,5 +237,3 @@ sui-forking status
 ```
 
 Shows the current checkpoint, epoch, and timestamp.
-
-
