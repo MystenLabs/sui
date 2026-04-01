@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use super::BlockColors;
 use crate::parser::ast::FunctionName;
 use move_ir_types::ast as IR;
 use std::collections::BTreeSet;
@@ -12,14 +13,15 @@ pub fn optimize(
     _loop_heads: &BTreeSet<IR::BlockLabel_>,
     locals: &mut Vec<(IR::Var, IR::Type)>,
     blocks: &mut IR::BytecodeBlocks,
+    _colors: &mut BlockColors,
 ) -> bool {
     let mut unused = locals
         .iter()
         .map(|(sp!(_, v_), _)| v_.clone())
         .collect::<BTreeSet<_>>();
     for (_lbl, block) in blocks {
-        for colored in block.iter() {
-            match &colored.instr.value {
+        for instr in block.iter() {
+            match &instr.value {
                 IR::Bytecode_::CopyLoc(sp!(_, v_))
                 | IR::Bytecode_::MoveLoc(sp!(_, v_))
                 | IR::Bytecode_::StLoc(sp!(_, v_))

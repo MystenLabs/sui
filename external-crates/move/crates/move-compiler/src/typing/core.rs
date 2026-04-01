@@ -770,13 +770,11 @@ impl<'env, 'outer> Context<'env, 'outer> {
         self.outer.current_module.as_ref()
     }
 
-    pub fn add_macro_frame_info(
-        &self,
-        info: crate::shared::macro_frames::ColorFrameInfo,
-    ) {
-        if let (Some(module), Some(function)) =
-            (self.outer.current_module.as_ref(), self.current_function.as_ref())
-        {
+    pub fn add_macro_frame_info(&self, info: crate::shared::macro_frames::ColorFrameInfo) {
+        if let (Some(module), Some(function)) = (
+            self.outer.current_module.as_ref(),
+            self.current_function.as_ref(),
+        ) {
             self.outer
                 .env
                 .add_macro_frame_info(module.value, function.0.value, info);

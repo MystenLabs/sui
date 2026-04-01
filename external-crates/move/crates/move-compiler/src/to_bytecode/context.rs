@@ -34,11 +34,17 @@ pub struct Context<'a> {
     seen_functions: BTreeSet<(ModuleIdent, FunctionName)>,
     /// Active macro expansion color for bytecode annotation. Set from
     /// `cmd.color` at command boundaries and from `e.color` at expression
-    /// boundaries (with save/restore), mirroring how `current_color` is
-    /// tracked in HLIR translation. Passed to `push_instr` so each
-    /// bytecode carries the color of its enclosing macro scope. Starts
-    /// at 0 (no macro scope).
+    /// boundaries (with save/restore). Starts at 0 (no macro scope).
     pub color: u16,
+    /// Colors for the block currently being built. Each `push_instr` call
+    /// appends `self.color` here in parallel with the instruction.
+    pub current_block_colors: Vec<u16>,
+    /// Per-function flat color vectors. After building and optimizing
+    /// bytecode blocks, the per-block colors are flattened into a single
+    /// vector (one u16 per instruction in block order) and stored here.
+    /// Used after `compile_module()` to populate the source map's
+    /// `macro_color_map`.
+    pub function_color_data: BTreeMap<Symbol, Vec<u16>>,
 }
 
 impl<'a> Context<'a> {
@@ -54,6 +60,8 @@ impl<'a> Context<'a> {
             seen_datatypes: BTreeSet::new(),
             seen_functions: BTreeSet::new(),
             color: 0,
+            current_block_colors: Vec::new(),
+            function_color_data: BTreeMap::new(),
         }
     }
 

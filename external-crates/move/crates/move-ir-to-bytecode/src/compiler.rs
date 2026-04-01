@@ -115,7 +115,7 @@ macro_rules! record_src_loc {
 }
 
 macro_rules! make_push_instr {
-    ($context:ident, $code:ident, $color:ident) => {
+    ($context:ident, $code:ident) => {
         macro_rules! push_instr {
             ($loc:expr, $instr:expr) => {{
                 let code_offset = $code.len() as CodeOffset;
@@ -123,16 +123,6 @@ macro_rules! make_push_instr {
                     $context.current_function_definition_index(),
                     code_offset,
                     $loc,
-                )?;
-                // Record the macro expansion color for this bytecode offset.
-                // Color 0 maps to None (user code), color > 0 maps to Some
-                // (macro expansion). Every instruction must be reported — not
-                // just macro ones — so that transitions back to user code are
-                // captured. The callee deduplicates consecutive identical colors.
-                $context.source_map.add_color_mapping(
-                    $context.current_function_definition_index(),
-                    code_offset,
-                    if $color != 0 { Some($color as u32) } else { None },
                 )?;
                 $code.push($instr);
             }};
@@ -313,8 +303,8 @@ fn verify_bytecode_function_body(code: &[(BlockLabel_, BytecodeBlock)]) -> Resul
 
     let mut undeclared = vec![];
     for block in code {
-        for colored in &block.1 {
-            match &colored.instr.value {
+        for statement in &block.1 {
+            match &statement.value {
                 IRBytecode_::Branch(label)
                 | IRBytecode_::BrTrue(label)
                 | IRBytecode_::BrFalse(label) => {
@@ -1095,10 +1085,7 @@ fn compile_statement(
     jump_tables: &mut Vec<VariantJumpTable>,
     statement: Statement,
 ) -> Result<()> {
-    // This is compilation path from IR to bytecode and IR does not
-    // have a notion of macros and colors.
-    let color = 0u16;
-    make_push_instr!(context, code, color);
+    make_push_instr!(context, code);
     match statement.value {
         Statement_::Abort(exp_opt) => {
             if let Some(exp) = exp_opt {
@@ -1270,10 +1257,7 @@ fn compile_lvalues(
     code: &mut Vec<Bytecode>,
     lvalues: Vec<LValue>,
 ) -> Result<()> {
-    // This is compilation path from IR to bytecode and IR does not
-    // have a notion of macros and colors.
-    let color = 0u16;
-    make_push_instr!(context, code, color);
+    make_push_instr!(context, code);
     for lvalue_ in lvalues.into_iter().rev() {
         match lvalue_.value {
             LValue_::Var(v) => {
@@ -1302,10 +1286,7 @@ fn compile_expression(
     code: &mut Vec<Bytecode>,
     exp: Exp,
 ) -> Result<()> {
-    // This is compilation path from IR to bytecode and IR does not
-    // have a notion of macros and colors.
-    let color = 0u16;
-    make_push_instr!(context, code, color);
+    make_push_instr!(context, code);
     match exp.value {
         Exp_::Move(v) => {
             let loc_idx = function_frame.get_local(&v.value)?;
@@ -1594,10 +1575,7 @@ fn compile_call(
     code: &mut Vec<Bytecode>,
     call: FunctionCall,
 ) -> Result<()> {
-    // This is compilation path from IR to bytecode and IR does not
-    // have a notion of macros and colors.
-    let color = 0u16;
-    make_push_instr!(context, code, color);
+    make_push_instr!(context, code);
     match call.value {
         FunctionCall_::Builtin(function) => {
             match function {
@@ -1837,15 +1815,8 @@ fn compile_bytecode_block(
     jump_tables: &mut Vec<VariantJumpTable>,
     block: BytecodeBlock,
 ) -> Result<()> {
-    for colored in block {
-        compile_bytecode(
-            context,
-            function_frame,
-            code,
-            jump_tables,
-            colored.instr,
-            colored.color,
-        )?
+    for instr in block {
+        compile_bytecode(context, function_frame, code, jump_tables, instr)?
     }
     Ok(())
 }
@@ -1856,9 +1827,8 @@ fn compile_bytecode(
     code: &mut Vec<Bytecode>,
     jump_tables: &mut Vec<VariantJumpTable>,
     sp!(loc, instr_): IRBytecode,
-    color: u16,
 ) -> Result<()> {
-    make_push_instr!(context, code, color);
+    make_push_instr!(context, code);
     make_record_nop_label!(context, code);
     let ff_instr = match instr_ {
         IRBytecode_::Pop => Bytecode::Pop,

@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use super::BlockColors;
 use crate::parser::ast::FunctionName;
 use move_ir_types::ast as IR;
 use std::collections::BTreeSet;
@@ -13,13 +14,15 @@ pub fn optimize(
     _loop_heads: &BTreeSet<IR::BlockLabel_>,
     _locals: &mut Vec<(IR::Var, IR::Type)>,
     blocks: &mut IR::BytecodeBlocks,
+    colors: &mut BlockColors,
 ) -> bool {
     let mut changed = false;
-    for (_lbl, block) in blocks.iter_mut() {
+    for (block_idx, (_lbl, block)) in blocks.iter_mut().enumerate() {
         let mut new_block = vec![];
+        let mut new_colors = vec![];
         let mut i = 0;
         while i < block.len() {
-            match (&block[i].instr, block.get(i + 1).map(|b| &b.instr)) {
+            match (&block[i], block.get(i + 1)) {
                 (sp!(_, IR::Bytecode_::StLoc(v1)), Some(sp!(_, IR::Bytecode_::MoveLoc(v2))))
                     if v1 == v2 =>
                 {
@@ -28,11 +31,13 @@ pub fn optimize(
                 }
                 _ => {
                     new_block.push(block[i].clone());
+                    new_colors.push(colors[block_idx][i]);
                     i += 1
                 }
             }
         }
         *block = new_block;
+        colors[block_idx] = new_colors;
     }
 
     changed

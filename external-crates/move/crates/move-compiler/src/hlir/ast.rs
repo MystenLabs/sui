@@ -7,9 +7,7 @@ use crate::{
     expansion::ast::{
         AbilitySet, Attributes, Friend, ModuleIdent, Mutability, ability_modifiers_ast_debug,
     },
-    naming::ast::{
-        BuiltinTypeName, BuiltinTypeName_, Color, DatatypeTypeParameter, TParam,
-    },
+    naming::ast::{BuiltinTypeName, BuiltinTypeName_, Color, DatatypeTypeParameter, TParam},
     parser::ast::{
         self as P, BinOp, ConstantName, DatatypeName, ENTRY_MODIFIER, Field, FunctionName,
         TargetKind, UnaryOp, VariantName,

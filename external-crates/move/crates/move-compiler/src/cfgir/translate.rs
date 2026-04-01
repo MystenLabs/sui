@@ -14,8 +14,8 @@ use crate::{
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
-    naming::ast::Color,
     ice_assert,
+    naming::ast::Color,
     parser::ast::{ConstantName, FunctionName},
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
@@ -1006,8 +1006,10 @@ fn statement(
 
             let entry_block = VecDeque::from([make_jump(sloc, color, start_label, false)]);
 
-            let (body_entry_block, body_blocks) =
-                block_(context, with_last(body, make_jump(sloc, color, end_label, false)));
+            let (body_entry_block, body_blocks) = block_(
+                context,
+                with_last(body, make_jump(sloc, color, end_label, false)),
+            );
 
             context.exit_named_block(&name);
 
@@ -1036,8 +1038,7 @@ fn statement(
             let ccolor = cmd.color;
             if let C::Continue(name) = cmd.value {
                 // Discard the current block because it's dead code.
-                let jump =
-                    make_jump(cloc, ccolor, context.named_block_start_label(&name), true);
+                let jump = make_jump(cloc, ccolor, context.named_block_start_label(&name), true);
                 (VecDeque::from([jump]), vec![])
             } else {
                 unreachable!()
@@ -1056,7 +1057,9 @@ fn statement(
 
 fn with_last(mut block: H::Block, cmd: H::Command) -> H::Block {
     match block.iter().last() {
-        Some(stmt) if matches!(&stmt.value, H::Statement_::Command(cmd) if cmd.value.is_hlir_terminal()) => block,
+        Some(stmt) if matches!(&stmt.value, H::Statement_::Command(cmd) if cmd.value.is_hlir_terminal()) => {
+            block
+        }
         _ => {
             let loc = cmd.loc;
             let color = cmd.color;

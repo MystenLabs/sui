@@ -10,11 +10,17 @@ use crate::parser::ast::FunctionName;
 use move_ir_types::ast::{self as IR};
 use std::collections::{BTreeSet, HashMap};
 
+/// Per-block color data maintained in parallel with BytecodeBlocks.
+/// `block_colors[i][j]` is the macro expansion color for instruction `j`
+/// in block `i`.
+pub(crate) type BlockColors = Vec<Vec<u16>>;
+
 pub type Optimization = fn(
     &FunctionName,
     &BTreeSet<IR::BlockLabel_>,
     &mut Vec<(IR::Var, IR::Type)>,
     &mut IR::BytecodeBlocks,
+    &mut BlockColors,
 ) -> bool;
 
 const OPTIMIZATIONS: &[Optimization] = &[
@@ -29,6 +35,7 @@ pub(crate) fn code(
     loop_heads: &BTreeSet<IR::BlockLabel_>,
     locals: &mut Vec<(IR::Var, IR::Type)>,
     blocks: &mut IR::BytecodeBlocks,
+    colors: &mut BlockColors,
 ) {
     let mut count = 0;
     for optimization in OPTIMIZATIONS.iter().cycle() {
@@ -40,7 +47,7 @@ pub(crate) fn code(
         }
 
         // reset the count if something has changed
-        if optimization(f, loop_heads, locals, blocks) {
+        if optimization(f, loop_heads, locals, blocks, colors) {
             count = 0
         } else {
             count += 1
@@ -51,8 +58,8 @@ pub(crate) fn code(
 fn remap_labels(blocks: &mut IR::BytecodeBlocks, map: &HashMap<IR::BlockLabel_, IR::BlockLabel_>) {
     use IR::Bytecode_ as B;
     for (_, block) in blocks {
-        for colored in block {
-            match &mut colored.instr.value {
+        for instr in block {
+            match &mut instr.value {
                 B::Branch(lbl) | B::BrTrue(lbl) | B::BrFalse(lbl) => {
                     *lbl = map[lbl].clone();
                 }

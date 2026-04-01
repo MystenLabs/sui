@@ -337,6 +337,7 @@ fn module(
         | Address::NamedUnassigned(name) => Some(*name),
     };
     let addr_bytes = context.resolve_address(ident.value.address);
+    let function_color_data = std::mem::take(&mut context.function_color_data);
     let (imports, explicit_dependency_declarations) = context.materialize(
         dependency_orderings,
         datatype_declarations,
@@ -384,6 +385,7 @@ fn module(
         &module,
         compilation_env,
         &module_ident_value,
+        &function_color_data,
     );
     if compilation_env
         .modes()
@@ -636,6 +638,7 @@ fn populate_macro_frame_info(
     compiled_module: &F::CompiledModule,
     env: &CompilationEnv,
     module_ident: &ModuleIdent_,
+    function_color_data: &BTreeMap<Symbol, Vec<u16>>,
 ) {
     use move_bytecode_source_map::source_map::MacroFrameInfoEntry;
 
@@ -690,22 +693,27 @@ fn populate_macro_frame_info(
             })
             .collect();
 
-        // Remap raw color values in macro_color_map to frame indices
-        fsm.macro_color_map = fsm
-            .macro_color_map
-            .iter()
-            .map(|&(offset, color_opt)| {
-                let index = color_opt.and_then(|raw_color| {
-                    let idx = color_to_index.get(&(raw_color as u16)).copied();
-                    debug_assert!(
-                        idx.is_some(),
-                        "bytecode color {raw_color} has no matching frame info in {fname_str}",
-                    );
-                    idx
-                });
-                (offset, index)
-            })
-            .collect();
+        // Build macro_color_map from stored flat color data
+        if let Some(flat_colors) = function_color_data.get(&fname_sym) {
+            fsm.macro_color_map = flat_colors
+                .iter()
+                .enumerate()
+                .map(|(offset, &raw_color)| {
+                    let index = if raw_color == 0 {
+                        None
+                    } else {
+                        let idx = color_to_index.get(&raw_color).copied();
+                        debug_assert!(
+                            idx.is_some(),
+                            "bytecode color {raw_color} has no matching frame info \
+                             in {fname_str}",
+                        );
+                        idx
+                    };
+                    (offset as F::CodeOffset, index)
+                })
+                .collect();
+        }
     }
 }
 
@@ -1173,16 +1181,19 @@ fn function_body(
     blocks.sort_by_key(|(lbl, _)| *lbl);
 
     let mut bytecode_blocks = Vec::new();
+    let mut block_colors: optimize::BlockColors = Vec::new();
     for (idx, (lbl, basic_block)) in blocks.into_iter().enumerate() {
         // first idx should be the start label
         assert!(idx != 0 || lbl == start);
         assert!(idx == bytecode_blocks.len());
 
+        context.current_block_colors = Vec::new();
         let mut code = IR::BytecodeBlock::new();
         for cmd in basic_block {
             command(context, &mut code, cmd);
         }
         bytecode_blocks.push((label(lbl), code));
+        block_colors.push(std::mem::take(&mut context.current_block_colors));
     }
 
     let loop_heads = block_info
@@ -1190,7 +1201,16 @@ fn function_body(
         .filter(|(_lbl, info)| matches!(info, G::BlockInfo::LoopHead(_)))
         .map(|(lbl, _)| label(lbl))
         .collect();
-    optimize::code(f, &loop_heads, &mut locals, &mut bytecode_blocks);
+    optimize::code(
+        f,
+        &loop_heads,
+        &mut locals,
+        &mut bytecode_blocks,
+        &mut block_colors,
+    );
+
+    let flat_colors: Vec<u16> = block_colors.into_iter().flatten().collect();
+    context.function_color_data.insert(f.0.value, flat_colors);
 
     (locals, bytecode_blocks)
 }
@@ -1358,8 +1378,9 @@ fn label(lbl: H::Label) -> IR::BlockLabel_ {
     IR::BlockLabel_(format!("{}", lbl).into())
 }
 
-fn push_instr(code: &mut IR::BytecodeBlock, instr: IR::Bytecode, color: u16) {
-    code.push(IR::ColoredBytecode::new(instr, color));
+fn push_instr(context: &mut Context, code: &mut IR::BytecodeBlock, instr: IR::Bytecode) {
+    code.push(instr);
+    context.current_block_colors.push(context.color);
 }
 
 fn command(context: &mut Context, code: &mut IR::BytecodeBlock, cmd: H::Command) {
@@ -1376,33 +1397,31 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, cmd: H::Command)
         C::Mutate(eref, ervalue) => {
             exp(context, code, *ervalue);
             exp(context, code, *eref);
-            push_instr(code, sp(loc, B::WriteRef), context.color);
+            push_instr(context, code, sp(loc, B::WriteRef));
         }
         C::Abort(_, ecode) => {
             exp(context, code, ecode);
-            push_instr(code, sp(loc, B::Abort), context.color);
+            push_instr(context, code, sp(loc, B::Abort));
         }
         C::Return { exp: e, .. } => {
             exp(context, code, e);
-            push_instr(code, sp(loc, B::Ret), context.color);
+            push_instr(context, code, sp(loc, B::Ret));
         }
         C::IgnoreAndPop { pop_num, exp: e } => {
             exp(context, code, e);
             for _ in 0..pop_num {
-                push_instr(code, sp(loc, B::Pop), context.color);
+                push_instr(context, code, sp(loc, B::Pop));
             }
         }
-        C::Jump { target, .. } => {
-            push_instr(code, sp(loc, B::Branch(label(target))), context.color)
-        }
+        C::Jump { target, .. } => push_instr(context, code, sp(loc, B::Branch(label(target)))),
         C::JumpIf {
             cond,
             if_true,
             if_false,
         } => {
             exp(context, code, cond);
-            push_instr(code, sp(loc, B::BrFalse(label(if_false))), context.color);
-            push_instr(code, sp(loc, B::Branch(label(if_true))), context.color);
+            push_instr(context, code, sp(loc, B::BrFalse(label(if_false))));
+            push_instr(context, code, sp(loc, B::Branch(label(if_true))));
         }
         C::VariantSwitch {
             subject,
@@ -1415,7 +1434,7 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, cmd: H::Command)
                 .into_iter()
                 .map(|(variant, arm_lbl)| (context.variant_name(variant), sp(loc, label(arm_lbl))))
                 .collect::<Vec<_>>();
-            push_instr(code, sp(loc, B::VariantSwitch(name, arms)), context.color);
+            push_instr(context, code, sp(loc, B::VariantSwitch(name, arms)));
         }
         C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
@@ -1439,71 +1458,59 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
     use H::LValue_ as L;
     use IR::Bytecode_ as B;
     match l_ {
-        L::Ignore => push_instr(code, sp(loc, B::Pop), context.color),
+        L::Ignore => push_instr(context, code, sp(loc, B::Pop)),
         L::Var {
             var: v,
             unused_assignment,
             ty,
         } => {
             if unused_assignment && ty.value.abilities(loc).has_ability_(Ability_::Drop) {
-                push_instr(code, sp(loc, B::Pop), context.color);
+                push_instr(context, code, sp(loc, B::Pop));
             } else {
-                push_instr(code, sp(loc, B::StLoc(var(v))), context.color);
+                push_instr(context, code, sp(loc, B::StLoc(var(v))));
             }
         }
 
         L::Unpack(s, tys, field_ls) if field_ls.is_empty() => {
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            push_instr(
-                code,
-                sp(loc, B::Unpack(n, base_types(context, tys))),
-                context.color,
-            );
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Unpack(n, btys)));
             // Pop off false
-            push_instr(code, sp(loc, B::Pop), context.color);
+            push_instr(context, code, sp(loc, B::Pop));
         }
 
         L::Unpack(s, tys, field_ls) => {
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            push_instr(
-                code,
-                sp(loc, B::Unpack(n, base_types(context, tys))),
-                context.color,
-            );
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Unpack(n, btys)));
 
             lvalues_(context, code, field_ls.into_iter().map(|(_, l)| l));
         }
 
         L::UnpackVariant(e, v, unpack_type, _rhs_loc, tys, field_ls) if field_ls.is_empty() => {
             let n = context.enum_definition_name(context.current_module().unwrap(), e);
+            let vn = context.variant_name(v);
+            let btys = base_types(context, tys);
             push_instr(
+                context,
                 code,
                 sp(
                     loc,
-                    B::UnpackVariant(
-                        n,
-                        context.variant_name(v),
-                        base_types(context, tys),
-                        convert_unpack_type(unpack_type),
-                    ),
+                    B::UnpackVariant(n, vn, btys, convert_unpack_type(unpack_type)),
                 ),
-                context.color,
             );
         }
         L::UnpackVariant(e, v, unpack_type, _rhs_loc, tys, field_ls) => {
             let n = context.enum_definition_name(context.current_module().unwrap(), e);
+            let vn = context.variant_name(v);
+            let btys = base_types(context, tys);
             push_instr(
+                context,
                 code,
                 sp(
                     loc,
-                    B::UnpackVariant(
-                        n,
-                        context.variant_name(v),
-                        base_types(context, tys),
-                        convert_unpack_type(unpack_type),
-                    ),
+                    B::UnpackVariant(n, vn, btys, convert_unpack_type(unpack_type)),
                 ),
-                context.color,
             );
 
             lvalues_(context, code, field_ls.into_iter().map(|(_, l)| l));
@@ -1557,18 +1564,17 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     B::LdConst(ty, move_value_from_value_(v_))
                 }
             };
-            push_instr(code, sp(loc, ld_value), context.color);
+            push_instr(context, code, sp(loc, ld_value));
         }
         E::Move { var: v, .. } => {
-            push_instr(code, sp(loc, B::MoveLoc(var(v))), context.color);
+            push_instr(context, code, sp(loc, B::MoveLoc(var(v))));
         }
-        E::Copy { var: v, .. } => push_instr(code, sp(loc, B::CopyLoc(var(v))), context.color),
+        E::Copy { var: v, .. } => push_instr(context, code, sp(loc, B::CopyLoc(var(v)))),
 
-        E::Constant(c) => push_instr(
-            code,
-            sp(loc, B::LdNamedConst(context.constant_name(c))),
-            context.color,
-        ),
+        E::Constant(c) => {
+            let cn = context.constant_name(c);
+            push_instr(context, code, sp(loc, B::LdNamedConst(cn)))
+        }
 
         E::ErrorConstant {
             line_number_loc,
@@ -1585,17 +1591,18 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             // record the line number essentially.
             let line_number = std::cmp::min(line_no, u16::MAX as usize) as u16;
 
+            let constant = error_constant.map(|n| context.constant_name(n));
             push_instr(
+                context,
                 code,
                 sp(
                     loc,
                     B::ErrorConstant {
                         line_number,
                         error_code,
-                        constant: error_constant.map(|n| context.constant_name(n)),
+                        constant,
                     },
                 ),
-                context.color,
             );
         }
 
@@ -1615,23 +1622,23 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
 
         E::Freeze(er) => {
             exp(context, code, *er);
-            push_instr(code, sp(loc, B::FreezeRef), context.color);
+            push_instr(context, code, sp(loc, B::FreezeRef));
         }
 
         E::Dereference(er) => {
             exp(context, code, *er);
-            push_instr(code, sp(loc, B::ReadRef), context.color);
+            push_instr(context, code, sp(loc, B::ReadRef));
         }
 
         E::UnaryExp(op, er) => {
             exp(context, code, *er);
-            unary_op(code, op, context.color);
+            unary_op(context, code, op);
         }
 
         E::BinopExp(el, op, er) => {
             exp(context, code, *el);
             exp(context, code, *er);
-            binary_op(code, op, context.color);
+            binary_op(context, code, op);
         }
 
         E::Pack(s, tys, field_args) if field_args.is_empty() => {
@@ -1639,14 +1646,11 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             // empty structs have a dummy field of type 'bool' added
 
             // Push on fake field
-            push_instr(code, sp(loc, B::LdFalse), context.color);
+            push_instr(context, code, sp(loc, B::LdFalse));
 
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            push_instr(
-                code,
-                sp(loc, B::Pack(n, base_types(context, tys))),
-                context.color,
-            )
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Pack(n, btys)))
         }
 
         E::Pack(s, tys, field_args) => {
@@ -1654,22 +1658,16 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 exp(context, code, earg);
             }
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            push_instr(
-                code,
-                sp(loc, B::Pack(n, base_types(context, tys))),
-                context.color,
-            )
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Pack(n, btys)))
         }
 
         E::PackVariant(e, v, tys, field_args) if field_args.is_empty() => {
             // unlike structs, empty fields _are_ allowed in the bytecode
             let e = context.enum_definition_name(context.current_module().unwrap(), e);
             let v = context.variant_name(v);
-            push_instr(
-                code,
-                sp(loc, B::PackVariant(e, v, base_types(context, tys))),
-                context.color,
-            )
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::PackVariant(e, v, btys)))
         }
 
         E::PackVariant(e, v, tys, field_args) => {
@@ -1678,11 +1676,8 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             }
             let e = context.enum_definition_name(context.current_module().unwrap(), e);
             let v = context.variant_name(v);
-            push_instr(
-                code,
-                sp(loc, B::PackVariant(e, v, base_types(context, tys))),
-                context.color,
-            )
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::PackVariant(e, v, btys)))
         }
 
         E::Vector(_, n, bt, args) => {
@@ -1691,9 +1686,9 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 exp(context, code, arg);
             }
             push_instr(
+                context,
                 code,
                 sp(loc, B::VecPack(ty, n.try_into().unwrap())),
-                context.color,
             )
         }
 
@@ -1711,7 +1706,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             } else {
                 B::ImmBorrowField(n, tys, field(f))
             };
-            push_instr(code, sp(loc, instr), context.color);
+            push_instr(context, code, sp(loc, instr));
         }
 
         E::BorrowLocal(mut_, v) => {
@@ -1720,7 +1715,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             } else {
                 B::ImmBorrowLoc(var(v))
             };
-            push_instr(code, sp(loc, instr), context.color);
+            push_instr(context, code, sp(loc, instr));
         }
 
         E::Cast(el, sp!(_, bt_)) => {
@@ -1737,7 +1732,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     panic!("ICE type checking failed. unexpected cast")
                 }
             };
-            push_instr(code, sp(loc, instr), context.color);
+            push_instr(context, code, sp(loc, instr));
         }
     }
     context.color = saved_color;
@@ -1753,26 +1748,23 @@ fn module_call(
 ) {
     use IR::Bytecode_ as B;
     match fake_natives::resolve_builtin(&mident, &fname) {
-        Some(mk_bytecode) => push_instr(
-            code,
-            sp(loc, mk_bytecode(base_types(context, tys))),
-            context.color,
-        ),
+        Some(mk_bytecode) => {
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, mk_bytecode(btys)))
+        }
         _ => {
             let (m, n) = context.qualified_function_name(&mident, fname);
-            push_instr(
-                code,
-                sp(loc, B::Call(m, n, base_types(context, tys))),
-                context.color,
-            )
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Call(m, n, btys)))
         }
     }
 }
 
-fn unary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp, color: u16) {
+fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
     use UnaryOp_ as O;
     use IR::Bytecode_ as B;
     push_instr(
+        context,
         code,
         sp(
             loc,
@@ -1780,14 +1772,14 @@ fn unary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp, color: u16) {
                 O::Not => B::Not,
             },
         ),
-        color,
     );
 }
 
-fn binary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp, color: u16) {
+fn binary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
     use BinOp_ as O;
     use IR::Bytecode_ as B;
     push_instr(
+        context,
         code,
         sp(
             loc,
@@ -1816,6 +1808,5 @@ fn binary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp, color: u16) {
                 O::Ge => B::Ge,
             },
         ),
-        color,
     );
 }
