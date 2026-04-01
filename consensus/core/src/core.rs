@@ -212,6 +212,8 @@ impl Core {
         // Try to commit, since they may not have run after the last storage write.
         self.try_commit(vec![]).unwrap();
 
+        self.try_signal_new_round();
+
         self
     }
 
