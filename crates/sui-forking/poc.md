@@ -38,7 +38,7 @@ When using the Sui CLI to interact with the forked network, the CLI requires to 
 Under the hood, the tool uses `simulacrum` to manage the state of the network and execute transactions. In a nutshell, simulacrum has an API for creating & handling checkpoints, objects, transactions, transaction events, executing transactions, etc.
 
 When a transaction execution request comes in from gRPC, it will be routed by the gRPC API and passed to the `simulacrum`. Before executing the transaction, there are a few more steps needed to successfully execute the transaction:
-- fetch any missing input objects (this delegates fetching to the data-layer)
+- fetch any missing input objects (this delegates fetching data to the data-layer)
 - sign the transaction with a dummy private key (allows for impersonating senders)
 - execute the transaction and get back the effects
 - create a checkpoint
@@ -47,73 +47,69 @@ When a transaction execution request comes in from gRPC, it will be routed by th
 
 ### **Data Layer**
 
-`simulacrum` requires to use a `store` where all the required data (checkpoints, transactions, objects, etc) lives. To this end, a `ServiceStore` type that implements the required traits from `simulacrum` (e.g., `SimulatorStore`, `BackingStore`, `ObjectStore`, etc.), is implemented.
+In the initial POC, the tool will have a store that persists data on disk, and resolves various queries through a GraphQL client as the backing source for historical data (checkpoints, epochs, objects, transactions).
 
-Ultimately, the goal is to get to something like this for this store:
+** Checkpoints | Epochs | Transactions **
+
+Expected read flow:
+- a checkpoint|epoch|tx is identified by its sequence number|number|digest
+- on read, check on disk first
+- on miss, fetch from backing source
+- if the data is found but is later than the fork checkpoint, return `None`
+- if the data is not found, return `None`
+
+When a checkpoint | epoch | transaction is created, it is persisted to disk. For checkpoints, a latest metadata is also updated to keep track of the latest checkpoint available on disk.
+When a transaction is executed, its data and effects are persisted to disk. Each transaction also triggers a checkpoint creation, which is also persisted to disk.
+
+** Objects **
+
+Expected object read flow:
+- an object is identified by its ID and version (or other query, e.g., latest version, version at checkpoint, etc)
+- on read, check on disk first
+- on miss, fetch from backing source by ID and version/query
+- if the object is found but is later than the fork checkpoint, cache the latest object at the forked checkpoint and return `None`.
+- if the object is not found, return `None`
+
+When an object is updated (e.g., by executing a transaction that changes the object), the new version of the object is persisted to disk and the metadata around latest version is updated.
 
 ```rust
-pub struct ServiceStore {
-    /// Capability-routed composite store:
-    /// - transactions/epochs/checkpoints: memory -> filesystem (note in POC there is no historical paginated (e.g., live objects, transactions) data provided)
-    /// - objects: memory -> filesystem -> GraphQL
-    store: ForkDataStore,
-
-    // The checkpoint at which this forked network was forked
-    forked_at_checkpoint: u64,
-}
-```
-
-**Store Layer (forking-data-store)**
-
-In the initial POC, the store will be an in-memory store with a GraphQL client as the backing source for historical data (checkpoints, epochs, objects, transactions).
-
-```rust
-pub type StoredCheckpoint = Checkpoint;
-pub type StoredTransaction = Transaction;
-pub type StoredObject = Object;
-
 pub trait CheckpointReader {
-    fn get(&self, sequence_number: u64) -> Result<Option<StoredCheckpoint>, StoreError>;
-    fn get_latest(&self) -> Result<Option<StoredCheckpoint>, StoreError>;
+    fn get(&self, sequence_number: u64) -> Result<Option<Checkpoint>, StoreError>;
+    fn get_latest(&self) -> Result<Option<Checkpoint>, StoreError>;
 }
 
 pub trait CheckpointWriter {
-    fn put(&self, checkpoint: StoredCheckpoint) -> Result<(), StoreError>;
+    fn write(&self, checkpoint: Checkpoint) -> Result<(), StoreError>;
 }
 
-pub struct StoredObject {
-    pub object: Object,
+pub ObjectKey {
+    object_id: ObjectID,
+    version_query: VersionQuery
 }
 
-pub enum ObjectVersion {
+pub enum VersionQuery {
     Version(Option<u64>),
     RootVersion(u64),
     AtCheckpoint(u64),
 }
 
 pub trait ObjectReader {
-    fn get(
-        &self,
-        object_id: ObjectID,
-        version: ObjectVersion,
-    ) -> Result<Option<StoredObject>, StoreError>;
+    fn get_objects(&self, keys: [ObjectKey]) -> Result<Vec<Option<Object>>, StoreError>;
 }
 
 pub trait ObjectWriter {
-    fn put(&self, object_id: ObjectID, object: StoredObject) -> Result<(), StoreError>;
+    fn write(&self, object: Object) -> Result<(), StoreError>;
 }
 
-
-
 pub trait TransactionReader {
-    fn get(&self, digest: &str) -> Result<Option<StoredTransaction>, StoreError>;
+    fn get(&self, digest: &str) -> Result<Option<Transaction>, StoreError>;
 }
 
 pub trait TransactionWriter {
-    fn put(&self, tx: StoredTransaction) -> Result<(), StoreError>;
+   fn write(&self, tx: Transaction) -> Result<(), StoreError>;
 }
 
-pub struct StoredEpoch {
+pub struct Epoch {
     pub epoch: u64,
     pub protocol_version: u64,
     pub reference_gas_price: u64,
@@ -121,41 +117,64 @@ pub struct StoredEpoch {
 }
 
 pub trait EpochReader {
-    fn get(&self, epoch: u64) -> Result<Option<StoredEpoch>, StoreError>;
+    fn get(&self, epoch: u64) -> Result<Option<Epoch>, StoreError>;
 }
 
 pub trait EpochWriter {
-    fn put(&self, epoch: StoredEpoch) -> Result<(), StoreError>;
+    fn write(&self, epoch: Epoch) -> Result<(), StoreError>;
 }
 ```
-
-For this design, we can express that shape as a `ForkStore` capability bundle:
 
 ```rust
-pub trait ForkStore:
-    CheckpointReader
-    + CheckpointWriter
-    + ObjectReader
-    + ObjectWriter
-    + TransactionReader
-    + TransactionWriter
-    + EpochReader
-    + EpochWriter
-    + Send
-    + Sync
-{
+pub ForkStore {
+    local: FileSystemStore,
+    remote: GraphQLStore,
+    fork_checkpoint: u64,
+}
+
+impl ForkStore {
+    pub fn get_checkpoint(&self, sequence_number: u64) -> Result<Option<Checkpoint>, StoreError> {
+        // check local store first, then remote store if not found
+    }
+
+    pub fn get_latest_checkpoint(&self) -> Result<Option<Checkpoint>, StoreError> {
+        // check local store
+    }
+
+    pub fn write_checkpoint(&self, checkpoint: Checkpoint) -> Result<(), StoreError> {
+        // persist to local store
+    }
+
+    pub fn get_objects(&self, key: [ObjectKey]) -> Result<Vec<Option<Object>>, StoreError> {
+        // check local store first, then remote store if not found
+    }
+
+    pub fn write_object(&self, object: Object) -> Result<(), StoreError> {
+        // persist to local store
+    }
+
+    pub fn get_transaction(&self, digest: &str) -> Result<Option<Transaction>, StoreError> {
+        // check local store first, then remote store if not found
+    }
+
+    pub fn write_transaction(&self, tx: Transaction) -> Result<(), StoreError> {
+        // persist to local store
+    }
+
+    pub fn get_epoch(&self, epoch: u64) -> Result<Option<Epoch>, StoreError> {
+        // check local store first, then remote store if not found
+    }
+
+    pub fn get_latest_epoch(&self) -> Result<Option<Epoch>, StoreError> {
+        // check local store
+    }
+
+    pub fn write_epoch(&self, epoch: Epoch) -> Result<(), StoreError> {
+        // persist to local store
 }
 ```
 
-
-Expected object read behavior:
-- check memory first
-- on miss, fetch from backing source at requested version/query
-- cache the hit in memory
-- return `None` if data does not exist at or before the fork checkpoint
-
-The same read-through/write-back flow applies to transactions, checkpoints, and epochs.
-Updates produced by local transaction execution write to the in-memory store immediately.
+As data is persisted to disk, the user needs to provide a directory where the network state should be stored. Upon restarting the tool, if the directory exists and contains valid data, the tool can reuse the existing data and continue from there. This allows the user to maintain the state of the forked network across restarts.
 
 ### **Startup object seeding**
 
@@ -165,6 +184,7 @@ At startup, the user has the choice to seed addresses or objects, to make the fo
 `--object` add the object by ID directly to the seed.
 
 Note that seeding can also be done from a file:
+
 ```json
 {
     "network": "testnet",
@@ -176,9 +196,10 @@ Note that seeding can also be done from a file:
     "objects": [
         "0xabcdef1234567890abcdef1234567890abcdef12
     ]
+}
 ```
 
-At statup, the tool will also dump this information to generated_{network}_{checkpoint}.json for future reference. This file can be used to restart the same forked network with the same seed, which is useful for debugging or CI purposes.
+At startup, the tool will also dump this information to `generated_{network}_{checkpoint}.json` for future reference. This file can be used to restart the same forked network with the same seed, which is useful for debugging or CI purposes.
 
 ### Starting a Local Forked Network
 
@@ -196,13 +217,14 @@ This command:
 
 The command accepts a checkpoint to fork from. This must not larger than the latest known checkpoint the RPC is aware of. It will error if the user requests a checkpoint that is not available.
 
-- `-checkpoint <number>`: The checkpoint to fork from
-- `-network <network>`: Network to fork from: `mainnet (default)`, `testnet`, `devnet`, or a custom one (`-network <CUSTOM-GRAPHQL-ENDPOINT>` ). The latter is useful for “forking” from a custom local network  / private network. It requires to have a GraphQL service running and a fullnode as well.
+- `--checkpoint <number>`: The checkpoint to fork from
+- `--network <network>`: Network to fork from: `mainnet (default)`, `testnet`, `devnet`, or a custom one (`-network <CUSTOM-GRAPHQL-ENDPOINT>` ). The latter is useful for “forking” from a custom local network  / private network. It requires to have a GraphQL service running and a fullnode as well.
+- `--data-dir <path>`: The directory to persist the network state (checkpoints, epochs, transactions, objects, etc). This allows the user to maintain the state of the forked network across restarts.
 
 **The startup flow**
 - Initialize store layer (forking-data-store)
 - Fetch the latest checkpoint (or the checkpoint specified by the user)
-- Wait for commands to advance checkpoint, clock, or to execute transactions
+- Wait for commands to advance the network (checkpoint, clock) on the forking service, or gRPC requests.
 
 ### POC CLI
 
