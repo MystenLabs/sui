@@ -101,6 +101,23 @@ public fun remove_opt<Name: copy + drop + store, Value: key + store>(
     }
 }
 
+/// Removes the existing value at `name` (if any) and adds `value` in its place.
+/// Returns the old value if it existed, or `none` otherwise.
+/// Note: the old and new value types may differ.
+public fun replace<Name: copy + drop + store, Value1: key + store, Value2: key + store>(
+    object: &mut UID,
+    name: Name,
+    value: Value1,
+): Option<Value2> {
+    let old = if (exists_with_type<Name, Value2>(object, name)) {
+        option::some(remove(object, name))
+    } else {
+        option::none()
+    };
+    add(object, name, value);
+    old
+}
+
 // === Macro Functions ===
 
 /// Immutably borrows the field value, adding it with `$default` if it doesn't exist.

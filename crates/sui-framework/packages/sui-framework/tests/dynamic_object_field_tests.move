@@ -221,6 +221,60 @@ fun transfer_object() {
     id2.delete();
 }
 
+// === Replace Tests ===
+
+#[test]
+fun replace_existing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    bump(borrow_mut(&mut id, 0u64));
+    let old: Option<Counter> = dynamic_object_field::replace(&mut id, 0u64, new(&mut scenario));
+    // old counter was bumped once, so count should be 1
+    assert_eq!(destroy(old.destroy_some()), 1);
+    // new counter is fresh, so count should be 0
+    assert_eq!(count(borrow(&id, 0u64)), 0);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun replace_missing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    // no previous value, so none is returned
+    let old: Option<Counter> = dynamic_object_field::replace(&mut id, 0u64, new(&mut scenario));
+    old.destroy_none();
+    assert_eq!(count(borrow(&id, 0u64)), 0);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun replace_different_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    bump(borrow_mut(&mut id, 0u64));
+    let old: Option<Counter> = dynamic_object_field::replace(
+        &mut id,
+        0u64,
+        Fake { id: scenario.new_object() },
+    );
+    // old counter was bumped once, so count should be 1
+    assert_eq!(destroy(old.destroy_some()), 1);
+    // new value is a Fake, confirm it exists
+    assert!(exists_with_type<u64, Fake>(&id, 0));
+    // clean up the Fake
+    let Fake { id: fake_id } = remove(&mut id, 0u64);
+    fake_id.delete();
+    scenario.end();
+    id.delete();
+}
+
 // === Macro Tests ===
 
 #[test]
