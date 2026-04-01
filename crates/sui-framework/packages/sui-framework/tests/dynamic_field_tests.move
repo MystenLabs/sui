@@ -200,6 +200,7 @@ fun borrow_mut_or_add_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
+    assert!(!exists_<u64>(&id, 0));
     *dynamic_field::borrow_mut_or_add!(&mut id, 0u64, 99u64) = 100;
     assert_eq!(*borrow(&id, 0u64), 100u64);
     scenario.end();
