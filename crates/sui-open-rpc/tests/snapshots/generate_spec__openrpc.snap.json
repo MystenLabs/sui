@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "120",
+              "maxSupportedProtocolVersion": "121",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1347,6 +1347,7 @@
                 "disable_preconsensus_locking": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
+                "disallow_jump_orphans": false,
                 "disallow_new_modules_in_deps_only_packages": false,
                 "disallow_self_identifier": false,
                 "enable_accumulators": false,
