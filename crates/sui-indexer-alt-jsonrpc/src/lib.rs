@@ -317,7 +317,10 @@ pub async fn start_rpc(
         let fullnode_client = FullnodeClient::new(
             Some("jsonrpc_alt_fullnode"),
             FullnodeArgs {
-                fullnode_rpc_url: node_args.fullnode_grpc_url,
+                fullnode_rpc_url: node_args
+                    .fullnode_grpc_url
+                    .as_deref()
+                    .map(|u| Url::parse(u).expect("Invalid fullnode gRPC URL")),
             },
             registry,
         )
