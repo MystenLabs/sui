@@ -15124,7 +15124,7 @@ dependencies = [
 
 [[package]]
 name = "sui-forking"
-version = "1.69.0"
+version = "1.70.0"
 dependencies = [
  "anyhow",
  "bin-version",
