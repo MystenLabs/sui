@@ -379,6 +379,7 @@ Returns true if and only if the <code><a href="../sui/object.md#sui_object">obje
 ## Macro function `borrow_or_add`
 
 Immutably borrow the field value, adding it with <code>$default</code> if it doesn't exist.
+Note that <code>$default</code> is evaluated only if the field does not already exist.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_or_add">borrow_or_add</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $default: $Value): &$Value
@@ -411,6 +412,7 @@ Immutably borrow the field value, adding it with <code>$default</code> if it doe
 ## Macro function `borrow_mut_or_add`
 
 Mutably borrow the field value, adding it with <code>$default</code> if it doesn't exist.
+Note that <code>$default</code> is evaluated only if the field does not already exist.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut_or_add">borrow_mut_or_add</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $default: $Value): &<b>mut</b> $Value
@@ -443,6 +445,7 @@ Mutably borrow the field value, adding it with <code>$default</code> if it doesn
 ## Macro function `get_do`
 
 If the field exists, call <code>$f</code> on an immutable reference to the value.
+This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a href="../std/option.md#std_option_do">std::option::do</a></code>.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_do">get_do</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R: drop&gt;($<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $f: |&$Value| -&gt; $R)
@@ -474,6 +477,7 @@ If the field exists, call <code>$f</code> on an immutable reference to the value
 ## Macro function `get_mut_do`
 
 If the field exists, call <code>$f</code> on a mutable reference to the value.
+This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then calling <code><a href="../std/option.md#std_option_do">std::option::do</a></code>.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_mut_do">get_mut_do</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R: drop&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $f: |&<b>mut</b> $Value| -&gt; $R)
@@ -506,6 +510,7 @@ If the field exists, call <code>$f</code> on a mutable reference to the value.
 
 If the field exists, apply <code>$some</code> to an immutable reference to the value; otherwise return
 <code>$none</code>.
+This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_fold">get_fold</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R&gt;($<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $none: $R, $some: |&$Value| -&gt; $R): $R
@@ -539,6 +544,7 @@ If the field exists, apply <code>$some</code> to an immutable reference to the v
 
 If the field exists, apply <code>$some</code> to a mutable reference to the value; otherwise return
 <code>$none</code>.
+This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_mut_fold">get_mut_fold</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $none: $R, $some: |&<b>mut</b> $Value| -&gt; $R): $R
