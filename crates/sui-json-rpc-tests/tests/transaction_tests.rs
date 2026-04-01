@@ -453,6 +453,16 @@ async fn test_query_transaction_blocks_to_address() -> Result<(), anyhow::Error>
     let cluster = TestClusterBuilder::new().build().await;
     let http_client = cluster.rpc_client();
 
+    let accumulators_enabled = cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .epoch_store_for_testing()
+            .protocol_config()
+            .enable_accumulators()
+    });
+    if !accumulators_enabled {
+        return Ok(());
+    }
+
     let recipient = SuiAddress::random_for_testing_only();
 
     // Send SUI to the recipient so the address appears in the index.
