@@ -68,37 +68,6 @@ pub struct HealthLayer {
     pub max_checkpoint_lag_ms: Option<u64>,
 }
 
-pub struct SubscriptionConfig {
-    /// Number of checkpoints the broadcast channel can buffer before slow subscribers are
-    /// dropped. Higher values give subscribers more time to catch up but use more memory,
-    /// as each buffered checkpoint's data is kept alive until it leaves the buffer.
-    /// Subscribers that fall behind by this many checkpoints receive a lagged error.
-    pub broadcast_buffer: usize,
-}
-
-impl Default for SubscriptionConfig {
-    fn default() -> Self {
-        Self {
-            broadcast_buffer: 256,
-        }
-    }
-}
-
-#[DefaultConfig]
-#[derive(Default, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct SubscriptionLayer {
-    pub broadcast_buffer: Option<usize>,
-}
-
-impl SubscriptionLayer {
-    pub(crate) fn finish(self, base: SubscriptionConfig) -> SubscriptionConfig {
-        SubscriptionConfig {
-            broadcast_buffer: self.broadcast_buffer.unwrap_or(base.broadcast_buffer),
-        }
-    }
-}
-
 /// Config for an indexer writing to a database used by this RPC service. It is simplified w.r.t.
 /// to the actual indexer config to focus on extracting the names of pipelines enabled on that
 /// indexer.
@@ -256,6 +225,37 @@ pub struct ZkLoginConfig {
 pub struct ZkLoginLayer {
     pub env: Option<ZkLoginEnv>,
     pub max_epoch_upper_bound_delta: Option<Option<u64>>,
+}
+
+pub struct SubscriptionConfig {
+    /// Number of checkpoints the broadcast channel can buffer before slow subscribers are
+    /// dropped. Higher values give subscribers more time to catch up but use more memory,
+    /// as each buffered checkpoint's data is kept alive until it leaves the buffer.
+    /// Subscribers that fall behind by this many checkpoints receive a lagged error.
+    pub broadcast_buffer: usize,
+}
+
+impl Default for SubscriptionConfig {
+    fn default() -> Self {
+        Self {
+            broadcast_buffer: 256,
+        }
+    }
+}
+
+#[DefaultConfig]
+#[derive(Default, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct SubscriptionLayer {
+    pub broadcast_buffer: Option<usize>,
+}
+
+impl SubscriptionLayer {
+    pub(crate) fn finish(self, base: SubscriptionConfig) -> SubscriptionConfig {
+        SubscriptionConfig {
+            broadcast_buffer: self.broadcast_buffer.unwrap_or(base.broadcast_buffer),
+        }
+    }
 }
 
 impl RpcLayer {

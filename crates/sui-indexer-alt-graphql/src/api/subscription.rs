@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::Context;
-use async_graphql::Subscription;
 
 use crate::api::types::checkpoint::Checkpoint;
 use crate::error::RpcError;
 
 #[derive(Default)]
-pub struct StreamSubscription;
+pub struct Subscription;
 
-#[Subscription]
-impl StreamSubscription {
+#[async_graphql::Subscription]
+impl Subscription {
     /// Subscribe to checkpoints as they are finalized, starting from the current tip.
     ///
     /// This subscription is not yet available for use.

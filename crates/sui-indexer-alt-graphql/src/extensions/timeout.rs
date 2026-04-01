@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use async_graphql::Response;
@@ -37,8 +36,7 @@ pub(crate) struct Timeout(Arc<TimeoutConfig>);
 
 struct TimeoutExt {
     config: Arc<TimeoutConfig>,
-    is_mutation: AtomicBool,
-    is_subscription: AtomicBool,
+    operation_type: Mutex<OperationType>,
 }
 
 impl Timeout {
@@ -51,8 +49,7 @@ impl ExtensionFactory for Timeout {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(TimeoutExt {
             config: self.0.clone(),
-            is_mutation: AtomicBool::new(false),
-            is_subscription: AtomicBool::new(false),
+            operation_type: Mutex::new(OperationType::Query),
         })
     }
 }
@@ -68,21 +65,9 @@ impl Extension for TimeoutExt {
     ) -> ServerResult<ExecutableDocument> {
         let document = next.run(ctx, query, variables).await?;
 
-        self.is_mutation.store(
-            document
-                .operations
-                .iter()
-                .any(|(_, op)| op.node.ty == OperationType::Mutation),
-            Ordering::Relaxed,
-        );
-
-        self.is_subscription.store(
-            document
-                .operations
-                .iter()
-                .any(|(_, op)| op.node.ty == OperationType::Subscription),
-            Ordering::Relaxed,
-        );
+        if let Some((_, op)) = document.operations.iter().next() {
+            *self.operation_type.lock().unwrap() = op.node.ty;
+        }
 
         Ok(document)
     }
@@ -93,12 +78,14 @@ impl Extension for TimeoutExt {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
+        let operation_type = *self.operation_type.lock().unwrap();
+
         // Subscriptions are long-lived streams — a per-request timeout does not apply.
-        if self.is_subscription.load(Ordering::Relaxed) {
+        if operation_type == OperationType::Subscription {
             return next.run(ctx, operation_name).await;
         }
 
-        let is_mutation = self.is_mutation.load(Ordering::Relaxed);
+        let is_mutation = operation_type == OperationType::Mutation;
         let limit = if is_mutation {
             self.config.mutation
         } else {

@@ -4014,7 +4014,8 @@ type StoreExecutionTimeObservationsTransaction {
 	_: Boolean
 }
 
-type StreamSubscription {
+
+type Subscription {
 	"""
 	Subscribe to checkpoints as they are finalized, starting from the current tip.
 	
@@ -4022,7 +4023,6 @@ type StreamSubscription {
 	"""
 	checkpoints: Checkpoint!
 }
-
 
 """
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
@@ -4671,5 +4671,5 @@ directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: Query
 	mutation: Mutation
-	subscription: StreamSubscription
+	subscription: Subscription
 }
