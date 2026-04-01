@@ -28,7 +28,7 @@ commit_sync_request_timeout:
   secs: 10
   nanos: 0
 commit_sync_probe_timeout:
-  secs: 1
+  secs: 2
   nanos: 0
 use_fifo_compaction: true
 tonic:

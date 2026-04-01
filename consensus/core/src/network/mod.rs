@@ -253,13 +253,6 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
         peer: NodeId,
         commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
-
-    /// Handles the request to get the latest received & accepted rounds.
-    #[allow(unused)]
-    async fn handle_get_latest_rounds(
-        &self,
-        peer: NodeId,
-    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
 /// Observer network client for communicating with validators' observer ports or other observers.
@@ -295,13 +288,6 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
         commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
-
-    /// Gets the latest received & accepted rounds of all authorities from the peer.
-    async fn get_latest_rounds(
-        &self,
-        peer: PeerId,
-        timeout: Duration,
-    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.

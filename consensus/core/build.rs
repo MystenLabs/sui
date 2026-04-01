@@ -122,15 +122,6 @@ fn build_tonic_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
-        .method(
-            tonic_build::manual::Method::builder()
-                .name("get_latest_rounds")
-                .route_name("GetLatestRounds")
-                .input_type("crate::network::observer::GetLatestRoundsRequest")
-                .output_type("crate::network::observer::GetLatestRoundsResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
         .build();
 
     tonic_build::manual::Builder::new()

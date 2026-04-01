@@ -553,7 +553,7 @@ where
         let probe_timeout = inner.context.parameters.commit_sync_probe_timeout;
         inner
             .network_client
-            .get_latest_rounds(
+            .probe_connectivity(
                 crate::network::PeerId::Validator(target_authority),
                 probe_timeout,
             )
@@ -994,14 +994,6 @@ mod tests {
             _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn get_latest_rounds(
-            &self,
-            _peer: crate::network::PeerId,
-            _timeout: Duration,
-        ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
             unimplemented!("Unimplemented")
         }
     }

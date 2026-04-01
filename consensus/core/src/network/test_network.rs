@@ -187,11 +187,4 @@ impl ObserverNetworkService for Mutex<TestService> {
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
         unimplemented!("ObserverNetworkService fetch_commits not implemented for TestService")
     }
-
-    async fn handle_get_latest_rounds(
-        &self,
-        _peer: NodeId,
-    ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
-        unimplemented!("ObserverNetworkService not implemented for TestService")
-    }
 }

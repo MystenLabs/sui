@@ -100,7 +100,7 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_request_timeout")]
     pub commit_sync_request_timeout: Duration,
 
-    // Timeout for the reachability probe (get_latest_rounds()) before committing to a full fetch.
+    // Timeout for the connectivity probe against a peer before committing to a full fetch.
     // Should be short to quickly skip unreachable peers.
     #[serde(default = "Parameters::default_commit_sync_probe_timeout")]
     pub commit_sync_probe_timeout: Duration,
@@ -214,7 +214,7 @@ impl Parameters {
     }
 
     pub(crate) fn default_commit_sync_probe_timeout() -> Duration {
-        Duration::from_secs(1)
+        Duration::from_secs(2)
     }
 
     pub(crate) fn default_commit_sync_batches_ahead() -> usize {

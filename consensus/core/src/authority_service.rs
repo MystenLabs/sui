@@ -32,7 +32,10 @@ use crate::{
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{BlockStream, ExtendedSerializedBlock, PeerId, ValidatorNetworkService},
+    network::{
+        BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream, ObserverNetworkService,
+        PeerId, ValidatorNetworkService,
+    },
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
@@ -1050,14 +1053,6 @@ mod tests {
             _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn get_latest_rounds(
-            &self,
-            _peer: crate::network::PeerId,
-            _timeout: Duration,
-        ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
             unimplemented!("Unimplemented")
         }
     }
