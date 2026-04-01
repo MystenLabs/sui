@@ -1380,10 +1380,8 @@ impl CoreSignals {
     /// need to acquire the dag_state lock on every delivery.
     /// Silently drops the send when there are no active observer subscribers.
     pub(crate) fn new_accepted_block(&self, block: VerifiedBlock, commit_index: CommitIndex) {
-        if self.context.committee.size() > 1 {
-            // Ignoring send errors here: it is normal for there to be no observers subscribed.
-            let _ = self.tx_accepted_block_broadcast.send((block, commit_index));
-        }
+        // Ignoring send errors here: it is normal for there to be no observers subscribed.
+        let _ = self.tx_accepted_block_broadcast.send((block, commit_index));
     }
 
     /// Sends a signal that threshold clock has advanced to new round. The `round_number` is the round at which the
