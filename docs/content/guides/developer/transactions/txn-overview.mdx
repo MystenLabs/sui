@@ -18,7 +18,7 @@ Programmable transaction blocks have the following metadata fields:
 
 - **Sender address:** The [address](/guides/developer/getting-started/get-address.mdx) of the user sending the transaction.
 
-- **Gas input:** A reference pointing to the object used to pay for the transaction's execution and storage. The sender address must own the object and it must be of type `sui::coin::Coin<SUI>`.
+- **Gas input:** A reference pointing to the object used to pay for the transaction's execution and storage. The sender address must own the object and it must be of type `sui::coin::Coin<SUI>`. Alternatively, the gas payment can be an empty list, in which case the transaction pays gas from the sender's address balance.
 
 - **Gas price:** An unsigned integer specifying the number of native tokens per gas unit that the transaction pays. The gas price must be greater than zero.
 
@@ -30,7 +30,7 @@ Programmable transaction blocks have the following metadata fields:
 
 - **Authenticator:** A cryptographic signature paired with a public key. The public key must verify the signature and match the sender address.
 
-- **Expiration:** Optional. An epoch number that acts as a deadline. Validators only accept the transaction if the current epoch is less than or equal to the expiration epoch. If the deadline passes, the transaction never executes. By default, transactions do not expire.
+- **Expiration:** Optional. An epoch number that acts as a deadline. Validators only accept the transaction if the current epoch is less than or equal to the expiration epoch. If the deadline passes, the transaction never executes. By default, transactions do not expire. Transactions that use address balance gas payments must use ValidDuring expiration with both a minimum and maximum epoch specified.
 
 System transactions do not have gas input, price, or budget, and do not have an expiration. The sender address of a system transaction is always `0x0`.
 
