@@ -1,0 +1,44 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-21:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5403600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 23-25:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2857600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 27:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 29-40:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "json": {
+            "id": "0xdf243002c0e2a03803b05b0591f4afbefad01cd45a565c784e9a8f9b8a26d8ec",
+            "tn": "vector<877b45a9854b1b058b4c04792c2d2aa2df7a13065283b14050074ce2cdfff0bf::mod::Foo>"
+          },
+          "typeAsJson": "vector<877b45a9854b1b058b4c04792c2d2aa2df7a13065283b14050074ce2cdfff0bf::mod::Foo>",
+          "typeAsStr": "vector<877b45a9854b1b058b4c04792c2d2aa2df7a13065283b14050074ce2cdfff0bf::mod::Foo>"
+        }
+      }
+    }
+  }
+}
