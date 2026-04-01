@@ -110,6 +110,19 @@ public fun remove_opt<Name: copy + drop + store, Value: store>(
     }
 }
 
+/// Removes the existing value at `name` (if any) and adds `value` in its place.
+/// Returns the old value if it existed, or `none` otherwise.
+/// Note: the old and new value types may differ.
+public fun replace<Name: copy + drop + store, Value1: store, Value2: store>(
+    object: &mut UID,
+    name: Name,
+    value: Value1,
+): Option<Value2> {
+    let old = remove_if_exists<Name, Value2>(object, name);
+    add(object, name, value);
+    old
+}
+
 /// Returns true if and only if the `object` has a dynamic field with the name specified by
 /// `name: Name` with an assigned value of type `Value`.
 public fun exists_with_type<Name: copy + drop + store, Value: store>(

@@ -155,6 +155,46 @@ fun delete_uid_with_fields() {
     id.delete();
 }
 
+// === Replace Tests ===
+
+#[test]
+fun replace_existing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let old = dynamic_field::replace<u64, u64, u64>(&mut id, 0, 100);
+    assert_eq!(old, option::some(42));
+    assert_eq!(*borrow<u64, u64>(&id, 0), 100);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun replace_missing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    let old = dynamic_field::replace<u64, u64, u64>(&mut id, 0, 100);
+    assert_eq!(old, option::none());
+    assert_eq!(*borrow<u64, u64>(&id, 0), 100);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun replace_different_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let old = dynamic_field::replace<u64, u8, u64>(&mut id, 0, 7u8);
+    assert_eq!(old, option::some(42));
+    assert_eq!(*borrow<u64, u8>(&id, 0), 7);
+    scenario.end();
+    id.delete();
+}
+
 // === Macro Tests ===
 
 #[test]
