@@ -822,8 +822,8 @@ Equivalent to Rust's <code>t.<a href="../std/option.md#std_option_map">map</a>(f
 
 ## Macro function `map_mut`
 
-Map an <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> value to <code><a href="../std/option.md#std_option_Option">Option</a>&lt;U&gt;</code> by applying a function to a contained value by mutable reference.
-Original <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> is preserved.
+Map an <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> value to <code><a href="../std/option.md#std_option_Option">Option</a>&lt;U&gt;</code> by applying a function to a contained value by mutable
+reference. Original <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> is preserved, although potentially modified.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_map_mut">map_mut</a>&lt;$T, $U&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&<b>mut</b> $T| -&gt; $U): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$U&gt;
