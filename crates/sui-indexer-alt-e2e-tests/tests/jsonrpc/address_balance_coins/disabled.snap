@@ -1,0 +1,41 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 11-14:
+//# programmable --sender A --inputs 1000000000 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 1000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 16-18:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 19-23:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": [
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0x46c131cd7a9211815d0ab878f85e3aa8ad7d53a9ffeaad6c4852858a1ee00bce",
+        "version": "1",
+        "digest": "AY3K4iX5ZtyS8f4g8S7bALdURRxHXsdZmSrsP6tbB4Nb",
+        "balance": "300000000000000",
+        "previousTransaction": "9c7JX62GSccurErW5nkLeBHdGvQm1KthfxaMexLak2oH"
+      }
+    ],
+    "nextCursor": "zAEAp7AycDh4qnTDEmk1eJ/R1NfhEdWRGwkkfWljBhwxK1oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAANzdWkAAAAAAAAAA1NVSQAAAAAAAAAAAf/+7ybOkT//RsExzXqSEYFdCrh4+F46qK19U6n/6q1sSFKFih7gC84=",
+    "hasNextPage": false
+  }
+}
