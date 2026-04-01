@@ -3,7 +3,6 @@
 
 use std::time::Duration;
 
-use anyhow::Context;
 use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Utc;
@@ -169,13 +168,6 @@ pub trait SequentialStore: for<'c> Store<Connection<'c> = Self::SequentialConnec
     type SequentialConnection<'c>: SequentialConnection
     where
         Self: 'c;
-
-    async fn sequential_connect<'c>(&'c self) -> anyhow::Result<Self::SequentialConnection<'c>> {
-        Ok(self
-            .connect()
-            .await
-            .context("Failed to establish sequential connection to store")?)
-    }
 
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
