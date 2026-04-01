@@ -1,8 +1,45 @@
 ---
 title: Integrating with Stablecoins
 draft: true
-description: placeholder
-keywords: [ placeholder ]
+description: Learn how to use stablecoins like USDC in Sui apps.
+keywords: [stablecoins, USDC, USDY, FdUSD, AUSD, BUCK, YLSD, currency standard, DeepBookV3, trading]
 ---
 
-Stablecoins are a type of cryptocurrency that are designed to maintain a stable value relative to a fiat currency or a basket of assets. They are widely used for trading, lending, and as a store of value. 
+Stablecoins are a type of cryptocurrency designed to maintain a stable value relative to a fiat currency or a basket of assets. They are widely used for trading, lending, and as a store of value.
+
+On Sui, you can interact with various stablecoins such as [USDC](https://www.circle.com/en/usdc), eSui Dollar (SuiUSDe), [USDY (Ondo)](https://ondo.finance/), [FdUSD (First Digital)](https://www.firstdigitallabs.com/fdusd), [AUSD (Agora)](https://www.agora.finance/), [BUCK (Bucket Protocol)](https://www.bucketprotocol.io/earn), and [YLSD (Figure)](https://www.ylds.com/).
+
+## Use stablecoins in apps
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] [Install the latest version of Sui](/guides/developer/getting-started/sui-install).
+
+</TabItem>
+</Tabs>
+
+:::info
+
+This example uses USDC tokens. Get Testnet USDC tokens from the Circle [faucet](https://faucet.circle.com/).
+
+While this example uses USDC, the same principles apply to any asset on Sui that uses the [Sui Currency Standard](/standards/currency.mdx).
+
+:::
+
+To use a stablecoin in an app, import the stablecoin module (if it has one) and define the coin object type, such as `use sui::coin::Coin`.
+
+For example, to use USDC, import the `usdc_usage::usdc_usage` module and use the coin object `use usdc::usdc::USDC` with type `Coin<USDC>`. Use `Coin<USDC>` in functions the same way you would use coins of other types. The following example demonstrates how to use `Coin<USDC>` compared to using `Coin<SUI>` and `Coin<CoinType>`:
+
+<ImportContent
+	source="contracts/sources/usdc_usage.move"
+	mode="code"
+	org="sui-foundation"
+	repo="usdc-move-usage"
+/>
+
+## Use stablecoins with DeepBookV3
+
+DeepBookV3 is a decentralized central limit order book (CLOB) built on Sui. It offers built-in trading functionality that can support token trades from wallets, decentralized exchanges, or other apps. It supports a variety of tokens, including several stablecoins.
+
+Learn more about DeepBookV3 [supported stablecoins](/standards/deepbookv3/contract-information#supported-coins), supported [pools for different coin pairs](/standards/deepbookv3/contract-information#pools), or how to use the DeepBookV3 SDK to [interact with coins through DeepBook](/standards/deepbookv3-sdk#coin).

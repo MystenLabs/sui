@@ -171,6 +171,7 @@
 
 ### Guides/Developer/Transactions
 - [Gas Smashing](https://docs.sui.io/guides/developer/transactions/gas-smashing.md)
+- [Gasless Transactions](https://docs.sui.io/guides/developer/transactions/gasless-transactions.md)
 - [Transactions Index](https://docs.sui.io/guides/developer/transactions/index.md)
 - [Building Ptb](https://docs.sui.io/guides/developer/transactions/ptbs/building-ptb.md)
 - [Ptbs Index](https://docs.sui.io/guides/developer/transactions/ptbs/index.md)

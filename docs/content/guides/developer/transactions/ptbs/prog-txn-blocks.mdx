@@ -69,13 +69,13 @@ Commands take `Argument` values that specify which input or result to use. The r
 
 The `Argument` enum has 4 variants:
 
-- **`Input(u16)`:** References an input by its index. For example, with inputs `[Object1, Object2, Pure1, Object3]`, use `Input(0)` for `Object1` and `Input(2)` for `Pure1`.
+- `Input(u16)`: References an input by its index. For example, with inputs `[Object1, Object2, Pure1, Object3]`, use `Input(0)` for `Object1` and `Input(2)` for `Pure1`.
 
-- **`GasCoin`:** References the SUI coin used to pay for gas. This is separate from other inputs because it has special restrictions. It can only be taken by value through the `TransferObjects` command. To use a portion of the gas coin elsewhere, first split off a coin with [`SplitCoins`](/references/ptb-commands.mdx).
+- `GasCoin`: References the SUI coin used to pay for gas. When using address balance gas payment (empty gas payment list), GasCoin references a synthetic coin created from the sender or sponsor address balance. This is separate from other inputs because it has special restrictions.
 
-- **`NestedResult(u16, u16)`:** References a result from a previous command. The first index specifies the command, the second specifies which result from that command. For example, if command 1 returns `[Value1, Value2]`, use `NestedResult(1, 0)` for `Value1` and `NestedResult(1, 1)` for `Value2`.
+- `NestedResult(u16, u16)`: References a result from a previous command. The first index specifies the command, the second specifies which result from that command. For example, if command 1 returns `[Value1, Value2]`, use `NestedResult(1, 0)` for `Value1` and `NestedResult(1, 1)` for `Value2`.
 
-- **`Result(u16)`:** Shorthand for `NestedResult(i, 0)`, but only valid when the command at index `i` returns exactly 1 result. Use `NestedResult` for commands that return 0 or multiple results.
+- `Result(u16)`: Shorthand for `NestedResult(i, 0)`, but only valid when the command at index `i` returns exactly 1 result. Use `NestedResult` for commands that return 0 or multiple results.
 
 ## Execution {#execution}
 

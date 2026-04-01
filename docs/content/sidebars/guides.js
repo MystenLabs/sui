@@ -156,6 +156,8 @@ const guides = [
           'guides/developer/transactions/transaction-auth/offline-signing',
         ],
       },
+      'guides/developer/transactions/gasless-transactions',
+
       'guides/developer/transactions/sponsor-txn',
 			'guides/developer/transactions/gas-smashing',
     ],
@@ -224,8 +226,23 @@ const guides = [
         ],
       },
       'guides/developer/digital-assets/permissioned-assets',
+<<<<<<< HEAD
       'guides/developer/digital-assets/gasless-transactions',
       'guides/developer/digital-assets/migrate-address-balances',
+=======
+      {
+        type: 'category',
+        label: 'Address Balances',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/digital-assets/address-balances/index',
+        },
+        items: [
+          'guides/developer/digital-assets/address-balances/using-address-balances',
+          'guides/developer/digital-assets/address-balances/migrate-address-balances',
+        ],
+      },
+>>>>>>> 06c44346826d9a1d3b30b5f17f807fded1e66e1a
       {
         type: 'category',
         label: 'Examples and Patterns',
@@ -328,7 +345,7 @@ const guides = [
       'guides/developer/app-examples/e2e-counter',
       'guides/developer/app-examples/client-tssdk',
       'guides/developer/app-examples/trustless-swap',
-	  'guides/developer/app-examples/trustless-swap-frontend',
+	    'guides/developer/app-examples/trustless-swap-frontend',
       'guides/developer/app-examples/coin-flip',
       'guides/developer/app-examples/reviews-rating',
       'guides/developer/app-examples/blackjack',
