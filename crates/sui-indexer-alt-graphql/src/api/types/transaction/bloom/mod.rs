@@ -39,7 +39,7 @@ use crate::scope::Scope;
 
 mod scan;
 
-struct CandidateTxn {
+struct SequencedTxnDigest {
     cp_sequence_number: u64,
     tx_sequence_number: u64,
     digest: TransactionDigest,
@@ -76,7 +76,7 @@ pub(crate) async fn transactions(
     let mut result = BTreeMap::new();
 
     while let Some(candidates) = scan.next(pg_reader, &filter_values).await? {
-        let txns = candidate_txns(kv_loader, candidates.candidates()).await?;
+        let txns = sequenced_txn_digests(kv_loader, candidates.candidates()).await?;
         let digests = txns.iter().map(|t| t.digest).collect();
         let mut transactions_by_digest = kv_loader
             .load_many_transactions(digests)
@@ -122,7 +122,7 @@ pub(crate) async fn events(
     let mut result = BTreeMap::new();
 
     while let Some(candidates) = scan.next(pg_reader, &filter_values).await? {
-        let txns = candidate_txns(kv_loader, candidates.candidates()).await?;
+        let txns = sequenced_txn_digests(kv_loader, candidates.candidates()).await?;
         let digests = txns.iter().map(|t| t.digest).collect();
         let events_by_digest = kv_loader
             .load_many_transaction_events(digests)
@@ -163,10 +163,10 @@ pub(crate) async fn events(
 }
 
 /// Load checkpoints for the given candidate CPs to get transaction digests with checkpoint and transaction sequence numbers.
-async fn candidate_txns(
+async fn sequenced_txn_digests(
     kv_loader: &KvLoader,
     candidate_cps: &[u64],
-) -> Result<Vec<CandidateTxn>, RpcError> {
+) -> Result<Vec<SequencedTxnDigest>, RpcError> {
     let checkpoints = kv_loader
         .load_many_checkpoints(candidate_cps.to_vec())
         .await
@@ -178,7 +178,7 @@ async fn candidate_txns(
             content
                 .enumerate_transactions(&summary)
                 .map(
-                    move |(tx_seq, &ExecutionDigests { transaction, .. })| CandidateTxn {
+                    move |(tx_seq, &ExecutionDigests { transaction, .. })| SequencedTxnDigest {
                         tx_sequence_number: tx_seq,
                         cp_sequence_number: cp_seq,
                         digest: transaction,
@@ -276,8 +276,7 @@ pub(super) async fn candidate_cps(
         limit as i64,
     );
 
-    // For each matched block, scan cp_blooms until we have adjusted_limit checkpoints that
-    // match the probe.
+    // Scan cp_blooms within matched blocks to find up to `limit` checkpoints matching the probe.
     let query = query!(
         r#"
         WITH

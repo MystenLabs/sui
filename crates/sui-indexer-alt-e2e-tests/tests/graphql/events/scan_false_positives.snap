@@ -1,0 +1,290 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 833
+---
+processed 29 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 14-35:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6292800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 36:
+//# run P::Rare::signal --sender A --args 1
+events: Event { package_id: P, transaction_module: Identifier("Rare"), sender: A, type_: StructTag { address: P, module: Identifier("Rare"), name: Identifier("Signal"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 38:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 40:
+//# run P::Common::ping --sender A --args 1
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 42:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, line 44:
+//# run P::Common::ping --sender A --args 2
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 46:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, line 48:
+//# run P::Common::ping --sender A --args 3
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 50:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 10, line 52:
+//# run P::Common::ping --sender A --args 4
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [4, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, line 54:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 12, line 56:
+//# run P::Common::ping --sender A --args 5
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [5, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 58:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 14, line 60:
+//# run P::Common::ping --sender A --args 6
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [6, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15, line 62:
+//# create-checkpoint
+Checkpoint created: 7
+
+task 16, line 64:
+//# run P::Common::ping --sender A --args 7
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [7, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 17, line 66:
+//# create-checkpoint
+Checkpoint created: 8
+
+task 18, line 68:
+//# run P::Common::ping --sender A --args 8
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [8, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 19, line 70:
+//# create-checkpoint
+Checkpoint created: 9
+
+task 20, line 72:
+//# run P::Common::ping --sender A --args 9
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [9, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 21, line 74:
+//# create-checkpoint
+Checkpoint created: 10
+
+task 22, line 76:
+//# run P::Common::ping --sender A --args 10
+events: Event { package_id: P, transaction_module: Identifier("Common"), sender: A, type_: StructTag { address: P, module: Identifier("Common"), name: Identifier("Ping"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 23, lines 78-80:
+//# create-checkpoint
+Checkpoint created: 11
+
+task 24, lines 81-83:
+//# create-checkpoint 2989
+Checkpoint created: 3000
+
+task 25, line 84:
+//# run P::Rare::signal --sender A --args 2
+events: Event { package_id: P, transaction_module: Identifier("Rare"), sender: A, type_: StructTag { address: P, module: Identifier("Rare"), name: Identifier("Signal"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 26, line 86:
+//# create-checkpoint
+Checkpoint created: 3001
+
+task 27, lines 88-101:
+//# run-graphql
+Response: {
+  "data": {
+    "byType": {
+      "pageInfo": {
+        "startCursor": "eyJjIjoxLCJ0IjoyLCJlIjowfQ==",
+        "endCursor": "eyJjIjozMDAxLCJ0IjoxMywiZSI6MH0=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxLCJ0IjoyLCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x91a14998b2ed70bbfa30fc4e0c38a84abdde338709e907eb5bbcc188f1d8f630::Rare::Signal"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjozMDAxLCJ0IjoxMywiZSI6MH0=",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x91a14998b2ed70bbfa30fc4e0c38a84abdde338709e907eb5bbcc188f1d8f630::Rare::Signal"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "byModule": {
+      "pageInfo": {
+        "startCursor": "eyJjIjoxLCJ0IjoyLCJlIjowfQ==",
+        "endCursor": "eyJjIjozMDAxLCJ0IjoxMywiZSI6MH0=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxLCJ0IjoyLCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x91a14998b2ed70bbfa30fc4e0c38a84abdde338709e907eb5bbcc188f1d8f630::Rare::Signal"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjozMDAxLCJ0IjoxMywiZSI6MH0=",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x91a14998b2ed70bbfa30fc4e0c38a84abdde338709e907eb5bbcc188f1d8f630::Rare::Signal"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "backward": {
+      "pageInfo": {
+        "startCursor": "eyJjIjoxLCJ0IjoyLCJlIjowfQ==",
+        "endCursor": "eyJjIjozMDAxLCJ0IjoxMywiZSI6MH0=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjoxLCJ0IjoyLCJlIjowfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x91a14998b2ed70bbfa30fc4e0c38a84abdde338709e907eb5bbcc188f1d8f630::Rare::Signal"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjozMDAxLCJ0IjoxMywiZSI6MH0=",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x91a14998b2ed70bbfa30fc4e0c38a84abdde338709e907eb5bbcc188f1d8f630::Rare::Signal"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 28, lines 103-113:
+//# run-graphql --cursors {"c":1,"t":2,"e":0}
+Response: {
+  "data": {
+    "afterFirst": {
+      "pageInfo": {
+        "startCursor": "eyJjIjozMDAxLCJ0IjoxMywiZSI6MH0=",
+        "endCursor": "eyJjIjozMDAxLCJ0IjoxMywiZSI6MH0=",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjozMDAxLCJ0IjoxMywiZSI6MH0=",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x91a14998b2ed70bbfa30fc4e0c38a84abdde338709e907eb5bbcc188f1d8f630::Rare::Signal"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

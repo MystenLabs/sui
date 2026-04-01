@@ -16,7 +16,7 @@ use crate::api::types::transaction::bloom::candidate_cps;
 const BLOOM_FPR: f64 = 0.1;
 
 /// Maximum number of bloom-matched candidate checkpoints to fetch in a single batch.
-const MAX_LIMIT: usize = 500;
+const MAX_CHECKPOINT_FETCH: usize = 500;
 
 /// Scan state for paginating through bloom-filtered checkpoint candidates.
 ///
@@ -81,10 +81,7 @@ impl BloomScan {
         }
     }
 
-    /// Fetches the next batch of bloom-matched checkpoints, sized based on the hit rate
-    /// observed so far. Bloom filters operate on the values inserted and values inserted
-    /// from busy packages may cause a high false positive rate for other items,
-    /// so candidates include false positives — low hit rates cause larger fetches to compensate.
+    /// Fetches the next batch of bloom-matched checkpoints. The current hit rate influences the number of checkpoints fetched in a batch.
     ///
     /// Returns `None` when the page is filled or the checkpoint window is exhausted.
     pub(super) async fn next<'a>(
@@ -154,8 +151,8 @@ impl BloomScan {
     /// Once hits are observed, switches to the empirical hit rate with
     /// an overfetch multiplier to overfetch and reduce the chance of needing another round.
     ///
-    /// The result is always clamped to `[remaining, MAX_LIMIT]` — at least
-    /// enough to fill the page at 100% hit rate, and at most MAX_LIMIT to
+    /// The result is always clamped to `[remaining, MAX_CHECKPOINT_FETCH]` — at least
+    /// enough to fill the page at 100% hit rate, and at most MAX_CHECKPOINT_FETCH to
     /// bound per-round work.
     fn limit(&self) -> usize {
         let remaining = self.page_limit.saturating_sub(self.hits);
@@ -165,7 +162,7 @@ impl BloomScan {
             Some(rate) => remaining as f64 / rate,
         };
 
-        estimate.clamp(remaining as f64, MAX_LIMIT as f64) as usize
+        estimate.clamp(remaining as f64, MAX_CHECKPOINT_FETCH as f64) as usize
     }
 }
 

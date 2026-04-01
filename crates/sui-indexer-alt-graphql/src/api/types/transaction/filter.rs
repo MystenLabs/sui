@@ -155,7 +155,7 @@ impl TransactionFilter {
 
         values
             .into_iter()
-            .filter(|v| !v.should_skip())
+            .filter(|v| !v.exclude())
             .map(|v| v.to_bytes())
             .collect()
     }

@@ -98,15 +98,17 @@ pub(crate) fn insert_tx_addresses(tx: &ExecutedTransaction, bloom: &mut impl Ext
 
     for ev in tx.events.iter().flat_map(|evs| evs.data.iter()) {
         let emit_pkg: AccountAddress = ev.package_id.into();
-        values.push(BloomValue::EvAddress(emit_pkg));
-        values.push(BloomValue::EvEmitModule(ev.transaction_module.to_string()));
-        values.extend(BloomValue::from_struct_tag(&ev.type_));
+        values.push(BloomValue::EventAddress(emit_pkg));
+        values.push(BloomValue::EventEmitModule(
+            ev.transaction_module.to_string(),
+        ));
+        values.extend(BloomValue::from_event_struct_tag(&ev.type_));
     }
 
     bloom.extend(
         values
             .into_iter()
-            .filter(|v| !v.should_skip())
+            .filter(|v| !v.exclude())
             .map(|v| v.to_bytes()),
     );
 }

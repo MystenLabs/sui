@@ -177,17 +177,17 @@ impl EventFilter {
 
         if let Some(m) = &self.module {
             let pkg: AccountAddress = m.package().into_bytes().into();
-            values.push(BloomValue::EvAddress(pkg));
+            values.push(BloomValue::EventAddress(pkg));
             if let Some(mod_name) = m.module() {
-                values.push(BloomValue::EvEmitModule(mod_name.to_owned()));
+                values.push(BloomValue::EventEmitModule(mod_name.to_owned()));
             }
         }
 
         if let Some(t) = &self.type_ {
             let pkg: AccountAddress = t.package().into_bytes().into();
-            values.push(BloomValue::EvAddress(pkg));
+            values.push(BloomValue::EventAddress(pkg));
             if let Some(mod_name) = t.module() {
-                values.push(BloomValue::EvTypeModule(mod_name.to_owned()));
+                values.push(BloomValue::EventTypeModule(mod_name.to_owned()));
                 if let Some(name) = t.type_name() {
                     values.push(BloomValue::Name(name.to_owned()));
                 }
@@ -201,7 +201,7 @@ impl EventFilter {
 
         values
             .into_iter()
-            .filter(|v| !v.should_skip())
+            .filter(|v| !v.exclude())
             .map(|v| v.to_bytes())
             .collect()
     }
