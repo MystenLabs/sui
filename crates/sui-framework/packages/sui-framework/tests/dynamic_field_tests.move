@@ -5,7 +5,7 @@
 module sui::dynamic_field_tests;
 
 use std::unit_test::assert_eq;
-use sui::dynamic_field::{Self, add, exists_with_type, borrow, borrow_mut, remove};
+use sui::dynamic_field::{Self, add, exists_with_type, borrow, borrow_mut, remove, exists_};
 use sui::test_scenario;
 
 #[test]
@@ -163,7 +163,9 @@ fun borrow_or_add_existing() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     add(&mut id, 0u64, 42u64);
+    assert!(exists_with_type<u64, u64>(&id, 0));
     assert_eq!(*dynamic_field::borrow_or_add!(&mut id, 0u64, 99u64), 42);
+    assert!(exists_with_type<u64, u64>(&id, 0));
     scenario.end();
     id.delete();
 }
@@ -173,6 +175,7 @@ fun borrow_or_add_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
+    assert!(!exists_<u64>(&id, 0));
     assert_eq!(*dynamic_field::borrow_or_add!(&mut id, 0u64, 99u64), 99);
     assert!(exists_with_type<u64, u64>(&id, 0));
     scenario.end();
@@ -185,6 +188,7 @@ fun borrow_mut_or_add_existing() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     add(&mut id, 0u64, 42u64);
+    assert!(exists_with_type<u64, u64>(&id, 0));
     *dynamic_field::borrow_mut_or_add!(&mut id, 0u64, 99u64) = 100;
     assert_eq!(*borrow(&id, 0u64), 100u64);
     scenario.end();
@@ -224,7 +228,7 @@ fun get_do_missing() {
     let mut scenario = test_scenario::begin(sender);
     let id = scenario.new_object();
     let mut called = false;
-    dynamic_field::get_do!(&id, 0u64, |_v: &u64| { called = true; });
+    dynamic_field::get_do!(&id, 0u64, |_v: &u64| { called = true; assert!(false) });
     assert!(!called);
     scenario.end();
     id.delete();
@@ -248,7 +252,7 @@ fun get_mut_do_missing() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     let mut called = false;
-    dynamic_field::get_mut_do!(&mut id, 0u64, |_v: &mut u64| { called = true; });
+    dynamic_field::get_mut_do!(&mut id, 0u64, |_v: &mut u64| { called = true; assert!(false) });
     assert!(!called);
     scenario.end();
     id.delete();
@@ -260,7 +264,7 @@ fun get_fold_existing() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     add(&mut id, 0u64, 42u64);
-    let result = dynamic_field::get_fold!(&id, 0u64, 0u64, |v: &u64| *v + 1);
+    let result = dynamic_field::get_fold!(&id, 0u64, abort 0, |v: &u64| *v + 1);
     assert_eq!(result, 43);
     scenario.end();
     id.delete();
@@ -271,7 +275,7 @@ fun get_fold_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let id = scenario.new_object();
-    let result: u64 = dynamic_field::get_fold!(&id, 0u64, 0u64, |v: &u64| *v + 1);
+    let result: u64 = dynamic_field::get_fold!(&id, 0u64, 0u64, |_: &u64| abort 0);
     assert_eq!(result, 0);
     scenario.end();
     id.delete();
@@ -283,7 +287,7 @@ fun get_mut_fold_existing() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     add(&mut id, 0u64, 42u64);
-    let result = dynamic_field::get_mut_fold!(&mut id, 0u64, 0u64, |v: &mut u64| {
+    let result = dynamic_field::get_mut_fold!(&mut id, 0u64, abort 0, |v: &mut u64| {
         *v = 100;
         99u64
     });
@@ -298,10 +302,7 @@ fun get_mut_fold_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    let result: u64 = dynamic_field::get_mut_fold!(&mut id, 0u64, 0u64, |v: &mut u64| {
-        *v = 100;
-        99u64
-    });
+    let result: u64 = dynamic_field::get_mut_fold!(&mut id, 0u64, 0u64, |_: &mut u64| abort 0);
     assert_eq!(result, 0);
     scenario.end();
     id.delete();
