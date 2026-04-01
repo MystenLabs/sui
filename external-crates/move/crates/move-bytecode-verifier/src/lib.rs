@@ -42,6 +42,7 @@ pub use verifier::{
 };
 
 mod acquires_list_verifier;
+mod jump_table_usage_verifier;
 mod locals_safety;
 mod reference_safety;
 pub mod regex_reference_safety;

@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 119;
+const MAX_PROTOCOL_VERSION: u64 = 120;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -310,6 +310,7 @@ const TESTNET_USDC: &str =
 // Version 117: Update Sui System metadata handling.
 // Version 118: Adds `transfer_migration_cap` to display registry
 // Version 119: Enable the new VM.
+// Version 120: Disallow unused jump tables
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1040,6 +1041,9 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_gasless: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_jump_orphans: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2722,6 +2726,10 @@ impl ProtocolConfig {
 
     pub fn get_gasless_max_pure_input_bytes(&self) -> u64 {
         self.gasless_max_pure_input_bytes.unwrap_or(u64::MAX)
+    }
+
+    pub fn disallow_jump_orphans(&self) -> bool {
+        self.feature_flags.disallow_jump_orphans
     }
 }
 
@@ -4768,6 +4776,9 @@ impl ProtocolConfig {
                     cfg.transfer_receive_object_cost_per_byte = Some(1);
                     cfg.transfer_receive_object_type_cost_per_byte = Some(2);
                 }
+                120 => {
+                    cfg.feature_flags.disallow_jump_orphans = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4872,6 +4883,7 @@ impl ProtocolConfig {
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
             switch_to_regex_reference_safety: false,
+            disallow_jump_orphans: self.disallow_jump_orphans(),
         }
     }
 
