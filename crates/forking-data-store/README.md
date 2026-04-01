@@ -4,14 +4,15 @@ Multi-tier caching data store for Sui blockchain data.
 
 This crate provides a flexible data store abstraction for retrieving and caching
 Sui blockchain data. The trait surface covers transactions, epochs, objects,
-and checkpoints, while the concrete PR3 store implementations are intentionally
-scoped to epoch/checkpoint support for `sui-forking` bootstrap.
+and checkpoints, and the filesystem/GraphQL store implementations now support
+the object-fetching paths used by `sui-forking`.
 
 ## Capability Traits
 
 - `TransactionStore` / `TransactionStoreWriter`
 - `EpochStore` / `EpochStoreWriter`
 - `ObjectStore` / `ObjectStoreWriter`
+- `LatestObjectStore`
 - `CheckpointStore` / `CheckpointStoreWriter`
 
 `ReadDataStore` and `ReadWriteDataStore` remain convenience bundles for the
@@ -21,8 +22,8 @@ transaction/epoch/object capability set.
 
 | Store | Description | Read | Write |
 |-------|-------------|------|-------|
-| `DataStore` | Remote GraphQL-backed epoch/checkpoint store (mainnet/testnet) | Yes | No |
-| `FileSystemStore` | Persistent local epoch/checkpoint cache | Yes | Yes |
+| `GraphQLStore` | Remote GraphQL-backed epoch/checkpoint/object store | Yes | No |
+| `FileSystemStore` | Persistent local epoch/checkpoint/object cache | Yes | Yes |
 | `InMemoryStore` | Unbounded in-memory epoch/checkpoint cache | Yes | Yes |
 | `LruMemoryStore` | Bounded LRU epoch/checkpoint cache | Yes | Yes |
 | `ReadThroughStore` | Read-through cache over a source | Yes | Primary only |
@@ -54,7 +55,7 @@ use forking_data_store::{
     },
 };
 
-// Filesystem -> GraphQL for checkpoint reads, persisting successful misses to disk.
+// Filesystem -> GraphQL for checkpoint/object reads, persisting successful misses to disk.
 let graphql = GraphQLStore::new(Node::Mainnet, "test-version")?;
 let disk = FileSystemStore::new(Node::Mainnet)?;
 let disk_then_graphql = ReadThroughStore::new(disk, graphql);
@@ -71,6 +72,30 @@ let objects = FileSystemStore::new(Node::Mainnet)?;
 let checkpoints = /* another chain or the same chain */;
 let store = ForkingStore::new(transactions, epochs, objects, checkpoints);
 ```
+
+## Object Storage Layout
+
+`FileSystemStore` keeps objects under the same per-chain, optionally per-fork,
+directory that checkpoints and epochs use:
+
+```text
+<chain-or-fork>/
+  objects/
+    <object_id>/
+      <version>
+      root_versions
+      checkpoint_versions
+```
+
+- `<version>` stores the BCS-encoded `sui_types::object::Object`.
+- `root_versions` maps `RootVersion(max_version)` queries to the concrete stored version.
+- `checkpoint_versions` maps `AtCheckpoint(checkpoint)` queries to the concrete stored version.
+
+This lets `sui-forking` answer three object query kinds consistently:
+
+- `Version(v)`
+- `RootVersion(max_v)`
+- `AtCheckpoint(checkpoint)`
 
 ## Network Configuration
 

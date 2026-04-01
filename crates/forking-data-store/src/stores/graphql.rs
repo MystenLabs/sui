@@ -15,8 +15,9 @@ use sui_types::{
 };
 
 use crate::{
-    CheckpointData, CheckpointStore, EpochData, EpochStore, SetupStore, StoreSummary,
-    gql_queries::{chain_id_query, checkpoint_query, epoch_query},
+    CheckpointData, CheckpointStore, EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore,
+    StoreSummary,
+    gql_queries::{chain_id_query, checkpoint_query, epoch_query, object_query},
     node::Node,
     normalize_chain_identifier,
 };
@@ -124,6 +125,15 @@ impl EpochStore for GraphQLStore {
                 self.chain(),
             )
         }))
+    }
+}
+
+impl ObjectStore for GraphQLStore {
+    fn get_objects(
+        &self,
+        keys: &[ObjectKey],
+    ) -> Result<Vec<Option<(sui_types::object::Object, u64)>>, Error> {
+        block_on!(object_query::query(keys, self))
     }
 }
 

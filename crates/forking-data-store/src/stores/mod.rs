@@ -3,6 +3,7 @@
 
 //! Data store implementations.
 
+mod cache_helpers;
 mod filesystem;
 mod forking;
 mod graphql;
@@ -13,8 +14,9 @@ mod write_through;
 
 pub use filesystem::{
     CHECKPOINT_CONTENTS_DIGEST_INDEX_FILE, CHECKPOINT_DIGEST_INDEX_FILE, CHECKPOINT_DIR,
-    CHECKPOINT_FILE_EXTENSION, CHECKPOINT_LATEST_FILE, DATA_STORE_DIR, EPOCH_DIR,
-    FORK_DIRECTORY_PREFIX, FileSystemStore, NODE_MAPPING_FILE,
+    CHECKPOINT_FILE_EXTENSION, CHECKPOINT_LATEST_FILE, CHECKPOINT_VERSIONS_FILE, DATA_STORE_DIR,
+    EPOCH_DIR, FORK_DIRECTORY_PREFIX, FileSystemStore, NODE_MAPPING_FILE, OBJECTS_DIR,
+    ROOT_VERSIONS_FILE,
 };
 pub use forking::ForkingStore;
 pub use graphql::GraphQLStore;

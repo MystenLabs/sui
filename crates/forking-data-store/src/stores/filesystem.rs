@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! File-system backed epoch/checkpoint store.
-//!
-//! This PR3 implementation keeps the on-disk store scoped to the startup data
-//! that `sui-forking` consumes today: epoch metadata and full checkpoints.
+//! File-system backed epoch/checkpoint/object store.
 //!
 //! # Base Directory
 //!
@@ -25,6 +22,11 @@
 //!       checkpoint_digest_index.csv
 //!       contents_digest_index.csv
 //!       <sequence>.binpb.zst
+//!     objects/
+//!       <object_id>/
+//!         <version>
+//!         root_versions
+//!         checkpoint_versions
 //!     forked_at_<checkpoint>/
 //!       epoch/
 //!         <epoch_id>
@@ -33,13 +35,18 @@
 //!         checkpoint_digest_index.csv
 //!         contents_digest_index.csv
 //!         <sequence>.binpb.zst
+//!       objects/
+//!         <object_id>/
+//!           <version>
+//!           root_versions
+//!           checkpoint_versions
 //! ```
 //!
 //! The `checkpoint/` directory stores full checkpoint payloads together with the
 //! indexes needed to resolve checkpoint and contents digests back to a sequence
-//! number. Stores created for a specific fork session namespace their epoch and
-//! checkpoint data under `forked_at_<checkpoint>` so multiple fork sessions can
-//! coexist under the same chain ID.
+//! number. Stores created for a specific fork session namespace their epoch,
+//! checkpoint, and object data under `forked_at_<checkpoint>` so multiple fork
+//! sessions can coexist under the same chain ID.
 
 use std::{
     collections::BTreeMap,
@@ -53,16 +60,19 @@ use anyhow::{Context, Error, Result, anyhow};
 use prost::Message;
 use sui_rpc::{field::FieldMaskTree, merge::Merge};
 use sui_types::{
+    base_types::ObjectID,
     committee::ProtocolVersion,
     digests::{CheckpointContentsDigest, CheckpointDigest},
     message_envelope::Message as _,
     messages_checkpoint::CheckpointSequenceNumber,
+    object::Object,
     supported_protocol_versions::ProtocolConfig,
 };
 
 use crate::{
     CheckpointData, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore,
-    EpochStoreWriter, SetupStore, StoreSummary, node::Node, normalize_chain_identifier,
+    EpochStoreWriter, LatestObjectStore, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore,
+    StoreSummary, VersionQuery, node::Node, normalize_chain_identifier,
 };
 
 /// Directory name appended to the configured filesystem store root.
@@ -71,6 +81,8 @@ pub const DATA_STORE_DIR: &str = ".forking_data_store";
 pub const NODE_MAPPING_FILE: &str = "node_mapping.csv";
 /// Per-chain epoch storage directory.
 pub const EPOCH_DIR: &str = "epoch";
+/// Per-chain object storage directory.
+pub const OBJECTS_DIR: &str = "objects";
 /// Per-chain checkpoint storage directory.
 pub const CHECKPOINT_DIR: &str = "checkpoint";
 /// File extension used for serialized checkpoint payloads.
@@ -81,6 +93,10 @@ pub const CHECKPOINT_DIGEST_INDEX_FILE: &str = "checkpoint_digest_index.csv";
 pub const CHECKPOINT_CONTENTS_DIGEST_INDEX_FILE: &str = "contents_digest_index.csv";
 /// Marker file for the latest checkpoint sequence known to the store.
 pub const CHECKPOINT_LATEST_FILE: &str = "latest";
+/// CSV mapping a root-version bound to the concrete stored object version.
+pub const ROOT_VERSIONS_FILE: &str = "root_versions";
+/// CSV mapping a checkpoint to the concrete stored object version.
+pub const CHECKPOINT_VERSIONS_FILE: &str = "checkpoint_versions";
 /// Prefix used for per-fork session directories under a chain ID.
 pub const FORK_DIRECTORY_PREFIX: &str = "forked_at_";
 
@@ -122,6 +138,8 @@ pub struct FileSystemStore {
     fork_directory: Option<String>,
     checkpoint_digest_index: RwLock<Option<BTreeMap<String, CheckpointSequenceNumber>>>,
     checkpoint_contents_digest_index: RwLock<Option<BTreeMap<String, CheckpointSequenceNumber>>>,
+    root_versions_map: RwLock<BTreeMap<ObjectID, BTreeMap<u64, u64>>>,
+    checkpoint_versions_map: RwLock<BTreeMap<ObjectID, BTreeMap<u64, u64>>>,
 }
 
 impl FileSystemStore {
@@ -173,6 +191,8 @@ impl FileSystemStore {
             fork_directory,
             checkpoint_digest_index: RwLock::new(None),
             checkpoint_contents_digest_index: RwLock::new(None),
+            root_versions_map: RwLock::new(BTreeMap::new()),
+            checkpoint_versions_map: RwLock::new(BTreeMap::new()),
         }
     }
 
@@ -226,8 +246,28 @@ impl FileSystemStore {
         Ok(self.scoped_chain_dir()?.join(EPOCH_DIR))
     }
 
+    fn objects_dir(&self) -> Result<PathBuf, Error> {
+        Ok(self.scoped_chain_dir()?.join(OBJECTS_DIR))
+    }
+
     fn checkpoint_dir(&self) -> Result<PathBuf, Error> {
         Ok(self.scoped_chain_dir()?.join(CHECKPOINT_DIR))
+    }
+
+    fn object_dir(&self, object_id: &ObjectID) -> Result<PathBuf, Error> {
+        Ok(self.objects_dir()?.join(object_id.to_string()))
+    }
+
+    fn object_version_path(&self, object_id: &ObjectID, version: u64) -> Result<PathBuf, Error> {
+        Ok(self.object_dir(object_id)?.join(version.to_string()))
+    }
+
+    fn root_versions_path(&self, object_id: &ObjectID) -> Result<PathBuf, Error> {
+        Ok(self.object_dir(object_id)?.join(ROOT_VERSIONS_FILE))
+    }
+
+    fn checkpoint_versions_path(&self, object_id: &ObjectID) -> Result<PathBuf, Error> {
+        Ok(self.object_dir(object_id)?.join(CHECKPOINT_VERSIONS_FILE))
     }
 
     fn checkpoint_file_path(&self, sequence: CheckpointSequenceNumber) -> Result<PathBuf, Error> {
@@ -267,6 +307,237 @@ impl FileSystemStore {
         fs::write(path, bytes)
             .with_context(|| format!("failed to write file: {}", path.display()))?;
         Ok(())
+    }
+
+    fn read_version_mapping(&self, path: &Path) -> Result<BTreeMap<u64, u64>, Error> {
+        if !path.exists() {
+            return Ok(BTreeMap::new());
+        }
+
+        let file = fs::File::open(path)
+            .with_context(|| format!("failed to open version mapping file: {}", path.display()))?;
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .trim(csv::Trim::All)
+            .from_reader(file);
+
+        let mut mapping = BTreeMap::new();
+        for result in rdr.records() {
+            let record = result
+                .with_context(|| format!("failed to read CSV record from: {}", path.display()))?;
+            if record.len() != 2 {
+                return Err(anyhow!(
+                    "invalid format in version mapping file {}: expected 2 columns, got {}",
+                    path.display(),
+                    record.len()
+                ));
+            }
+
+            let key = record[0].parse().with_context(|| {
+                format!(
+                    "failed to parse mapping key '{}' in {}",
+                    &record[0],
+                    path.display()
+                )
+            })?;
+            let version = record[1].parse().with_context(|| {
+                format!(
+                    "failed to parse object version '{}' in {}",
+                    &record[1],
+                    path.display()
+                )
+            })?;
+            mapping.insert(key, version);
+        }
+
+        Ok(mapping)
+    }
+
+    fn write_version_mapping(
+        &self,
+        path: &Path,
+        mapping: &BTreeMap<u64, u64>,
+    ) -> Result<(), Error> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create directory: {}", parent.display()))?;
+        }
+
+        let mut file = fs::File::create(path).with_context(|| {
+            format!("failed to create version mapping file: {}", path.display())
+        })?;
+        for (key, version) in mapping {
+            writeln!(file, "{key},{version}").with_context(|| {
+                format!("failed to write version mapping file: {}", path.display())
+            })?;
+        }
+
+        Ok(())
+    }
+
+    fn load_root_mapping(&self, object_id: &ObjectID) -> Result<(), Error> {
+        use std::collections::btree_map::Entry;
+        let mut guard = self
+            .root_versions_map
+            .write()
+            .expect("root versions lock poisoned");
+        if let Entry::Vacant(entry) = guard.entry(*object_id) {
+            let mapping = self.read_version_mapping(&self.root_versions_path(object_id)?)?;
+            entry.insert(mapping);
+        }
+        Ok(())
+    }
+
+    fn load_checkpoint_mapping(&self, object_id: &ObjectID) -> Result<(), Error> {
+        use std::collections::btree_map::Entry;
+        let mut guard = self
+            .checkpoint_versions_map
+            .write()
+            .expect("checkpoint versions lock poisoned");
+        if let Entry::Vacant(entry) = guard.entry(*object_id) {
+            let mapping = self.read_version_mapping(&self.checkpoint_versions_path(object_id)?)?;
+            entry.insert(mapping);
+        }
+        Ok(())
+    }
+
+    fn update_root_mapping(
+        &self,
+        object_id: &ObjectID,
+        key: u64,
+        version: u64,
+    ) -> Result<(), Error> {
+        self.load_root_mapping(object_id)?;
+        let path = self.root_versions_path(object_id)?;
+        let mut guard = self
+            .root_versions_map
+            .write()
+            .expect("root versions lock poisoned");
+        let mapping = guard
+            .get_mut(object_id)
+            .expect("root versions mapping must be loaded");
+        mapping.insert(key, version);
+        self.write_version_mapping(&path, mapping)
+    }
+
+    fn update_checkpoint_mapping(
+        &self,
+        object_id: &ObjectID,
+        key: u64,
+        version: u64,
+    ) -> Result<(), Error> {
+        self.load_checkpoint_mapping(object_id)?;
+        let path = self.checkpoint_versions_path(object_id)?;
+        let mut guard = self
+            .checkpoint_versions_map
+            .write()
+            .expect("checkpoint versions lock poisoned");
+        let mapping = guard
+            .get_mut(object_id)
+            .expect("checkpoint versions mapping must be loaded");
+        mapping.insert(key, version);
+        self.write_version_mapping(&path, mapping)
+    }
+
+    fn get_object_by_version(
+        &self,
+        object_id: &ObjectID,
+        version: u64,
+    ) -> Result<Option<(Object, u64)>, Error> {
+        let path = self.object_version_path(object_id, version)?;
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        Ok(Some((self.read_bcs_file(&path)?, version)))
+    }
+
+    fn get_object_by_root_version(
+        &self,
+        object_id: &ObjectID,
+        max_version: u64,
+    ) -> Result<Option<(Object, u64)>, Error> {
+        self.load_root_mapping(object_id)?;
+        let guard = self
+            .root_versions_map
+            .read()
+            .expect("root versions lock poisoned");
+        let Some(actual_version) = guard
+            .get(object_id)
+            .and_then(|mapping| mapping.get(&max_version).copied())
+        else {
+            let fallback_version = self
+                .scan_object_versions(object_id)?
+                .into_iter()
+                .filter(|version| *version <= max_version)
+                .max();
+            return fallback_version.map_or(Ok(None), |version| {
+                self.get_object_by_version(object_id, version)
+            });
+        };
+
+        self.get_object_by_version(object_id, actual_version)
+    }
+
+    fn get_object_by_checkpoint(
+        &self,
+        object_id: &ObjectID,
+        checkpoint: u64,
+    ) -> Result<Option<(Object, u64)>, Error> {
+        self.load_checkpoint_mapping(object_id)?;
+        let guard = self
+            .checkpoint_versions_map
+            .read()
+            .expect("checkpoint versions lock poisoned");
+        let Some(actual_version) = guard
+            .get(object_id)
+            .and_then(|mapping| mapping.get(&checkpoint).copied())
+        else {
+            return Ok(None);
+        };
+
+        self.get_object_by_version(object_id, actual_version)
+    }
+
+    /// Return the latest locally persisted version of an object, if any.
+    ///
+    /// This scans the object directory on every call. Acceptable at the current
+    /// per-object version count; consider caching max version if this becomes
+    /// a hot path.
+    pub fn get_object_latest(&self, object_id: &ObjectID) -> Result<Option<(Object, u64)>, Error> {
+        let latest_version = self.scan_object_versions(object_id)?.into_iter().max();
+
+        latest_version.map_or(Ok(None), |version| {
+            self.get_object_by_version(object_id, version)
+        })
+    }
+
+    fn scan_object_versions(&self, object_id: &ObjectID) -> Result<Vec<u64>, Error> {
+        let object_dir = self.object_dir(object_id)?;
+        if !object_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        fs::read_dir(&object_dir)
+            .with_context(|| format!("failed to read object directory: {}", object_dir.display()))?
+            .map(|entry| {
+                let entry = entry.with_context(|| {
+                    format!(
+                        "failed to read object directory entry: {}",
+                        object_dir.display()
+                    )
+                })?;
+                Ok(entry
+                    .file_name()
+                    .to_str()
+                    .and_then(|name| name.parse::<u64>().ok()))
+            })
+            .filter_map(|result| match result {
+                Ok(Some(version)) => Some(Ok(version)),
+                Ok(None) => None,
+                Err(error) => Some(Err(error)),
+            })
+            .collect()
     }
 
     fn read_digest_index(
@@ -653,6 +924,57 @@ impl EpochStoreWriter for FileSystemStore {
     fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error> {
         let path = self.epoch_dir()?.join(epoch.to_string());
         self.write_bcs_file(&path, &EpochFileData::from(epoch_data))
+    }
+}
+
+impl LatestObjectStore for FileSystemStore {
+    fn latest_object(&self, object_id: &ObjectID) -> Result<Option<(Object, u64)>, Error> {
+        self.get_object_latest(object_id)
+    }
+}
+
+impl ObjectStore for FileSystemStore {
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
+        let mut objects = Vec::with_capacity(keys.len());
+        for key in keys {
+            let object = match key.version_query {
+                VersionQuery::Version(version) => {
+                    self.get_object_by_version(&key.object_id, version)
+                }
+                VersionQuery::RootVersion(max_version) => {
+                    self.get_object_by_root_version(&key.object_id, max_version)
+                }
+                VersionQuery::AtCheckpoint(checkpoint) => {
+                    self.get_object_by_checkpoint(&key.object_id, checkpoint)
+                }
+            }?;
+            objects.push(object);
+        }
+        Ok(objects)
+    }
+}
+
+impl ObjectStoreWriter for FileSystemStore {
+    fn write_object(
+        &self,
+        key: &ObjectKey,
+        object: Object,
+        actual_version: u64,
+    ) -> Result<(), Error> {
+        let path = self.object_version_path(&key.object_id, actual_version)?;
+        self.write_bcs_file(&path, &object)?;
+
+        match key.version_query {
+            VersionQuery::Version(_) => {}
+            VersionQuery::RootVersion(max_version) => {
+                self.update_root_mapping(&key.object_id, max_version, actual_version)?;
+            }
+            VersionQuery::AtCheckpoint(checkpoint) => {
+                self.update_checkpoint_mapping(&key.object_id, checkpoint, actual_version)?;
+            }
+        }
+
+        Ok(())
     }
 }
 

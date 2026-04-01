@@ -7,12 +7,14 @@ use anyhow::{Error, Result};
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
+    object::Object,
     supported_protocol_versions::ProtocolConfig,
 };
 
 use crate::{
     CheckpointData, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore,
-    EpochStoreWriter, SetupStore, StoreSummary,
+    EpochStoreWriter, LatestObjectStore, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore,
+    StoreSummary,
 };
 
 /// A router that delegates each capability to a dedicated store.
@@ -75,6 +77,41 @@ where
 {
     fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error> {
         self.epochs.write_epoch_info(epoch, epoch_data)
+    }
+}
+
+impl<Tx, Epoch, Obj, Ckpt> LatestObjectStore for ForkingStore<Tx, Epoch, Obj, Ckpt>
+where
+    Obj: LatestObjectStore,
+{
+    fn latest_object(
+        &self,
+        object_id: &sui_types::base_types::ObjectID,
+    ) -> Result<Option<(Object, u64)>, Error> {
+        self.objects.latest_object(object_id)
+    }
+}
+
+impl<Tx, Epoch, Obj, Ckpt> ObjectStore for ForkingStore<Tx, Epoch, Obj, Ckpt>
+where
+    Obj: ObjectStore,
+{
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
+        self.objects.get_objects(keys)
+    }
+}
+
+impl<Tx, Epoch, Obj, Ckpt> ObjectStoreWriter for ForkingStore<Tx, Epoch, Obj, Ckpt>
+where
+    Obj: ObjectStoreWriter,
+{
+    fn write_object(
+        &self,
+        key: &ObjectKey,
+        object: Object,
+        actual_version: u64,
+    ) -> Result<(), Error> {
+        self.objects.write_object(key, object, actual_version)
     }
 }
 

@@ -279,7 +279,7 @@ pub(crate) mod object_query {
                 data.multi_get_objects
             } else {
                 return Err(anyhow!(
-                    "Missing data in transaction query response. Errors: {:?}",
+                    "Missing data in object query response. Errors: {:?}",
                     response.errors,
                 ));
             };

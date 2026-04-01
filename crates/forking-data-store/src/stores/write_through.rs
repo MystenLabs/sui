@@ -7,13 +7,15 @@ use anyhow::{Error, Result};
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::CheckpointSequenceNumber,
+    object::Object,
     supported_protocol_versions::ProtocolConfig,
 };
 
 use crate::{
     CheckpointData, CheckpointStore, CheckpointStoreWriter, EpochData, EpochStore,
-    EpochStoreWriter, SetupStore, StoreSummary,
+    EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore, StoreSummary,
 };
+use crate::stores::cache_helpers;
 
 /// Write-through cache over a primary and secondary store.
 #[derive(Debug)]
@@ -73,6 +75,33 @@ where
     fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error> {
         self.secondary.write_epoch_info(epoch, epoch_data.clone())?;
         self.primary.write_epoch_info(epoch, epoch_data)
+    }
+}
+
+impl<P, S> ObjectStore for WriteThroughStore<P, S>
+where
+    P: ObjectStore + ObjectStoreWriter,
+    S: ObjectStore,
+{
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
+        cache_helpers::get_objects_with_backfill(&self.primary, &self.secondary, keys)
+    }
+}
+
+impl<P, S> ObjectStoreWriter for WriteThroughStore<P, S>
+where
+    P: ObjectStore + ObjectStoreWriter,
+    S: ObjectStoreWriter,
+{
+    fn write_object(
+        &self,
+        key: &ObjectKey,
+        object: Object,
+        actual_version: u64,
+    ) -> Result<(), Error> {
+        self.secondary
+            .write_object(key, object.clone(), actual_version)?;
+        self.primary.write_object(key, object, actual_version)
     }
 }
 

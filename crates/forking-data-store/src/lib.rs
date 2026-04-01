@@ -5,8 +5,8 @@
 //!
 //! This crate provides a flexible data store abstraction for retrieving and caching
 //! Sui blockchain data. The trait surface covers transactions, checkpoints,
-//! epochs, and objects, while the concrete PR3 store implementations are scoped
-//! to the epoch/checkpoint paths required by `sui-forking` bootstrap.
+//! epochs, and objects, and the concrete store implementations support the
+//! filesystem and GraphQL-backed object-fetching paths used by `sui-forking`.
 //!
 //! ## Core Traits
 //!
@@ -14,11 +14,12 @@
 //! - [`CheckpointStore`] - Retrieve checkpoint data by sequence number or digest
 //! - [`EpochStore`] - Retrieve epoch information and protocol configuration
 //! - [`ObjectStore`] - Retrieve objects by their keys with flexible version queries
+//! - [`LatestObjectStore`] - Retrieve the latest locally available object version
 //!
 //! ## Store Implementations
 //!
-//! - [`stores::GraphQLStore`] - Remote GraphQL-backed epoch/checkpoint store
-//! - [`stores::FileSystemStore`] - Persistent local epoch/checkpoint cache
+//! - [`stores::GraphQLStore`] - Remote GraphQL-backed epoch/checkpoint/object store
+//! - [`stores::FileSystemStore`] - Persistent local epoch/checkpoint/object cache
 //! - [`stores::InMemoryStore`] - Unbounded in-memory epoch/checkpoint cache
 //! - [`stores::LruMemoryStore`] - Bounded LRU epoch/checkpoint cache
 //!
@@ -151,6 +152,16 @@ pub trait ObjectStore {
     /// - `Object`: The object data
     /// - `u64`: The actual version of the object
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error>;
+}
+
+/// Optional helper trait for stores that can answer a direct latest-object lookup.
+///
+/// This keeps callers such as `sui-forking` generic while still allowing local
+/// stores to prefer post-fork objects over historical fallback lookups.
+#[cfg_attr(any(test, feature = "test-utils"), automock)]
+pub trait LatestObjectStore {
+    /// Return the latest locally available object version, if any.
+    fn latest_object(&self, object_id: &ObjectID) -> Result<Option<(Object, u64)>, Error>;
 }
 
 /// Retrieve checkpoint data and indexes.
@@ -332,6 +343,12 @@ macro_rules! impl_store_for_deref {
                 actual_version: u64,
             ) -> Result<(), Error> {
                 Deref::deref(self).write_object(key, object, actual_version)
+            }
+        }
+
+        impl<T: LatestObjectStore + ?Sized> LatestObjectStore for $wrapper {
+            fn latest_object(&self, object_id: &ObjectID) -> Result<Option<(Object, u64)>, Error> {
+                Deref::deref(self).latest_object(object_id)
             }
         }
 
