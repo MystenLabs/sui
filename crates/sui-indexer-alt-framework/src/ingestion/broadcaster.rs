@@ -302,7 +302,7 @@ where
         }
     };
 
-    let checkpoint_envelope = match std::pin::Pin::new(&mut stream).peek().await {
+    let checkpoint_envelope = match stream.peek().await {
         Some(Ok(checkpoint)) => CheckpointEnvelope {
             checkpoint: Arc::new(checkpoint.clone()),
             chain_id,
