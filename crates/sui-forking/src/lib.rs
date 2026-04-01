@@ -3,9 +3,12 @@
 
 //! Forking tool for Sui.
 
+mod grpc;
 mod network;
 mod service_store;
 mod startup;
+#[cfg(test)]
+mod test_utils;
 
 pub use network::Network;
 pub use service_store::ServiceStore;

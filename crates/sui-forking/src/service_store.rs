@@ -3,7 +3,10 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use forking_data_store::{CheckpointStore, CheckpointStoreWriter};
+use forking_data_store::{
+    CheckpointStore, CheckpointStoreWriter, LatestObjectStore, ObjectKey,
+    ObjectStore as ForkingObjectStore, VersionQuery,
+};
 use simulacrum::SimulatorStore;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
@@ -11,20 +14,23 @@ use sui_types::{
     committee::{Committee, EpochId},
     digests::{CheckpointContentsDigest, CheckpointDigest, ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEvents},
-    error::SuiResult,
+    error::{SuiErrorKind, SuiResult},
     full_checkpoint_content::{Checkpoint as CheckpointData, ObjectSet},
     messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint},
-    object::Object,
-    storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
+    object::{Object, Owner},
+    storage::{
+        BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync,
+        load_package_object_from_object_store,
+    },
     sui_system_state::SuiSystemState,
     transaction::VerifiedTransaction,
 };
 
-/// Persistent checkpoint adapter backing a forked network.
+/// Persistent checkpoint/object adapter backing a forked network.
 ///
 /// `ServiceStore` keeps two composed `ForkingStore` values:
 /// - `historical_store` serves checkpoint reads up to and including the fork point
-/// - `local_store` serves post-fork checkpoint reads and all checkpoint writes
+/// - `local_store` serves post-fork checkpoint/object reads and all local writes
 pub struct ServiceStore<H, L> {
     forked_at_checkpoint: u64,
     historical_store: H,
@@ -37,7 +43,7 @@ where
     H: CheckpointStore,
     L: CheckpointStore + CheckpointStoreWriter,
 {
-    /// Create a checkpoint-only service store over historical and local `ForkingStore` values.
+    /// Create a service store over historical and local `ForkingStore` values.
     pub fn new(forked_at_checkpoint: u64, historical_store: H, local_store: L) -> Self {
         Self {
             forked_at_checkpoint,
@@ -163,57 +169,189 @@ where
     }
 }
 
+impl<H, L> ServiceStore<H, L>
+where
+    H: CheckpointStore + ForkingObjectStore,
+    L: CheckpointStore + CheckpointStoreWriter + ForkingObjectStore + LatestObjectStore,
+{
+    fn object_lookup(
+        store: &dyn ForkingObjectStore,
+        object_id: &ObjectID,
+        version_query: VersionQuery,
+    ) -> Option<(Object, u64)> {
+        store
+            .get_objects(&[ObjectKey {
+                object_id: *object_id,
+                version_query,
+            }])
+            .ok()?
+            .into_iter()
+            .next()
+            .flatten()
+    }
+
+    fn local_object_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        Self::object_lookup(
+            &self.local_store,
+            object_id,
+            VersionQuery::Version(version.value()),
+        )
+        .map(|(object, _)| object)
+    }
+
+    fn historical_object_at_fork(&self, object_id: &ObjectID) -> Option<(Object, u64)> {
+        Self::object_lookup(
+            &self.historical_store,
+            object_id,
+            VersionQuery::AtCheckpoint(self.forked_at_checkpoint),
+        )
+    }
+
+    fn historical_exact_object_if_visible_at_fork(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        let (_, fork_version) = self.historical_object_at_fork(object_id)?;
+        if version.value() > fork_version {
+            return None;
+        }
+
+        Self::object_lookup(
+            &self.historical_store,
+            object_id,
+            VersionQuery::Version(version.value()),
+        )
+        .map(|(object, _)| object)
+    }
+
+    fn latest_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.local_store
+            .latest_object(object_id)
+            .ok()
+            .flatten()
+            .map(|(object, _)| object)
+            .or_else(|| {
+                self.historical_object_at_fork(object_id)
+                    .map(|(object, _)| object)
+            })
+    }
+}
+
 #[cold]
 fn checkpoint_only_store(method: &str) -> ! {
-    todo!("{method} is not implemented for the PR3 checkpoint-only ServiceStore")
+    todo!("{method} is not yet implemented for ServiceStore")
 }
 
 impl<H, L> BackingPackageStore for ServiceStore<H, L>
 where
-    H: CheckpointStore,
-    L: CheckpointStore + CheckpointStoreWriter,
+    H: CheckpointStore + ForkingObjectStore,
+    L: CheckpointStore + CheckpointStoreWriter + ForkingObjectStore + LatestObjectStore,
 {
-    fn get_package_object(&self, _package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-        checkpoint_only_store("get_package_object")
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        load_package_object_from_object_store(self, package_id)
     }
 }
 
 impl<H, L> ChildObjectResolver for ServiceStore<H, L>
 where
-    H: CheckpointStore,
-    L: CheckpointStore + CheckpointStoreWriter,
+    H: CheckpointStore + ForkingObjectStore,
+    L: CheckpointStore + CheckpointStoreWriter + ForkingObjectStore + LatestObjectStore,
 {
     fn read_child_object(
         &self,
-        _parent: &ObjectID,
-        _child: &ObjectID,
-        _child_version_upper_bound: SequenceNumber,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        checkpoint_only_store("read_child_object")
+        let validate = |child_object: Object| -> SuiResult<Option<Object>> {
+            let parent = *parent;
+            if child_object.owner != Owner::ObjectOwner(parent.into()) {
+                return Err(SuiErrorKind::InvalidChildObjectAccess {
+                    object: *child,
+                    given_parent: parent,
+                    actual_owner: child_object.owner.clone(),
+                }
+                .into());
+            }
+
+            // Post-fork local objects are currently stored without a version
+            // upper-bound index, so we cannot efficiently resolve the correct
+            // version when the child exceeds the bound. This is deferred to PR5
+            // which introduces transaction execution and object-write tracking.
+            if child_object.version() > child_version_upper_bound {
+                return Err(SuiErrorKind::UnsupportedFeatureError {
+                    error:
+                        "ServiceStore::read_child_object does not yet support bounded local post-fork reads"
+                            .to_owned(),
+                }
+                .into());
+            }
+
+            Ok(Some(child_object))
+        };
+
+        let local_object = Self::object_lookup(
+            &self.local_store,
+            child,
+            VersionQuery::RootVersion(child_version_upper_bound.value()),
+        )
+        .map(|(object, _)| object);
+        if let Some(child_object) = local_object {
+            return validate(child_object);
+        }
+
+        let historical_object = Self::object_lookup(
+            &self.historical_store,
+            child,
+            VersionQuery::RootVersion(child_version_upper_bound.value()),
+        )
+        .map(|(object, _)| object);
+
+        match historical_object {
+            Some(object) => validate(object),
+            None => Ok(None),
+        }
     }
 
     fn get_object_received_at_version(
         &self,
-        _owner: &ObjectID,
-        _receiving_object_id: &ObjectID,
-        _receive_object_at_version: SequenceNumber,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        checkpoint_only_store("get_object_received_at_version")
+        let Some(received_object) = sui_types::storage::ObjectStore::get_object_by_key(
+            self,
+            receiving_object_id,
+            receive_object_at_version,
+        ) else {
+            return Ok(None);
+        };
+        if received_object.owner != Owner::AddressOwner((*owner).into()) {
+            return Ok(None);
+        }
+
+        Ok(Some(received_object))
     }
 }
 
 impl<H, L> sui_types::storage::ObjectStore for ServiceStore<H, L>
 where
-    H: CheckpointStore,
-    L: CheckpointStore + CheckpointStoreWriter,
+    H: CheckpointStore + ForkingObjectStore,
+    L: CheckpointStore + CheckpointStoreWriter + ForkingObjectStore + LatestObjectStore,
 {
-    fn get_object(&self, _object_id: &ObjectID) -> Option<Object> {
-        checkpoint_only_store("get_object")
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.latest_object(object_id)
     }
 
-    fn get_object_by_key(&self, _object_id: &ObjectID, _version: SequenceNumber) -> Option<Object> {
-        checkpoint_only_store("get_object_by_key")
+    fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
+        self.local_object_version(object_id, version)
+            .or_else(|| self.historical_exact_object_if_visible_at_fork(object_id, version))
     }
 }
 
@@ -229,8 +367,8 @@ where
 
 impl<H, L> SimulatorStore for ServiceStore<H, L>
 where
-    H: CheckpointStore,
-    L: CheckpointStore + CheckpointStoreWriter,
+    H: CheckpointStore + ForkingObjectStore,
+    L: CheckpointStore + CheckpointStoreWriter + ForkingObjectStore + LatestObjectStore,
 {
     fn get_checkpoint_by_sequence_number(
         &self,
@@ -270,12 +408,12 @@ where
         checkpoint_only_store("get_transaction_events")
     }
 
-    fn get_object(&self, _id: &ObjectID) -> Option<Object> {
-        checkpoint_only_store("SimulatorStore::get_object")
+    fn get_object(&self, id: &ObjectID) -> Option<Object> {
+        sui_types::storage::ObjectStore::get_object(self, id)
     }
 
-    fn get_object_at_version(&self, _id: &ObjectID, _version: SequenceNumber) -> Option<Object> {
-        checkpoint_only_store("get_object_at_version")
+    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
+        sui_types::storage::ObjectStore::get_object_by_key(self, id, version)
     }
 
     fn get_system_state(&self) -> SuiSystemState {
@@ -341,28 +479,20 @@ where
 mod tests {
     use super::*;
 
-    use forking_data_store::{
-        SetupStore,
-        stores::{FileSystemStore, ForkingStore},
-    };
+    use forking_data_store::{ObjectStoreWriter, VersionQuery};
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
-    use sui_types::{digests::get_mainnet_chain_identifier, message_envelope::Message as _};
+    use sui_types::{
+        base_types::SuiAddress, digests::get_mainnet_chain_identifier,
+        message_envelope::Message as _, object::Owner, storage::ObjectStore,
+    };
     use tempfile::tempdir;
+
+    use crate::test_utils::{filesystem_store, forking_store, test_object};
 
     fn test_checkpoint(sequence: u64, epoch: u64) -> CheckpointData {
         TestCheckpointBuilder::new(sequence)
             .with_epoch(epoch)
             .build_checkpoint()
-    }
-
-    fn checkpoint_store(
-        node: forking_data_store::Node,
-        root: &std::path::Path,
-        chain_id: &str,
-    ) -> FileSystemStore {
-        let store = FileSystemStore::new_with_path(node, root.to_path_buf()).unwrap();
-        store.setup(Some(chain_id.to_string())).unwrap();
-        store
     }
 
     #[test]
@@ -371,13 +501,11 @@ mod tests {
         let local_dir = tempdir().unwrap();
         let chain_id = get_mainnet_chain_identifier().to_string();
 
-        let historical_fs = checkpoint_store(
-            forking_data_store::Node::Mainnet,
+        let historical_fs = filesystem_store(
             historical_dir.path(),
             &chain_id,
         );
-        let local_fs = checkpoint_store(
-            forking_data_store::Node::Mainnet,
+        let local_fs = filesystem_store(
             local_dir.path(),
             &chain_id,
         );
@@ -391,50 +519,8 @@ mod tests {
             .unwrap();
         local_fs.write_checkpoint(&local_checkpoint).unwrap();
 
-        let historical_store = ForkingStore::new(
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                historical_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                historical_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                historical_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                historical_dir.path(),
-                &chain_id,
-            ),
-        );
-        let local_store = ForkingStore::new(
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                local_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                local_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                local_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                local_dir.path(),
-                &chain_id,
-            ),
-        );
+        let historical_store = forking_store(historical_dir.path(), &chain_id);
+        let local_store = forking_store(local_dir.path(), &chain_id);
         let store = ServiceStore::new(10, historical_store, local_store);
 
         assert_eq!(
@@ -473,50 +559,8 @@ mod tests {
         let historical_dir = tempdir().unwrap();
         let local_dir = tempdir().unwrap();
         let chain_id = get_mainnet_chain_identifier().to_string();
-        let historical_store = ForkingStore::new(
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                historical_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                historical_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                historical_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                historical_dir.path(),
-                &chain_id,
-            ),
-        );
-        let local_store = ForkingStore::new(
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                local_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                local_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                local_dir.path(),
-                &chain_id,
-            ),
-            checkpoint_store(
-                forking_data_store::Node::Mainnet,
-                local_dir.path(),
-                &chain_id,
-            ),
-        );
+        let historical_store = forking_store(historical_dir.path(), &chain_id);
+        let local_store = forking_store(local_dir.path(), &chain_id);
         let mut store = ServiceStore::new(10, historical_store, local_store);
         let checkpoint = test_checkpoint(12, 3);
         let verified_checkpoint = VerifiedCheckpoint::new_unchecked(checkpoint.summary.clone());
@@ -525,13 +569,11 @@ mod tests {
         store.insert_checkpoint_summary(verified_checkpoint);
         store.insert_checkpoint_contents(contents);
 
-        let historical_fs = checkpoint_store(
-            forking_data_store::Node::Mainnet,
+        let historical_fs = filesystem_store(
             historical_dir.path(),
             &chain_id,
         );
-        let local_fs = checkpoint_store(
-            forking_data_store::Node::Mainnet,
+        let local_fs = filesystem_store(
             local_dir.path(),
             &chain_id,
         );
@@ -547,6 +589,282 @@ mod tests {
                 .get_checkpoint_by_sequence_number(12)
                 .unwrap()
                 .is_some()
+        );
+    }
+
+    #[test]
+    fn get_object_prefers_local_latest_object_over_historical_fork_snapshot() {
+        let historical_dir = tempdir().unwrap();
+        let local_dir = tempdir().unwrap();
+        let chain_id = get_mainnet_chain_identifier().to_string();
+        let object_id = ObjectID::random();
+        let owner = SuiAddress::random_for_testing_only();
+
+        let historical_store = forking_store(historical_dir.path(), &chain_id);
+        historical_store
+            .write_object(
+                &ObjectKey {
+                    object_id,
+                    version_query: VersionQuery::AtCheckpoint(10),
+                },
+                test_object(object_id, owner, 1),
+                1,
+            )
+            .unwrap();
+
+        let local_store = forking_store(local_dir.path(), &chain_id);
+        local_store
+            .write_object(
+                &ObjectKey {
+                    object_id,
+                    version_query: VersionQuery::Version(3),
+                },
+                test_object(object_id, owner, 3),
+                3,
+            )
+            .unwrap();
+
+        let store = ServiceStore::new(10, historical_store, local_store);
+        assert_eq!(
+            ObjectStore::get_object(&store, &object_id)
+                .unwrap()
+                .version()
+                .value(),
+            3
+        );
+    }
+
+    #[test]
+    fn get_object_by_key_fetches_historical_version_only_when_visible_at_fork() {
+        let historical_dir = tempdir().unwrap();
+        let local_dir = tempdir().unwrap();
+        let chain_id = get_mainnet_chain_identifier().to_string();
+        let object_id = ObjectID::random();
+        let owner = SuiAddress::random_for_testing_only();
+
+        let historical_store = forking_store(historical_dir.path(), &chain_id);
+        historical_store
+            .write_object(
+                &ObjectKey {
+                    object_id,
+                    version_query: VersionQuery::Version(10),
+                },
+                test_object(object_id, owner, 10),
+                10,
+            )
+            .unwrap();
+        historical_store
+            .write_object(
+                &ObjectKey {
+                    object_id,
+                    version_query: VersionQuery::AtCheckpoint(100),
+                },
+                test_object(object_id, owner, 15),
+                15,
+            )
+            .unwrap();
+
+        let store = ServiceStore::new(
+            100,
+            historical_store,
+            forking_store(local_dir.path(), &chain_id),
+        );
+        assert_eq!(
+            store
+                .get_object_by_key(&object_id, SequenceNumber::from_u64(10))
+                .unwrap()
+                .version()
+                .value(),
+            10
+        );
+    }
+
+    #[test]
+    fn get_object_by_key_rejects_versions_created_after_the_fork_checkpoint() {
+        let historical_dir = tempdir().unwrap();
+        let local_dir = tempdir().unwrap();
+        let chain_id = get_mainnet_chain_identifier().to_string();
+        let object_id = ObjectID::random();
+        let owner = SuiAddress::random_for_testing_only();
+
+        let historical_store = forking_store(historical_dir.path(), &chain_id);
+        historical_store
+            .write_object(
+                &ObjectKey {
+                    object_id,
+                    version_query: VersionQuery::Version(25),
+                },
+                test_object(object_id, owner, 25),
+                25,
+            )
+            .unwrap();
+        historical_store
+            .write_object(
+                &ObjectKey {
+                    object_id,
+                    version_query: VersionQuery::AtCheckpoint(100),
+                },
+                test_object(object_id, owner, 15),
+                15,
+            )
+            .unwrap();
+
+        let store = ServiceStore::new(
+            100,
+            historical_store,
+            forking_store(local_dir.path(), &chain_id),
+        );
+        assert!(
+            store
+                .get_object_by_key(&object_id, SequenceNumber::from_u64(25))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn get_object_by_key_returns_local_post_fork_versions() {
+        let historical_dir = tempdir().unwrap();
+        let local_dir = tempdir().unwrap();
+        let chain_id = get_mainnet_chain_identifier().to_string();
+        let object_id = ObjectID::random();
+        let owner = SuiAddress::random_for_testing_only();
+
+        let local_store = forking_store(local_dir.path(), &chain_id);
+        local_store
+            .write_object(
+                &ObjectKey {
+                    object_id,
+                    version_query: VersionQuery::Version(22),
+                },
+                test_object(object_id, owner, 22),
+                22,
+            )
+            .unwrap();
+
+        let store = ServiceStore::new(
+            100,
+            forking_store(historical_dir.path(), &chain_id),
+            local_store,
+        );
+        assert_eq!(
+            store
+                .get_object_by_key(&object_id, SequenceNumber::from_u64(22))
+                .unwrap()
+                .version()
+                .value(),
+            22
+        );
+    }
+
+    #[test]
+    fn get_object_received_at_version_uses_exact_version_instead_of_latest_object() {
+        let historical_dir = tempdir().unwrap();
+        let local_dir = tempdir().unwrap();
+        let chain_id = get_mainnet_chain_identifier().to_string();
+        let receiving_object_id = ObjectID::random();
+        let owner_id = ObjectID::random();
+
+        let historical_store = forking_store(historical_dir.path(), &chain_id);
+        historical_store
+            .write_object(
+                &ObjectKey {
+                    object_id: receiving_object_id,
+                    version_query: VersionQuery::Version(10),
+                },
+                Object::with_id_owner_version_for_testing(
+                    receiving_object_id,
+                    SequenceNumber::from_u64(10),
+                    Owner::AddressOwner(owner_id.into()),
+                ),
+                10,
+            )
+            .unwrap();
+        historical_store
+            .write_object(
+                &ObjectKey {
+                    object_id: receiving_object_id,
+                    version_query: VersionQuery::AtCheckpoint(100),
+                },
+                Object::with_id_owner_version_for_testing(
+                    receiving_object_id,
+                    SequenceNumber::from_u64(15),
+                    Owner::AddressOwner(owner_id.into()),
+                ),
+                15,
+            )
+            .unwrap();
+
+        let local_store = forking_store(local_dir.path(), &chain_id);
+        local_store
+            .write_object(
+                &ObjectKey {
+                    object_id: receiving_object_id,
+                    version_query: VersionQuery::Version(20),
+                },
+                Object::with_id_owner_version_for_testing(
+                    receiving_object_id,
+                    SequenceNumber::from_u64(20),
+                    Owner::AddressOwner(owner_id.into()),
+                ),
+                20,
+            )
+            .unwrap();
+
+        let store = ServiceStore::new(100, historical_store, local_store);
+        assert_eq!(
+            store
+                .get_object_received_at_version(
+                    &owner_id,
+                    &receiving_object_id,
+                    SequenceNumber::from_u64(10),
+                    0,
+                )
+                .unwrap()
+                .unwrap()
+                .version()
+                .value(),
+            10
+        );
+    }
+
+    #[test]
+    fn read_child_object_uses_root_version_history_and_validates_parent() {
+        let historical_dir = tempdir().unwrap();
+        let local_dir = tempdir().unwrap();
+        let chain_id = get_mainnet_chain_identifier().to_string();
+        let parent_id = ObjectID::random();
+        let child_id = ObjectID::random();
+        let child = Object::with_id_owner_version_for_testing(
+            child_id,
+            SequenceNumber::from_u64(5),
+            Owner::ObjectOwner(parent_id.into()),
+        );
+
+        let historical_store = forking_store(historical_dir.path(), &chain_id);
+        historical_store
+            .write_object(
+                &ObjectKey {
+                    object_id: child_id,
+                    version_query: VersionQuery::RootVersion(5),
+                },
+                child,
+                5,
+            )
+            .unwrap();
+
+        let store = ServiceStore::new(
+            100,
+            historical_store,
+            forking_store(local_dir.path(), &chain_id),
+        );
+        assert_eq!(
+            store
+                .read_child_object(&parent_id, &child_id, SequenceNumber::from_u64(5))
+                .unwrap()
+                .unwrap()
+                .version()
+                .value(),
+            5
         );
     }
 }
