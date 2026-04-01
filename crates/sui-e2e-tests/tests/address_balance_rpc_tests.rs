@@ -11,6 +11,7 @@ use sui_json_rpc_types::{
     Balance as RpcBalance, CoinPage, SuiData, SuiObjectDataOptions, SuiObjectResponse,
 };
 use sui_macros::*;
+use sui_types::error::SuiObjectResponseError;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     coin_reservation::ParsedDigest,
@@ -686,4 +687,81 @@ async fn test_get_balance_includes_address_balance() {
             "Address balance should be reported"
         );
     }
+}
+
+#[sim_test]
+async fn test_no_fake_coins_when_coin_reservations_disabled() {
+    // Enable address balances but explicitly disable coin reservations.
+    // Verify that getCoins does not return fake coins.
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg.disable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    test_env
+        .fund_one_address_balance(sender, 1_000_000_000)
+        .await;
+
+    let counts = get_coins_counts(&test_env, sender, None).await;
+    assert_eq!(
+        counts.fake_coins, 0,
+        "No fake coins should be returned when coin reservations are disabled"
+    );
+
+    let all_counts = get_all_coins_counts(&test_env, sender).await;
+    assert_eq!(
+        all_counts.fake_coins, 0,
+        "getAllCoins should not return fake coins when coin reservations are disabled"
+    );
+}
+
+#[sim_test]
+async fn test_get_object_no_fake_coin_when_coin_reservations_disabled() {
+    // Enable address balances but explicitly disable coin reservations.
+    // Verify that sui_getObject does not return a fake coin for a masked object ID.
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg.disable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let amount = 1_000_000_000u64;
+    test_env.fund_one_address_balance(sender, amount).await;
+
+    // Create a masked object ID as if coin reservations were enabled.
+    let fake_coin_ref = test_env.encode_coin_reservation(sender, 0, amount);
+    let masked_object_id = fake_coin_ref.0;
+
+    let params = rpc_params![
+        masked_object_id,
+        SuiObjectDataOptions::new().with_content().with_owner()
+    ];
+    let response: SuiObjectResponse = test_env
+        .cluster
+        .fullnode_handle
+        .rpc_client
+        .request("sui_getObject", params)
+        .await
+        .unwrap();
+
+    assert!(
+        response.data.is_none(),
+        "sui_getObject should not return a fake coin when coin reservations are disabled"
+    );
+    assert!(
+        matches!(
+            response.error,
+            Some(SuiObjectResponseError::NotExists { .. })
+        ),
+        "Expected NotExists error for masked object ID when coin reservations disabled"
+    );
 }
