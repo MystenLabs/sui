@@ -3,7 +3,7 @@
 
 // Test pagination of suix_getCoins when address balance coins are mixed with real coins.
 
-//# init --protocol-version 108 --addresses Test=0x0 --accounts A B --simulator --enable-accumulators --enable-address-balance-gas-payments
+//# init --protocol-version 119 --addresses Test=0x0 --accounts A B --simulator
 
 //# programmable --sender A --inputs 500 @B
 //> 0: SplitCoins(Gas, [Input(0)]);

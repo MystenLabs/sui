@@ -4,7 +4,7 @@
 // Create both real coins and an address balance for the same owner, verify they are merged in
 // descending balance order in suix_getCoins.
 
-//# init --protocol-version 108 --addresses Test=0x0 --accounts A B --simulator --enable-accumulators --enable-address-balance-gas-payments
+//# init --protocol-version 119 --addresses Test=0x0 --accounts A B --simulator
 
 //# programmable --sender A --inputs 500 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
