@@ -33,6 +33,10 @@ pub(crate) async fn load_address_balance_coin(
         return Ok(None);
     }
 
+    if !super::latest_feature_flag(ctx, "enable_coin_reservation_obj_refs").await? {
+        return Ok(None);
+    }
+
     let balance_type = Balance::type_tag(coin_type.clone());
     let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)
         .context("Failed to derive accumulator field ID")?;
@@ -44,7 +48,7 @@ pub(crate) async fn load_address_balance_coin(
 
     let accumulator_version = accumulator_obj.version();
     let previous_transaction = accumulator_obj.previous_transaction;
-    let epoch = super::current_epoch(ctx).await?;
+    let epoch = super::latest_epoch(ctx).await?;
     let chain_identifier = ctx
         .chain_identifier()
         .context("Chain identifier not available (no database configured)")?;
