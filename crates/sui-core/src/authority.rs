@@ -2497,6 +2497,22 @@ impl AuthorityState {
             .into());
         }
 
+        // Reject coin reservations in gas payment when the execution engine
+        // doesn't support them.
+        let protocol_config = epoch_store.protocol_config();
+        if !protocol_config.enable_coin_reservation_obj_refs()
+            && transaction.gas().iter().any(|obj_ref| {
+                sui_types::coin_reservation::ParsedDigest::is_coin_reservation_digest(&obj_ref.2)
+            })
+        {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error:
+                    "coin reservations in gas payment are not supported at this protocol version"
+                        .to_string(),
+            }
+            .into());
+        }
+
         // Cheap validity checks for a transaction, including input size limits.
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
