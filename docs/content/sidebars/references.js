@@ -204,6 +204,7 @@ const references = [
 			'references/contribute/code-of-conduct',
 			'references/contribute/style-guide',
 			'references/contribute/mdx-components',
+			`references/contribute/diagram-standards`,
 		],
 	},
 	'references/release-notes',
