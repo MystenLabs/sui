@@ -189,7 +189,10 @@ pub async fn setup_indexer(
     add_concurrent!(KvObjects, kv_objects);
     add_concurrent!(KvPackages, kv_packages);
     add_concurrent!(KvTransactions, kv_transactions);
-    add_concurrent!(ObjVersions, obj_versions);
+    add_concurrent!(
+        ObjVersions::new(indexer.ingestion_client().clone()),
+        obj_versions
+    );
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
     add_concurrent!(TxBalanceChanges, tx_balance_changes);
