@@ -251,8 +251,14 @@ impl StateRead for AuthorityState {
     fn get_object_read(&self, object_id: &ObjectID) -> StateReadResult<ObjectRead> {
         let result = self.get_object_read(object_id)?;
 
-        // If object not found, check if this is a masked object ID (fake coin request).
-        if let ObjectRead::NotExists(object_id) = result {
+        // If object not found and coin reservations are enabled, check if this is a
+        // masked object ID (fake coin request).
+        if let ObjectRead::NotExists(object_id) = result
+            && self
+                .load_epoch_store_one_call_per_task()
+                .protocol_config()
+                .enable_coin_reservation_obj_refs()
+        {
             let chain_identifier = self.get_chain_identifier();
             let unmasked_id = coin_reservation::mask_or_unmask_id(object_id, chain_identifier);
 
@@ -501,8 +507,15 @@ impl StateRead for AuthorityState {
             }
         }
 
-        // Build fake coins map.
-        let fake_coins: HashMap<String, SuiCoin> = if one_coin_type_only {
+        // Build fake coins map (only when coin reservations are enabled).
+        let coin_reservations_enabled = self
+            .load_epoch_store_one_call_per_task()
+            .protocol_config()
+            .enable_coin_reservation_obj_refs();
+
+        let fake_coins: HashMap<String, SuiCoin> = if !coin_reservations_enabled {
+            HashMap::new()
+        } else if one_coin_type_only {
             let balance_type_tag = sui_types::parse_sui_type_tag(&cursor.0)
                 .map_err(|e| anyhow::anyhow!("Invalid coin type: {} - {}", cursor.0, e))?;
             let balance_type = Balance::type_tag(balance_type_tag);
