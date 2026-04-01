@@ -458,8 +458,9 @@ impl Compiler {
     }
 
     pub fn check_and_report(self) -> anyhow::Result<MappedFiles> {
-        let (files, res) = self.check()?;
-        unwrap_or_report_diagnostics(&files, res);
+        let (files, units_res) = self.build()?;
+        let (_units, warnings) = unwrap_or_report_diagnostics(&files, units_res);
+        report_warnings(&files, warnings);
         Ok(files)
     }
 
@@ -593,8 +594,9 @@ macro_rules! ast_stepped_compilers {
                 }
 
                 pub fn check_and_report(self, files: &MappedFiles)  {
-                    let errors_result = self.check().map_err(|(_, diags)| diags);
-                    unwrap_or_report_diagnostics(&files, errors_result);
+                    let units_result = self.build().map_err(|(_, diags)| diags);
+                    let (_units, warnings) = unwrap_or_report_diagnostics(&files, units_result);
+                    report_warnings(&files, warnings);
                 }
 
                 pub fn build_and_report(
