@@ -58,6 +58,10 @@ fn large_functions<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "large_functions.move");
 }
 
+fn enums<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "enums.move");
+}
+
 /// Interpreter step() overhead benchmarks.
 /// These measure raw dispatch overhead with minimal work per instruction.
 /// Use to validate tracing optimizations:
@@ -83,6 +87,7 @@ criterion_group!(
         references,
         generics,
         large_functions,
+        enums,
         interpreter_step,
 );
 
