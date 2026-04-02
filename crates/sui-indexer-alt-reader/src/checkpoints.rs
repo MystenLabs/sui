@@ -8,6 +8,7 @@ use anyhow::Context;
 use async_graphql::dataloader::Loader;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
+use futures::future::try_join_all;
 use prost_types::FieldMask;
 use sui_indexer_alt_schema::checkpoints::StoredCheckpoint;
 use sui_indexer_alt_schema::schema::kv_checkpoints;
@@ -105,8 +106,7 @@ impl Loader<CheckpointKey> for LedgerGrpcReader {
             return Ok(HashMap::new());
         }
 
-        let mut results = HashMap::new();
-        for key in keys {
+        let futures = keys.iter().map(|key| async {
             let request = proto::GetCheckpointRequest::by_sequence_number(key.0).with_read_mask(
                 FieldMask::from_paths(["summary.bcs", "signature", "contents.bcs"]),
             );
@@ -139,12 +139,14 @@ impl Loader<CheckpointKey> for LedgerGrpcReader {
                         AuthorityQuorumSignInfo::from(sdk_sig)
                     };
 
-                    results.insert(*key, (summary, contents, signature));
+                    Ok(Some((*key, (summary, contents, signature))))
                 }
-                Err(status) if status.code() == tonic::Code::NotFound => continue,
-                Err(e) => return Err(e.into()),
+                Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
+                Err(e) => Err(Error::from(e)),
             }
-        }
-        Ok(results)
+        });
+
+        let results: Vec<_> = try_join_all(futures).await?;
+        Ok(results.into_iter().flatten().collect())
     }
 }
