@@ -789,6 +789,7 @@ async fn test_authority_txn_validation_pushback() {
         None,
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
+        Arc::new(tokio::sync::Notify::new()),
     ));
     let validator_service = Arc::new(ValidatorService::new_for_tests(
         authority_state.clone(),

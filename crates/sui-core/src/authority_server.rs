@@ -61,11 +61,11 @@ use sui_types::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
 };
-use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, info, instrument};
 
+use crate::admission_queue::{AdmissionQueueHandle, AdmissionQueueManager};
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
@@ -80,6 +80,7 @@ use crate::{
     checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
 };
+use arc_swap::ArcSwap;
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
 use sui_types::messages_grpc::PingType;
 
@@ -139,6 +140,7 @@ impl AuthorityServer {
     }
 
     pub fn new_for_test(state: Arc<AuthorityState>) -> Self {
+        let slot_freed_notify = Arc::new(tokio::sync::Notify::new());
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(LazyMysticetiClient::new()),
             CheckpointStore::new_for_tests(),
@@ -150,6 +152,7 @@ impl AuthorityServer {
             None,
             ConsensusAdapterMetrics::new_test(),
             state.epoch_store_for_testing().protocol_config().clone(),
+            slot_freed_notify,
         ));
         Self::new_for_test_with_consensus_adapter(state, consensus_adapter)
     }
@@ -193,7 +196,6 @@ pub struct ValidatorServiceMetrics {
     pub signature_errors: IntCounter,
     pub tx_verification_latency: Histogram,
     pub cert_verification_latency: Histogram,
-    pub consensus_latency: Histogram,
     pub handle_transaction_latency: Histogram,
     pub submit_certificate_consensus_latency: Histogram,
     pub handle_certificate_consensus_latency: Histogram,
@@ -209,7 +211,6 @@ pub struct ValidatorServiceMetrics {
     handle_submit_transaction_bytes: HistogramVec,
     handle_submit_transaction_batch_size: HistogramVec,
 
-    num_rejected_cert_in_epoch_boundary: IntCounter,
     num_rejected_tx_during_overload: IntCounterVec,
     submission_rejected_transactions: IntCounterVec,
     connection_ip_not_found: IntCounter,
@@ -218,6 +219,7 @@ pub struct ValidatorServiceMetrics {
     forwarded_header_not_included: IntCounter,
     client_id_source_config_mismatch: IntCounter,
     x_forwarded_for_num_hops: Gauge,
+    admission_queue_direct_bypasses: IntCounter,
 }
 
 impl ValidatorServiceMetrics {
@@ -239,13 +241,6 @@ impl ValidatorServiceMetrics {
             cert_verification_latency: register_histogram_with_registry!(
                 "validator_service_cert_verification_latency",
                 "Latency of verifying a certificate",
-                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            consensus_latency: register_histogram_with_registry!(
-                "validator_service_consensus_latency",
-                "Time spent between submitting a txn to consensus and getting back local acknowledgement. Execution and finalization time are not included.",
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -346,12 +341,6 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            num_rejected_cert_in_epoch_boundary: register_int_counter_with_registry!(
-                "validator_service_num_rejected_cert_in_epoch_boundary",
-                "Number of rejected transaction certificate during epoch transitioning",
-                registry,
-            )
-            .unwrap(),
             num_rejected_tx_during_overload: register_int_counter_vec_with_registry!(
                 "validator_service_num_rejected_tx_during_overload",
                 "Number of rejected transaction due to system overload",
@@ -402,6 +391,12 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
+            admission_queue_direct_bypasses: register_int_counter_with_registry!(
+                "validator_service_admission_queue_direct_bypasses",
+                "Number of transactions that bypassed the queue (system not overloaded)",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -418,6 +413,8 @@ pub struct ValidatorService {
     metrics: Arc<ValidatorServiceMetrics>,
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
+    admission_queue: Arc<ArcSwap<AdmissionQueueHandle>>,
+    admission_queue_bypass_threshold: usize,
 }
 
 impl ValidatorService {
@@ -426,14 +423,18 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         validator_metrics: Arc<ValidatorServiceMetrics>,
         client_id_source: Option<ClientIdSource>,
+        admission_queue: Arc<ArcSwap<AdmissionQueueHandle>>,
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
+        let admission_queue_bypass_threshold = admission_queue.load().bypass_threshold;
         Self {
             state,
             consensus_adapter,
             metrics: validator_metrics,
             traffic_controller,
             client_id_source,
+            admission_queue,
+            admission_queue_bypass_threshold,
         }
     }
 
@@ -442,12 +443,21 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Self {
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let slot_freed_notify = Arc::new(tokio::sync::Notify::new());
+        let service =
+            AdmissionQueueManager::new_for_tests(consensus_adapter.clone(), slot_freed_notify);
+        let handle = service.spawn(epoch_store);
+        let admission_queue_bypass_threshold = handle.bypass_threshold;
+        let admission_queue = Arc::new(ArcSwap::new(Arc::new(handle)));
         Self {
             state,
             consensus_adapter,
             metrics,
             traffic_controller: None,
             client_id_source: None,
+            admission_queue,
+            admission_queue_bypass_threshold,
         }
     }
 
@@ -487,7 +497,6 @@ impl ValidatorService {
 
         // Check system overload
         self.state.check_system_overload(
-            self.consensus_adapter.as_ref(),
             transaction.data(),
             self.state.check_system_overload_at_signing(),
         )?;
@@ -565,10 +574,12 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<RawSubmitTxResponse> {
         let Self {
             state,
-            consensus_adapter,
+            consensus_adapter: _,
             metrics,
             traffic_controller: _,
             client_id_source,
+            admission_queue: _,
+            admission_queue_bypass_threshold: _,
         } = self.clone();
 
         let submitter_client_addr = if let Some(client_id_source) = &client_id_source {
@@ -585,13 +596,7 @@ impl ValidatorService {
 
         loop {
             let res = self
-                .handle_submit_transaction_inner(
-                    &state,
-                    &consensus_adapter,
-                    &metrics,
-                    &inner,
-                    submitter_client_addr,
-                )
+                .handle_submit_transaction_inner(&state, &metrics, &inner, submitter_client_addr)
                 .await;
             match res {
                 Ok((response, weight)) => return Ok((tonic::Response::new(response), weight)),
@@ -629,7 +634,6 @@ impl ValidatorService {
     async fn handle_submit_transaction_inner(
         &self,
         state: &AuthorityState,
-        consensus_adapter: &ConsensusAdapter,
         metrics: &ValidatorServiceMetrics,
         request: &RawSubmitTxRequest,
         submitter_client_addr: Option<IpAddr>,
@@ -749,7 +753,6 @@ impl ValidatorService {
             }
 
             let overload_check_res = state.check_system_overload(
-                consensus_adapter,
                 transaction.data(),
                 state.check_system_overload_at_signing(),
             );
@@ -964,45 +967,82 @@ impl ValidatorService {
             .with_label_values(&[req_type])
             .start_timer();
 
-        let consensus_positions = if is_soft_bundle_request || is_ping_request {
+        if is_soft_bundle_request {
             // We only allow the `consensus_transactions` to be empty for ping requests. This is how it should and is be treated from the downstream components.
             // For any other case, having an empty `consensus_transactions` vector is an invalid state and we should have never reached at this point.
             assert!(
-                is_ping_request || !consensus_transactions.is_empty(),
+                !consensus_transactions.is_empty(),
                 "A valid soft bundle must have at least one transaction"
             );
-            debug!(
-                "handle_submit_transaction: submitting consensus transactions ({}): {}",
-                req_type,
-                consensus_transactions
-                    .iter()
-                    .map(|t| t.local_display())
-                    .join(", ")
-            );
-            self.handle_submit_to_consensus_for_position(
-                consensus_transactions,
-                &epoch_store,
-                submitter_client_addr,
-            )
-            .await?
-        } else {
-            let futures = consensus_transactions.into_iter().map(|t| {
+        }
+
+        let consensus_positions = if is_ping_request || self.should_bypass_admission_queue() {
+            // Submit directly to consensus, bypassing the admission queue.
+            self.metrics.admission_queue_direct_bypasses.inc();
+            if is_soft_bundle_request || is_ping_request {
                 debug!(
-                    "handle_submit_transaction: submitting consensus transaction ({}): {}",
+                    "handle_submit_transaction: submitting consensus transactions ({}): {}",
                     req_type,
-                    t.local_display(),
+                    consensus_transactions
+                        .iter()
+                        .map(|t| t.local_display())
+                        .join(", ")
                 );
-                self.handle_submit_to_consensus_for_position(
-                    vec![t],
-                    &epoch_store,
-                    submitter_client_addr,
-                )
-            });
-            future::try_join_all(futures)
-                .await?
-                .into_iter()
-                .flatten()
-                .collect()
+                self.consensus_adapter
+                    .submit_and_get_positions(
+                        consensus_transactions,
+                        &epoch_store,
+                        submitter_client_addr,
+                    )
+                    .await?
+            } else {
+                let futures = consensus_transactions.into_iter().map(|t| {
+                    debug!(
+                        "handle_submit_transaction: submitting consensus transaction ({}): {}",
+                        req_type,
+                        t.local_display(),
+                    );
+                    self.consensus_adapter.submit_and_get_positions(
+                        vec![t],
+                        &epoch_store,
+                        submitter_client_addr,
+                    )
+                });
+                future::try_join_all(futures)
+                    .await?
+                    .into_iter()
+                    .flatten()
+                    .collect()
+            }
+        } else {
+            // Consensus is overloaded — route through the priority admission queue.
+            // Soft bundles are inserted as a single queue entry.
+            // Individual transactions are each inserted separately.
+            let tx_groups: Vec<Vec<ConsensusTransaction>> = if is_soft_bundle_request {
+                vec![consensus_transactions]
+            } else {
+                consensus_transactions
+                    .into_iter()
+                    .map(|t| vec![t])
+                    .collect()
+            };
+
+            let aq = self.admission_queue.load();
+            let mut receivers = Vec::with_capacity(tx_groups.len());
+            for txns in tx_groups {
+                let gas_price = Self::extract_gas_price(&txns);
+                let rx = aq
+                    .try_insert(gas_price, txns, submitter_client_addr)
+                    .await?;
+                receivers.push(rx);
+            }
+            let results = future::try_join_all(receivers.into_iter().map(|rx| async move {
+                rx.await.map_err(|_| {
+                    SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus)
+                })?
+            }))
+            .await?;
+            results.into_iter().flatten().collect()
         };
 
         if is_ping_request {
@@ -1046,48 +1086,29 @@ impl ValidatorService {
         })
     }
 
-    #[instrument(
-        name = "ValidatorService::handle_submit_to_consensus_for_position",
-        level = "debug",
-        skip_all,
-        err(level = "debug")
-    )]
-    async fn handle_submit_to_consensus_for_position(
-        &self,
-        // Empty when this is a ping request.
-        consensus_transactions: Vec<ConsensusTransaction>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        submitter_client_addr: Option<IpAddr>,
-    ) -> Result<Vec<ConsensusPosition>, tonic::Status> {
-        let (tx_consensus_positions, rx_consensus_positions) = oneshot::channel();
+    /// Extract the gas price from a batch of consensus transactions.
+    /// Returns the minimum gas price in the batch, or 0 if no user transactions.
+    fn extract_gas_price(transactions: &[ConsensusTransaction]) -> u64 {
+        use sui_types::messages_consensus::ConsensusTransactionKind;
+        transactions
+            .iter()
+            .filter_map(|tx| match &tx.kind {
+                ConsensusTransactionKind::CertifiedTransaction(cert) => Some(cert.gas_price()),
+                ConsensusTransactionKind::UserTransaction(t) => {
+                    Some(t.data().transaction_data().gas_price())
+                }
+                ConsensusTransactionKind::UserTransactionV2(t) => {
+                    Some(t.tx().data().transaction_data().gas_price())
+                }
+                _ => None,
+            })
+            .min()
+            .unwrap_or(0)
+    }
 
-        {
-            // code block within reconfiguration lock
-            let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
-            if !reconfiguration_lock.should_accept_user_certs() {
-                self.metrics.num_rejected_cert_in_epoch_boundary.inc();
-                return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
-            }
-
-            // Submit to consensus and wait for position, we do not check if tx
-            // has been processed by consensus already as this method is called
-            // to get back a consensus position.
-            let _metrics_guard = self.metrics.consensus_latency.start_timer();
-
-            self.consensus_adapter.submit_batch(
-                &consensus_transactions,
-                Some(&reconfiguration_lock),
-                epoch_store,
-                Some(tx_consensus_positions),
-                submitter_client_addr,
-            )?;
-        }
-
-        Ok(rx_consensus_positions.await.map_err(|e| {
-            SuiErrorKind::FailedToSubmitToConsensus(format!(
-                "Failed to get consensus position: {e}"
-            ))
-        })?)
+    fn should_bypass_admission_queue(&self) -> bool {
+        let inflight = usize::try_from(self.consensus_adapter.num_inflight_transactions()).unwrap();
+        inflight < self.admission_queue_bypass_threshold
     }
 
     async fn collect_effects_data(

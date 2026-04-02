@@ -67,6 +67,7 @@ impl SingleValidator {
             None,
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
         // TODO: for validator benchmarking purposes, we should allow for traffic control
         // to be configurable and introduce traffic control benchmarks to test

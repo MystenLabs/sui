@@ -27,27 +27,28 @@ use mysten_network::anemo_connection_monitor::ConnectionStatus;
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
+use prometheus::IntCounter;
 use prometheus::IntCounterVec;
 use prometheus::IntGauge;
 use prometheus::IntGaugeVec;
 use prometheus::Registry;
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_simulator::anemo::PeerId;
 use sui_types::base_types::AuthorityName;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
-use sui_types::error::{SuiErrorKind, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
 use sui_types::transaction::TransactionDataAPI;
-use tokio::sync::{Semaphore, SemaphorePermit, oneshot};
+use tokio::sync::{Notify, Semaphore, SemaphorePermit, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::time::{self};
@@ -87,6 +88,8 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_estimated_latency: IntGauge,
     pub sequencing_resubmission_interval_ms: IntGauge,
     pub sequencing_best_effort_timeout: IntCounterVec,
+    pub consensus_latency: Histogram,
+    pub num_rejected_cert_in_epoch_boundary: IntCounter,
 }
 
 impl ConsensusAdapterMetrics {
@@ -201,17 +204,25 @@ impl ConsensusAdapterMetrics {
                 &["tx_type"],
                 registry,
             ).unwrap(),
+            // These two metrics originally lived in ValidatorServiceMetrics (authority_server.rs)
+            // and keep their legacy names for dashboard compatibility.
+            consensus_latency: register_histogram_with_registry!(
+                "validator_service_consensus_latency",
+                "Time spent between submitting a txn to consensus and getting back local acknowledgement. Execution and finalization time are not included.",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            num_rejected_cert_in_epoch_boundary: register_int_counter_with_registry!(
+                "validator_service_num_rejected_cert_in_epoch_boundary",
+                "Number of rejected transaction certificate during epoch transitioning",
+                registry,
+            ).unwrap(),
         }
     }
 
     pub fn new_test() -> Self {
         Self::new(&Registry::default())
     }
-}
-
-/// An object that can be used to check if the consensus is overloaded.
-pub trait ConsensusOverloadChecker: Sync + Send + 'static {
-    fn check_consensus_overload(&self) -> SuiResult;
 }
 
 pub type BlockStatusReceiver = oneshot::Receiver<BlockStatus>;
@@ -272,6 +283,9 @@ pub struct ConsensusAdapter {
     submit_semaphore: Arc<Semaphore>,
     latency_observer: LatencyObserver,
     protocol_config: ProtocolConfig,
+    /// Notified when an inflight slot is freed (InflightDropGuard dropped).
+    /// Used by the admission queue drainer to wake up and submit more transactions.
+    inflight_slot_freed_notify: Arc<Notify>,
 }
 
 pub trait CheckConnection: Send + Sync {
@@ -305,6 +319,7 @@ impl ConsensusAdapter {
         submit_delay_step_override: Option<Duration>,
         metrics: ConsensusAdapterMetrics,
         protocol_config: ProtocolConfig,
+        inflight_slot_freed_notify: Arc<Notify>,
     ) -> Self {
         let num_inflight_transactions = Default::default();
         let low_scoring_authorities =
@@ -324,6 +339,7 @@ impl ConsensusAdapter {
             latency_observer: LatencyObserver::new(),
             consensus_throughput_profiler: ArcSwapOption::empty(),
             protocol_config,
+            inflight_slot_freed_notify,
         }
     }
 
@@ -341,6 +357,51 @@ impl ConsensusAdapter {
     /// Get the current number of in-flight transactions
     pub fn num_inflight_transactions(&self) -> u64 {
         self.num_inflight_transactions.load(Ordering::Relaxed)
+    }
+
+    /// Get the maximum number of pending transactions (consensus capacity limit).
+    pub fn max_pending_transactions(&self) -> usize {
+        self.max_pending_transactions
+    }
+
+    /// Submits transactions to consensus within the reconfiguration lock and
+    /// returns their consensus positions.
+    pub async fn submit_and_get_positions(
+        self: &Arc<Self>,
+        consensus_transactions: Vec<ConsensusTransaction>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        submitter_client_addr: Option<IpAddr>,
+    ) -> Result<Vec<ConsensusPosition>, SuiError> {
+        let (tx_consensus_positions, rx_consensus_positions) = oneshot::channel();
+
+        {
+            // code block within reconfiguration lock
+            let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
+            if !reconfiguration_lock.should_accept_user_certs() {
+                self.metrics.num_rejected_cert_in_epoch_boundary.inc();
+                return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
+            }
+
+            // Submit to consensus and wait for position, we do not check if tx
+            // has been processed by consensus already as this method is called
+            // to get back a consensus position.
+            let _metrics_guard = self.metrics.consensus_latency.start_timer();
+
+            self.submit_batch(
+                &consensus_transactions,
+                Some(&reconfiguration_lock),
+                epoch_store,
+                Some(tx_consensus_positions),
+                submitter_client_addr,
+            )?;
+        }
+
+        rx_consensus_positions.await.map_err(|e| {
+            SuiErrorKind::FailedToSubmitToConsensus(format!(
+                "Failed to get consensus position: {e}"
+            ))
+            .into()
+        })
     }
 
     pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
@@ -694,19 +755,6 @@ impl ConsensusAdapter {
             tx_consensus_position,
             submitter_client_addr,
         ))
-    }
-
-    /// Performs weakly consistent checks on internal buffers to quickly
-    /// discard transactions if we are overloaded
-    fn check_limits(&self) -> bool {
-        // First check total transactions (waiting and in submission)
-        if self.num_inflight_transactions.load(Ordering::Relaxed) as usize
-            > self.max_pending_transactions
-        {
-            return false;
-        }
-        // Then check if submit_semaphore has permits
-        self.submit_semaphore.available_permits() > 0
     }
 
     fn submit_unchecked(
@@ -1237,24 +1285,6 @@ pub fn get_position_in_list(
         .0
 }
 
-impl ConsensusOverloadChecker for ConsensusAdapter {
-    fn check_consensus_overload(&self) -> SuiResult {
-        fp_ensure!(
-            self.check_limits(),
-            SuiErrorKind::TooManyTransactionsPendingConsensus.into()
-        );
-        Ok(())
-    }
-}
-
-pub struct NoopConsensusOverloadChecker {}
-
-impl ConsensusOverloadChecker for NoopConsensusOverloadChecker {
-    fn check_consensus_overload(&self) -> SuiResult {
-        Ok(())
-    }
-}
-
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
     /// It sets reconfig state to reject new certificates from user.
@@ -1356,6 +1386,9 @@ impl Drop for InflightDropGuard<'_> {
             .sequencing_certificate_inflight
             .with_label_values(&[self.tx_type])
             .dec();
+
+        // Wake the admission queue drainer so it can submit more transactions.
+        self.adapter.inflight_slot_freed_notify.notify_one();
 
         let position = if let Some(position) = self.position {
             self.adapter
@@ -1506,6 +1539,7 @@ mod adapter_tests {
         committee::Committee,
         crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, get_key_pair_from_rng},
     };
+    use tokio::sync::Notify;
 
     fn test_committee(rng: &mut StdRng, size: usize) -> Committee {
         let authorities = (0..size)
@@ -1542,6 +1576,7 @@ mod adapter_tests {
             Some(Duration::from_secs(2)),
             ConsensusAdapterMetrics::new_test(),
             sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE(),
+            Arc::new(Notify::new()),
         );
 
         // transaction to submit
@@ -1573,6 +1608,7 @@ mod adapter_tests {
             None,
             ConsensusAdapterMetrics::new_test(),
             sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE(),
+            Arc::new(Notify::new()),
         );
 
         let (delay_step, position, positions_moved, _) =

@@ -939,6 +939,7 @@ mod tests {
             None,
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(
             epoch_store.clone(),
@@ -1077,6 +1078,7 @@ mod tests {
             None,
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(
             epoch_store.clone(),
@@ -1173,6 +1175,7 @@ mod tests {
             None,
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(
             epoch_store.clone(),
@@ -1273,6 +1276,7 @@ mod tests {
             None,
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(
             epoch_store.clone(),
@@ -1419,6 +1423,7 @@ mod tests {
             None,
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(
             epoch_store.clone(),

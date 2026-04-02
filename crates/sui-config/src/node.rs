@@ -1376,6 +1376,18 @@ pub struct AuthorityOverloadConfig {
     // is above the threshold.
     #[serde(default = "default_max_transaction_manager_per_object_queue_length")]
     pub max_transaction_manager_per_object_queue_length: usize,
+
+    // Fraction of max_pending_transactions that determines the admission queue
+    // capacity. During congestion, the queue evicts the lowest gas price entries
+    // to make room for higher ones. Capacity = max_pending_transactions * fraction.
+    #[serde(default = "default_admission_queue_capacity_fraction")]
+    pub admission_queue_capacity_fraction: f64,
+
+    // Fraction of max_pending_transactions below which the admission queue is
+    // bypassed (transactions are submitted directly to consensus). Above this
+    // threshold, transactions go through the priority queue.
+    #[serde(default = "default_admission_queue_bypass_fraction")]
+    pub admission_queue_bypass_fraction: f64,
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
@@ -1418,6 +1430,14 @@ fn default_max_transaction_manager_per_object_queue_length() -> usize {
     2000
 }
 
+fn default_admission_queue_capacity_fraction() -> f64 {
+    0.5
+}
+
+fn default_admission_queue_bypass_fraction() -> f64 {
+    0.9
+}
+
 impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
@@ -1434,6 +1454,8 @@ impl Default for AuthorityOverloadConfig {
             max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),
+            admission_queue_capacity_fraction: default_admission_queue_capacity_fraction(),
+            admission_queue_bypass_fraction: default_admission_queue_bypass_fraction(),
         }
     }
 }
