@@ -222,8 +222,8 @@ struct InsertCommand {
 #[derive(Clone)]
 pub struct AdmissionQueueHandle {
     sender: mpsc::Sender<InsertCommand>,
-    pub metrics: Arc<AdmissionQueueMetrics>,
-    pub bypass_threshold: usize,
+    pub(crate) metrics: Arc<AdmissionQueueMetrics>,
+    pub(crate) bypass_threshold: usize,
 }
 
 impl AdmissionQueueHandle {
