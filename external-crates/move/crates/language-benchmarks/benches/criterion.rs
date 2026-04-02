@@ -50,6 +50,10 @@ fn references<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "references.move");
 }
 
+fn generics<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "generics.move");
+}
+
 /// Interpreter step() overhead benchmarks.
 /// These measure raw dispatch overhead with minimal work per instruction.
 /// Use to validate tracing optimizations:
@@ -73,6 +77,7 @@ criterion_group!(
         vector,
         structs,
         references,
+        generics,
         interpreter_step,
 );
 
