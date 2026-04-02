@@ -54,6 +54,10 @@ fn generics<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "generics.move");
 }
 
+fn large_functions<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "large_functions.move");
+}
+
 /// Interpreter step() overhead benchmarks.
 /// These measure raw dispatch overhead with minimal work per instruction.
 /// Use to validate tracing optimizations:
@@ -78,6 +82,7 @@ criterion_group!(
         structs,
         references,
         generics,
+        large_functions,
         interpreter_step,
 );
 
