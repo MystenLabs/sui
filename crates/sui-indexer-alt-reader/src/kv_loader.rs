@@ -68,6 +68,10 @@ pub enum TransactionContents {
         /// The proto Transaction from gRPC, if available.
         /// Contains the fully-rendered transaction.
         proto_transaction: Option<grpc::Transaction>,
+        /// Checkpoint timestamp. Set for streamed/checkpointed transactions, None for mutations.
+        timestamp_ms: Option<u64>,
+        /// Checkpoint sequence number. Set for streamed/checkpointed transactions, None for mutations.
+        cp_sequence_number: Option<u64>,
     },
 }
 
@@ -297,6 +301,8 @@ impl TransactionContents {
             balance_changes,
             proto_effects,
             proto_transaction,
+            timestamp_ms: None,
+            cp_sequence_number: None,
         })
     }
 
@@ -490,7 +496,7 @@ impl TransactionContents {
             Self::Pg(stored) => Some(stored.timestamp_ms as u64),
             Self::Bigtable(kv) => Some(kv.timestamp),
             Self::LedgerGrpc(txn) => txn.timestamp_ms,
-            Self::ExecutedTransaction { .. } => None, // No timestamp until checkpointed
+            Self::ExecutedTransaction { timestamp_ms, .. } => *timestamp_ms,
         }
     }
 
@@ -499,7 +505,9 @@ impl TransactionContents {
             Self::Pg(stored) => Some(stored.cp_sequence_number as u64),
             Self::Bigtable(kv) => Some(kv.checkpoint_number),
             Self::LedgerGrpc(txn) => txn.cp_sequence_number,
-            Self::ExecutedTransaction { .. } => None,
+            Self::ExecutedTransaction {
+                cp_sequence_number, ..
+            } => *cp_sequence_number,
         }
     }
 }

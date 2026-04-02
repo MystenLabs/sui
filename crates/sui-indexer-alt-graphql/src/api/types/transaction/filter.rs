@@ -6,6 +6,9 @@ use async_graphql::Enum;
 use async_graphql::InputObject;
 use async_graphql::InputValueError;
 
+use sui_indexer_alt_reader::kv_loader::TransactionContents;
+use sui_types::transaction::TransactionDataAPI;
+
 use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::uint53::UInt53;
@@ -130,6 +133,77 @@ impl TransactionFilter {
         }
 
         filters
+    }
+
+    /// Check if a transaction's contents matches this filter's non-checkpoint conditions.
+    ///
+    /// Checkpoint bounds (after/at/before) are not checked here — they are handled by the
+    /// caller since streamed transactions are already scoped to a specific checkpoint.
+    ///
+    // Adapted from TransactionFilter::matches in PR #25717 (scan APIs). When #25717 merges,
+    // we will unify them.
+    pub(crate) fn matches(&self, transaction: &TransactionContents) -> bool {
+        let Ok(data) = transaction.data() else {
+            return false;
+        };
+        let Ok(effects) = transaction.effects() else {
+            return false;
+        };
+
+        if let Some(function) = &self.function {
+            let has_match = data.move_calls().into_iter().any(|(_, p, m, f)| {
+                SuiAddress::from(*p) == function.package()
+                    && function.module().is_none_or(|module| m == module)
+                    && function.name().is_none_or(|name| f == name)
+            });
+            if !has_match {
+                return false;
+            }
+        }
+
+        if let Some(sent_address) = &self.sent_address
+            && SuiAddress::from(data.sender()) != *sent_address
+        {
+            return false;
+        }
+
+        if let Some(affected_address) = &self.affected_address {
+            let in_changed_objects = effects.all_changed_objects().iter().any(|(_, owner, _)| {
+                owner
+                    .get_address_owner_address()
+                    .is_ok_and(|addr| SuiAddress::from(addr) == *affected_address)
+            });
+            let is_sender = SuiAddress::from(data.sender()) == *affected_address;
+            if !in_changed_objects && !is_sender {
+                return false;
+            }
+        }
+
+        if let Some(affected_object) = &self.affected_object {
+            let has_match = effects
+                .all_changed_objects()
+                .iter()
+                .any(|((object_id, _, _), _, _)| SuiAddress::from(*object_id) == *affected_object);
+            if !has_match {
+                return false;
+            }
+        }
+
+        if let Some(kind) = &self.kind {
+            let is_programmable = matches!(
+                data.kind(),
+                sui_types::transaction::TransactionKind::ProgrammableTransaction(_)
+            );
+            let matches_kind = match kind {
+                TransactionKindInput::ProgrammableTx => is_programmable,
+                TransactionKindInput::SystemTx => !is_programmable,
+            };
+            if !matches_kind {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
