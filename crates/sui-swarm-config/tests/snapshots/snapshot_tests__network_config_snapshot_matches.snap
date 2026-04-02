@@ -149,6 +149,8 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -319,6 +321,8 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -489,6 +493,8 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -659,6 +665,8 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -829,6 +837,8 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -999,6 +1009,8 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1169,6 +1181,8 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
     execution-cache:
       writeback-cache:
         max_cache_size: ~
