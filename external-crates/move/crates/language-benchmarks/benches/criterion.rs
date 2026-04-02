@@ -70,6 +70,10 @@ fn deep_calls<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "deep_calls.move");
 }
 
+fn constants<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "constants.move");
+}
+
 /// Interpreter step() overhead benchmarks.
 /// These measure raw dispatch overhead with minimal work per instruction.
 /// Use to validate tracing optimizations:
@@ -98,6 +102,7 @@ criterion_group!(
         enums,
         abort_paths,
         deep_calls,
+        constants,
         interpreter_step,
 );
 
