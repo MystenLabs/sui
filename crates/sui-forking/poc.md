@@ -54,9 +54,8 @@ In the initial POC, the tool will have a store that persists data on disk, and r
 Expected read flow:
 - a checkpoint|epoch|tx is identified by its sequence number|number|digest
 - on read, check on disk first
-- on miss, fetch from backing source
-- if the data is found but is later than the fork checkpoint, return `None`
-- if the data is not found, return `None`
+- on miss, fetch from backing source by querying for that data at the forked checkpoint
+- return `None` if not found (GraphQL will return null if there's no data at that checkpoint)
 
 When a checkpoint | epoch | transaction is created, it is persisted to disk. For checkpoints, a latest metadata is also updated to keep track of the latest checkpoint available on disk.
 When a transaction is executed, its data and effects are persisted to disk. Each transaction also triggers a checkpoint creation, which is also persisted to disk.
@@ -67,112 +66,12 @@ Expected object read flow:
 - an object is identified by its ID and version (or other query, e.g., latest version, version at checkpoint, etc)
 - on read, check on disk first
 - on miss, fetch from backing source by ID and version/query
-- if the object is found but is later than the fork checkpoint, cache the latest object at the forked checkpoint and return `None`.
-- if the object is not found, return `None`
+- if the object is found but is later than the fork checkpoint, fetch & cache the latest object at the forked checkpoint and return `None`.
+- return `None` if not found (GraphQL will return null if there's no data at that checkpoint)
 
 When an object is updated (e.g., by executing a transaction that changes the object), the new version of the object is persisted to disk and the metadata around latest version is updated.
 
-```rust
-pub trait CheckpointReader {
-    fn get(&self, sequence_number: u64) -> Result<Option<Checkpoint>, StoreError>;
-    fn get_latest(&self) -> Result<Option<Checkpoint>, StoreError>;
-}
-
-pub trait CheckpointWriter {
-    fn write(&self, checkpoint: Checkpoint) -> Result<(), StoreError>;
-}
-
-pub ObjectKey {
-    object_id: ObjectID,
-    version_query: VersionQuery
-}
-
-pub enum VersionQuery {
-    Version(Option<u64>),
-    RootVersion(u64),
-    AtCheckpoint(u64),
-}
-
-pub trait ObjectReader {
-    fn get_objects(&self, keys: [ObjectKey]) -> Result<Vec<Option<Object>>, StoreError>;
-}
-
-pub trait ObjectWriter {
-    fn write(&self, object: Object) -> Result<(), StoreError>;
-}
-
-pub trait TransactionReader {
-    fn get(&self, digest: &str) -> Result<Option<Transaction>, StoreError>;
-}
-
-pub trait TransactionWriter {
-   fn write(&self, tx: Transaction) -> Result<(), StoreError>;
-}
-
-pub struct Epoch {
-    pub epoch: u64,
-    pub protocol_version: u64,
-    pub reference_gas_price: u64,
-    pub start_timestamp_ms: u64,
-}
-
-pub trait EpochReader {
-    fn get(&self, epoch: u64) -> Result<Option<Epoch>, StoreError>;
-}
-
-pub trait EpochWriter {
-    fn write(&self, epoch: Epoch) -> Result<(), StoreError>;
-}
-```
-
-```rust
-pub ForkStore {
-    local: FileSystemStore,
-    remote: GraphQLStore,
-    fork_checkpoint: u64,
-}
-
-impl ForkStore {
-    pub fn get_checkpoint(&self, sequence_number: u64) -> Result<Option<Checkpoint>, StoreError> {
-        // check local store first, then remote store if not found
-    }
-
-    pub fn get_latest_checkpoint(&self) -> Result<Option<Checkpoint>, StoreError> {
-        // check local store
-    }
-
-    pub fn write_checkpoint(&self, checkpoint: Checkpoint) -> Result<(), StoreError> {
-        // persist to local store
-    }
-
-    pub fn get_objects(&self, key: [ObjectKey]) -> Result<Vec<Option<Object>>, StoreError> {
-        // check local store first, then remote store if not found
-    }
-
-    pub fn write_object(&self, object: Object) -> Result<(), StoreError> {
-        // persist to local store
-    }
-
-    pub fn get_transaction(&self, digest: &str) -> Result<Option<Transaction>, StoreError> {
-        // check local store first, then remote store if not found
-    }
-
-    pub fn write_transaction(&self, tx: Transaction) -> Result<(), StoreError> {
-        // persist to local store
-    }
-
-    pub fn get_epoch(&self, epoch: u64) -> Result<Option<Epoch>, StoreError> {
-        // check local store first, then remote store if not found
-    }
-
-    pub fn get_latest_epoch(&self) -> Result<Option<Epoch>, StoreError> {
-        // check local store
-    }
-
-    pub fn write_epoch(&self, epoch: Epoch) -> Result<(), StoreError> {
-        // persist to local store
-}
-```
+** Data Persistence **
 
 As data is persisted to disk, the user needs to provide a directory where the network state should be stored. Upon restarting the tool, if the directory exists and contains valid data, the tool can reuse the existing data and continue from there. This allows the user to maintain the state of the forked network across restarts.
 
@@ -230,12 +129,6 @@ The command accepts a checkpoint to fork from. This must not larger than the lat
 
 The forking tool provides a CLI to interact with the forking-server for various actions. In addition to the `sui-forking start` command explained previously, there are a few other commands available:
 
-**Faucet - request SUI tokens**
-
-```bash
-sui-forking faucet --address <address> --amount <amount> # Max is 10M SUI
-```
-
 **Advance Checkpoint**
 
 ```bash
@@ -259,3 +152,11 @@ sui-forking status
 ```
 
 Shows the current checkpoint, epoch, and timestamp.
+
+
+## Outside of scope for POC
+- GraphQL support
+- advance-epoch support
+- faucet support
+- minting any coin type
+
