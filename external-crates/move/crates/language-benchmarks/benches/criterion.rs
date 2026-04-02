@@ -62,6 +62,10 @@ fn enums<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "enums.move");
 }
 
+fn abort_paths<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "abort_paths.move");
+}
+
 /// Interpreter step() overhead benchmarks.
 /// These measure raw dispatch overhead with minimal work per instruction.
 /// Use to validate tracing optimizations:
@@ -88,6 +92,7 @@ criterion_group!(
         generics,
         large_functions,
         enums,
+        abort_paths,
         interpreter_step,
 );
 
