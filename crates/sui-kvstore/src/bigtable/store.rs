@@ -12,12 +12,12 @@ use std::time::Duration;
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+use sui_indexer_alt_framework_store_traits::ConcurrentConnection;
 use sui_indexer_alt_framework_store_traits::Connection;
 use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::PrunerWatermark;
 use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
-use sui_indexer_alt_framework_store_traits::init_with_committer_watermark;
 
 use crate::Watermark;
 use crate::bigtable::client::BigTableClient;
@@ -48,6 +48,11 @@ impl BigTableConnection<'_> {
 }
 
 #[async_trait]
+impl sui_indexer_alt_framework_store_traits::ConcurrentStore for BigTableStore {
+    type ConcurrentConnection<'c> = BigTableConnection<'c>;
+}
+
+#[async_trait]
 impl Store for BigTableStore {
     type Connection<'c> = BigTableConnection<'c>;
 
@@ -64,9 +69,9 @@ impl Connection for BigTableConnection<'_> {
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        init_watermark: InitWatermark,
-    ) -> Result<InitWatermark> {
-        init_with_committer_watermark(self, pipeline_task, init_watermark).await
+        _checkpoint_hi_inclusive: Option<u64>,
+    ) -> Result<Option<InitWatermark>> {
+        self.delegate_to_reader_watermark(pipeline_task).await
     }
 
     async fn accepts_chain_id(
@@ -100,14 +105,11 @@ impl Connection for BigTableConnection<'_> {
             .await?;
         Ok(true)
     }
+}
 
-    // Phase 1: Return Ok(None) - reader/pruner watermarks not needed for concurrent
-    // pipelines without pruning.
-
-    async fn reader_watermark(
-        &mut self,
-        _pipeline: &'static str,
-    ) -> Result<Option<ReaderWatermark>> {
+#[async_trait]
+impl ConcurrentConnection for BigTableConnection<'_> {
+    async fn reader_watermark(&mut self, _pipeline: &str) -> Result<Option<ReaderWatermark>> {
         Ok(None)
     }
 

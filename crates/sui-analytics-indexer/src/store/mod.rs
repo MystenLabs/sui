@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Analytics store implementation with TransactionalStore support.
+//! Analytics store implementation with SequentialStore support.
 //!
 //! This store supports two modes:
 //!
@@ -24,20 +24,17 @@ use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::Result;
-use anyhow::bail;
 use async_trait::async_trait;
 use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::store::Connection;
+use sui_indexer_alt_framework::store::SequentialConnection;
+use sui_indexer_alt_framework::store::SequentialStore;
 use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_framework::store::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_indexer_alt_framework_store_traits::InitWatermark;
-use sui_indexer_alt_framework_store_traits::PrunerWatermark;
-use sui_indexer_alt_framework_store_traits::ReaderWatermark;
-use sui_indexer_alt_framework_store_traits::init_with_committer_watermark;
 use sui_types::base_types::EpochId;
 use tokio::sync::mpsc;
 use tracing::debug;
@@ -610,7 +607,9 @@ impl Store for AnalyticsStore {
 }
 
 #[async_trait]
-impl TransactionalStore for AnalyticsStore {
+impl SequentialStore for AnalyticsStore {
+    type SequentialConnection<'c> = AnalyticsConnection<'c>;
+
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,
@@ -626,16 +625,13 @@ impl TransactionalStore for AnalyticsStore {
 
 #[async_trait]
 impl Connection for AnalyticsConnection<'_> {
-    /// Initialize watermark.
-    ///
-    /// In live mode: Watermarks are derived from file names, so just delegates to `committer_watermark`.
-    /// In migration mode: Delegates to `MigrationStore::init_watermark`.
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        init_watermark: InitWatermark,
-    ) -> anyhow::Result<InitWatermark> {
-        init_with_committer_watermark(self, pipeline_task, init_watermark).await
+        checkpoint_hi_inclusive: Option<u64>,
+    ) -> Result<Option<InitWatermark>> {
+        self.delegate_to_committer_watermark(pipeline_task, checkpoint_hi_inclusive)
+            .await
     }
 
     async fn accepts_chain_id(
@@ -665,23 +661,6 @@ impl Connection for AnalyticsConnection<'_> {
         }
     }
 
-    async fn reader_watermark(
-        &mut self,
-        _pipeline: &'static str,
-    ) -> anyhow::Result<Option<ReaderWatermark>> {
-        // Reader watermark not supported - no pruning in analytics indexer
-        Ok(None)
-    }
-
-    async fn pruner_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark>> {
-        // Pruning not supported in analytics indexer
-        Ok(None)
-    }
-
     /// Store the watermark for use in commit_batch.
     ///
     /// Note: This doesn't persist the watermark - that's done by the upload worker
@@ -695,23 +674,10 @@ impl Connection for AnalyticsConnection<'_> {
         self.watermark = Some(watermark);
         Ok(true)
     }
-
-    async fn set_reader_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _reader_lo: u64,
-    ) -> anyhow::Result<bool> {
-        bail!("Pruning not supported by analytics store");
-    }
-
-    async fn set_pruner_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _pruner_hi: u64,
-    ) -> anyhow::Result<bool> {
-        bail!("Pruning not supported by analytics store");
-    }
 }
+
+#[async_trait]
+impl SequentialConnection for AnalyticsConnection<'_> {}
 
 /// Construct the object store path for an analytics file.
 /// Path format: {pipeline}/epoch_{epoch}/{start}_{end}.{ext}

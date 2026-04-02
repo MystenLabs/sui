@@ -62,7 +62,6 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
-#[cfg(debug_assertions)]
 use std::sync::RwLock;
 use std::time::Duration;
 use std::{
@@ -972,14 +971,14 @@ pub struct ProgrammableTransaction {
 }
 
 #[cfg(debug_assertions)]
-static GASLESS_TOKENS_FOR_TESTING: RwLock<Vec<String>> = RwLock::new(Vec::new());
+static GASLESS_TOKENS_FOR_TESTING: RwLock<Vec<(String, u64)>> = RwLock::new(Vec::new());
 
 #[cfg(debug_assertions)]
-pub fn add_gasless_token_for_testing(type_string: String) {
+pub fn add_gasless_token_for_testing(type_string: String, min_transfer: u64) {
     GASLESS_TOKENS_FOR_TESTING
         .write()
         .unwrap()
-        .push(type_string);
+        .push((type_string, min_transfer));
 }
 
 #[cfg(debug_assertions)]
@@ -1016,7 +1015,7 @@ impl ProgrammableTransaction {
             }
         }
 
-        let allowed_token_types = parse_gasless_allowed_token_types(config);
+        let allowed_token_types = get_gasless_allowed_token_types(config);
 
         for command in &self.commands {
             command.validate_gasless_transaction(&allowed_token_types)?;
@@ -1085,34 +1084,64 @@ impl ProgrammableTransaction {
     }
 }
 
-pub fn parse_gasless_allowed_token_types(config: &ProtocolConfig) -> Vec<TypeTag> {
-    let mut types: Vec<TypeTag> = config
+/// Caches gasless allowed token types for the most recently seen protocol version.
+pub fn get_gasless_allowed_token_types(config: &ProtocolConfig) -> Arc<BTreeMap<TypeTag, u64>> {
+    #[allow(clippy::type_complexity)]
+    static CACHE: RwLock<Option<(u64, Arc<BTreeMap<TypeTag, u64>>)>> = RwLock::new(None);
+
+    let version = config.version.as_u64();
+
+    // Fast path: read lock only.
+    if let Some((v, map)) = CACHE.read().unwrap().as_ref()
+        && *v == version
+    {
+        return apply_test_token_overrides(Arc::clone(map));
+    }
+
+    // Parse from ProtocolConfig if it changed.
+    let mut cache = CACHE.write().unwrap();
+    if let Some((v, map)) = cache.as_ref()
+        && *v == version
+    {
+        return apply_test_token_overrides(Arc::clone(map));
+    }
+    let map: BTreeMap<TypeTag, u64> = config
         .gasless_allowed_token_types()
         .iter()
-        .filter_map(|(s, min_transfer_size)| {
-            debug_assert_eq!(
-                *min_transfer_size, 0,
-                "min_transfer_size not yet implemented"
-            );
-            match s.parse() {
-                Ok(tag) => Some(tag),
-                Err(e) => {
-                    debug_fatal!("invalid gasless token type {s:?}: {e}");
-                    None
-                }
-            }
+        .map(|(s, min_amount)| {
+            let tag: TypeTag = s
+                .parse()
+                .unwrap_or_else(|e| panic!("invalid gasless token type {s:?}: {e}"));
+            (tag, *min_amount)
         })
         .collect();
+    let arc = Arc::new(map);
+    *cache = Some((version, Arc::clone(&arc)));
+    apply_test_token_overrides(arc)
+}
+
+/// Merges debug-only token overrides into the cached map.
+/// In release builds this is a no-op that returns the input unchanged.
+fn apply_test_token_overrides(base: Arc<BTreeMap<TypeTag, u64>>) -> Arc<BTreeMap<TypeTag, u64>> {
     #[cfg(debug_assertions)]
-    for s in GASLESS_TOKENS_FOR_TESTING.read().unwrap().iter() {
-        match s.parse() {
-            Ok(tag) => types.push(tag),
-            Err(e) => {
-                debug_fatal!("invalid gasless token override {s:?}: {e}");
+    {
+        let overrides = GASLESS_TOKENS_FOR_TESTING.read().unwrap();
+        if !overrides.is_empty() {
+            let mut types = (*base).clone();
+            for (s, min_transfer) in overrides.iter() {
+                match s.parse() {
+                    Ok(tag) => {
+                        types.insert(tag, *min_transfer);
+                    }
+                    Err(e) => {
+                        debug_fatal!("invalid gasless token override {s:?}: {e}");
+                    }
+                }
             }
+            return Arc::new(types);
         }
     }
-    types
+    base
 }
 
 /// A single command in a programmable transaction.
@@ -1232,7 +1261,10 @@ impl ProgrammableMoveCall {
         Ok(())
     }
 
-    fn validate_gasless_transaction(&self, allowed_token_types: &[TypeTag]) -> UserInputResult {
+    fn validate_gasless_transaction(
+        &self,
+        allowed_token_types: &BTreeMap<TypeTag, u64>,
+    ) -> UserInputResult {
         type FunctionIdent = (AccountAddress, &'static IdentStr, &'static IdentStr);
 
         enum TypeArgConstraint {
@@ -1346,7 +1378,7 @@ impl ProgrammableMoveCall {
                     })?,
             };
             fp_ensure!(
-                allowed_token_types.contains(&fund_type),
+                allowed_token_types.contains_key(&fund_type),
                 UserInputError::Unsupported(format!(
                     "Fund type {fund_type} is not currently allowed in gasless transactions"
                 ))
@@ -1479,7 +1511,10 @@ impl Command {
         Ok(())
     }
 
-    fn validate_gasless_transaction(&self, allowed_token_types: &[TypeTag]) -> UserInputResult {
+    fn validate_gasless_transaction(
+        &self,
+        allowed_token_types: &BTreeMap<TypeTag, u64>,
+    ) -> UserInputResult {
         match self {
             Command::MoveCall(call) => call.validate_gasless_transaction(allowed_token_types),
             Command::MergeCoins(_, _) | Command::SplitCoins(_, _) => Ok(()),

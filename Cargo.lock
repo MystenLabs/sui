@@ -5923,6 +5923,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
+name = "forking-data-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "chrono",
+ "csv",
+ "cynic",
+ "cynic-codegen",
+ "fastcrypto",
+ "lru 0.10.1",
+ "prost 0.14.1",
+ "reqwest",
+ "serde",
+ "sui-rpc",
+ "sui-rpc-api",
+ "sui-types",
+ "tempfile",
+ "tokio",
+ "tonic 0.14.3",
+ "tracing",
+ "zstd 0.12.3+zstd.1.5.2",
+]
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15864,7 +15889,6 @@ dependencies = [
  "prometheus",
  "prost-types 0.14.1",
  "rustls",
- "sui-data-ingestion-core",
  "sui-futures",
  "sui-kvstore",
  "sui-package-resolver",
@@ -15872,6 +15896,7 @@ dependencies = [
  "sui-rpc",
  "sui-rpc-api",
  "sui-sdk-types",
+ "sui-storage",
  "sui-types",
  "telemetry-subscribers",
  "tokio",
@@ -15948,7 +15973,6 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-config",
- "sui-data-ingestion-core",
  "sui-package-resolver",
  "sui-rpc",
  "sui-rpc-api",
@@ -17142,6 +17166,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "percent-encoding",
  "prometheus",
+ "prost 0.14.1",
  "reqwest",
  "serde",
  "serde_json",
@@ -17149,6 +17174,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-macros",
  "sui-protocol-config",
+ "sui-rpc",
  "sui-simulator",
  "sui-test-transaction-builder",
  "sui-types",
@@ -17345,7 +17371,6 @@ dependencies = [
  "strum_macros 0.27.1",
  "sui-config",
  "sui-core",
- "sui-data-ingestion-core",
  "sui-network",
  "sui-package-dump",
  "sui-protocol-config",

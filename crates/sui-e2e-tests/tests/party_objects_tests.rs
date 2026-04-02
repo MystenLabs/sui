@@ -520,6 +520,13 @@ async fn party_object_read() {
         .expect("Party object should be mutated");
     object_initial_shared_version = mutated_party.1.start_version().unwrap();
 
+    // Wait for the transfer to settle across the cluster before issuing reads with the
+    // new initial_shared_version. Without this, submit_and_execute may route the next
+    // read to a validator that hasn't executed the transfer yet, causing ObjectNotFound.
+    test_cluster
+        .wait_for_tx_settlement(&[*signed_transfer.digest()])
+        .await;
+
     // Make some more transactions that read the party object from the new owner.
     for gas_coin in gas_coins_account2.iter().take(num_reads / 2) {
         let transaction = test_cluster
@@ -581,7 +588,11 @@ async fn party_object_grpc() {
     let object_id_str = object_id.to_canonical_string(true);
     let object_initial_shared_version = object.1;
 
-    let channel = test_cluster.grpc_channel();
+    let channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
 
     let mut live_data_service_client = StateServiceClient::new(channel.clone());
     let mut ledger_service_client = LedgerServiceClient::new(channel);
@@ -718,7 +729,11 @@ async fn party_coin_grpc() {
     use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
 
     let cluster = TestClusterBuilder::new().build().await;
-    let channel = cluster.grpc_channel();
+    let channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
 
     let mut live_data_service_client = StateServiceClient::new(channel.clone());
     let mut execution_client = TransactionExecutionServiceClient::new(channel.clone());

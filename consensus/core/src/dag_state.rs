@@ -147,12 +147,8 @@ impl DagState {
                         last_committed_rounds[block_ref.author] =
                             max(last_committed_rounds[block_ref.author], block_ref.round);
                     }
-                    let committed_subdag = load_committed_subdag_from_store(
-                        &context,
-                        store.as_ref(),
-                        commit.clone(),
-                        vec![],
-                    );
+                    let committed_subdag =
+                        load_committed_subdag_from_store(store.as_ref(), commit.clone(), vec![]);
                     // We don't need to recover reputation scores for unscored_committed_subdags
                     unscored_committed_subdags.push(committed_subdag);
                 });

@@ -1037,6 +1037,12 @@ fn compile_blocks(
             block.value,
         )?;
     }
+    let fdef_idx = context.current_function_definition_index();
+    for (label, offset) in &label_to_index {
+        context
+            .source_map
+            .add_label_mapping(fdef_idx, label.clone(), *offset)?;
+    }
     let fake_to_actual = context.build_index_remapping(label_to_index);
     remap_branch_offsets(&mut code, &mut jump_tables, &fake_to_actual);
     Ok((code, jump_tables))
@@ -1786,6 +1792,12 @@ fn compile_function_body_bytecode(
             &mut jump_tables,
             block,
         )?;
+    }
+    let fdef_idx = context.current_function_definition_index();
+    for (label, offset) in &label_to_index {
+        context
+            .source_map
+            .add_label_mapping(fdef_idx, label.clone(), *offset)?;
     }
     let fake_to_actual = context.build_index_remapping(label_to_index);
     remap_branch_offsets(&mut code, &mut jump_tables, &fake_to_actual);

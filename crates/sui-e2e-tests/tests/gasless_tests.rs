@@ -49,7 +49,7 @@ async fn setup_custom_coin(test_env: &mut TestEnv, funding: &[(u64, SuiAddress)]
         .build();
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok());
-    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true));
+    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true), 0);
     coin_type
 }
 
@@ -509,7 +509,7 @@ async fn setup_mintable_coin_env(
     let (publisher, package_id, coin_type, mut treasury_cap_ref) =
         test_env.setup_mintable_coin().await;
 
-    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true));
+    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true), 0);
 
     let mut coin_refs = Vec::new();
     for &(amount, recipient) in mints {
@@ -627,7 +627,7 @@ async fn test_gasless_rejects_non_coin_object_input() {
     // Use it as an object input in a gasless tx to verify rejection.
     let (publisher, _package_id, coin_type, treasury_cap_ref) =
         test_env.setup_mintable_coin().await;
-    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true));
+    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true), 0);
 
     // Include TreasuryCap as an object input with an allowed gasless command.
     // The command validation passes, but object input check rejects the non-Coin.
@@ -732,8 +732,8 @@ async fn test_gasless_coin_and_withdrawal_combined() {
     assert!(effects.status().is_ok());
 
     // Register both coin types in the allowlist
-    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true));
-    transaction::add_gasless_token_for_testing(custom_coin_type.to_canonical_string(true));
+    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true), 0);
+    transaction::add_gasless_token_for_testing(custom_coin_type.to_canonical_string(true), 0);
 
     // Build combined PTB: withdrawal(custom_coin) → redeem → send_funds,
     // coin input(mintable) → into_balance → send_funds

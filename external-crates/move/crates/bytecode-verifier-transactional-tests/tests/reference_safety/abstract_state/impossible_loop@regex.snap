@@ -6,7 +6,7 @@ processed 2 tasks
 task 1, line 45:
 //# view-abstract-state 0x2::loopy::t
 {
-  "0": {
+  "l0": {
     "local_root": "ROOT",
     "locals": {},
     "graph": {
@@ -16,7 +16,7 @@ task 1, line 45:
       "outgoing": {}
     }
   },
-  "2": {
+  "loop_body": {
     "local_root": "ROOT",
     "locals": {
       "cur": {
@@ -48,7 +48,7 @@ task 1, line 45:
       }
     }
   },
-  "4": {
+  "loop_cond": {
     "local_root": "ROOT",
     "locals": {
       "cur": {
@@ -80,7 +80,7 @@ task 1, line 45:
       }
     }
   },
-  "13": {
+  "loop_end": {
     "local_root": "ROOT",
     "locals": {
       "cur": {

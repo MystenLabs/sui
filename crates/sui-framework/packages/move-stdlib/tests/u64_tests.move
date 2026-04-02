@@ -78,14 +78,14 @@ fun test_mul_div_ceil_overflow() {
     MAX.mul_div_ceil(MAX, 1);
 }
 
-#[test]
-fun test_divide_and_round_up() {
-    integer_tests::test_divide_and_round_up!(MAX, CASES);
+#[test, allow(deprecated_usage)]
+fun test_div_ceil() {
+    integer_tests::test_div_ceil!(MAX, CASES);
 }
 
 #[test, expected_failure(arithmetic_error, location = std::u8)]
-fun test_divide_and_round_up_error() {
-    1u8.divide_and_round_up(0);
+fun test_div_ceil_error() {
+    1u8.div_ceil(0);
 }
 
 #[test]

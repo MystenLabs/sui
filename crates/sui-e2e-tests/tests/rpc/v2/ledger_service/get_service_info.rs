@@ -17,7 +17,9 @@ async fn get_service_info() {
         .build()
         .await;
 
-    let mut grpc_client = LedgerServiceClient::new(test_cluster.grpc_channel());
+    let mut grpc_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
 
     let GetServiceInfoResponse {
         chain_id,
@@ -55,7 +57,9 @@ async fn chain_id_is_base58_digest() {
     let chain_identifier = test_cluster.get_chain_identifier();
     let expected_digest = Digest::new(chain_identifier.as_bytes().to_owned());
 
-    let mut grpc_client = LedgerServiceClient::new(test_cluster.grpc_channel());
+    let mut grpc_client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
 
     let response = grpc_client
         .get_service_info(GetServiceInfoRequest::default())

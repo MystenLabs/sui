@@ -102,7 +102,7 @@ impl FullCluster {
         // Trigger an epoch change and wait until GraphQL sees Epoch 1
         onchain.trigger_reconfiguration().await;
         onchain.wait_for_authenticator_state_update().await;
-        tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::time::timeout(Duration::from_secs(30), async {
             let mut interval = interval(Duration::from_millis(200));
             loop {
                 interval.tick().await;

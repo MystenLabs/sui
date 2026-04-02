@@ -5,21 +5,33 @@ use crate::object_store::{
     ObjectStoreDeleteExt, ObjectStoreGetExt, ObjectStoreListExt, ObjectStorePutExt,
 };
 use anyhow::{Context, Result, anyhow};
+use backoff::ExponentialBackoff;
 use backoff::future::retry;
 use bytes::Bytes;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use indicatif::ProgressBar;
 use itertools::Itertools;
+use object_store::aws::{AmazonS3Builder, AmazonS3ConfigKey};
+use object_store::http::HttpBuilder;
+use object_store::local::LocalFileSystem;
 use object_store::path::Path;
-use object_store::{DynObjectStore, Error, ObjectStore, ObjectStoreExt};
+use object_store::{
+    ClientOptions, DynObjectStore, Error, ObjectStore, ObjectStoreExt, RetryConfig,
+};
+use prost::Message;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::ops::Range;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_rpc::proto::sui::rpc::v2 as proto;
+use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::time::Instant;
 use tracing::{error, warn};
 use url::Url;
@@ -424,6 +436,102 @@ pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
     .await?;
 
     Ok(())
+}
+
+pub fn build_object_store(
+    ingestion_url: &str,
+    remote_store_options: Vec<(String, String)>,
+) -> Arc<dyn ObjectStore> {
+    let timeout_secs = 5;
+    let client_options = ClientOptions::new()
+        .with_timeout(Duration::from_secs(timeout_secs))
+        .with_allow_http(true);
+    let retry_config = RetryConfig {
+        max_retries: 10,
+        retry_timeout: Duration::from_secs(timeout_secs + 1),
+        ..Default::default()
+    };
+    let url = ingestion_url
+        .parse::<Url>()
+        .expect("archival ingestion url must be valid");
+    if url.scheme() == "file" {
+        Arc::new(
+            LocalFileSystem::new_with_prefix(
+                url.to_file_path()
+                    .expect("archival ingestion url must have a valid file path"),
+            )
+            .expect("failed to create local file system store"),
+        )
+    } else if url.host_str().unwrap_or_default().starts_with("s3") {
+        let mut builder = AmazonS3Builder::new()
+            .with_client_options(client_options)
+            .with_retry(retry_config)
+            .with_imdsv1_fallback()
+            .with_url(ingestion_url);
+        for (key, value) in &remote_store_options {
+            builder = builder.with_config(
+                AmazonS3ConfigKey::from_str(key).expect("invalid S3 config key"),
+                value.clone(),
+            );
+        }
+        Arc::new(builder.build().expect("failed to build S3 store"))
+    } else {
+        Arc::new(
+            HttpBuilder::new()
+                .with_url(url.to_string())
+                .with_client_options(client_options)
+                .with_retry(retry_config)
+                .build()
+                .expect("failed to build HTTP store"),
+        )
+    }
+}
+
+pub async fn fetch_checkpoint(
+    store: &Arc<dyn ObjectStore>,
+    seq: u64,
+) -> anyhow::Result<Checkpoint> {
+    let store = store.clone();
+    let request = move || {
+        let store = store.clone();
+        async move {
+            use backoff::Error as BE;
+            let path = Path::from(format!("{seq}.binpb.zst"));
+            let bytes = store
+                .get(&path)
+                .await
+                .map_err(|e| match e {
+                    object_store::Error::NotFound { .. } => {
+                        BE::permanent(anyhow!("Checkpoint {seq} not found in archive"))
+                    }
+                    e => BE::transient(anyhow::Error::from(e)),
+                })?
+                .bytes()
+                .await
+                .map_err(|e| BE::transient(anyhow::Error::from(e)))?;
+            let decompressed =
+                zstd::decode_all(&bytes[..]).map_err(|e| BE::transient(anyhow::Error::from(e)))?;
+            let proto_checkpoint = proto::Checkpoint::decode(&decompressed[..])
+                .map_err(|e| BE::transient(anyhow::Error::from(e)))?;
+            Checkpoint::try_from(&proto_checkpoint).map_err(|e| BE::transient(anyhow!(e)))
+        }
+    };
+    let backoff = ExponentialBackoff {
+        max_elapsed_time: Some(Duration::from_secs(60)),
+        multiplier: 1.0,
+        ..Default::default()
+    };
+    backoff::future::retry(backoff, request).await
+}
+
+pub async fn end_of_epoch_data(
+    url: &str,
+    remote_store_options: Vec<(String, String)>,
+) -> anyhow::Result<Vec<CheckpointSequenceNumber>> {
+    let store = build_object_store(url, remote_store_options);
+    let response = store.get(&Path::from("epochs.json")).await?;
+    let bytes = response.bytes().await?;
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 #[cfg(test)]

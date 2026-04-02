@@ -59,6 +59,7 @@ pub struct CompiledState {
     flavor: Flavor,
     modules: BTreeMap<ModuleId, CompiledModule>,
     source_maps: BTreeMap<ModuleId, SourceMap>,
+    syntax_choices: BTreeMap<ModuleId, SyntaxChoice>,
     temp_files: BTreeMap<String, NamedTempFile>,
 }
 
@@ -527,6 +528,7 @@ impl CompiledState {
             pre_compiled_ids,
             modules: BTreeMap::new(),
             source_maps: BTreeMap::new(),
+            syntax_choices: BTreeMap::new(),
             compiled_module_named_address_mapping: BTreeMap::new(),
             named_address_mapping,
             edition: compiler_edition.unwrap_or(Edition::LEGACY),
@@ -558,6 +560,10 @@ impl CompiledState {
 
     pub fn source_map(&self, id: &ModuleId) -> Option<&SourceMap> {
         self.source_maps.get(id)
+    }
+
+    pub fn syntax_choice(&self, id: &ModuleId) -> Option<&SyntaxChoice> {
+        self.syntax_choices.get(id)
     }
 
     pub fn add_with_source_file(
@@ -713,16 +719,22 @@ pub fn store_modules<'a, A: MoveTestAdapter<'a>>(
 ) {
     match syntax {
         SyntaxChoice::Source => {
+            let state = test_adapter.compiled_state();
+            for m in &modules {
+                state
+                    .syntax_choices
+                    .insert(m.module.self_id(), SyntaxChoice::Source);
+            }
             let path = data.path().to_str().unwrap().to_owned();
-            test_adapter
-                .compiled_state()
-                .add_with_source_file(modules, (path, data))
+            state.add_with_source_file(modules, (path, data))
         }
         SyntaxChoice::IR => {
             let module = modules.pop().unwrap();
-            test_adapter
-                .compiled_state()
-                .add_and_generate_interface_file(module.module, module.source_map);
+            let state = test_adapter.compiled_state();
+            state
+                .syntax_choices
+                .insert(module.module.self_id(), SyntaxChoice::IR);
+            state.add_and_generate_interface_file(module.module, module.source_map);
         }
     }
 }

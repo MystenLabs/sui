@@ -29,7 +29,7 @@ use sui_config::NodeConfig;
 use sui_types::{
     committee::EpochId,
     error::{ErrorCategory, UserInputError},
-    messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
+    messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
     transaction::TransactionDataAPI as _,
 };
 use tokio::{
@@ -362,9 +362,9 @@ where
                     authority_name: name,
                     display_name: auth_agg.get_display_name(&name),
                     operation: if tx_type == TxType::SingleWriter {
-                        OperationType::FastPath
+                        OperationType::SingleWriterFinality
                     } else {
-                        OperationType::Consensus
+                        OperationType::SharedObjectFinality
                     },
                     ping_type,
                     result: Ok(start_time.elapsed()),
@@ -409,7 +409,7 @@ where
                     // Send a consensus ping transaction to the validator
                     match self_clone
                         .drive_transaction(
-                            SubmitTxRequest::new_ping(PingType::Consensus),
+                            SubmitTxRequest::new_ping(),
                             SubmitTransactionOptions {
                                 allowed_validators: vec![display_name.clone()],
                                 ..Default::default()

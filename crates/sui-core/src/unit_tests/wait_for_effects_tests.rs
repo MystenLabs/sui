@@ -136,7 +136,6 @@ async fn test_wait_for_effects_position_mismatch() {
         WaitForEffectsResponse::Executed {
             effects_digest,
             details,
-            fast_path: _,
         } => {
             assert!(details.is_some());
             assert_eq!(effects_digest, exec_effects.digest());
@@ -146,25 +145,23 @@ async fn test_wait_for_effects_position_mismatch() {
 }
 
 #[tokio::test]
-async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
+async fn test_wait_for_effects_ping_rejected() {
+    // Tests the path where a ping request gets a Rejected status from consensus.
     let test_context = TestContext::new().await;
 
-    let transaction = test_context.build_test_transaction();
-    let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
         epoch: EpochId::MIN,
         block: BlockRef::MIN,
-        index: TransactionIndex::MIN,
+        index: PING_TRANSACTION_INDEX,
     };
 
     let request = WaitForEffectsRequest {
-        transaction_digest: Some(tx_digest),
+        transaction_digest: None,
         consensus_position: Some(tx_position),
-        include_details: true,
-        ping_type: None,
+        include_details: false,
+        ping_type: Some(PingType::Consensus),
     };
 
-    // Validator does not reject the transaction, but it is rejected by the commit.
     let state_clone = test_context.state.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -180,7 +177,6 @@ async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
 
     match response {
         WaitForEffectsResponse::Rejected { error } => {
-            // TODO(fastpath): Test reject reason.
             assert!(error.is_none(), "{:?}", error);
         }
         _ => panic!("Expected Rejected response"),
@@ -238,23 +234,21 @@ async fn test_wait_for_effects_timeout() {
 }
 
 #[tokio::test]
-async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
-    // This test exercises the path where the transaction is rejected by both consensus and the validator.
+async fn test_wait_for_effects_ping_rejected_with_reason() {
+    // Tests the path where a ping request gets a Rejected status with a rejection reason.
     let test_context = TestContext::new().await;
 
-    let transaction = test_context.build_test_transaction();
-    let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
         epoch: EpochId::MIN,
         block: BlockRef::MIN,
-        index: TransactionIndex::MIN,
+        index: PING_TRANSACTION_INDEX,
     };
 
     let request = WaitForEffectsRequest {
-        transaction_digest: Some(tx_digest),
+        transaction_digest: None,
         consensus_position: Some(tx_position),
-        include_details: true,
-        ping_type: None,
+        include_details: false,
+        ping_type: Some(PingType::Consensus),
     };
 
     let state_clone = test_context.state.clone();
@@ -291,114 +285,6 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
             );
         }
         _ => panic!("Expected Rejected response"),
-    }
-}
-
-#[tokio::test]
-async fn test_wait_for_effects_fastpath_certified_only() {
-    // Without the fastpath cache, effects are always read from the regular execution cache.
-    // Even when only FastpathCertified is set (no Finalized), the outer select in
-    // wait_for_effects_response resolves via notify_read_executed_effects once the tx executes.
-    let test_context = TestContext::new().await;
-
-    let transaction = test_context.build_test_transaction();
-    let tx_digest = *transaction.digest();
-    let tx_position = ConsensusPosition {
-        epoch: EpochId::MIN,
-        block: BlockRef::MIN,
-        index: TransactionIndex::MIN,
-    };
-
-    let state_clone = test_context.state.clone();
-    let exec_handle = tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
-        state_clone
-            .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
-            .await
-            .unwrap()
-            .0
-    });
-
-    let request = WaitForEffectsRequest {
-        transaction_digest: Some(tx_digest),
-        consensus_position: Some(tx_position),
-        include_details: false,
-        ping_type: None,
-    };
-
-    let response = test_context
-        .client
-        .wait_for_effects(request, None)
-        .await
-        .unwrap();
-
-    let exec_effects = exec_handle.await.unwrap();
-    match response {
-        WaitForEffectsResponse::Executed {
-            details,
-            effects_digest,
-            fast_path: _,
-        } => {
-            assert!(details.is_none());
-            assert_eq!(effects_digest, exec_effects.digest());
-        }
-        _ => panic!("Expected Executed response"),
-    }
-}
-
-#[tokio::test]
-async fn test_wait_for_effects_fastpath_certified_then_executed() {
-    // This test exercises the path where the transaction is first fastpath certified,
-    // then executed right away.
-    let test_context = TestContext::new().await;
-
-    let transaction = test_context.build_test_transaction();
-    let tx_digest = *transaction.digest();
-    let tx_position = ConsensusPosition {
-        epoch: EpochId::MIN,
-        block: BlockRef::MIN,
-        index: TransactionIndex::MIN,
-    };
-
-    let request = WaitForEffectsRequest {
-        transaction_digest: Some(tx_digest),
-        consensus_position: Some(tx_position),
-        // Also test the case where details are not requested.
-        include_details: false,
-        ping_type: None,
-    };
-
-    let state_clone = test_context.state.clone();
-    let exec_handle = tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
-        state_clone
-            .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
-            .await
-            .unwrap()
-            .0
-    });
-
-    let response = test_context
-        .client
-        .wait_for_effects(request, None)
-        .await
-        .unwrap();
-
-    let exec_effects = exec_handle.await.unwrap();
-    match response {
-        WaitForEffectsResponse::Executed {
-            details,
-            effects_digest,
-            fast_path: _,
-        } => {
-            assert!(details.is_none());
-            assert_eq!(effects_digest, exec_effects.digest());
-        }
-        _ => panic!("Expected Executed response"),
     }
 }
 
@@ -451,7 +337,6 @@ async fn test_wait_for_effects_finalized() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
-            fast_path: _,
         } => {
             assert!(details.is_none());
             assert_eq!(effects_digest, exec_effects.digest());
@@ -478,7 +363,6 @@ async fn test_wait_for_effects_finalized() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
-            fast_path: _,
         } => {
             let details = details.unwrap();
             assert_eq!(effects_digest, exec_effects.digest());
@@ -491,10 +375,9 @@ async fn test_wait_for_effects_finalized() {
 
 #[tokio::test]
 async fn test_wait_for_effects_expired() {
+    // Test that a ping request with an expired consensus position returns Expired.
     let test_context = TestContext::new().await;
 
-    let transaction = test_context.build_test_transaction();
-    let tx_digest = *transaction.digest();
     let block_round = 3;
     let tx_position = ConsensusPosition {
         epoch: EpochId::MIN,
@@ -502,14 +385,14 @@ async fn test_wait_for_effects_expired() {
             round: block_round,
             ..BlockRef::MIN
         },
-        index: TransactionIndex::MIN,
+        index: PING_TRANSACTION_INDEX,
     };
 
     let request = WaitForEffectsRequest {
-        transaction_digest: Some(tx_digest),
+        transaction_digest: None,
         consensus_position: Some(tx_position),
-        include_details: true,
-        ping_type: None,
+        include_details: false,
+        ping_type: Some(PingType::Consensus),
     };
 
     let state_clone = test_context.state.clone();
@@ -523,18 +406,10 @@ async fn test_wait_for_effects_expired() {
             .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + block_round)
             .await;
 
-        // Update that will actually trigger expiration using the leader round, CONSENSUS_STATUS_RETENTION_ROUNDS + block_round
+        // Update that will actually trigger expiration using the leader round.
         cache
             .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + block_round + 1)
             .await;
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
-        state_clone
-            .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
-            .await
-            .unwrap()
-            .0
     });
 
     let response = test_context
@@ -564,14 +439,14 @@ async fn test_wait_for_effects_ping() {
             transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
-            ping_type: Some(PingType::FastPath),
+            ping_type: Some(PingType::Consensus),
         };
 
         let state_clone = test_context.state.clone();
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(100)).await;
             let epoch_store = state_clone.epoch_store_for_testing();
-            epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+            epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
         });
 
         let response = test_context
@@ -584,13 +459,11 @@ async fn test_wait_for_effects_ping() {
             WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
-                fast_path,
             } => {
                 assert!(details.is_none());
                 assert_eq!(effects_digest, TransactionEffectsDigest::ZERO);
-                assert!(fast_path);
             }
-            _ => panic!("Expected Executed response for FastPath ping check"),
+            _ => panic!("Expected Executed response for ping check"),
         }
     }
 
@@ -631,29 +504,25 @@ async fn test_wait_for_effects_ping() {
             WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
-                fast_path,
             } => {
                 assert!(details.is_none());
                 assert_eq!(effects_digest, TransactionEffectsDigest::ZERO);
-                assert!(
-                    !fast_path,
-                    "This is Consensus ping request, so fast_path should be false"
-                );
             }
             _ => panic!("Expected Executed response for Consensus ping check"),
         }
     }
 
     println!(
-        "Case 3. Send a Consensus ping request but the corresponding block gets garbage collected and never committed."
+        "Case 3. Send a Consensus ping request but the position expires before getting a status."
     );
     {
+        let block_round = 10_u32;
         let mut block = BlockRef::MIN;
-        block.round = 10;
+        block.round = block_round;
         let tx_position = ConsensusPosition {
             epoch: EpochId::MIN,
             block,
-            index: TransactionIndex::MIN,
+            index: PING_TRANSACTION_INDEX,
         };
 
         let request = WaitForEffectsRequest {
@@ -683,9 +552,10 @@ async fn test_wait_for_effects_ping() {
             .await
             .unwrap();
 
-        match response {
-            WaitForEffectsResponse::Expired { .. } => {}
-            _ => panic!("Expected Expired response"),
-        }
+        assert!(
+            matches!(response, WaitForEffectsResponse::Expired { .. }),
+            "Expected Expired response, got {:?}",
+            response
+        );
     }
 }

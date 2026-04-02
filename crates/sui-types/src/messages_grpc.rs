@@ -306,20 +306,16 @@ impl SubmitTxRequest {
         }
     }
 
-    pub fn new_ping(ping_type: PingType) -> Self {
+    pub fn new_ping() -> Self {
         Self {
             transaction: None,
-            ping_type: Some(ping_type),
+            ping_type: Some(PingType::Consensus),
         }
     }
 
     pub fn tx_type(&self) -> TxType {
-        if let Some(ping_type) = self.ping_type {
-            return if ping_type == PingType::FastPath {
-                TxType::SingleWriter
-            } else {
-                TxType::SharedObject
-            };
+        if self.ping_type.is_some() {
+            return TxType::SharedObject;
         }
         let transaction = self.transaction.as_ref().unwrap();
         if transaction.is_consensus_tx() {
@@ -388,8 +384,6 @@ pub enum SubmitTxResult {
         // Response should always include details for executed transactions.
         // TODO(fastpath): validate this field is always present and return an error during deserialization.
         details: Option<Box<ExecutedData>>,
-        // Whether the transaction was executed using fast path.
-        fast_path: bool,
     },
     Rejected {
         error: crate::error::SuiError,
@@ -403,14 +397,9 @@ impl std::fmt::Debug for SubmitTxResult {
                 .debug_struct("Submitted")
                 .field("consensus_position", consensus_position)
                 .finish(),
-            Self::Executed {
-                effects_digest,
-                fast_path,
-                ..
-            } => f
+            Self::Executed { effects_digest, .. } => f
                 .debug_struct("Executed")
                 .field("effects_digest", &format_args!("{}", effects_digest))
-                .field("fast_path", fast_path)
                 .finish(),
             Self::Rejected { error } => f.debug_struct("Rejected").field("error", &error).finish(),
         }
@@ -481,15 +470,11 @@ pub enum PingType {
     /// Measures the end to end latency from when a transaction is included by a proposed block,
     /// to when the block is committed by consensus.
     Consensus = 0,
-    /// Measures the end to end latency from when a transaction is included by a proposed block,
-    /// to when the block is certified.
-    FastPath = 1,
 }
 
 impl PingType {
     pub fn as_str(&self) -> &str {
         match self {
-            PingType::FastPath => "fastpath",
             PingType::Consensus => "consensus",
         }
     }
@@ -516,7 +501,6 @@ pub enum WaitForEffectsResponse {
     Executed {
         effects_digest: crate::digests::TransactionEffectsDigest,
         details: Option<Box<ExecutedData>>,
-        fast_path: bool,
     },
     // The transaction was rejected by consensus.
     Rejected {
@@ -535,14 +519,9 @@ pub enum WaitForEffectsResponse {
 impl std::fmt::Debug for WaitForEffectsResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Executed {
-                effects_digest,
-                fast_path,
-                ..
-            } => f
+            Self::Executed { effects_digest, .. } => f
                 .debug_struct("Executed")
                 .field("effects_digest", effects_digest)
-                .field("fast_path", fast_path)
                 .finish(),
             Self::Rejected { error } => f.debug_struct("Rejected").field("error", error).finish(),
             Self::Expired { epoch, round } => f
@@ -609,8 +588,6 @@ pub struct RawExecutedStatus {
     pub effects_digest: Bytes,
     #[prost(message, optional, tag = "2")]
     pub details: Option<RawExecutedData>,
-    #[prost(bool, tag = "3")]
-    pub fast_path: bool,
 }
 
 #[derive(Clone, prost::Message)]
@@ -791,9 +768,8 @@ impl TryFrom<SubmitTxResult> for RawSubmitTxResult {
             SubmitTxResult::Executed {
                 effects_digest,
                 details,
-                fast_path,
             } => {
-                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
+                let raw_executed = try_from_response_executed(effects_digest, details)?;
                 RawValidatorSubmitStatus::Executed(raw_executed)
             }
             SubmitTxResult::Rejected { error } => {
@@ -815,11 +791,10 @@ impl TryFrom<RawSubmitTxResult> for SubmitTxResult {
                 })
             }
             Some(RawValidatorSubmitStatus::Executed(executed)) => {
-                let (effects_digest, details, fast_path) = try_from_raw_executed_status(executed)?;
+                let (effects_digest, details) = try_from_raw_executed_status(executed)?;
                 Ok(SubmitTxResult::Executed {
                     effects_digest,
                     details,
-                    fast_path,
                 })
             }
             Some(RawValidatorSubmitStatus::Rejected(error)) => {
@@ -870,7 +845,6 @@ fn try_from_raw_executed_status(
     (
         crate::digests::TransactionEffectsDigest,
         Option<Box<ExecutedData>>,
-        bool,
     ),
     crate::error::SuiError,
 > {
@@ -885,7 +859,7 @@ fn try_from_raw_executed_status(
     } else {
         None
     };
-    Ok((effects_digest, executed_data, executed.fast_path))
+    Ok((effects_digest, executed_data))
 }
 
 fn try_from_raw_rejected_status(
@@ -927,7 +901,6 @@ fn try_from_response_rejected(
 fn try_from_response_executed(
     effects_digest: crate::digests::TransactionEffectsDigest,
     details: Option<Box<ExecutedData>>,
-    fast_path: bool,
 ) -> Result<RawExecutedStatus, crate::error::SuiError> {
     let effects_digest = bcs::to_bytes(&effects_digest)
         .map_err(
@@ -945,7 +918,6 @@ fn try_from_response_executed(
     Ok(RawExecutedStatus {
         effects_digest,
         details,
-        fast_path,
     })
 }
 
@@ -1021,11 +993,10 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
     fn try_from(value: RawWaitForEffectsResponse) -> Result<Self, Self::Error> {
         match value.inner {
             Some(RawValidatorTransactionStatus::Executed(executed)) => {
-                let (effects_digest, details, fast_path) = try_from_raw_executed_status(executed)?;
+                let (effects_digest, details) = try_from_raw_executed_status(executed)?;
                 Ok(Self::Executed {
                     effects_digest,
                     details,
-                    fast_path,
                 })
             }
             Some(RawValidatorTransactionStatus::Rejected(rejected)) => {
@@ -1053,9 +1024,8 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
             WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
-                fast_path,
             } => {
-                let raw_executed = try_from_response_executed(effects_digest, details, fast_path)?;
+                let raw_executed = try_from_response_executed(effects_digest, details)?;
                 RawValidatorTransactionStatus::Executed(raw_executed)
             }
             WaitForEffectsResponse::Rejected { error } => {
@@ -1116,7 +1086,7 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
 #[cfg(test)]
 mod tests {
     use crate::{
-        messages_grpc::{PingType, SubmitTxRequest, SubmitTxType},
+        messages_grpc::{SubmitTxRequest, SubmitTxType},
         transaction::{Transaction, TransactionData},
     };
 
@@ -1126,7 +1096,7 @@ mod tests {
             "Case 1. SubmitTxRequest::new_ping should be converted to RawSubmitTxRequest with submit_type set to Ping."
         );
         {
-            let request = SubmitTxRequest::new_ping(PingType::Consensus);
+            let request = SubmitTxRequest::new_ping();
             let raw_request = request.into_raw().unwrap();
 
             let submit_type = SubmitTxType::try_from(raw_request.submit_type).unwrap();

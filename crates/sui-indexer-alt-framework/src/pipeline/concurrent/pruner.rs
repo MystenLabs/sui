@@ -20,7 +20,7 @@ use crate::pipeline::concurrent::Handler;
 use crate::pipeline::concurrent::PrunerConfig;
 use crate::pipeline::logging::LoggerWatermark;
 use crate::pipeline::logging::WatermarkLogger;
-use crate::store::Connection;
+use crate::store::ConcurrentConnection;
 use crate::store::Store;
 
 #[derive(Default)]
@@ -95,7 +95,7 @@ impl PendingRanges {
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
 /// If the `config` is `None`, the task will shutdown immediately.
-pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
+pub(super) fn pruner<H: Handler>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
@@ -278,7 +278,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     })
 }
 
-async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
+async fn prune_task_impl<H: Handler>(
     metrics: Arc<IndexerMetrics>,
     db: H::Store,
     handler: Arc<H>,

@@ -25,7 +25,6 @@ pub struct ConsensusProtocolConfig {
     transaction_voting_enabled: bool,
     num_leaders_per_round: Option<usize>,
     bad_nodes_stake_threshold: u64,
-    always_accept_system_transactions: bool,
 }
 
 impl Default for ConsensusProtocolConfig {
@@ -40,7 +39,6 @@ impl Default for ConsensusProtocolConfig {
             transaction_voting_enabled: false,
             num_leaders_per_round: None,
             bad_nodes_stake_threshold: 0,
-            always_accept_system_transactions: false,
         }
     }
 }
@@ -56,7 +54,6 @@ impl ConsensusProtocolConfig {
         transaction_voting_enabled: bool,
         num_leaders_per_round: Option<usize>,
         bad_nodes_stake_threshold: u64,
-        always_accept_system_transactions: bool,
     ) -> Self {
         Self {
             protocol_version,
@@ -68,7 +65,6 @@ impl ConsensusProtocolConfig {
             transaction_voting_enabled,
             num_leaders_per_round,
             bad_nodes_stake_threshold,
-            always_accept_system_transactions,
         }
     }
 
@@ -85,7 +81,6 @@ impl ConsensusProtocolConfig {
             transaction_voting_enabled: true,
             num_leaders_per_round: Some(1),
             bad_nodes_stake_threshold: 30,
-            always_accept_system_transactions: true,
         }
     }
 
@@ -125,10 +120,6 @@ impl ConsensusProtocolConfig {
 
     pub fn bad_nodes_stake_threshold(&self) -> u64 {
         self.bad_nodes_stake_threshold
-    }
-
-    pub fn always_accept_system_transactions(&self) -> bool {
-        self.always_accept_system_transactions
     }
 
     // Test setter methods

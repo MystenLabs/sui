@@ -1,0 +1,142 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
+---
+processed 26 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-55:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 10320800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 56-58:
+//# run test::m::mint_a --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 59-61:
+//# run test::m::mint_b --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 62-64:
+//# run test::m::mint_wrapper_u64 --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 65-67:
+//# run test::m::mint_wrapper_bool --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 68-70:
+//# run test::m::take_a --sender A --args object(3,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 7, lines 71-73:
+//# run test::m::take_b --sender A --args object(2,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 8, lines 74-76:
+//# run test::m::take_wrapper_u64 --sender A --args object(5,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 9, lines 77-79:
+//# run test::m::take_wrapper_bool --sender A --args object(4,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 10, lines 80-82:
+//# run test::m::take_generic --type-args test::m::ObjB --sender A --args object(2,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 11, lines 83-85:
+//# run test::m::take_a_mut --sender A --args object(3,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 12, lines 86-88:
+//# run test::m::take_wrapper_u64_mut --sender A --args object(5,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 13, lines 89-91:
+//# run test::m::take_wrapper_bool_mut --sender A --args object(4,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 14, line 92:
+//# run test::m::take_a --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+
+task 15, line 94:
+//# run test::m::take_wrapper_u64 --sender A --args object(4,0)
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 16, lines 96-98:
+//# run test::m::take_generic --type-args test::m::ObjA --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+
+task 17, line 99:
+//# run test::m::take_a_mut --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+
+task 18, lines 101-104:
+//# run test::m::take_wrapper_u64_mut --sender A --args object(4,0)
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 19, lines 105-107:
+//# run test::m::destroy_a --sender A --args object(3,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 20, lines 108-110:
+//# run test::m::destroy_wrapper_u64 --sender A --args object(5,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 21, lines 111-113:
+//# run test::m::destroy_wrapper_bool --sender A --args object(4,0)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 22, line 114:
+//# run test::m::destroy_a --sender A --args object(2,0)
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+
+task 23, line 116:
+//# run test::m::destroy_wrapper_u64 --sender A --args object(4,0)
+mutated: object(0,0)
+deleted: object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 24, line 118:
+//# run test::m::destroy_wrapper_bool --sender A --args object(5,0)
+mutated: object(0,0)
+deleted: object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 25, line 120:
+//# run test::m::destroy_b --sender A --args object(3,0)
+mutated: object(0,0)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2197008, non_refundable_storage_fee: 22192

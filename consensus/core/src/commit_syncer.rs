@@ -436,8 +436,7 @@ where
         inner: Arc<Inner<VC, OC>>,
         commit_range: CommitRange,
     ) -> (CommitIndex, CertifiedCommits) {
-        // Individual request base timeout.
-        const TIMEOUT: Duration = Duration::from_secs(10);
+        let base_timeout = inner.context.parameters.commit_sync_request_timeout;
         // Max per-request timeout will be base timeout times a multiplier.
         // At the extreme, this means there will be 120s timeout to fetch max_blocks_per_fetch blocks.
         const MAX_TIMEOUT_MULTIPLIER: u32 = 12;
@@ -470,7 +469,7 @@ where
             target_authorities.truncate(MAX_NUM_TARGETS);
             // Increase timeout multiplier for each loop until MAX_TIMEOUT_MULTIPLIER.
             timeout_multiplier = (timeout_multiplier + 1).min(MAX_TIMEOUT_MULTIPLIER);
-            let request_timeout = TIMEOUT * timeout_multiplier;
+            let request_timeout = base_timeout * timeout_multiplier;
             // Give enough overall timeout for fetching commits and blocks.
             // - Timeout for fetching commits and commit certifying blocks.
             // - Timeout for fetching blocks referenced by the commits.
@@ -529,7 +528,7 @@ where
                 }
             }
             // Avoid busy looping, by waiting for a while before retrying.
-            sleep(TIMEOUT).await;
+            sleep(base_timeout).await;
         }
     }
 
@@ -548,6 +547,17 @@ where
             .node_metrics
             .commit_sync_fetch_once_latency
             .start_timer();
+
+        // 0. Probe the target to check reachability before committing to the full fetch.
+        // This skips unreachable and slow peers quickly.
+        let probe_timeout = inner.context.parameters.commit_sync_probe_timeout;
+        inner
+            .network_client
+            .probe_connectivity(
+                crate::network::PeerId::Validator(target_authority),
+                probe_timeout,
+            )
+            .await?;
 
         // 1. Fetch commits in the commit range from the target authority.
         let (serialized_commits, serialized_blocks) = inner

@@ -123,6 +123,19 @@ where
         }
     }
 
+    pub async fn probe_connectivity(&self, peer: PeerId, timeout: Duration) -> ConsensusResult<()> {
+        // For now, only probe connectivity by validator against validators.
+        if self.context.is_validator()
+            && let PeerId::Validator(authority) = peer
+        {
+            let client = self.validator_client.as_ref().ok_or_else(|| {
+                ConsensusError::NetworkConfig("Validator client not available".to_string())
+            })?;
+            let _ = client.get_latest_rounds(authority, timeout).await?;
+        }
+        Ok(())
+    }
+
     pub async fn fetch_commits(
         &self,
         peer: PeerId,

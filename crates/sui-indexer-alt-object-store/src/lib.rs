@@ -15,13 +15,13 @@ use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_framework_store_traits as framework_traits;
+use sui_indexer_alt_framework_store_traits::ConcurrentConnection;
 use sui_indexer_alt_framework_store_traits::Connection;
 use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::PrunerWatermark;
 use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
-use sui_indexer_alt_framework_store_traits::init_with_committer_watermark;
-use sui_indexer_alt_framework_store_traits::{self as framework_traits};
 use tracing::info;
 
 #[derive(Clone)]
@@ -76,6 +76,11 @@ impl From<CommitterWatermark> for framework_traits::CommitterWatermark {
 }
 
 #[async_trait]
+impl framework_traits::ConcurrentStore for ObjectStore {
+    type ConcurrentConnection<'c> = ObjectStoreConnection;
+}
+
+#[async_trait]
 impl Store for ObjectStore {
     type Connection<'c> = ObjectStoreConnection;
 
@@ -91,9 +96,9 @@ impl Connection for ObjectStoreConnection {
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        init_watermark: InitWatermark,
-    ) -> anyhow::Result<InitWatermark> {
-        init_with_committer_watermark(self, pipeline_task, init_watermark).await
+        _checkpoint_hi_inclusive: Option<u64>,
+    ) -> anyhow::Result<Option<InitWatermark>> {
+        self.delegate_to_reader_watermark(pipeline_task).await
     }
 
     async fn accepts_chain_id(
@@ -127,21 +132,6 @@ impl Connection for ObjectStoreConnection {
             Err(ObjectStoreError::NotFound { .. }) => Ok(None),
             Err(e) => Err(e.into()),
         }
-    }
-
-    async fn reader_watermark(
-        &mut self,
-        _pipeline: &'static str,
-    ) -> anyhow::Result<Option<ReaderWatermark>> {
-        Ok(None)
-    }
-
-    async fn pruner_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark>> {
-        Ok(None)
     }
 
     async fn set_committer_watermark(
@@ -189,6 +179,24 @@ impl Connection for ObjectStoreConnection {
         }
 
         Ok(true)
+    }
+}
+
+#[async_trait]
+impl ConcurrentConnection for ObjectStoreConnection {
+    async fn reader_watermark(
+        &mut self,
+        _pipeline: &str,
+    ) -> anyhow::Result<Option<ReaderWatermark>> {
+        Ok(None)
+    }
+
+    async fn pruner_watermark(
+        &mut self,
+        _pipeline: &'static str,
+        _delay: Duration,
+    ) -> anyhow::Result<Option<PrunerWatermark>> {
+        Ok(None)
     }
 
     async fn set_reader_watermark(

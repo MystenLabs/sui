@@ -43,7 +43,7 @@ use crate::store::pipeline_task;
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
 /// The task will shutdown if the `rx` channel closes and the watermark cannot be progressed.
-pub(super) fn commit_watermark<H: Handler + 'static>(
+pub(super) fn commit_watermark<H: Handler>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
@@ -370,7 +370,7 @@ mod tests {
         commit_watermark: Service,
     }
 
-    fn setup_test<H: Handler<Store = MockStore> + 'static>(
+    fn setup_test<H: Handler<Store = MockStore>>(
         config: CommitterConfig,
         next_checkpoint: u64,
         store: MockStore,

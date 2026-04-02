@@ -18,11 +18,13 @@ use sui_indexer_alt_framework_store_traits::InitWatermark;
 use tokio::time::Duration;
 
 use crate::store::CommitterWatermark;
+use crate::store::ConcurrentConnection;
 use crate::store::Connection;
 use crate::store::PrunerWatermark;
 use crate::store::ReaderWatermark;
+use crate::store::SequentialConnection;
+use crate::store::SequentialStore;
 use crate::store::Store;
-use crate::store::TransactionalStore;
 
 #[derive(Default, Clone)]
 pub struct MockWatermark {
@@ -89,16 +91,30 @@ pub struct MockStore {
 #[derive(Clone)]
 pub struct MockConnection<'c>(pub &'c MockStore);
 
+impl MockWatermark {
+    fn for_init(checkpoint_hi_inclusive: Option<u64>, reader_lo: u64) -> Self {
+        Self {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive,
+            tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
+            reader_lo,
+            pruner_timestamp: 0,
+            pruner_hi: reader_lo,
+            chain_id: None,
+        }
+    }
+}
+
 impl MockConnection<'_> {
     async fn get_watermark(
         &self,
         pipeline: &str,
-    ) -> anyhow::Result<Option<(Ref<'_, String, MockWatermark>, u64)>> {
+    ) -> anyhow::Result<Ref<'_, String, MockWatermark>> {
         let Some(watermark) = self.0.watermarks.get(pipeline) else {
             bail!("Pipeline {pipeline} not found");
         };
-
-        Ok(watermark.checkpoint_hi_inclusive.map(|cp| (watermark, cp)))
+        Ok(watermark)
     }
 }
 
@@ -107,27 +123,23 @@ impl Connection for MockConnection<'_> {
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        init_watermark: InitWatermark,
-    ) -> anyhow::Result<InitWatermark> {
+        checkpoint_hi_inclusive: Option<u64>,
+    ) -> anyhow::Result<Option<InitWatermark>> {
         let watermark = self
             .0
             .watermarks
             .entry(pipeline_task.to_string())
-            .or_insert(MockWatermark {
-                epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive: init_watermark.checkpoint_hi_inclusive,
-                tx_hi: 0,
-                timestamp_ms_hi_inclusive: 0,
-                reader_lo: init_watermark.reader_lo,
-                pruner_timestamp: 0,
-                pruner_hi: init_watermark.reader_lo,
-                chain_id: None,
+            .or_insert_with(|| {
+                MockWatermark::for_init(
+                    checkpoint_hi_inclusive,
+                    checkpoint_hi_inclusive.map_or(0, |c| c + 1),
+                )
             });
 
-        Ok(InitWatermark {
+        Ok(Some(InitWatermark {
             checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
-            reader_lo: watermark.reader_lo,
-        })
+            reader_lo: Some(watermark.reader_lo),
+        }))
     }
 
     async fn accepts_chain_id(
@@ -153,8 +165,8 @@ impl Connection for MockConnection<'_> {
         &mut self,
         pipeline_task: &str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
-        let Some((watermark, checkpoint_hi_inclusive)) = self.get_watermark(pipeline_task).await?
-        else {
+        let watermark = self.get_watermark(pipeline_task).await?;
+        let Some(checkpoint_hi_inclusive) = watermark.checkpoint_hi_inclusive else {
             return Ok(None);
         };
 
@@ -163,42 +175,6 @@ impl Connection for MockConnection<'_> {
             checkpoint_hi_inclusive,
             tx_hi: watermark.tx_hi,
             timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
-        }))
-    }
-
-    async fn reader_watermark(
-        &mut self,
-        pipeline: &'static str,
-    ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
-        let Some((watermark, checkpoint_hi_inclusive)) = self.get_watermark(pipeline).await? else {
-            return Ok(None);
-        };
-
-        Ok(Some(ReaderWatermark {
-            checkpoint_hi_inclusive,
-            reader_lo: watermark.reader_lo,
-        }))
-    }
-
-    async fn pruner_watermark(
-        &mut self,
-        pipeline: &'static str,
-        delay: Duration,
-    ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
-        let Some((watermark, _)) = self.get_watermark(pipeline).await? else {
-            return Ok(None);
-        };
-
-        let elapsed_ms = watermark.pruner_timestamp as i64
-            - SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64;
-        let wait_for_ms = delay.as_millis() as i64 + elapsed_ms;
-        Ok(Some(PrunerWatermark {
-            pruner_hi: watermark.pruner_hi,
-            reader_lo: watermark.reader_lo,
-            wait_for_ms,
         }))
     }
 
@@ -230,6 +206,47 @@ impl Connection for MockConnection<'_> {
         wm.tx_hi = watermark.tx_hi;
         wm.timestamp_ms_hi_inclusive = watermark.timestamp_ms_hi_inclusive;
         Ok(true)
+    }
+}
+
+#[async_trait]
+impl ConcurrentConnection for MockConnection<'_> {
+    async fn reader_watermark(
+        &mut self,
+        pipeline: &str,
+    ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
+        let watermark = self.get_watermark(pipeline).await?;
+        let Some(checkpoint_hi_inclusive) = watermark.checkpoint_hi_inclusive else {
+            return Ok(None);
+        };
+
+        Ok(Some(ReaderWatermark {
+            checkpoint_hi_inclusive,
+            reader_lo: watermark.reader_lo,
+        }))
+    }
+
+    async fn pruner_watermark(
+        &mut self,
+        pipeline: &'static str,
+        delay: Duration,
+    ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
+        let watermark = self.get_watermark(pipeline).await?;
+        if watermark.checkpoint_hi_inclusive.is_none() {
+            return Ok(None);
+        }
+
+        let elapsed_ms = watermark.pruner_timestamp as i64
+            - SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+        let wait_for_ms = delay.as_millis() as i64 + elapsed_ms;
+        Ok(Some(PrunerWatermark {
+            pruner_hi: watermark.pruner_hi,
+            reader_lo: watermark.reader_lo,
+            wait_for_ms,
+        }))
     }
 
     async fn set_reader_watermark(
@@ -273,6 +290,14 @@ impl Connection for MockConnection<'_> {
 }
 
 #[async_trait]
+impl SequentialConnection for MockConnection<'_> {}
+
+#[async_trait]
+impl crate::store::ConcurrentStore for MockStore {
+    type ConcurrentConnection<'c> = MockConnection<'c>;
+}
+
+#[async_trait]
 impl Store for MockStore {
     type Connection<'c> = MockConnection<'c>;
 
@@ -303,7 +328,9 @@ impl Store for MockStore {
 }
 
 #[async_trait]
-impl TransactionalStore for MockStore {
+impl SequentialStore for MockStore {
+    type SequentialConnection<'c> = MockConnection<'c>;
+
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

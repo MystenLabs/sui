@@ -133,7 +133,6 @@ fn to_consensus_protocol_config(config: &ProtocolConfig, chain: Chain) -> Consen
         config.mysticeti_fastpath(),
         config.mysticeti_num_leaders_per_round(),
         config.consensus_bad_nodes_stake_threshold(),
-        config.consensus_always_accept_system_transactions(),
     )
 }
 

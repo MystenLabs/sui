@@ -1,0 +1,41 @@
+{
+  "problemMatcher": [
+    {
+      "owner": "cargo-error",
+      "severity": "error",
+      "pattern": [
+        {
+          "regexp": "^error(\\[E\\d+\\])?:\\s+(.+)$",
+          "message": 2,
+          "code": 1
+        },
+        {
+          "regexp": "^\\s+-->\\s+(.+):(\\d+):(\\d+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "owner": "cargo-could-not-compile",
+      "severity": "error",
+      "pattern": [
+        {
+          "regexp": "^error: could not compile `(.+)`",
+          "message": 0
+        }
+      ]
+    },
+    {
+      "owner": "cargo-linker",
+      "severity": "error",
+      "pattern": [
+        {
+          "regexp": "^error: linking with `.+` failed",
+          "message": 0
+        }
+      ]
+    }
+  ]
+}

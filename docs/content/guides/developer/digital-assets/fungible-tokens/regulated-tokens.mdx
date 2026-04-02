@@ -1,6 +1,5 @@
 ---
-title: Regulated Currency and Deny List
-draft: true
+title: Regulated Currencies
 description: Create regulated currencies on Sui using the Coin Registry system with deny list capabilities for access control.
 keywords: [regulated coin list, regulated coins, regulate coin, allow list, deny list, stablecoins, token example, create a token, how to create token, SUI token standards, coin registry]
 ---
@@ -30,7 +29,7 @@ To learn about available features, see [Currency Standard](/standards/currency.m
 
 ## Create regulated currency
 
-To use regulatory features, you will need to [create a currency](/guides/developer/digital-assets/fungible-tokens/create-a-fungible-tokens). During currency initialization, use the `make_regulated()` function on the `CurrencyInitializer<T>` before calling `finalize()`. This adds deny list capabilities to the `Currency<T>` and tracks the regulatory status within the registry system:
+To use regulatory features, you will need to [create a currency](/guides/developer/digital-assets/fungible-tokens/create-a-fungible-token). During currency initialization, use the `make_regulated()` function on the `CurrencyInitializer<T>` before calling `finalize()`. This adds deny list capabilities to the `Currency<T>` and tracks the regulatory status within the registry system:
 
 <details>
 <summary>

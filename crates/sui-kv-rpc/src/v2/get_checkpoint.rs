@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_data_ingestion_core::{CheckpointReader, create_remote_store_client};
 use sui_kvstore::tables::checkpoints::col;
 use sui_kvstore::{BigTableClient, CHECKPOINTS_PIPELINE, KeyValueStoreReader};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
@@ -11,6 +10,7 @@ use sui_rpc::proto::sui::rpc::v2::{Checkpoint, GetCheckpointRequest, GetCheckpoi
 use sui_rpc_api::{
     CheckpointNotFoundError, ErrorReason, RpcError, proto::google::rpc::bad_request::FieldViolation,
 };
+use sui_storage::object_store::util::{build_object_store, fetch_checkpoint};
 use sui_types::digests::CheckpointDigest;
 
 pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
@@ -93,12 +93,8 @@ pub async fn get_checkpoint(
         || read_mask.contains(Checkpoint::OBJECTS_FIELD))
         && let Some(url) = checkpoint_bucket
     {
-        let client = create_remote_store_client(url, vec![], 60)?;
-        let (checkpoint_data, _) =
-            CheckpointReader::fetch_from_object_store(&client, sequence_number).await?;
-        let checkpoint = sui_types::full_checkpoint_content::Checkpoint::from(
-            std::sync::Arc::into_inner(checkpoint_data).unwrap(),
-        );
+        let store = build_object_store(&url, vec![]);
+        let checkpoint = fetch_checkpoint(&store, sequence_number).await?;
 
         message.merge(&checkpoint, &read_mask);
     }

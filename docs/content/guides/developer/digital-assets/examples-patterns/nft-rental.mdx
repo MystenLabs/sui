@@ -2,7 +2,6 @@
 title: NFT Rentals
 description: An example that enables users to rent NFTs according to the rules of a provided policy instead of owning them outright.
 keywords: [ERC-721, NFT]
-draft: true
 ---
 
 Renting non-fungible tokens (NFTs) is a mechanism that allows individuals to temporarily use the benefits of an NFT without ownership or possession. This implementation uses the [Kiosk Apps standard](/standards/kiosk-apps.mdx) to establish an infrastructure for rental transactions. This approach aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
@@ -24,6 +23,13 @@ To create NFTs that can be rented, use the following workflows:
 ## Example
 
 This NFT rental example uses a single module, [`nft_rental.move`](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-rental/sources/nft_rental.move).
+
+<details>
+<summary>`nft_rental.move`</summary>
+
+<ImportContent source="examples/move/nft-rental/sources/nft_rental.move" mode="code" />
+
+</details>
 
 The `nft_rental` module provides an API that facilitates lending and borrowing through the following operations:
 

@@ -1,5 +1,4 @@
 ---
-draft: true
 title: Asset Tokenization
 description: Represent real-world assets as on-chain fractional tokens using the tokenized_asset module on Sui.
 keywords: [asset tokenization, fractionalization, NFT, fungible token, tokenized asset, Move, kiosk, burnability]
@@ -11,7 +10,7 @@ Asset tokenization is the process of representing real-world assets, such as rea
 
 The core idea behind asset tokenization is fractionalization: dividing a high-value asset into smaller units, each representing a share of the whole. This makes assets more accessible by allowing investors to hold a fraction rather than the entire asset. Common use cases include real estate, where a single property can be divided into thousands of tradeable shares, or fine art and collectibles, where fractional ownership allows multiple investors to hold a stake in a single high-value item.
  
-On Sui, the `tokenized_asset` module handles this. It operates similarly to the [`coin` library](/references/framework/sui-framework/coin): when it receives a new [One-Time Witness (OTW)](https://move-book.com/programmability/one-time-witness/) type, it creates a unique on-chain representation of a fractional asset. Each fraction is a `TokenizedAsset<T>` object with a balance that counts toward the asset's total supply.
+On Sui, the `tokenized_asset` module handles this. It operates similarly to the [`coin` library](/references/framework/sui_sui/coin): when it receives a new [One-Time Witness (OTW)](https://move-book.com/programmability/one-time-witness/) type, it creates a unique on-chain representation of a fractional asset. Each fraction is a `TokenizedAsset<T>` object with a balance that counts toward the asset's total supply.
  
 This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155) multi-token standard, with additional functionality. It is a suitable starting point for Solidity-based use cases you want to implement on Sui.
 
@@ -52,7 +51,7 @@ The `asset_tokenization` package contains 3 modules: `tokenized_asset`, `proxy`,
 
 #### `tokenized_asset`
  
-The `tokenized_asset` module is the core of the implementation. It handles asset creation, minting, splitting, joining, and burning. It operates similarly to the [`coin` library](/references/framework/sui-framework/coin) on Sui:
+The `tokenized_asset` module is the core of the implementation. It handles asset creation, minting, splitting, joining, and burning. It operates similarly to the [`coin` library](/references/framework/sui_sui/coin) on Sui:
  
 - Create a new asset representation using a [One-Time Witness](https://move-book.com/programmability/one-time-witness/) type, returning an `AssetCap<T>` and `AssetMetadata<T>`
 - Mint `TokenizedAsset<T>` fractions as either NFTs or FTs depending on whether metadata is provided
@@ -65,9 +64,9 @@ For full struct and function details, see the [`tokenized_asset` source](https:/
  
 The `proxy` module manages publisher-related operations on behalf of the asset type owner. It controls access to transfer policy creation and management for tokenized assets:
  
-- Claim the [`Publisher`](/references/framework/sui-framework/package) object using a One-Time Witness and store it in a shared `Registry`
-- Create a [`TransferPolicy`](/standards/kiosk) and `TransferPolicyCap` for a given `TokenizedAsset<T>` type using `setup_tp`
-- Create an empty [`Display`](/references/framework/sui-framework/display) for a `TokenizedAsset<T>` type using `new_display`
+- Claim the `Publisher` object using a One-Time Witness and store it in a shared `Registry`
+- Create a `TransferPolicy` and `TransferPolicyCap` for a given `TokenizedAsset<T>` type using `setup_tp`
+- Create an empty `Display` for a `TokenizedAsset<T>` type using `new_display`
 - Store an empty transfer policy in a shared `ProtectedTP<T>` object, used by the `unlock` module
  
 For full struct and function details, see the [`proxy` source](https://github.com/MystenLabs/asset-tokenization/blob/main/move/asset_tokenization/sources/proxy.move).

@@ -36,17 +36,17 @@ Offchain computation can also be verified onchain by using [Nautilus](/guides/de
 
 In-game currencies allow users to purchase game features like items, upgrades, and premium content. In Web2 games, these currencies are exclusively in-game, with values set by the developers. 
 
-Using Sui, players can now have [true ownership of their in-game currency](/guides/developer/coin/in-game-token.mdx). The currency exists as a [token on the Sui blockchain](/standards/currency.mdx), where players can conceivably buy, sell, or swap that currency for anything else that also lives onchain. If you create an ecosystem of games, players can purchase currency in one of your games but spend it in another one that also uses that same currency. The possibilities are vast, but you must first learn how to create the currency.
+Using Sui, players can now have [true ownership of their in-game currency](/guides/developer/digital-assets/examples-patterns/in-game-currency.mdx). The currency exists as a [token on the Sui blockchain](/standards/currency.mdx), where players can conceivably buy, sell, or swap that currency for anything else that also lives onchain. If you create an ecosystem of games, players can purchase currency in one of your games but spend it in another one that also uses that same currency. The possibilities are vast, but you must first learn how to create the currency.
 
 ### Closed-Loop Tokens
 
 Similar to in-game currencies, [Closed-Loop Tokens](/standards/closed-loop-token.mdx) provide a level of engagement and control integrated into the game experience that isn't possible without Web3. 
 
-For example, you can create tokens associated with your game that [reward loyalty](/guides/developer/coin/loyalty.mdx) amongst your user base. You can also produce [regulated tokens](/guides/developer/coin/regulated.mdx) that allow the bearer of a specific capability to control the addresses that have access to the token, facilitating gated access to special events, leagues, or other game features. 
+For example, you can create tokens associated with your game that [reward loyalty](/guides/developer/digital-assets/examples-patterns/loyalty-tokens.mdx) amongst your user base. You can also produce [regulated tokens](/guides/developer/digital-assets/fungible-tokens/regulated-tokens.mdx) that allow the bearer of a specific capability to control the addresses that have access to the token, facilitating gated access to special events, leagues, or other game features. 
 
 ## Game features
 
-[Non-fungible tokens (NFTs)](/guides/developer/nft) are able to represent many traditional game features such as in-game objects, battle passes, rewards, skins, game cards or keys, and loot boxes.
+[Non-fungible tokens (NFTs)](/guides/developer/digital-assets/non-fungible-tokens) are able to represent many traditional game features such as in-game objects, battle passes, rewards, skins, game cards or keys, and loot boxes.
 
 You can think of these NFTs as game assets that are generally categorized as either [dynamic assets](#dynamic-assets) or [soulbound assets](#soulbound-assets).
 
@@ -209,7 +209,7 @@ There is more than one type of distribution mechanics, but they are not necessar
 | Initial distribution | Through ICO, TGE, airdrops, or private sales. |
 | Ongoing distribution | Through staking, liquidity mining, or incentive programs. |
 
-Ongoing distribution refers to [staking and vesting of GameFi tokens](/guides/developer/coin/vesting-strategies.mdx). Not all game economies include staking or vesting models. When deciding whether yours should, consider the benefits:
+Ongoing distribution refers to [staking and vesting of GameFi tokens](/guides/developer/digital-assets/fungible-tokens/token-vesting-strategies.mdx). Not all game economies include staking or vesting models. When deciding whether yours should, consider the benefits:
 
 - Encourages long-term participation.
 - Reduces circulating supply, potentially stabilizing token prices.
@@ -219,7 +219,7 @@ Ongoing distribution refers to [staking and vesting of GameFi tokens](/guides/de
 When deciding how best to launch your tokens, it's important to consider some key points:
 
 - Should you go with a fixed or adjusted supply of coins? A fixed supply means all tokens mint at the TGE. Adjusted supply requires careful control over minting and burning functions.
-- Does your token need to be regulated? A [regulated coin](/guides/developer/coin/regulated.mdx) provides greater control over who has access to your token but comes at the cost of additional maintenance of a deny list.
+- Does your token need to be regulated? A [regulated coin](/guides/developer/digital-assets/fungible-tokens/regulated-tokens.mdx) provides greater control over who has access to your token but comes at the cost of additional maintenance of a deny list.
 - Consider your metadata requirements, as well.
     - Decimal places: Predefine precision of the token.
     - Metadata management: Determine if metadata should be immutable.

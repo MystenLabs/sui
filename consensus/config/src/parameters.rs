@@ -95,6 +95,16 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_batches_ahead")]
     pub commit_sync_batches_ahead: usize,
 
+    // Base per-request timeout for commit sync fetches. The actual timeout grows progressively
+    // with a multiplier to allow larger commit batches to finish downloading.
+    #[serde(default = "Parameters::default_commit_sync_request_timeout")]
+    pub commit_sync_request_timeout: Duration,
+
+    // Timeout for the connectivity probe against a peer before committing to a full fetch.
+    // Should be short to quickly skip unreachable peers.
+    #[serde(default = "Parameters::default_commit_sync_probe_timeout")]
+    pub commit_sync_probe_timeout: Duration,
+
     /// Whether to use FIFO compaction for RocksDB.
     #[serde(default = "Parameters::default_use_fifo_compaction")]
     pub use_fifo_compaction: bool,
@@ -199,6 +209,14 @@ impl Parameters {
         }
     }
 
+    pub(crate) fn default_commit_sync_request_timeout() -> Duration {
+        Duration::from_secs(10)
+    }
+
+    pub(crate) fn default_commit_sync_probe_timeout() -> Duration {
+        Duration::from_secs(2)
+    }
+
     pub(crate) fn default_commit_sync_batches_ahead() -> usize {
         // This is set to be a multiple of default commit_sync_parallel_fetches to allow fetching ahead,
         // while keeping the total number of inflight fetches and unprocessed fetched commits limited.
@@ -229,6 +247,8 @@ impl Default for Parameters {
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
+            commit_sync_request_timeout: Parameters::default_commit_sync_request_timeout(),
+            commit_sync_probe_timeout: Parameters::default_commit_sync_probe_timeout(),
             use_fifo_compaction: Parameters::default_use_fifo_compaction(),
             tonic: TonicParameters::default(),
             internal: InternalParameters::default(),

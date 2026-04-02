@@ -40,7 +40,6 @@ fastcrypto.workspace = true
 
 sui-config.workspace = true
 sui-core.workspace = true
-sui-data-ingestion-core.workspace = true
 sui-network.workspace = true
 sui-snapshot.workspace = true
 sui-protocol-config.workspace = true

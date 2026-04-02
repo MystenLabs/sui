@@ -1,0 +1,51 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
+---
+processed 10 tasks
+
+task 1, lines 8-15:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3830400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 16-18:
+//# run test::m::no_ty_args --type-args u64
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
+
+task 3, lines 19-21:
+//# run test::m::one_ty_arg
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
+
+task 4, lines 22-24:
+//# run test::m::one_ty_arg --type-args u64 bool
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
+
+task 5, lines 25-27:
+//# run test::m::two_ty_args --type-args u64
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
+
+task 6, lines 28-30:
+//# run test::m::two_ty_args --type-args u64 bool u8
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
+
+task 7, line 31:
+//# run test::m::no_ty_args
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 33:
+//# run test::m::one_ty_arg --type-args u64
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 35:
+//# run test::m::two_ty_args --type-args u64 bool
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

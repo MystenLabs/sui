@@ -11,15 +11,13 @@ use std::collections::HashSet;
 use std::io::Read;
 use std::{fs, io::Write};
 use sui_config::genesis::Genesis;
-use sui_data_ingestion_core::end_of_epoch_data;
 use sui_rpc_api::Client;
+use sui_storage::object_store::util::end_of_epoch_data;
 use sui_types::{
     crypto::AuthorityQuorumSignInfo, message_envelope::Envelope,
     messages_checkpoint::CheckpointSummary,
 };
 use tracing::info;
-
-const CHECKPOINT_BUCKET_TIMEOUT_SECS: u64 = 5;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CheckpointsList {
@@ -149,8 +147,7 @@ async fn sync_checkpoint_list_to_latest_using_checkpoint_bucket(
     archive_url: String,
 ) -> anyhow::Result<CheckpointsList> {
     info!("Syncing checkpoints from Archive store");
-    let checkpoints =
-        end_of_epoch_data(archive_url, vec![], CHECKPOINT_BUCKET_TIMEOUT_SECS).await?;
+    let checkpoints = end_of_epoch_data(&archive_url, vec![]).await?;
     Ok(CheckpointsList { checkpoints })
 }
 

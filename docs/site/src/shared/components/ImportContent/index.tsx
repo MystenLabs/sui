@@ -125,6 +125,7 @@ type Props = {
   dep?: string;
   test?: string; // target test blocks
   highlight?: string;
+  lines?: string; // line range to extract, e.g. "29-38"
   noComments?: boolean; // if included, remove ALL code comments
   noTests?: boolean; // if included, don't include tests
   noTitle?: boolean;
@@ -155,6 +156,7 @@ export default function ImportContent({
   component,
   test,
   highlight,
+  lines,
   style,
   org,
   repo,
@@ -323,6 +325,18 @@ export default function ImportContent({
       /\[dependencies\]\nsui\s?=\s?{\s?local\s?=.*sui-framework.*\n/i,
       "[dependencies]",
     );
+
+  if (lines) {
+    const parts = lines.split("-").map((n) => parseInt(n, 10));
+    const start = parts[0];
+    const end = parts[1] ?? parts[0];
+    if (!isNaN(start) && !isNaN(end)) {
+      out = out
+        .split("\n")
+        .slice(start - 1, end)
+        .join("\n");
+    }
+  }
 
   if (tag) {
     out = utils.returnTag(out, tag);

@@ -2,7 +2,6 @@
 title: Soulbound NFTs
 description: Use Sui Move struct abilities and the Sui framework transfer module to make an NFT soulbound (non-transferable).
 keywords: [ERC-721, NFT, soulbound]
-draft: true
 ---
 
 A soulbound non-fungible token (NFT) is an NFT that is non-transferable. After an NFT is minted to a Sui account, the NFT is bound to that account and cannot be transferred. This implementation uses the custom logic of the Sui framework `transfer` functions. The <UnsafeLink href="/references/framework/sui-framework/sui_sui/transfer">`sui::transfer` module</UnsafeLink> contains 2 functions that transfer objects: <UnsafeLink href="/references/framework/sui-framework/sui_sui/transfer#function-transfer">`transfer::transfer`</UnsafeLink> and <UnsafeLink href="/references/framework/sui-framework/sui_sui/transfer#function-public_transfer">`transfer::public_transfer`</UnsafeLink>.

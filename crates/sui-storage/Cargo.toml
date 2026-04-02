@@ -52,6 +52,8 @@ sui-config.workspace = true
 typed-store.workspace = true
 eyre.workspace = true
 lru.workspace = true
+prost.workspace = true
+sui-rpc.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

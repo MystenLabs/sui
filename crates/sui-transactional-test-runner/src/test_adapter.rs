@@ -849,7 +849,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 write!(&mut output, "Response: {}", resp.response_body).unwrap();
                 Ok(Some(output))
             }
-            SuiSubcommand::GaslessAllowToken(GaslessAllowTokenCommand { token_type }) => {
+            SuiSubcommand::GaslessAllowToken(GaslessAllowTokenCommand {
+                token_type,
+                min_transfer,
+            }) => {
                 #[cfg(debug_assertions)]
                 {
                     let state = self.compiled_state();
@@ -858,12 +861,13 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         .map_err(|e| anyhow::anyhow!("invalid gasless token type: {e}"))?;
                     sui_types::transaction::add_gasless_token_for_testing(
                         type_tag.to_canonical_string(true),
+                        min_transfer,
                     );
                     Ok(None)
                 }
                 #[cfg(not(debug_assertions))]
                 {
-                    let _ = token_type;
+                    let _ = (token_type, min_transfer);
                     panic!("gasless-allow-token is only supported in debug builds")
                 }
             }

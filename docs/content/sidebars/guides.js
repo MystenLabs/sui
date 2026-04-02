@@ -204,6 +204,7 @@ const guides = [
           id: 'guides/developer/digital-assets/fungible-tokens/index',
         },
         items: [
+          'guides/developer/digital-assets/fungible-tokens/create-a-fungible-token-coin',
           'guides/developer/digital-assets/fungible-tokens/create-a-fungible-token',
           'guides/developer/digital-assets/fungible-tokens/regulated-tokens',
           'guides/developer/digital-assets/fungible-tokens/token-vesting-strategies',
@@ -211,30 +212,20 @@ const guides = [
       },
       {
         type: 'category',
-        label: 'Non-Fungible Tokens',
+        label: 'Tokenized Assets',
         link: {
           type: 'doc',
           id: 'guides/developer/digital-assets/non-fungible-tokens/index',
         },
         items: [
-          'guides/developer/digital-assets/non-fungible-tokens/create-nft',
           'guides/developer/digital-assets/non-fungible-tokens/asset-tokenization',
           'guides/developer/digital-assets/non-fungible-tokens/deploy-tokenized-asset',
+          'guides/developer/digital-assets/non-fungible-tokens/create-nft',
         ],
       },
       'guides/developer/digital-assets/permissioned-assets',
       'guides/developer/digital-assets/gasless-transactions',
-      {
-        type: 'category',
-        label: 'Address Management',
-        link: {
-          type: 'doc',
-          id: 'guides/developer/digital-assets/address-management/index',
-        },
-        items: [
-          'guides/developer/digital-assets/address-management/migrate-address-balances',
-        ],
-      },
+      'guides/developer/digital-assets/migrate-address-balances',
       {
         type: 'category',
         label: 'Examples and Patterns',
@@ -245,40 +236,13 @@ const guides = [
         items: [
           'guides/developer/digital-assets/examples-patterns/in-game-currency',
           'guides/developer/digital-assets/examples-patterns/loyalty-tokens',
-          'guides/developer/digital-assets/examples-patterns/nft-rental',
+          'guides/developer/digital-assets/examples-patterns/fixed-supply',
           'guides/developer/digital-assets/examples-patterns/soulbound-tokens',
+          'guides/developer/digital-assets/examples-patterns/nft-rental',
+          'guides/developer/digital-assets/examples-patterns/kiosk',
+          'guides/developer/digital-assets/examples-patterns/wasm-template',
         ],
       },
-    ],
-  },
-  {
-    type: 'category',
-    label: 'Currencies and Tokens',
-    link: {
-      type: 'doc',
-      id: 'guides/developer/coin/index',
-    },
-    items: [
-      'guides/developer/coin/currency',
-      'guides/developer/address-balances-migration',
-      'guides/developer/coin/regulated',
-      'guides/developer/coin/in-game-token',
-      'guides/developer/coin/loyalty',
-      'guides/developer/coin/vesting-strategies',
-    ],
-  },
-  {
-    type: 'category',
-    label: 'NFTs',
-    link: {
-      type: 'doc',
-      id: 'guides/developer/nft/index',
-    },
-    items: [
-      'guides/developer/nft/nft',
-      'guides/developer/nft/nft-soulbound',
-      'guides/developer/nft/nft-rental',
-      'guides/developer/nft/asset-tokenization',
     ],
   },
   {

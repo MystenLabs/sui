@@ -1,0 +1,35 @@
+[package]
+name = "forking-data-store"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+bcs.workspace = true
+chrono.workspace = true
+csv.workspace = true
+cynic.workspace = true
+fastcrypto.workspace = true
+lru.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+serde.workspace = true
+sui-rpc.workspace = true
+sui-rpc-api.workspace = true
+sui-types.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+prost.workspace = true
+zstd.workspace = true
+tonic.workspace = true
+
+[build-dependencies]
+cynic-codegen.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["cynic-codegen"]

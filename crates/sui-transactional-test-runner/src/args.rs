@@ -315,6 +315,8 @@ pub struct AuthenticatorStateUpdateCommand {
 pub struct GaslessAllowTokenCommand {
     #[clap(value_parser = ParsedType::parse)]
     pub token_type: ParsedType,
+    #[clap(long = "min-transfer", default_value = "0")]
+    pub min_transfer: u64,
 }
 
 #[derive(Debug)]

@@ -2528,6 +2528,82 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_format_single_bare_expression_falls_back_to_json() {
+        #[derive(serde::Serialize)]
+        enum Status<'s> {
+            Pending(&'s str),
+        }
+
+        let bytes = bcs::to_bytes(&(
+            (42u64, "hello"),
+            Status::Pending("ready"),
+            vec![1u64, 2u64, 3u64],
+        ))
+        .unwrap();
+
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                (
+                    "st",
+                    struct_(
+                        "0x1::m::Inner",
+                        vec![
+                            ("count", L::U64),
+                            ("label", L::Struct(Box::new(move_ascii_str_layout()))),
+                        ],
+                    ),
+                ),
+                (
+                    "en",
+                    enum_(
+                        "0x1::m::Status",
+                        vec![(
+                            "Pending",
+                            vec![("message", L::Struct(Box::new(move_ascii_str_layout())))],
+                        )],
+                    ),
+                ),
+                ("vs", vector_(L::U64)),
+            ],
+        );
+
+        let store = MockStore::default();
+        let root = OwnedSlice { bytes, layout };
+        let interpreter = Interpreter::new(root, store);
+
+        let formats = ["{st}", "{en}", "{vs}"];
+        let mut output = Vec::with_capacity(formats.len());
+        for s in formats {
+            let format = Format::parse(Limits::default(), s).unwrap();
+            output.push(
+                format
+                    .format::<serde_json::Value>(&interpreter, usize::MAX, usize::MAX)
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        assert_json_snapshot!(output, @r###"
+        [
+          {
+            "count": "42",
+            "label": "hello"
+          },
+          {
+            "@variant": "Pending",
+            "message": "ready"
+          },
+          [
+            "1",
+            "2",
+            "3"
+          ]
+        ]
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_display_field_errors() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("byte", L::U8)]);

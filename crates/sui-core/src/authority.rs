@@ -137,7 +137,7 @@ use sui_types::effects::{
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
 use sui_types::error::{ExecutionError, ExecutionErrorTrait, SuiErrorKind, UserInputError};
-use sui_types::event::{Event, EventID};
+use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
@@ -2488,6 +2488,22 @@ impl AuthorityState {
         if dev_inspect && self.config.dev_inspect_disabled {
             return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "simulate with checks disabled is not allowed on this node".to_string(),
+            }
+            .into());
+        }
+
+        // Reject coin reservations in gas payment when the execution engine
+        // doesn't support them.
+        let protocol_config = epoch_store.protocol_config();
+        if !protocol_config.enable_coin_reservation_obj_refs()
+            && transaction.gas().iter().any(|obj_ref| {
+                sui_types::coin_reservation::ParsedDigest::is_coin_reservation_digest(&obj_ref.2)
+            })
+        {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error:
+                    "coin reservations in gas payment are not supported at this protocol version"
+                        .to_string(),
             }
             .into());
         }

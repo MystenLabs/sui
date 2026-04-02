@@ -502,7 +502,7 @@
     },
     {
       "source": "/guides/developer/advanced/asset-tokenization",
-      "destination": "/guides/developer/nft/asset-tokenization",
+      "destination": "/guides/developer/digital-assets/non-fungible-tokens/create-nft/asset-tokenization",
       "permanent": true
     },
     {
@@ -3831,7 +3831,7 @@
     },
     {
       "source": "/guides/developer/nft-index",
-      "destination": "/guides/developer/nft",
+      "destination": "/guides/developer/digital-assets/non-fungible-tokens/create-nft",
       "permanent": true
     },
     {
@@ -3891,12 +3891,12 @@
     },
     {
       "source": "/guides/developer/nft/nft-rental",
-      "destination": "/guides/developer/nft",
+      "destination": "/guides/developer/digital-assets/non-fungible-tokens/create-nft",
       "permanent": true
     },
     {
       "source": "/guides/developer/nft/nft-soulbound",
-      "destination": "/guides/developer/nft",
+      "destination": "/guides/developer/digital-assets/non-fungible-tokens/create-nft",
       "permanent": true
     },
     {
@@ -4033,7 +4033,67 @@
       "source": "/sui-glossary",
       "destination": "/references/sui-glossary",
       "permanent": true
-    }
+    },
+    {
+    "source": "/guides/developer/coin",
+    "destination": "/guides/developer/digital-assets/fungible-tokens",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/coin/currency",
+    "destination": "/guides/developer/digital-assets/fungible-tokens",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/address-balances-migration",
+    "destination": "/guides/developer/digital-assets/migrate-address-balances",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/coin/regulated",
+    "destination": "/guides/developer/digital-assets/fungible-tokens/regulated-tokens",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/coin/in-game-token",
+    "destination": "/guides/developer/digital-assets/examples-patterns/in-game-currency",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/coin/loyalty",
+    "destination": "/guides/developer/digital-assets/examples-patterns/loyalty-tokens",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/coin/vesting-strategies",
+    "destination": "/guides/developer/digital-assets/fungible-tokens/token-vesting-strategies",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/nft",
+    "destination": "/guides/developer/digital-assets/non-fungible-tokens",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/nft/nft",
+    "destination": "/guides/developer/digital-assets/non-fungible-tokens/create-nft",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/nft/nft-soulbound",
+    "destination": "/guides/developer/digital-assets/examples-patterns/soulbound-tokens",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/nft/nft-rental",
+    "destination": "/guides/developer/digital-assets/examples-patterns/nft-rental",
+    "permanent": true
+  },
+  {
+    "source": "/guides/developer/nft/asset-tokenization",
+    "destination": "/guides/developer/digital-assets/non-fungible-tokens/asset-tokenization",
+    "permanent": true
+  }
   ],
   "rewrites": [
     {

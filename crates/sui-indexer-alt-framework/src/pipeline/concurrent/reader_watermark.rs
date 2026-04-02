@@ -12,7 +12,7 @@ use tracing::warn;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::concurrent::Handler;
 use crate::pipeline::concurrent::PrunerConfig;
-use crate::store::Connection;
+use crate::store::ConcurrentConnection;
 use crate::store::Store;
 
 /// The reader watermark task is responsible for updating the `reader_lo` and `pruner_timestamp`
@@ -25,7 +25,7 @@ use crate::store::Store;
 /// indexer or the reader), to avoid issues with drift between clocks.
 ///
 /// If there is no pruner configuration, this task will immediately exit.
-pub(super) fn reader_watermark<H: Handler + 'static>(
+pub(super) fn reader_watermark<H: Handler>(
     config: Option<PrunerConfig>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,

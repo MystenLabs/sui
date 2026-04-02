@@ -3,7 +3,7 @@
 
 // Fund an address balance for B and verify that suix_getCoins returns the address balance coin.
 
-//# init --protocol-version 108 --addresses Test=0x0 --accounts A B --simulator --enable-accumulators --enable-address-balance-gas-payments
+//# init --protocol-version 119 --addresses Test=0x0 --accounts A B --simulator
 
 // Send 1_000_000_000 from A to B's address balance
 //# programmable --sender A --inputs 1000000000 @B

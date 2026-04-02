@@ -52,35 +52,47 @@ fn coins(objects: &[Object]) -> impl Iterator<Item = (&SuiAddress, TypeTag, u64)
     })
 }
 
-/// Extract balance changes from accumulator events that have `Balance<T>` types.
-/// Returns an iterator of (address, coin_type, signed_amount) tuples.
+/// Extract the signed balance change from a single accumulator event, if it
+/// has a `Balance<T>` type and an integer value.
+fn signed_balance_change_from_event(
+    event: &crate::accumulator_event::AccumulatorEvent,
+) -> Option<(SuiAddress, TypeTag, i128)> {
+    let ty = &event.write.address.ty;
+    // Only process events with Balance<T> types
+    let coin_type = Balance::maybe_get_balance_type_param(ty)?;
+
+    let amount = match &event.write.value {
+        AccumulatorValue::Integer(v) => *v as i128,
+        // IntegerTuple and EventDigest are not balance-related
+        AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+            return None;
+        }
+    };
+
+    // Convert operation to signed amount: Split means balance decreased, Merge means increased
+    let signed_amount = match event.write.operation {
+        AccumulatorOperation::Split => -amount,
+        AccumulatorOperation::Merge => amount,
+    };
+
+    Some((event.write.address.address, coin_type, signed_amount))
+}
+
+/// Extract balance changes from a slice of accumulator events.
+pub fn signed_balance_changes_from_events(
+    events: &[crate::accumulator_event::AccumulatorEvent],
+) -> impl Iterator<Item = (SuiAddress, TypeTag, i128)> + '_ {
+    events.iter().filter_map(signed_balance_change_from_event)
+}
+
+/// Extract balance changes from accumulator events in transaction effects.
 pub fn address_balance_changes_from_accumulator_events(
     effects: &TransactionEffects,
-) -> impl Iterator<Item = (SuiAddress, TypeTag, i128)> + '_ {
+) -> impl Iterator<Item = (SuiAddress, TypeTag, i128)> {
     effects
         .accumulator_events()
         .into_iter()
-        .filter_map(|event| {
-            let ty = &event.write.address.ty;
-            // Only process events with Balance<T> types
-            let coin_type = Balance::maybe_get_balance_type_param(ty)?;
-
-            let amount = match &event.write.value {
-                AccumulatorValue::Integer(v) => *v as i128,
-                // IntegerTuple and EventDigest are not balance-related
-                AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
-                    return None;
-                }
-            };
-
-            // Convert operation to signed amount: Split means balance decreased, Merge means increased
-            let signed_amount = match event.write.operation {
-                AccumulatorOperation::Split => -amount,
-                AccumulatorOperation::Merge => amount,
-            };
-
-            Some((event.write.address.address, coin_type, signed_amount))
-        })
+        .filter_map(|ref event| signed_balance_change_from_event(event))
 }
 
 pub fn derive_balance_changes(

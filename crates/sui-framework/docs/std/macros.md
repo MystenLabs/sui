@@ -8,7 +8,7 @@ This module holds shared implementation of macros used in <code>std</code>
 -  [Macro function `num_max`](#std_macros_num_max)
 -  [Macro function `num_min`](#std_macros_num_min)
 -  [Macro function `num_diff`](#std_macros_num_diff)
--  [Macro function `num_divide_and_round_up`](#std_macros_num_divide_and_round_up)
+-  [Macro function `num_div_ceil`](#std_macros_num_div_ceil)
 -  [Macro function `num_pow`](#std_macros_num_pow)
 -  [Macro function `num_sqrt`](#std_macros_num_sqrt)
 -  [Macro function `num_to_string`](#std_macros_num_to_string)
@@ -126,13 +126,13 @@ This module holds shared implementation of macros used in <code>std</code>
 
 </details>
 
-<a name="std_macros_num_divide_and_round_up"></a>
+<a name="std_macros_num_div_ceil"></a>
 
-## Macro function `num_divide_and_round_up`
+## Macro function `num_div_ceil`
 
 
 
-<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>&lt;$T&gt;($x: $T, $y: $T): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_div_ceil">num_div_ceil</a>&lt;$T&gt;($x: $T, $y: $T): $T
 </code></pre>
 
 
@@ -141,7 +141,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>&lt;$T&gt;($x: $T, $y: $T): $T {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_div_ceil">num_div_ceil</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x % y == 0) x / y <b>else</b> x / y + 1
@@ -870,7 +870,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 <pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_mul_div_ceil">num_mul_div_ceil</a>&lt;$T, $U&gt;($a: $T, $b: $T, $c: $T): $T {
-    <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>!(($a <b>as</b> $U) * ($b <b>as</b> $U), $c <b>as</b> $U) <b>as</b> $T
+    <a href="../std/macros.md#std_macros_num_div_ceil">num_div_ceil</a>!(($a <b>as</b> $U) * ($b <b>as</b> $U), $c <b>as</b> $U) <b>as</b> $T
 }
 </code></pre>
 

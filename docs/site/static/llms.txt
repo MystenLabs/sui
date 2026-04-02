@@ -84,14 +84,6 @@
     Frontend](https://docs.sui.io/guides/developer/app-examples/trustless-swap-frontend.md)
 - [Trustless Swap](https://docs.sui.io/guides/developer/app-examples/trustless-swap.md)
 - [Weather Oracle](https://docs.sui.io/guides/developer/app-examples/weather-oracle.md)
-
-### Guides/Developer/Coin
-- [Currency](https://docs.sui.io/guides/developer/coin/currency.md)
-- [In Game Token](https://docs.sui.io/guides/developer/coin/in-game-token.md)
-- [Coin Index](https://docs.sui.io/guides/developer/coin/index.md)
-- [Loyalty](https://docs.sui.io/guides/developer/coin/loyalty.md)
-- [Regulated](https://docs.sui.io/guides/developer/coin/regulated.md)
-- [Vesting Strategies](https://docs.sui.io/guides/developer/coin/vesting-strategies.md)
 - [Common Errors](https://docs.sui.io/guides/developer/common-errors.md)
 
 ### Guides/Developer/Cryptography
@@ -135,13 +127,6 @@
 - [Nautilus Overview](https://docs.sui.io/guides/developer/nautilus/nautilus-overview.md)
 - [Seal](https://docs.sui.io/guides/developer/nautilus/seal.md)
 - [Using Nautilus](https://docs.sui.io/guides/developer/nautilus/using-nautilus.md)
-
-### Guides/Developer/Nft
-- [Asset Tokenization](https://docs.sui.io/guides/developer/nft/asset-tokenization.md)
-- [Nft Index](https://docs.sui.io/guides/developer/nft/index.md)
-- [Nft Rental](https://docs.sui.io/guides/developer/nft/nft-rental.md)
-- [Nft Soulbound](https://docs.sui.io/guides/developer/nft/nft-soulbound.md)
-- [Nft](https://docs.sui.io/guides/developer/nft/nft.md)
 
 ### Guides/Developer/Objects
 - [Derived Objects](https://docs.sui.io/guides/developer/objects/derived-objects.md)

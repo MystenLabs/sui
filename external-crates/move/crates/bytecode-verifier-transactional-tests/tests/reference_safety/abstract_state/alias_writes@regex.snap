@@ -6,7 +6,7 @@ processed 2 tasks
 task 1, line 35:
 //# view-abstract-state 0x2::alias_after_join::t
 {
-  "0": {
+  "l0": {
     "local_root": "ROOT",
     "locals": {},
     "graph": {
@@ -16,7 +16,7 @@ task 1, line 35:
       "outgoing": {}
     }
   },
-  "6": {
+  "l1": {
     "local_root": "ROOT",
     "locals": {},
     "graph": {
@@ -26,7 +26,7 @@ task 1, line 35:
       "outgoing": {}
     }
   },
-  "11": {
+  "l2": {
     "local_root": "ROOT",
     "locals": {},
     "graph": {
@@ -36,7 +36,7 @@ task 1, line 35:
       "outgoing": {}
     }
   },
-  "16": {
+  "l3": {
     "local_root": "ROOT",
     "locals": {
       "x": {

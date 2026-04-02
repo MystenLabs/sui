@@ -26,6 +26,7 @@ use crate::pipeline::concurrent::main_reader_lo::track_main_reader_lo;
 use crate::pipeline::concurrent::pruner::pruner;
 use crate::pipeline::concurrent::reader_watermark::reader_watermark;
 use crate::pipeline::processor::processor;
+use crate::store::ConcurrentStore;
 use crate::store::Store;
 
 mod collector;
@@ -65,7 +66,7 @@ pub enum BatchStatus {
 /// back to the ingestion service.
 #[async_trait]
 pub trait Handler: Processor {
-    type Store: Store;
+    type Store: ConcurrentStore;
     type Batch: Default + Send + Sync + 'static;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
@@ -232,7 +233,7 @@ impl Default for PrunerConfig {
 /// channels are created to communicate between its various components. The pipeline will shutdown
 /// if any of its input or output channels close, any of its independent tasks fail, or if it is
 /// signalled to shutdown through the returned service handle.
-pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
+pub(crate) fn pipeline<H: Handler>(
     handler: H,
     next_checkpoint: u64,
     config: ConcurrentConfig,

@@ -1023,7 +1023,7 @@ async fn test_validator_traffic_control_gasless_spam_blocked() -> Result<(), any
     let recipient = test_cluster.wallet.get_addresses()[1];
 
     // Register SUI as an allowed gasless token type for this test.
-    add_gasless_token_for_testing(GAS::type_tag().to_canonical_string(true));
+    add_gasless_token_for_testing(GAS::type_tag().to_canonical_string(true), 0);
 
     // Build a gasless transaction with a valid balance::send_funds MoveCall.
     let mut builder = ProgrammableTransactionBuilder::new();

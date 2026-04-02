@@ -567,6 +567,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// Validates gasless post-execution invariants:
     /// - No new objects were created or existing objects mutated (written_objects is empty)
     /// - The set of deleted objects exactly equals the set of input Coin objects
+    /// - Each recipient receives at least the minimum transfer amount per token type
     pub fn check_gasless_execution_requirements(&self) -> Result<(), String> {
         if !self.execution_results.written_objects.is_empty() {
             return Err("Gasless transactions cannot create or mutate objects".to_string());
@@ -584,6 +585,36 @@ impl<'backing> TemporaryStore<'backing> {
                  Expected: {input_coin_ids:?}, deleted: {:?}",
                 self.execution_results.deleted_object_ids
             ));
+        }
+
+        let allowed_types =
+            sui_types::transaction::get_gasless_allowed_token_types(self.protocol_config);
+
+        // Aggregate signed balance changes per (address, token_type).
+        // Positive nets are recipient deposits that must meet the minimum transfer amount.
+        let net_totals = sui_types::balance_change::signed_balance_changes_from_events(
+            &self.execution_results.accumulator_events,
+        )
+        .fold(
+            BTreeMap::<(SuiAddress, TypeTag), i128>::new(),
+            |mut totals, (address, token_type, signed_amount)| {
+                *totals.entry((address, token_type)).or_default() += signed_amount;
+                totals
+            },
+        );
+
+        for ((recipient, token_type), net_amount) in net_totals {
+            if net_amount <= 0 {
+                continue;
+            }
+            if let Some(&min_amount) = allowed_types.get(&token_type)
+                && net_amount < i128::from(min_amount)
+            {
+                return Err(format!(
+                    "Gasless transfer of {net_amount} to {recipient} is below \
+                     minimum {min_amount} for token type {token_type}"
+                ));
+            }
         }
 
         Ok(())
