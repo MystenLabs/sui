@@ -479,6 +479,17 @@ impl<'a> ObjectRuntime<'a> {
         else {
             return Ok(None);
         };
+        if self
+            .protocol_config
+            .early_return_receive_object_mismatched_type()
+        {
+            match &value {
+                ObjectResult::MismatchedType => {
+                    return Ok(Some(ObjectResult::MismatchedType));
+                }
+                ObjectResult::Loaded(_) => (),
+            }
+        }
         // NB: It is important that the object only be added to the received set after it has been
         // fully authenticated and loaded.
         if self.state.received.insert(child, obj_meta).is_some() {
