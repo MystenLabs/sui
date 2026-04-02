@@ -129,6 +129,16 @@ pub struct BuildConfig {
 }
 
 impl BuildConfig {
+    pub async fn check_package<F: MoveFlavor, W: Write + Send>(
+        &self,
+        path: &Path,
+        env: &Environment,
+        writer: &mut W,
+    ) -> anyhow::Result<()> {
+        let root_pkg: RootPackage<F> = self.package_loader(path, env).load().await?;
+        BuildPlan::create(&root_pkg, self)?.check(writer)
+    }
+
     pub async fn compile_package<F: MoveFlavor, W: Write + Send>(
         &self,
         path: &Path,

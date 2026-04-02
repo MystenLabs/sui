@@ -238,6 +238,29 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         Ok(migration)
     }
 
+    /// Check the package without producing compiled artifacts.
+    /// Reports errors and warnings (including lints) to stderr.
+    pub fn check<W: Write + Send>(&self, writer: &mut W) -> anyhow::Result<()> {
+        let dependencies: BTreeSet<PackageID> = self
+            .root_pkg
+            .packages()
+            .into_iter()
+            .filter(|x| !x.is_root())
+            .map(|x| x.id().to_string())
+            .collect();
+        build_for_driver(
+            writer,
+            self.compiler_vfs_root.clone(),
+            &self.build_config,
+            self.root_pkg,
+            dependencies,
+            |compiler| {
+                compiler.check_and_report()?;
+                Ok(())
+            },
+        )
+    }
+
     /// Rewrite the edition field in Move.toml to the given edition.
     pub fn record_package_edition(&self, edition: Edition) -> anyhow::Result<()> {
         let move_toml_path = self
