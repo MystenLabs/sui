@@ -413,7 +413,8 @@ pub async fn start_rpc(
         .data(package_store)
         .data(fullnode_client);
 
-    let mut rpc = rpc.layer(SubscriptionsEnabled(streaming_task.is_some()));
+    let subscriptions_enabled = streaming_task.is_some();
+    let mut rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
 
     if let Some(ref task) = streaming_task {
         rpc = rpc.data(task.broadcaster());
@@ -423,10 +424,16 @@ pub async fn start_rpc(
     let s_system_package_task = system_package_task.run();
     let s_watermark = watermark_task.run();
 
-    Ok(s_rpc
+    let mut service = s_rpc
         .attach(s_chain_id)
         .attach(s_system_package_task)
-        .attach(s_watermark))
+        .attach(s_watermark);
+
+    if let Some(task) = streaming_task {
+        service = service.attach(task.run());
+    }
+
+    Ok(service)
 }
 
 /// Handler for RPC requests (POST requests making GraphQL queries).

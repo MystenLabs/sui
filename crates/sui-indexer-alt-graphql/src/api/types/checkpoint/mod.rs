@@ -36,6 +36,7 @@ use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
+use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
@@ -43,6 +44,9 @@ pub(crate) mod filter;
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
     pub(crate) scope: Scope,
+    /// Pre-processed data from streaming. When set, checkpoint fields are resolved from
+    /// this data instead of fetching from the database.
+    pub(crate) streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
 #[derive(Clone)]
@@ -89,7 +93,11 @@ impl Checkpoint {
 
     #[graphql(flatten)]
     async fn contents(&self, ctx: &Context<'_>) -> Result<CheckpointContents, RpcError> {
-        CheckpointContents::fetch(ctx, self.scope.clone(), self.sequence_number).await
+        if let Some(processed) = &self.streamed_data {
+            CheckpointContents::from_streamed_checkpoint(self.scope.clone(), processed)
+        } else {
+            CheckpointContents::fetch(ctx, self.scope.clone(), self.sequence_number).await
+        }
     }
 }
 
@@ -245,6 +253,7 @@ impl Checkpoint {
         (sequence_number <= scope_checkpoint).then_some(Self {
             scope,
             sequence_number,
+            streamed_data: None,
         })
     }
 
@@ -310,5 +319,20 @@ impl CheckpointContents {
             .context("Failed to fetch checkpoint contents")?;
 
         Ok(Self { scope, contents })
+    }
+
+    /// Construct from pre-processed streamed checkpoint data.
+    fn from_streamed_checkpoint(
+        scope: Scope,
+        processed: &ProcessedCheckpoint,
+    ) -> Result<Self, RpcError> {
+        Ok(Self {
+            scope,
+            contents: Some((
+                processed.summary.clone(),
+                processed.contents.clone(),
+                processed.signature.clone(),
+            )),
+        })
     }
 }
