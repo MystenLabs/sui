@@ -56,7 +56,7 @@ pub enum Strand<'s> {
     Value {
         offset: usize,
         value: Value<'s>,
-        transform: Transform,
+        transform: Option<Transform>,
     },
 }
 
@@ -344,7 +344,10 @@ impl Atom<'_> {
     }
 
     /// Format the atom as a string.
-    fn format_as_str(&self, w: &mut writer::StringWriter<'_>) -> Result<(), FormatError> {
+    pub(crate) fn format_as_str(
+        &self,
+        w: &mut writer::StringWriter<'_>,
+    ) -> Result<(), FormatError> {
         match self {
             Atom::Address(a) => write!(w, "{}", a.to_canonical_display(true))?,
             Atom::Bool(b) => write!(w, "{b}")?,

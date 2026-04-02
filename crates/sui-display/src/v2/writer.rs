@@ -97,15 +97,34 @@ pub(crate) fn write<F: RV::Format>(
     meter: Meter<'_>,
     mut strands: Vec<V::Strand<'_>>,
 ) -> Result<F, FormatError> {
-    if matches!(&strands[..], [V::Strand::Value { transform, .. }] if *transform == Transform::Json)
-    {
-        let V::Strand::Value { offset, value, .. } = strands.pop().unwrap() else {
+    if matches!(
+        &strands[..],
+        [V::Strand::Value {
+            transform: None | Some(Transform::Json),
+            ..
+        }]
+    ) {
+        let V::Strand::Value {
+            offset,
+            value,
+            transform,
+        } = strands.pop().unwrap()
+        else {
             unreachable!();
         };
 
-        return value
-            .format_json(meter)
-            .map_err(|e| e.for_expr_at_offset(offset));
+        return if transform.is_none()
+            && let Ok(atom) = V::Atom::try_from(value.clone())
+        {
+            let mut writer = StringWriter::new(meter);
+            atom.format_as_str(&mut writer)
+                .map_err(|e| e.for_expr_at_offset(offset))?;
+            Ok(writer.finish())
+        } else {
+            value
+                .format_json(meter)
+                .map_err(|e| e.for_expr_at_offset(offset))
+        };
     }
 
     let mut writer = StringWriter::new(meter);
@@ -120,7 +139,7 @@ pub(crate) fn write<F: RV::Format>(
                 value,
                 transform,
             } => value
-                .format(transform, &mut writer)
+                .format(transform.unwrap_or(Transform::Str), &mut writer)
                 .map_err(|e| e.for_expr_at_offset(offset))?,
         }
     }
