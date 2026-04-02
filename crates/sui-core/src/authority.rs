@@ -1282,8 +1282,7 @@ impl AuthorityState {
             .tap_err(|_| {
                 self.update_overload_metrics("execution_pending");
             })?;
-        // Note: consensus overload is now handled by the priority admission queue
-        // in authority_server.rs, not by check_limits() here.
+        // Consensus overload is handled by the admission queue in authority_server.rs.
 
         let pending_tx_count = self
             .get_cache_commit()

@@ -222,7 +222,6 @@ struct InsertCommand {
 #[derive(Clone)]
 pub struct AdmissionQueueHandle {
     sender: mpsc::Sender<InsertCommand>,
-    pub(crate) metrics: Arc<AdmissionQueueMetrics>,
     pub(crate) bypass_threshold: usize,
 }
 
@@ -324,7 +323,6 @@ impl AdmissionQueueManager {
 
         AdmissionQueueHandle {
             sender,
-            metrics: self.metrics.clone(),
             bypass_threshold: self.bypass_threshold,
         }
     }
