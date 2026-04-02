@@ -66,6 +66,10 @@ fn abort_paths<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "abort_paths.move");
 }
 
+fn deep_calls<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "deep_calls.move");
+}
+
 /// Interpreter step() overhead benchmarks.
 /// These measure raw dispatch overhead with minimal work per instruction.
 /// Use to validate tracing optimizations:
@@ -93,6 +97,7 @@ criterion_group!(
         large_functions,
         enums,
         abort_paths,
+        deep_calls,
         interpreter_step,
 );
 
