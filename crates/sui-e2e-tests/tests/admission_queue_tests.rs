@@ -71,7 +71,7 @@ async fn test_admission_queue_eviction_and_rejection() {
     };
 
     // Drain is disabled via an AtomicBool so we can re-enable it at the end.
-    let drain_disabled = Arc::new(AtomicBool::new(false));
+    let drain_disabled = Arc::new(AtomicBool::new(true));
 
     // Build network config with overload settings, and extract the committee
     // for creating direct authority clients.
@@ -94,7 +94,6 @@ async fn test_admission_queue_eviction_and_rejection() {
             dd.load(Ordering::SeqCst)
         });
     });
-    drain_disabled.store(true, Ordering::SeqCst);
 
     // Create a direct gRPC client to the target validator.
     let local_clients = make_network_authority_clients_with_network_config(
@@ -215,6 +214,104 @@ async fn test_admission_queue_epoch_boundary_cleanup() {
     assert!(
         result.is_ok(),
         "Transaction should succeed after second epoch change: {:?}",
+        result.err()
+    );
+}
+
+/// Verify that epoch change with a pending admission queue entry does not
+/// leave the system in a broken state. Submits a transaction to a validator
+/// with draining disabled, triggers reconfiguration, re-enables draining,
+/// and verifies:
+/// - The pending transaction succeeds (retried in the new epoch).
+/// - The system is healthy in the new epoch.
+/// - A second reconfiguration completes successfully.
+#[sim_test]
+async fn test_admission_queue_reconfig_with_pending_entries() {
+    let overload_config = AuthorityOverloadConfig {
+        admission_queue_bypass_fraction: 0.0,
+        admission_queue_capacity_fraction: 0.0001,
+        ..Default::default()
+    };
+
+    let drain_disabled = Arc::new(AtomicBool::new(true));
+
+    let network_config = ConfigBuilder::new_with_temp_dir()
+        .committee_size(NonZeroUsize::new(4).unwrap())
+        .with_authority_overload_config(overload_config)
+        .build();
+    let committee = network_config.committee_with_network();
+
+    let cluster = TestClusterBuilder::new()
+        .set_network_config(network_config)
+        .build()
+        .await;
+
+    let validator = cluster.all_validator_handles().into_iter().next().unwrap();
+
+    // Register drain-disable failpoint on the target validator.
+    let dd = drain_disabled.clone();
+    validator.with(|_| {
+        register_fail_point_if("admission_queue_disable_drain", move || {
+            dd.load(Ordering::SeqCst)
+        });
+    });
+
+    let local_clients = make_network_authority_clients_with_network_config(
+        &committee,
+        &default_mysten_network_config(),
+    );
+    let target_name = validator.with(|node| node.state().name);
+    let auth_client = local_clients.get(&target_name).unwrap();
+
+    let rgp = cluster.get_reference_gas_price().await;
+    let tx1 = make_transfer_tx_with_gas_price(&cluster, rgp).await;
+
+    // Submit a fill via the validator's gRPC interface. With draining disabled,
+    // the RPC will block waiting for the consensus position.
+    let fill = tokio::spawn({
+        let c = auth_client.clone();
+        async move {
+            c.submit_transaction(SubmitTxRequest::new_transaction(tx1), None)
+                .await
+        }
+    });
+
+    // Give the fill time to reach the queue.
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    // Trigger reconfiguration while the fill is pending.
+    cluster.trigger_reconfiguration().await;
+
+    // Re-enable draining so the new epoch's queue works normally.
+    drain_disabled.store(false, Ordering::SeqCst);
+
+    // The fill was pending when reconfig replaced the queue. The RPC handler's
+    // retry loop catches ValidatorHaltedAtEpochEnd and resubmits in the new
+    // epoch, so the fill succeeds.
+    let r_fill = fill.await.unwrap();
+    assert!(
+        r_fill.is_ok(),
+        "fill should succeed via retry in new epoch: {:?}",
+        r_fill,
+    );
+
+    // Verify the system is healthy in the new epoch.
+    let tx = make_transfer_tx_with_gas_price(&cluster, rgp).await;
+    let result = cluster.wallet.execute_transaction_may_fail(tx).await;
+    assert!(
+        result.is_ok(),
+        "Transaction should succeed in new epoch: {:?}",
+        result.err()
+    );
+
+    // A second reconfiguration should succeed (no stale state).
+    cluster.trigger_reconfiguration().await;
+
+    let tx = make_transfer_tx_with_gas_price(&cluster, rgp).await;
+    let result = cluster.wallet.execute_transaction_may_fail(tx).await;
+    assert!(
+        result.is_ok(),
+        "Transaction should succeed after second reconfig: {:?}",
         result.err()
     );
 }
