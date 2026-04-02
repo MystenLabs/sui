@@ -174,6 +174,7 @@ impl MachineHeap {
 // -------------------------------------------------------------------------------------------------
 
 impl StackFrame {
+    #[cfg(any(debug_assertions, feature = "testing"))]
     pub(crate) fn iter(&self) -> std::slice::Iter<'_, MemBox<Value>> {
         self.slice.iter()
     }

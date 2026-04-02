@@ -36,9 +36,11 @@ use smallvec::{SmallVec, smallvec};
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
-    fmt::Write,
     sync::Arc,
 };
+
+#[cfg(any(debug_assertions, feature = "testing"))]
+use std::fmt::Write;
 
 pub type UnboxedNativeFunction = dyn Fn(&mut NativeContext, Vec<Type>, VecDeque<Value>) -> PartialVMResult<NativeResult>
     + Send
@@ -211,6 +213,7 @@ impl NativeFunctions {
 pub struct NativeContext<'a, 'b, 'c> {
     // If this native was the base invocation, we do not create a machine state. This is only used
     // for printing stack traces, and in that case we will print that there is no call stack.
+    #[cfg(any(debug_assertions, feature = "testing"))]
     state: Option<&'a MachineState>,
     vtables: &'a VMDispatchTables,
     extensions: &'a mut NativeContextExtensions<'b>,
@@ -221,6 +224,7 @@ pub struct NativeContext<'a, 'b, 'c> {
 
 impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     pub(crate) fn new(
+        #[cfg_attr(not(any(debug_assertions, feature = "testing")), allow(unused))]
         state: Option<&'a MachineState>,
         vtables: &'a VMDispatchTables,
         extensions: &'a mut NativeContextExtensions<'b>,
@@ -228,6 +232,7 @@ impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
         gas_budget: InternalGas,
     ) -> Self {
         Self {
+            #[cfg(any(debug_assertions, feature = "testing"))]
             state,
             vtables,
             extensions,

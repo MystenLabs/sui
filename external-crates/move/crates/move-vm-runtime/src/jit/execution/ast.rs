@@ -250,6 +250,7 @@ pub(crate) struct StructInstantiation {
 #[derive(Debug)]
 pub(crate) struct FieldHandle {
     pub offset: usize,
+    #[cfg(any(debug_assertions, feature = "testing"))]
     pub owner: VirtualTableKey,
 }
 
@@ -257,6 +258,7 @@ pub(crate) struct FieldHandle {
 #[derive(Debug)]
 pub(crate) struct FieldInstantiation {
     pub offset: usize,
+    #[cfg(any(debug_assertions, feature = "testing"))]
     pub owner: VirtualTableKey,
 }
 
@@ -1622,10 +1624,12 @@ impl std::fmt::Debug for ArenaType {
 /// Trait for types that can be displayed with an interner.
 /// This is similar to `std::fmt::Display` but takes an interner as argument. It is used for
 /// printing stack traces and other debug situations.
+#[cfg(any(debug_assertions, feature = "testing"))]
 pub trait InternedDisplay<B: std::fmt::Write> {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result;
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for IdentifierKey {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         let name = interner.resolve_ident(self, "module name");
@@ -1633,6 +1637,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for IdentifierKey {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for VirtualTableKey {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         let str = self.to_short_string(interner);
@@ -1640,6 +1645,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for VirtualTableKey {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for StructDef {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         // Name
@@ -1667,6 +1673,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for StructDef {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for EnumDef {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         // Name
@@ -1687,6 +1694,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for EnumDef {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for VariantDef {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         // Prefix with Enum name
@@ -1715,6 +1723,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for VariantDef {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for FunctionInstantiation {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         // callee
@@ -1735,6 +1744,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for FunctionInstantiation {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for StructInstantiation {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         // Head
@@ -1755,6 +1765,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for StructInstantiation {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for FieldHandle {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         self.owner.fmt(f, interner)?;
@@ -1762,6 +1773,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for FieldHandle {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for FieldInstantiation {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         // Owner may be unused operationally, but it’s very helpful in logs
@@ -1770,6 +1782,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for FieldInstantiation {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for EnumInstantiation {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         // Head
@@ -1790,6 +1803,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for EnumInstantiation {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for VariantInstantiation {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         // Enum head with type params from enum_inst
@@ -1812,6 +1826,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for VariantInstantiation {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for Bytecode {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         match self {
@@ -2024,6 +2039,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for Bytecode {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for CallType {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         match self {
@@ -2036,6 +2052,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for CallType {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "testing"))]
 impl<B: std::fmt::Write> InternedDisplay<B> for ArenaType {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         match self {

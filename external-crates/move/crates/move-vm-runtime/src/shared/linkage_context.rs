@@ -4,12 +4,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_binary_format::{
-    errors::{Location, PartialVMResult, VMResult},
+    errors::{Location, VMResult},
     partial_vm_error,
 };
-use move_core_types::language_storage::TypeTag;
-
 use crate::shared::types::{OriginalId, VersionId};
+
+#[cfg(any(debug_assertions, feature = "testing"))]
+use move_binary_format::errors::PartialVMResult;
+#[cfg(any(debug_assertions, feature = "testing"))]
+use move_core_types::language_storage::TypeTag;
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
 /// table, allowing the same module in storage to be run against different dependencies.

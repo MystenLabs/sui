@@ -4,14 +4,13 @@
 use crate::{
     cache::identifier_interner::IdentifierInterner,
     execution::{
-        dispatch_tables::VMDispatchTables,
         interpreter::{
             locals::{MachineHeap, StackFrame},
             set_err_info,
         },
-        values::values_impl::{self as values, VMValueCast, Value},
+        values::values_impl::{VMValueCast, Value},
     },
-    jit::execution::ast::{Function, InternedDisplay, Type},
+    jit::execution::ast::{Function, Type},
     shared::{
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
@@ -20,7 +19,19 @@ use crate::{
 };
 use move_binary_format::{errors::*, partial_vm_error};
 
-use std::{fmt::Write, sync::Arc};
+use std::sync::Arc;
+
+#[cfg(any(debug_assertions, feature = "testing"))]
+use crate::{
+    execution::{
+        dispatch_tables::VMDispatchTables,
+        values::values_impl as values,
+    },
+    jit::execution::ast::InternedDisplay,
+};
+
+#[cfg(any(debug_assertions, feature = "testing"))]
+use std::fmt::Write;
 
 #[cfg(any(debug_assertions, feature = "testing"))]
 macro_rules! debug_write {

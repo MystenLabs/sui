@@ -797,16 +797,19 @@ fn cache_signatures(
 fn field_handles(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
+    #[cfg_attr(not(any(debug_assertions, feature = "testing")), allow(unused))]
     structs: &[StructDef],
 ) -> PartialVMResult<ArenaVec<FieldHandle>> {
     let field_handles = module
         .field_handles()
         .iter()
         .map(|f_handle| {
-            let def_idx = f_handle.owner;
-            let owner = structs.safe_get(def_idx.0 as usize)?.def_vtable_key.clone();
             let offset = f_handle.field as usize;
-            Ok(FieldHandle { offset, owner })
+            Ok(FieldHandle {
+                offset,
+                #[cfg(any(debug_assertions, feature = "testing"))]
+                owner: structs.safe_get(f_handle.owner.0 as usize)?.def_vtable_key.clone(),
+            })
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
     context.arena_vec(field_handles.into_iter())
@@ -937,10 +940,13 @@ fn field_instantiations(
         .iter()
         .map(|f_inst| {
             let fh_idx = f_inst.handle;
-            let owner = field_handles.safe_get(fh_idx.0 as usize)?.owner.clone();
             let offset = field_handles.safe_get(fh_idx.0 as usize)?.offset;
 
-            Ok(FieldInstantiation { offset, owner })
+            Ok(FieldInstantiation {
+                offset,
+                #[cfg(any(debug_assertions, feature = "testing"))]
+                owner: field_handles.safe_get(fh_idx.0 as usize)?.owner.clone(),
+            })
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
     context.arena_vec(field_instantiations.into_iter())
