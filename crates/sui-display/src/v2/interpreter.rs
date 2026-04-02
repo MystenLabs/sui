@@ -55,17 +55,14 @@ impl<S: V::Store> Interpreter<S> {
                     offset,
                     alternates,
                     transform,
-                }) => {
-                    let transform = transform.unwrap_or_default();
-                    Ok(self
-                        .eval_alts(alternates)
-                        .await?
-                        .map(move |value| V::Strand::Value {
-                            value,
-                            transform,
-                            offset: *offset,
-                        }))
-                }
+                }) => Ok(self
+                    .eval_alts(alternates)
+                    .await?
+                    .map(move |value| V::Strand::Value {
+                        value,
+                        transform: *transform,
+                        offset: *offset,
+                    })),
             }
         }))
         .await

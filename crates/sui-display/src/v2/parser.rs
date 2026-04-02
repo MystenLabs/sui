@@ -143,13 +143,12 @@ pub enum Fields<'s> {
 }
 
 /// Ways to modify a value before displaying it.
-#[derive(Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Transform {
     Base64(Base64Modifier),
     Bcs(Base64Modifier),
     Hex,
     Json,
-    #[default]
     Str,
     Timestamp,
     Url,
