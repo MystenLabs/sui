@@ -110,7 +110,7 @@ sui-forking start --network testnet
 
 This command:
 
-- Starts a local “*forked*” network on port 9001 (default) - this is used to interact with the forked network, e.g., advance-checkpoints, request gas, advance-clock, advance-epoch, etc. You can do so via the CLI commands with the `sui-forking` binary or via the REST API (see below).
+- Starts a local “*forked*” network on port 9000 (default) - this is used to interact with the forked network specific commands, e.g., advance-checkpoints, advance-clock, status. You can do so via the CLI or via a gRPC API.
 - Starts the RPC server on port 9000 (default) - this is the gRPC endpoint you can connect the Sui client to interact with the network.
 - Allows you to execute transactions against this local state and fetches objects on-demand from the real network
 
@@ -123,7 +123,7 @@ The command accepts a checkpoint to fork from. This must not larger than the lat
 **The startup flow**
 - Initialize store layer (forking-data-store)
 - Fetch the latest checkpoint (or the checkpoint specified by the user)
-- Wait for commands to advance the network (checkpoint, clock) on the forking service, or gRPC requests.
+- Accept incoming gRPC requests (data fetching, transaction execution, forked network control).
 
 ### POC CLI
 
@@ -152,7 +152,6 @@ sui-forking status
 ```
 
 Shows the current checkpoint, epoch, and timestamp.
-
 
 ## Outside of scope for POC
 - GraphQL support
