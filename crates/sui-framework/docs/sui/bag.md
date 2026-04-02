@@ -261,7 +261,7 @@ Returns true iff there is an value associated with the key <code>k: K</code> in 
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bag.md#sui_bag_contains">contains</a>&lt;K: <b>copy</b> + drop + store&gt;(<a href="../sui/bag.md#sui_bag">bag</a>: &<a href="../sui/bag.md#sui_bag_Bag">Bag</a>, k: K): bool {
-    field::exists_&lt;K&gt;(&<a href="../sui/bag.md#sui_bag">bag</a>.id, k)
+    field::exists&lt;K&gt;(&<a href="../sui/bag.md#sui_bag">bag</a>.id, k)
 }
 </code></pre>
 

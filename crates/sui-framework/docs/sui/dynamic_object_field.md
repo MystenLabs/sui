@@ -13,15 +13,17 @@ for external tools. The difference is otherwise not observable from within Move.
 -  [Function `borrow`](#sui_dynamic_object_field_borrow)
 -  [Function `borrow_mut`](#sui_dynamic_object_field_borrow_mut)
 -  [Function `remove`](#sui_dynamic_object_field_remove)
--  [Function `exists_`](#sui_dynamic_object_field_exists_)
+-  [Function `exists`](#sui_dynamic_object_field_exists)
 -  [Function `exists_with_type`](#sui_dynamic_object_field_exists_with_type)
 -  [Function `id`](#sui_dynamic_object_field_id)
+-  [Function `remove_opt`](#sui_dynamic_object_field_remove_opt)
 -  [Macro function `borrow_or_add`](#sui_dynamic_object_field_borrow_or_add)
 -  [Macro function `borrow_mut_or_add`](#sui_dynamic_object_field_borrow_mut_or_add)
 -  [Macro function `get_do`](#sui_dynamic_object_field_get_do)
 -  [Macro function `get_mut_do`](#sui_dynamic_object_field_get_mut_do)
 -  [Macro function `get_fold`](#sui_dynamic_object_field_get_fold)
 -  [Macro function `get_mut_fold`](#sui_dynamic_object_field_get_mut_fold)
+-  [Function `exists_`](#sui_dynamic_object_field_exists_)
 -  [Function `internal_add`](#sui_dynamic_object_field_internal_add)
 -  [Function `internal_borrow`](#sui_dynamic_object_field_internal_borrow)
 -  [Function `internal_borrow_mut`](#sui_dynamic_object_field_internal_borrow_mut)
@@ -196,15 +198,15 @@ specified type.
 
 </details>
 
-<a name="sui_dynamic_object_field_exists_"></a>
+<a name="sui_dynamic_object_field_exists"></a>
 
-## Function `exists_`
+## Function `exists`
 
 Returns true if and only if the <code><a href="../sui/object.md#sui_object">object</a></code> has a dynamic object field with the name specified by
 <code>name: Name</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_">exists_</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists">exists</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
 </code></pre>
 
 
@@ -213,7 +215,7 @@ Returns true if and only if the <code><a href="../sui/object.md#sui_object">obje
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_">exists_</a>&lt;Name: <b>copy</b> + drop + store&gt;(<a href="../sui/object.md#sui_object">object</a>: &UID, name: Name): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists">exists</a>&lt;Name: <b>copy</b> + drop + store&gt;(<a href="../sui/object.md#sui_object">object</a>: &UID, name: Name): bool {
     <b>let</b> key = <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a> { name };
     field::exists_with_type&lt;<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="../sui/object.md#sui_object">object</a>, key)
 }
@@ -281,6 +283,39 @@ Returns none otherwise
 
 </details>
 
+<a name="sui_dynamic_object_field_remove_opt"></a>
+
+## Function `remove_opt`
+
+Removes the dynamic object field if it exists. Returns <code>some(Value)</code> if it exists or <code>none</code>
+otherwise.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_remove_opt">remove_opt</a>&lt;Name: <b>copy</b>, drop, store, Value: key, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_remove_opt">remove_opt</a>&lt;Name: <b>copy</b> + drop + store, Value: key + store&gt;(
+    <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    name: Name,
+): Option&lt;Value&gt; {
+    <b>if</b> (<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_with_type">exists_with_type</a>&lt;Name, Value&gt;(<a href="../sui/object.md#sui_object">object</a>, name)) {
+        option::some(<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_remove">remove</a>(<a href="../sui/object.md#sui_object">object</a>, name))
+    } <b>else</b> {
+        option::none()
+    }
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_dynamic_object_field_borrow_or_add"></a>
 
 ## Macro function `borrow_or_add`
@@ -305,7 +340,7 @@ Note that <code>$default</code> is evaluated only if the field does not already 
 ): &$Value {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (!<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_">exists_</a>&lt;$Name&gt;(o, name)) <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_add">add</a>(o, name, $default);
+    <b>if</b> (!<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists">exists</a>&lt;$Name&gt;(o, name)) <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_add">add</a>(o, name, $default);
     <a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)
 }
 </code></pre>
@@ -338,7 +373,7 @@ Note that <code>$default</code> is evaluated only if the field does not already 
 ): &<b>mut</b> $Value {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (!<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_">exists_</a>&lt;$Name&gt;(o, name)) <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_add">add</a>(o, name, $default);
+    <b>if</b> (!<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists">exists</a>&lt;$Name&gt;(o, name)) <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_add">add</a>(o, name, $default);
     <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_borrow_mut">borrow_mut</a>(o, name)
 }
 </code></pre>
@@ -472,6 +507,30 @@ This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then callin
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
     <b>if</b> (<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) $some(<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_borrow_mut">borrow_mut</a>(o, name)) <b>else</b> $none
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_object_field_exists_"></a>
+
+## Function `exists_`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_">exists_</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_">exists_</a>&lt;Name: <b>copy</b> + drop + store&gt;(<a href="../sui/object.md#sui_object">object</a>: &UID, name: Name): bool {
+    <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists">exists</a>(<a href="../sui/object.md#sui_object">object</a>, name)
 }
 </code></pre>
 

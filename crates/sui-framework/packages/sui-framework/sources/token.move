@@ -510,7 +510,7 @@ public fun remove_rule_config<T, Rule, Config: store>(
 /// Check if a config for a `Rule` is set in the `TokenPolicy` without
 /// checking the type of the `Config`.
 public fun has_rule_config<T, Rule>(self: &TokenPolicy<T>): bool {
-    df::exists_<RuleKey<Rule>>(&self.id, key<Rule>())
+    df::exists<RuleKey<Rule>>(&self.id, key<Rule>())
 }
 
 /// Check if a `Config` for a `Rule` is set in the `TokenPolicy` and that

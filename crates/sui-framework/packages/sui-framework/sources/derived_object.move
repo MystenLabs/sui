@@ -38,7 +38,7 @@ public enum ClaimedStatus has store {
 public fun claim<K: copy + drop + store>(parent: &mut UID, key: K): UID {
     let addr = derive_address(parent.to_inner(), key);
     let id = addr.to_id();
-    assert!(!df::exists_(parent, Claimed(id)), EObjectAlreadyExists);
+    assert!(!df::exists(parent, Claimed(id)), EObjectAlreadyExists);
     df::add(parent, Claimed(id), ClaimedStatus::Reserved);
     object::new_uid_from_hash(addr)
 }
@@ -47,7 +47,7 @@ public fun claim<K: copy + drop + store>(parent: &mut UID, key: K): UID {
 /// Note: If the UID has been deleted through `object::delete`, this will always return true.
 public fun exists<K: copy + drop + store>(parent: &UID, key: K): bool {
     let addr = derive_address(parent.to_inner(), key);
-    df::exists_(parent, Claimed(addr.to_id()))
+    df::exists(parent, Claimed(addr.to_id()))
 }
 
 /// Given an ID and a Key, it calculates the derived address.

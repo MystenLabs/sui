@@ -55,7 +55,7 @@ fun record_accumulator_object_changes(
     objects_destroyed: u64,
 ) {
     let key = AccumulatorObjectCountKey();
-    if (dynamic_field::exists_(accumulator_root.id_mut(), key)) {
+    if (dynamic_field::exists(accumulator_root.id_mut(), key)) {
         let current_count: &mut u64 = dynamic_field::borrow_mut(accumulator_root.id_mut(), key);
         assert!(*current_count + objects_created >= objects_destroyed, EInvariantViolation);
         *current_count = *current_count + objects_created - objects_destroyed;
@@ -69,7 +69,7 @@ fun record_accumulator_object_changes(
 #[allow(unused_function)]
 fun get_accumulator_object_count(accumulator_root: &AccumulatorRoot): u64 {
     let key = AccumulatorObjectCountKey();
-    if (dynamic_field::exists_(accumulator_root.id(), key)) {
+    if (dynamic_field::exists(accumulator_root.id(), key)) {
         *dynamic_field::borrow(accumulator_root.id(), key)
     } else {
         0

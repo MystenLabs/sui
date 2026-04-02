@@ -65,7 +65,7 @@ public fun remove<Name: copy + drop + store, Value: key + store>(
 
 /// Returns true if and only if the `object` has a dynamic object field with the name specified by
 /// `name: Name`.
-public fun exists_<Name: copy + drop + store>(object: &UID, name: Name): bool {
+public fun exists<Name: copy + drop + store>(object: &UID, name: Name): bool {
     let key = Wrapper { name };
     field::exists_with_type<Wrapper<Name>, ID>(object, key)
 }
@@ -88,6 +88,19 @@ public fun id<Name: copy + drop + store>(object: &UID, name: Name): Option<ID> {
     option::some(value_addr.to_id())
 }
 
+/// Removes the dynamic object field if it exists. Returns `some(Value)` if it exists or `none`
+/// otherwise.
+public fun remove_opt<Name: copy + drop + store, Value: key + store>(
+    object: &mut UID,
+    name: Name,
+): Option<Value> {
+    if (exists_with_type<Name, Value>(object, name)) {
+        option::some(remove(object, name))
+    } else {
+        option::none()
+    }
+}
+
 // === Macro Functions ===
 
 /// Immutably borrows the field value, adding it with `$default` if it doesn't exist.
@@ -99,7 +112,7 @@ public macro fun borrow_or_add<$Name: copy + drop + store, $Value: key + store>(
 ): &$Value {
     let o = $object;
     let name = $name;
-    if (!exists_<$Name>(o, name)) add(o, name, $default);
+    if (!exists<$Name>(o, name)) add(o, name, $default);
     borrow(o, name)
 }
 
@@ -112,7 +125,7 @@ public macro fun borrow_mut_or_add<$Name: copy + drop + store, $Value: key + sto
 ): &mut $Value {
     let o = $object;
     let name = $name;
-    if (!exists_<$Name>(o, name)) add(o, name, $default);
+    if (!exists<$Name>(o, name)) add(o, name, $default);
     borrow_mut(o, name)
 }
 
@@ -166,6 +179,13 @@ public macro fun get_mut_fold<$Name: copy + drop + store, $Value: key + store, $
     let o = $object;
     let name = $name;
     if (exists_with_type<$Name, $Value>(o, name)) $some(borrow_mut(o, name)) else $none
+}
+
+// === Deprecated ===
+
+#[deprecated(note = b"Renamed to `exists`")]
+public fun exists_<Name: copy + drop + store>(object: &UID, name: Name): bool {
+    exists(object, name)
 }
 
 public(package) fun internal_add<Name: copy + drop + store, Value: key>(

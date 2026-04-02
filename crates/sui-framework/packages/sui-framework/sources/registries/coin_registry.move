@@ -505,7 +505,7 @@ public fun borrow_legacy_metadata<T>(
 ): (CoinMetadata<T>, Borrow<T>) {
     assert!(!currency.is_migrated_from_legacy(), EBorrowLegacyMetadata);
 
-    if (!df::exists_(&currency.id, LegacyMetadataKey())) {
+    if (!df::exists(&currency.id, LegacyMetadataKey())) {
         let legacy = currency.to_legacy_metadata(ctx);
         df::add(&mut currency.id, LegacyMetadataKey(), legacy);
     };
@@ -531,7 +531,7 @@ public fun return_borrowed_legacy_metadata<T>(
     borrow: Borrow<T>,
     _ctx: &mut TxContext,
 ) {
-    assert!(!df::exists_(&currency.id, LegacyMetadataKey()), EDuplicateBorrow);
+    assert!(!df::exists(&currency.id, LegacyMetadataKey()), EDuplicateBorrow);
 
     let Borrow {} = borrow;
 
