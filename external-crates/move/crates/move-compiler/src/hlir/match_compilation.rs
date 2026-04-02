@@ -98,7 +98,7 @@ pub(super) fn compile_match(
     let mut seq = VecDeque::new();
     seq.append(&mut initial_binders);
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(match_exp))));
-    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
+    let exp_value = sp(eloc, T::UnannotatedExp_::Block(0, (UseFuns::new(0), seq)));
     T::exp(result_type.clone(), exp_value)
 }
 
@@ -751,7 +751,7 @@ fn make_arm_unpack(
     let nloc = next.exp.loc;
     seq.push_back(sp(nloc, T::SequenceItem_::Seq(Box::new(next))));
 
-    let body = T::UnannotatedExp_::Block((UseFuns::new(0), seq));
+    let body = T::UnannotatedExp_::Block(0, (UseFuns::new(0), seq));
     T::exp(context.output_type(), sp(ploc, body))
 }
 
@@ -1017,7 +1017,7 @@ fn make_match_variant_unpack(
     let eloc = next.exp.loc;
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
 
-    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
+    let exp_value = sp(eloc, T::UnannotatedExp_::Block(0, (UseFuns::new(0), seq)));
     T::exp(context.output_type(), exp_value)
 }
 
@@ -1059,7 +1059,7 @@ fn make_match_struct_unpack(
     let eloc = next.exp.loc;
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
 
-    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
+    let exp_value = sp(eloc, T::UnannotatedExp_::Block(0, (UseFuns::new(0), seq)));
     T::exp(context.output_type(), exp_value)
 }
 
@@ -1180,7 +1180,7 @@ fn make_bindings(
         seq.push_back(binding);
     }
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
-    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
+    let exp_value = sp(eloc, T::UnannotatedExp_::Block(0, (UseFuns::new(0), seq)));
     T::exp(context.output_type(), exp_value)
 }
 

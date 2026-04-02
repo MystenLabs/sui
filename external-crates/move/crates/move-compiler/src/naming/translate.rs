@@ -2007,7 +2007,6 @@ fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
     }
     N::UseFuns {
         color: 0, // used for macro substitution
-        expansion_color: 0,
         resolved,
         implicit_candidates: eimplicit,
     }
@@ -2183,7 +2182,6 @@ fn use_fun_module_defines(
 fn mark_all_use_funs_as_used(use_funs: &mut N::UseFuns) {
     let N::UseFuns {
         color: _,
-        expansion_color: _,
         resolved,
         implicit_candidates,
     } = use_funs;
@@ -3020,12 +3018,14 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             NE::Block(N::Block {
                 name: Some(label),
                 from_macro_argument: None,
+                expansion_color: 0,
                 seq,
             })
         }
         EE::Block(None, eseq) => NE::Block(N::Block {
             name: None,
             from_macro_argument: None,
+            expansion_color: 0,
             seq: sequence(context, eseq),
         }),
         EE::Lambda(elambda_binds, ety_opt, body) => {
@@ -4624,6 +4624,7 @@ fn remove_unused_bindings_exp(
         N::Exp_::Block(N::Block {
             name: _,
             from_macro_argument: _,
+            expansion_color: _,
             seq,
         }) => remove_unused_bindings_seq(context, used, seq),
         N::Exp_::Lambda(N::Lambda {

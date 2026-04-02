@@ -49,7 +49,6 @@ use std::{
 
 pub struct UseFunsScope<'env, 'outer> {
     color: Option<Color>,
-    expansion_color: Option<Color>,
     count: usize,
     use_funs: UseFunsScope_<'env, 'outer>,
 }
@@ -155,6 +154,7 @@ pub struct Context<'env, 'outer> {
     // for generating new variables during match compilation
     next_match_var_id: usize,
     use_funs: Vec<UseFunsScope<'env, 'outer>>,
+    pub current_expansion_color: Color,
     pub current_function: Option<FunctionName>,
     pub in_macro_function: bool,
     max_variable_color: RefCell<u16>,
@@ -219,7 +219,6 @@ impl<'env> UseFunsScope<'env, '_> {
     pub fn global(global_use_funs: &'env ResolvedUseFuns) -> Self {
         UseFunsScope {
             color: None,
-            expansion_color: None,
             count: 1,
             use_funs: UseFunsScope_::Global(global_use_funs),
         }
@@ -262,7 +261,6 @@ macro_rules! add_use_funs_scope {
     ($self:ident, $new_scope:expr) => {{
         let N::UseFuns {
             color,
-            expansion_color,
             resolved: mut new_scope,
             implicit_candidates,
         } = $new_scope;
@@ -271,10 +269,7 @@ macro_rules! add_use_funs_scope {
             "ICE use fun candidates should have been resolved"
         );
         let cur = $self.use_funs.last_mut().unwrap();
-        if new_scope.is_empty()
-            && cur.color == Some(color)
-            && cur.expansion_color == Some(expansion_color)
-        {
+        if new_scope.is_empty() && cur.color == Some(color) {
             cur.count += 1;
             return;
         }
@@ -317,7 +312,6 @@ macro_rules! add_use_funs_scope {
             count: 1,
             use_funs: UseFunsScope_::Local(new_scope),
             color: Some(color),
-            expansion_color: Some(expansion_color),
         })
     }};
 }
@@ -329,10 +323,7 @@ fn pop_use_funs_scope(use_funs: &mut Vec<UseFunsScope>) -> N::UseFuns {
         return N::UseFuns::new(cur.color.unwrap_or(0));
     }
     let UseFunsScope {
-        use_funs,
-        color,
-        expansion_color,
-        ..
+        use_funs, color, ..
     } = use_funs.pop().unwrap();
     let use_funs = match use_funs {
         UseFunsScope_::Global(_) => panic!("ICE global scope should never be popped"),
@@ -343,7 +334,6 @@ fn pop_use_funs_scope(use_funs: &mut Vec<UseFunsScope>) -> N::UseFuns {
     N::UseFuns {
         resolved: use_funs,
         color,
-        expansion_color: expansion_color.unwrap_or(color),
         implicit_candidates: UniqueMap::new(),
     }
 }
@@ -523,7 +513,6 @@ impl<'env> ModuleContext<'env> {
             .map(|scope| {
                 let UseFunsScope {
                     color,
-                    expansion_color,
                     count,
                     use_funs,
                 } = scope;
@@ -532,7 +521,6 @@ impl<'env> ModuleContext<'env> {
                         let use_funs = UseFunsScope_::Global(r);
                         UseFunsScope {
                             color: *color,
-                            expansion_color: *expansion_color,
                             count: *count,
                             use_funs,
                         }
@@ -544,7 +532,6 @@ impl<'env> ModuleContext<'env> {
                         debug_assert_eq!(count, &1);
                         UseFunsScope {
                             color: *color,
-                            expansion_color: *expansion_color,
                             count: *count,
                             use_funs: scope,
                         }
@@ -559,6 +546,7 @@ impl<'env> ModuleContext<'env> {
             used_module_members: BTreeMap::new(),
             next_match_var_id: 0,
             use_funs,
+            current_expansion_color: 0,
             current_function: None,
             in_macro_function: false,
             max_variable_color: RefCell::new(0),
@@ -1068,14 +1056,7 @@ impl<'env, 'outer> Context<'env, 'outer> {
     }
 
     pub fn current_expansion_color(&self) -> Color {
-        for scope in self.use_funs.iter().rev() {
-            if let Some(ec) = scope.expansion_color {
-                if ec != 0 {
-                    return ec;
-                }
-            }
-        }
-        0
+        self.current_expansion_color
     }
 
     pub fn add_ability_constraint(

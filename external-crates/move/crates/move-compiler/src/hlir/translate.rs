@@ -144,10 +144,10 @@ pub(super) struct Context<'env> {
     named_block_binders: UniqueMap<H::BlockLabel, Vec<H::LValue>>,
     named_block_types: UniqueMap<H::BlockLabel, H::Type>,
     /// Tracks the active macro expansion color during translation. Saved and
-    /// restored at block boundaries (set to `use_funs.expansion_color` on
-    /// entry), and stamped onto every H::Statement and H::Command so that
-    /// to_bytecode can compute debugger frame transitions between consecutive
-    /// bytecodes. Starts at 0 (no macro scope).
+    /// restored at block boundaries (set from the Sequence's expansion_color
+    /// element on entry), and stamped onto every H::Statement and H::Command
+    /// so that to_bytecode can compute debugger frame transitions between
+    /// consecutive bytecodes. Starts at 0 (no macro scope).
     current_color: Color,
     /// collects all struct fields used in the current module
     used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
@@ -476,9 +476,8 @@ fn function_body(
             context.extract_function_locals();
             HB::Native
         }
-        TB::Defined((use_funs, seq)) => {
+        TB::Defined((_, seq)) => {
             let saved_color = context.current_color;
-            context.current_color = use_funs.expansion_color;
             debug_print!(context.debug.function_translation,
                          (msg format!("-- {} ----------------", _name)),
                          (lines "body" => &seq; verbose));
@@ -993,9 +992,9 @@ fn tail(
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
             None
         }
-        E::NamedBlock(name, (use_funs, seq)) => {
+        E::NamedBlock(name, ec, (_, seq)) => {
             let saved_color = context.current_color;
-            context.current_color = use_funs.expansion_color;
+            context.current_color = ec;
             let name = translate_block_label(name);
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             let result = if binders.is_empty() {
@@ -1022,15 +1021,15 @@ fn tail(
             context.current_color = saved_color;
             Some(result)
         }
-        E::Block((use_funs, seq)) => {
+        E::Block(ec, (_, seq)) => {
             let saved_color = context.current_color;
-            context.current_color = use_funs.expansion_color;
+            context.current_color = ec;
             let result = tail_block(context, block, expected_type, seq);
             // Mirrors the value-position Block handler's color guard but it's
             // difficult to conceive a source-level test that would exercise it.
             let result = result.map(|mut e| {
-                if use_funs.expansion_color != saved_color && e.color.is_none() {
-                    e.color = Some(use_funs.expansion_color);
+                if ec != saved_color && e.color.is_none() {
+                    e.color = Some(ec);
                 }
                 e
             });
@@ -1343,9 +1342,9 @@ fn value(
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
             make_exp(HE::Unreachable)
         }
-        E::NamedBlock(name, (use_funs, seq)) => {
+        E::NamedBlock(name, ec, (_, seq)) => {
             let saved_color = context.current_color;
-            context.current_color = use_funs.expansion_color;
+            context.current_color = ec;
             let name = translate_block_label(name);
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             context.enter_named_block(name, binders.clone(), out_type.clone());
@@ -1365,15 +1364,15 @@ fn value(
             // to NamedBlock results (macro bodies use NamedBlocks for their
             // return labels). See test: macro_frames/binop_macro.
             let mut bound_exp = bound_exp;
-            if use_funs.expansion_color != saved_color && bound_exp.color.is_none() {
-                bound_exp.color = Some(use_funs.expansion_color);
+            if ec != saved_color && bound_exp.color.is_none() {
+                bound_exp.color = Some(ec);
             }
             context.current_color = saved_color;
             bound_exp
         }
-        E::Block((use_funs, seq)) => {
+        E::Block(ec, (_, seq)) => {
             let saved_color = context.current_color;
-            context.current_color = use_funs.expansion_color;
+            context.current_color = ec;
             let mut result = value_block(context, block, Some(&out_type), eloc, seq);
             // Preserve the block's expansion color on its result expression
             // when the block introduced a new color and the result doesn't
@@ -1400,8 +1399,8 @@ fn value(
             // overwriting it with MacroBody(outer) would make the inner
             // transition invisible.
             // See test: macro_frames/simple_nested_macros.
-            if use_funs.expansion_color != saved_color && result.color.is_none() {
-                result.color = Some(use_funs.expansion_color);
+            if ec != saved_color && result.color.is_none() {
+                result.color = Some(ec);
             }
             context.current_color = saved_color;
             result
@@ -1970,9 +1969,9 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             }
             context.exit_named_block(name);
         }
-        E::Block((use_funs, seq)) => {
+        E::Block(ec, (_, seq)) => {
             let saved_color = context.current_color;
-            context.current_color = use_funs.expansion_color;
+            context.current_color = ec;
             statement_block(context, block, seq);
             context.current_color = saved_color;
         }
@@ -2069,7 +2068,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError
-        | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
+        | E::NamedBlock(_, _, _)) => value_statement(context, block, make_exp(e_)),
 
         E::Value(_) | E::Unit { .. } => (),
 

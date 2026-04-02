@@ -478,13 +478,13 @@ fn tail(context: &mut Context, e: &T::Exp) -> ControlFlow {
         // it is intentionally infinite. It is, after all not causing any dead code.
         E::Loop { .. } => statement(context, e),
 
-        E::NamedBlock(name, (_, seq)) => {
+        E::NamedBlock(name, _, (_, seq)) => {
             // a named block in tail position checks for bad semicolons plus if the body exits that
             // block; if so, at least some of that code is live.
             let body_flow = tail_block(context, seq);
             body_flow.remove_label(name)
         }
-        E::Block((_, seq)) => tail_block(context, seq),
+        E::Block(_, (_, seq)) => tail_block(context, seq),
 
         // -----------------------------------------------------------------------------------------
         //  statements
@@ -593,13 +593,13 @@ fn value(context: &mut Context, e: &T::Exp) -> ControlFlow {
             };
             loop_flow.remove_label(name)
         }
-        E::NamedBlock(name, (_, seq)) => {
+        E::NamedBlock(name, _, (_, seq)) => {
             // a named block checks for bad semicolons plus if the body exits that
             // block; if so, at least some of that code is live.
             let body_flow = value_block(context, seq);
             body_flow.remove_label(name)
         }
-        E::Block((_, seq)) => value_block(context, seq),
+        E::Block(_, (_, seq)) => value_block(context, seq),
 
         // -----------------------------------------------------------------------------------------
         //  calls and nested expressions
@@ -782,7 +782,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> ControlFlow {
             };
             loop_flow.remove_label(name)
         }
-        E::NamedBlock(name, (_, seq)) => {
+        E::NamedBlock(name, _, (_, seq)) => {
             // a named block checks for bad semicolons plus if the body exits that
             // block; if so, at least some of that code is live.
             let body_flow = statement_block(
@@ -790,7 +790,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> ControlFlow {
             );
             body_flow.remove_label(name)
         }
-        E::Block((_, seq)) => statement_block(
+        E::Block(_, (_, seq)) => statement_block(
             context, seq, /* stmt_pos */ true, /* skip_last */ false,
         ),
         E::Return(rhs) => value_report!(rhs).combine_seq(return_called(*eloc)),

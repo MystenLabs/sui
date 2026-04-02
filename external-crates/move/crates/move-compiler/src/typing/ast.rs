@@ -9,8 +9,8 @@ use crate::{
     },
     ice,
     naming::ast::{
-        BlockLabel, EnumDefinition, FunctionSignature, Neighbor, StructDefinition, SyntaxMethods,
-        Type, Type_, UNIT_TYPE, UseFuns, Var,
+        BlockLabel, Color, EnumDefinition, FunctionSignature, Neighbor, StructDefinition,
+        SyntaxMethods, Type, Type_, UNIT_TYPE, UseFuns, Var,
     },
     parser::ast::{
         BinOp, ConstantName, DatatypeName, DocComment, ENTRY_MODIFIER, Field, FunctionName,
@@ -210,8 +210,12 @@ pub enum UnannotatedExp_ {
         has_break: bool,
         body: Box<Exp>,
     },
-    NamedBlock(BlockLabel, Sequence),
-    Block(Sequence),
+    /// Color: expansion color for debugger macro frame tracking (0 = no macro scope).
+    /// Set from `N::Block::expansion_color` during typing; consumed by HLIR
+    /// translation to stamp bytecodes with the active macro color.
+    NamedBlock(BlockLabel, Color, Sequence),
+    /// See `NamedBlock` for the Color parameter.
+    Block(Color, Sequence),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
@@ -354,11 +358,11 @@ impl UnannotatedExp_ {
         match &self {
             Self::Unit { .. } => true,
             Self::Annotate(inner, _) => inner.is_unit(diags),
-            Self::Block((_, seq)) if seq.is_empty() => {
+            Self::Block(_, (_, seq)) if seq.is_empty() => {
                 diags.add_diag(ice!((loc, "Unexpected empty block without a value")));
                 false
             }
-            Self::Block((_, seq)) if seq.len() == 1 => seq[0].value.is_unit(diags),
+            Self::Block(_, (_, seq)) if seq.len() == 1 => seq[0].value.is_unit(diags),
             _ => false,
         }
     }
@@ -767,12 +771,12 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(" ");
                 body.ast_debug(w);
             }
-            E::NamedBlock(name, seq) => {
+            E::NamedBlock(name, _, seq) => {
                 name.ast_debug(w);
                 w.write(": ");
                 seq.ast_debug(w)
             }
-            E::Block(seq) => seq.ast_debug(w),
+            E::Block(_, seq) => seq.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));

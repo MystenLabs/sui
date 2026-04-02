@@ -72,7 +72,6 @@ pub fn program(env: &CompilationEnv, info: &mut NamingProgramInfo, inner: &mut N
                 resolved,
                 implicit_candidates,
                 color: _,
-                expansion_color: _,
             } = &mdef.use_funs;
             assert!(implicit_candidates.is_empty());
             (mident, resolved.clone())
@@ -122,7 +121,6 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
         resolved,
         implicit_candidates,
         color: _,
-        expansion_color: _,
     } = uf;
     // remove any incorrect resolved functions
     for (tn, methods) in &mut *resolved {
@@ -377,6 +375,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         N::Exp_::Block(N::Block {
             name: _,
             from_macro_argument: _,
+            expansion_color: _,
             seq,
         }) => sequence(context, seq),
         N::Exp_::FieldMutate(ed, e) => {
