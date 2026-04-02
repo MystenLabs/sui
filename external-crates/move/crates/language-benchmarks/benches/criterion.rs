@@ -42,6 +42,10 @@ fn vector<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "vector.move");
 }
 
+fn structs<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "structs.move");
+}
+
 /// Interpreter step() overhead benchmarks.
 /// These measure raw dispatch overhead with minimal work per instruction.
 /// Use to validate tracing optimizations:
@@ -63,6 +67,7 @@ criterion_group!(
         natives,
         transfers,
         vector,
+        structs,
         interpreter_step,
 );
 
