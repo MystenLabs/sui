@@ -10,6 +10,8 @@ use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Connection;
 use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::balance::Balance;
+use sui_indexer_alt_framework::types::effects::AccumulatorValue;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::full_checkpoint_content::ExecutedTransaction;
@@ -37,7 +39,7 @@ impl Processor for CpBlooms {
 
         let mut bloom = CpBloomFilter::new();
         for tx in &checkpoint.transactions {
-            insert_tx_addresses(tx, &mut bloom);
+            insert_tx_bloom_values(tx, &mut bloom);
         }
 
         if bloom.popcount() == 0 {
@@ -71,11 +73,10 @@ impl Handler for CpBlooms {
     }
 }
 
-/// Inserts values from a transaction into bloom filter.
-///
-/// Common addresses (e.g., 0x0, clock) are filtered out as they appear in most
-/// checkpoints and would defeat the bloom filter's purpose.
-pub(crate) fn insert_tx_addresses(tx: &ExecutedTransaction, bloom: &mut impl Extend<Vec<u8>>) {
+/// Inserts bloom filter values from a transaction: sender, recipients, balance change
+/// addresses, affected object IDs, Move call packages/modules/functions, and event
+/// type components. High-frequency addresses (e.g., 0x0, clock) are excluded.
+pub(crate) fn insert_tx_bloom_values(tx: &ExecutedTransaction, bloom: &mut impl Extend<Vec<u8>>) {
     let mut values: Vec<BloomValue> = Vec::new();
 
     let sender: AccountAddress = tx.transaction.sender().into();
@@ -83,6 +84,19 @@ pub(crate) fn insert_tx_addresses(tx: &ExecutedTransaction, bloom: &mut impl Ext
 
     for addr in affected_addresses(&tx.effects) {
         values.push(BloomValue::SenderOrRecipient(addr.into()));
+    }
+
+    // Balance change recipients from accumulator events (e.g. coin transfers where the
+    // recipient address only appears in the accumulator, not in object ownership changes).
+    for event in tx.effects.accumulator_events() {
+        let ty = &event.write.address.ty;
+        if Balance::is_balance_type(ty)
+            && matches!(&event.write.value, AccumulatorValue::Integer(_))
+        {
+            values.push(BloomValue::SenderOrRecipient(
+                event.write.address.address.into(),
+            ));
+        }
     }
 
     for change in tx.effects.object_changes() {

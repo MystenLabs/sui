@@ -22,7 +22,7 @@ use sui_indexer_alt_schema::cp_bloom_blocks::function_bytea_or;
 use sui_indexer_alt_schema::schema::cp_bloom_blocks;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::handlers::cp_blooms::insert_tx_addresses;
+use crate::handlers::cp_blooms::insert_tx_bloom_values;
 
 /// Blocked bloom filters that span multiple checkpoints for efficient range queries.
 ///
@@ -62,7 +62,7 @@ impl Processor for CpBloomBlocks {
 
         let mut bloom = CpBlockedBloomFilter::new(seed);
         for tx in &checkpoint.transactions {
-            insert_tx_addresses(tx, &mut bloom);
+            insert_tx_bloom_values(tx, &mut bloom);
         }
 
         let blocks = bloom
