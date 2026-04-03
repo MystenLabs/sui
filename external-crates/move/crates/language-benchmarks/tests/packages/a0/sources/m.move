@@ -13,7 +13,7 @@ module a::m {
     }
 
     public fun bench_call_empty_internal_function(): u64 {
-        let i : u64 = 0;
+        let mut i : u64 = 0;
         while (i < COUNT) {
             i = i + empty_function();
         };
@@ -21,7 +21,7 @@ module a::m {
     }
 
     public fun bench_call_empty_pub_function(): u64 {
-        let i : u64 = 0;
+        let mut i : u64 = 0;
         while (i < COUNT) {
             i = i + empty_function_pub();
         };

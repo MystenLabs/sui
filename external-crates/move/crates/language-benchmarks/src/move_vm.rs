@@ -58,7 +58,8 @@ static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new
 
 /// Entry point for the bench, provide a function name to invoke in Module Bench in bench.move.
 pub fn bench<M: Measurement + 'static>(c: &mut Criterion<M>, filename: &str) {
-    let modules = compile_modules(filename);
+    let mut modules = compile_modules(filename);
+    modules.extend(stdlib_modules());
     let mut move_vm = create_vm();
     execute(c, &mut move_vm, modules, filename);
 }
@@ -97,6 +98,17 @@ fn create_vm() -> InMemoryTestAdapter {
         )
         .unwrap(),
     ))
+}
+
+fn stdlib_modules() -> Vec<CompiledModule> {
+    PRECOMPILED_MOVE_STDLIB
+        .iter()
+        .filter_map(|(_, info)| {
+            info.compiled_unit
+                .as_ref()
+                .map(|unit| unit.named_module.module.clone())
+        })
+        .collect()
 }
 
 fn find_bench_functions(modules: &[CompiledModule]) -> Vec<(Identifier, ModuleId)> {
