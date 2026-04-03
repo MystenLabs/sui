@@ -718,7 +718,12 @@ impl SuiNode {
         }
 
         // Send initial peer addresses to the p2p network.
-        update_peer_addresses(&config, &endpoint_manager, epoch_store.epoch_start_state());
+        update_peer_addresses(
+            &config,
+            &endpoint_manager,
+            epoch_store.epoch_start_state(),
+            None,
+        );
 
         info!("start snapshot upload");
         // Start uploading state snapshot to remote store
@@ -1619,7 +1624,8 @@ impl SuiNode {
         self.state.clone()
     }
 
-    pub fn connection_monitor_status(&self) -> &Arc<ConnectionMonitorStatus> {
+    #[cfg(any(test, msim))]
+    pub fn connection_monitor_status_for_testing(&self) -> &Arc<ConnectionMonitorStatus> {
         &self.connection_monitor_status
     }
 
@@ -1814,7 +1820,12 @@ impl SuiNode {
 
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
 
-            update_peer_addresses(&self.config, &self.endpoint_manager, &new_epoch_start_state);
+            update_peer_addresses(
+                &self.config,
+                &self.endpoint_manager,
+                &new_epoch_start_state,
+                Some(cur_epoch_store.epoch_start_state()),
+            );
 
             let mut validator_components_lock_guard = self.validator_components.lock().await;
 
@@ -2345,24 +2356,41 @@ impl SpawnOnce {
 }
 
 /// Updates trusted peer addresses in the p2p network (for nodes configured as validators).
+/// When `prev_epoch_start_state` is provided, validators that are no longer in the committee
+/// have their Chain addresses cleared.
 fn update_peer_addresses(
     config: &NodeConfig,
     endpoint_manager: &EndpointManager,
     epoch_start_state: &EpochStartSystemState,
+    prev_epoch_start_state: Option<&EpochStartSystemState>,
 ) {
     if config.consensus_config().is_none() {
         return;
     }
-    for (peer_id, address) in
-        epoch_start_state.get_validator_as_p2p_peers(config.protocol_public_key())
-    {
-        endpoint_manager
-            .update_endpoint(
-                EndpointId::P2p(peer_id),
-                AddressSource::Chain,
-                vec![address],
-            )
-            .expect("Updating peer addresses should not fail");
+    let new_peers: HashSet<PeerId> = epoch_start_state
+        .get_validator_as_p2p_peers(config.protocol_public_key())
+        .into_iter()
+        .map(|(peer_id, address)| {
+            endpoint_manager
+                .update_endpoint(
+                    EndpointId::P2p(peer_id),
+                    AddressSource::Chain,
+                    vec![address],
+                )
+                .expect("Updating peer addresses should not fail");
+            peer_id
+        })
+        .collect();
+
+    // Clear Chain addresses for validators that left the committee.
+    if let Some(prev) = prev_epoch_start_state {
+        for (peer_id, _) in prev.get_validator_as_p2p_peers(config.protocol_public_key()) {
+            if !new_peers.contains(&peer_id) {
+                endpoint_manager
+                    .update_endpoint(EndpointId::P2p(peer_id), AddressSource::Chain, vec![])
+                    .expect("Clearing peer addresses should not fail");
+            }
+        }
     }
 }
 

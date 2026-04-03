@@ -3,15 +3,17 @@
 
 #[cfg(msim)]
 mod test {
+    use mysten_network::anemo_connection_monitor::ConnectionStatus;
     use std::collections::HashSet;
     use std::time::Duration;
     use sui_macros::sim_test;
+    use sui_node::SuiNodeHandle;
     use sui_simulator::anemo;
-    use sui_test_transaction_builder::emit_new_random_u128;
+    use sui_test_transaction_builder::{TestTransactionBuilder, emit_new_random_u128};
     use sui_types::crypto::KeypairTraits;
     use sui_types::effects::TransactionEffectsAPI;
     use sui_types::object::Owner;
-    use test_cluster::TestClusterBuilder;
+    use test_cluster::{TestCluster, TestClusterBuilder};
     use tokio::time::sleep;
     use tracing::info;
 
@@ -91,8 +93,11 @@ mod test {
         for (i, name) in validator_names[1..].iter().enumerate() {
             let node = test_cluster.swarm.node(name).unwrap();
             let handle = node.get_node_handle().unwrap();
-            let statuses =
-                handle.with(|n| n.connection_monitor_status().connection_statuses.clone());
+            let statuses = handle.with(|n| {
+                n.connection_monitor_status_for_testing()
+                    .connection_statuses
+                    .clone()
+            });
             let connected_peer_ids: Vec<_> = statuses.iter().map(|entry| *entry.key()).collect();
             info!(
                 bad_validator_index = i + 1,
@@ -164,5 +169,103 @@ mod test {
         info!("Triggering reconfiguration...");
         test_cluster.trigger_reconfiguration().await;
         info!("Reconfiguration succeeded");
+    }
+
+    /// Tests that when a validator is removed from the committee, remaining
+    /// validators disconnect from it after reconfiguration (because its Chain
+    /// addresses are cleared and no other address source is configured).
+    #[sim_test]
+    async fn test_removed_validator_disconnected_after_reconfig() {
+        let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(5)
+            .build()
+            .await;
+
+        // Stop all validators to clear seed_peers, so Chain is the only
+        // address source between validators.
+        test_cluster.stop_all_validators().await;
+        let validator_names: Vec<_> = test_cluster.get_validator_pubkeys();
+        for name in &validator_names {
+            let node = test_cluster.swarm.node(name).unwrap();
+            node.config().p2p_config.seed_peers.clear();
+        }
+        test_cluster.start_all_validators().await;
+
+        // Wait for connections to stabilize via Chain addresses.
+        sleep(Duration::from_secs(10)).await;
+
+        // Pick the last validator to remove.
+        let validator_to_remove = test_cluster.swarm.validator_node_handles().pop().unwrap();
+        let removed_peer_id = validator_to_remove
+            .with(|node| anemo::PeerId(node.get_config().network_key_pair().public().0.to_bytes()));
+
+        // Verify remaining validators are connected to the to-be-removed validator.
+        let remaining_handles: Vec<_> = test_cluster
+            .swarm
+            .validator_node_handles()
+            .into_iter()
+            .filter(|h| {
+                h.with(|n| anemo::PeerId(n.get_config().network_key_pair().public().0.to_bytes()))
+                    != removed_peer_id
+            })
+            .collect();
+
+        for handle in &remaining_handles {
+            let statuses = handle.with(|n| {
+                n.connection_monitor_status_for_testing()
+                    .connection_statuses
+                    .clone()
+            });
+            let status = statuses.get(&removed_peer_id).map(|e| e.value().clone());
+            assert_eq!(
+                status,
+                Some(ConnectionStatus::Connected),
+                "remaining validator should be connected to the to-be-removed validator before reconfig"
+            );
+        }
+
+        // Request removal and trigger reconfiguration.
+        execute_remove_validator_tx(&test_cluster, &validator_to_remove).await;
+        test_cluster.trigger_reconfiguration().await;
+
+        // Stop the removed validator so it can't re-establish connections.
+        let removed_name = validator_to_remove.with(|node| node.state().name);
+        test_cluster.stop_node(&removed_name);
+
+        // Wait for disconnect to take effect.
+        sleep(Duration::from_secs(15)).await;
+
+        // Verify remaining validators are no longer connected to the removed validator.
+        for handle in &remaining_handles {
+            let statuses = handle.with(|n| {
+                n.connection_monitor_status_for_testing()
+                    .connection_statuses
+                    .clone()
+            });
+            let status = statuses.get(&removed_peer_id).map(|e| e.value().clone());
+            assert_eq!(
+                status,
+                Some(ConnectionStatus::Disconnected),
+                "remaining validator should be disconnected from removed validator after reconfig"
+            );
+        }
+    }
+
+    async fn execute_remove_validator_tx(test_cluster: &TestCluster, handle: &SuiNodeHandle) {
+        let address = handle.with(|node| node.get_config().sui_address());
+        let gas = test_cluster
+            .wallet
+            .get_one_gas_object_owned_by_address(address)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let rgp = test_cluster.get_reference_gas_price().await;
+        let tx = handle.with(|node| {
+            TestTransactionBuilder::new(address, gas, rgp)
+                .call_request_remove_validator()
+                .build_and_sign(node.get_config().account_key_pair.keypair())
+        });
+        test_cluster.execute_transaction(tx).await;
     }
 }

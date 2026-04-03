@@ -40,6 +40,7 @@ fastcrypto-zkp.workspace = true
 move-core-types.workspace = true
 
 mysten-common.workspace = true
+mysten-network.workspace = true
 sui-core.workspace = true
 sui-framework-snapshot.workspace = true
 sui-framework.workspace = true
