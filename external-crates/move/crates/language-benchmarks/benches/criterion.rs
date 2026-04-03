@@ -74,6 +74,14 @@ fn constants<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "constants.move");
 }
 
+// TODO: broken — uses multi-address packages not supported by current setup
+// fn cross_module<M: Measurement + 'static>(c: &mut Criterion<M>) {
+//     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+//     let dir = "a1";
+//     path.extend(["tests", "packages", dir]);
+//     run_cross_module_tests(c, path);
+// }
+
 /// Interpreter step() overhead benchmarks.
 /// These measure raw dispatch overhead with minimal work per instruction.
 /// Use to validate tracing optimizations:
@@ -104,6 +112,7 @@ criterion_group!(
         deep_calls,
         constants,
         interpreter_step,
+        // cross_module, // TODO: broken — uses multi-address packages not supported by current setup
 );
 
 criterion_main!(vm_benches);
