@@ -59,7 +59,7 @@ module 0x1::bench {
             7 + 5;
             let x = 1;
             let y = x + 3;
-            check(x + y == 5, 10);
+            assert!(x + y == 5);
             i = i + 1;
         }
     }
