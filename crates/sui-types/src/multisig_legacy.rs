@@ -16,6 +16,7 @@ use fastcrypto::{
     error::FastCryptoError,
     traits::{EncodeDecodeBase64, ToFromBytes},
 };
+use mysten_common::CheckedIteratorExt;
 use once_cell::sync::OnceCell;
 use roaring::RoaringBitmap;
 use schemars::JsonSchema;
@@ -311,7 +312,7 @@ impl MultiSigPublicKeyLegacy {
             .into());
         }
         Ok(MultiSigPublicKeyLegacy {
-            pk_map: pks.into_iter().zip(weights).collect(),
+            pk_map: pks.into_iter().checked_zip(weights).collect(),
             threshold,
         })
     }

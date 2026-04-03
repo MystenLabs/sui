@@ -8,6 +8,7 @@ use std::{
 
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
+use mysten_common::CheckedIteratorExt;
 use parking_lot::RwLock;
 
 use super::{Store, WriteBatch};
@@ -145,7 +146,7 @@ impl Store for MemStore {
         }
         let results = self.read_blocks(refs.as_slice())?;
         let mut blocks = vec![];
-        for (r, block) in refs.into_iter().zip(results.into_iter()) {
+        for (r, block) in refs.into_iter().checked_zip(results.into_iter()) {
             if let Some(block) = block {
                 blocks.push(block);
             } else {
@@ -179,7 +180,7 @@ impl Store for MemStore {
         let refs_slice = refs.make_contiguous();
         let results = self.read_blocks(refs_slice)?;
         let mut blocks = vec![];
-        for (r, block) in refs.into_iter().zip(results.into_iter()) {
+        for (r, block) in refs.into_iter().checked_zip(results.into_iter()) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
             );

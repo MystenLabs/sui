@@ -233,6 +233,8 @@ pub fn assert_commit_sequences_match(
             shortest_sequence.len()
         );
 
+        #[allow(clippy::disallowed_methods)]
+        // Intentional zip: comparing prefix between sequences of varying lengths
         for (commit_index, (c1, c2)) in commit_sequence
             .iter()
             .zip(shortest_sequence.iter())

@@ -32,6 +32,7 @@ move-bytecode-utils.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
 
+mysten-common.workspace = true
 mysten-metrics.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true

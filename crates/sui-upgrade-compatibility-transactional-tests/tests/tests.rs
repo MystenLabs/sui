@@ -8,6 +8,7 @@ use move_binary_format::{
     compatibility::{self, Compatibility, InclusionCheck},
     normalized,
 };
+use mysten_common::CheckedIteratorExt;
 use sui_move_build::BuildConfig;
 
 pub const TEST_DIR: &str = "tests";
@@ -75,7 +76,7 @@ fn check_all_compatibilities(
         .map(|compat| {
             let compatibility_checks: Vec<_> = base
                 .iter()
-                .zip(upgraded.iter())
+                .checked_zip(upgraded.iter())
                 .map(|(base, upgraded)| {
                     format!(
                         "{}::{}:\n\tbase->upgrade: {}\n\tupgrade->base: {}",
@@ -101,7 +102,7 @@ fn check_all_compatibilities(
         .map(|compat| {
             let compatibility_checks: Vec<_> = base
                 .iter()
-                .zip(upgraded.iter())
+                .checked_zip(upgraded.iter())
                 .map(|(base, upgraded)| {
                     format!(
                         "{}::{}:\n\tbase->upgrade: {}\n\tupgrade->base: {}",

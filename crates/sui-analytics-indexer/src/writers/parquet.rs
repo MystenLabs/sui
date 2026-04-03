@@ -16,6 +16,8 @@ use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 
+use mysten_common::CheckedIteratorExt;
+
 use crate::handlers::CheckpointRows;
 use crate::schema::ColumnValue;
 
@@ -129,7 +131,7 @@ impl ParquetWriter {
             .map(|b| b.finish())
             .collect();
 
-        let batch = RecordBatch::try_from_iter(schema.iter().zip(arrays))?;
+        let batch = RecordBatch::try_from_iter(schema.iter().checked_zip(arrays))?;
 
         let properties = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)

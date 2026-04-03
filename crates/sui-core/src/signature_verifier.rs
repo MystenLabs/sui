@@ -7,8 +7,8 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::pin_mut;
 use im::hashmap::HashMap as ImHashMap;
-use itertools::{Itertools as _, izip};
-use mysten_common::debug_fatal;
+use itertools::Itertools as _;
+use mysten_common::{checked_izip, debug_fatal};
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
 use parking_lot::{Mutex, MutexGuard, RwLock};
@@ -373,7 +373,7 @@ impl SignatureVerifier {
             &buffer.certs.iter().collect_vec(),
             zklogin_inputs_cache,
         );
-        izip!(
+        checked_izip!(
             results.into_iter(),
             buffer.certs.into_iter(),
             buffer.senders.into_iter(),

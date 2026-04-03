@@ -7,6 +7,7 @@ xclippy = [
     "clippy", "--all-targets", "--all-features", "--",
     "-Wclippy::all",
     "-Wclippy::disallowed_methods",
+    "-Wclippy::disallowed_macros",
     "-Aclippy::unnecessary_get_then_check",
 ]
 xlint = "run --package x --bin x -- lint"
@@ -20,6 +21,7 @@ move-clippy = [
     "--",
     "-Wclippy::all",
     "-Wclippy::disallowed_methods",
+    "-Wclippy::disallowed_macros",
     "-Aclippy::upper_case_acronyms",
     "-Aclippy::type_complexity",
     "-Aclippy::new_without_default",

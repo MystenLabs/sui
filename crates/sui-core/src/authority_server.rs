@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
+use mysten_common::CheckedIteratorExt;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
@@ -540,7 +541,7 @@ impl ValidatorService {
         // All objects should be found, since owned input objects have been validated to exist.
         objects
             .into_iter()
-            .zip(object_ids.iter())
+            .checked_zip(object_ids.iter())
             .filter_map(|(obj, id)| {
                 let Some(o) = obj else {
                     return Some(Err::<ObjectID, SuiError>(
@@ -812,9 +813,7 @@ impl ValidatorService {
                 }
             };
 
-            let tx_digest = verified_transaction.tx().digest();
-            tx_digests.push(*tx_digest);
-
+            let tx_digest = *verified_transaction.tx().digest();
             debug!(
                 ?tx_digest,
                 "handle_submit_transaction: verified transaction"
@@ -824,7 +823,7 @@ impl ValidatorService {
             // which could have been consumed.
             if let Some(effects) = state
                 .get_transaction_cache_reader()
-                .get_executed_effects(tx_digest)
+                .get_executed_effects(&tx_digest)
             {
                 let effects_digest = effects.digest();
                 if let Ok(executed_data) = self.complete_executed_data(effects).await {
@@ -841,10 +840,10 @@ impl ValidatorService {
             if self
                 .state
                 .get_transaction_cache_reader()
-                .transaction_executed_in_last_epoch(tx_digest, epoch_store.epoch())
+                .transaction_executed_in_last_epoch(&tx_digest, epoch_store.epoch())
             {
                 results[idx] = Some(SubmitTxResult::Rejected {
-                    error: UserInputError::TransactionAlreadyExecuted { digest: *tx_digest }.into(),
+                    error: UserInputError::TransactionAlreadyExecuted { digest: tx_digest }.into(),
                 });
                 debug!(
                     ?tx_digest,
@@ -877,7 +876,7 @@ impl ValidatorService {
                     // This is an edge case so checking executed effects twice is acceptable.
                     if let Some(effects) = state
                         .get_transaction_cache_reader()
-                        .get_executed_effects(tx_digest)
+                        .get_executed_effects(&tx_digest)
                     {
                         let effects_digest = effects.digest();
                         if let Ok(executed_data) = self.complete_executed_data(effects).await {
@@ -945,6 +944,7 @@ impl ValidatorService {
             ));
 
             transaction_indexes.push(idx);
+            tx_digests.push(tx_digest);
             total_size_bytes += tx_size;
         }
 
@@ -1041,8 +1041,8 @@ impl ValidatorService {
             // Otherwise, return the consensus position for each transaction.
             for ((idx, tx_digest), consensus_position) in transaction_indexes
                 .into_iter()
-                .zip(tx_digests)
-                .zip(consensus_positions)
+                .checked_zip(tx_digests)
+                .checked_zip(consensus_positions)
             {
                 debug!(
                     ?tx_digest,

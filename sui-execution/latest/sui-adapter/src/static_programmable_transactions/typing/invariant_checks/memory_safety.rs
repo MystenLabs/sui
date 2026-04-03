@@ -6,6 +6,7 @@ use crate::{
     static_programmable_transactions::{env::Env, typing::ast as T},
 };
 use indexmap::IndexSet;
+use mysten_common::CheckedIteratorExt;
 use std::rc::Rc;
 use sui_types::error::ExecutionError;
 
@@ -580,7 +581,7 @@ fn command(context: &mut Context, c: &T::Command) -> anyhow::Result<()> {
     context.add_result_values(
         results
             .into_iter()
-            .zip(c.value.drop_values.iter().copied())
+            .checked_zip(c.value.drop_values.iter().copied())
             .map(|(v, drop)| if drop { None } else { Some(v) }),
     )?;
     context.arg_roots.clear();

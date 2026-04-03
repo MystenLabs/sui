@@ -27,6 +27,7 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 bin-version.workspace = true
 itertools.workspace = true
+mysten-common.workspace = true
 rand.workspace = true
 reqwest.workspace = true
 hyper.workspace = true

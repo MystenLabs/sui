@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
+use mysten_common::CheckedIteratorExt;
 use reqwest::header::USER_AGENT;
 use std::time::Instant;
 use std::{
@@ -177,7 +178,7 @@ impl ObjectStore for DataStore {
         match block_on!(self.objects(keys)) {
             Ok(results) => {
                 assert_eq!(results.len(), keys.len());
-                for (key, res) in keys.iter().zip(results.iter()) {
+                for (key, res) in keys.iter().checked_zip(results.iter()) {
                     match key.version_query {
                         VersionQuery::Version(_) => {
                             if res.is_some() {

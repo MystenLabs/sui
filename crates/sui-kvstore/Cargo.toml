@@ -39,6 +39,7 @@ tonic-prost.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+mysten-common.workspace = true
 sui-indexer-alt-framework = { workspace = true, features = ["cluster"] }
 sui-keys.workspace = true
 sui-rpc.workspace = true

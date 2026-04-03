@@ -15,6 +15,7 @@ proptest.workspace = true
 proptest-derive.workspace = true
 rand.workspace = true
 move-core-types.workspace = true
+mysten-common.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 

@@ -49,6 +49,7 @@ url.workspace = true
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
+mysten-common.workspace = true
 
 sui-default-config.workspace = true
 sui-display.workspace = true

@@ -22,6 +22,7 @@ prost-types.workspace = true
 
 move-core-types.workspace = true
 
+mysten-common.workspace = true
 sui-json-rpc-types.workspace = true
 sui-types.workspace = true
 

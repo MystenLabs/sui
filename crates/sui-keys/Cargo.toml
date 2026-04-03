@@ -18,6 +18,7 @@ tiny-bip39.workspace = true
 bip32.workspace = true
 slip10_ed25519.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
+mysten-common.workspace = true
 shared-crypto.workspace = true
 sui-types.workspace = true
 regex.workspace = true

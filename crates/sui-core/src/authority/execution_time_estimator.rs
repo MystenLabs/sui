@@ -509,9 +509,11 @@ impl ExecutionTimeObserver {
         tx: &ProgrammableTransaction,
         timings: &[ExecutionTiming],
     ) -> (Vec<ExecutionTiming>, Duration) {
+        #[allow(clippy::disallowed_methods)]
         let generated_timings: Vec<_> = tx
             .commands
             .iter()
+            // TODO: migrate to checked_zip once PR #26125 fixes the timings/commands length mismatch
             .zip(timings.iter())
             .map(|(command, timing)| {
                 let key = ExecutionTimeObservationKey::from_command(command);

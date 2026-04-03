@@ -6,18 +6,10 @@ disallowed-methods = [
     { path = "log::debug", reason = "use tracing::debug instead", allow-invalid = true },
     { path = "log::error", reason = "use tracing::error instead", allow-invalid = true },
     { path = "log::warn", reason = "use tracing::warn instead", allow-invalid = true },
-    # unbounded channels are for expert use only
-    { path = "tokio::sync::mpsc::unbounded_channel", reason = "use a bounded channel instead" },
-    { path = "futures::channel::mpsc::unbounded", reason = "use a bounded channel instead" },
-    { path = "futures_channel::mpsc::unbounded", reason = "use a bounded channel instead" },
     # known to cause blocking issues
     { path = "futures::executor::block_on", reason = "use tokio::runtime::runtime::Runtime::block_on instead"},
     # bincode::deserialize_from is easy to shoot your foot with
     { path = "bincode::deserialize_from", reason = "use bincode::deserialize instead" },
-    # zip silently truncates when iterators have different lengths
-    { path = "core::iter::Iterator::zip", reason = "prefer checked_zip, which detects length mismatches" },
-]
-disallowed-macros = [
-    # izip! uses zip internally which silently truncates
-    { path = "itertools::izip", reason = "use checked_izip! instead, which detects length mismatches" },
+    # NOTE: Iterator::zip ban is intentionally omitted here — external-crates are upstream
+    # Move code where checked_zip is not available.
 ]

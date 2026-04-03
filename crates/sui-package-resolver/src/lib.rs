@@ -35,6 +35,7 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use mysten_common::CheckedIteratorExt;
 use sui_types::Identifier;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::is_primitive_type_tag;
@@ -540,6 +541,8 @@ impl<S: PackageStore> Resolver<S> {
                         .await?
                         .parameters;
 
+                    #[allow(clippy::disallowed_methods)]
+                    // Intentional zip: params includes implicit TxContext param not in arguments
                     for (open_sig, arg) in params.iter().zip(call.arguments.iter()) {
                         let sig = open_sig.instantiate(&call.type_arguments)?;
                         register_type(arg, &sig.body);
@@ -1289,7 +1292,8 @@ impl<'l> ResolutionContext<'l> {
                         max_type_argument_width >= s.type_params.len()
                     );
 
-                    for (param, def) in s.type_params.iter_mut().zip(def.type_params.iter()) {
+                    for (param, def) in s.type_params.iter_mut().checked_zip(def.type_params.iter())
+                    {
                         if !def.is_phantom || visit_phantoms {
                             push_ty_param!(param);
                         }
@@ -1703,7 +1707,7 @@ impl<'l> ResolutionContext<'l> {
                 let param_abilities: Result<Vec<AbilitySet>> = s
                     .type_params
                     .iter()
-                    .zip(def.type_params.iter())
+                    .checked_zip(def.type_params.iter())
                     .map(|(p, d)| {
                         if d.is_phantom {
                             Ok(AbilitySet::EMPTY)

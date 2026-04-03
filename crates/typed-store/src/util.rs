@@ -145,7 +145,11 @@ pub(crate) fn ensure_database_type<P: AsRef<Path>>(
     Ok(())
 }
 
-#[allow(clippy::assign_op_pattern, clippy::manual_div_ceil)]
+#[allow(
+    clippy::assign_op_pattern,
+    clippy::manual_div_ceil,
+    clippy::disallowed_methods
+)] // Intentional zip: external construct_uint! macro uses .zip() internally
 #[test]
 fn test_helpers() {
     let v = vec![];

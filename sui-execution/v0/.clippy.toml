@@ -1,0 +1,10 @@
+# Deprecated execution version — exempt from zip ban to avoid unnecessary churn.
+too-many-arguments-threshold = 20
+disallowed-methods = [
+    { path = "log::info", reason = "use tracing::info instead", allow-invalid = true },
+    { path = "log::debug", reason = "use tracing::debug instead", allow-invalid = true },
+    { path = "log::error", reason = "use tracing::error instead", allow-invalid = true },
+    { path = "log::warn", reason = "use tracing::warn instead", allow-invalid = true },
+    { path = "futures::executor::block_on", reason = "use tokio::runtime::runtime::Runtime::block_on instead"},
+    { path = "bincode::deserialize_from", reason = "use bincode::deserialize instead" },
+]

@@ -4,6 +4,7 @@
 use futures::future;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
+use mysten_common::CheckedIteratorExt;
 use sui_json_rpc_types::Page;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
@@ -145,7 +146,7 @@ impl QueryTransactionsApiServer for QueryTransactions {
         let data = future::join_all(tx_futures)
             .await
             .into_iter()
-            .zip(digests)
+            .checked_zip(digests)
             .map(|(r, d)| {
                 if let Err(RpcError::InvalidParams(e @ Error::NotFound(_))) = r {
                     rpc_bail!(e)

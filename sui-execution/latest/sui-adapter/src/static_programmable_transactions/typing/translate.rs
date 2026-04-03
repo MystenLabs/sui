@@ -681,8 +681,11 @@ fn arguments(
     locations: Vec<SplatLocation>,
     expected_tys: impl IntoIterator<Item = Type>,
 ) -> Result<Vec<T::Argument>, ExecutionError> {
+    #[allow(clippy::disallowed_methods)]
     locations
         .into_iter()
+        // Intentional zip: expected_tys may be an infinite repeat iterator
+        // TODO: Consider fixing callers to not use infinite repeat iterator.
         .zip(expected_tys)
         .enumerate()
         .map(|(i, (location, expected_ty))| {

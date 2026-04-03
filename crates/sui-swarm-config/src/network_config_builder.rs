@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 
+use mysten_common::CheckedIteratorExt;
 use mysten_common::in_test_configuration;
 use rand::rngs::OsRng;
 use sui_config::ExecutionCacheConfig;
@@ -441,7 +442,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 // See above re fixed protocol keys
                 let (_, protocol_keys) = Committee::new_simple_test_committee_of_size(keys.len());
                 keys.into_iter()
-                    .zip(protocol_keys)
+                    .checked_zip(protocol_keys)
                     .map(|(account_key, protocol_key)| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
                             .with_protocol_key_pair(protocol_key)

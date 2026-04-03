@@ -55,7 +55,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
-use mysten_common::{assert_reachable, debug_fatal};
+use mysten_common::{CheckedIteratorExt, assert_reachable, debug_fatal};
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
@@ -1355,8 +1355,9 @@ impl ProgrammableMoveCall {
             ))
         );
 
-        for (type_arg_constraint, type_input) in
-            type_arg_constraints.iter().zip(&self.type_arguments)
+        for (type_arg_constraint, type_input) in type_arg_constraints
+            .iter()
+            .checked_zip(&self.type_arguments)
         {
             let Some(type_arg_constraint) = type_arg_constraint else {
                 continue;

@@ -15,6 +15,7 @@ clap.workspace = true
 prost-types.workspace = true
 prometheus.workspace = true
 rustls.workspace = true
+mysten-common.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
 sui-kvstore.workspace = true

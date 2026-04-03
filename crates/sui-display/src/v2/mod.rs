@@ -4,6 +4,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
+use mysten_common::CheckedIteratorExt;
+
 use futures::future::try_join_all;
 use futures::join;
 use indexmap::IndexMap;
@@ -249,7 +251,7 @@ impl<'s> Display<'s> {
         let values = values?;
         debug_assert_eq!(self.fields.len(), values.len());
 
-        for ((field, name), value) in self.fields.iter().zip(names).zip(values) {
+        for ((field, name), value) in self.fields.iter().checked_zip(names).checked_zip(values) {
             use indexmap::map::Entry;
 
             let src = field.key.src;

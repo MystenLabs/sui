@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::{self, StreamExt};
 use moka::sync::{Cache as MokaCache, CacheBuilder as MokaCacheBuilder};
+use mysten_common::CheckedIteratorExt;
 use reqwest::Client;
 use reqwest::Url;
 use reqwest::header::{CONTENT_LENGTH, HeaderValue};
@@ -359,7 +360,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         let txn_results = txn_slice
             .iter()
             .take(num_txns)
-            .zip(transactions.iter())
+            .checked_zip(transactions.iter())
             .map(map_fetch)
             .map(|maybe_bytes| {
                 maybe_bytes.and_then(|(bytes, digest)| {
@@ -371,7 +372,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         let fx_results = fx_slice
             .iter()
             .take(num_effects)
-            .zip(effects.iter())
+            .checked_zip(effects.iter())
             .map(map_fetch)
             .map(|maybe_bytes| {
                 maybe_bytes.and_then(|(bytes, digest)| {
@@ -422,7 +423,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
 
         let summaries_results = result_slices[0]
             .iter()
-            .zip(checkpoint_summaries.iter())
+            .checked_zip(checkpoint_summaries.iter())
             .map(map_fetch)
             .map(|maybe_bytes| {
                 maybe_bytes
@@ -432,7 +433,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
 
         let contents_results = result_slices[1]
             .iter()
-            .zip(checkpoint_contents.iter())
+            .checked_zip(checkpoint_contents.iter())
             .map(map_fetch)
             .map(|maybe_bytes| {
                 maybe_bytes.and_then(|(bytes, seq)| deser::<_, CheckpointContents>(seq, bytes))
@@ -441,7 +442,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
 
         let summaries_by_digest_results = result_slices[2]
             .iter()
-            .zip(checkpoint_summaries_by_digest.iter())
+            .checked_zip(checkpoint_summaries_by_digest.iter())
             .map(map_fetch)
             .map(|maybe_bytes| {
                 maybe_bytes.and_then(|(bytes, digest)| {
@@ -503,7 +504,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
 
         let results = fetches
             .iter()
-            .zip(object_keys.iter())
+            .checked_zip(object_keys.iter())
             .map(map_fetch)
             .map(|maybe_bytes| maybe_bytes.and_then(|(bytes, key)| deser::<_, Object>(&key, bytes)))
             .collect::<Vec<_>>();
@@ -525,7 +526,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
 
         let results = fetches
             .iter()
-            .zip(digests.iter())
+            .checked_zip(digests.iter())
             .map(map_fetch)
             .map(|maybe_bytes| {
                 maybe_bytes
@@ -549,7 +550,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
             .multi_fetch(keys)
             .await
             .iter()
-            .zip(digests.iter())
+            .checked_zip(digests.iter())
             .map(map_fetch)
             .map(|maybe_bytes| {
                 maybe_bytes

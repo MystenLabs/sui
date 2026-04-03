@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use mysten_common::CheckedIteratorExt;
 use rand::seq::IteratorRandom;
 use tracing::error;
 
@@ -233,7 +234,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
         }
         let refs: Vec<(Vec<Gas>, Gas)> = transfer_gas
             .into_iter()
-            .zip(transfer_tokens.iter())
+            .checked_zip(transfer_tokens.iter())
             .map(|(g, t)| (g, t.clone()))
             .collect();
         refs.iter()

@@ -10,6 +10,7 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+mysten-common.workspace = true
 integer-encoding.workspace = true
 async-trait.workspace = true
 futures.workspace = true
