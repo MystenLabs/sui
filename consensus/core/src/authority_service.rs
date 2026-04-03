@@ -395,46 +395,45 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     // Handles 3 types of requests:
     // 1. Live sync:
     //    - Both missing block refs and highest accepted rounds are specified.
-    //    - breadth_first is true.
+    //    - fetch_missing_ancestors is true.
     //    - response returns max_blocks_per_sync blocks.
     // 2. Periodic sync:
     //    - Highest accepted rounds must be specified.
     //    - Missing block refs are optional.
-    //    - breadth_first is false.
+    //    - fetch_missing_ancestors is false (default).
     //    - response returns max_blocks_per_fetch blocks.
     // 3. Commit sync:
     //    - Missing block refs are specified.
     //    - Highest accepted rounds are empty.
-    //    - breadth_first should be false but is ignored.
+    //    - fetch_missing_ancestors is false (default).
     //    - response returns max_blocks_per_fetch blocks.
     async fn handle_fetch_blocks(
         &self,
         _peer: AuthorityIndex,
         mut block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
     ) -> ConsensusResult<Vec<Bytes>> {
         fail_point_async!("consensus-rpc-response");
 
-        if block_refs.is_empty() && (breadth_first || highest_accepted_rounds.is_empty()) {
-            return Err(ConsensusError::InvalidFetchBlocksRequest("When no block refs are provided, highest_accepted_rounds must be provided and breadth_first must be false".to_string()));
+        if block_refs.is_empty() && (fetch_missing_ancestors || fetch_after_rounds.is_empty()) {
+            return Err(ConsensusError::InvalidFetchBlocksRequest("When no block refs are provided, fetch_after_rounds must be provided and fetch_missing_ancestors must be false".to_string()));
         }
-        if !highest_accepted_rounds.is_empty()
-            && highest_accepted_rounds.len() != self.context.committee.size()
+        if !fetch_after_rounds.is_empty()
+            && fetch_after_rounds.len() != self.context.committee.size()
         {
             return Err(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
-                highest_accepted_rounds.len(),
+                fetch_after_rounds.len(),
                 self.context.committee.size(),
             ));
         }
 
         // Finds the suitable limit of # of blocks to return.
-        let max_response_num_blocks =
-            if !highest_accepted_rounds.is_empty() && !block_refs.is_empty() {
-                self.context.parameters.max_blocks_per_sync
-            } else {
-                self.context.parameters.max_blocks_per_fetch
-            };
+        let max_response_num_blocks = if !fetch_after_rounds.is_empty() && !block_refs.is_empty() {
+            self.context.parameters.max_blocks_per_sync
+        } else {
+            self.context.parameters.max_blocks_per_fetch
+        };
         if block_refs.len() > max_response_num_blocks {
             block_refs.truncate(max_response_num_blocks);
         }
@@ -461,15 +460,16 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             .flatten()
             .collect::<Vec<_>>();
 
-        // Then try to get ancestor blocks using breadth-first or depth-first strategy from the input missing blocks.
-        if blocks.len() < max_response_num_blocks && !highest_accepted_rounds.is_empty() {
-            if breadth_first {
+        // When fetch_missing_ancestors is true, fetch missing ancestors of the requested blocks.
+        // Otherwise, fetch additional blocks depth-first from the requested block authorities.
+        if blocks.len() < max_response_num_blocks && !fetch_after_rounds.is_empty() {
+            if fetch_missing_ancestors {
                 // Get unique missing ancestor blocks of the requested blocks (validated to be non-empty).
-                // highest_accepted_rounds will only be used to filter out already accepted blocks.
+                // fetch_after_rounds will only be used to filter out already accepted blocks.
                 let missing_ancestors = blocks
                     .iter()
                     .flat_map(|block| block.ancestors().to_vec())
-                    .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
+                    .filter(|block_ref| fetch_after_rounds[block_ref.author] < block_ref.round)
                     .collect::<BTreeSet<_>>()
                     .into_iter()
                     .collect::<Vec<_>>();
@@ -515,7 +515,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 // Each entry is (fetch_start_round, authority, limit_round).
                 let mut heap = BinaryHeap::new();
                 for (authority, limit_round) in &limit_rounds {
-                    let fetch_start = highest_accepted_rounds[*authority] + 1;
+                    let fetch_start = fetch_after_rounds[*authority] + 1;
                     if fetch_start < *limit_round {
                         heap.push(Reverse((fetch_start, *authority, *limit_round)));
                     }
@@ -1014,8 +1014,8 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
-            _highest_accepted_rounds: Vec<Round>,
-            _breadth_first: bool,
+            _fetch_after_rounds: Vec<Round>,
+            _fetch_missing_ancestors: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
@@ -1249,7 +1249,7 @@ mod tests {
         dag_state.write().flush();
         let all_blocks = dag_builder.all_blocks();
 
-        // WHEN: Request 2 blocks from round 40, get ancestors breadth first.
+        // WHEN: Request 2 blocks from round 40, fetch missing ancestors enabled.
         let missing_block_refs: Vec<BlockRef> = all_blocks
             .iter()
             .rev()
@@ -1290,7 +1290,7 @@ mod tests {
             context.parameters.max_blocks_per_sync - missing_block_refs.len()
         );
 
-        // WHEN: Request 2 blocks from round 37, get ancestors depth first.
+        // WHEN: Request 2 blocks from round 37, fetch missing ancestors disabled.
         let missing_round = NUM_ROUNDS as Round - 3;
         let missing_block_refs: Vec<BlockRef> = all_blocks
             .iter()
@@ -1332,7 +1332,7 @@ mod tests {
             assert!(expected_authors.contains(&b.author));
         }
 
-        // WHEN: Request with empty block_refs, get ancestors depth first from all authorities.
+        // WHEN: Request with empty block_refs, fetch missing ancestors disabled.
         let mut highest_accepted_rounds: Vec<Round> = vec![1; NUM_AUTHORITIES];
         // Set a few authorities to higher accepted rounds.
         highest_accepted_rounds[0] = (NUM_ROUNDS as Round) - 5;

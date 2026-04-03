@@ -487,12 +487,11 @@ where
         loop {
             tokio::select! {
                 Some(blocks_guard) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
-                    // get the highest accepted rounds
-                    let highest_rounds = Self::get_highest_accepted_rounds(dag_state.clone(), &context);
+                    let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
 
-                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, true, FETCH_REQUEST_TIMEOUT, 1))
+                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 1))
                 },
-                Some((response, blocks_guard, retries, _peer, highest_rounds)) = requests.next() => {
+                Some((response, blocks_guard, retries, _peer, fetch_after_rounds)) = requests.next() => {
                     match response {
                         Ok(blocks) => {
                             if let Err(err) = Self::process_fetched_blocks(blocks,
@@ -514,7 +513,7 @@ where
                         Err(_) => {
                             context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname.as_str(), "live"]).inc();
                             if retries <= MAX_RETRIES {
-                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
+                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
                             } else {
                                 warn!("Max retries {retries} reached while trying to fetch blocks from peer {peer_index} {peer_hostname}.");
                                 // we don't necessarily need to do, but dropping the guard here to unlock the blocks
@@ -637,18 +636,22 @@ where
         Ok(())
     }
 
-    fn get_highest_accepted_rounds(
-        dag_state: Arc<RwLock<DagState>>,
+    fn get_fetch_after_rounds(
         context: &Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
     ) -> Vec<Round> {
-        let blocks = dag_state
-            .read()
-            .get_last_cached_block_per_authority(Round::MAX);
+        let (blocks, gc_round) = {
+            let dag_state = dag_state.read();
+            (
+                dag_state.get_last_cached_block_per_authority(Round::MAX),
+                dag_state.gc_round(),
+            )
+        };
         assert_eq!(blocks.len(), context.committee.size());
 
         blocks
             .into_iter()
-            .map(|(block, _)| block.round())
+            .map(|(block, _)| block.round().max(gc_round))
             .collect::<Vec<_>>()
     }
 
@@ -717,8 +720,8 @@ where
         network_client: Arc<SynchronizerClient<VC, OC>>,
         peer: AuthorityIndex,
         blocks_guard: BlocksGuard,
-        highest_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         request_timeout: Duration,
         mut retries: u32,
     ) -> (
@@ -739,8 +742,8 @@ where
                     .clone()
                     .into_iter()
                     .collect::<Vec<_>>(),
-                highest_rounds.clone().into_iter().collect::<Vec<_>>(),
-                breadth_first,
+                fetch_after_rounds.clone().into_iter().collect::<Vec<_>>(),
+                fetch_missing_ancestors,
                 request_timeout,
             ),
         )
@@ -764,7 +767,7 @@ where
             }
             Ok(result) => result,
         };
-        (resp, blocks_guard, retries, peer, highest_rounds)
+        (resp, blocks_guard, retries, peer, fetch_after_rounds)
     }
 
     fn start_fetch_own_last_block_task(&mut self) {
@@ -933,11 +936,9 @@ where
             .map_err(|_err| ConsensusError::Shutdown)?;
         if self.commit_sync_failover {
             // Keep missing blocks to those that must be included in fetch request.
-            // Filtered out missing blocks that will eventually be fetched with highest accepted rounds.
-            let highest_accepted_rounds =
-                Self::get_highest_accepted_rounds(dag_state.clone(), &context);
-            missing_blocks
-                .retain(|block| block.round <= highest_accepted_rounds[block.author.value()]);
+            // Filtered out missing blocks that will eventually be fetched with fetch_after_rounds.
+            let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
+            missing_blocks.retain(|block| block.round <= fetch_after_rounds[block.author.value()]);
         } else if missing_blocks.is_empty() {
             return Ok(());
         }
@@ -955,7 +956,7 @@ where
                 let results = if missing_blocks.is_empty() {
                     let _scope = monitored_scope("BlockSync::Periodic::HighestAcceptedRounds");
                     // Fetch blocks from a random peer using highest accepted rounds (commit sync failover)
-                    Self::fetch_blocks_with_highest_accepted_rounds(
+                    Self::fetch_blocks_with_fetch_after_rounds(
                         context.clone(),
                         blocks_to_fetch.clone(),
                         network_client,
@@ -1084,15 +1085,15 @@ where
         false
     }
 
-    /// Fetches blocks from a random peer using only highest_accepted_rounds (no specific missing blocks).
+    /// Fetches blocks from a random peer using only fetch_after_rounds (no specific missing blocks).
     /// Used during commit sync failover to make progress when commit sync is stalled.
-    async fn fetch_blocks_with_highest_accepted_rounds(
+    async fn fetch_blocks_with_fetch_after_rounds(
         context: Arc<Context>,
         inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, AuthorityIndex)> {
-        let highest_accepted_rounds = Self::get_highest_accepted_rounds(dag_state, &context);
+        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
 
         // Pick a random peer (excluding self).
         let mut peers: Vec<AuthorityIndex> = context
@@ -1112,7 +1113,7 @@ where
             network_client.fetch_blocks(
                 PeerId::Validator(peer),
                 vec![],
-                highest_accepted_rounds,
+                fetch_after_rounds,
                 false,
                 FETCH_REQUEST_TIMEOUT,
             ),
@@ -1122,13 +1123,11 @@ where
         let serialized_blocks = match response {
             Ok(Ok(blocks)) => blocks,
             Ok(Err(err)) => {
-                debug!(
-                    "Failed to fetch blocks with highest accepted rounds from peer {peer}: {err}"
-                );
+                debug!("Failed to fetch blocks with fetch_after_rounds from peer {peer}: {err}");
                 return vec![];
             }
             Err(_) => {
-                debug!("Timed out fetching blocks with highest accepted rounds from peer {peer}");
+                debug!("Timed out fetching blocks with fetch_after_rounds from peer {peer}");
                 return vec![];
             }
         };
@@ -1221,7 +1220,7 @@ where
             authorities.shuffle(&mut ThreadRng::default());
         }
 
-        let highest_rounds = Self::get_highest_accepted_rounds(dag_state.clone(), &context);
+        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
 
         // Send the fetch requests
         for batch in authorities.chunks(num_authorities_per_peer) {
@@ -1258,7 +1257,7 @@ where
                     network_client.clone(),
                     peer,
                     blocks_guard,
-                    highest_rounds.clone(),
+                    fetch_after_rounds.clone(),
                     false,
                     FETCH_REQUEST_TIMEOUT,
                     1,
@@ -1273,7 +1272,7 @@ where
 
         loop {
             tokio::select! {
-                Some((response, blocks_guard, _retries, peer_index, highest_rounds)) = request_futures.next() => {
+                Some((response, blocks_guard, _retries, peer_index, fetch_after_rounds)) = request_futures.next() => {
                     let peer_hostname = &context.committee.authority(peer_index).hostname;
                     match response {
                         Ok(fetched_blocks) => {
@@ -1304,7 +1303,7 @@ where
                                         network_client.clone(),
                                         next_peer,
                                         blocks_guard,
-                                        highest_rounds,
+                                        fetch_after_rounds,
                                         false,
                                         FETCH_REQUEST_TIMEOUT,
                                         1,
@@ -1439,8 +1438,8 @@ mod tests {
             &self,
             peer: AuthorityIndex,
             block_refs: Vec<BlockRef>,
-            _highest_accepted_rounds: Vec<Round>,
-            _breadth_first: bool,
+            _fetch_after_rounds: Vec<Round>,
+            _fetch_missing_ancestors: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             let mut lock = self.fetch_blocks_requests.lock().await;
