@@ -449,7 +449,7 @@ impl DiscoveryEventLoop {
 
     fn handle_peer_failure_report(&mut self, peer_id: PeerId) {
         if self.is_trusted_peer(&peer_id) {
-            info!(?peer_id, "ignoring failure report for configured peer");
+            info!(?peer_id, "ignoring failure report for trusted peer");
             return;
         }
         let min_peers = self.discovery_config.min_peers_for_disconnect();
