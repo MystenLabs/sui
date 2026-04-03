@@ -65,6 +65,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
         pure,
         receiving,
         withdrawal_compatibility_conversions,
+        original_command_len,
         commands,
     } = txn;
     for obj in objects {
@@ -80,6 +81,14 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
         receiving_input(r)?;
     }
     for c in commands {
+        // This sanity check is only a debug assert since the spanned index is not used in execution
+        // outside of errors
+        debug_assert!(
+            (c.idx as usize) < *original_command_len,
+            "Invalid command Spanned index. {} should be less than the original command length {}",
+            c.idx,
+            original_command_len
+        );
         command::<Mode>(env, &context, c)?;
     }
     for (withdrawal, conversion) in withdrawal_compatibility_conversions {

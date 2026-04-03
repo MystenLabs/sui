@@ -18,7 +18,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
 use sui_types::{
     base_types::TxContext,
     error::ExecutionError,
-    execution::{ExecutionTiming, ResultWithTimings},
+    execution::{ExecutionTiming, ExecutionTiming_, ResultWithTimings},
     execution_status::{ExecutionErrorKind, PackageUpgradeError},
     metrics::LimitsMetrics,
     move_package::MovePackage,
@@ -97,7 +97,8 @@ where
     trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;
 
     let mut mode_results = Mode::empty_results();
-    for sp!(idx, c) in commands {
+    for (actual_index, sp!(original_index, c)) in commands.into_iter().enumerate() {
+        let original_index = original_index as usize;
         let start = Instant::now();
         if let Err(err) =
             execute_command::<Mode>(&mut context, &mut mode_results, c, trace_builder_opt)
@@ -111,10 +112,18 @@ where
             // runtime, but its since been dropped. what gives with this error?
             env.state_view
                 .save_loaded_runtime_objects(loaded_runtime_objects);
-            timings.push(ExecutionTiming::Abort(start.elapsed()));
-            return Err(err.with_command_index(idx as usize));
+            timings.push(ExecutionTiming {
+                actual_index,
+                original_index,
+                timing: ExecutionTiming_::Abort(start.elapsed()),
+            });
+            return Err(err.with_command_index(original_index));
         };
-        timings.push(ExecutionTiming::Success(start.elapsed()));
+        timings.push(ExecutionTiming {
+            actual_index,
+            original_index,
+            timing: ExecutionTiming_::Success(start.elapsed()),
+        });
     }
     // Save loaded objects table in case we fail in post execution
     let object_runtime = context.object_runtime()?;

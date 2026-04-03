@@ -299,6 +299,7 @@ impl Context {
             pure,
             receiving,
             withdrawal_compatibility_conversions: _,
+            original_command_len: _,
             commands: _,
         } = txn;
         let tx_context = Location::non_ref(T::Location::TxContext);
