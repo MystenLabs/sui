@@ -49,7 +49,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use std::{
     cell::RefCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io::Write,
     marker::Send,
     rc::Rc,
@@ -84,15 +84,63 @@ fn setup_test_storage<'a>(
     modules: impl Iterator<Item = &'a CompiledModule>,
     bytecode_deps_modules: impl Iterator<Item = &'a CompiledModule>,
 ) -> Result<()> {
-    let mut packages = BTreeMap::new();
+    let mut packages: BTreeMap<AccountAddress, Vec<CompiledModule>> = BTreeMap::new();
     for module in modules.chain(bytecode_deps_modules) {
         let entry = packages
             .entry(*module.self_id().address())
             .or_insert_with(Vec::new);
         entry.push(module.clone());
     }
+
+    // Build a map from each package address to ALL addresses it transitively depends on.
+    // immediate_deps: addr -> set of direct dependency addresses
+    let mut immediate_deps: BTreeMap<AccountAddress, BTreeSet<AccountAddress>> = BTreeMap::new();
+    for (addr, modules) in &packages {
+        let deps: BTreeSet<AccountAddress> = modules
+            .iter()
+            .flat_map(|m| m.immediate_dependencies())
+            .map(|dep| *dep.address())
+            .filter(|dep_addr| dep_addr != addr)
+            .collect();
+        immediate_deps.insert(*addr, deps);
+    }
+
+    // Compute transitive closure for each package.
+    let mut transitive_deps: BTreeMap<AccountAddress, BTreeSet<AccountAddress>> = BTreeMap::new();
+    for addr in packages.keys() {
+        let mut all_deps = BTreeSet::new();
+        let mut to_visit: Vec<AccountAddress> = immediate_deps
+            .get(addr)
+            .map(|s| s.iter().copied().collect())
+            .unwrap_or_default();
+        while let Some(dep) = to_visit.pop() {
+            if dep == *addr || !all_deps.insert(dep) {
+                continue;
+            }
+            if let Some(dep_deps) = immediate_deps.get(&dep) {
+                for transitive in dep_deps {
+                    if !all_deps.contains(transitive) {
+                        to_visit.push(*transitive);
+                    }
+                }
+            }
+        }
+        transitive_deps.insert(*addr, all_deps);
+    }
+
+    // Create StoredPackages with full transitive linkage tables.
     for (addr, modules) in packages {
-        let package = StoredPackage::from_modules_for_testing(addr, modules).unwrap();
+        let mut package = StoredPackage::from_modules_for_testing(addr, modules).unwrap();
+        // Expand the linkage table with transitive dependencies (identity mapping for tests).
+        if let Some(trans) = transitive_deps.get(&addr) {
+            for dep_addr in trans {
+                package
+                    .0
+                    .linkage_table
+                    .entry(*dep_addr)
+                    .or_insert(*dep_addr);
+            }
+        }
         adapter.insert_package_into_storage(package);
     }
     Ok(())
