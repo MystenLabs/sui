@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use parking_lot::Mutex;
@@ -12,15 +11,21 @@ use sui_protocol_config::ProtocolConfig;
 /// within the current 1-second window. Updated by the consensus handler on
 /// each commit, and read by the rate limiter to make admission decisions.
 pub struct ConsensusGaslessCounter {
-    window_second: AtomicU64,
-    count: AtomicU64,
+    inner: Mutex<ConsensusWindowInner>,
+}
+
+struct ConsensusWindowInner {
+    window_second: u64,
+    count: u64,
 }
 
 impl Default for ConsensusGaslessCounter {
     fn default() -> Self {
         Self {
-            window_second: AtomicU64::new(0),
-            count: AtomicU64::new(0),
+            inner: Mutex::new(ConsensusWindowInner {
+                window_second: 0,
+                count: 0,
+            }),
         }
     }
 }
@@ -28,19 +33,17 @@ impl Default for ConsensusGaslessCounter {
 impl ConsensusGaslessCounter {
     pub fn record_commit(&self, commit_timestamp_ms: u64, gasless_count: u64) {
         let second = commit_timestamp_ms / 1000;
-        let current = self.window_second.load(Ordering::Relaxed);
-        if second > current {
-            self.window_second.store(second, Ordering::Relaxed);
-            self.count.store(gasless_count, Ordering::Relaxed);
-        } else if second == current {
-            self.count.fetch_add(gasless_count, Ordering::Relaxed);
+        let mut inner = self.inner.lock();
+        if second > inner.window_second {
+            inner.window_second = second;
+            inner.count = gasless_count;
+        } else if second == inner.window_second {
+            inner.count += gasless_count;
         }
     }
 
-    pub fn current_count(&self) -> (u64, u64) {
-        let window = self.window_second.load(Ordering::Relaxed);
-        let count = self.count.load(Ordering::Relaxed);
-        (window, count)
+    pub fn current_count(&self) -> u64 {
+        self.inner.lock().count
     }
 }
 
@@ -93,8 +96,7 @@ impl GaslessRateLimiter {
         let Some(max_tps) = config.gasless_max_tps_as_option() else {
             return true;
         };
-        let (_, consensus_count) = self.consensus_counter.current_count();
-        if consensus_count >= max_tps {
+        if self.consensus_counter.current_count() >= max_tps {
             return false;
         }
         // no single validator can admit more than max_tps burst
@@ -150,10 +152,10 @@ mod tests {
     fn test_record_commit_new_window_resets() {
         let counter = ConsensusGaslessCounter::default();
         counter.record_commit(1000, 10);
-        assert_eq!(counter.current_count(), (1, 10));
+        assert_eq!(counter.current_count(), 10);
 
         counter.record_commit(2000, 5);
-        assert_eq!(counter.current_count(), (2, 5));
+        assert_eq!(counter.current_count(), 5);
     }
 
     #[test]
@@ -161,7 +163,7 @@ mod tests {
         let counter = ConsensusGaslessCounter::default();
         counter.record_commit(1000, 10);
         counter.record_commit(1500, 7);
-        assert_eq!(counter.current_count(), (1, 17));
+        assert_eq!(counter.current_count(), 17);
     }
 
     #[test]
@@ -169,7 +171,7 @@ mod tests {
         let counter = ConsensusGaslessCounter::default();
         counter.record_commit(2000, 10);
         counter.record_commit(1000, 99);
-        assert_eq!(counter.current_count(), (2, 10));
+        assert_eq!(counter.current_count(), 10);
     }
 
     // -- Local admission counter tests --
