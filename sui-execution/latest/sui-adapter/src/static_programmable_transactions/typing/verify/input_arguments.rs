@@ -83,6 +83,7 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
         pure,
         receiving,
         withdrawal_compatibility_conversions: _,
+        original_command_len: _,
         commands,
     } = txn;
     for pure in pure {

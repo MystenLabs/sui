@@ -364,30 +364,20 @@ impl MoveTypeTagTrait for ExecutionTimeObservationChunkKey {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct ExecutionTiming {
-    /// The actual index into the AST's vector of commands. This may differ from the
-    /// `original_index` if commands were added during translation
-    pub actual_index: usize,
-    /// The index marked on the AST node of the command
-    pub original_index: usize,
-    pub timing: ExecutionTiming_,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum ExecutionTiming_ {
+pub enum ExecutionTiming {
     Success(Duration),
     Abort(Duration),
 }
 
 impl ExecutionTiming {
     pub fn is_abort(&self) -> bool {
-        matches!(&self.timing, ExecutionTiming_::Abort(_))
+        matches!(self, ExecutionTiming::Abort(_))
     }
 
     pub fn duration(&self) -> Duration {
-        match &self.timing {
-            ExecutionTiming_::Success(duration) => *duration,
-            ExecutionTiming_::Abort(duration) => *duration,
+        match self {
+            ExecutionTiming::Success(duration) => *duration,
+            ExecutionTiming::Abort(duration) => *duration,
         }
     }
 }

@@ -26,7 +26,7 @@ use sui_types::{
     move_package::MovePackage,
     object::Owner,
 };
-use tracing::instrument;
+use tracing::{error, instrument, warn};
 
 pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension>,
@@ -40,15 +40,23 @@ where
     'pc: 'state,
     'env: 'state,
 {
-    let mut timings = vec![];
+    let mut indexed_timings = vec![];
+    let original_command_len = ast.original_command_len;
     let result = execute_inner::<Mode>(
-        &mut timings,
+        &mut indexed_timings,
         env,
         metrics,
         tx_context,
         gas_charger,
         ast,
         trace_builder_opt,
+    );
+    let timings = coalesce_timings(indexed_timings, original_command_len);
+    debug_assert!(
+        timings.len() <= original_command_len,
+        "coalesced timings length {} exceeds original command length {}",
+        timings.len(),
+        original_command_len
     );
 
     match result {
@@ -60,8 +68,8 @@ where
     }
 }
 
-pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
-    timings: &mut Vec<ExecutionTiming>,
+fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
+    timings: &mut Vec<IndexedExecutionTiming>,
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension>,
     metrics: Arc<LimitsMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
@@ -100,7 +108,8 @@ where
     trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;
 
     let mut mode_results = Mode::empty_results();
-    for sp!(idx, c) in commands {
+    for (actual_index, sp!(original_index, c)) in commands.into_iter().enumerate() {
+        let original_index = original_index as usize;
         let start = Instant::now();
         if let Err(err) =
             execute_command::<Mode>(&mut context, &mut mode_results, c, trace_builder_opt)
@@ -113,10 +122,18 @@ where
             // runtime, but its since been dropped. what gives with this error?
             env.state_view
                 .save_loaded_runtime_objects(loaded_runtime_objects);
-            timings.push(ExecutionTiming::Abort(start.elapsed()));
-            return Err(err.with_command_index(idx as usize));
+            timings.push(IndexedExecutionTiming {
+                actual_index,
+                original_index,
+                timing: ExecutionTiming::Abort(start.elapsed()),
+            });
+            return Err(err.with_command_index(original_index));
         };
-        timings.push(ExecutionTiming::Success(start.elapsed()));
+        timings.push(IndexedExecutionTiming {
+            actual_index,
+            original_index,
+            timing: ExecutionTiming::Success(start.elapsed()),
+        });
     }
     // Save loaded objects table in case we fail in post execution
     //
@@ -423,4 +440,89 @@ fn execute_command<Mode: ExecutionMode>(
         "stack height did not end at 0"
     );
     Ok(())
+}
+
+/// Wrapper around `ExecutionTiming` that also tracks the actual and original command indices for
+/// coalescing timings after execution.
+struct IndexedExecutionTiming {
+    actual_index: usize,
+    original_index: usize,
+    timing: ExecutionTiming,
+}
+
+/// Coalesces timings by `original_index` to align with the original command count.
+/// Extra commands may have been injected during typing (e.g., withdrawal compatibility).
+/// Timings sharing an `original_index` have their durations summed. An error, if present,
+/// is always last; entries after it are truncated.
+fn coalesce_timings(
+    indexed_timings: Vec<IndexedExecutionTiming>,
+    original_command_len: usize,
+) -> Vec<ExecutionTiming> {
+    // Debug assertion that there should be at most one error timing at the end of the vector
+    debug_assert!(
+        indexed_timings
+            .iter()
+            .filter(|t| t.timing.is_abort())
+            .count()
+            <= 1,
+        "multiple abort timings found in execution timings"
+    );
+    debug_assert!(
+        indexed_timings
+            .iter()
+            .position(|t| t.timing.is_abort())
+            .is_none_or(|pos| pos == indexed_timings.len().saturating_sub(1)),
+        "abort timing found before the end of execution timings"
+    );
+
+    let mut coalesced =
+        vec![ExecutionTiming::Success(std::time::Duration::ZERO); original_command_len];
+    for cur in indexed_timings {
+        let existing_opt = if cur.original_index < original_command_len {
+            coalesced.get_mut(cur.original_index)
+        } else if cur.actual_index < original_command_len {
+            warn!(
+                "original_index {} is out of bounds for original_command_len {}, \
+                     using actual_index {} instead",
+                cur.original_index, original_command_len, cur.actual_index,
+            );
+            debug_assert!(false);
+            coalesced.get_mut(cur.actual_index)
+        } else {
+            None
+        };
+        let Some(existing) = existing_opt else {
+            error!(
+                "timing original_index {} and actual_index {} are both out of bounds \
+                     for original_command_len {}, skipping",
+                cur.original_index, cur.actual_index, original_command_len,
+            );
+            debug_assert!(false);
+            continue;
+        };
+        let new_duration = existing.duration().saturating_add(cur.timing.duration());
+        debug_assert!(!existing.is_abort());
+        *existing = if existing.is_abort() || cur.timing.is_abort() {
+            ExecutionTiming::Abort(new_duration)
+        } else {
+            ExecutionTiming::Success(new_duration)
+        };
+    }
+
+    // An error can only be the last timing. Truncate anything after it.
+    debug_assert!(
+        coalesced.iter().filter(|t| t.is_abort()).count() <= 1,
+        "multiple error timings found after coalescing"
+    );
+    debug_assert!(
+        coalesced
+            .iter()
+            .position(|t| t.is_abort())
+            .is_none_or(|pos| pos == coalesced.len().saturating_sub(1)),
+        "error timing found before the end of coalesced timings"
+    );
+    if let Some(abort_pos) = coalesced.iter().position(|t| t.is_abort()) {
+        coalesced.truncate(abort_pos.saturating_add(1));
+    }
+    coalesced
 }

@@ -55,15 +55,21 @@ struct Context {
     receiving: IndexMap<(T::InputIndex, Type), T::ReceivingInput>,
     withdrawal_compatibility_conversions:
         IndexMap<T::Location, T::WithdrawalCompatibilityConversion>,
+    original_command_len: usize,
     commands: Vec<T::Command>,
 }
 
 impl Context {
-    fn new(gas_payment: Option<GasPayment>, linputs: L::Inputs) -> Result<Self, ExecutionError> {
+    fn new(
+        gas_payment: Option<GasPayment>,
+        original_command_len: usize,
+        linputs: L::Inputs,
+    ) -> Result<Self, ExecutionError> {
         let mut context = Context {
             current_command: 0,
             gas_payment,
             input_resolution: vec![],
+            original_command_len,
             bytes: IndexSet::new(),
             bytes_idx_remapping: IndexMap::new(),
             receiving_refs: IndexMap::new(),
@@ -160,6 +166,7 @@ impl Context {
             receiving,
             commands,
             withdrawal_compatibility_conversions,
+            original_command_len,
             ..
         } = self;
         let objects = objects.into_iter().map(|(_, o)| o).collect();
@@ -174,6 +181,7 @@ impl Context {
             pure,
             receiving,
             withdrawal_compatibility_conversions,
+            original_command_len,
             commands,
         }
     }
@@ -332,11 +340,12 @@ pub fn transaction<Mode: ExecutionMode>(
     let L::Transaction {
         gas_payment,
         mut inputs,
+        original_command_len,
         mut commands,
     } = lt;
     let withdrawal_compatability_inputs =
         determine_withdrawal_compatibility_inputs(env, &mut inputs)?;
-    let mut context = Context::new(gas_payment, inputs)?;
+    let mut context = Context::new(gas_payment, original_command_len, inputs)?;
     withdrawal_compatibility_conversion(
         env,
         &mut context,
@@ -1283,6 +1292,7 @@ mod consumed_shared_objects {
                 pure: _,
                 receiving: _,
                 withdrawal_compatibility_conversions: _,
+                original_command_len: _,
                 commands: _,
             } = ast;
             let inputs = objects
