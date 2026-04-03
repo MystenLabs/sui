@@ -8,18 +8,13 @@ info:
 note[I15008]: macro frame info
    ┌─ tests/move_2024/macro_frames/nested_macros.move:12:9
    │
- 4 │         $x + $x
-   │         --   -- [5,8] Argument
-   │         │     
-   │         [4,7] Argument
-   ·
  8 │         double!($x) + double!($x)
    │         -----------   -----------
    │         │       │     │       │
-   │         │       │     │       [2] Argument
-   │         │       │     [6] MacroBody(0x41::m::double)
+   │         │       │     │       [3] Argument
+   │         │       │     [4] MacroBody(0x41::m::double)
    │         │       [1] Argument
-   │         [3] MacroBody(0x41::m::double)
+   │         [2] MacroBody(0x41::m::double)
    ·
 12 │         quad!(v)
    │         ^^^^^^^^ [0] MacroBody(0x41::m::quad)

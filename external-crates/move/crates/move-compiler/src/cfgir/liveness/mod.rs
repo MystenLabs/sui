@@ -484,5 +484,5 @@ fn pop_ref(loc: Loc, var: Var, ty: SingleType) -> Command {
         pop_num: 1,
         exp: move_e,
     };
-    H::Command::new(loc, 0, pop_)
+    H::Command::new(loc, None, pop_)
 }

@@ -154,7 +154,7 @@ pub struct Context<'env, 'outer> {
     // for generating new variables during match compilation
     next_match_var_id: usize,
     use_funs: Vec<UseFunsScope<'env, 'outer>>,
-    pub current_expansion_color: Color,
+    pub current_expansion_color: macro_frames::ExpansionColor,
     pub current_function: Option<FunctionName>,
     pub in_macro_function: bool,
     max_variable_color: RefCell<u16>,
@@ -546,7 +546,7 @@ impl<'env> ModuleContext<'env> {
             used_module_members: BTreeMap::new(),
             next_match_var_id: 0,
             use_funs,
-            current_expansion_color: 0,
+            current_expansion_color: None,
             current_function: None,
             in_macro_function: false,
             max_variable_color: RefCell::new(0),
@@ -756,17 +756,6 @@ impl<'env, 'outer> Context<'env, 'outer> {
 
     pub fn current_module(&self) -> Option<&'outer ModuleIdent> {
         self.outer.current_module.as_ref()
-    }
-
-    pub fn add_macro_frame_info(&self, info: crate::shared::macro_frames::ColorFrameInfo) {
-        if let (Some(module), Some(function)) = (
-            self.outer.current_module.as_ref(),
-            self.current_function.as_ref(),
-        ) {
-            self.outer
-                .env
-                .add_macro_frame_info(module.value, function.0.value, info);
-        }
     }
 
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
@@ -1055,8 +1044,8 @@ impl<'env, 'outer> Context<'env, 'outer> {
         self.use_funs.last().unwrap().color.unwrap()
     }
 
-    pub fn current_expansion_color(&self) -> Color {
-        self.current_expansion_color
+    pub fn current_expansion_color(&self) -> &macro_frames::ExpansionColor {
+        &self.current_expansion_color
     }
 
     pub fn add_ability_constraint(

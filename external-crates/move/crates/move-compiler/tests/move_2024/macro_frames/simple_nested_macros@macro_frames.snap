@@ -8,9 +8,6 @@ info:
 note[I15008]: macro frame info
    ┌─ tests/move_2024/macro_frames/simple_nested_macros.move:12:9
    │
- 4 │         $x + 1
-   │         -- [3] Argument
-   ·
  8 │         inner!($x)
    │         ----------
    │         │      │

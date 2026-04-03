@@ -9,15 +9,16 @@ use crate::{
     },
     ice,
     naming::ast::{
-        BlockLabel, Color, EnumDefinition, FunctionSignature, Neighbor, StructDefinition,
-        SyntaxMethods, Type, Type_, UNIT_TYPE, UseFuns, Var,
+        BlockLabel, EnumDefinition, FunctionSignature, Neighbor, StructDefinition, SyntaxMethods,
+        Type, Type_, UNIT_TYPE, UseFuns, Var,
     },
     parser::ast::{
         BinOp, ConstantName, DatatypeName, DocComment, ENTRY_MODIFIER, Field, FunctionName,
         MACRO_MODIFIER, NATIVE_MODIFIER, TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        Name, NamedAddressMap, ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap,
+        Name, NamedAddressMap, ast_debug::*, macro_frames::ExpansionColor,
+        program_info::TypingProgramInfo, unique_map::UniqueMap,
     },
 };
 use move_core_types::parsing::address::NumericalAddress;
@@ -210,12 +211,12 @@ pub enum UnannotatedExp_ {
         has_break: bool,
         body: Box<Exp>,
     },
-    /// Color: expansion color for debugger macro frame tracking (0 = no macro scope).
+    /// ExpansionColor: macro expansion info for debugger frame tracking (None = no macro scope).
     /// Set from `N::Block::expansion_color` during typing; consumed by HLIR
-    /// translation to stamp bytecodes with the active macro color.
-    NamedBlock(BlockLabel, Color, Sequence),
-    /// See `NamedBlock` for the Color parameter.
-    Block(Color, Sequence),
+    /// translation to stamp bytecodes with the active macro expansion color.
+    NamedBlock(BlockLabel, ExpansionColor, Sequence),
+    /// See `NamedBlock` for the ExpansionColor parameter.
+    Block(ExpansionColor, Sequence),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),

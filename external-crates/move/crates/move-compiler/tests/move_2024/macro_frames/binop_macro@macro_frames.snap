@@ -8,9 +8,6 @@ info:
 note[I15008]: macro frame info
    ┌─ tests/move_2024/macro_frames/binop_macro.move:21:9
    │  
-12 │           $x + 1
-   │           -- [3] Argument
-   ·  
 17 │           $f(arg)
    │           ------- [1] Lambda
    ·  

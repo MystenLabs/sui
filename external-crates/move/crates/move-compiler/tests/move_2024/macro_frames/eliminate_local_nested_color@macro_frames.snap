@@ -1,6 +1,5 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
-assertion_line: 295
 info:
   flavor: core
   edition: 2024.alpha
@@ -11,8 +10,6 @@ note[I15008]: macro frame info
    │
 10 │         let v = $v;
    │                 -- [2] Argument
-11 │         $f(v)
-   │         ----- [3] Lambda
    ·
 15 │         m!(1, $g)
    │         --------- [1] MacroBody(0x41::m::m)

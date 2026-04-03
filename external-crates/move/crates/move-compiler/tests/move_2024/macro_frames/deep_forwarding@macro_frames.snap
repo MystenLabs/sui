@@ -8,14 +8,8 @@ info:
 note[I15008]: macro frame info
    ┌─ tests/move_2024/macro_frames/deep_forwarding.move:19:9
    │
- 7 │         $x + 1
-   │         -- [5] Argument
-   ·
 11 │         a!($x)
-   │         ------
-   │         │  │
-   │         │  [3] Argument
-   │         [4] MacroBody(0x41::m::a)
+   │         ------ [3] MacroBody(0x41::m::a)
    ·
 15 │         b!($x)
    │         ------

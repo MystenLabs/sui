@@ -6,14 +6,14 @@ mod remove_nop_store;
 mod remove_unused_locals;
 mod remove_write_back;
 
-use crate::parser::ast::FunctionName;
+use crate::{parser::ast::FunctionName, shared::macro_frames::ExpansionColor};
 use move_ir_types::ast::{self as IR};
 use std::collections::{BTreeSet, HashMap};
 
 /// Per-block color data maintained in parallel with BytecodeBlocks.
 /// `block_colors[i][j]` is the macro expansion color for instruction `j`
 /// in block `i`.
-pub(crate) type BlockColors = Vec<Vec<u16>>;
+pub(crate) type BlockColors = Vec<Vec<ExpansionColor>>;
 
 pub type Optimization = fn(
     &FunctionName,

@@ -22,8 +22,12 @@ use crate::{
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
     shared::{
-        ide::IDEInfo, known_attributes::AttributeKind_, program_info::ModuleInfo,
-        unique_map::UniqueMap, *,
+        ide::IDEInfo,
+        known_attributes::AttributeKind_,
+        macro_frames::{ExpansionColor, MacroInfo},
+        program_info::ModuleInfo,
+        unique_map::UniqueMap,
+        *,
     },
     PreCompiledProgramInfo,
 };
@@ -631,16 +635,17 @@ fn emit_macro_frame_diagnostics(
     }
 }
 
-/// After compilation, populate macro_frame_info on the source map by converting
-/// ColorFrameInfo entries from the compilation env into MacroFrameInfoEntry records.
+/// After compilation, populate macro_frame_info on the source map by walking
+/// the `Arc<MacroInfo>` parent chains from per-instruction expansion colors.
 fn populate_macro_frame_info(
     source_map: &mut SourceMap,
     compiled_module: &F::CompiledModule,
-    env: &CompilationEnv,
-    module_ident: &ModuleIdent_,
-    function_color_data: &BTreeMap<Symbol, Vec<u16>>,
+    _env: &CompilationEnv,
+    _module_ident: &ModuleIdent_,
+    function_color_data: &BTreeMap<Symbol, FunctionColorData>,
 ) {
     use move_bytecode_source_map::source_map::MacroFrameInfoEntry;
+    use std::collections::HashMap as StdHashMap;
 
     for (fdef_idx, fsm) in source_map.function_source_maps_mut() {
         let func_idx = fdef_idx as usize;
@@ -652,68 +657,74 @@ fn populate_macro_frame_info(
         let fname_str = compiled_module.identifiers[fhandle.name.0 as usize].as_str();
         let fname_sym = Symbol::from(fname_str);
 
-        let infos = env.get_macro_frame_infos(&module_ident, &fname_sym);
-        if infos.is_empty() {
+        let color_data = match function_color_data.get(&fname_sym) {
+            Some(data) => data,
+            None => continue,
+        };
+
+        // Collect all unique MacroInfo nodes (by Arc pointer identity)
+        // including ancestors reachable via parent chains.
+        let mut ptr_to_index: StdHashMap<*const MacroInfo, u32> = StdHashMap::new();
+        let mut ordered_nodes: Vec<Arc<MacroInfo>> = Vec::new();
+
+        fn register_node(
+            node: &Arc<MacroInfo>,
+            ptr_to_index: &mut StdHashMap<*const MacroInfo, u32>,
+            ordered_nodes: &mut Vec<Arc<MacroInfo>>,
+        ) {
+            let ptr = Arc::as_ptr(node);
+            if ptr_to_index.contains_key(&ptr) {
+                return;
+            }
+            // Register ancestors first so parent indices are always lower.
+            if let Some(ref parent) = node.parent {
+                register_node(parent, ptr_to_index, ordered_nodes);
+            }
+            let index = ordered_nodes.len() as u32;
+            ptr_to_index.insert(ptr, index);
+            ordered_nodes.push(Arc::clone(node));
+        }
+
+        // Register nodes from post-optimization instruction colors.
+        for color in &color_data.flat_colors {
+            if let Some(node) = color {
+                register_node(node, &mut ptr_to_index, &mut ordered_nodes);
+            }
+        }
+
+        if ordered_nodes.is_empty() {
             continue;
         }
 
-        // Build color → index mapping
-        let color_to_index: HashMap<u16, u32> = infos
+        // Build MacroFrameInfoEntry records.
+        fsm.macro_frame_info = ordered_nodes
             .iter()
-            .enumerate()
-            .map(|(i, info)| (info.color, i as u32))
-            .collect();
-        debug_assert_eq!(
-            color_to_index.len(),
-            infos.len(),
-            "duplicate colors in macro frame infos for {fname_str}"
-        );
-
-        // Convert ColorFrameInfos to MacroFrameInfoEntries
-        fsm.macro_frame_info = infos
-            .into_iter()
-            .map(|info| {
-                let parent_index = if info.parent_color == 0 {
-                    None
-                } else {
-                    let idx = color_to_index.get(&info.parent_color).copied();
-                    debug_assert!(
-                        idx.is_some(),
-                        "parent color {} has no matching frame info in {fname_str}",
-                        info.parent_color,
-                    );
-                    idx
-                };
+            .map(|node| {
+                let parent_index = node
+                    .parent
+                    .as_ref()
+                    .map(|p| *ptr_to_index.get(&Arc::as_ptr(p)).unwrap());
                 MacroFrameInfoEntry {
-                    kind: info.kind,
-                    source_loc: info.source_loc,
-                    call_loc: info.call_loc,
+                    kind: node.kind.clone(),
+                    source_loc: node.source_loc,
+                    call_loc: node.call_loc,
                     parent_index,
                 }
             })
             .collect();
 
-        // Build macro_color_map from stored flat color data
-        if let Some(flat_colors) = function_color_data.get(&fname_sym) {
-            fsm.macro_color_map = flat_colors
-                .iter()
-                .enumerate()
-                .map(|(offset, &raw_color)| {
-                    let index = if raw_color == 0 {
-                        None
-                    } else {
-                        let idx = color_to_index.get(&raw_color).copied();
-                        debug_assert!(
-                            idx.is_some(),
-                            "bytecode color {raw_color} has no matching frame info \
-                             in {fname_str}",
-                        );
-                        idx
-                    };
-                    (offset as F::CodeOffset, index)
-                })
-                .collect();
-        }
+        // Build macro_color_map: instruction offset → frame index.
+        fsm.macro_color_map = color_data
+            .flat_colors
+            .iter()
+            .enumerate()
+            .map(|(offset, color)| {
+                let index = color
+                    .as_ref()
+                    .map(|node| *ptr_to_index.get(&Arc::as_ptr(node)).unwrap());
+                (offset as F::CodeOffset, index)
+            })
+            .collect();
     }
 }
 
@@ -1209,8 +1220,10 @@ fn function_body(
         &mut block_colors,
     );
 
-    let flat_colors: Vec<u16> = block_colors.into_iter().flatten().collect();
-    context.function_color_data.insert(f.0.value, flat_colors);
+    let flat_colors: Vec<ExpansionColor> = block_colors.into_iter().flatten().collect();
+    context
+        .function_color_data
+        .insert(f.0.value, FunctionColorData { flat_colors });
 
     (locals, bytecode_blocks)
 }
@@ -1380,14 +1393,14 @@ fn label(lbl: H::Label) -> IR::BlockLabel_ {
 
 fn push_instr(context: &mut Context, code: &mut IR::BytecodeBlock, instr: IR::Bytecode) {
     code.push(instr);
-    context.current_block_colors.push(context.color);
+    context.current_block_colors.push(context.color.clone());
 }
 
 fn command(context: &mut Context, code: &mut IR::BytecodeBlock, cmd: H::Command) {
     use H::Command_ as C;
     use IR::Bytecode_ as B;
     let loc = cmd.loc;
-    context.color = cmd.color;
+    context.color = cmd.color.clone();
     let cmd_ = cmd.value;
     match cmd_ {
         C::Assign(_, ls, e) => {
@@ -1535,8 +1548,8 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
     use Value_ as V;
     use H::UnannotatedExp_ as E;
     use IR::Bytecode_ as B;
-    let saved_color = context.color;
-    context.color = e.color.unwrap_or(context.color);
+    let saved_color = context.color.clone();
+    context.color = e.color.clone().unwrap_or_else(|| saved_color.clone());
     let sp!(loc, e_) = e.exp;
     match e_ {
         E::Unreachable => panic!("ICE should not compile dead code"),

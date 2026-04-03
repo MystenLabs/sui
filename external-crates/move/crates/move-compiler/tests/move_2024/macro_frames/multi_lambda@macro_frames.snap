@@ -8,11 +8,6 @@ info:
 note[I15008]: macro frame info
    ┌─ tests/move_2024/macro_frames/multi_lambda.move:11:9
    │
- 7 │         $f(1) + $g(2)
-   │         -----   ----- [2] Lambda
-   │         │        
-   │         [1] Lambda
-   ·
 11 │         apply2!(|x| x + 1, |y| y * 2)
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::apply2)
    │

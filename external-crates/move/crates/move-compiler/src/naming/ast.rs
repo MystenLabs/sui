@@ -426,16 +426,15 @@ pub struct Lambda {
 pub struct Block {
     pub name: Option<BlockLabel>,
     pub from_macro_argument: Option<MacroArgument>,
-    /// Color used by HLIR translation for the debugger's macro color map. Usually
-    /// equal to the UseFuns `color` in `seq`, but differs for lambda/argument
-    /// expansion blocks where `color` must stay at the definition-site value for
-    /// correct scope resolution. Set to 0 for non-macro blocks.
+    /// Structural macro expansion info for the debugger's frame tracking.
+    /// `None` for non-macro blocks; `Some(Rc<MacroInfo>)` for blocks introduced
+    /// by macro body, lambda, or argument expansion.
     ///
     /// During macro body recoloring (`recolor_use_funs = true`), this is set to
-    /// the recolored UseFuns color. During argument/lambda recoloring (`false`),
-    /// it is preserved — resetting it would destroy a color from a prior
+    /// the MacroInfo for the current expansion. During argument/lambda recoloring
+    /// (`false`), it is preserved — resetting it would destroy info from a prior
     /// substitution, making that frame invisible in debugger transitions.
-    pub expansion_color: Color,
+    pub expansion_color: macro_frames::ExpansionColor,
     pub seq: Sequence,
 }
 

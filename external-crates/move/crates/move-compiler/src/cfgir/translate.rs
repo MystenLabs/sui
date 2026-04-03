@@ -15,8 +15,8 @@ use crate::{
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
-    naming::ast::Color,
     parser::ast::{ConstantName, FunctionName},
+    shared::macro_frames::ExpansionColor,
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use cfgir::ast::LoopInfo;
@@ -559,7 +559,7 @@ fn constant_(
         "{}",
         ICE_MSG
     );
-    cfgir::optimize(
+    let _ = cfgir::optimize(
         context.env,
         &context.reporter,
         context.current_package,
@@ -851,7 +851,7 @@ fn statement(
     mut current_block: BasicBlock,
 ) -> (BasicBlock, BlockList) {
     let sloc = stmt.loc;
-    let color = stmt.color;
+    let color = stmt.color.clone();
     use H::{Command_ as C, Statement_ as S};
     match stmt.value {
         S::IfElse {
@@ -865,7 +865,7 @@ fn statement(
 
             let test_block = VecDeque::from([H::Command::new(
                 sloc,
-                color,
+                color.clone(),
                 C::JumpIf {
                     cond: *test,
                     if_true: true_label,
@@ -875,7 +875,7 @@ fn statement(
 
             let (true_entry_block, true_blocks) = block_(
                 context,
-                with_last(if_block, make_jump(sloc, color, phi_label, false)),
+                with_last(if_block, make_jump(sloc, color.clone(), phi_label, false)),
             );
             let (false_entry_block, false_blocks) = block_(
                 context,
@@ -910,7 +910,7 @@ fn statement(
                     let arm_label = context.new_label();
                     let (arm_entry_block, arm_entry_blocks) = block_(
                         context,
-                        with_last(arm_block, make_jump(sloc, color, phi_label, false)),
+                        with_last(arm_block, make_jump(sloc, color.clone(), phi_label, false)),
                     );
                     let mut blocks = [(arm_label, arm_entry_block)]
                         .into_iter()
@@ -945,12 +945,12 @@ fn statement(
             let (start_label, end_label) = context.enter_named_block(name, NamedBlockType::While);
             let body_label = context.new_label();
 
-            let entry_block = VecDeque::from([make_jump(sloc, color, start_label, false)]);
+            let entry_block = VecDeque::from([make_jump(sloc, color.clone(), start_label, false)]);
 
             let (initial_test_block, test_blocks) = {
                 let test_jump = H::Command::new(
                     sloc,
-                    color,
+                    color.clone(),
                     C::JumpIf {
                         cond: *test,
                         if_true: body_label,
@@ -984,7 +984,7 @@ fn statement(
         } => {
             let (start_label, end_label) = context.enter_named_block(name, NamedBlockType::Loop);
 
-            let entry_block = VecDeque::from([make_jump(sloc, color, start_label, false)]);
+            let entry_block = VecDeque::from([make_jump(sloc, color.clone(), start_label, false)]);
 
             let (body_entry_block, body_blocks) = block_(
                 context,
@@ -1004,7 +1004,7 @@ fn statement(
         S::NamedBlock { name, block: body } => {
             let (start_label, end_label) = context.enter_named_block(name, NamedBlockType::Named);
 
-            let entry_block = VecDeque::from([make_jump(sloc, color, start_label, false)]);
+            let entry_block = VecDeque::from([make_jump(sloc, color.clone(), start_label, false)]);
 
             let (body_entry_block, body_blocks) = block_(
                 context,
@@ -1023,7 +1023,7 @@ fn statement(
         }
         S::Command(cmd) if matches!(cmd.value, C::Break(_)) => {
             let cloc = cmd.loc;
-            let ccolor = cmd.color;
+            let ccolor = cmd.color.clone();
             if let C::Break(name) = cmd.value {
                 // Discard the current block because it's dead code.
                 let break_jump =
@@ -1035,7 +1035,7 @@ fn statement(
         }
         S::Command(cmd) if matches!(cmd.value, C::Continue(_)) => {
             let cloc = cmd.loc;
-            let ccolor = cmd.color;
+            let ccolor = cmd.color.clone();
             if let C::Continue(name) = cmd.value {
                 // Discard the current block because it's dead code.
                 let jump = make_jump(cloc, ccolor, context.named_block_start_label(&name), true);
@@ -1062,7 +1062,7 @@ fn with_last(mut block: H::Block, cmd: H::Command) -> H::Block {
         }
         _ => {
             let loc = cmd.loc;
-            let color = cmd.color;
+            let color = cmd.color.clone();
             let stmt = H::Statement::new(loc, color, H::Statement_::Command(cmd));
             block.push_back(stmt);
             block
@@ -1070,7 +1070,7 @@ fn with_last(mut block: H::Block, cmd: H::Command) -> H::Block {
     }
 }
 
-fn make_jump(loc: Loc, color: Color, target: Label, from_user: bool) -> H::Command {
+fn make_jump(loc: Loc, color: ExpansionColor, target: Label, from_user: bool) -> H::Command {
     H::Command::new(loc, color, H::Command_::Jump { target, from_user })
 }
 

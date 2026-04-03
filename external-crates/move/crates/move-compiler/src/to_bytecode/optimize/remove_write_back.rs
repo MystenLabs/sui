@@ -31,7 +31,7 @@ pub fn optimize(
                 }
                 _ => {
                     new_block.push(block[i].clone());
-                    new_colors.push(colors[block_idx][i]);
+                    new_colors.push(colors[block_idx][i].clone());
                     i += 1
                 }
             }

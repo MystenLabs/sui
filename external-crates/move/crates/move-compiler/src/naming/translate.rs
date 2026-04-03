@@ -3018,14 +3018,14 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             NE::Block(N::Block {
                 name: Some(label),
                 from_macro_argument: None,
-                expansion_color: 0,
+                expansion_color: None,
                 seq,
             })
         }
         EE::Block(None, eseq) => NE::Block(N::Block {
             name: None,
             from_macro_argument: None,
-            expansion_color: 0,
+            expansion_color: None,
             seq: sequence(context, eseq),
         }),
         EE::Lambda(elambda_binds, ety_opt, body) => {

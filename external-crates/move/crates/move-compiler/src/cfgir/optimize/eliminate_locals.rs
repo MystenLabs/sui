@@ -418,7 +418,7 @@ mod eliminate {
                     // chain already covers it. Only colorless replacements
                     // need the use-site color.
                     if replacement.color.is_none() {
-                        replacement.color = parent_e.color;
+                        replacement.color = parent_e.color.clone();
                     }
                     *parent_e = replacement
                 }

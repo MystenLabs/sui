@@ -5,7 +5,7 @@
 use crate::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_},
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
-    shared::{CompilationEnv, NumericalAddress},
+    shared::{CompilationEnv, NumericalAddress, macro_frames::ExpansionColor},
 };
 use move_core_types::account_address::AccountAddress as MoveAddress;
 use move_ir_types::ast as IR;
@@ -24,6 +24,13 @@ pub struct FunctionDeclaration {
 pub type DatatypeDeclarations =
     HashMap<(ModuleIdent, DatatypeName), (BTreeSet<IR::Ability>, Vec<IR::DatatypeTypeParameter>)>;
 
+/// Per-function macro color data collected during bytecode generation.
+pub struct FunctionColorData {
+    /// Post-optimization flat color vector: one entry per instruction in
+    /// block order. Used to build `macro_color_map`.
+    pub flat_colors: Vec<ExpansionColor>,
+}
+
 /// Compilation context for a single compilation unit (module).
 /// Contains all of the dependencies actually used in the module
 pub struct Context<'a> {
@@ -34,17 +41,14 @@ pub struct Context<'a> {
     seen_functions: BTreeSet<(ModuleIdent, FunctionName)>,
     /// Active macro expansion color for bytecode annotation. Set from
     /// `cmd.color` at command boundaries and from `e.color` at expression
-    /// boundaries (with save/restore). Starts at 0 (no macro scope).
-    pub color: u16,
+    /// boundaries (with save/restore). Starts at `None` (no macro scope).
+    pub color: ExpansionColor,
     /// Colors for the block currently being built. Each `push_instr` call
     /// appends `self.color` here in parallel with the instruction.
-    pub current_block_colors: Vec<u16>,
-    /// Per-function flat color vectors. After building and optimizing
-    /// bytecode blocks, the per-block colors are flattened into a single
-    /// vector (one u16 per instruction in block order) and stored here.
-    /// Used after `compile_module()` to populate the source map's
-    /// `macro_color_map`.
-    pub function_color_data: BTreeMap<Symbol, Vec<u16>>,
+    pub current_block_colors: Vec<ExpansionColor>,
+    /// Per-function color data for populating the source map's macro frame
+    /// info and color map.
+    pub function_color_data: BTreeMap<Symbol, FunctionColorData>,
 }
 
 impl<'a> Context<'a> {
@@ -59,7 +63,7 @@ impl<'a> Context<'a> {
             current_module,
             seen_datatypes: BTreeSet::new(),
             seen_functions: BTreeSet::new(),
-            color: 0,
+            color: None,
             current_block_colors: Vec::new(),
             function_color_data: BTreeMap::new(),
         }

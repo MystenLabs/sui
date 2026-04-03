@@ -7,14 +7,14 @@ use crate::{
     expansion::ast::{
         AbilitySet, Attributes, Friend, ModuleIdent, Mutability, ability_modifiers_ast_debug,
     },
-    naming::ast::{BuiltinTypeName, BuiltinTypeName_, Color, DatatypeTypeParameter, TParam},
+    naming::ast::{BuiltinTypeName, BuiltinTypeName_, DatatypeTypeParameter, TParam},
     parser::ast::{
         self as P, BinOp, ConstantName, DatatypeName, ENTRY_MODIFIER, Field, FunctionName,
         TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        Name, NumericalAddress, TName, ast_debug::*, program_info::TypingProgramInfo,
-        unique_map::UniqueMap,
+        Name, NumericalAddress, TName, ast_debug::*, macro_frames::ExpansionColor,
+        program_info::TypingProgramInfo, unique_map::UniqueMap,
     },
 };
 use move_ir_types::location::*;
@@ -206,7 +206,7 @@ pub type Type = Spanned<Type_>;
 // Statements
 //**************************************************************************************************
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Statement_ {
     Command(Command),
@@ -235,15 +235,15 @@ pub enum Statement_ {
         block: Block,
     },
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Statement {
     pub loc: Loc,
-    pub color: Color,
+    pub color: ExpansionColor,
     pub value: Statement_,
 }
 
 impl Statement {
-    pub fn new(loc: Loc, color: Color, value: Statement_) -> Self {
+    pub fn new(loc: Loc, color: ExpansionColor, value: Statement_) -> Self {
         Self { loc, color, value }
     }
 }
@@ -297,12 +297,12 @@ pub enum Command_ {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Command {
     pub loc: Loc,
-    pub color: Color,
+    pub color: ExpansionColor,
     pub value: Command_,
 }
 
 impl Command {
-    pub fn new(loc: Loc, color: Color, value: Command_) -> Self {
+    pub fn new(loc: Loc, color: ExpansionColor, value: Command_) -> Self {
         Self { loc, color, value }
     }
 }
@@ -446,11 +446,11 @@ pub enum UnannotatedExp_ {
     UnresolvedError,
 }
 pub type UnannotatedExp = Spanned<UnannotatedExp_>;
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Exp {
     pub ty: Type,
     pub exp: UnannotatedExp,
-    pub color: Option<Color>,
+    pub color: Option<ExpansionColor>,
 }
 pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
     Exp {
@@ -1513,7 +1513,7 @@ impl AstDebug for Exp {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Exp { ty, exp, color } = self;
         if let Some(c) = color {
-            w.write(&format!("(color={c}) "));
+            w.write(&format!("(color={c:?}) "));
         }
         w.annotate(|w| exp.ast_debug(w), ty)
     }
