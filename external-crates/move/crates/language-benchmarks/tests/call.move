@@ -1,4 +1,4 @@
-module 0x1::bench {
+module 0x2::bench {
     const COUNT: u64 = 10_000u64;
 
     //
@@ -32,10 +32,10 @@ module 0x1::bench {
         };
     }
 
-    // use 0x1::bench_xmodule_call;
+    // use 0x2::bench_xmodule_call;
 
     public fun bench_xmodule_call() {
-        0x1::bench_xmodule_call::bench_call();
+        0x2::bench_xmodule_call::bench_call();
     }
 
     fun call_1(addr: address, val: u64): bool {
@@ -66,7 +66,7 @@ module 0x1::bench {
     }
 }
 
-module 0x1::bench_xmodule_call {
+module 0x2::bench_xmodule_call {
     fun check(check: bool, code: u64) {
         if (check) () else abort code
     }

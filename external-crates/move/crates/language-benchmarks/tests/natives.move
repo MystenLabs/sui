@@ -1,4 +1,4 @@
-module 0x1::bench {
+module 0x2::bench {
 
     //
     // Global helpers
