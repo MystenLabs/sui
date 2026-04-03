@@ -62,7 +62,6 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
-#[cfg(feature = "testing")]
 use std::sync::RwLock;
 use std::time::Duration;
 use std::{
@@ -971,8 +970,6 @@ pub struct ProgrammableTransaction {
     pub commands: Vec<Command>,
 }
 
-<<<<<<< HEAD
-#[cfg(debug_assertions)]
 #[cfg(feature = "testing")]
 static GASLESS_TOKENS_FOR_TESTING: RwLock<Vec<(String, u64)>> = RwLock::new(Vec::new());
 

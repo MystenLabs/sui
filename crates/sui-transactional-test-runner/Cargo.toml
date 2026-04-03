@@ -61,6 +61,10 @@ sui-framework-snapshot.workspace = true
 sui-storage.workspace = true
 typed-store.workspace = true
 
+[[bin]]
+name = "sui-transactional-test-runner"
+required-features = ["testing"]
+
 [features]
 testing = ["sui-types/testing"]
 
