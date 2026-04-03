@@ -1210,7 +1210,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                 // visit_exp_custom also returns false, and the default visit_exp
                 // traversal runs AFTER the state has been restored — defeating the
                 // macro/lambda state management.
-                TE::Block(seq) | TE::NamedBlock(_, seq) => {
+                TE::Block(_, seq) | TE::NamedBlock(_, _, seq) => {
                     visitor.visit_seq(exp.exp.loc, seq);
                     true
                 }
@@ -1399,7 +1399,6 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
     fn visit_use_funs(&mut self, use_funs: &N::UseFuns) {
         let N::UseFuns {
             color: _,
-            expansion_color: _,
             resolved,
             implicit_candidates,
         } = use_funs;
