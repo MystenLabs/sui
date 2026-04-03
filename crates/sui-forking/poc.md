@@ -82,6 +82,7 @@ At startup, the user has the choice to seed addresses or objects, to make the fo
 `--address` adds an address for seeding (works in the consistent range), loads that address's objects and adds them to the seed.
 `--object` add the object by ID directly to the seed.
 
+
 Note that seeding can also be done from a file:
 
 ```json
@@ -98,7 +99,20 @@ Note that seeding can also be done from a file:
 }
 ```
 
-At startup, the tool will also dump this information to `generated_{network}_{checkpoint}.json` for future reference. This file can be used to restart the same forked network with the same seed, which is useful for debugging or CI purposes.
+If the user provides both `--address` and `--object`, the tool will combine the objects resolved from both sources and use that as the initial seed for the forked network.
+The initial seed will be dumped to a file `generated_{network}_{checkpoint}.json` for future reference. This file can be used to restart the same forked network with the same seed, which is useful for debugging or CI purposes.
+
+```json
+{
+    "network": "testnet",
+    "checkpoint": "12345678",
+    "objects": [
+        "0xabcdef1234567890abcdef1234567890abcdef12
+    ]
+}
+```
+
+The `network` identifier is defined as `mainnet`, `testnet`, or a custom one `custom-CHAIN_ID_DIGEST` for ephemeral networks.
 
 ### Starting a Local Forked Network
 
@@ -154,8 +168,8 @@ sui-forking status
 Shows the current checkpoint, epoch, and timestamp.
 
 ## Outside of scope for POC
-- GraphQL support
 - advance-epoch support
 - faucet support
 - minting any coin type
+- GraphQL RPC support
 
