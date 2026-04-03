@@ -293,6 +293,7 @@ fun test_withdraw_more_than_there_is() {
 }
 
 #[test]
+#[allow(deprecated_usage)]
 fun test_disallow_extensions_access_as_owner() {
     let ctx = &mut test::ctx();
     let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
@@ -314,6 +315,7 @@ fun test_uid_access() {
 }
 
 #[test]
+#[allow(deprecated_usage)]
 #[expected_failure(abort_code = sui::kiosk::EUidAccessNotAllowed)]
 fun test_disallow_extensions_uid_mut() {
     let ctx = &mut test::ctx();
@@ -326,6 +328,7 @@ fun test_disallow_extensions_uid_mut() {
 }
 
 #[test]
+#[allow(deprecated_usage)]
 fun test_disallow_extensions_uid_available() {
     let ctx = &mut test::ctx();
     let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
