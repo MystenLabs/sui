@@ -45,6 +45,7 @@ fn vector<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "vector.move");
 }
 
+#[allow(dead_code)]
 fn cross_module<M: Measurement + 'static>(c: &mut Criterion<M>) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let dir = "a1";
@@ -64,7 +65,7 @@ criterion_group!(
         natives,
         transfers,
         vector,
-        cross_module,
+        // cross_module, // TODO: broken — uses multi-address packages not supported by current setup
 );
 
 criterion_main!(vm_benches);
