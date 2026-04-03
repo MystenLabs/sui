@@ -27,6 +27,7 @@ use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
 
 mod broadcaster;
+mod byte_count;
 pub(crate) mod decode;
 pub mod error;
 pub mod ingestion_client;

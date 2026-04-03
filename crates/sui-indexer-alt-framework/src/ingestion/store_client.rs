@@ -4,18 +4,16 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use object_store::Error as ObjectStoreError;
+use object_store::Error;
 use object_store::ObjectStore;
 use object_store::ObjectStoreExt;
 use object_store::RetryConfig;
 use object_store::path::Path as ObjectPath;
+use prometheus::IntCounter;
 use serde::de::DeserializeOwned;
 use sui_types::digests::ChainIdentifier;
-use tracing::debug;
-use tracing::error;
 
 use crate::ingestion::decode;
-use crate::ingestion::ingestion_client::CheckpointData;
 use crate::ingestion::ingestion_client::CheckpointError;
 use crate::ingestion::ingestion_client::CheckpointResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
@@ -32,11 +30,18 @@ pub(super) fn retry_config() -> RetryConfig {
 
 pub struct StoreIngestionClient {
     store: Arc<dyn ObjectStore>,
+    /// Counter incremented (in the [`IngestionClientTrait`] impl) by the size in bytes of each
+    /// fetched checkpoint payload. `None` for callers that only use this client for one-shot
+    /// metadata fetches (e.g. `end_of_epoch_checkpoints`) and don't need a metric.
+    total_ingested_bytes: Option<IntCounter>,
 }
 
 impl StoreIngestionClient {
-    pub fn new(store: Arc<dyn ObjectStore>) -> Self {
-        Self { store }
+    pub fn new(store: Arc<dyn ObjectStore>, total_ingested_bytes: Option<IntCounter>) -> Self {
+        Self {
+            store,
+            total_ingested_bytes,
+        }
     }
 
     /// Fetch metadata mapping epoch IDs to the sequence numbers of their last checkpoints.
@@ -80,20 +85,18 @@ impl IngestionClientTrait for StoreIngestionClient {
     /// - server errors (5xx),
     /// - issues getting a full response.
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
-        match self.checkpoint_bytes(checkpoint).await {
-            Ok(bytes) => Ok(CheckpointData::Raw(bytes)),
-            Err(ObjectStoreError::NotFound { .. }) => {
-                debug!(checkpoint, "Checkpoint not found");
-                Err(CheckpointError::NotFound)
-            }
-            Err(error) => {
-                error!(checkpoint, "Failed to fetch checkpoint: {error}");
-                Err(CheckpointError::Transient {
-                    reason: "object_store",
-                    error: error.into(),
-                })
-            }
+        let bytes = self
+            .checkpoint_bytes(checkpoint)
+            .await
+            .map_err(|e| match e {
+                Error::NotFound { .. } => CheckpointError::NotFound,
+                e => CheckpointError::Fetch(e.into()),
+            })?;
+
+        if let Some(counter) = &self.total_ingested_bytes {
+            counter.inc_by(bytes.len() as u64);
         }
+        decode::checkpoint(&bytes).map_err(CheckpointError::Decode)
     }
 }
 
