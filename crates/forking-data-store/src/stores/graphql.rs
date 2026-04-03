@@ -128,8 +128,8 @@ impl EpochStore for GraphQLStore {
 }
 
 impl ObjectStore for GraphQLStore {
-    fn get_objects(&self, _keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
-        todo!("GraphQL object reads are not implemented in the skeleton")
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
+        block_on!(crate::gql_queries::object_query::query(keys, self))
     }
 }
 
@@ -147,11 +147,12 @@ mod tests {
     use cynic::QueryBuilder;
     use fastcrypto::encoding::Base64 as FastCryptoBase64;
     use serde_json::json;
-    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+    use sui_types::{base_types::ObjectID, test_checkpoint_data_builder::TestCheckpointBuilder};
     use wiremock::matchers::{body_partial_json, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+    use crate::VersionQuery;
     use crate::gql_queries::checkpoint_query::{CheckpointArgs, Query as CheckpointQuery};
 
     fn mock_store(server: &MockServer) -> GraphQLStore {
@@ -181,6 +182,28 @@ mod tests {
                             .collect::<Vec<_>>(),
                     },
                 }
+            }
+        })
+    }
+
+    fn object_response_body(objects: &[Option<&Object>]) -> serde_json::Value {
+        json!({
+            "data": {
+                "multiGetObjects": objects
+                    .iter()
+                    .map(|object| {
+                        object.as_ref().map(|object| {
+                            json!({
+                                "address": object.id().to_string(),
+                                "version": object.version().value(),
+                                "objectBcs": FastCryptoBase64::from_bytes(
+                                    &bcs::to_bytes(*object).expect("object should serialize"),
+                                )
+                                .encoded(),
+                            })
+                        })
+                    })
+                    .collect::<Vec<_>>(),
             }
         })
     }
@@ -270,5 +293,88 @@ mod tests {
             verified.auth_sig().signers_map,
             checkpoint.summary.auth_sig().signers_map
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_objects() {
+        let server = MockServer::start().await;
+        let versioned_object = Object::immutable_with_id_for_testing(ObjectID::random());
+        let root_version_object = Object::immutable_with_id_for_testing(ObjectID::random());
+        let missing_object_id = ObjectID::random();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(header("user-agent", "forking-data-store-vtest-version"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "keys": [
+                        {
+                            "address": versioned_object.id().to_string(),
+                            "version": versioned_object.version().value(),
+                        },
+                        {
+                            "address": root_version_object.id().to_string(),
+                            "rootVersion": 17,
+                        },
+                        {
+                            "address": missing_object_id.to_string(),
+                            "atCheckpoint": 29,
+                        },
+                    ],
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(object_response_body(&[
+                    Some(&versioned_object),
+                    Some(&root_version_object),
+                    None,
+                ])),
+            )
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let objects = store
+            .get_objects(&[
+                ObjectKey {
+                    object_id: versioned_object.id(),
+                    version_query: VersionQuery::Version(versioned_object.version().value()),
+                },
+                ObjectKey {
+                    object_id: root_version_object.id(),
+                    version_query: VersionQuery::RootVersion(17),
+                },
+                ObjectKey {
+                    object_id: missing_object_id,
+                    version_query: VersionQuery::AtCheckpoint(29),
+                },
+            ])
+            .expect("object query should succeed");
+
+        assert_eq!(
+            objects,
+            vec![
+                Some((versioned_object.clone(), versioned_object.version().value())),
+                Some((
+                    root_version_object.clone(),
+                    root_version_object.version().value(),
+                )),
+                None,
+            ]
+        );
+
+        let requests = server
+            .received_requests()
+            .await
+            .expect("wiremock should record requests");
+        let request_body: serde_json::Value = requests[0]
+            .body_json()
+            .expect("request body should be json");
+        let query = request_body
+            .get("query")
+            .and_then(serde_json::Value::as_str)
+            .expect("query string should be present");
+        assert!(query.contains("multiGetObjects"));
+        assert!(query.contains("objectBcs"));
     }
 }

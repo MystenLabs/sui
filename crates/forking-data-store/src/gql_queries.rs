@@ -326,6 +326,43 @@ pub(crate) mod object_query {
             }
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use sui_types::base_types::ObjectID;
+
+        use super::*;
+
+        #[test]
+        fn object_key_from_version_query_sets_only_selected_bound() {
+            let object_id = ObjectID::random();
+
+            let version_key = ObjectKey::from(GqlObjectKey {
+                object_id,
+                version_query: VersionQuery::Version(7),
+            });
+            assert_eq!(version_key.address.0, object_id.to_string());
+            assert_eq!(version_key.version, Some(7));
+            assert_eq!(version_key.root_version, None);
+            assert_eq!(version_key.at_checkpoint, None);
+
+            let root_version_key = ObjectKey::from(GqlObjectKey {
+                object_id,
+                version_query: VersionQuery::RootVersion(11),
+            });
+            assert_eq!(root_version_key.version, None);
+            assert_eq!(root_version_key.root_version, Some(11));
+            assert_eq!(root_version_key.at_checkpoint, None);
+
+            let checkpoint_key = ObjectKey::from(GqlObjectKey {
+                object_id,
+                version_query: VersionQuery::AtCheckpoint(19),
+            });
+            assert_eq!(checkpoint_key.version, None);
+            assert_eq!(checkpoint_key.root_version, None);
+            assert_eq!(checkpoint_key.at_checkpoint, Some(19));
+        }
+    }
 }
 
 pub(crate) mod checkpoint_query {
