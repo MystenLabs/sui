@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use async_graphql::Response;
@@ -36,7 +37,9 @@ pub(crate) struct Timeout(Arc<TimeoutConfig>);
 
 struct TimeoutExt {
     config: Arc<TimeoutConfig>,
-    operation_type: Mutex<OperationType>,
+    /// Map from operation name to its type, populated once during parsing.
+    /// `None` key represents an anonymous (single) operation.
+    operation_types: OnceLock<HashMap<Option<String>, OperationType>>,
 }
 
 impl Timeout {
@@ -49,7 +52,7 @@ impl ExtensionFactory for Timeout {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(TimeoutExt {
             config: self.0.clone(),
-            operation_type: Mutex::new(OperationType::Query),
+            operation_types: OnceLock::new(),
         })
     }
 }
@@ -65,9 +68,12 @@ impl Extension for TimeoutExt {
     ) -> ServerResult<ExecutableDocument> {
         let document = next.run(ctx, query, variables).await?;
 
-        if let Some((_, op)) = document.operations.iter().next() {
-            *self.operation_type.lock().unwrap() = op.node.ty;
-        }
+        let types: HashMap<_, _> = document
+            .operations
+            .iter()
+            .map(|(name, op)| (name.map(|n| n.to_string()), op.node.ty))
+            .collect();
+        let _ = self.operation_types.set(types);
 
         Ok(document)
     }
@@ -78,7 +84,12 @@ impl Extension for TimeoutExt {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
-        let operation_type = *self.operation_type.lock().unwrap();
+        let key = operation_name.map(|s| s.to_string());
+        let operation_type = self
+            .operation_types
+            .get()
+            .and_then(|types| types.get(&key).copied())
+            .unwrap_or(OperationType::Query);
 
         // Subscriptions are long-lived streams — a per-request timeout does not apply.
         if operation_type == OperationType::Subscription {
