@@ -107,7 +107,7 @@ fun update_randomness_state(
         // randomness ever being generated in that epoch.
         assert!(
             (epoch > inner.epoch && new_round == 0) ||
-                    (new_round == inner.randomness_round + 1),
+                    (epoch == inner.epoch && new_round == inner.randomness_round + 1),
             EInvalidRandomnessUpdate,
         );
     };
