@@ -26,7 +26,7 @@ use sui_types::{
     move_package::MovePackage,
     object::Owner,
 };
-use tracing::{error, instrument, warn};
+use tracing::instrument;
 
 pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension>,
@@ -108,8 +108,8 @@ where
     trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;
 
     let mut mode_results = Mode::empty_results();
-    for (actual_index, sp!(original_index, c)) in commands.into_iter().enumerate() {
-        let original_index = original_index as usize;
+    for (actual_index, sp!(annotated_index, c)) in commands.into_iter().enumerate() {
+        let annotated_index = annotated_index as usize;
         let start = Instant::now();
         if let Err(err) =
             execute_command::<Mode>(&mut context, &mut mode_results, c, trace_builder_opt)
@@ -124,14 +124,14 @@ where
                 .save_loaded_runtime_objects(loaded_runtime_objects);
             timings.push(IndexedExecutionTiming {
                 actual_index,
-                original_index,
+                annotated_index,
                 timing: ExecutionTiming::Abort(start.elapsed()),
             });
-            return Err(err.with_command_index(original_index));
+            return Err(err.with_command_index(annotated_index));
         };
         timings.push(IndexedExecutionTiming {
             actual_index,
-            original_index,
+            annotated_index,
             timing: ExecutionTiming::Success(start.elapsed()),
         });
     }
@@ -445,14 +445,15 @@ fn execute_command<Mode: ExecutionMode>(
 /// Wrapper around `ExecutionTiming` that also tracks the actual and original command indices for
 /// coalescing timings after execution.
 struct IndexedExecutionTiming {
+    #[allow(unused)]
     actual_index: usize,
-    original_index: usize,
+    annotated_index: usize,
     timing: ExecutionTiming,
 }
 
 /// Coalesces timings by `original_index` to align with the original command count.
 /// Extra commands may have been injected during typing (e.g., withdrawal compatibility).
-/// Timings sharing an `original_index` have their durations summed. An error, if present,
+/// Timings sharing an `annotated_index` have their durations summed. An error, if present,
 /// is always last; entries after it are truncated.
 fn coalesce_timings(
     indexed_timings: Vec<IndexedExecutionTiming>,
@@ -477,26 +478,10 @@ fn coalesce_timings(
 
     let mut coalesced =
         vec![ExecutionTiming::Success(std::time::Duration::ZERO); original_command_len];
+    let last_index = original_command_len.saturating_sub(1);
     for cur in indexed_timings {
-        let existing_opt = if cur.original_index < original_command_len {
-            coalesced.get_mut(cur.original_index)
-        } else if cur.actual_index < original_command_len {
-            warn!(
-                "original_index {} is out of bounds for original_command_len {}, \
-                     using actual_index {} instead",
-                cur.original_index, original_command_len, cur.actual_index,
-            );
-            debug_assert!(false);
-            coalesced.get_mut(cur.actual_index)
-        } else {
-            None
-        };
-        let Some(existing) = existing_opt else {
-            error!(
-                "timing original_index {} and actual_index {} are both out of bounds \
-                     for original_command_len {}, skipping",
-                cur.original_index, cur.actual_index, original_command_len,
-            );
+        let idx = cur.annotated_index.min(last_index);
+        let Some(existing) = coalesced.get_mut(idx) else {
             debug_assert!(false);
             continue;
         };
