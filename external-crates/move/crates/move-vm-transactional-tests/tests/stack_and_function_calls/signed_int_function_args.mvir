@@ -1,0 +1,192 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --edition development
+
+//# publish
+module 0x5.M {
+    public identity_i8(x: i8): i8 {
+    label b0:
+        return move(x);
+    }
+
+    public identity_i64(x: i64): i64 {
+    label b0:
+        return move(x);
+    }
+
+    public add_i8(a: i8, b: i8): i8 {
+    label b0:
+        return move(a) + move(b);
+    }
+
+    public add_i64(a: i64, b: i64): i64 {
+    label b0:
+        return move(a) + move(b);
+    }
+
+    public multi_i8(a: i8, b: i8, c: i8): i8 {
+    label b0:
+        return move(a) + move(b) + move(c);
+    }
+
+    public negate_i8(x: i8): i8 {
+    label b0:
+        return neg(move(x));
+    }
+
+    public negate_i64(x: i64): i64 {
+    label b0:
+        return neg(move(x));
+    }
+}
+
+// Test i8 identity with positive value
+//# run
+module 0x6.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i8;
+label b0:
+    r = M.identity_i8(42i8);
+    assert(move(r) == 42i8, 1000);
+    return;
+}
+
+}
+
+// Test i8 identity with negative value
+//# run
+module 0x7.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i8;
+label b0:
+    r = M.identity_i8(-1i8);
+    assert(move(r) == -1i8, 1100);
+    return;
+}
+
+}
+
+// Test i64 identity with positive value
+//# run
+module 0x8.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i64;
+label b0:
+    r = M.identity_i64(9999i64);
+    assert(move(r) == 9999i64, 1200);
+    return;
+}
+
+}
+
+// Test i64 identity with negative value
+//# run
+module 0x9.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i64;
+label b0:
+    r = M.identity_i64(-500i64);
+    assert(move(r) == -500i64, 1300);
+    return;
+}
+
+}
+
+// Test add_i8 with two signed params including negative
+//# run
+module 0xa.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i8;
+label b0:
+    r = M.add_i8(10i8, -3i8);
+    assert(move(r) == 7i8, 1400);
+    return;
+}
+
+}
+
+// Test add_i64 with two signed params
+//# run
+module 0xb.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i64;
+label b0:
+    r = M.add_i64(1000i64, -500i64);
+    assert(move(r) == 500i64, 1500);
+    return;
+}
+
+}
+
+// Test multi_i8 with three signed params
+//# run
+module 0xc.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i8;
+label b0:
+    r = M.multi_i8(10i8, -20i8, 30i8);
+    assert(move(r) == 20i8, 1600);
+    return;
+}
+
+}
+
+// Test negate returning negative from positive
+//# run
+module 0xd.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i8;
+label b0:
+    r = M.negate_i8(42i8);
+    assert(move(r) == -42i8, 1700);
+    return;
+}
+
+}
+
+// Test negate_i64 returning negative
+//# run
+module 0xe.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i64;
+label b0:
+    r = M.negate_i64(100i64);
+    assert(move(r) == -100i64, 1800);
+    return;
+}
+
+}
+
+// Test negate_i8 with negative input returns positive
+//# run
+module 0xf.m {
+import 0x5.M;
+
+entry foo() {
+    let r: i8;
+label b0:
+    r = M.negate_i8(-42i8);
+    assert(move(r) == 42i8, 1900);
+    return;
+}
+
+}

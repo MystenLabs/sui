@@ -1,0 +1,78 @@
+//# init --edition development
+
+//# print-bytecode
+module 0x42.SignedI8Ops {
+    ops() {
+        let x: i8;
+        let y: i8;
+        let z: i8;
+    label b0:
+        x = 1i8;
+        y = 2i8;
+        z = move(x) + move(y);
+        x = 10i8;
+        y = 3i8;
+        z = move(x) - move(y);
+        x = 4i8;
+        y = 5i8;
+        z = move(x) * move(y);
+        x = 20i8;
+        y = 4i8;
+        z = move(x) / move(y);
+        x = 17i8;
+        y = 5i8;
+        z = move(x) % move(y);
+        x = 7i8;
+        y = 3i8;
+        z = move(x) & move(y);
+        x = 5i8;
+        y = 3i8;
+        z = move(x) | move(y);
+        x = 6i8;
+        y = 3i8;
+        z = move(x) ^ move(y);
+        return;
+    }
+}
+
+//# print-bytecode
+module 0x42.SignedI64Ops {
+    ops() {
+        let x: i64;
+        let y: i64;
+        let z: i64;
+        let s: u8;
+    label b0:
+        x = 100i64;
+        y = 200i64;
+        z = move(x) + move(y);
+        x = 500i64;
+        y = 123i64;
+        z = move(x) - move(y);
+        x = 10i64;
+        y = 20i64;
+        z = move(x) * move(y);
+        x = 100i64;
+        y = 7i64;
+        z = move(x) / move(y);
+        x = 100i64;
+        y = 7i64;
+        z = move(x) % move(y);
+        x = 255i64;
+        y = 15i64;
+        z = move(x) & move(y);
+        x = 240i64;
+        y = 15i64;
+        z = move(x) | move(y);
+        x = 255i64;
+        y = 128i64;
+        z = move(x) ^ move(y);
+        x = 1i64;
+        s = 4u8;
+        z = move(x) << move(s);
+        x = 16i64;
+        s = 2u8;
+        z = move(x) >> move(s);
+        return;
+    }
+}

@@ -1,0 +1,498 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 3-202:
+//# run
+Error: error[E13003]: feature is under active development
+  ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:6:25
+  │
+6 │     const I8_MIN: i8 = -128i8;
+  │                         ^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:7:24
+  │
+7 │     const I8_MAX: i8 = 127i8;
+  │                        ^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:8:25
+  │
+8 │     const I8_ZERO: i8 = 0i8;
+  │                         ^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+  ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:9:29
+  │
+9 │     const I8_NEG_LIT: i8 = -1i8;
+  │                             ^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:11:24
+   │
+11 │     const I8_ADD: i8 = 10i8 + -20i8;
+   │                        ^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:12:24
+   │
+12 │     const I8_SUB: i8 = -50i8 - -30i8;
+   │                        ^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:13:24
+   │
+13 │     const I8_MUL: i8 = -6i8 * 7i8;
+   │                        ^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:14:24
+   │
+14 │     const I8_DIV: i8 = 42i8 / -6i8;
+   │                        ^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:15:24
+   │
+15 │     const I8_MOD: i8 = -7i8 % 3i8;
+   │                        ^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:17:29
+   │
+17 │     const I8_MAX_ADD0: i8 = 127i8 + 0i8;
+   │                             ^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:18:29
+   │
+18 │     const I8_MIN_ADD0: i8 = -128i8 + 0i8;
+   │                             ^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:20:25
+   │
+20 │     const I8_BAND: i8 = 0x7Fi8 & 0x0Fi8;
+   │                         ^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:21:24
+   │
+21 │     const I8_BOR: i8 = 0x70i8 | 0x0Fi8;
+   │                        ^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:22:25
+   │
+22 │     const I8_BXOR: i8 = 0x7Fi8 ^ 0x7Fi8;
+   │                         ^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:24:24
+   │
+24 │     const I8_SHL: i8 = 1i8 << 6;
+   │                        ^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:25:24
+   │
+25 │     const I8_SHR: i8 = 64i8 >> 6;
+   │                        ^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:27:27
+   │
+27 │     const I16_MIN: i16 = -32768i16;
+   │                           ^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:28:26
+   │
+28 │     const I16_MAX: i16 = 32767i16;
+   │                          ^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:29:26
+   │
+29 │     const I16_ADD: i16 = 100i16 + -200i16;
+   │                          ^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:30:26
+   │
+30 │     const I16_SUB: i16 = -500i16 - -300i16;
+   │                          ^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:31:26
+   │
+31 │     const I16_MUL: i16 = -60i16 * 70i16;
+   │                          ^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:32:26
+   │
+32 │     const I16_DIV: i16 = 420i16 / -6i16;
+   │                          ^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:33:26
+   │
+33 │     const I16_MOD: i16 = -17i16 % 5i16;
+   │                          ^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:34:31
+   │
+34 │     const I16_MAX_ADD0: i16 = 32767i16 + 0i16;
+   │                               ^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:35:31
+   │
+35 │     const I16_MIN_ADD0: i16 = -32768i16 + 0i16;
+   │                               ^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:36:27
+   │
+36 │     const I16_BAND: i16 = 0x7FFFi16 & 0x00FFi16;
+   │                           ^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:37:26
+   │
+37 │     const I16_BOR: i16 = 0x7F00i16 | 0x00FFi16;
+   │                          ^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:38:27
+   │
+38 │     const I16_BXOR: i16 = 0x7FFFi16 ^ 0x7FFFi16;
+   │                           ^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:39:26
+   │
+39 │     const I16_SHL: i16 = 1i16 << 14;
+   │                          ^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:40:26
+   │
+40 │     const I16_SHR: i16 = 16384i16 >> 14;
+   │                          ^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:42:27
+   │
+42 │     const I32_MIN: i32 = -2147483648i32;
+   │                           ^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:43:26
+   │
+43 │     const I32_MAX: i32 = 2147483647i32;
+   │                          ^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:44:26
+   │
+44 │     const I32_ADD: i32 = 1000i32 + -2000i32;
+   │                          ^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:45:26
+   │
+45 │     const I32_SUB: i32 = -5000i32 - -3000i32;
+   │                          ^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:46:26
+   │
+46 │     const I32_MUL: i32 = -600i32 * 700i32;
+   │                          ^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:47:26
+   │
+47 │     const I32_DIV: i32 = 4200i32 / -6i32;
+   │                          ^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:48:26
+   │
+48 │     const I32_MOD: i32 = -17i32 % 5i32;
+   │                          ^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:49:31
+   │
+49 │     const I32_MAX_ADD0: i32 = 2147483647i32 + 0i32;
+   │                               ^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:50:31
+   │
+50 │     const I32_MIN_ADD0: i32 = -2147483648i32 + 0i32;
+   │                               ^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:51:27
+   │
+51 │     const I32_BAND: i32 = 0x7FFFFFFFi32 & 0x0000FFFFi32;
+   │                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:52:26
+   │
+52 │     const I32_BOR: i32 = 0x7FFF0000i32 | 0x0000FFFFi32;
+   │                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:53:27
+   │
+53 │     const I32_BXOR: i32 = 0x7FFFFFFFi32 ^ 0x7FFFFFFFi32;
+   │                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:54:26
+   │
+54 │     const I32_SHL: i32 = 1i32 << 30;
+   │                          ^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:55:26
+   │
+55 │     const I32_SHR: i32 = 1073741824i32 >> 30;
+   │                          ^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:57:27
+   │
+57 │     const I64_MIN: i64 = -9223372036854775808i64;
+   │                           ^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:58:26
+   │
+58 │     const I64_MAX: i64 = 9223372036854775807i64;
+   │                          ^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:59:26
+   │
+59 │     const I64_ADD: i64 = 10000i64 + -20000i64;
+   │                          ^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:60:26
+   │
+60 │     const I64_SUB: i64 = -50000i64 - -30000i64;
+   │                          ^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:61:26
+   │
+61 │     const I64_MUL: i64 = -6000i64 * 7000i64;
+   │                          ^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:62:26
+   │
+62 │     const I64_DIV: i64 = 42000i64 / -6i64;
+   │                          ^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:63:26
+   │
+63 │     const I64_MOD: i64 = -17i64 % 5i64;
+   │                          ^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:64:31
+   │
+64 │     const I64_MAX_ADD0: i64 = 9223372036854775807i64 + 0i64;
+   │                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:65:31
+   │
+65 │     const I64_MIN_ADD0: i64 = -9223372036854775808i64 + 0i64;
+   │                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:66:27
+   │
+66 │     const I64_BAND: i64 = 0x7FFFFFFFFFFFFFFFi64 & 0x00000000FFFFFFFFi64;
+   │                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:67:26
+   │
+67 │     const I64_BOR: i64 = 0x7FFFFFFF00000000i64 | 0x00000000FFFFFFFFi64;
+   │                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:68:27
+   │
+68 │     const I64_BXOR: i64 = 0x7FFFFFFFFFFFFFFFi64 ^ 0x7FFFFFFFFFFFFFFFi64;
+   │                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:69:26
+   │
+69 │     const I64_SHL: i64 = 1i64 << 62;
+   │                          ^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:70:26
+   │
+70 │     const I64_SHR: i64 = 4611686018427387904i64 >> 62;
+   │                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:72:29
+   │
+72 │     const I128_MIN: i128 = -170141183460469231731687303715884105728i128;
+   │                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:73:28
+   │
+73 │     const I128_MAX: i128 = 170141183460469231731687303715884105727i128;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:74:28
+   │
+74 │     const I128_ADD: i128 = 100000i128 + -200000i128;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:75:28
+   │
+75 │     const I128_SUB: i128 = -500000i128 - -300000i128;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:76:28
+   │
+76 │     const I128_MUL: i128 = -60000i128 * 70000i128;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:77:28
+   │
+77 │     const I128_DIV: i128 = 420000i128 / -6i128;
+   │                            ^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:78:28
+   │
+78 │     const I128_MOD: i128 = -17i128 % 5i128;
+   │                            ^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:79:33
+   │
+79 │     const I128_MAX_ADD0: i128 = 170141183460469231731687303715884105727i128 + 0i128;
+   │                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:80:33
+   │
+80 │     const I128_MIN_ADD0: i128 = -170141183460469231731687303715884105728i128 + 0i128;
+   │                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:81:29
+   │
+81 │     const I128_BXOR: i128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFi128 ^ 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFi128;
+   │                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:82:28
+   │
+82 │     const I128_SHL: i128 = 1i128 << 126;
+   │                            ^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:83:28
+   │
+83 │     const I128_SHR: i128 = 85070591730234615865843651857942052864i128 >> 126;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:85:29
+   │
+85 │     const I256_MIN: i256 = -57896044618658097711785492504343953926634992332820282019728792003956564819968i256;
+   │                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:86:28
+   │
+86 │     const I256_MAX: i256 = 57896044618658097711785492504343953926634992332820282019728792003956564819967i256;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:87:28
+   │
+87 │     const I256_ADD: i256 = 1000000i256 + -2000000i256;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:88:28
+   │
+88 │     const I256_SUB: i256 = -5000000i256 - -3000000i256;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:89:28
+   │
+89 │     const I256_MUL: i256 = -600000i256 * 700000i256;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:90:28
+   │
+90 │     const I256_DIV: i256 = 4200000i256 / -6i256;
+   │                            ^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:91:28
+   │
+91 │     const I256_MOD: i256 = -17i256 % 5i256;
+   │                            ^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:92:33
+   │
+92 │     const I256_MAX_ADD0: i256 = 57896044618658097711785492504343953926634992332820282019728792003956564819967i256 + 0i256;
+   │                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:93:33
+   │
+93 │     const I256_MIN_ADD0: i256 = -57896044618658097711785492504343953926634992332820282019728792003956564819968i256 + 0i256;
+   │                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:94:29
+   │
+94 │     const I256_BXOR: i256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFi256 ^ 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFi256;
+   │                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:95:28
+   │
+95 │     const I256_SHL: i256 = 1i256 << 254;
+   │                            ^^^^^^^^^^^^ signed integer types are under development
+
+error[E13003]: feature is under active development
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp9XNqQV:96:28
+   │
+96 │     const I256_SHR: i256 = 28948022309329048855892746252171976963317496166410141009864396001978282409984i256 >> 254;
+   │                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ signed integer types are under development

@@ -1,0 +1,127 @@
+//# init --edition development
+
+//# publish
+module 0x42.ti8 {
+test() {
+let x: i8;
+label l0:
+    x = 0i8;
+    x = 100i8;
+    x = 1i8 + 1i8;
+    x = 1i8 - 1i8;
+    x = 1i8 * 1i8;
+    x = 1i8 / 1i8;
+    x = 1i8 % 1i8;
+    x = 1i8 & 1i8;
+    x = 1i8 | 1i8;
+    x = 1i8 ^ 1i8;
+    x = 1i8 << 1u8;
+    x = 1i8 >> 1u8;
+    return;
+}
+}
+
+//# publish
+module 0x42.ti16 {
+test() {
+let x: i16;
+label l0:
+    x = 0i16;
+    x = 100i16;
+    x = 1i16 + 1i16;
+    x = 1i16 - 1i16;
+    x = 1i16 * 1i16;
+    x = 1i16 / 1i16;
+    x = 1i16 % 1i16;
+    x = 1i16 & 1i16;
+    x = 1i16 | 1i16;
+    x = 1i16 ^ 1i16;
+    x = 1i16 << 1u8;
+    x = 1i16 >> 1u8;
+    return;
+}
+}
+
+//# publish
+module 0x42.ti32 {
+test() {
+let x: i32;
+label l0:
+    x = 0i32;
+    x = 100i32;
+    x = 1i32 + 1i32;
+    x = 1i32 - 1i32;
+    x = 1i32 * 1i32;
+    x = 1i32 / 1i32;
+    x = 1i32 % 1i32;
+    x = 1i32 & 1i32;
+    x = 1i32 | 1i32;
+    x = 1i32 ^ 1i32;
+    x = 1i32 << 1u8;
+    x = 1i32 >> 1u8;
+    return;
+}
+}
+
+//# publish
+module 0x42.ti64 {
+test() {
+let x: i64;
+label l0:
+    x = 0i64;
+    x = 100i64;
+    x = 1i64 + 1i64;
+    x = 1i64 - 1i64;
+    x = 1i64 * 1i64;
+    x = 1i64 / 1i64;
+    x = 1i64 % 1i64;
+    x = 1i64 & 1i64;
+    x = 1i64 | 1i64;
+    x = 1i64 ^ 1i64;
+    x = 1i64 << 1u8;
+    x = 1i64 >> 1u8;
+    return;
+}
+}
+
+//# publish
+module 0x42.ti128 {
+test() {
+let x: i128;
+label l0:
+    x = 0i128;
+    x = 100i128;
+    x = 1i128 + 1i128;
+    x = 1i128 - 1i128;
+    x = 1i128 * 1i128;
+    x = 1i128 / 1i128;
+    x = 1i128 % 1i128;
+    x = 1i128 & 1i128;
+    x = 1i128 | 1i128;
+    x = 1i128 ^ 1i128;
+    x = 1i128 << 1u8;
+    x = 1i128 >> 1u8;
+    return;
+}
+}
+
+//# publish
+module 0x42.ti256 {
+test() {
+let x: i256;
+label l0:
+    x = 0i256;
+    x = 100i256;
+    x = 1i256 + 1i256;
+    x = 1i256 - 1i256;
+    x = 1i256 * 1i256;
+    x = 1i256 / 1i256;
+    x = 1i256 % 1i256;
+    x = 1i256 & 1i256;
+    x = 1i256 | 1i256;
+    x = 1i256 ^ 1i256;
+    x = 1i256 << 1u8;
+    x = 1i256 >> 1u8;
+    return;
+}
+}

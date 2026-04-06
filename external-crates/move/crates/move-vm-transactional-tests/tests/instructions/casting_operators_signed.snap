@@ -1,0 +1,48 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+task 1, lines 7-43:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term ToI64
+
+task 2, lines 44-53:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term ToI8
+
+task 3, lines 54-65:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term ToI8
+
+task 4, lines 66-81:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term ToI8
+
+task 6, lines 96-105:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term Minus
+
+task 7, lines 106-117:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term Minus
+
+task 8, lines 118-131:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term ToI8
+
+task 9, lines 132-141:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term ToI8
+
+task 10, lines 142-153:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term ToI8
+
+task 12, lines 168-179:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term Minus
+
+task 13, lines 180-189:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term ToI64

@@ -1,0 +1,111 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --edition development
+
+// Borrow local i8, read through immutable ref
+//# run
+module 0x6.m {
+
+entry foo() {
+    let x: i8;
+    let r: &i8;
+label b0:
+    x = 42i8;
+    r = &x;
+    assert(*move(r) == 42i8, 1000);
+    return;
+}
+
+}
+
+// Borrow local i8 negative value, read through ref
+//# run
+module 0x7.m {
+
+entry foo() {
+    let x: i8;
+    let r: &i8;
+label b0:
+    x = -1i8;
+    r = &x;
+    assert(*move(r) == -1i8, 1100);
+    return;
+}
+
+}
+
+// Mut borrow i64, write through ref, verify new value
+//# run
+module 0x8.m {
+
+entry foo() {
+    let x: i64;
+    let r: &mut i64;
+label b0:
+    x = 100i64;
+    r = &mut x;
+    *copy(r) = -200i64;
+    assert(*move(r) == -200i64, 1200);
+    assert(move(x) == -200i64, 1201);
+    return;
+}
+
+}
+
+// Mut borrow i8, write negative, verify
+//# run
+module 0x9.m {
+
+entry foo() {
+    let x: i8;
+    let r: &mut i8;
+label b0:
+    x = 0i8;
+    r = &mut x;
+    *copy(r) = -128i8;
+    assert(*move(r) == -128i8, 1300);
+    assert(move(x) == -128i8, 1301);
+    return;
+}
+
+}
+
+// Freeze: mut ref to imm ref with signed int
+//# run
+module 0xa.m {
+
+entry foo() {
+    let x: i64;
+    let r: &mut i64;
+    let imm: &i64;
+label b0:
+    x = -42i64;
+    r = &mut x;
+    imm = freeze(move(r));
+    assert(*move(imm) == -42i64, 1400);
+    return;
+}
+
+}
+
+// Multiple refs to different signed int locals
+//# run
+module 0xb.m {
+
+entry foo() {
+    let a: i8;
+    let b: i64;
+    let ra: &i8;
+    let rb: &i64;
+label b0:
+    a = 127i8;
+    b = -9999i64;
+    ra = &a;
+    rb = &b;
+    assert(*move(ra) == 127i8, 1500);
+    assert(*move(rb) == -9999i64, 1501);
+    return;
+}
+
+}

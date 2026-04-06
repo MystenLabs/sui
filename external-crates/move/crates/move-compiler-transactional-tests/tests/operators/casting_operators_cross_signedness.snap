@@ -1,0 +1,180 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 19 tasks
+
+task 2, lines 39-45:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x2::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast i8(-1) to u8",
+}
+
+task 3, lines 47-53:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x3::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast i16(-1) to u16",
+}
+
+task 4, lines 55-61:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x4::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast i32(-1) to u32",
+}
+
+task 5, lines 63-69:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x5::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast i64(-1) to u64",
+}
+
+task 6, lines 71-77:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x6::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast i128(-1) to u128",
+}
+
+task 7, lines 79-87:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x7::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast negative signed integer to u256",
+}
+
+task 8, lines 88-94:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x8::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast i8(-128) to u8",
+}
+
+task 9, lines 96-104:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x9::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast i8(-128) to u64",
+}
+
+task 11, lines 141-147:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xb::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast u8(128) to i8",
+}
+
+task 12, lines 149-155:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xc::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast u8(255) to i8",
+}
+
+task 13, lines 157-163:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xd::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast u16(32768) to i16",
+}
+
+task 14, lines 165-171:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xe::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast u16(65535) to i16",
+}
+
+task 15, lines 173-179:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xf::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast u32(2147483648) to i32",
+}
+
+task 16, lines 181-187:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x10::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast u64(9223372036854775808) to i64",
+}
+
+task 17, lines 189-195:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x11::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast u64(18446744073709551615) to i64",
+}
+
+task 18, lines 197-203:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x12::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot cast u128(170141183460469231731687303715884105728) to i128",
+}

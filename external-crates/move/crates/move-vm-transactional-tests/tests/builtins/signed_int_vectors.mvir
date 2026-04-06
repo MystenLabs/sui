@@ -1,0 +1,165 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --edition development
+
+//# publish
+module 0x5.M {
+    import 0x1.vector;
+
+    // VecPack and VecLen with i8
+    public test_i8_pack_and_len() {
+        let v: vector<i8>;
+    label b0:
+        v = vec_pack_3<i8>(1i8, -1i8, 0i8);
+        assert(vector.length<i8>(&v) == 3, 1000);
+        return;
+    }
+
+    // VecImmBorrow with i8
+    public test_i8_imm_borrow() {
+        let v: vector<i8>;
+    label b0:
+        v = vec_pack_3<i8>(10i8, -20i8, 30i8);
+        assert(*vector.borrow<i8>(&v, 0) == 10i8, 1100);
+        assert(*vector.borrow<i8>(&v, 1) == -20i8, 1101);
+        assert(*vector.borrow<i8>(&v, 2) == 30i8, 1102);
+        return;
+    }
+
+    // VecMutBorrow with i8
+    public test_i8_mut_borrow() {
+        let v: vector<i8>;
+    label b0:
+        v = vec_pack_2<i8>(1i8, 2i8);
+        *vector.borrow_mut<i8>(&mut v, 0) = -100i8;
+        assert(*vector.borrow<i8>(&v, 0) == -100i8, 1200);
+        return;
+    }
+
+    // VecPushBack with i8
+    public test_i8_push_back() {
+        let v: vector<i8>;
+    label b0:
+        v = vector.empty<i8>();
+        vector.push_back<i8>(&mut v, 42i8);
+        vector.push_back<i8>(&mut v, -42i8);
+        assert(vector.length<i8>(&v) == 2, 1300);
+        assert(*vector.borrow<i8>(&v, 0) == 42i8, 1301);
+        assert(*vector.borrow<i8>(&v, 1) == -42i8, 1302);
+        return;
+    }
+
+    // VecPopBack with i8
+    public test_i8_pop_back() {
+        let v: vector<i8>;
+        let val: i8;
+    label b0:
+        v = vec_pack_2<i8>(10i8, -20i8);
+        val = vector.pop_back<i8>(&mut v);
+        assert(move(val) == -20i8, 1400);
+        assert(vector.length<i8>(&v) == 1, 1401);
+        return;
+    }
+
+    // VecSwap with i8
+    public test_i8_swap() {
+        let v: vector<i8>;
+    label b0:
+        v = vec_pack_2<i8>(1i8, -1i8);
+        vector.swap<i8>(&mut v, 0, 1);
+        assert(*vector.borrow<i8>(&v, 0) == -1i8, 1500);
+        assert(*vector.borrow<i8>(&v, 1) == 1i8, 1501);
+        return;
+    }
+
+    // VecPack and VecLen with i64
+    public test_i64_pack_and_len() {
+        let v: vector<i64>;
+    label b0:
+        v = vec_pack_3<i64>(1000i64, -2000i64, 3000i64);
+        assert(vector.length<i64>(&v) == 3, 2000);
+        return;
+    }
+
+    // VecImmBorrow with i64
+    public test_i64_imm_borrow() {
+        let v: vector<i64>;
+    label b0:
+        v = vec_pack_3<i64>(100i64, -200i64, 300i64);
+        assert(*vector.borrow<i64>(&v, 0) == 100i64, 2100);
+        assert(*vector.borrow<i64>(&v, 1) == -200i64, 2101);
+        assert(*vector.borrow<i64>(&v, 2) == 300i64, 2102);
+        return;
+    }
+
+    // VecMutBorrow with i64
+    public test_i64_mut_borrow() {
+        let v: vector<i64>;
+    label b0:
+        v = vec_pack_2<i64>(1i64, 2i64);
+        *vector.borrow_mut<i64>(&mut v, 0) = -99999i64;
+        assert(*vector.borrow<i64>(&v, 0) == -99999i64, 2200);
+        return;
+    }
+
+    // VecPushBack with i64
+    public test_i64_push_back() {
+        let v: vector<i64>;
+    label b0:
+        v = vector.empty<i64>();
+        vector.push_back<i64>(&mut v, 12345i64);
+        vector.push_back<i64>(&mut v, -12345i64);
+        assert(vector.length<i64>(&v) == 2, 2300);
+        assert(*vector.borrow<i64>(&v, 0) == 12345i64, 2301);
+        assert(*vector.borrow<i64>(&v, 1) == -12345i64, 2302);
+        return;
+    }
+
+    // VecPopBack with i64
+    public test_i64_pop_back() {
+        let v: vector<i64>;
+        let val: i64;
+    label b0:
+        v = vec_pack_2<i64>(100i64, -200i64);
+        val = vector.pop_back<i64>(&mut v);
+        assert(move(val) == -200i64, 2400);
+        assert(vector.length<i64>(&v) == 1, 2401);
+        return;
+    }
+
+    // VecSwap with i64
+    public test_i64_swap() {
+        let v: vector<i64>;
+    label b0:
+        v = vec_pack_2<i64>(1000i64, -1000i64);
+        vector.swap<i64>(&mut v, 0, 1);
+        assert(*vector.borrow<i64>(&v, 0) == -1000i64, 2500);
+        assert(*vector.borrow<i64>(&v, 1) == 1000i64, 2501);
+        return;
+    }
+}
+
+//# run 0x5::M::test_i8_pack_and_len
+
+//# run 0x5::M::test_i8_imm_borrow
+
+//# run 0x5::M::test_i8_mut_borrow
+
+//# run 0x5::M::test_i8_push_back
+
+//# run 0x5::M::test_i8_pop_back
+
+//# run 0x5::M::test_i8_swap
+
+//# run 0x5::M::test_i64_pack_and_len
+
+//# run 0x5::M::test_i64_imm_borrow
+
+//# run 0x5::M::test_i64_mut_borrow
+
+//# run 0x5::M::test_i64_push_back
+
+//# run 0x5::M::test_i64_pop_back
+
+//# run 0x5::M::test_i64_swap
