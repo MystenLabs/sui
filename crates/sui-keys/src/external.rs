@@ -153,8 +153,8 @@ impl External {
         };
 
         if !aliases_file_exists {
-            let aliases_store = serde_json::to_string_pretty(&aliases)
-                .context("Error serializing keystore")?;
+            let aliases_store =
+                serde_json::to_string_pretty(&aliases).context("Error serializing keystore")?;
             std::fs::write(&aliases_store_directory, aliases_store).with_context(|| {
                 format!(
                     "Cannot write aliases to file: {}",
@@ -164,8 +164,8 @@ impl External {
         }
 
         if !keystore_file_exists {
-            let keys_store = serde_json::to_string_pretty(&keys)
-                .context("Error serializing aliases")?;
+            let keys_store =
+                serde_json::to_string_pretty(&keys).context("Error serializing aliases")?;
             std::fs::write(path, keys_store)
                 .with_context(|| format!("Cannot write keystore to file: {}", path.display()))?;
         }
