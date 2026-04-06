@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::ident_str;
 use sui_macros::*;
 use sui_simulator::has_mainnet_protocol_config_override;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
@@ -9,7 +10,7 @@ use sui_types::{
     coin_reservation::ParsedObjectRefWithdrawal,
     digests::CheckpointDigest,
     effects::TransactionEffectsAPI,
-    transaction::{Argument, Command, ObjectArg, TransactionDataAPI, TransactionKind},
+    transaction::{Argument, CallArg, Command, ObjectArg, TransactionDataAPI, TransactionKind},
 };
 use test_cluster::addr_balance_test_env::{TestEnvBuilder, get_sui_accumulator_object_id};
 
@@ -1136,6 +1137,56 @@ async fn test_merge_coin_into_gas_coin_with_coin_reservation() {
     // since gas charges are paid from the coin, not the address balance.
     let final_sender_balance = test_env.get_sui_balance_ab(sender);
     assert_eq!(final_sender_balance, initial_sender_balance - budget);
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_coin_reservation_with_shared_object() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    let mut test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 100);
+
+    let recipient = SuiAddress::random_for_testing_only();
+
+    let mut builder = TestTransactionBuilder::new(sender, gas, test_env.rgp);
+    let coin_arg = builder
+        .ptb_builder_mut()
+        .obj(ObjectArg::ImmOrOwnedObject(coin_reservation))
+        .unwrap();
+    builder = builder.move_call(
+        sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+        "clock",
+        "timestamp_ms",
+        vec![CallArg::CLOCK_IMM],
+    );
+    let balance = builder.ptb_builder_mut().programmable_move_call(
+        sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("coin").to_owned(),
+        ident_str!("into_balance").to_owned(),
+        vec![sui_types::gas_coin::GAS::type_tag()],
+        vec![coin_arg],
+    );
+    let recipient_arg = builder.ptb_builder_mut().pure(recipient).unwrap();
+    builder.ptb_builder_mut().programmable_move_call(
+        sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("balance").to_owned(),
+        ident_str!("send_funds").to_owned(),
+        vec![sui_types::gas_coin::GAS::type_tag()],
+        vec![balance, recipient_arg],
+    );
+    let tx = builder.build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
 
     test_env.cluster.trigger_reconfiguration().await;
 }
