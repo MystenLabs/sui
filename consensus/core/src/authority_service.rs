@@ -883,7 +883,6 @@ mod tests {
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
     use consensus_types::block::{BlockDigest, BlockRef, Round};
-    use mysten_metrics::monitored_mpsc;
     use parking_lot::{Mutex, RwLock};
     use tokio::{sync::broadcast, time::sleep};
 
@@ -1071,16 +1070,10 @@ mod tests {
             Some(fake_client.clone()),
             Some(fake_client.clone()),
         ));
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
@@ -1195,16 +1188,10 @@ mod tests {
             Some(fake_client.clone()),
             Some(fake_client.clone()),
         ));
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
@@ -1368,16 +1355,10 @@ mod tests {
             Some(fake_client.clone()),
             Some(fake_client.clone()),
         ));
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
@@ -1446,16 +1427,10 @@ mod tests {
             Some(fake_client.clone()),
             Some(fake_client.clone()),
         ));
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
@@ -1541,16 +1516,10 @@ mod tests {
             Some(fake_client.clone()),
             Some(fake_client.clone()),
         ));
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,

@@ -886,7 +886,6 @@ mod tests {
     use bytes::Bytes;
     use consensus_config::{AuthorityIndex, Parameters};
     use consensus_types::block::{BlockRef, Round};
-    use mysten_metrics::monitored_mpsc;
     use parking_lot::RwLock;
 
     use crate::{
@@ -1025,14 +1024,8 @@ mod tests {
         ));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));

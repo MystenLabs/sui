@@ -69,12 +69,10 @@ impl CommitTestFixture {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
 
         let linearizer = Linearizer::new(context.clone(), dag_state.clone());
-        let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
-            blocks_sender,
         );
         let (commit_sender, _commit_receiver) = unbounded_channel("consensus_commit_output");
         let commit_finalizer = CommitFinalizer::new(

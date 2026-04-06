@@ -1483,16 +1483,10 @@ mod tests {
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let mock_client = Arc::new(MockNetworkClient::default());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let network_client = Arc::new(SynchronizerClient::new(
@@ -1547,16 +1541,10 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(MockNetworkClient::default());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let network_client = Arc::new(SynchronizerClient::new(
@@ -1622,16 +1610,10 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(MockNetworkClient::default());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // Create some test blocks
@@ -1708,16 +1690,10 @@ mod tests {
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(MockNetworkClient::default());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
@@ -1847,17 +1823,11 @@ mod tests {
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(MockNetworkClient::default());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let our_index = AuthorityIndex::new_for_test(0);
 
@@ -1978,17 +1948,11 @@ mod tests {
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let (commands_sender, _commands_receiver) =
             monitored_mpsc::channel("consensus_synchronizer_commands", 1000);
