@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 21 tasks
 
@@ -129,7 +130,7 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
             bytes: fake(15,1),
         },
     },
-    v: 7u64,
+    v: 0u64,
 }
 
 task 17, lines 107-112:
@@ -142,7 +143,7 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
             bytes: fake(15,0),
         },
     },
-    v: 0u64,
+    v: 7u64,
 }
 
 task 18, lines 114-120:

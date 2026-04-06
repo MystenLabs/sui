@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 9 tasks
 
@@ -21,16 +22,24 @@ task 6, lines 38-40:
 //# programmable --sender A
 //> 0: q::m::x();
 //> p::m::foo(Result(0))
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: Error checking transaction input objects: A move package is expected, instead a move object is passed: object(3,2)
 
 task 7, lines 42-47:
 //# publish --dependencies p q
-created: object(7,0)
-mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5228800,  storage_rebate: 0, non_refundable_storage_fee: 0
+Error: error[E03002]: unbound module
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpPJtTLV:45:9
+   │
+45 │         p::m::foo(q::m::x())
+   │         ^^^^ Unbound module 'p::m'
+
+error[E03002]: unbound module
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpPJtTLV:45:19
+   │
+45 │         p::m::foo(q::m::x())
+   │                   ^^^^ Unbound module 'q::m'
+
+
 
 task 8, line 49:
 //# run r::all::foo_x
-mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000

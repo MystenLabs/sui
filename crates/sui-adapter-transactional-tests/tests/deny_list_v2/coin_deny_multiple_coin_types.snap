@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 6 tasks
 
@@ -14,43 +15,89 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 gas summary: computation_cost: 1000000, storage_cost: 34276000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 63-65:
-//# view-object 1,1
-Owner: Account Address ( A )
-Version: 2
-Contents: sui::coin::Coin<test::regulated_coin1::REGULATED_COIN1> {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(1,1),
-        },
-    },
-    balance: sui::balance::Balance<test::regulated_coin1::REGULATED_COIN1> {
-        value: 10000u64,
-    },
-}
-
-task 3, lines 66-68:
 //# view-object 1,2
-Owner: Account Address ( A )
+Owner: Immutable
 Version: 2
-Contents: sui::coin::Coin<test::regulated_coin2::REGULATED_COIN2> {
+Contents: sui::coin::CoinMetadata<test::regulated_coin1::REGULATED_COIN1> {
     id: sui::object::UID {
         id: sui::object::ID {
             bytes: fake(1,2),
         },
     },
-    balance: sui::balance::Balance<test::regulated_coin2::REGULATED_COIN2> {
-        value: 10000u64,
+    decimals: 9u8,
+    name: std::string::String {
+        bytes: vector[
+            82u8,
+            69u8,
+            71u8,
+            85u8,
+            76u8,
+            65u8,
+            84u8,
+            69u8,
+            68u8,
+            95u8,
+            67u8,
+            79u8,
+            73u8,
+            78u8,
+        ],
+    },
+    symbol: std::ascii::String {
+        bytes: vector[
+            82u8,
+            67u8,
+        ],
+    },
+    description: std::string::String {
+        bytes: vector[
+            65u8,
+            32u8,
+            110u8,
+            101u8,
+            119u8,
+            32u8,
+            114u8,
+            101u8,
+            103u8,
+            117u8,
+            108u8,
+            97u8,
+            116u8,
+            101u8,
+            100u8,
+            32u8,
+            99u8,
+            111u8,
+            105u8,
+            110u8,
+        ],
+    },
+    icon_url: std::option::Option<sui::url::Url> {
+        vec: vector[],
     },
 }
 
+task 3, lines 66-68:
+//# view-object 1,8
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::DenyCapV2<test::regulated_coin2::REGULATED_COIN2> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,8),
+        },
+    },
+    allow_global_pause: false,
+}
+
 task 4, line 69:
-//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,6) @A --type-args test::regulated_coin2::REGULATED_COIN2 --sender A
-events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 98, 49, 54, 51, 48, 49, 50, 98, 50, 99, 97, 55, 102, 102, 56, 98, 100, 53, 97, 53, 54, 98, 50, 56, 50, 100, 48, 98, 56, 101, 101, 101, 48, 55, 51, 101, 49, 50, 98, 48, 100, 51, 49, 52, 52, 101, 98, 97, 54, 56, 49, 101, 49, 100, 98, 98, 57, 55, 100, 49, 51, 55, 101, 55, 51, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 50, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 50, 134, 227, 8, 85, 36, 87, 157, 154, 67, 29, 178, 8, 75, 99, 185, 237, 203, 14, 68, 178, 39, 85, 219, 94, 235, 221, 149, 253, 111, 231, 210, 170] }
-created: object(4,0), object(4,1), object(4,2)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,6)
-gas summary: computation_cost: 1000000, storage_cost: 12220800,  storage_rebate: 2761308, non_refundable_storage_fee: 27892
+//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,1) @A --type-args test::regulated_coin2::REGULATED_COIN2 --sender A
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Debug of error: CommandArgumentError { arg_idx: 1, kind: TypeMismatch } at command Some(0)
 
 task 5, lines 71-72:
-//# programmable --sender A --inputs object(1,1) object(1,2) @A
+//# programmable --sender A --inputs object(1,2) object(1,8) @A
 //> TransferObjects([Input(0), Input(1)], Input(2))
-Error: Error checking transaction input objects: Address @A is denied for coin object(1,0)::regulated_coin2::REGULATED_COIN2
+Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }

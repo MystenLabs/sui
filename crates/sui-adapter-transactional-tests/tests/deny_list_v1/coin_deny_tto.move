@@ -50,24 +50,24 @@ module test::regulated_coin {
 
 //# view-object 1,1
 
-//# view-object 1,2
-
 //# view-object 1,3
 
 //# view-object 1,4
 
 //# view-object 1,5
 
+//# view-object 1,2
+
 //# view-object 1,6
 
 // Deny account A.
-//# run sui::coin::deny_list_add --args object(0x403) object(1,4) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
+//# run sui::coin::deny_list_add --args object(0x403) object(1,5) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
 
 // Try to receive coin in Wallet. This should now fail.
-//# run test::regulated_coin::receive_coin --args object(1,0) receiving(1,2) --sender A
+//# run test::regulated_coin::receive_coin --args object(1,0) receiving(1,3) --sender A
 
 // Undeny account A.
-//# run sui::coin::deny_list_remove --args object(0x403) object(1,4) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
+//# run sui::coin::deny_list_remove --args object(0x403) object(1,5) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
 
 // Try to receive coin in Wallet. This should now succeed.
-//# run test::regulated_coin::receive_coin --args object(1,0) receiving(1,2) --sender A
+//# run test::regulated_coin::receive_coin --args object(1,0) receiving(1,3) --sender A

@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 12 tasks
 
@@ -98,19 +99,20 @@ task 9, line 67:
 //# view-object 8,0
 Owner: Account Address ( B )
 Version: 5
-Contents: test::m1::Cup<sui::object::ID> {
+Contents: test::m1::Pub {
     id: sui::object::UID {
         id: sui::object::ID {
             bytes: fake(8,0),
         },
     },
+    value: 112u64,
 }
 
 task 10, line 69:
 //# view-object 8,1
 Owner: Account Address ( B )
 Version: 5
-Contents: test::m1::Cup<test::m1::Pub> {
+Contents: test::m1::Cup<sui::object::ID> {
     id: sui::object::UID {
         id: sui::object::ID {
             bytes: fake(8,1),
@@ -122,11 +124,10 @@ task 11, line 71:
 //# view-object 8,2
 Owner: Account Address ( B )
 Version: 5
-Contents: test::m1::Pub {
+Contents: test::m1::Cup<test::m1::Pub> {
     id: sui::object::UID {
         id: sui::object::ID {
             bytes: fake(8,2),
         },
     },
-    value: 112u64,
 }
