@@ -1226,6 +1226,12 @@ impl SignatureToken {
         }
     }
 
+    /// Returns true if the `SignatureToken` is a signed integer type.
+    pub fn is_signed_integer(&self) -> bool {
+        use SignatureToken::*;
+        matches!(self, I8 | I16 | I32 | I64 | I128 | I256)
+    }
+
     /// Returns true if the `SignatureToken` is any kind of reference (mutable and immutable).
     pub fn is_reference(&self) -> bool {
         use SignatureToken::*;

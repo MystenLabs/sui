@@ -1145,7 +1145,7 @@ fn verify_instr(
         }
         Bytecode::Neg => {
             let operand = safe_unwrap_err!(verifier.stack.pop());
-            if !operand.is_integer() {
+            if !operand.is_signed_integer() {
                 return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
             }
             verifier.push(meter, operand)?;
