@@ -564,21 +564,6 @@ pub(crate) fn genesis_blocks(context: &Context) -> Vec<VerifiedBlock> {
         .collect::<Vec<VerifiedBlock>>()
 }
 
-/// A block certified by consensus for fast path execution.
-#[derive(Clone)]
-pub struct CertifiedBlock {
-    /// All transactions in the block have a quorum of accept or reject votes.
-    pub block: VerifiedBlock,
-    /// Sorted transaction indices that indicate the transactions rejected by a quorum.
-    pub rejected: Vec<TransactionIndex>,
-}
-
-impl CertifiedBlock {
-    pub fn new(block: VerifiedBlock, rejected: Vec<TransactionIndex>) -> Self {
-        Self { block, rejected }
-    }
-}
-
 /// Creates fake blocks for testing.
 /// This struct is public for testing in other crates.
 #[derive(Clone)]

@@ -49,7 +49,7 @@ use crate::{
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction::TransactionConsumer,
-    transaction_certifier::TransactionCertifier,
+    transaction_vote_tracker::TransactionVoteTracker,
     universal_committer::{
         UniversalCommitter, universal_committer_builder::UniversalCommitterBuilder,
     },
@@ -64,7 +64,7 @@ pub(crate) struct Core {
     /// The consumer to use in order to pull transactions to be included for the next proposals
     transaction_consumer: TransactionConsumer,
     /// This contains the reject votes on transactions which proposed blocks should include.
-    transaction_certifier: TransactionCertifier,
+    transaction_vote_tracker: TransactionVoteTracker,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
@@ -121,7 +121,7 @@ impl Core {
         context: Arc<Context>,
         leader_schedule: Arc<LeaderSchedule>,
         transaction_consumer: TransactionConsumer,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         block_manager: BlockManager,
         commit_observer: CommitObserver,
         signals: CoreSignals,
@@ -181,7 +181,7 @@ impl Core {
             last_decided_leader,
             leader_schedule,
             transaction_consumer,
-            transaction_certifier,
+            transaction_vote_tracker,
             block_manager,
             propagation_delay: 0,
             committer,
@@ -661,7 +661,8 @@ impl Core {
                     .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
                     .collect()
             };
-            self.transaction_certifier.get_own_votes(new_causal_history)
+            self.transaction_vote_tracker
+                .get_own_votes(new_causal_history)
         } else {
             vec![]
         };
@@ -726,11 +727,11 @@ impl Core {
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
 
-        // The block must be added to transaction certifier before it is broadcasted or added to DagState.
+        // The block must be added to the transaction vote tracker before it is broadcasted or added to DagState.
         // Update proposed state of blocks in local DAG.
         // TODO(fastpath): move this logic and the logic afterwards to proposed block handler.
         if self.context.protocol_config.transaction_voting_enabled() {
-            self.transaction_certifier
+            self.transaction_vote_tracker
                 .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
             self.dag_state
                 .write()
@@ -1436,7 +1437,7 @@ pub(crate) async fn create_cores(
 #[cfg(test)]
 pub(crate) struct CoreTextFixture {
     pub(crate) core: Core,
-    pub(crate) transaction_certifier: TransactionCertifier,
+    pub(crate) transaction_vote_tracker: TransactionVoteTracker,
     pub(crate) signal_receivers: CoreSignalsReceivers,
     pub(crate) block_receiver: broadcast::Receiver<ExtendedBlock>,
     pub(crate) _commit_output_receiver: UnboundedReceiver<CommittedSubDag>,
@@ -1472,7 +1473,7 @@ impl CoreTextFixture {
         );
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -1486,7 +1487,7 @@ impl CoreTextFixture {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -1498,7 +1499,7 @@ impl CoreTextFixture {
             context,
             leader_schedule,
             transaction_consumer,
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
             signals,
@@ -1510,7 +1511,7 @@ impl CoreTextFixture {
 
         Self {
             core,
-            transaction_certifier,
+            transaction_vote_tracker,
             signal_receivers,
             block_receiver,
             _commit_output_receiver: commit_output_receiver,
@@ -1523,7 +1524,7 @@ impl CoreTextFixture {
         &mut self,
         blocks: Vec<VerifiedBlock>,
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
-        self.transaction_certifier
+        self.transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         self.core.add_blocks(blocks)
     }
@@ -1598,7 +1599,7 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -1609,7 +1610,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -1621,12 +1622,12 @@ mod test {
 
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
         );
-        transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
+        transaction_vote_tracker.recover_blocks_after_round(dag_state.read().gc_round());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
@@ -1634,7 +1635,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
             signals,
@@ -1732,7 +1733,7 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -1743,7 +1744,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -1755,12 +1756,12 @@ mod test {
 
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
         );
-        transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
+        transaction_vote_tracker.recover_blocks_after_round(dag_state.read().gc_round());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
@@ -1768,7 +1769,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier,
+            transaction_vote_tracker,
             block_manager,
             commit_observer,
             signals,
@@ -1836,7 +1837,7 @@ mod test {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -1854,7 +1855,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -1864,7 +1865,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier,
+            transaction_vote_tracker,
             block_manager,
             commit_observer,
             signals,
@@ -1946,7 +1947,7 @@ mod test {
             false,
         )
         .await;
-        let transaction_certifier = &core_fixture.transaction_certifier;
+        let transaction_vote_tracker = &core_fixture.transaction_vote_tracker;
         let store = &core_fixture.store;
         let dag_state = &core_fixture.dag_state;
         let core = &mut core_fixture.core;
@@ -1959,7 +1960,7 @@ mod test {
         // Wait for min round delay to allow blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // add blocks to trigger proposal.
-        transaction_certifier.add_voted_blocks(vec![(block_1.clone(), vec![])]);
+        transaction_vote_tracker.add_voted_blocks(vec![(block_1.clone(), vec![])]);
         _ = core.add_blocks(vec![block_1]);
 
         assert_eq!(core.last_proposed_round(), 1);
@@ -1973,7 +1974,7 @@ mod test {
         // Wait for min round delay to allow blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // add blocks to trigger proposal.
-        transaction_certifier.add_voted_blocks(vec![(block_2.clone(), vec![1, 4])]);
+        transaction_vote_tracker.add_voted_blocks(vec![(block_2.clone(), vec![1, 4])]);
         _ = core.add_blocks(vec![block_2.clone()]);
 
         assert_eq!(core.last_proposed_round(), 2);
@@ -2066,7 +2067,7 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -2077,7 +2078,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -2092,12 +2093,12 @@ mod test {
 
         // Now recover Core and other components.
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
         );
-        transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
+        transaction_vote_tracker.recover_blocks_after_round(dag_state.read().gc_round());
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
@@ -2105,7 +2106,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier,
+            transaction_vote_tracker,
             block_manager,
             commit_observer,
             signals,
@@ -2225,7 +2226,7 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -2236,7 +2237,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -2251,7 +2252,7 @@ mod test {
 
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -2263,7 +2264,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
             signals,
@@ -2285,7 +2286,7 @@ mod test {
         all_blocks.sort_by_key(|b| b.round());
         let voted_blocks: Vec<(VerifiedBlock, Vec<TransactionIndex>)> =
             all_blocks.iter().map(|b| (b.clone(), vec![])).collect();
-        transaction_certifier.add_voted_blocks(voted_blocks);
+        transaction_vote_tracker.add_voted_blocks(voted_blocks);
         let blocks: Vec<VerifiedBlock> = all_blocks
             .into_iter()
             .filter(|b| !(b.round() == 1 && b.author() == AuthorityIndex::new_for_test(3)))
@@ -2316,7 +2317,7 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -2329,7 +2330,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -2339,7 +2340,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
             signals,
@@ -2366,7 +2367,7 @@ mod test {
         let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
 
         // Process all the blocks
-        transaction_certifier
+        transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
 
@@ -2669,7 +2670,7 @@ mod test {
 
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -2683,7 +2684,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -2693,7 +2694,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
             signals,
@@ -2722,7 +2723,7 @@ mod test {
             .build();
         let blocks = builder.blocks(1..=12);
         // Process all the blocks
-        transaction_certifier
+        transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         core.set_last_known_proposed_round(12);
@@ -2759,7 +2760,7 @@ mod test {
             .skip_block()
             .build();
         let blocks = builder.blocks(13..=14);
-        transaction_certifier
+        transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
 
@@ -2790,7 +2791,7 @@ mod test {
         // Wait for min round delay to allow blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // Smart select should be triggered and no block should be proposed.
-        transaction_certifier
+        transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         assert_eq!(core.last_proposed_block().round(), 15);
@@ -2820,7 +2821,7 @@ mod test {
             .collect::<Vec<_>>();
 
         // Have enough ancestor blocks to propose now.
-        transaction_certifier
+        transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         assert_eq!(core.last_proposed_block().round(), 16);
@@ -2864,7 +2865,7 @@ mod test {
         // Wait for leader timeout to force blocks to be proposed.
         sleep(context.parameters.min_round_delay).await;
         // Smart select should be triggered and no block should be proposed.
-        transaction_certifier
+        transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         assert_eq!(core.last_proposed_block().round(), 16);
@@ -2928,7 +2929,7 @@ mod test {
 
         // Have enough ancestor blocks to propose now.
         sleep(context.parameters.min_round_delay).await;
-        transaction_certifier
+        transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         assert_eq!(core.last_proposed_block().round(), 23);
@@ -2965,7 +2966,7 @@ mod test {
 
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -2979,7 +2980,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -2989,7 +2990,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
             signals,
@@ -3021,7 +3022,7 @@ mod test {
         let blocks = builder.blocks(1..=4);
 
         // Process all the blocks
-        transaction_certifier
+        transaction_vote_tracker
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
         core.set_last_known_proposed_round(3);
@@ -3059,7 +3060,7 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -3072,7 +3073,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -3082,7 +3083,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
             signals,
@@ -3097,7 +3098,7 @@ mod test {
         // then simulating updating round tracker received rounds from probe where
         // low quorum round for own index should get calculated to round 0.
         let test_block = VerifiedBlock::new_for_test(TestBlock::new(1000, 0).build());
-        transaction_certifier.add_voted_blocks(vec![(test_block.clone(), vec![])]);
+        transaction_vote_tracker.add_voted_blocks(vec![(test_block.clone(), vec![])]);
         // Force accepting the block to dag state because its causal history is incomplete.
         dag_state.write().accept_block(test_block);
 
@@ -3141,7 +3142,7 @@ mod test {
         // round 1001
         for author in 1..4 {
             let block = VerifiedBlock::new_for_test(TestBlock::new(1000, author).build());
-            transaction_certifier.add_voted_blocks(vec![(block.clone(), vec![])]);
+            transaction_vote_tracker.add_voted_blocks(vec![(block.clone(), vec![])]);
             // Force accepting the block to dag state because its causal history is incomplete.
             dag_state.write().accept_block(block);
         }
@@ -3504,7 +3505,7 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -3517,7 +3518,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -3527,7 +3528,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
             signals,

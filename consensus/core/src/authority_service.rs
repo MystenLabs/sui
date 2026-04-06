@@ -41,7 +41,7 @@ use crate::{
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
     synchronizer::SynchronizerHandle,
-    transaction_certifier::TransactionCertifier,
+    transaction_vote_tracker::TransactionVoteTracker,
 };
 
 pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
@@ -55,7 +55,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     core_dispatcher: Arc<C>,
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
-    transaction_certifier: TransactionCertifier,
+    transaction_vote_tracker: TransactionVoteTracker,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
     round_tracker: Arc<RwLock<RoundTracker>>,
@@ -70,7 +70,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
@@ -83,7 +83,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             core_dispatcher,
             rx_block_broadcast,
             subscription_counter,
-            transaction_certifier,
+            transaction_vote_tracker,
             dag_state,
             store,
             round_tracker,
@@ -283,7 +283,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // The block is verified and current, so record own votes on the block
         // before sending the block to Core.
         if self.context.protocol_config.transaction_voting_enabled() {
-            self.transaction_certifier
+            self.transaction_vote_tracker
                 .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
         }
 
@@ -927,7 +927,7 @@ mod tests {
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
-        transaction_certifier::TransactionCertifier,
+        transaction_vote_tracker::TransactionVoteTracker,
     };
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
@@ -1094,8 +1094,8 @@ mod tests {
         ));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
@@ -1103,7 +1103,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             round_tracker.clone(),
             dag_state.clone(),
             false,
@@ -1116,7 +1116,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
-            transaction_certifier,
+            transaction_vote_tracker,
             dag_state,
             store,
         ));
@@ -1213,8 +1213,8 @@ mod tests {
         ));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
@@ -1222,7 +1222,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             round_tracker.clone(),
             dag_state.clone(),
             false,
@@ -1235,7 +1235,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
-            transaction_certifier,
+            transaction_vote_tracker,
             dag_state.clone(),
             store,
         ));
@@ -1422,8 +1422,8 @@ mod tests {
         ));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
@@ -1431,7 +1431,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             round_tracker.clone(),
             dag_state.clone(),
             true,
@@ -1444,7 +1444,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
-            transaction_certifier,
+            transaction_vote_tracker,
             dag_state.clone(),
             store,
         ));
@@ -1494,8 +1494,8 @@ mod tests {
         ));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
@@ -1503,7 +1503,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             round_tracker.clone(),
             dag_state.clone(),
             false,
@@ -1528,7 +1528,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
-            transaction_certifier,
+            transaction_vote_tracker,
             dag_state.clone(),
             store,
         ));
@@ -1583,8 +1583,8 @@ mod tests {
         ));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let synchronizer = Synchronizer::start(
             network_client,
@@ -1592,7 +1592,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             round_tracker.clone(),
             dag_state.clone(),
             false,
@@ -1608,7 +1608,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
-            transaction_certifier,
+            transaction_vote_tracker,
             dag_state.clone(),
             store,
         ));
