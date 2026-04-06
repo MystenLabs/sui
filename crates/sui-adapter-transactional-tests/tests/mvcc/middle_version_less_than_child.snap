@@ -1,6 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
+assertion_line: 926
 ---
 processed 11 tasks
 
@@ -20,7 +20,6 @@ task 2, lines 53-57:
 // All 3 objects have version 2
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
-WARNING: ambiguous creation order for same-type objects: object(2,1), object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 6285200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 59:
@@ -45,13 +44,13 @@ Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
 }
 
 task 4, line 61:
-//# view-object 2,1
-Owner: Object ID: ( _ )
+//# view-object 2,2
+Owner: Object ID: ( fake(2,0) )
 Version: 2
 Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,1),
+            bytes: fake(2,2),
         },
     },
     name: 0u64,
@@ -107,13 +106,13 @@ Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
 }
 
 task 8, line 72:
-//# view-object 2,1
-Owner: Object ID: ( _ )
-Version: 3
+//# view-object 2,2
+Owner: Object ID: ( fake(2,0) )
+Version: 2
 Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,1),
+            bytes: fake(2,2),
         },
     },
     name: 0u64,
@@ -123,7 +122,7 @@ Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
                 bytes: _,
             },
         },
-        value: 112u64,
+        value: 0u64,
     },
 }
 

@@ -1,6 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
+assertion_line: 926
 ---
 processed 24 tasks
 
@@ -20,19 +20,37 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7273200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 62:
-//# view-object 2,0
-Owner: Account Address ( A )
+//# view-object 2,3
+Owner: Object ID: ( fake(2,1) )
+Version: 2
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,2),
+    },
+}
+
+task 4, line 64:
+//# view-object 2,2
+Owner: Object ID: ( fake(2,3) )
 Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,0),
+            bytes: fake(2,2),
         },
     },
     value: 0u64,
 }
 
-task 4, line 64:
+task 5, line 66:
 //# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 2
@@ -45,20 +63,26 @@ Contents: tto::M1::A {
     value: 0u64,
 }
 
-task 5, line 66:
-//# view-object 2,2
-Owner: Object ID: ( fake(2,3) )
+task 6, line 68:
+//# view-object 2,0
+Owner: Account Address ( A )
 Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,2),
+            bytes: fake(2,0),
         },
     },
     value: 0u64,
 }
 
-task 6, line 68:
+task 7, line 70:
+//# run tto::M1::receive --args object(2,0) receiving(2,1) --sender A
+created: object(7,0)
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
+
+task 8, lines 72-74:
 //# view-object 2,3
 Owner: Object ID: ( fake(2,1) )
 Version: 2
@@ -76,52 +100,52 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 7, lines 70-72:
-//# run tto::M1::receive --args object(2,0) receiving(2,1) --sender A
-created: object(7,0)
-mutated: object(0,0), object(2,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
-
-task 8, line 73:
-//# view-object 2,0
-Owner: Account Address ( A )
-Version: 3
-Contents: tto::M1::A {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    value: 0u64,
-}
-
 task 9, line 75:
-//# view-object 2,1
-Owner: Object ID: ( fake(7,0) )
-Version: 3
+//# view-object 2,2
+Owner: Object ID: ( fake(2,3) )
+Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,1),
+            bytes: fake(2,2),
         },
     },
     value: 0u64,
 }
 
 task 10, line 77:
-//# view-object 2,2
-Owner: Object ID: ( fake(2,3) )
-Version: 2
+//# view-object 2,1
+Owner: Object ID: ( fake(7,0) )
+Version: 3
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,2),
+            bytes: fake(2,1),
         },
     },
     value: 0u64,
 }
 
 task 11, line 79:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 12, lines 81-82:
+//# programmable --sender A --inputs object(2,0) 1 2 3
+//> tto::M1::set(Input(0), Input(1), Input(2), Input(3))
+mutated: object(0,0), object(2,0), object(2,1), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 4818400,  storage_rebate: 4770216, non_refundable_storage_fee: 48184
+
+task 13, lines 84-86:
 //# view-object 2,3
 Owner: Object ID: ( fake(2,1) )
 Version: 2
@@ -139,40 +163,7 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 12, lines 81-84:
-//# programmable --sender A --inputs object(2,0) 1 2 3
-//> tto::M1::set(Input(0), Input(1), Input(2), Input(3))
-// The grand parent
-mutated: object(0,0), object(2,0), object(2,1), object(2,2)
-gas summary: computation_cost: 1000000, storage_cost: 4818400,  storage_rebate: 4770216, non_refundable_storage_fee: 48184
-
-task 13, line 85:
-//# view-object 2,0
-Owner: Account Address ( A )
-Version: 4
-Contents: tto::M1::A {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    value: 1u64,
-}
-
 task 14, line 87:
-//# view-object 2,1
-Owner: Object ID: ( fake(7,0) )
-Version: 4
-Contents: tto::M1::A {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,1),
-        },
-    },
-    value: 2u64,
-}
-
-task 15, line 89:
 //# view-object 2,2
 Owner: Object ID: ( fake(2,3) )
 Version: 4
@@ -185,22 +176,30 @@ Contents: tto::M1::A {
     value: 3u64,
 }
 
-task 16, line 91:
-//# view-object 2,3
-Owner: Object ID: ( fake(2,1) )
-Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+task 15, line 89:
+//# view-object 2,1
+Owner: Object ID: ( fake(7,0) )
+Version: 4
+Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,3),
+            bytes: fake(2,1),
         },
     },
-    name: sui::dynamic_object_field::Wrapper<u64> {
-        name: 0u64,
+    value: 2u64,
+}
+
+task 16, line 91:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
     },
-    value: sui::object::ID {
-        bytes: fake(2,2),
-    },
+    value: 1u64,
 }
 
 task 17, lines 93-96:

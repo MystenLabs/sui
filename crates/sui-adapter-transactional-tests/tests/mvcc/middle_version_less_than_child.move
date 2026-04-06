@@ -58,7 +58,7 @@ module test::m {
 
 //# view-object 2,1
 
-//# view-object 2,1
+//# view-object 2,2
 
 //# view-object 2,0
 
@@ -69,7 +69,7 @@ module test::m {
 
 //# view-object 2,1
 
-//# view-object 2,1
+//# view-object 2,2
 
 //# view-object 2,0
 

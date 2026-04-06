@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 11 tasks
 
@@ -77,7 +76,6 @@ task 7, line 54:
 //# run a::m::ephemeral_parent_ephemeral_intermediate_derived --sender A
 created: object(7,0), object(7,1), object(7,2)
 mutated: object(0,0)
-WARNING: ambiguous creation order for same-type objects: object(7,1), object(7,2)
 gas summary: computation_cost: 1000000, storage_cost: 7227600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, line 56:

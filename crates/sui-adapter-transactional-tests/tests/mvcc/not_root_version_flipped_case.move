@@ -66,12 +66,12 @@ module test::m {
 //> 0: test::m::b();
 //> TransferObjects([Result(0)], Input(0))
 
-//# view-object 4,0
+//# view-object 4,1
 
 //# programmable --sender P2 --inputs object(4,0)
 //> 0: test::m::bump(Input(0));
 
-//# view-object 4,0
+//# view-object 4,1
 
 // Append object B to object A. And ensure that when we later read the dynamic
 // field of object B, we get the most recent version.

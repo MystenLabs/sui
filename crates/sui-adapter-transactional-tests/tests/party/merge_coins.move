@@ -38,7 +38,7 @@ fun init(witness: M, ctx: &mut TxContext) {
 //> 3: sui::party::single_owner(Input(2));
 //> sui::transfer::public_party_transfer<sui::coin::Coin<ex::m::M>>(Result(1), Result(3))
 
-//# programmable --sender A --inputs object(5,0) object(5,1) @A
+//# programmable --sender A --inputs object(5,1) object(5,0) @A
 //> MergeCoins(Input(0), [Input(1)])
 
-//# view-object 5,0
+//# view-object 5,1

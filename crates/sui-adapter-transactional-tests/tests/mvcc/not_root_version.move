@@ -71,12 +71,12 @@ module test::m {
 //> 0: test::m::b();
 //> TransferObjects([Result(0)], Input(0))
 
-//# view-object 6,0
+//# view-object 6,1
 
 //# programmable --sender P2 --inputs object(6,0)
 //> 0: test::m::bump(Input(0));
 
-//# view-object 6,0
+//# view-object 6,1
 
 
 // Append object B to object A, but using version 2 of object B. And ensure that

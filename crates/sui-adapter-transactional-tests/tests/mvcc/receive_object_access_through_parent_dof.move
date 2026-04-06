@@ -77,25 +77,25 @@ module tto::M1 {
 
 //# run tto::M1::start --sender A
 
-//# view-object 2,0
+//# view-object 2,7
 
-//# view-object 2,1
+//# view-object 2,8
 
-//# view-object 2,2
+//# view-object 2,6
+
+//# view-object 2,9
 
 //# view-object 2,3
 
 //# view-object 2,4
 
+//# view-object 2,1
+
+//# view-object 2,2
+
+//# view-object 2,0
+
 //# view-object 2,5
-
-//# view-object 2,6
-
-//# view-object 2,7
-
-//# view-object 2,8
-
-//# view-object 2,9
 
 // E_OBJECT_TYPE_MISMATCH
 // Try to load an invalid type that will cause indexing to fail.
