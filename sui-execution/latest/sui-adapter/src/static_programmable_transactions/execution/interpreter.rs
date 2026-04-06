@@ -499,13 +499,6 @@ fn coalesce_timings(
         coalesced.iter().filter(|t| t.is_abort()).count() <= 1,
         "multiple error timings found after coalescing"
     );
-    debug_assert!(
-        coalesced
-            .iter()
-            .position(|t| t.is_abort())
-            .is_none_or(|pos| pos == coalesced.len().saturating_sub(1)),
-        "error timing found before the end of coalesced timings"
-    );
     if let Some(abort_pos) = coalesced.iter().position(|t| t.is_abort()) {
         coalesced.truncate(abort_pos.saturating_add(1));
     }
