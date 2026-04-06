@@ -2054,13 +2054,7 @@ impl SuiTestAdapter {
 
         let gas_summary = effects.gas_cost_summary();
 
-        let total_objects = created_ids.len()
-            + mutated_ids.len()
-            + unwrapped_ids.len()
-            + deleted_ids.len()
-            + unwrapped_then_deleted_ids.len()
-            + wrapped_ids.len();
-        self.record_creation_order(digest, &created_ids, total_objects);
+        self.record_creation_order(digest, &created_ids);
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
@@ -2234,13 +2228,7 @@ impl SuiTestAdapter {
 
         let gas_summary = effects.gas_cost_summary();
 
-        let total_objects = created_ids.len()
-            + mutated_ids.len()
-            + unwrapped_ids.len()
-            + deleted_ids.len()
-            + unwrapped_then_deleted_ids.len()
-            + wrapped_ids.len();
-        self.record_creation_order(effects.transaction_digest(), &created_ids, total_objects);
+        self.record_creation_order(effects.transaction_digest(), &created_ids);
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
@@ -2315,20 +2303,18 @@ impl SuiTestAdapter {
 
     // stable way of sorting objects by type. Does not however, produce a stable sorting
     // between objects of the same type
-    fn record_creation_order(
-        &mut self,
-        digest: &TransactionDigest,
-        created_ids: &[ObjectID],
-        total_objects: usize,
-    ) {
+    fn record_creation_order(&mut self, digest: &TransactionDigest, created_ids: &[ObjectID]) {
         if created_ids.is_empty() {
             return;
         }
         let mut remaining: HashSet<ObjectID> = created_ids.iter().copied().collect();
         let mut n = 0u64;
-        // total_objects is an upper bound on the number of fresh_id() calls in the transaction,
-        // since every created/deleted/wrapped object consumes at most one derive_id slot.
-        let max_probes = total_objects as u64;
+        // We probe derive_id(digest, n) for increasing n until all created IDs are found.
+        // Internal Move operations may consume derive_id slots that don't appear in effects
+        // (e.g., objects created and deleted in the same transaction), so the number of slots
+        // can exceed the number of objects in effects. Use a generous hard cap; the warning
+        // in object_summary_output will flag if this is ever insufficient.
+        let max_probes = 2048u64;
         while !remaining.is_empty() && n < max_probes {
             let candidate = ObjectID::derive_id(*digest, n);
             if remaining.remove(&candidate) {
@@ -2343,7 +2329,7 @@ impl SuiTestAdapter {
     // a stable way, so that test outputs are stable. Objects that have not been seen before (and
     // thus have no creation order) will be sorted at the end, and among them the ones of the same
     // type will be sorted together.
-    fn get_object_sorting_key(&self, id: &ObjectID) -> (u64, String) {
+    fn get_object_sorting_key(&self, id: &ObjectID) -> (u64, String, ObjectID) {
         let creation_id = self.creation_order.get(id).copied().unwrap_or(u64::MAX);
         let type_key = match &self.get_object(id, None).unwrap().data {
             object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
@@ -2354,7 +2340,9 @@ impl SuiTestAdapter {
                 .collect::<Vec<_>>()
                 .join(","),
         };
-        (creation_id, type_key)
+        // ObjectID as final tiebreaker for objects with the same creation order and type
+        // (e.g., dynamic field objects whose IDs are derived from parent+key, not fresh_id).
+        (creation_id, type_key, *id)
     }
 
     pub(crate) fn fake_to_real_object_id(&self, fake_id: FakeID) -> Option<ObjectID> {

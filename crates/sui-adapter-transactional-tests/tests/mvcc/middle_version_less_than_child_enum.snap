@@ -20,6 +20,7 @@ task 2, lines 78-82:
 // All 3 objects have version 2
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
+WARNING: ambiguous creation order for same-type objects: object(2,1), object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 6315600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 84:

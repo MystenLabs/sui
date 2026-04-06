@@ -17,6 +17,7 @@ task 2, line 78:
 //# run tto::M1::start --sender A
 created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9)
 mutated: object(0,0)
+WARNING: ambiguous creation order for same-type objects: object(2,6), object(2,7), object(2,8)
 gas summary: computation_cost: 1000000, storage_cost: 18749200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 80:
