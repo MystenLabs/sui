@@ -285,7 +285,7 @@ impl UnitTestingConfig {
         }
 
         writeln!(shared_writer.lock().unwrap(), "Running Move unit tests")?;
-        let trace_location = if self.trace {
+        let trace_location = if self.trace.is_some() {
             Some(TRACE_DIR.to_string())
         } else {
             None

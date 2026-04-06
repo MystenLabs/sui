@@ -1167,6 +1167,16 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                         )),
                     );
                 }
+                S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256
+                    if (cursor.version() < VERSION_8) =>
+                {
+                    return Err(
+                        PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
+                            "Signed integer types not supported in bytecode version {}",
+                            cursor.version()
+                        )),
+                    );
+                }
                 _ => (),
             };
 

@@ -1875,11 +1875,25 @@ macro_rules! cast_integer {
                         stringify!($target_type)
                     )
                 }),
-                I256(_) => Err(partial_vm_error!(
-                    ARITHMETIC_ERROR,
-                    "Cannot cast i256 to {}",
-                    stringify!($target_type)
-                )),
+                I256(x) => {
+                    if x < i256::I256::zero() {
+                        return Err(partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "Cannot cast negative i256 to {}",
+                            stringify!($target_type)
+                        ));
+                    }
+                    let u = x.to_u256_bits();
+                    if u > move_core_types::u256::U256::from(<$target_type>::MAX) {
+                        Err(partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "Cannot cast i256 to {}: value too large",
+                            stringify!($target_type)
+                        ))
+                    } else {
+                        move_binary_format::checked_as!(u, $target_type)
+                    }
+                }
             }
         }
     };
@@ -1931,11 +1945,23 @@ macro_rules! cast_signed_integer {
                         stringify!($target_type)
                     )
                 }),
-                U256(_) => Err(partial_vm_error!(
-                    ARITHMETIC_ERROR,
-                    "Cannot cast u256 to {}",
-                    stringify!($target_type)
-                )),
+                U256(x) => {
+                    let as_i256 = i256::I256::from_u256_bits(x);
+                    if as_i256 < i256::I256::zero() {
+                        return Err(partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "Cannot cast u256 to {}: value too large",
+                            stringify!($target_type)
+                        ));
+                    }
+                    <$target_type>::try_from(as_i256).map_err(|_| {
+                        partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "Cannot cast u256 to {}",
+                            stringify!($target_type)
+                        )
+                    })
+                }
                 I8(x) => <$target_type>::try_from(x).map_err(|_| {
                     partial_vm_error!(
                         ARITHMETIC_ERROR,
@@ -2036,9 +2062,15 @@ impl IntegerValue {
             U64(x) => Ok(u256::U256::from(x)),
             U128(x) => Ok(u256::U256::from(x)),
             U256(x) => Ok(x),
+            I8(x) if x >= 0 => Ok(u256::U256::from(x as u8)),
+            I16(x) if x >= 0 => Ok(u256::U256::from(x as u16)),
+            I32(x) if x >= 0 => Ok(u256::U256::from(x as u32)),
+            I64(x) if x >= 0 => Ok(u256::U256::from(x as u64)),
+            I128(x) if x >= 0 => Ok(u256::U256::from(x as u128)),
+            I256(x) if x >= i256::I256::zero() => Ok(x.to_u256_bits()),
             I8(_) | I16(_) | I32(_) | I64(_) | I128(_) | I256(_) => Err(partial_vm_error!(
                 ARITHMETIC_ERROR,
-                "Cannot cast signed integer to u256"
+                "Cannot cast negative signed integer to u256"
             )),
         }
     }
@@ -2063,20 +2095,21 @@ impl IntegerValue {
             U32(x) => Ok(i256::I256::from(x as i64)),
             U64(x) => Ok(i256::I256::from(x as i128)),
             U128(x) => {
-                if x > i128::MAX as u128 {
+                let mut bytes = [0u8; 32];
+                bytes[..16].copy_from_slice(&x.to_le_bytes());
+                Ok(i256::I256::from_le_bytes(&bytes))
+            }
+            U256(x) => {
+                let result = i256::I256::from_u256_bits(x);
+                if result < i256::I256::zero() {
                     Err(partial_vm_error!(
                         ARITHMETIC_ERROR,
-                        "Cannot cast u128({}) to i256",
-                        x
+                        "Cannot cast u256 to i256: value exceeds i256::MAX"
                     ))
                 } else {
-                    Ok(i256::I256::from(x as i128))
+                    Ok(result)
                 }
             }
-            U256(_) => Err(partial_vm_error!(
-                ARITHMETIC_ERROR,
-                "Cannot cast u256 to i256"
-            )),
         }
     }
 
