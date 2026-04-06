@@ -198,6 +198,12 @@ pub(crate) enum ConstantValue {
     U64(u64),
     U128(u128),
     U256(u256::U256),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    I256(i256::I256),
     Bool(bool),
     Address(AccountAddress),
     Container(ConstantContainer),
@@ -217,6 +223,12 @@ pub(crate) enum ConstantContainer {
     VecU16(ArenaVec<u16>),
     VecU32(ArenaVec<u32>),
     VecU256(ArenaVec<u256::U256>),
+    VecI8(ArenaVec<i8>),
+    VecI16(ArenaVec<i16>),
+    VecI32(ArenaVec<i32>),
+    VecI64(ArenaVec<i64>),
+    VecI128(ArenaVec<i128>),
+    VecI256(ArenaVec<i256::I256>),
     Variant(VariantTag, ArenaVec<ConstantValue>),
 }
 
@@ -639,11 +651,12 @@ impl Value {
             Value::U64(value) => Ok(ConstantValue::U64(value)),
             Value::U128(value) => Ok(ConstantValue::U128(*value)),
             Value::U256(value) => Ok(ConstantValue::U256(*value)),
-            Value::I8(_) | Value::I16(_) | Value::I32(_) | Value::I64(_) | Value::I128(_)
-            | Value::I256(_) => Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "signed integer values not supported in constants"
-            )),
+            Value::I8(value) => Ok(ConstantValue::I8(value)),
+            Value::I16(value) => Ok(ConstantValue::I16(value)),
+            Value::I32(value) => Ok(ConstantValue::I32(value)),
+            Value::I64(value) => Ok(ConstantValue::I64(value)),
+            Value::I128(value) => Ok(ConstantValue::I128(*value)),
+            Value::I256(value) => Ok(ConstantValue::I256(*value)),
             Value::Bool(value) => Ok(ConstantValue::Bool(value)),
             Value::Address(value) => Ok(ConstantValue::Address(*value)),
 
@@ -662,17 +675,12 @@ impl Value {
                 PrimVec::VecU64(values) => ConstantContainer::VecU64(alloc_vec!(values)),
                 PrimVec::VecU128(values) => ConstantContainer::VecU128(alloc_vec!(values)),
                 PrimVec::VecU256(values) => ConstantContainer::VecU256(alloc_vec!(values)),
-                PrimVec::VecI8(_)
-                | PrimVec::VecI16(_)
-                | PrimVec::VecI32(_)
-                | PrimVec::VecI64(_)
-                | PrimVec::VecI128(_)
-                | PrimVec::VecI256(_) => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "signed integer vectors not supported in constants"
-                    ))
-                }
+                PrimVec::VecI8(values) => ConstantContainer::VecI8(alloc_vec!(values)),
+                PrimVec::VecI16(values) => ConstantContainer::VecI16(alloc_vec!(values)),
+                PrimVec::VecI32(values) => ConstantContainer::VecI32(alloc_vec!(values)),
+                PrimVec::VecI64(values) => ConstantContainer::VecI64(alloc_vec!(values)),
+                PrimVec::VecI128(values) => ConstantContainer::VecI128(alloc_vec!(values)),
+                PrimVec::VecI256(values) => ConstantContainer::VecI256(alloc_vec!(values)),
                 PrimVec::VecBool(values) => ConstantContainer::VecBool(alloc_vec!(values)),
                 PrimVec::VecAddress(values) => ConstantContainer::VecAddress(alloc_vec!(values)),
             })),
@@ -713,6 +721,12 @@ impl ConstantValue {
             ConstantValue::U64(value) => Value::U64(*value),
             ConstantValue::U128(value) => Value::U128(Box::new(*value)),
             ConstantValue::U256(value) => Value::U256(Box::new(*value)),
+            ConstantValue::I8(value) => Value::I8(*value),
+            ConstantValue::I16(value) => Value::I16(*value),
+            ConstantValue::I32(value) => Value::I32(*value),
+            ConstantValue::I64(value) => Value::I64(*value),
+            ConstantValue::I128(value) => Value::I128(Box::new(*value)),
+            ConstantValue::I256(value) => Value::I256(Box::new(*value)),
             ConstantValue::Bool(value) => Value::Bool(*value),
             ConstantValue::Address(value) => Value::Address(Box::new(*value)),
             ConstantValue::Container(container) => container.to_value(),
@@ -764,6 +778,24 @@ impl ConstantContainer {
             }
             ConstantContainer::VecU256(const_values) => {
                 Value::PrimVec(PrimVec::VecU256(const_values.to_vec()))
+            }
+            ConstantContainer::VecI8(const_values) => {
+                Value::PrimVec(PrimVec::VecI8(const_values.to_vec()))
+            }
+            ConstantContainer::VecI16(const_values) => {
+                Value::PrimVec(PrimVec::VecI16(const_values.to_vec()))
+            }
+            ConstantContainer::VecI32(const_values) => {
+                Value::PrimVec(PrimVec::VecI32(const_values.to_vec()))
+            }
+            ConstantContainer::VecI64(const_values) => {
+                Value::PrimVec(PrimVec::VecI64(const_values.to_vec()))
+            }
+            ConstantContainer::VecI128(const_values) => {
+                Value::PrimVec(PrimVec::VecI128(const_values.to_vec()))
+            }
+            ConstantContainer::VecI256(const_values) => {
+                Value::PrimVec(PrimVec::VecI256(const_values.to_vec()))
             }
             ConstantContainer::Variant(tag, const_values) => {
                 let values = const_values
@@ -3052,6 +3084,12 @@ impl fmt::Display for ConstantValue {
             ConstantValue::U64(x) => write!(f, "{}", x),
             ConstantValue::U128(x) => write!(f, "{}", x),
             ConstantValue::U256(x) => write!(f, "{}", x),
+            ConstantValue::I8(x) => write!(f, "{}", x),
+            ConstantValue::I16(x) => write!(f, "{}", x),
+            ConstantValue::I32(x) => write!(f, "{}", x),
+            ConstantValue::I64(x) => write!(f, "{}", x),
+            ConstantValue::I128(x) => write!(f, "{}", x),
+            ConstantValue::I256(x) => write!(f, "{}", x),
             ConstantValue::Bool(b) => write!(f, "{}", b),
             ConstantValue::Address(addr) => write!(f, "{}", addr),
             ConstantValue::Container(c) => write!(f, "{}", c),
@@ -3072,6 +3110,12 @@ impl fmt::Display for ConstantContainer {
             ConstantContainer::VecU16(vec) => display_list_of_items(vec.iter(), f),
             ConstantContainer::VecU32(vec) => display_list_of_items(vec.iter(), f),
             ConstantContainer::VecU256(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI8(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI16(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI32(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI64(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI128(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI256(vec) => display_list_of_items(vec.iter(), f),
             ConstantContainer::Variant(tag, vec) => {
                 write!(f, "|tag: {}|", tag)?;
                 display_list_of_items(vec.iter(), f)
