@@ -50,6 +50,7 @@ fn count(signature: &FunctionSignature, cfg: &MutForwardCFG) -> BTreeSet<Var> {
 }
 
 mod count {
+    use crate::csp;
     use move_proc_macros::growing_stack;
 
     use crate::{
@@ -114,9 +115,9 @@ mod count {
     }
 
     #[growing_stack]
-    pub fn command(context: &mut Context, cmd: &Command) {
+    pub fn command(context: &mut Context, csp!(_, _, cmd_): &Command) {
         use Command_ as C;
-        match &cmd.value {
+        match cmd_ {
             C::Assign(_, ls, e) => {
                 exp(context, e);
                 let substitutable_rvalues = can_subst_exp(ls.len(), e);
@@ -272,6 +273,7 @@ fn eliminate(cfg: &mut MutForwardCFG, ssa_temps: BTreeSet<Var>) {
 }
 
 mod eliminate {
+    use crate::csp;
     use crate::hlir::ast::{self as H, *};
     use move_ir_types::location::*;
     use move_proc_macros::growing_stack;
@@ -296,9 +298,9 @@ mod eliminate {
     }
 
     #[growing_stack]
-    pub fn command(context: &mut Context, cmd: &mut Command) {
+    pub fn command(context: &mut Context, csp!(_, _, cmd_): &mut Command) {
         use Command_ as C;
-        match &mut cmd.value {
+        match cmd_ {
             C::Assign(_, ls, e) => {
                 exp(context, e);
                 let eliminated = lvalues(context, ls);

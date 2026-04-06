@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::csp;
 use crate::{
     diagnostics::filter::FilterScope,
     expansion::ast::{Attributes, Friend, ModuleIdent, Mutability},
@@ -166,9 +167,9 @@ fn remap_labels_block(remapping: &BTreeMap<Label, Label>, block: &mut BasicBlock
     }
 }
 
-fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, cmd: &mut Command) {
+fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, csp!(_, _, cmd_): &mut Command) {
     use Command_::*;
-    match &mut cmd.value {
+    match cmd_ {
         Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
         Mutate(_, _) | Assign(_, _, _) | IgnoreAndPop { .. } | Abort(_, _) | Return { .. } => (),
         Jump { target, .. } => *target = remapping[target],

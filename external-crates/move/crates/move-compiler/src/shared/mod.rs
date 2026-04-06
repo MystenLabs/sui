@@ -66,6 +66,66 @@ pub mod unique_set;
 
 pub use ast_debug::AstDebug;
 
+/// Like `Spanned<T>`, but also carries the macro expansion color for debugger
+/// frame tracking. Used as the wrapper for HLIR `Command` and `Statement`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColorSpanned<T> {
+    pub loc: move_ir_types::location::Loc,
+    pub color: macro_frames::ExpansionColor,
+    pub value: T,
+}
+
+/// Construct a `ColorSpanned<T>` value (analogous to `sp()` for `Spanned<T>`).
+pub fn csp<T>(
+    loc: move_ir_types::location::Loc,
+    color: macro_frames::ExpansionColor,
+    value: T,
+) -> ColorSpanned<T> {
+    ColorSpanned { loc, color, value }
+}
+
+/// Destructure a `ColorSpanned<T>` value (analogous to `sp!` for `Spanned<T>`).
+#[macro_export]
+macro_rules! csp {
+    (_, _, $value:pat) => {
+        $crate::shared::ColorSpanned { value: $value, .. }
+    };
+    (_, $color:pat, _) => {
+        $crate::shared::ColorSpanned { color: $color, .. }
+    };
+    ($loc:pat, _, _) => {
+        $crate::shared::ColorSpanned { loc: $loc, .. }
+    };
+    ($loc:pat, $color:pat, _) => {
+        $crate::shared::ColorSpanned {
+            loc: $loc,
+            color: $color,
+            ..
+        }
+    };
+    ($loc:pat, _, $value:pat) => {
+        $crate::shared::ColorSpanned {
+            loc: $loc,
+            value: $value,
+            ..
+        }
+    };
+    (_, $color:pat, $value:pat) => {
+        $crate::shared::ColorSpanned {
+            color: $color,
+            value: $value,
+            ..
+        }
+    };
+    ($loc:pat, $color:pat, $value:pat) => {
+        $crate::shared::ColorSpanned {
+            loc: $loc,
+            color: $color,
+            value: $value,
+        }
+    };
+}
+
 //**************************************************************************************************
 // Numbers
 //**************************************************************************************************

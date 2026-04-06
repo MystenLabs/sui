@@ -26,6 +26,7 @@
 // Label 2:
 //     ...
 
+use crate::csp;
 use move_proc_macros::growing_stack;
 
 use crate::{
@@ -69,10 +70,8 @@ fn find_forwarding_jump_destinations(blocks: &BasicBlocks) -> LabelMap {
     use Command_ as C;
     let mut forwarding_jumps = BTreeMap::new();
     for (label, block) in blocks.iter().filter(|(_, block)| block.len() == 1) {
-        if let Some(cmd) = block.iter().last() {
-            if let C::Jump { target, .. } = &cmd.value {
-                forwarding_jumps.insert(*label, *target);
-            }
+        if let Some(csp!(_, _, C::Jump { target, .. })) = block.iter().last() {
+            forwarding_jumps.insert(*label, *target);
         }
     }
 
@@ -130,9 +129,9 @@ fn optimize_forwarding_jumps(
 }
 
 #[growing_stack]
-fn optimize_cmd(cmd: &mut Command, final_jumps: &BTreeMap<Label, Label>) -> bool {
+fn optimize_cmd(csp!(_, _, cmd_): &mut Command, final_jumps: &BTreeMap<Label, Label>) -> bool {
     use Command_ as C;
-    match &mut cmd.value {
+    match cmd_ {
         C::Jump {
             target,
             from_user: _,

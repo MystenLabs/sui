@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::csp;
 use crate::{
     cfgir::cfg::MutForwardCFG,
     diagnostics::DiagnosticReporter,
@@ -63,9 +64,9 @@ struct Context<'a> {
 // Some(changed) to keep
 // None to remove the cmd
 #[growing_stack]
-fn optimize_cmd(context: &Context, cmd: &mut Command) -> Option<bool> {
+fn optimize_cmd(context: &Context, csp!(_, _, cmd_): &mut Command) -> Option<bool> {
     use Command_ as C;
-    Some(match &mut cmd.value {
+    Some(match cmd_ {
         C::Assign(_, _ls, e) => optimize_exp(context, e),
         C::Mutate(el, er) => {
             let c1 = optimize_exp(context, er);

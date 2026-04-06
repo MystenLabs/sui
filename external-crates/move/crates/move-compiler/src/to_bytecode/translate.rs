@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{canonicalize_handles, context::*, optimize};
+use crate::csp;
 use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
@@ -1396,12 +1397,14 @@ fn push_instr(context: &mut Context, code: &mut IR::BytecodeBlock, instr: IR::By
     context.current_block_colors.push(context.color.clone());
 }
 
-fn command(context: &mut Context, code: &mut IR::BytecodeBlock, cmd: H::Command) {
+fn command(
+    context: &mut Context,
+    code: &mut IR::BytecodeBlock,
+    csp!(loc, color, cmd_): H::Command,
+) {
     use H::Command_ as C;
     use IR::Bytecode_ as B;
-    let loc = cmd.loc;
-    context.color = cmd.color.clone();
-    let cmd_ = cmd.value;
+    context.color = color;
     match cmd_ {
         C::Assign(_, ls, e) => {
             exp(context, code, e);

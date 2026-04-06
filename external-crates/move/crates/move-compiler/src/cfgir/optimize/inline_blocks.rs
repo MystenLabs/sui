@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::csp;
 use move_proc_macros::growing_stack;
 
 use crate::{
@@ -94,15 +95,9 @@ fn inline_single_target_blocks(
             // Do not need to worry about infinitely unwrapping loops as loop heads will always
             // be the target of at least 2 jumps: the jump to the loop and the "continue" jump
             // This is always true as long as we start the count for the start label at 1
-            cmd if matches!(&cmd.value, Command_::Jump { target, .. } if single_jump_targets.contains(target)) =>
-            {
-                let target = if let Command_::Jump { target, .. } = &cmd.value {
-                    *target
-                } else {
-                    unreachable!()
-                };
-                remapping.insert(cur, target);
-                let target_block = working_blocks.remove(&target).unwrap();
+            csp!(_, _, Command_::Jump { target, .. }) if single_jump_targets.contains(target) => {
+                remapping.insert(cur, *target);
+                let target_block = working_blocks.remove(target).unwrap();
                 block.pop_back();
                 block.extend(target_block);
                 working_blocks.insert(cur, block);

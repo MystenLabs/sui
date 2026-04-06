@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::csp;
 use move_proc_macros::growing_stack;
 
 use crate::{
@@ -36,11 +37,11 @@ pub fn optimize(
 }
 
 #[growing_stack]
-fn optimize_cmd(cmd: &mut Command) -> bool {
+fn optimize_cmd(csp!(_, _, cmd_): &mut Command) -> bool {
     use Command_ as C;
     use UnannotatedExp_ as E;
     use Value_ as V;
-    match &mut cmd.value {
+    match cmd_ {
         C::JumpIf {
             cond:
                 Exp {
@@ -51,7 +52,7 @@ fn optimize_cmd(cmd: &mut Command) -> bool {
             if_false,
         } => {
             let lbl = if *cond { *if_true } else { *if_false };
-            cmd.value = C::Jump {
+            *cmd_ = C::Jump {
                 target: lbl,
                 from_user: false,
             };

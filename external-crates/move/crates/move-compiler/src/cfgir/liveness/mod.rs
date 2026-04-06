@@ -9,11 +9,12 @@ use super::{
     cfg::{CFG, MutForwardCFG, MutReverseCFG, ReverseCFG},
     locals,
 };
+use crate::csp;
 use crate::{
     diagnostics::Diagnostics,
     expansion::ast::Mutability,
     hlir::ast::{self as H, *},
-    shared::unique_map::UniqueMap,
+    shared::{csp, unique_map::UniqueMap},
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -80,9 +81,9 @@ fn analyze(
 }
 
 #[growing_stack]
-fn command(state: &mut LivenessState, cmd: &Command) {
+fn command(state: &mut LivenessState, csp!(_, _, cmd_): &Command) {
     use Command_ as C;
-    match &cmd.value {
+    match cmd_ {
         C::Assign(_, ls, e) => {
             lvalues(state, ls);
             exp(state, e);
@@ -181,6 +182,7 @@ pub fn last_usage(context: &super::CFGContext, cfg: &mut MutForwardCFG) {
 }
 
 mod last_usage {
+    use crate::csp;
     use move_proc_macros::growing_stack;
 
     use crate::{
@@ -242,9 +244,9 @@ mod last_usage {
     }
 
     #[growing_stack]
-    fn command(context: &mut Context, cmd: &mut Command) {
+    fn command(context: &mut Context, csp!(_, _, cmd_): &mut Command) {
         use Command_ as C;
-        match &mut cmd.value {
+        match cmd_ {
             C::Assign(_, ls, e) => {
                 lvalues(context, ls);
                 exp(context, e);
@@ -484,5 +486,5 @@ fn pop_ref(loc: Loc, var: Var, ty: SingleType) -> Command {
         pop_num: 1,
         exp: move_e,
     };
-    H::Command::new(loc, None, pop_)
+    csp(loc, None, pop_)
 }

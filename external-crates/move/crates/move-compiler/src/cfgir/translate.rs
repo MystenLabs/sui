@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::csp;
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{
@@ -16,6 +17,7 @@ use crate::{
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
+    shared::csp,
     shared::macro_frames::ExpansionColor,
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
@@ -559,7 +561,7 @@ fn constant_(
         "{}",
         ICE_MSG
     );
-    let _ = cfgir::optimize(
+    cfgir::optimize(
         context.env,
         &context.reporter,
         context.current_package,
@@ -578,14 +580,13 @@ fn constant_(
     }
     let mut optimized_block = blocks.remove(&start).unwrap();
     let return_cmd = optimized_block.pop_back().unwrap();
-    for cmd in &optimized_block {
-        let cloc = cmd.loc;
-        let e = match &cmd.value {
+    for csp!(cloc, _, cmd_) in &optimized_block {
+        let e = match cmd_ {
             C::IgnoreAndPop { exp, .. } => exp,
             _ => {
                 context.add_diag(diag!(
                     CodeGeneration::UnfoldableConstant,
-                    (cloc, CANNOT_FOLD)
+                    (*cloc, CANNOT_FOLD)
                 ));
                 continue;
             }
@@ -847,13 +848,12 @@ fn finalize_blocks(
 #[growing_stack]
 fn statement(
     context: &mut Context,
-    stmt: H::Statement,
+    csp!(sloc, color, stmt): H::Statement,
     mut current_block: BasicBlock,
 ) -> (BasicBlock, BlockList) {
-    let sloc = stmt.loc;
-    let color = stmt.color.clone();
     use H::{Command_ as C, Statement_ as S};
-    match stmt.value {
+    let color = color.clone();
+    match stmt {
         S::IfElse {
             cond: test,
             if_block,
@@ -863,7 +863,7 @@ fn statement(
             let false_label = context.new_label();
             let phi_label = context.new_label();
 
-            let test_block = VecDeque::from([H::Command::new(
+            let test_block = VecDeque::from([csp(
                 sloc,
                 color.clone(),
                 C::JumpIf {
@@ -923,7 +923,7 @@ fn statement(
 
             arm_blocks.push((phi_label, current_block));
 
-            let test_block = VecDeque::from([H::Command::new(
+            let test_block = VecDeque::from([csp(
                 sloc,
                 color,
                 C::VariantSwitch {
@@ -948,7 +948,7 @@ fn statement(
             let entry_block = VecDeque::from([make_jump(sloc, color.clone(), start_label, false)]);
 
             let (initial_test_block, test_blocks) = {
-                let test_jump = H::Command::new(
+                let test_jump = csp(
                     sloc,
                     color.clone(),
                     C::JumpIf {
@@ -1021,28 +1021,17 @@ fn statement(
 
             (entry_block, new_blocks)
         }
-        S::Command(cmd) if matches!(cmd.value, C::Break(_)) => {
-            let cloc = cmd.loc;
-            let ccolor = cmd.color.clone();
-            if let C::Break(name) = cmd.value {
-                // Discard the current block because it's dead code.
-                let break_jump =
-                    make_jump(cloc, ccolor, context.named_block_end_label(&name), true);
-                (VecDeque::from([break_jump]), vec![])
-            } else {
-                unreachable!()
-            }
+        S::Command(csp!(cloc, color, C::Break(name))) => {
+            let color = color.clone();
+            // Discard the current block because it's dead code.
+            let break_jump = make_jump(cloc, color, context.named_block_end_label(&name), true);
+            (VecDeque::from([break_jump]), vec![])
         }
-        S::Command(cmd) if matches!(cmd.value, C::Continue(_)) => {
-            let cloc = cmd.loc;
-            let ccolor = cmd.color.clone();
-            if let C::Continue(name) = cmd.value {
-                // Discard the current block because it's dead code.
-                let jump = make_jump(cloc, ccolor, context.named_block_start_label(&name), true);
-                (VecDeque::from([jump]), vec![])
-            } else {
-                unreachable!()
-            }
+        S::Command(csp!(cloc, color, C::Continue(name))) => {
+            let color = color.clone();
+            // Discard the current block because it's dead code.
+            let jump = make_jump(cloc, color, context.named_block_start_label(&name), true);
+            (VecDeque::from([jump]), vec![])
         }
         S::Command(cmd) if cmd.value.is_terminal() => {
             // Discard the current block because it's dead code.
@@ -1055,15 +1044,15 @@ fn statement(
     }
 }
 
-fn with_last(mut block: H::Block, cmd: H::Command) -> H::Block {
+fn with_last(mut block: H::Block, csp!(loc, color, cmd): H::Command) -> H::Block {
     match block.iter().last() {
-        Some(stmt) if matches!(&stmt.value, H::Statement_::Command(cmd) if cmd.value.is_hlir_terminal()) => {
-            block
-        }
+        Some(csp!(_, _, H::Statement_::Command(cmd))) if cmd.value.is_hlir_terminal() => block,
         _ => {
-            let loc = cmd.loc;
-            let color = cmd.color.clone();
-            let stmt = H::Statement::new(loc, color, H::Statement_::Command(cmd));
+            let stmt = csp(
+                loc,
+                color.clone(),
+                H::Statement_::Command(csp(loc, color, cmd)),
+            );
             block.push_back(stmt);
             block
         }
@@ -1071,7 +1060,7 @@ fn with_last(mut block: H::Block, cmd: H::Command) -> H::Block {
 }
 
 fn make_jump(loc: Loc, color: ExpansionColor, target: Label, from_user: bool) -> H::Command {
-    H::Command::new(loc, color, H::Command_::Jump { target, from_user })
+    csp(loc, color, H::Command_::Jump { target, from_user })
 }
 
 // Added to dodge a clippy complaint
