@@ -5,31 +5,43 @@ source: crates/sui/tests/shell_tests.rs
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# If `-y` is passed and the config file doesn't exist, it is created
-# This is the same as prompt.sh except we pass -y instead of writing <enter> on stdin
-sui move --client.config ./client.yaml -y new example \
-  | sed 's/Generated new keypair.*$/Generated new keypair <REDACTED>/g' \
-  | sed 's/recovery phrase : \[.*\]/recovery phrase : <REDACTED>/g'
+# If client.yaml exists but predates the external_keys field, external-keys
+# should repair the config and bootstrap the external keystore files.
+mkdir config
+cp client-old-no-external-keys.yaml config/client.yaml
+export SUI_CONFIG_DIR="$PWD/config"
 
-sed 's/active_address:.*$/active_address: <REDACTED>/g' client.yaml
+set -o pipefail
+sui external-keys list-keys missing-signer 2>&1 \
+  | sed 's/No such file or directory (os error 2)/<REDACTED>/g'
+echo "exit_code: $?"
 
 echo ""
-echo "check for keystore:"
-ls sui.keystore
+echo "check for created files:"
+ls config
+
+echo ""
+echo "client config:"
+sed 's/active_address:.*$/active_address: <REDACTED>/g' config/client.yaml
 
 ----- results -----
 success: true
 exit_code: 0
 ----- stdout -----
-Generated new keypair <REDACTED>
-  secret recovery phrase : <REDACTED>
-Created "./client.yaml"
-Set active environment to testnet
+<REDACTED>
+exit_code: 1
+
+check for created files:
+client.yaml
+external.aliases
+external.keystore
+
+client config:
 ---
 keystore:
   File: "./sui.keystore"
 external_keys:
-  External: "./external.keystore"
+  External: <SANDBOX_DIR>/config/external.keystore
 envs:
   - alias: testnet
     rpc: "https://fullnode.testnet.sui.io:443"
@@ -51,8 +63,5 @@ envs:
     basic_auth: ~
 active_env: testnet
 active_address: <REDACTED>
-
-check for keystore:
-sui.keystore
 
 ----- stderr -----
