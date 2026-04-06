@@ -18,7 +18,7 @@ fun init(witness: M, ctx: &mut TxContext) {
 }
 
 // Verify ConsenusAddressOwner coin can be merged into AddressOwner coin.
-//# programmable --sender A --inputs object(1,2) 100 @A
+//# programmable --sender A --inputs object(1,1) 100 @A
 //> 0: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 1: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 2: TransferObjects([Result(0)], Input(2));
@@ -31,7 +31,7 @@ fun init(witness: M, ctx: &mut TxContext) {
 //# view-object 2,0
 
 // Verify AddressOwner coin can be merged into ConsensusAddressOwner coin.
-//# programmable --sender A --inputs object(1,2) 100 @A
+//# programmable --sender A --inputs object(1,1) 100 @A
 //> 0: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 1: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 2: TransferObjects([Result(0)], Input(2));

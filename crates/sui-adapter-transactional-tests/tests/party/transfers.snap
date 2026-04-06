@@ -1,6 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 915
+assertion_line: 920
 ---
 processed 21 tasks
 

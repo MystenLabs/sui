@@ -58,18 +58,6 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, line 91:
-//# view-object 6,0
-Owner: Account Address ( A )
-Version: 4
-Contents: test::m::Parent {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(6,0),
-        },
-    },
-}
-
-task 8, line 93:
 //# view-object 6,1
 Owner: Account Address ( fake(6,0) )
 Version: 4
@@ -81,12 +69,26 @@ Contents: test::m::Cup<u64> {
     },
 }
 
+task 8, line 93:
+//# view-object 6,0
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+}
+
 task 9, lines 95-99:
-//# programmable --sender A --inputs object(6,1) receiving(6,0)
+//# programmable --sender A --inputs object(6,0) receiving(6,1)
 //> 0: test::m::receive_cup<u64>(Input(0), Input(1));
 //> 1: test::m::destroy_cup<u64>(Result(0));
 // Try to directly call `public_receive` and `receive` on an object without public transfer.
-Error: Error checking transaction input objects: Transaction was not signed by the correct sender: Object object(6,1) is owned by account address object(6,0), but given owner/signer address is @A
+mutated: object(0,0), object(6,0)
+deleted: object(6,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
 
 task 10, line 101:
 //# run test::m::mint_s --sender A
@@ -97,7 +99,7 @@ gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 
 task 11, line 103:
 //# view-object 10,0
 Owner: Account Address ( A )
-Version: 5
+Version: 6
 Contents: test::m::Parent {
     id: sui::object::UID {
         id: sui::object::ID {
@@ -109,7 +111,7 @@ Contents: test::m::Parent {
 task 12, line 105:
 //# view-object 10,1
 Owner: Account Address ( fake(10,0) )
-Version: 5
+Version: 6
 Contents: test::m::S {
     id: sui::object::UID {
         id: sui::object::ID {
@@ -146,7 +148,7 @@ gas summary: computation_cost: 1000000, storage_cost: 3473200,  storage_rebate: 
 task 16, line 123:
 //# view-object 15,0
 Owner: Account Address ( A )
-Version: 8
+Version: 9
 Contents: test::m::Parent {
     id: sui::object::UID {
         id: sui::object::ID {
@@ -158,7 +160,7 @@ Contents: test::m::Parent {
 task 17, line 125:
 //# view-object 15,1
 Owner: Account Address ( fake(15,0) )
-Version: 8
+Version: 9
 Contents: test::m::Store {
     id: sui::object::UID {
         id: sui::object::ID {

@@ -33,32 +33,6 @@ Contents: tto::M1::A {
 }
 
 task 4, line 40:
-//# view-object 2,0
-Owner: Shared( 3 )
-Version: 3
-Contents: tto::M1::A {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    value: 0u64,
-}
-
-task 5, line 42:
-//# view-object 2,0
-Owner: Shared( 3 )
-Version: 3
-Contents: tto::M1::A {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    value: 0u64,
-}
-
-task 6, line 44:
 //# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -69,6 +43,37 @@ Contents: tto::M1::A {
         },
     },
     value: 0u64,
+}
+
+task 5, line 42:
+//# view-object 2,2
+Owner: Object ID: ( fake(2,3) )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 0u64,
+}
+
+task 6, line 44:
+//# view-object 2,3
+Owner: Object ID: ( fake(2,1) )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,2),
+    },
 }
 
 task 7, line 46:
@@ -91,32 +96,6 @@ Contents: tto::M1::A {
 }
 
 task 9, line 50:
-//# view-object 2,0
-Owner: Shared( 3 )
-Version: 4
-Contents: tto::M1::A {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    value: 0u64,
-}
-
-task 10, line 52:
-//# view-object 2,0
-Owner: Shared( 3 )
-Version: 4
-Contents: tto::M1::A {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    value: 0u64,
-}
-
-task 11, line 54:
 //# view-object 2,1
 Owner: Object ID: ( fake(7,0) )
 Version: 4
@@ -127,4 +106,35 @@ Contents: tto::M1::A {
         },
     },
     value: 100u64,
+}
+
+task 10, line 52:
+//# view-object 2,2
+Owner: Object ID: ( fake(2,3) )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 0u64,
+}
+
+task 11, line 54:
+//# view-object 2,3
+Owner: Object ID: ( fake(2,1) )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,2),
+    },
 }

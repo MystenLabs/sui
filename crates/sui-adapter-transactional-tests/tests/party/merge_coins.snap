@@ -14,43 +14,71 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10374000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 21-26:
-//# programmable --sender A --inputs object(1,2) 100 @A
+//# programmable --sender A --inputs object(1,1) 100 @A
 //> 0: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 1: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 2: TransferObjects([Result(0)], Input(2));
 //> 3: sui::party::single_owner(Input(2));
 //> sui::transfer::public_party_transfer<sui::coin::Coin<ex::m::M>>(Result(1), Result(3))
-Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+created: object(2,0), object(2,1)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 5198400,  storage_rebate: 2618352, non_refundable_storage_fee: 26448
 
 task 3, lines 28-29:
 //# programmable --sender A --inputs object(2,1) object(2,0) @A
 //> MergeCoins(Input(1), [Input(0)])
-Error: INVALID TEST. Unknown object, object(2,1)
+mutated: object(0,0), object(2,0)
+deleted: object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
 
 task 4, lines 31-33:
 //# view-object 2,0
-Error: task 4, lines 31-31
-//# view-object 2,0
-. Unbound fake id 2,0
+Owner: Account Address ( A )
+Version: 4
+Contents: sui::coin::Coin<ex::m::M> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<ex::m::M> {
+        value: 200u64,
+    },
+}
 
 task 5, lines 34-39:
-//# programmable --sender A --inputs object(1,2) 100 @A
+//# programmable --sender A --inputs object(1,1) 100 @A
 //> 0: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 1: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 2: TransferObjects([Result(0)], Input(2));
 //> 3: sui::party::single_owner(Input(2));
 //> sui::transfer::public_party_transfer<sui::coin::Coin<ex::m::M>>(Result(1), Result(3))
-Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+created: object(5,0), object(5,1)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 5198400,  storage_rebate: 2618352, non_refundable_storage_fee: 26448
 
 task 6, lines 41-42:
 //# programmable --sender A --inputs object(5,0) object(5,1) @A
 //> MergeCoins(Input(0), [Input(1)])
-Error: INVALID TEST. Unknown object, object(5,0)
+mutated: object(0,0), object(5,0)
+deleted: object(5,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
 
 task 7, line 44:
 //# view-object 5,0
-Error: task 7, lines 44-44
-//# view-object 5,0
-. Unbound fake id 5,0
+Owner: Account Address ( A )
+Version: 6
+Contents: sui::coin::Coin<ex::m::M> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    balance: sui::balance::Balance<ex::m::M> {
+        value: 200u64,
+    },
+}

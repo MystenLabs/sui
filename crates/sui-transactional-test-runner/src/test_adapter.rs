@@ -2054,7 +2054,13 @@ impl SuiTestAdapter {
 
         let gas_summary = effects.gas_cost_summary();
 
-        self.record_creation_order(digest, &created_ids);
+        let total_objects = created_ids.len()
+            + mutated_ids.len()
+            + unwrapped_ids.len()
+            + deleted_ids.len()
+            + unwrapped_then_deleted_ids.len()
+            + wrapped_ids.len();
+        self.record_creation_order(digest, &created_ids, total_objects);
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
@@ -2228,7 +2234,13 @@ impl SuiTestAdapter {
 
         let gas_summary = effects.gas_cost_summary();
 
-        self.record_creation_order(effects.transaction_digest(), &created_ids);
+        let total_objects = created_ids.len()
+            + mutated_ids.len()
+            + unwrapped_ids.len()
+            + deleted_ids.len()
+            + unwrapped_then_deleted_ids.len()
+            + wrapped_ids.len();
+        self.record_creation_order(effects.transaction_digest(), &created_ids, total_objects);
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
@@ -2303,13 +2315,20 @@ impl SuiTestAdapter {
 
     // stable way of sorting objects by type. Does not however, produce a stable sorting
     // between objects of the same type
-    fn record_creation_order(&mut self, digest: &TransactionDigest, created_ids: &[ObjectID]) {
+    fn record_creation_order(
+        &mut self,
+        digest: &TransactionDigest,
+        created_ids: &[ObjectID],
+        total_objects: usize,
+    ) {
         if created_ids.is_empty() {
             return;
         }
         let mut remaining: HashSet<ObjectID> = created_ids.iter().copied().collect();
         let mut n = 0u64;
-        let max_probes = (created_ids.len() as u64) * 10 + 100;
+        // total_objects is an upper bound on the number of fresh_id() calls in the transaction,
+        // since every created/deleted/wrapped object consumes at most one derive_id slot.
+        let max_probes = total_objects as u64;
         while !remaining.is_empty() && n < max_probes {
             let candidate = ObjectID::derive_id(*digest, n);
             if remaining.remove(&candidate) {

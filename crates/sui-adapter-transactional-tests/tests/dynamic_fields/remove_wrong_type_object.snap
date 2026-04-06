@@ -1,6 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 915
+assertion_line: 920
 ---
 processed 4 tasks
 
@@ -20,6 +20,5 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 38:
-//# run a::m::t2 --sender A --args object(2,0)
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::remove_child_object (function index 13) at offset 0, Abort Code: 2
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 13, instruction: 0, function_name: Some("remove_child_object") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(13), 0)] }), command: Some(0) } }
+//# run a::m::t2 --sender A --args object(2,1)
+Error: Error checking transaction input objects: Object object(2,1) is owned by object object(2,2). Objects owned by other objects cannot be used as input arguments

@@ -65,36 +65,29 @@ Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
 }
 
 task 5, line 63:
-//# view-object 2,1
-Owner: Object ID: ( _ )
+//# view-object 2,0
+Owner: Account Address ( A )
 Version: 2
-Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
+Contents: test::m::Obj {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,1),
+            bytes: fake(2,0),
         },
     },
-    name: 0u64,
-    value: test::m::Obj {
-        id: sui::object::UID {
-            id: sui::object::ID {
-                bytes: _,
-            },
-        },
-        value: 0u64,
-    },
+    value: 0u64,
 }
 
 task 6, lines 65-68:
-//# programmable --sender A --inputs object(2,1) 112
+//# programmable --sender A --inputs object(2,0) 112
 //> test::m::set(Input(0), Input(1))
 // The middle object has version 2, while the root and modified leaf have version 3
-Error: Error checking transaction input objects: Object object(2,1) is owned by object 0x506d2c9e4e43a4c960dba5df989c770049474aa60e504276171eedb7e36eb116. Objects owned by other objects cannot be used as input arguments
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 4278800,  storage_rebate: 4236012, non_refundable_storage_fee: 42788
 
 task 7, line 70:
 //# view-object 2,1
 Owner: Object ID: ( _ )
-Version: 2
+Version: 3
 Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
     id: sui::object::UID {
         id: sui::object::ID {
@@ -108,14 +101,14 @@ Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
                 bytes: _,
             },
         },
-        value: 0u64,
+        value: 112u64,
     },
 }
 
 task 8, line 72:
 //# view-object 2,1
 Owner: Object ID: ( _ )
-Version: 2
+Version: 3
 Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
     id: sui::object::UID {
         id: sui::object::ID {
@@ -129,32 +122,25 @@ Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
                 bytes: _,
             },
         },
-        value: 0u64,
+        value: 112u64,
     },
 }
 
 task 9, lines 74-77:
-//# view-object 2,1
-Owner: Object ID: ( _ )
-Version: 2
-Contents: sui::dynamic_field::Field<u64, test::m::Obj> {
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::Obj {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,1),
+            bytes: fake(2,0),
         },
     },
-    name: 0u64,
-    value: test::m::Obj {
-        id: sui::object::UID {
-            id: sui::object::ID {
-                bytes: _,
-            },
-        },
-        value: 0u64,
-    },
+    value: 0u64,
 }
 
 task 10, lines 79-80:
-//# programmable --sender A --inputs object(2,1) 112
+//# programmable --sender A --inputs object(2,0) 112
 //> test::m::check(Input(0), Input(1))
-Error: Error checking transaction input objects: Object object(2,1) is owned by object 0x506d2c9e4e43a4c960dba5df989c770049474aa60e504276171eedb7e36eb116. Objects owned by other objects cannot be used as input arguments
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
