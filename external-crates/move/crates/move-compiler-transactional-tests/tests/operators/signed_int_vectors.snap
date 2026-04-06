@@ -1,0 +1,165 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+task 1, lines 4-24:
+//# run
+Error: error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp5JRNc5:12:5
+   │
+ 7 │     let v = vector[1i8, -1i8, 0i8, 127i8, -128i8];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+12 │     v.push_back(42i8);
+   │     ^ Invalid mutable borrow of immutable variable 'v'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp5JRNc5:14:16
+   │
+ 7 │     let v = vector[1i8, -1i8, 0i8, 127i8, -128i8];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+14 │     let last = v.pop_back();
+   │                ^ Invalid mutable borrow of immutable variable 'v'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp5JRNc5:16:5
+   │
+ 7 │     let v = vector[1i8, -1i8, 0i8, 127i8, -128i8];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+16 │     v.swap(0, 1);
+   │     ^ Invalid mutable borrow of immutable variable 'v'
+
+
+
+task 2, lines 25-43:
+//# run
+Error: error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp0LwthK:32:5
+   │
+28 │     let v = vector[100i16, -200i16, 32767i16, -32768i16];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+32 │     v.push_back(0i16);
+   │     ^ Invalid mutable borrow of immutable variable 'v'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp0LwthK:33:16
+   │
+28 │     let v = vector[100i16, -200i16, 32767i16, -32768i16];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+33 │     let last = v.pop_back();
+   │                ^ Invalid mutable borrow of immutable variable 'v'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmp0LwthK:35:5
+   │
+28 │     let v = vector[100i16, -200i16, 32767i16, -32768i16];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+35 │     v.swap(0, 3);
+   │     ^ Invalid mutable borrow of immutable variable 'v'
+
+
+
+task 3, lines 44-59:
+//# run
+Error: error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpu5e4bd:51:5
+   │
+47 │     let v = vector[1000i32, -1000i32, 2147483647i32, -2147483648i32];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+51 │     v.push_back(-999i32);
+   │     ^ Invalid mutable borrow of immutable variable 'v'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpu5e4bd:53:16
+   │
+47 │     let v = vector[1000i32, -1000i32, 2147483647i32, -2147483648i32];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+53 │     let last = v.pop_back();
+   │                ^ Invalid mutable borrow of immutable variable 'v'
+
+
+
+task 4, lines 60-74:
+//# run
+Error: error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmplaC2nU:67:5
+   │
+63 │     let v = vector[9223372036854775807i64, -9223372036854775808i64, 0i64];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+67 │     v.swap(0, 1);
+   │     ^ Invalid mutable borrow of immutable variable 'v'
+
+
+
+task 5, lines 75-90:
+//# run
+Error: error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpRsRWt8:81:5
+   │
+78 │     let v = vector[0i128, 1i128, -1i128];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+81 │     v.push_back(170141183460469231731687303715884105727i128);
+   │     ^ Invalid mutable borrow of immutable variable 'v'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpRsRWt8:82:5
+   │
+78 │     let v = vector[0i128, 1i128, -1i128];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+82 │     v.push_back(-170141183460469231731687303715884105728i128);
+   │     ^ Invalid mutable borrow of immutable variable 'v'
+
+
+
+task 6, lines 91-105:
+//# run
+Error: error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpsrwJlf:98:5
+   │
+94 │     let v = vector[0i256, 1i256, -1i256];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+98 │     v.push_back(42i256);
+   │     ^ Invalid mutable borrow of immutable variable 'v'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpsrwJlf:99:16
+   │
+94 │     let v = vector[0i256, 1i256, -1i256];
+   │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+   ·
+99 │     let last = v.pop_back();
+   │                ^ Invalid mutable borrow of immutable variable 'v'
+
+
+
+task 7, lines 106-124:
+//# run
+Error: bug[ICE12001]: BYTECODE GENERATION FAILED
+    ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpKtGMBw:107:8
+    │
+107 │ module 7::m {
+    │        ^^^^ IR ERROR: Signed integer types are not supported in constant type layouts
+
+
+
+task 8, lines 125-133:
+//# run
+Error: error[E04024]: invalid usage of immutable variable
+    ┌─ /var/folders/wq/yn9hqn9s71s8ktjc6z89b8wr0000gn/T/.tmpLke88Q:129:13
+    │
+128 │     let v = vector[10i32, 20i32, 30i32];
+    │         - To use the variable mutably, it must be declared 'mut', e.g. 'mut v'
+129 │     let r = v.borrow_mut(1);
+    │             ^ Invalid mutable borrow of immutable variable 'v'
