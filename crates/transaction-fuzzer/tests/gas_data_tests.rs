@@ -329,8 +329,7 @@ fn make_edge_case_balance_insufficient(rgp: u64) -> GasDataWithObjects {
 /// ensuring edge cases are always exercised alongside random exploration.
 fn gen_gas_data_with_edge_cases() -> BoxedStrategy<GasDataWithObjects> {
     let rgp = Executor::new().get_reference_gas_price();
-    let max_budget =
-        sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
+    let max_budget = sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
 
     prop_oneof![
         1 => Just(()).prop_map(move |_| make_edge_case_valid(rgp)),
@@ -379,7 +378,13 @@ fn test_valid_gas_data_all_modes() {
     let case = make_edge_case_valid(rgp);
     let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &case.sender_key, case.gas_data, &case.objects);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert!(results.normal.is_ok(), "normal: {:?}", results.normal);
     assert!(results.dry_run.is_ok(), "dry_run: {:?}", results.dry_run);
@@ -403,7 +408,13 @@ fn test_gas_price_zero() {
     let case = make_edge_case_price_zero();
     let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &case.sender_key, case.gas_data, &case.objects);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasPriceUnderRGP", "normal");
     assert_err_contains(&results.dry_run, "GasPriceUnderRGP", "dry_run");
@@ -428,7 +439,13 @@ fn test_gas_price_below_rgp() {
     let case = make_edge_case_price_below_rgp(rgp);
     let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &case.sender_key, case.gas_data, &case.objects);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasPriceUnderRGP", "normal");
     assert_err_contains(&results.dry_run, "GasPriceUnderRGP", "dry_run");
@@ -453,7 +470,13 @@ fn test_gas_budget_zero() {
     let case = make_edge_case_budget_zero(rgp);
     let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &case.sender_key, case.gas_data, &case.objects);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasBudgetTooLow", "normal");
     assert_err_contains(&results.dry_run, "GasBudgetTooLow", "dry_run");
@@ -479,7 +502,13 @@ fn test_gas_budget_exceeds_max() {
     let case = make_edge_case_budget_exceeds_max(rgp, max_budget);
     let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &case.sender_key, case.gas_data, &case.objects);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasBudgetTooHigh", "normal");
     assert_err_contains(&results.dry_run, "GasBudgetTooHigh", "dry_run");
@@ -530,7 +559,13 @@ fn test_gas_balance_insufficient() {
     let case = make_edge_case_balance_insufficient(rgp);
     let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &case.sender_key, case.gas_data, &case.objects);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasBalanceTooLow", "normal");
     assert_err_contains(&results.dry_run, "GasBalanceTooLow", "dry_run");
