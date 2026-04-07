@@ -88,13 +88,13 @@ Note that seeding can also be done from a file:
 ```json
 {
     "network": "testnet",
-    "checkpoint": "12345678",
+    "checkpoint": 12345678,
     "addresses": [
         "0x1234567890abcdef1234567890abcdef12345678",
         "0xabcdef1234567890abcdef1234567890abcdef12"
     ],
     "objects": [
-        "0xabcdef1234567890abcdef1234567890abcdef12
+        "0xabcdef1234567890abcdef1234567890abcdef12"
     ]
 }
 ```
@@ -105,9 +105,9 @@ The initial seed will be dumped to a file `generated_{network}_{checkpoint}.json
 ```json
 {
     "network": "testnet",
-    "checkpoint": "12345678",
+    "checkpoint": 12345678,
     "objects": [
-        "0xabcdef1234567890abcdef1234567890abcdef12
+        "0xabcdef1234567890abcdef1234567890abcdef12"
     ]
 }
 ```
@@ -124,7 +124,7 @@ sui-forking start --network testnet
 
 This command:
 
-- Starts a local “*forked*” network on port 9000 (default) - this is used to interact with the forked network specific commands, e.g., advance-checkpoints, advance-clock, status. You can do so via the CLI or via a gRPC API.
+- Starts a local “*forked*” network on port 9000 (default) - this is used to interact with the forked network, e.g., through the Sui CLI or programmatically through gRPC clients. This will also expose a gRPC API for manually controlling the network (clock, checkpoints, epoch).
 - Starts the RPC server on port 9000 (default) - this is the gRPC endpoint you can connect the Sui client to interact with the network.
 - Allows you to execute transactions against this local state and fetches objects on-demand from the real network
 

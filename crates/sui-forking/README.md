@@ -31,7 +31,7 @@ The table below summarizes when to use each option:
 | Existing on-chain packages and objects | Available from the fork point (fetched/cached on demand) | Not available unless you deploy/create them locally |
 | External dependency at runtime | Needs network access to source chain for first-time object fetches | Fully local once started |
 | Execution model | Single validator, lock-step, sequential execution | Multi-validator local network flow |
-| Checkpoint/time/epoch control | Explicit control through `advance-checkpoint`, `advance-clock`, `advance-epoch` | Driven by normal local network progression |
+| Checkpoint/time/epoch control | Explicit control through `advance-checkpoint`, `advance-clock` | Driven by normal local network progression |
 | Best for | Testing against real deployed packages and realistic chain state | Fast local development from clean state |
 | Startup cost | Higher (state bootstrap + potential object downloads) | Lower (local genesis and startup) |
 | Determinism/reproducibility | Deterministic from selected checkpoint + seeded objects | Deterministic from local genesis/configuration |

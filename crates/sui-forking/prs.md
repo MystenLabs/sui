@@ -4,9 +4,9 @@
 
 - this should have the minimal `sui-forking` crate
 - Cargo.toml
-- lib.rs
+- main.rs
 - [README.md](http://README.md) file
-- design.md
+- poc.md
 - prs.md
 
 ## Forking PR2 -> update forking-data-store
@@ -25,11 +25,10 @@
 - use the forking-data-store for the simulacrum instantiation
 - implement the checkpoint related APIs to initialize the forked network
 
-## Forking PR6 -> Implement transaction execution
+## Forking PR6 -> implement transaction execution
 - implement transaction execution logic in sui-forking & related gRPC APIs
 
 Future PRs: TBD (probably a PR per line below)
-- implement subscription service
 - implement simulate transaction API
 - implement rest of gRPC APIs (dynamic fields, epoch, etc)
 - implement the forking CLI and related gRPC APIs to interact with the network
