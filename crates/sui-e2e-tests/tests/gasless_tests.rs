@@ -126,6 +126,70 @@ async fn test_gasless_transfer_success() {
 
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
+async fn test_gasless_dryrun() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let initial_funding = 10_000u64;
+    let transfer_amount = 1000u64;
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(initial_funding, sender)]).await;
+
+    // Verify dryrun works for gasless transactions.
+    let tx_data = test_env.create_gasless_transaction(
+        transfer_amount,
+        coin_type.clone(),
+        sender,
+        recipient,
+        0,
+        0,
+    );
+    let tx_digest = sui_types::digests::TransactionDigest::genesis_marker();
+    let result = test_env
+        .cluster
+        .fullnode_handle
+        .sui_node
+        .with_async(
+            |node| async move { node.state().dry_exec_transaction(tx_data, tx_digest).await },
+        )
+        .await;
+    assert!(
+        result.is_ok(),
+        "Expected gasless dryrun to succeed, got: {:?}",
+        result.unwrap_err()
+    );
+
+    // Verify simulate works for gasless transactions.
+    let tx_data = test_env.create_gasless_transaction(
+        transfer_amount,
+        coin_type.clone(),
+        sender,
+        recipient,
+        0,
+        0,
+    );
+    let result = test_env.cluster.fullnode_handle.sui_node.with(|node| {
+        node.state().simulate_transaction(
+            tx_data,
+            sui_types::transaction_executor::TransactionChecks::Enabled,
+            true,
+        )
+    });
+    if let Err(e) = result {
+        panic!("Expected gasless simulate to succeed, got: {e}");
+    }
+
+    // Verify direct execution also works for the same transaction shape.
+    let tx_data =
+        test_env.create_gasless_transaction(transfer_amount, coin_type, sender, recipient, 1, 0);
+    let (_, effects) = test_env.exec_tx_directly(tx_data).await.unwrap();
+    assert!(effects.status().is_ok());
+    assert_zero_gas(effects.gas_cost_summary());
+}
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
 async fn test_gasless_multi_recipient() {
     let mut test_env = setup_gasless_env().await;
     let sender = test_env.get_sender(1);
