@@ -20,6 +20,10 @@ move-binary-format.workspace = true
 move-stdlib.workspace = true
 move-package.workspace = true
 
+[features]
+default = []
+no-inline-optimization = ["move-vm-runtime/no-inline-optimization"]
+
 [lib]
 bench = false
 

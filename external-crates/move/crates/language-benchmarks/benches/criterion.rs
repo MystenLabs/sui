@@ -45,6 +45,10 @@ fn vector<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "vector.move");
 }
 
+fn inline<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "inline.move");
+}
+
 #[allow(dead_code)]
 fn cross_module<M: Measurement + 'static>(c: &mut Criterion<M>) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -61,6 +65,7 @@ criterion_group!(
         basic_alloc,
         branch,
         call,
+        inline,
         loops,
         natives,
         transfers,
