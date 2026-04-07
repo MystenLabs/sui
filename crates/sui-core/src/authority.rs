@@ -17,6 +17,7 @@ use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
+use crate::gasless_rate_limiter::ConsensusGaslessCounter;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
@@ -933,6 +934,9 @@ pub struct AuthorityState {
     chain_identifier: ChainIdentifier,
 
     pub(crate) congestion_tracker: Arc<CongestionTracker>,
+
+    /// Consumed by gasless tx rate limiter.
+    pub(crate) consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
@@ -2301,7 +2305,23 @@ impl AuthorityState {
 
         // make a gas object if one was not provided
         let mut gas_data = transaction.gas_data().clone();
-        let ((gas_status, checked_input_objects), mock_gas) = if transaction.gas().is_empty() {
+        let is_gasless =
+            epoch_store.protocol_config().enable_gasless() && transaction.is_gasless_transaction();
+        let ((gas_status, checked_input_objects), mock_gas) = if is_gasless {
+            // Gasless transactions don't use gas coins — skip mock gas object injection.
+            (
+                sui_transaction_checks::check_transaction_input(
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
+                    &transaction,
+                    input_objects,
+                    &receiving_objects,
+                    &self.metrics.bytecode_verifier_metrics,
+                    &self.config.verifier_signing_config,
+                )?,
+                None,
+            )
+        } else if transaction.gas().is_empty() {
             let sender = transaction.sender();
             // use a 1B sui coin
             const MIST_TO_SUI: u64 = 1_000_000_000;
@@ -2522,7 +2542,10 @@ impl AuthorityState {
         // Create and inject mock gas coin before pre_object_load_checks so that
         // funds withdrawal processing sees non-empty payment and doesn't incorrectly
         // create an address balance withdrawal for gas.
-        let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() {
+        // Skip mock gas for gasless transactions — they don't use gas coins.
+        let is_gasless = protocol_config.enable_gasless() && transaction.is_gasless_transaction();
+        let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() && !is_gasless
+        {
             let obj = Object::new_move(
                 MoveObject::new_gas_coin(
                     OBJECT_START_VERSION,
@@ -3844,6 +3867,7 @@ impl AuthorityState {
             overload_info: AuthorityOverloadInfo::default(),
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
+            consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,

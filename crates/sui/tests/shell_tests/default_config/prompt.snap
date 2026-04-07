@@ -29,7 +29,8 @@ Set active environment to testnet
 ---
 keystore:
   File: "./sui.keystore"
-external_keys: ~
+external_keys:
+  External: "./external.keystore"
 envs:
   - alias: testnet
     rpc: "https://fullnode.testnet.sui.io:443"

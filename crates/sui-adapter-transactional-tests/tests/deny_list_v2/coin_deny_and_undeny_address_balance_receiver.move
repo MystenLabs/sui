@@ -55,12 +55,19 @@ public fun split_to_balance(
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 
+//# create-checkpoint
+
 //# advance-epoch
 
 // After epoch change, the deny list should block the recipient.
 //# programmable --sender A --inputs object(1,1) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
+
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(1) @A
+// withdraw funds from denied account B
+//> 0: sui::balance::redeem_funds(Input(0));
+//> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(1));
 
 // Undeny account B.
 //# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A

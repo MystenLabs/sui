@@ -146,8 +146,8 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
@@ -162,8 +162,8 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     }
                 })
                 .collect(),
-            highest_accepted_rounds,
-            breadth_first,
+            fetch_after_rounds,
+            fetch_missing_ancestors,
         });
         request.set_timeout(timeout);
 
@@ -611,15 +611,15 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
                 }
             })
             .collect();
-        let highest_accepted_rounds = inner.highest_accepted_rounds;
-        let breadth_first = inner.breadth_first;
+        let fetch_after_rounds = inner.fetch_after_rounds;
+        let fetch_missing_ancestors = inner.fetch_missing_ancestors;
         let blocks = self
             .service
             .handle_fetch_blocks(
                 peer_index,
                 block_refs,
-                highest_accepted_rounds,
-                breadth_first,
+                fetch_after_rounds,
+                fetch_missing_ancestors,
             )
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -1330,18 +1330,16 @@ pub(crate) struct SubscribeBlocksResponse {
 pub(crate) struct FetchBlocksRequest {
     #[prost(bytes = "vec", repeated, tag = "1")]
     block_refs: Vec<Vec<u8>>,
-    // The highest accepted round per authority. The vector represents the round for each authority
-    // and its length should be the same as the committee size.
+    // The round per authority after which blocks should be fetched. The vector represents the round
+    // for each authority and its length should be the same as the committee size.
     // When this field is non-empty, additional ancestors of the requested blocks can be fetched.
     #[prost(uint32, repeated, tag = "2")]
-    highest_accepted_rounds: Vec<Round>,
-    // When true, this indicates that missing ancestors should be added breadth-first, by searching through
-    // missing ancestors of the requested blocks.
-    // When false, this indicates that missing ancestors should be added depth-first, by adding missing
-    // ancestors from the requested block authorities.
-    // This field is only meaningful when highest_accepted_rounds is non-empty.
+    fetch_after_rounds: Vec<Round>,
+    // When true, missing ancestors of the requested blocks will be fetched as well.
+    // When false, additional blocks are fetched depth-first from the requested block authorities.
+    // This field is only meaningful when fetch_after_rounds is non-empty.
     #[prost(bool, tag = "3")]
-    breadth_first: bool,
+    fetch_missing_ancestors: bool,
 }
 
 #[derive(Clone, prost::Message)]

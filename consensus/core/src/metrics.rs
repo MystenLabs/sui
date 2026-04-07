@@ -139,6 +139,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) synchronizer_fetch_failures: IntCounterVec,
     pub(crate) synchronizer_skipped_fetch_requests: IntCounterVec,
     pub(crate) synchronizer_process_fetched_failures: IntCounterVec,
+    pub(crate) synchronizer_periodic_sync_decision: IntCounterVec,
     pub(crate) network_received_excluded_ancestors_from_authority: IntCounterVec,
     pub(crate) network_excluded_ancestors_sent_to_fetch: IntCounterVec,
     pub(crate) network_excluded_ancestors_count_by_authority: IntCounterVec,
@@ -456,6 +457,12 @@ impl NodeMetrics {
                 "synchronizer_process_fetched_failures",
                 "Number of failures for processing fetched blocks against each peer",
                 &["peer", "type"],
+                registry,
+            ).unwrap(),
+            synchronizer_periodic_sync_decision: register_int_counter_vec_with_registry!(
+                "synchronizer_periodic_sync_decision",
+                "Decision to run periodic sync",
+                &["decision", "reason"],
                 registry,
             ).unwrap(),
             network_received_excluded_ancestors_from_authority: register_int_counter_vec_with_registry!(

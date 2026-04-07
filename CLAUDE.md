@@ -101,6 +101,10 @@ sui/
    - Move VM executes smart contracts with gas metering
    - Parallel execution for non-conflicting transactions
 
+### Test-Only Code
+
+Use `#[cfg(test)]` for test-only code used within the same crate. Use `#[cfg(feature = "testing")]` for test-only code that must be callable cross-crate. For the `testing` feature: define `testing = []` in the crate's `Cargo.toml`, and callers must propagate it via `features = ["testing"]` in their dependency declaration.
+
 ### Critical Development Notes
 1. **Testing Requirements**:
    - Always run tests before submitting changes

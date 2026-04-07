@@ -579,11 +579,6 @@ impl CertifiedBlock {
     }
 }
 
-/// A batch of certified blocks output by consensus for processing.
-pub struct CertifiedBlocksOutput {
-    pub blocks: Vec<CertifiedBlock>,
-}
-
 /// Creates fake blocks for testing.
 /// This struct is public for testing in other crates.
 #[derive(Clone)]

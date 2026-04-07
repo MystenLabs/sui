@@ -372,7 +372,6 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
 
 #[cfg(test)]
 mod test {
-    use mysten_metrics::monitored_mpsc;
     use parking_lot::RwLock;
 
     use super::*;
@@ -401,13 +400,10 @@ mod test {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
-            blocks_sender,
         );
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();

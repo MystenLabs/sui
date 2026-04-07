@@ -970,10 +970,10 @@ pub struct ProgrammableTransaction {
     pub commands: Vec<Command>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "testing")]
 static GASLESS_TOKENS_FOR_TESTING: RwLock<Vec<(String, u64)>> = RwLock::new(Vec::new());
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "testing")]
 pub fn add_gasless_token_for_testing(type_string: String, min_transfer: u64) {
     GASLESS_TOKENS_FOR_TESTING
         .write()
@@ -981,7 +981,7 @@ pub fn add_gasless_token_for_testing(type_string: String, min_transfer: u64) {
         .push((type_string, min_transfer));
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "testing")]
 pub fn clear_gasless_tokens_for_testing() {
     GASLESS_TOKENS_FOR_TESTING.write().unwrap().clear();
 }
@@ -1120,10 +1120,8 @@ pub fn get_gasless_allowed_token_types(config: &ProtocolConfig) -> Arc<BTreeMap<
     apply_test_token_overrides(arc)
 }
 
-/// Merges debug-only token overrides into the cached map.
-/// In release builds this is a no-op that returns the input unchanged.
 fn apply_test_token_overrides(base: Arc<BTreeMap<TypeTag, u64>>) -> Arc<BTreeMap<TypeTag, u64>> {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "testing")]
     {
         let overrides = GASLESS_TOKENS_FOR_TESTING.read().unwrap();
         if !overrides.is_empty() {

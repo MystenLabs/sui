@@ -190,6 +190,100 @@ async fn scan_blocks(
 
 #[rstest]
 #[tokio::test]
+async fn scan_blocks_in_range(
+    #[values(new_rocksdb_teststore(), new_mem_teststore())] test_store: TestStore,
+) {
+    let store = test_store.store();
+
+    let written_blocks = vec![
+        VerifiedBlock::new_for_test(TestBlock::new(9, 0).build()),
+        VerifiedBlock::new_for_test(TestBlock::new(10, 0).build()),
+        VerifiedBlock::new_for_test(TestBlock::new(10, 1).build()),
+        VerifiedBlock::new_for_test(TestBlock::new(11, 1).build()),
+        VerifiedBlock::new_for_test(TestBlock::new(11, 3).build()),
+        VerifiedBlock::new_for_test(TestBlock::new(12, 1).build()),
+        VerifiedBlock::new_for_test(TestBlock::new(13, 2).build()),
+        VerifiedBlock::new_for_test(TestBlock::new(13, 1).build()),
+    ];
+    store
+        .write(WriteBatch::default().blocks(written_blocks.clone()))
+        .unwrap();
+
+    // Author 1 blocks: round 10, 11, 12, 13
+
+    // No blocks in range [20, 30)
+    {
+        let scanned_blocks = store
+            .scan_blocks_by_author_in_range(AuthorityIndex::new_for_test(1), 20, 30, 10)
+            .expect("Scan blocks should not fail");
+        assert!(scanned_blocks.is_empty());
+    }
+
+    // Range [10, 12) with no limit — should return rounds 10, 11
+    {
+        let scanned_blocks = store
+            .scan_blocks_by_author_in_range(AuthorityIndex::new_for_test(1), 10, 12, 100)
+            .expect("Scan blocks should not fail");
+        assert_eq!(scanned_blocks.len(), 2);
+        assert_eq!(
+            scanned_blocks,
+            vec![written_blocks[2].clone(), written_blocks[3].clone()]
+        );
+    }
+
+    // Range [10, 14) with limit 1 — should return only round 10
+    {
+        let scanned_blocks = store
+            .scan_blocks_by_author_in_range(AuthorityIndex::new_for_test(1), 10, 14, 1)
+            .expect("Scan blocks should not fail");
+        assert_eq!(scanned_blocks.len(), 1);
+        assert_eq!(scanned_blocks, vec![written_blocks[2].clone()]);
+    }
+
+    // Range [10, 14) with limit 3 — should return rounds 10, 11, 12
+    {
+        let scanned_blocks = store
+            .scan_blocks_by_author_in_range(AuthorityIndex::new_for_test(1), 10, 14, 3)
+            .expect("Scan blocks should not fail");
+        assert_eq!(scanned_blocks.len(), 3);
+        assert_eq!(
+            scanned_blocks,
+            vec![
+                written_blocks[2].clone(),
+                written_blocks[3].clone(),
+                written_blocks[5].clone(),
+            ]
+        );
+    }
+
+    // Range [10, 14) unlimited — should return all 4 blocks for author 1
+    {
+        let scanned_blocks = store
+            .scan_blocks_by_author_in_range(AuthorityIndex::new_for_test(1), 10, 14, 100)
+            .expect("Scan blocks should not fail");
+        assert_eq!(scanned_blocks.len(), 4);
+        assert_eq!(
+            scanned_blocks,
+            vec![
+                written_blocks[2].clone(),
+                written_blocks[3].clone(),
+                written_blocks[5].clone(),
+                written_blocks[7].clone(),
+            ]
+        );
+    }
+
+    // start_round >= end_round — should return empty
+    {
+        let scanned_blocks = store
+            .scan_blocks_by_author_in_range(AuthorityIndex::new_for_test(1), 14, 14, 10)
+            .expect("Scan blocks should not fail");
+        assert!(scanned_blocks.is_empty());
+    }
+}
+
+#[rstest]
+#[tokio::test]
 async fn read_and_scan_commits(
     #[values(new_rocksdb_teststore(), new_mem_teststore())] test_store: TestStore,
 ) {

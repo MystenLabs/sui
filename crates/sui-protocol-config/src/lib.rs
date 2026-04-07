@@ -1933,6 +1933,9 @@ pub struct ProtocolConfig {
     /// Maximum size in bytes of each Pure input in a gasless transaction.
     /// When None, there is no limit (effectively unlimited).
     gasless_max_pure_input_bytes: Option<u64>,
+
+    /// Max tps for gasless transactions. Unlimited when unset, zero when set to zero.
+    gasless_max_tps: Option<u64>,
 }
 
 /// An aliased address.
@@ -3320,6 +3323,7 @@ impl ProtocolConfig {
             gasless_allowed_token_types: None,
             gasless_max_unused_inputs: None,
             gasless_max_pure_input_bytes: None,
+            gasless_max_tps: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4779,6 +4783,7 @@ impl ProtocolConfig {
                     // Re-enable unpaid amplification deferral protection (testnet + devnet)
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.defer_unpaid_amplification = true;
+                        cfg.gasless_max_tps = Some(50);
                     }
                 }
                 // Use this template when making changes:
@@ -5177,6 +5182,7 @@ impl ProtocolConfig {
         self.feature_flags.enable_gasless = true;
         self.gasless_max_computation_units = Some(50_000);
         self.gasless_allowed_token_types = Some(vec![]);
+        self.gasless_max_tps = Some(1000);
     }
 
     pub fn disable_gasless_for_testing(&mut self) {

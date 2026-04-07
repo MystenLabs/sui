@@ -251,12 +251,8 @@ where
             transaction_verifier,
         ));
 
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            commit_consumer.block_sender.clone(),
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
 
         let mut proposed_block_handler = ProposedBlockHandler::new(
             context.clone(),

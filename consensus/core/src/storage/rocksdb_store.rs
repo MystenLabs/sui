@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, VecDeque},
-    ops::Bound::Included,
+    ops::Bound::{Excluded, Included},
     time::Duration,
 };
 
@@ -255,13 +255,26 @@ impl Store for RocksDBStore {
         author: AuthorityIndex,
         start_round: Round,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
+        self.scan_blocks_by_author_in_range(author, start_round, Round::MAX, usize::MAX)
+    }
+
+    fn scan_blocks_by_author_in_range(
+        &self,
+        author: AuthorityIndex,
+        start_round: Round,
+        end_round: Round,
+        limit: usize,
+    ) -> ConsensusResult<Vec<VerifiedBlock>> {
         let mut refs = vec![];
         for kv in self.digests_by_authorities.safe_range_iter((
             Included((author, start_round, BlockDigest::MIN)),
-            Included((author, Round::MAX, BlockDigest::MAX)),
+            Excluded((author, end_round, BlockDigest::MIN)),
         )) {
             let ((author, round, digest), _) = kv?;
             refs.push(BlockRef::new(round, author, digest));
+            if refs.len() >= limit {
+                break;
+            }
         }
         let results = self.read_blocks(refs.as_slice())?;
         let mut blocks = Vec::with_capacity(refs.len());

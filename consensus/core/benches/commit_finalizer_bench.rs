@@ -33,13 +33,10 @@ impl BenchFixture {
             Arc::new(MemStore::new()),
         )));
         let linearizer = Linearizer::new(context.clone(), dag_state.clone());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
-            blocks_sender,
         );
         let (commit_sender, _commit_receiver) =
             monitored_mpsc::unbounded_channel("consensus_commit_output");
