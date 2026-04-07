@@ -1036,9 +1036,14 @@ where
         let commit_threshold = current_commit_index
             + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER;
         let now = Instant::now();
+        let metrics = &self.context.metrics.node_metrics;
 
         // Commit is not lagging.
         if quorum_commit_index <= commit_threshold {
+            metrics
+                .synchronizer_periodic_sync_decision
+                .with_label_values(&["true", "default"])
+                .inc();
             // Reset last commit state.
             self.last_changed_commit_index = current_commit_index;
             self.last_commit_change_time = now;
@@ -1053,11 +1058,19 @@ where
             if current_commit_index
                 < self.last_changed_commit_index + self.context.parameters.commit_sync_batch_size
             {
+                metrics
+                    .synchronizer_periodic_sync_decision
+                    .with_label_values(&["true", "commit_catchup::run"])
+                    .inc();
                 // Not enough progress has been made yet. Keep running periodic sync.
                 // Do not update last commit state yet.
                 // Run periodic sync.
                 return true;
             } else {
+                metrics
+                    .synchronizer_periodic_sync_decision
+                    .with_label_values(&["false", "commit_catchup::end"])
+                    .inc();
                 // Enough progress has been made. Disable commit sync failover and reset last commit state.
                 self.last_changed_commit_index = current_commit_index;
                 self.last_commit_change_time = now;
@@ -1071,17 +1084,24 @@ where
         if current_commit_index == self.last_changed_commit_index {
             // Enter commit sync failover if not enough progress has been made.
             if now.duration_since(self.last_commit_change_time) >= COMMIT_PROGRESS_TIMEOUT {
+                metrics
+                    .synchronizer_periodic_sync_decision
+                    .with_label_values(&["true", "commit_catchup::start"])
+                    .inc();
                 self.commit_sync_failover = true;
                 // Run periodic sync.
                 return true;
             }
-            // Do not update last commit state when commit index is not changing.
         } else {
-            // Update last commit state.
+            // IMPORTANT: Only update last commit state when commit index is changing.
             self.last_changed_commit_index = current_commit_index;
             self.last_commit_change_time = now;
         }
 
+        metrics
+            .synchronizer_periodic_sync_decision
+            .with_label_values(&["false", "commit_lag"])
+            .inc();
         false
     }
 
@@ -1967,16 +1987,10 @@ mod tests {
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let mock_client = Arc::new(MockNetworkClient::default());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
