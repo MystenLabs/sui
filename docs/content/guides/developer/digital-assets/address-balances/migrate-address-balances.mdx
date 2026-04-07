@@ -29,7 +29,7 @@ This rollout initially has very limited impact:
 
 ### Impact for wallets, exchanges, and custody providers
 
-Anyone operating a wallet (custodial, non-custodial, or exchange wallets) might be impacted by this change. Users can now send funds to your address through `send_funds()` instead of transferring a coin object. If a wallet receives funds this way but cannot see or access them, the user might believe the funds have been lost. The funds cannot actually be lost, but this can cause confusion for affected users.
+Anyone operating a wallet (custodial, non-custodial, or exchange wallets) might be impacted by this change. Users can now send funds to your address through `send_funds()` instead of transferring a coin object. If a wallet receives funds this way, but does not have proper support for address balances, the user will not be able to see or access the funds. The user might then believe the funds have been lost. The funds cannot actually be lost, but this can cause confusion for affected users.
 
 Initially, this does not happen often because most of the ecosystem continues to transfer coin objects. However, because funds can arrive at any wallet as an address balance transfer, wallet implementors should be prepared.
 
