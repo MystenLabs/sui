@@ -419,8 +419,8 @@ mod eliminate {
                     // or below parent_e's scope in the tree, so X's parent
                     // chain already covers it. Only colorless replacements
                     // need the use-site color.
-                    if replacement.color.is_none() {
-                        replacement.color = parent_e.color.clone();
+                    if replacement.exp.color.is_none() {
+                        replacement.exp.color = parent_e.exp.color.clone();
                     }
                     *parent_e = replacement
                 }

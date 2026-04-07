@@ -484,7 +484,7 @@ fn constant(
     );
     let value = match final_value {
         Some(H::Exp {
-            exp: sp!(_, H::UnannotatedExp_::Value(value)),
+            exp: csp!(_, _, H::UnannotatedExp_::Value(value)),
             ..
         }) => {
             constant_values

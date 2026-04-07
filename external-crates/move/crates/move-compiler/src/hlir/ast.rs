@@ -13,8 +13,8 @@ use crate::{
         TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        Name, NumericalAddress, TName, ast_debug::*, macro_frames::ExpansionColor,
-        program_info::TypingProgramInfo, unique_map::UniqueMap,
+        Name, NumericalAddress, TName, ast_debug::*, program_info::TypingProgramInfo,
+        unique_map::UniqueMap,
     },
 };
 use move_ir_types::location::*;
@@ -425,18 +425,20 @@ pub enum UnannotatedExp_ {
 
     UnresolvedError,
 }
-pub type UnannotatedExp = Spanned<UnannotatedExp_>;
+pub type UnannotatedExp = crate::shared::OptColorSpanned<UnannotatedExp_>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Exp {
     pub ty: Type,
     pub exp: UnannotatedExp,
-    pub color: Option<ExpansionColor>,
 }
-pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
+pub fn exp(ty: Type, exp: Spanned<UnannotatedExp_>) -> Exp {
     Exp {
         ty,
-        exp,
-        color: None,
+        exp: crate::shared::ColorSpanned {
+            loc: exp.loc,
+            color: None,
+            value: exp.value,
+        },
     }
 }
 
@@ -1491,11 +1493,11 @@ impl AstDebug for Value_ {
 
 impl AstDebug for Exp {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Exp { ty, exp, color } = self;
-        if let Some(c) = color {
+        let Exp { ty, exp } = self;
+        if let Some(c) = &exp.color {
             w.write(&format!("(color={c:?}) "));
         }
-        w.annotate(|w| exp.ast_debug(w), ty)
+        w.annotate(|w| exp.value.ast_debug(w), ty)
     }
 }
 

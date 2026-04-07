@@ -45,7 +45,7 @@ fn optimize_cmd(csp!(_, _, cmd_): &mut Command) -> bool {
         C::JumpIf {
             cond:
                 Exp {
-                    exp: sp!(_, E::Value(sp!(_, V::Bool(cond)))),
+                    exp: csp!(_, _, E::Value(sp!(_, V::Bool(cond)))),
                     ..
                 },
             if_true,

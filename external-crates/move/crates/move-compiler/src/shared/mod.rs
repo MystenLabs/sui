@@ -67,13 +67,23 @@ pub mod unique_set;
 pub use ast_debug::AstDebug;
 
 /// Like `Spanned<T>`, but also carries the macro expansion color for debugger
-/// frame tracking. Used as the wrapper for HLIR `Command` and `Statement`.
+/// frame tracking. Used as the wrapper for HLIR `Command`, `Statement`, and
+/// `UnannotatedExp`.
+///
+/// The `C` parameter defaults to `ExpansionColor` (always present, for
+/// `Command`/`Statement`). Use `OptColorSpanned<T>` (= `ColorSpanned<T,
+/// Option<ExpansionColor>>`) for expressions where color is optional (`None`
+/// means "inherit from enclosing command").
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ColorSpanned<T> {
+pub struct ColorSpanned<T, C = macro_frames::ExpansionColor> {
     pub loc: move_ir_types::location::Loc,
-    pub color: macro_frames::ExpansionColor,
+    pub color: C,
     pub value: T,
 }
+
+/// A `ColorSpanned` with optional color, used for HLIR `UnannotatedExp`.
+/// `None` color means "inherit from the enclosing command's color".
+pub type OptColorSpanned<T> = ColorSpanned<T, Option<macro_frames::ExpansionColor>>;
 
 /// Construct a `ColorSpanned<T>` value (analogous to `sp()` for `Spanned<T>`).
 pub fn csp<T>(

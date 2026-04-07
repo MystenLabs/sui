@@ -1029,8 +1029,8 @@ fn tail(
             context.current_color = ec.clone();
             let result = tail_block(context, block, expected_type, seq);
             let result = result.map(|mut e| {
-                if !expansion_color_eq(&ec, &saved_color) && e.color.is_none() {
-                    e.color = Some(ec.clone());
+                if !expansion_color_eq(&ec, &saved_color) && e.exp.color.is_none() {
+                    e.exp.color = Some(ec.clone());
                 }
                 e
             });
@@ -1358,8 +1358,8 @@ fn value(
             ));
             context.exit_named_block(name);
             let mut bound_exp = bound_exp;
-            if !expansion_color_eq(&ec, &saved_color) && bound_exp.color.is_none() {
-                bound_exp.color = Some(ec.clone());
+            if !expansion_color_eq(&ec, &saved_color) && bound_exp.exp.color.is_none() {
+                bound_exp.exp.color = Some(ec.clone());
             }
             context.current_color = saved_color;
             bound_exp
@@ -1393,8 +1393,8 @@ fn value(
             // overwriting it with MacroBody(outer) would make the inner
             // transition invisible.
             // See test: macro_frames/simple_nested_macros.
-            if !expansion_color_eq(&ec, &saved_color) && result.color.is_none() {
-                result.color = Some(ec.clone());
+            if !expansion_color_eq(&ec, &saved_color) && result.exp.color.is_none() {
+                result.exp.color = Some(ec.clone());
             }
             context.current_color = saved_color;
             result
@@ -1778,11 +1778,7 @@ fn value_list_items_to_vec(
                 Freeze::NotNeeded => es,
                 Freeze::Point => unreachable!(),
                 Freeze::Sub(_) => {
-                    let current_exp = H::Exp {
-                        ty: current_ty,
-                        exp: sp(loc, HE::Multiple(es)),
-                        color: None,
-                    };
+                    let current_exp = H::exp(current_ty, sp(loc, HE::Multiple(es)));
                     let (mut freeze_block, frozen) = freeze(context, expected_ty, current_exp);
                     result.append(&mut freeze_block);
                     match frozen.exp.value {
@@ -2651,6 +2647,7 @@ fn bind_value_in_block(
     //
     // See test: macro_frames/expansion_assign.
     let color = rhs_exp
+        .exp
         .color
         .clone()
         .unwrap_or_else(|| context.current_color.clone());
@@ -3107,8 +3104,7 @@ fn freeze(context: &mut Context, expected_type: &H::Type, e: H::Exp) -> (Block, 
             let bound_rhs = bind_exp(context, &mut bind_stmts, e);
             if let H::Exp {
                 ty: _,
-                exp: sp!(eloc, E::Multiple(exps)),
-                ..
+                exp: csp!(eloc, _, E::Multiple(exps)),
             } = bound_rhs
             {
                 assert!(exps.len() == points.len());
