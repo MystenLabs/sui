@@ -10,6 +10,7 @@ use sui_rpc::Client as RpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
+use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::Checkpoint;
@@ -23,13 +24,7 @@ use crate::ingestion::ingestion_client::IngestionClientTrait;
 #[async_trait]
 impl IngestionClientTrait for RpcClient {
     async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
-        let request = GetServiceInfoRequest::const_default();
-        let response = self
-            .clone()
-            .ledger_client()
-            .get_service_info(request)
-            .await?
-            .into_inner();
+        let response = get_service_info_request(self).await?;
         Ok(CheckpointDigest::from_str(response.chain_id())?.into())
     }
 
@@ -63,4 +58,24 @@ impl IngestionClientTrait for RpcClient {
         Checkpoint::try_from(response.checkpoint())
             .map_err(|e| CheckpointError::Decode(ProtoConversion(e)))
     }
+
+    async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        let response = get_service_info_request(self).await?;
+        let Some(latest_checkpoint_number) = response.checkpoint_height else {
+            return Err(anyhow!("Checkpoint height not found {response:?}"));
+        };
+        Ok(latest_checkpoint_number)
+    }
+}
+
+async fn get_service_info_request(
+    rpc_client: &RpcClient,
+) -> anyhow::Result<GetServiceInfoResponse> {
+    let request = GetServiceInfoRequest::const_default();
+    Ok(rpc_client
+        .clone()
+        .ledger_client()
+        .get_service_info(request)
+        .await?
+        .into_inner())
 }

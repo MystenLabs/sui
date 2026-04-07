@@ -54,6 +54,8 @@ pub(crate) trait IngestionClientTrait: Send + Sync {
     async fn chain_id(&self) -> anyhow::Result<ChainIdentifier>;
 
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult;
+
+    async fn latest_checkpoint_number(&self) -> anyhow::Result<u64>;
 }
 
 #[derive(clap::Args, Clone, Debug)]
@@ -393,6 +395,10 @@ impl IngestionClient {
             chain_id: *chain_id,
         })
     }
+
+    pub async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        self.client.latest_checkpoint_number().await
+    }
 }
 
 /// Keep backing off until we are waiting for the max interval, but don't give up.
@@ -535,6 +541,10 @@ mod tests {
                 .as_deref()
                 .cloned()
                 .ok_or(CheckpointError::NotFound)
+        }
+
+        async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+            Ok(0)
         }
     }
 
