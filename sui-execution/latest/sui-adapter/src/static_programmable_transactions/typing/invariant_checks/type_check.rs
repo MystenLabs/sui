@@ -80,7 +80,13 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
     for r in receiving {
         receiving_input(r)?;
     }
+    let mut prev_index = 0;
     for c in commands {
+        debug_assert!(
+            prev_index <= c.idx,
+            "command indices should be monotonically increasing"
+        );
+        prev_index = prev_index.max(c.idx);
         command::<Mode>(env, &context, c)?;
     }
     for (withdrawal, conversion) in withdrawal_compatibility_conversions {

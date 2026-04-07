@@ -16,7 +16,13 @@ use crate::{
 };
 use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
-use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    rc::Rc,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use sui_types::{
     base_types::TxContext,
     error::ExecutionError,
@@ -40,7 +46,7 @@ where
     'pc: 'state,
     'env: 'state,
 {
-    let mut indexed_timings = vec![];
+    let mut indexed_timings = IndexedExecutionTimings::new();
     let original_command_len = ast.original_command_len;
     let result = execute_inner::<Mode>(
         &mut indexed_timings,
@@ -51,7 +57,7 @@ where
         ast,
         trace_builder_opt,
     );
-    let timings = coalesce_timings(indexed_timings, original_command_len);
+    let timings = indexed_timings.into_coalesced(original_command_len);
     debug_assert!(
         timings.len() <= original_command_len,
         "coalesced timings length {} exceeds original command length {}",
@@ -69,7 +75,7 @@ where
 }
 
 fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
-    timings: &mut Vec<IndexedExecutionTiming>,
+    timings: &mut IndexedExecutionTimings,
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension>,
     metrics: Arc<LimitsMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
@@ -108,7 +114,7 @@ where
     trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;
 
     let mut mode_results = Mode::empty_results();
-    for (actual_index, sp!(annotated_index, c)) in commands.into_iter().enumerate() {
+    for sp!(annotated_index, c) in commands {
         let annotated_index = annotated_index as usize;
         let start = Instant::now();
         if let Err(err) =
@@ -122,18 +128,10 @@ where
             // runtime, but its since been dropped. what gives with this error?
             env.state_view
                 .save_loaded_runtime_objects(loaded_runtime_objects);
-            timings.push(IndexedExecutionTiming {
-                actual_index,
-                annotated_index,
-                timing: ExecutionTiming::Abort(start.elapsed()),
-            });
+            timings.error(annotated_index, start.elapsed());
             return Err(err.with_command_index(annotated_index));
         };
-        timings.push(IndexedExecutionTiming {
-            actual_index,
-            annotated_index,
-            timing: ExecutionTiming::Success(start.elapsed()),
-        });
+        timings.executed(annotated_index, start.elapsed());
     }
     // Save loaded objects table in case we fail in post execution
     //
@@ -442,65 +440,106 @@ fn execute_command<Mode: ExecutionMode>(
     Ok(())
 }
 
-/// Wrapper around `ExecutionTiming` that also tracks the actual and original command indices for
-/// coalescing timings after execution.
-struct IndexedExecutionTiming {
-    #[allow(unused)]
-    actual_index: usize,
-    annotated_index: usize,
-    timing: ExecutionTiming,
+/// Struct to track execution timings, coalesced into the annotated command indices.
+struct IndexedExecutionTimings {
+    /// Mapping from the command's annotated index to its duration. Multiple commands may share
+    /// the same annotated index, in which case their durations will be added together.
+    executed_commands: BTreeMap<usize, Duration>,
+    /// `Some`` if an error occurred, stopping execution.
+    /// `usize` is the annotated index of the command
+    error_command: Option<(usize, Duration)>,
 }
 
-/// Coalesces timings by `original_index` to align with the original command count.
-/// Extra commands may have been injected during typing (e.g., withdrawal compatibility).
-/// Timings sharing an `annotated_index` have their durations summed. An error, if present,
-/// is always last; entries after it are truncated.
-fn coalesce_timings(
-    indexed_timings: Vec<IndexedExecutionTiming>,
-    original_command_len: usize,
-) -> Vec<ExecutionTiming> {
-    // Debug assertion that there should be at most one error timing at the end of the vector
-    debug_assert!(
-        indexed_timings
-            .iter()
-            .filter(|t| t.timing.is_abort())
-            .count()
-            <= 1,
-        "multiple abort timings found in execution timings"
-    );
-    debug_assert!(
-        indexed_timings
-            .iter()
-            .position(|t| t.timing.is_abort())
-            .is_none_or(|pos| pos == indexed_timings.len().saturating_sub(1)),
-        "abort timing found before the end of execution timings"
-    );
-
-    let mut coalesced =
-        vec![ExecutionTiming::Success(std::time::Duration::ZERO); original_command_len];
-    let last_index = original_command_len.saturating_sub(1);
-    for cur in indexed_timings {
-        let idx = cur.annotated_index.min(last_index);
-        let Some(existing) = coalesced.get_mut(idx) else {
-            debug_assert!(false);
-            continue;
-        };
-        let new_duration = existing.duration().saturating_add(cur.timing.duration());
-        debug_assert!(!existing.is_abort());
-        *existing = if existing.is_abort() || cur.timing.is_abort() {
-            ExecutionTiming::Abort(new_duration)
-        } else {
-            ExecutionTiming::Success(new_duration)
-        };
+impl IndexedExecutionTimings {
+    fn new() -> Self {
+        Self {
+            executed_commands: BTreeMap::new(),
+            error_command: None,
+        }
     }
 
-    // An error can only be the last timing. Truncate anything after it.
-    debug_assert!(
-        coalesced.iter().filter(|t| t.is_abort()).count() <= 1,
-        "multiple error timings found after coalescing"
-    );
-    if let Some(abort_pos) = coalesced.iter().position(|t| t.is_abort()) {
-        coalesced.truncate(abort_pos.saturating_add(1));
+    /// Records the execution of a successful command.
+    fn executed(&mut self, annotated_index: usize, duration: Duration) {
+        debug_assert!(
+            self.error_command.is_none(),
+            "command executed after an error occurred"
+        );
+        let existing = self
+            .executed_commands
+            .entry(annotated_index)
+            .or_insert(Duration::ZERO);
+        *existing = existing.saturating_add(duration);
     }
-    coalesced
+
+    /// Record the execution of a failed command that error and stopped the execution of the PTB.
+    fn error(&mut self, annotated_index: usize, duration: Duration) {
+        debug_assert!(self.error_command.is_none(), "multiple errors recorded");
+        debug_assert!(
+            self.executed_commands
+                .last_key_value()
+                .is_none_or(|(last, _)| *last <= annotated_index),
+            "execution timings recorded for command index {:?} after error at index {}",
+            self.executed_commands
+                .last_key_value()
+                .map(|(last, _)| *last),
+            annotated_index,
+        );
+
+        let existing_opt = self.executed_commands.remove(&annotated_index);
+        let total_duration = existing_opt
+            .unwrap_or(Duration::ZERO)
+            .saturating_add(duration);
+        self.error_command = Some((annotated_index, total_duration));
+    }
+
+    /// Coalesces timings by each commands annotated index to align with the original command count.
+    /// Extra commands may have been injected during typing (e.g., withdrawal compatibility).
+    /// Timings sharing an `annotated_index` have their durations summed. An error, if present,
+    /// is always last.
+    fn into_coalesced(self, original_command_len: usize) -> Vec<ExecutionTiming> {
+        let Self {
+            executed_commands,
+            error_command,
+        } = self;
+
+        let max_executed_index = executed_commands.keys().last().copied();
+        let error_index = error_command.as_ref().map(|(idx, _)| *idx);
+        let max_annotated = match (max_executed_index, error_index) {
+            (Some(exec), Some(err)) => exec.max(err),
+            (Some(idx), None) | (None, Some(idx)) => idx,
+            (None, None) => return vec![],
+        };
+        let size = max_annotated.saturating_add(1).min(original_command_len);
+
+        let mut coalesced = vec![ExecutionTiming::Success(Duration::ZERO); size];
+        let last_index = coalesced.len().saturating_sub(1);
+        for (annotated_index, duration) in executed_commands {
+            let Some(entry) = coalesced.get_mut(annotated_index.min(last_index)) else {
+                debug_assert!(
+                    false,
+                    "failed to initialize coalesced timings at index {}",
+                    annotated_index
+                );
+                continue;
+            };
+            debug_assert!(!entry.is_abort() && entry.duration().is_zero());
+            *entry = ExecutionTiming::Success(duration);
+        }
+
+        if let Some((annotated_index, error_duration)) = error_command {
+            debug_assert!(annotated_index >= last_index, "error index should be last");
+            if let Some(entry) = coalesced.get_mut(annotated_index.min(last_index)) {
+                debug_assert!(!entry.is_abort() && entry.duration().is_zero());
+                *entry = ExecutionTiming::Abort(error_duration);
+            } else {
+                debug_assert!(
+                    false,
+                    "failed to initialize coalesced timings at index {}",
+                    annotated_index
+                );
+            };
+        }
+
+        coalesced
+    }
 }
