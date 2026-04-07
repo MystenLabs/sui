@@ -27,10 +27,10 @@ pub const INVALID_RANGE: u64 = 3;
 pub const INVALID_BATCH_SIZE: u64 = 4;
 
 /// Upper bound for batch size * range in bits
-pub const MAX_TOTAL_BITS: u64 = 256;
+pub const MAX_TOTAL_BITS: u64 = 512;
 
-/// Proofs with MAX_TOTAL_BITS = 256 will be exactly 800 bytes.
-const MAX_PROOF_SIZE: usize = 800;
+/// Proofs with MAX_TOTAL_BITS = 512 will be exactly 864 bytes.
+const MAX_PROOF_SIZE: usize = 864;
 
 #[derive(Clone)]
 pub struct BulletproofsCostParams {
