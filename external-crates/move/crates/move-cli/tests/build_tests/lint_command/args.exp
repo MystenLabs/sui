@@ -1,17 +1,12 @@
 Command `lint`:
 BUILDING LintTest
-warning[W09008]: unused function
-  ┌─ ./sources/example.move:8:5
-  │
-8 │ fun t1(): u64 { return EXAMPLE }
-  │     ^^ The non-'public', non-'entry' function 't1' is never called. Consider removing it.
-  │
-  = This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 warning[Lint W04004]: unneeded return
-  ┌─ ./sources/example.move:8:17
+  ┌─ ./sources/example.move:8:24
   │
-8 │ fun t1(): u64 { return EXAMPLE }
-  │                 ^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+8 │ public fun t1(): u64 { return EXAMPLE }
+  │                        ^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
   │
   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+External Command `ls build`:
+ls: build: No such file or directory
