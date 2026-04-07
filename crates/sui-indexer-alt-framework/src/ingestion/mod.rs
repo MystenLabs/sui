@@ -14,6 +14,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
+use tracing::warn;
 
 pub use crate::config::ConcurrencyConfig as IngestConcurrencyConfig;
 use crate::ingestion::broadcaster::broadcaster;
@@ -22,9 +23,13 @@ use crate::ingestion::error::Result;
 use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::ingestion::ingestion_client::IngestionClient;
 use crate::ingestion::ingestion_client::IngestionClientArgs;
+use crate::ingestion::streaming_client::CheckpointStream;
+use crate::ingestion::streaming_client::CheckpointStreamingClient;
 use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
+
+use self::ingestion_client::retry_transient_with_slow_monitor;
 
 mod broadcaster;
 mod byte_count;
@@ -38,6 +43,8 @@ pub mod streaming_client;
 mod test_utils;
 
 pub(crate) const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
+
+const OPERATION: &str = "latest_checkpoint_number";
 
 /// Combined arguments for both ingestion and streaming clients.
 /// This is a convenience wrapper that flattens both argument types.
@@ -144,6 +151,26 @@ impl IngestionService {
         &self.ingestion_client
     }
 
+    pub async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        let streaming_client = self.streaming_client.clone();
+        let ingestion_client = self.ingestion_client.clone();
+        let future = move || {
+            let mut streaming_client = streaming_client.clone();
+            let ingestion_client = ingestion_client.clone();
+            async move {
+                latest_checkpoint_number(&mut streaming_client, &ingestion_client)
+                    .await
+                    .map_err(|e| backoff::Error::transient(Error::LatestCheckpointError(e)))
+            }
+        };
+        Ok(retry_transient_with_slow_monitor(
+            OPERATION,
+            future,
+            &self.metrics.ingested_latest_checkpoint_latency,
+        )
+        .await?)
+    }
+
     /// Access to the ingestion metrics.
     pub(crate) fn metrics(&self) -> &Arc<IngestionMetrics> {
         &self.metrics
@@ -242,6 +269,42 @@ impl Default for IngestionConfig {
     }
 }
 
+/// Try to get the latest checkpoint number from the streaming client first, falling back to
+/// the ingestion client if the streaming client is unavailable or fails.
+async fn latest_checkpoint_number(
+    streaming_client: &mut Option<impl CheckpointStreamingClient>,
+    ingestion_client: &IngestionClient,
+) -> anyhow::Result<u64> {
+    if let Some(streaming_client) = streaming_client.as_mut() {
+        match streaming_client.connect().await {
+            Ok(CheckpointStream { mut stream, .. }) => match stream.peek().await {
+                Some(Ok(checkpoint)) => {
+                    return Ok(checkpoint.summary.sequence_number);
+                }
+                Some(Err(e)) => {
+                    warn!(
+                        operation = OPERATION,
+                        "Failed to peek checkpoint stream: {e}"
+                    );
+                }
+                None => {
+                    warn!(
+                        operation = OPERATION,
+                        "Checkpoint stream ended unexpectedly"
+                    );
+                }
+            },
+            Err(e) => {
+                warn!(
+                    operation = OPERATION,
+                    "Failed to connect streaming client: {e}"
+                );
+            }
+        }
+    }
+    ingestion_client.latest_checkpoint_number().await
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
@@ -252,12 +315,39 @@ mod tests {
     use wiremock::MockServer;
     use wiremock::Request;
 
+    use crate::ingestion::ingestion_client::CheckpointResult;
+    use crate::ingestion::ingestion_client::IngestionClientTrait;
     use crate::ingestion::store_client::tests::respond_with;
     use crate::ingestion::store_client::tests::respond_with_chain_id;
     use crate::ingestion::store_client::tests::status;
+    use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
+    use crate::metrics::IngestionMetrics;
+    use crate::types::digests::ChainIdentifier;
 
     use super::*;
+
+    const FALLBACK: u64 = 99;
+
+    struct MockLatestCheckpoint(u64);
+
+    #[async_trait::async_trait]
+    impl IngestionClientTrait for MockLatestCheckpoint {
+        async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+            unimplemented!()
+        }
+        async fn checkpoint(&self, _: u64) -> CheckpointResult {
+            unimplemented!()
+        }
+        async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+            Ok(self.0)
+        }
+    }
+
+    fn mock_ingestion_client(latest_checkpoint: u64) -> IngestionClient {
+        let metrics = IngestionMetrics::new(None, &Registry::new());
+        IngestionClient::new_impl(Arc::new(MockLatestCheckpoint(latest_checkpoint)), metrics)
+    }
 
     async fn test_ingestion(
         uri: String,
@@ -456,5 +546,49 @@ mod tests {
 
         let seqs = subscriber.await.unwrap();
         assert_eq!(seqs, vec![0, 1, 2, 3, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn latest_checkpoint_number_no_streaming_client() {
+        let client = mock_ingestion_client(FALLBACK);
+        let mut streaming: Option<MockStreamingClient> = None;
+        let result = latest_checkpoint_number(&mut streaming, &client).await;
+        assert_eq!(result.unwrap(), FALLBACK);
+    }
+
+    #[tokio::test]
+    async fn latest_checkpoint_number_from_stream() {
+        let client = mock_ingestion_client(FALLBACK);
+        let mut streaming = Some(MockStreamingClient::new([42], None));
+        let result = latest_checkpoint_number(&mut streaming, &client).await;
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn latest_checkpoint_number_stream_error_falls_back() {
+        let client = mock_ingestion_client(FALLBACK);
+        let mut mock = MockStreamingClient::new(std::iter::empty::<u64>(), None);
+        mock.insert_error();
+        let mut streaming = Some(mock);
+        let result = latest_checkpoint_number(&mut streaming, &client).await;
+        assert_eq!(result.unwrap(), FALLBACK);
+    }
+
+    #[tokio::test]
+    async fn latest_checkpoint_number_empty_stream_falls_back() {
+        let client = mock_ingestion_client(FALLBACK);
+        let mut streaming = Some(MockStreamingClient::new(std::iter::empty::<u64>(), None));
+        let result = latest_checkpoint_number(&mut streaming, &client).await;
+        assert_eq!(result.unwrap(), FALLBACK);
+    }
+
+    #[tokio::test]
+    async fn latest_checkpoint_number_connection_failure_falls_back() {
+        let client = mock_ingestion_client(FALLBACK);
+        let mut streaming = Some(
+            MockStreamingClient::new(std::iter::empty::<u64>(), None).fail_connection_times(1),
+        );
+        let result = latest_checkpoint_number(&mut streaming, &client).await;
+        assert_eq!(result.unwrap(), FALLBACK);
     }
 }

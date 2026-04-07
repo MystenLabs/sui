@@ -402,7 +402,7 @@ impl IngestionClient {
 }
 
 /// Keep backing off until we are waiting for the max interval, but don't give up.
-fn transient_backoff() -> ExponentialBackoff {
+pub(crate) fn transient_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
         max_interval: MAX_TRANSIENT_RETRY_INTERVAL,
         max_elapsed_time: None,
@@ -412,7 +412,7 @@ fn transient_backoff() -> ExponentialBackoff {
 
 /// Retry a fallible async operation with exponential backoff and slow-operation monitoring.
 /// Records the total time (including retries) in the provided latency histogram.
-async fn retry_transient_with_slow_monitor<F, Fut, T>(
+pub(crate) async fn retry_transient_with_slow_monitor<F, Fut, T>(
     operation: &str,
     make_future: F,
     latency: &Histogram,

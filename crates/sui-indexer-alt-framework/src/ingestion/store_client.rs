@@ -67,7 +67,8 @@ impl StoreIngestionClient {
     }
 
     async fn checkpoint_bytes(&self, checkpoint: u64) -> object_store::Result<Bytes> {
-        self.bytes(checkpoint_path(checkpoint)).await
+        self.bytes(ObjectPath::from(format!("{checkpoint}.binpb.zst")))
+            .await
     }
 
     async fn bytes(&self, path: ObjectPath) -> object_store::Result<Bytes> {
@@ -78,17 +79,13 @@ impl StoreIngestionClient {
     async fn watermark_checkpoint_hi_inclusive(&self) -> anyhow::Result<Option<u64>> {
         let bytes = match self.bytes(ObjectPath::from(WATERMARK_PATH)).await {
             Ok(bytes) => bytes,
-            Err(ObjectStoreError::NotFound { .. }) => return Ok(None),
+            Err(Error::NotFound { .. }) => return Ok(None),
             Err(e) => return Err(e).context(format!("error reading {WATERMARK_PATH}")),
         };
         let watermark: ObjectStoreWatermark =
             serde_json::from_slice(&bytes).context(format!("error parsing {WATERMARK_PATH}"))?;
         Ok(Some(watermark.checkpoint_hi_inclusive))
     }
-}
-
-fn checkpoint_path(checkpoint: u64) -> ObjectPath {
-    ObjectPath::from(format!("{checkpoint}.binpb.zst"))
 }
 
 #[async_trait::async_trait]
@@ -209,7 +206,7 @@ pub(crate) mod tests {
             .build()
             .map(Arc::new)
             .unwrap();
-        let client = StoreIngestionClient::new(store);
+        let client = StoreIngestionClient::new(store, None);
 
         IngestionClientTrait::latest_checkpoint_number(&client).await
     }

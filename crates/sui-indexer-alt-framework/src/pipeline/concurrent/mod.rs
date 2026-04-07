@@ -554,22 +554,32 @@ mod tests {
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
-        // Wait for pruning to occur (5s + delay + processing time)
-        tokio::time::sleep(Duration::from_millis(5_200)).await;
+        // Wait for pruning to occur. The pruner and reader_watermark tasks both run on
+        // the same interval, so poll until the pruner has caught up rather instead of using a
+        // fixed sleep.
+        let pruning_deadline = Duration::from_secs(15);
+        let start = tokio::time::Instant::now();
+        loop {
+            let pruned = {
+                let data = setup.store.data.get(DataPipeline::NAME).unwrap();
+                !data.contains_key(&0) && !data.contains_key(&1) && !data.contains_key(&2)
+            };
+            if pruned {
+                break;
+            }
+            assert!(
+                start.elapsed() < pruning_deadline,
+                "Timed out waiting for pruning to occur"
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
 
-        // Verify pruning has occurred
+        // Verify recent checkpoints are still available
         {
             let data = setup.store.data.get(DataPipeline::NAME).unwrap();
-
-            // Verify recent checkpoints are still available
             assert!(data.contains_key(&3));
             assert!(data.contains_key(&4));
             assert!(data.contains_key(&5));
-
-            // Verify old checkpoints are pruned
-            assert!(!data.contains_key(&0));
-            assert!(!data.contains_key(&1));
-            assert!(!data.contains_key(&2));
         };
     }
 
