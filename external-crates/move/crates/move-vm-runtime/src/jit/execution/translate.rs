@@ -1194,13 +1194,21 @@ fn code(
 
     // Generate the final bytecode with jump table pointers
     let jump_table_ptrs = final_jump_tables.to_ptrs();
-    let final_bytecode = context.package_context.package_arena.alloc_vec(
-        fn_bytecode
-            .into_iter()
-            .map(|bc| bytecode(context, &jump_table_ptrs, bc))
-            .collect::<PartialVMResult<Vec<Bytecode>>>()?
-            .into_iter(),
-    )?;
+    let mut translated: Vec<Bytecode> = fn_bytecode
+        .into_iter()
+        .map(|bc| bytecode(context, &jump_table_ptrs, bc))
+        .collect::<PartialVMResult<Vec<Bytecode>>>()?;
+
+    // Apply inlining optimization for direct calls
+    #[cfg(not(feature = "no-inline-optimization"))]
+    {
+        translated = inline_direct_calls(context, translated)?;
+    }
+
+    let final_bytecode = context
+        .package_context
+        .package_arena
+        .alloc_vec(translated.into_iter())?;
 
     // Return the final bytecode and jump tables
     Ok((final_bytecode, final_jump_tables))
@@ -1210,6 +1218,288 @@ fn jump_table(table: &FF::VariantJumpTable) -> Vec<FF::CodeOffset> {
     match &table.jump_table {
         FF::JumpTableInner::Full(items) => items.clone(),
     }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Direct Call Inlining
+// -------------------------------------------------------------------------------------------------
+
+/// Determines if a function is a candidate for inlining.
+/// A function is inlineable if:
+/// 1. It is not native
+/// 2. It has no type parameters (non-generic)
+/// 3. Its body is small enough (configurable threshold)
+/// 4. It does not contain any calls (leaf function)
+/// 5. It has no parameters (to avoid complex local variable remapping)
+/// 6. It has no local variables (to avoid complex local variable remapping)
+fn is_inlineable(func: &Function) -> bool {
+    // Native functions cannot be inlined
+    if func.def_is_native {
+        return false;
+    }
+
+    // Generic functions are not supported yet
+    if !func.type_parameters.is_empty() {
+        return false;
+    }
+
+    // Don't inline functions with parameters until locals expansion is implemented.
+    if func.arg_count() > 0 {
+        return false;
+    }
+
+    // Don't inline functions with local variables since we don't remap locals.
+    if func.local_count() > func.arg_count() {
+        return false;
+    }
+
+    let code = func.code();
+
+    // Empty functions are not worth inlining
+    if code.is_empty() {
+        return false;
+    }
+
+    // Size threshold: only inline small functions (configurable)
+    const MAX_INLINE_SIZE: usize = 20;
+    if code.len() > MAX_INLINE_SIZE {
+        return false;
+    }
+
+    // Check if the function is a leaf (no calls)
+    for bc in code.iter() {
+        match bc {
+            Bytecode::DirectCall(_) | Bytecode::VirtualCall(_) | Bytecode::CallGeneric(_) => {
+                return false;
+            }
+            _ => {}
+        }
+    }
+
+    true
+}
+
+/// Inlines a direct call by substituting the callee's bytecode.
+/// Currently only supports callees with no parameters and no local variables.
+/// Handles the Ret instruction by converting it to a Nop (final) or Branch (early return).
+/// Adjusts branch targets within the inlined code to be absolute offsets.
+fn inline_callee(
+    context: &FunctionContext,
+    callee: &Function,
+    inline_start_offset: u16,
+) -> PartialVMResult<Vec<Bytecode>> {
+    let callee_code = callee.code();
+    let callee_body_len = callee_code.len();
+
+    let mut inlined = Vec::with_capacity(callee_body_len);
+
+    for (idx, bc) in callee_code.iter().enumerate() {
+        let new_bc = match bc {
+            // Adjust branch targets to absolute offsets within the caller
+            Bytecode::BrTrue(target) => Bytecode::BrTrue(inline_start_offset + *target),
+            Bytecode::BrFalse(target) => Bytecode::BrFalse(inline_start_offset + *target),
+            Bytecode::Branch(target) => Bytecode::Branch(inline_start_offset + *target),
+
+            // Return becomes a Nop (final) or Branch to end (early return)
+            Bytecode::Ret => {
+                if idx == callee_body_len - 1 {
+                    Bytecode::Nop
+                } else {
+                    Bytecode::Branch(inline_start_offset + callee_body_len as u16)
+                }
+            }
+
+            // Clone other bytecodes (they don't reference locals or branches)
+            Bytecode::Pop => Bytecode::Pop,
+            Bytecode::LdU8(n) => Bytecode::LdU8(*n),
+            Bytecode::LdU16(n) => Bytecode::LdU16(*n),
+            Bytecode::LdU32(n) => Bytecode::LdU32(*n),
+            Bytecode::LdU64(n) => Bytecode::LdU64(*n),
+            Bytecode::LdU128(n) => Bytecode::LdU128(
+                context
+                    .package_context
+                    .arena_box(**n)
+                    .expect("arena allocation"),
+            ),
+            Bytecode::LdU256(n) => Bytecode::LdU256(
+                context
+                    .package_context
+                    .arena_box(**n)
+                    .expect("arena allocation"),
+            ),
+            Bytecode::LdTrue => Bytecode::LdTrue,
+            Bytecode::LdFalse => Bytecode::LdFalse,
+            Bytecode::LdConst(c) => Bytecode::LdConst(c.ptr_clone()),
+            Bytecode::CastU8 => Bytecode::CastU8,
+            Bytecode::CastU16 => Bytecode::CastU16,
+            Bytecode::CastU32 => Bytecode::CastU32,
+            Bytecode::CastU64 => Bytecode::CastU64,
+            Bytecode::CastU128 => Bytecode::CastU128,
+            Bytecode::CastU256 => Bytecode::CastU256,
+            Bytecode::Add => Bytecode::Add,
+            Bytecode::Sub => Bytecode::Sub,
+            Bytecode::Mul => Bytecode::Mul,
+            Bytecode::Div => Bytecode::Div,
+            Bytecode::Mod => Bytecode::Mod,
+            Bytecode::BitOr => Bytecode::BitOr,
+            Bytecode::BitAnd => Bytecode::BitAnd,
+            Bytecode::Xor => Bytecode::Xor,
+            Bytecode::Shl => Bytecode::Shl,
+            Bytecode::Shr => Bytecode::Shr,
+            Bytecode::Or => Bytecode::Or,
+            Bytecode::And => Bytecode::And,
+            Bytecode::Not => Bytecode::Not,
+            Bytecode::Eq => Bytecode::Eq,
+            Bytecode::Neq => Bytecode::Neq,
+            Bytecode::Lt => Bytecode::Lt,
+            Bytecode::Gt => Bytecode::Gt,
+            Bytecode::Le => Bytecode::Le,
+            Bytecode::Ge => Bytecode::Ge,
+            Bytecode::Abort => Bytecode::Abort,
+            Bytecode::Nop => Bytecode::Nop,
+            Bytecode::ReadRef => Bytecode::ReadRef,
+            Bytecode::WriteRef => Bytecode::WriteRef,
+            Bytecode::FreezeRef => Bytecode::FreezeRef,
+            Bytecode::Pack(s) => Bytecode::Pack(s.ptr_clone()),
+            Bytecode::PackGeneric(s) => Bytecode::PackGeneric(s.ptr_clone()),
+            Bytecode::Unpack(s) => Bytecode::Unpack(s.ptr_clone()),
+            Bytecode::UnpackGeneric(s) => Bytecode::UnpackGeneric(s.ptr_clone()),
+            Bytecode::MutBorrowField(f) => Bytecode::MutBorrowField(f.ptr_clone()),
+            Bytecode::MutBorrowFieldGeneric(f) => Bytecode::MutBorrowFieldGeneric(f.ptr_clone()),
+            Bytecode::ImmBorrowField(f) => Bytecode::ImmBorrowField(f.ptr_clone()),
+            Bytecode::ImmBorrowFieldGeneric(f) => Bytecode::ImmBorrowFieldGeneric(f.ptr_clone()),
+            Bytecode::VecPack(t, n) => Bytecode::VecPack(t.ptr_clone(), *n),
+            Bytecode::VecLen(t) => Bytecode::VecLen(t.ptr_clone()),
+            Bytecode::VecImmBorrow(t) => Bytecode::VecImmBorrow(t.ptr_clone()),
+            Bytecode::VecMutBorrow(t) => Bytecode::VecMutBorrow(t.ptr_clone()),
+            Bytecode::VecPushBack(t) => Bytecode::VecPushBack(t.ptr_clone()),
+            Bytecode::VecPopBack(t) => Bytecode::VecPopBack(t.ptr_clone()),
+            Bytecode::VecUnpack(t, n) => Bytecode::VecUnpack(t.ptr_clone(), *n),
+            Bytecode::VecSwap(t) => Bytecode::VecSwap(t.ptr_clone()),
+            Bytecode::PackVariant(v) => Bytecode::PackVariant(v.ptr_clone()),
+            Bytecode::PackVariantGeneric(v) => Bytecode::PackVariantGeneric(v.ptr_clone()),
+            Bytecode::UnpackVariant(v) => Bytecode::UnpackVariant(v.ptr_clone()),
+            Bytecode::UnpackVariantImmRef(v) => Bytecode::UnpackVariantImmRef(v.ptr_clone()),
+            Bytecode::UnpackVariantMutRef(v) => Bytecode::UnpackVariantMutRef(v.ptr_clone()),
+            Bytecode::UnpackVariantGeneric(v) => Bytecode::UnpackVariantGeneric(v.ptr_clone()),
+            Bytecode::UnpackVariantGenericImmRef(v) => {
+                Bytecode::UnpackVariantGenericImmRef(v.ptr_clone())
+            }
+            Bytecode::UnpackVariantGenericMutRef(v) => {
+                Bytecode::UnpackVariantGenericMutRef(v.ptr_clone())
+            }
+            Bytecode::VariantSwitch(t) => Bytecode::VariantSwitch(t.ptr_clone()),
+
+            // Local-referencing bytecodes should not appear in inlineable functions
+            // (is_inlineable rejects functions with locals)
+            Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_) => {
+                unreachable!("Local-referencing bytecodes should not be in inlineable functions")
+            }
+
+            // Calls should not appear in inlineable functions (checked in is_inlineable)
+            Bytecode::DirectCall(_) | Bytecode::VirtualCall(_) | Bytecode::CallGeneric(_) => {
+                unreachable!("Calls should not be in inlineable functions")
+            }
+        };
+        inlined.push(new_bc);
+    }
+
+    Ok(inlined)
+}
+
+/// Performs the inlining optimization on a sequence of bytecodes.
+/// This replaces DirectCall instructions with the inlined callee body where possible.
+fn inline_direct_calls(
+    context: &FunctionContext,
+    bytecode: Vec<Bytecode>,
+) -> PartialVMResult<Vec<Bytecode>> {
+    // First pass: identify which calls can be inlined and calculate new offsets
+    let mut inline_info: Vec<(usize, VMPointer<Function>, usize)> = Vec::new(); // (original_idx, callee, inlined_size)
+    let mut total_expansion = 0usize;
+
+    for (idx, bc) in bytecode.iter().enumerate() {
+        if let Bytecode::DirectCall(func_ptr) = bc {
+            let func = func_ptr.to_ref();
+            if is_inlineable(func) {
+                let total_inlined_size = func.code().len();
+                inline_info.push((idx, func_ptr.ptr_clone(), total_inlined_size));
+                // Each inlined function replaces 1 instruction with total_inlined_size instructions
+                total_expansion += total_inlined_size.saturating_sub(1);
+            }
+        }
+    }
+
+    // If nothing to inline, return original
+    if inline_info.is_empty() {
+        return Ok(bytecode);
+    }
+
+    // Second pass: build the new bytecode with inlining
+    let mut result = Vec::with_capacity(bytecode.len() + total_expansion);
+    let mut inline_idx = 0;
+
+    for (original_idx, bc) in bytecode.into_iter().enumerate() {
+        if inline_idx < inline_info.len() && inline_info[inline_idx].0 == original_idx {
+            // This is a call site to inline
+            let (_idx, func_ptr, _total_inlined_size) = &inline_info[inline_idx];
+            let func = func_ptr.to_ref();
+
+            // Calculate the offset where inlined code starts
+            let inline_start_offset = result.len() as u16;
+
+            // Inline the callee's body
+            let inlined = inline_callee(context, func, inline_start_offset)?;
+            result.extend(inlined);
+
+            inline_idx += 1;
+        } else {
+            // Adjust branch targets if needed
+            let adjusted_bc =
+                adjust_branch_targets(context, bc, original_idx, &inline_info)?;
+            result.push(adjusted_bc);
+        }
+    }
+
+    Ok(result)
+}
+
+/// Adjusts branch targets in non-inlined bytecode to account for code expansion.
+fn adjust_branch_targets(
+    context: &FunctionContext,
+    bc: Bytecode,
+    _current_idx: usize,
+    inline_info: &[(usize, VMPointer<Function>, usize)],
+) -> PartialVMResult<Bytecode> {
+    // Calculate how much the target needs to be adjusted based on inlinings before it
+    fn calc_adjustment(target: u16, inline_info: &[(usize, VMPointer<Function>, usize)]) -> u16 {
+        let mut adjustment = 0i32;
+        for (idx, _func, size) in inline_info {
+            if (*idx as u16) < target {
+                adjustment += (*size as i32) - 1;
+            }
+        }
+        ((target as i32) + adjustment) as u16
+    }
+
+    let adjusted = match bc {
+        Bytecode::BrTrue(target) => Bytecode::BrTrue(calc_adjustment(target, inline_info)),
+        Bytecode::BrFalse(target) => Bytecode::BrFalse(calc_adjustment(target, inline_info)),
+        Bytecode::Branch(target) => Bytecode::Branch(calc_adjustment(target, inline_info)),
+        Bytecode::VariantSwitch(jt) => {
+            let adjusted_targets = jt.iter().map(|t| calc_adjustment(*t, inline_info));
+            let new_jt = context
+                .package_context
+                .arena_vec(adjusted_targets)?;
+            let jt_ptr = context.package_context.arena_box(new_jt)?;
+            Bytecode::VariantSwitch(VMPointer::from_ref(&*jt_ptr))
+        }
+        other => other,
+    };
+    Ok(adjusted)
 }
 
 pub(crate) fn flatten_and_renumber_input_bytcode_and_jumptables(
