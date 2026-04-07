@@ -58,7 +58,7 @@ scripts/simtest/cargo-simtest simtest \
   -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
 
 # Clean up temp files from the e2e phase to prevent /tmp (tmpfs) from filling up.
-rm -rf /tmp/tmp.* /tmp/sui-* 2>/dev/null
+rm -rf /tmp/tmp.* /tmp/.tmp* /tmp/sui-* 2>/dev/null
 
 echo ""
 echo "============================================="
@@ -89,7 +89,7 @@ done
 wait
 
 # Clean up temp files from the stress phase before running determinism tests.
-rm -rf /tmp/tmp.* /tmp/sui-* 2>/dev/null
+rm -rf /tmp/tmp.* /tmp/.tmp* /tmp/sui-* 2>/dev/null
 
 echo ""
 echo "==========================="
