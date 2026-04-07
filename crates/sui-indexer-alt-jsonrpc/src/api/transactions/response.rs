@@ -263,16 +263,14 @@ async fn object_changes(
         let input = fetch_object(object_id, input_version, input_digest)?;
         let output = fetch_object(object_id, output_version, output_digest)?;
 
-        if let Some(sui_change) = to_sui_object_change(
+        changes.extend(to_sui_object_change(
             tx_data.sender(),
             object_id,
             id_operation,
             input,
             output,
             effects.lamport_version(),
-        )? {
-            changes.push(sui_change);
-        }
+        )?);
     }
 
     Ok(changes)

@@ -3,16 +3,13 @@
 
 mod response;
 
+use anyhow::Context as _;
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::types::ErrorObject;
-use jsonrpsee::types::error::INTERNAL_ERROR_CODE;
-use jsonrpsee::types::error::INVALID_PARAMS_CODE;
 use prost_types::FieldMask;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_json_rpc_types::DryRunTransactionBlockResponse;
-use sui_json_rpc_types::SuiTransactionBlockData;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_open_rpc::Module;
@@ -22,11 +19,11 @@ use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
-use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 
 use crate::api::rpc_module::RpcModule;
 use crate::context::Context;
+use crate::error::RpcError;
 use crate::error::invalid_params;
 
 #[open_rpc(namespace = "sui", tag = "Write API")]
@@ -66,6 +63,15 @@ pub(crate) struct Write {
 pub enum Error {
     #[error("WaitForLocalExecution mode is deprecated")]
     DeprecatedWaitForLocalExecution,
+
+    #[error("Invalid transaction bytes: {0}")]
+    InvalidTransactionBytes(String),
+
+    #[error("Invalid signature: {0}")]
+    InvalidSignature(String),
+
+    #[error("Transaction execution failed: {0}")]
+    ExecutionFailed(String),
 }
 
 impl Write {
@@ -83,116 +89,70 @@ impl WriteApiServer for Write {
         options: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        if let Some(ExecuteTransactionRequestType::WaitForLocalExecution) = request_type {
-            return Err(invalid_params(Error::DeprecatedWaitForLocalExecution).into());
-        }
-
-        let options = options.unwrap_or_default();
-        let tx_data: TransactionData =
-            bcs::from_bytes(&tx_bytes.to_vec().map_err(invalid_params_err)?).map_err(|e| {
-                invalid_params_err(anyhow::anyhow!(
-                    "Failed to deserialize TransactionData: {e}"
-                ))
-            })?;
-        let tx_digest = tx_data.digest();
-
-        let parsed_sigs = parse_signatures(&signatures)?;
-
-        let read_mask = build_execute_read_mask(&options);
-
-        let grpc_response = self
-            .client
-            .execute_transaction(tx_data.clone(), parsed_sigs.clone(), read_mask)
-            .await
-            .map_err(grpc_error_to_error_object)?;
-
-        let executed_tx = grpc_response
-            .transaction
-            .as_ref()
-            .ok_or_else(|| internal_err("Missing transaction in gRPC response"))?;
-
-        let mut result = SuiTransactionBlockResponse::new(tx_digest);
-        result.checkpoint = executed_tx.checkpoint;
-        result.timestamp_ms = executed_tx
-            .timestamp
-            .and_then(|ts| sui_rpc::proto::proto_to_timestamp_ms(ts).ok());
-
-        if options.show_input {
-            result.transaction = Some(
-                response::input(&self.context, tx_data.clone(), parsed_sigs.clone())
-                    .await
-                    .map_err(|e| {
-                        internal_err(format!("Failed to convert transaction data: {e}"))
-                    })?,
-            );
-        }
-
-        if options.show_raw_input {
-            result.raw_transaction = response::raw_input(&tx_data)
-                .map_err(|e| internal_err(format!("Failed to serialize transaction: {e}")))?;
-        }
-
-        if options.show_raw_effects {
-            result.raw_effects = response::raw_effects(executed_tx)
-                .map_err(|e| internal_err(format!("Failed to extract raw effects: {e}")))?;
-        }
-
-        if options.show_effects || options.show_object_changes {
-            let effects = response::deserialize_effects(executed_tx)
-                .map_err(|e| internal_err(format!("Failed to deserialize effects: {e}")))?;
-
-            if options.show_effects {
-                result.effects = Some(
-                    effects
-                        .clone()
-                        .try_into()
-                        .map_err(|e| internal_err(format!("Failed to convert effects: {e}")))?,
-                );
-            }
-
-            if options.show_object_changes {
-                result.object_changes = Some(
-                    response::object_changes(tx_data.sender(), &effects, executed_tx).map_err(
-                        |e| internal_err(format!("Failed to build object changes: {e}")),
-                    )?,
-                );
-            }
-        }
-
-        if options.show_events {
-            result.events = Some(
-                response::events(&self.context, tx_digest, executed_tx)
-                    .await
-                    .map_err(|e| internal_err(format!("Failed to build events: {e}")))?,
-            );
-        }
-
-        if options.show_balance_changes {
-            result.balance_changes = Some(
-                response::balance_changes(executed_tx)
-                    .map_err(|e| internal_err(format!("Failed to build balance changes: {e}")))?,
-            );
-        }
-
-        Ok(result)
+        Ok(self
+            .execute_transaction_block_impl(tx_bytes, signatures, options, request_type)
+            .await?)
     }
 
     async fn dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
     ) -> RpcResult<DryRunTransactionBlockResponse> {
-        let raw_tx_bytes = tx_bytes.to_vec().map_err(invalid_params_err)?;
-        let tx_data: TransactionData = bcs::from_bytes(&raw_tx_bytes).map_err(|e| {
-            invalid_params_err(anyhow::anyhow!(
-                "Failed to deserialize TransactionData: {e}"
-            ))
-        })?;
+        Ok(self.dry_run_transaction_block_impl(tx_bytes).await?)
+    }
+}
+
+impl RpcModule for Write {
+    fn schema(&self) -> Module {
+        WriteApiOpenRpc::module_doc()
+    }
+
+    fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
+        self.into_rpc()
+    }
+}
+
+impl Write {
+    async fn execute_transaction_block_impl(
+        &self,
+        tx_bytes: Base64,
+        signatures: Vec<Base64>,
+        options: Option<SuiTransactionBlockResponseOptions>,
+        request_type: Option<ExecuteTransactionRequestType>,
+    ) -> Result<SuiTransactionBlockResponse, RpcError<Error>> {
+        if let Some(ExecuteTransactionRequestType::WaitForLocalExecution) = request_type {
+            return Err(invalid_params(Error::DeprecatedWaitForLocalExecution));
+        }
+
+        let options = options.unwrap_or_default();
+        let tx_data = parse_transaction_data(&tx_bytes)?;
+        let parsed_sigs = parse_signatures_impl(&signatures)?;
+        let read_mask = build_execute_read_mask(&options);
+
+        let grpc_response = self
+            .client
+            .execute_transaction(tx_data.clone(), parsed_sigs.clone(), read_mask)
+            .await
+            .map_err(grpc_error_to_rpc_error)?;
+
+        let executed_tx = grpc_response
+            .transaction
+            .as_ref()
+            .context("Missing transaction in gRPC response")?;
+
+        response::transaction(&self.context, tx_data, parsed_sigs, executed_tx, &options).await
+    }
+
+    async fn dry_run_transaction_block_impl(
+        &self,
+        tx_bytes: Base64,
+    ) -> Result<DryRunTransactionBlockResponse, RpcError<Error>> {
+        let tx_data = parse_transaction_data(&tx_bytes)?;
 
         let mut proto_tx = proto::Transaction::default();
-        proto_tx.bcs =
-            Some(proto::Bcs::serialize(&tx_data).map_err(|e| {
-                internal_err(format!("Failed to serialize transaction for gRPC: {e}"))
-            })?);
+        proto_tx.bcs = Some(
+            proto::Bcs::serialize(&tx_data).context("Failed to serialize transaction for gRPC")?,
+        );
 
         let read_mask = FieldMask::from_paths([
             "transaction.effects.bcs",
@@ -210,71 +170,49 @@ impl WriteApiServer for Write {
             .client
             .simulate_transaction(proto_tx, true, false, read_mask)
             .await
-            .map_err(grpc_error_to_error_object)?;
+            .map_err(grpc_error_to_rpc_error)?;
 
         let executed_tx = grpc_response
             .transaction
             .as_ref()
-            .ok_or_else(|| internal_err("Missing transaction in dry run gRPC response"))?;
+            .context("Missing transaction in dry run gRPC response")?;
 
-        let effects = response::deserialize_effects(executed_tx)
-            .map_err(|e| internal_err(format!("Failed to deserialize effects: {e}")))?;
-
-        let sui_effects = effects
-            .clone()
-            .try_into()
-            .map_err(|e| internal_err(format!("Failed to convert effects: {e}")))?;
-
-        let tx_digest = tx_data.digest();
-        let events = response::events(&self.context, tx_digest, executed_tx)
-            .await
-            .map_err(|e| internal_err(format!("Failed to build events: {e}")))?;
-
-        let object_changes = response::object_changes(tx_data.sender(), &effects, executed_tx)
-            .map_err(|e| internal_err(format!("Failed to build object changes: {e}")))?;
-
-        let balance_changes = response::balance_changes(executed_tx)
-            .map_err(|e| internal_err(format!("Failed to build balance changes: {e}")))?;
-
-        let input = SuiTransactionBlockData::try_from_with_package_resolver(
+        response::dry_run(
+            &self.context,
             tx_data,
-            self.context.package_resolver(),
+            executed_tx,
+            grpc_response.suggested_gas_price,
         )
         .await
-        .map_err(|e| internal_err(format!("Failed to convert transaction data: {e}")))?;
-
-        Ok(DryRunTransactionBlockResponse {
-            effects: sui_effects,
-            events,
-            object_changes,
-            balance_changes,
-            input,
-            execution_error_source: None,
-            suggested_gas_price: grpc_response.suggested_gas_price,
-        })
     }
 }
 
-impl RpcModule for Write {
-    fn schema(&self) -> Module {
-        WriteApiOpenRpc::module_doc()
-    }
-
-    fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
-        self.into_rpc()
-    }
+fn parse_transaction_data(tx_bytes: &Base64) -> Result<TransactionData, RpcError<Error>> {
+    let raw_tx_bytes = tx_bytes
+        .to_vec()
+        .map_err(|e| invalid_params(Error::InvalidTransactionBytes(e.to_string())))?;
+    bcs::from_bytes(&raw_tx_bytes).map_err(|e| {
+        invalid_params(Error::InvalidTransactionBytes(format!(
+            "Failed to deserialize TransactionData: {e}"
+        )))
+    })
 }
 
-fn parse_signatures(signatures: &[Base64]) -> RpcResult<Vec<GenericSignature>> {
+fn parse_signatures_impl(signatures: &[Base64]) -> Result<Vec<GenericSignature>, RpcError<Error>> {
     signatures
         .iter()
         .enumerate()
         .map(|(i, sig)| {
             let bytes = sig.to_vec().map_err(|e| {
-                invalid_params_err(anyhow::anyhow!("Invalid base64 in signature {i}: {e}"))
+                invalid_params(Error::InvalidSignature(format!(
+                    "Invalid base64 in signature {i}: {e}"
+                )))
             })?;
-            GenericSignature::from_bytes(&bytes)
-                .map_err(|e| invalid_params_err(anyhow::anyhow!("Invalid signature {i}: {e}")))
+            GenericSignature::from_bytes(&bytes).map_err(|e| {
+                invalid_params(Error::InvalidSignature(format!(
+                    "Invalid signature {i}: {e}"
+                )))
+            })
         })
         .collect()
 }
@@ -302,9 +240,9 @@ fn build_execute_read_mask(options: &SuiTransactionBlockResponseOptions) -> Fiel
     FieldMask::from_paths(paths)
 }
 
-fn grpc_error_to_error_object(
+fn grpc_error_to_rpc_error(
     error: sui_indexer_alt_reader::fullnode_client::Error,
-) -> ErrorObject<'static> {
+) -> RpcError<Error> {
     use sui_indexer_alt_reader::fullnode_client::Error;
     match error {
         Error::GrpcExecutionError(status)
@@ -313,23 +251,16 @@ fn grpc_error_to_error_object(
                 tonic::Code::InvalidArgument | tonic::Code::NotFound
             ) =>
         {
-            ErrorObject::owned(
-                INVALID_PARAMS_CODE,
+            invalid_params(crate::api::write::Error::ExecutionFailed(
                 status.message().to_string(),
-                None::<()>,
-            )
+            ))
         }
-        Error::NotConfigured => {
-            ErrorObject::owned(INTERNAL_ERROR_CODE, error.to_string(), None::<()>)
-        }
-        _ => ErrorObject::owned(INTERNAL_ERROR_CODE, error.to_string(), None::<()>),
+        Error::NotConfigured => anyhow::Error::new(Error::NotConfigured)
+            .context("Fullnode client not configured for write API")
+            .into(),
+        Error::Internal(err) => err.context("Write API gRPC request failed").into(),
+        Error::GrpcExecutionError(status) => anyhow::Error::new(status)
+            .context("Write API gRPC request failed")
+            .into(),
     }
-}
-
-fn invalid_params_err(err: impl std::fmt::Display) -> ErrorObject<'static> {
-    ErrorObject::owned(INVALID_PARAMS_CODE, "Invalid params", Some(err.to_string()))
-}
-
-fn internal_err(msg: impl Into<String>) -> ErrorObject<'static> {
-    ErrorObject::owned(INTERNAL_ERROR_CODE, msg.into(), None::<()>)
 }
