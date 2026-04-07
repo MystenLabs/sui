@@ -21,7 +21,7 @@ Address balances provide a canonical balance for each coin type tied directly to
 
 Use `send_funds` to deposit directly into a recipient address balance. The recipient balance increases without creating new objects, and multiple deposits from different senders all merge into one balance.
 
-### TypeScript
+### TypeScript SDK
 
 To deposit tokens into a recipient's address balance use `tx.balance()` with `balance::send_funds` instead of creating a coin object:
 
@@ -117,7 +117,7 @@ const [coin] = tx.moveCall({
 
 To use address balance funds in a transaction, withdraw them and redeem them using `Coin<T>` or `Balance<T>`.
 
-### TypeScript
+### TypeScript SDK
 
 If you are not explicitly selecting coin objects for gas or as transaction arguments, the TypeScript SDK automatically checks both coin objects and address balances and draws from the correct sources. 
 
@@ -128,7 +128,7 @@ const tx = new Transaction();
 tx.transferObjects([tx.coin({ balance: requiredAmount })], recipient);
 ```
 
-### TypeScript: Manual withdrawals
+### TypeScript SDK: Manual withdrawals
 
 For explicit control over address balance withdrawals, use [`tx.withdrawal()`](https://sui-typescript-docs-git-mh-address-balance-docs-mysten-labs.vercel.app/sui/transactions/reference#address-balance-withdrawals). The withdrawal must be redeemed through `redeem_funds` to produce a usable `Coin<T>` or `Balance<T>`:
 
@@ -476,15 +476,15 @@ pub struct BalanceChange {
 
 ## Converting existing coins to address balances
 
-Migration is optional. The SDK automatically selects coins or address balances as needed. Contracts that accept `Coin<T>` or `Balance<T>` remain callable. The `redeem_funds` functions convert withdrawals to the expected types within the PTB.
-
-To consolidate coins into address balances using [Sui CLI](/references/cli/ptb):
+Migration is optional. To consolidate coins into address balances using [Sui CLI](/references/cli/ptb):
 
 ```bash
 sui client ptb \
     --merge-coins @<COIN_1> '[@<COIN_2>, @<COIN_3>]' \
     --move-call 0x2::coin::send_funds '<0x2::sui::SUI>' @<COIN_1> @<YOUR_ADDRESS>
 ```
+
+The TypeScript SDK automatically selects coins or address balances as needed. Contracts that accept `Coin<T>` or `Balance<T>` remain callable. The `redeem_funds` function converts withdrawals to the expected types within the PTB.
 
 Using the TypeScript SDK:
 
