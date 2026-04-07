@@ -1,0 +1,30 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription_tests.rs
+expression: item
+---
+{
+  "data": {
+    "checkpoints": {
+      "sequenceNumber": 1,
+      "digest": "DqnhktG3eDNPKRQXDHejaYBCNFAyCtSqJJDCJW7gPxPm",
+      "contentDigest": "4DAFLFUa9nURxBwemptqHzWzKDPsfRaF4TqfgNr58aAM",
+      "timestamp": "2022-01-03T02:04:56Z",
+      "networkTotalTransactions": 3,
+      "rollingGasSummary": {
+        "computationCost": 0,
+        "storageCost": 0,
+        "storageRebate": 0,
+        "nonRefundableStorageFee": 0
+      },
+      "epoch": {
+        "epochId": 0
+      },
+      "validatorSignatures": {
+        "signature": "tX4fCxBdzwFMO8rRcv/xwgc1KBtMPF5XpkXIpPvEwfCZl/lf9UhOu/MTYqbO8cGL",
+        "signersMap": [
+          0
+        ]
+      }
+    }
+  }
+}
