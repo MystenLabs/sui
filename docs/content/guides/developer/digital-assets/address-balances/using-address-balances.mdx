@@ -15,7 +15,7 @@ keywords:
   ]
 ---
 
-Address balances provide a canonical balance for each coin type tied directly to a Sui address. Funds sent through `send_funds` merge automatically into a single balance per coin type, with no object management required. For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
+Address balances provide a canonical balance for each coin type tied directly to a Sui address. Funds sent through `sui::coin::send_funds` and `sui::balance::send_funds` merge automatically into a single balance per coin type, with no object management required. For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
 
 ## Sending funds
 
@@ -303,12 +303,16 @@ console.log(`enable_address_balance_gas_payments on ${network}:`, enabled);
 
 ## Sponsored transactions
 
-Address balances simplify sponsored transactions compared to coin-based sponsorship:
+Address balances simplify sponsored transactions compared to coin-based sponsorship.
 
 - No gas coin locking risk.
 - The sponsor does not need to manage gas coin inventory.
 - The user can sign before the sponsor, enabling simpler async flows.
 - Enables permissionless public gas stations.
+
+:::caution 
+The `GasCoin` argument is still valid here, and usage should still be monitored in sponsored transactions even when using address balance gas payment.
+:::
 
 With address balances, the user signs first and the sponsor signs afterward:
 
@@ -483,6 +487,8 @@ sui client ptb \
     --merge-coins @<COIN_1> '[@<COIN_2>, @<COIN_3>]' \
     --move-call 0x2::coin::send_funds '<0x2::sui::SUI>' @<COIN_1> @<YOUR_ADDRESS>
 ```
+`
+For SUI coins, you can smash them as gas and use `--move-call 0x2::coin::send_funds --gas-coin <COIN>`.
 
 The TypeScript SDK automatically selects coins or address balances as needed. Contracts that accept `Coin<T>` or `Balance<T>` remain callable. The `redeem_funds` function converts withdrawals to the expected types within the PTB.
 
