@@ -100,9 +100,7 @@ pub(super) fn pruner<H: Handler>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
-    // Will be awaited in commit 4 so this task only starts once backwards indexing finishes.
-    // Accepted but unused in commit 3.
-    _backwards_complete: Arc<SetOnce<()>>,
+    backwards_complete: Arc<SetOnce<()>>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
@@ -110,6 +108,12 @@ pub(super) fn pruner<H: Handler>(
             info!(pipeline = H::NAME, "Skipping pruner task");
             return Ok(());
         };
+
+        // Wait for backwards indexing to complete before starting to prune. While backwards is
+        // running it is actively lowering `reader_lo`; if the pruner ran concurrently it would
+        // race with backwards and could prune data the backwards path was about to extend
+        // backwards into.
+        backwards_complete.wait().await;
 
         info!(
             pipeline = H::NAME,
@@ -761,6 +765,87 @@ mod tests {
             assert!(!data.contains_key(&2), "Checkpoint 2 should be pruned");
             assert!(!data.contains_key(&3), "Checkpoint 3 should be pruned");
             assert!(data.contains_key(&4), "Checkpoint 4 should be preserved");
+        }
+    }
+
+    /// The pruner must wait for `backwards_complete` to be set before doing any work. While the
+    /// signal is unset it is forbidden to prune anything (backwards is actively lowering
+    /// reader_lo); once set, the pruner proceeds normally.
+    #[tokio::test]
+    async fn test_pruner_gated_on_backwards_complete() {
+        let handler = Arc::new(DataPipeline);
+        let pruner_config = PrunerConfig {
+            interval_ms: 10,
+            delay_ms: 0,
+            retention: 1,
+            max_chunk_size: 100,
+            prune_concurrency: 1,
+        };
+        let metrics = IndexerMetrics::new(None, &Registry::default());
+
+        let test_data = HashMap::from([(1, vec![1, 2, 3]), (2, vec![4, 5, 6]), (3, vec![7, 8, 9])]);
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let watermark = MockWatermark {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: Some(3),
+            tx_hi: 9,
+            timestamp_ms_hi_inclusive: timestamp,
+            reader_lo: 3,
+            pruner_timestamp: timestamp,
+            pruner_hi: 0,
+            chain_id: None,
+        };
+        let store = MockStore::new()
+            .with_watermark(DataPipeline::NAME, watermark)
+            .with_data(DataPipeline::NAME, test_data);
+
+        // backwards_complete is *not* set — pruner should be blocked.
+        let backwards_complete: Arc<SetOnce<()>> = Arc::new(SetOnce::new());
+        let _pruner = pruner(
+            handler,
+            Some(pruner_config),
+            store.clone(),
+            backwards_complete.clone(),
+            metrics,
+        );
+
+        // Wait long enough that the pruner would have run several intervals if it weren't gated.
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Nothing should have been pruned yet — all three checkpoints still present.
+        {
+            let data = store.data.get(DataPipeline::NAME).unwrap();
+            assert!(data.contains_key(&1));
+            assert!(data.contains_key(&2));
+            assert!(data.contains_key(&3));
+            let watermarks = store.watermark(DataPipeline::NAME).unwrap();
+            assert_eq!(
+                watermarks.pruner_hi, 0,
+                "pruner_hi should not advance while backwards_complete is unset",
+            );
+        }
+
+        // Fire the signal — pruner should begin doing work.
+        let _ = backwards_complete.set(());
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        {
+            let data = store.data.get(DataPipeline::NAME).unwrap();
+            assert!(
+                !data.contains_key(&1),
+                "Checkpoint 1 should be pruned after backwards_complete fires",
+            );
+            assert!(
+                !data.contains_key(&2),
+                "Checkpoint 2 should be pruned after backwards_complete fires",
+            );
+            assert!(
+                data.contains_key(&3),
+                "Checkpoint 3 (== reader_lo) should remain",
+            );
         }
     }
 }

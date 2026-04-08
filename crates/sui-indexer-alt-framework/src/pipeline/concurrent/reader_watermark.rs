@@ -29,9 +29,7 @@ use crate::store::Store;
 pub(super) fn reader_watermark<H: Handler>(
     config: Option<PrunerConfig>,
     store: H::Store,
-    // Will be awaited in commit 4 so this task only starts once backwards indexing finishes.
-    // Accepted but unused in commit 3.
-    _backwards_complete: Arc<SetOnce<()>>,
+    backwards_complete: Arc<SetOnce<()>>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
@@ -39,6 +37,11 @@ pub(super) fn reader_watermark<H: Handler>(
             info!(pipeline = H::NAME, "Skipping reader watermark task");
             return Ok(());
         };
+
+        // Wait for backwards indexing to complete before raising `reader_lo` based on retention.
+        // While backwards is running it actively *lowers* `reader_lo`; this task would race and
+        // overwrite that progress.
+        backwards_complete.wait().await;
 
         let mut poll = interval(config.interval());
 
