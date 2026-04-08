@@ -73,7 +73,7 @@ The `Argument` enum has 4 variants:
 - `GasCoin`: References the SUI coin used to pay for gas. When using address balance gas payment (empty gas payment list), `GasCoin` references a synthetic coin created from the sender or sponsor address balance. **This is separate from other inputs because it has special restrictions**:
 
     - `&mut` or `&` usage anywhere.
-    - Only by value through `TransferObjects` or new `sui::coin::send_funds`
+    - Only by value through `TransferObjects` or `sui::coin::send_funds`
         - If you need an owned `Coin<SUI>` from the `GasCoin`, first use `SplitCoins`.
 
 - `NestedResult(u16, u16)`: References a result from a previous command. The first index specifies the command, the second specifies which result from that command. For example, if command 1 returns `[Value1, Value2]`, use `NestedResult(1, 0)` for `Value1` and `NestedResult(1, 1)` for `Value2`.
