@@ -443,6 +443,94 @@ fn noop_streaming_task(checkpoint_hi: u64) -> TaskGuard<u64> {
     TaskGuard::new(tokio::spawn(async move { checkpoint_hi }))
 }
 
+/// Backwards broadcaster task: fetches checkpoints in *descending* order from
+/// `start_exclusive - 1` down to `end_inclusive`, broadcasting each one to all subscribers.
+///
+/// Unlike the forward [`broadcaster`], this task:
+/// - uses only the [`IngestionClient`] (no streaming client),
+/// - has no `next_sequential_checkpoint` regulator (sequential pipelines do not subscribe),
+/// - has no `commit_hi_rx` feedback loop,
+/// - relies entirely on subscriber channel fullness (via the adaptive concurrency controller in
+///   [`try_for_each_broadcast_spawned`]) for backpressure.
+///
+/// The task shuts down when the descending range is exhausted or when any subscriber's channel
+/// is closed.
+pub(super) fn backwards_broadcaster(
+    start_exclusive: u64,
+    end_inclusive: u64,
+    config: IngestionConfig,
+    client: IngestionClient,
+    subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
+    metrics: Arc<IngestionMetrics>,
+) -> Service {
+    Service::new().spawn_aborting(async move {
+        info!(
+            start_exclusive,
+            end_inclusive, "Starting backwards broadcaster"
+        );
+
+        if subscribers.is_empty() || start_exclusive <= end_inclusive {
+            info!("Backwards broadcaster has no work to do");
+            return Ok(());
+        }
+
+        let retry_interval = config.retry_interval();
+        let report_metrics = metrics.clone();
+        let result = descending_checkpoint_stream(start_exclusive, end_inclusive)
+            .try_for_each_broadcast_spawned(
+                config.ingest_concurrency.into(),
+                |cp| {
+                    let client = client.clone();
+                    async move {
+                        let checkpoint_envelope = client.wait_for(cp, retry_interval).await?;
+                        debug!(checkpoint = cp, "Fetched backwards checkpoint");
+                        Ok(Arc::new(checkpoint_envelope))
+                    }
+                },
+                subscribers,
+                move |stats| {
+                    report_metrics
+                        .ingestion_concurrency_limit
+                        .set(stats.limit as i64);
+                    report_metrics
+                        .ingestion_concurrency_inflight
+                        .set(stats.inflight as i64);
+                },
+            )
+            .await;
+
+        match result {
+            Ok(()) => {
+                info!("Backwards broadcaster completed range");
+                Ok(())
+            }
+            Err(Break::Break) => {
+                info!("Backwards broadcaster shutting down");
+                Ok(())
+            }
+            Err(Break::Err(e)) => {
+                Err(anyhow!(e).context("Backwards broadcaster task failed"))
+            }
+        }
+    })
+}
+
+/// Stream that yields checkpoint sequence numbers in descending order, starting from
+/// `start_exclusive - 1` and ending after `end_inclusive`. No backpressure regulator: the
+/// downstream `try_for_each_broadcast_spawned` is the only thing that can stall this stream.
+fn descending_checkpoint_stream(
+    start_exclusive: u64,
+    end_inclusive: u64,
+) -> impl Stream<Item = u64> {
+    futures::stream::unfold(start_exclusive, move |cp| async move {
+        if cp <= end_inclusive {
+            return None;
+        }
+        let next = cp - 1;
+        Some((next, next))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -1541,5 +1629,91 @@ mod tests {
         assert_eq!(metrics.latest_streamed_checkpoint.get(), 14);
 
         svc.join().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn backwards_finite_range() {
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+
+        let metrics = test_ingestion_metrics();
+        let mut svc = backwards_broadcaster(
+            10, // start_exclusive
+            0,  // end_inclusive
+            test_config(),
+            mock_client(metrics.clone()),
+            vec![subscriber_tx],
+            metrics,
+        );
+
+        // Should yield checkpoints 9, 8, 7, ..., 0 (10 values), in arbitrary order due to
+        // concurrent fetching.
+        assert_eq!(
+            recv_set(&mut subscriber_rx, 10).await,
+            BTreeSet::from_iter(0..10)
+        );
+
+        svc.join().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn backwards_no_work_when_range_empty() {
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+
+        let metrics = test_ingestion_metrics();
+        let mut svc = backwards_broadcaster(
+            5, // start_exclusive
+            5, // end_inclusive (== start, so empty)
+            test_config(),
+            mock_client(metrics.clone()),
+            vec![subscriber_tx],
+            metrics,
+        );
+
+        // The broadcaster should exit immediately, dropping its sender, so the receiver sees
+        // EOF (None) rather than any checkpoint data.
+        assert!(expect_recv(&mut subscriber_rx).await.is_none());
+
+        svc.join().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn backwards_shutdown_on_sender_closed() {
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+
+        let metrics = test_ingestion_metrics();
+        let mut svc = backwards_broadcaster(
+            100, // start_exclusive
+            0,   // end_inclusive
+            test_config(),
+            mock_client(metrics.clone()),
+            vec![subscriber_tx],
+            metrics,
+        );
+
+        // Receive a few checkpoints, then drop the receiver. The broadcaster should shut down
+        // cleanly without erroring out.
+        let _ = recv_set(&mut subscriber_rx, 3).await;
+        drop(subscriber_rx);
+        svc.join().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn backwards_shutdown_via_handle() {
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
+
+        let metrics = test_ingestion_metrics();
+        let svc = backwards_broadcaster(
+            u64::MAX, // start_exclusive
+            0,        // end_inclusive (essentially unbounded for the test)
+            test_config(),
+            mock_client(metrics.clone()),
+            vec![subscriber_tx],
+            metrics,
+        );
+
+        // Drain a few checkpoints to confirm forward progress.
+        let _ = recv_set(&mut subscriber_rx, 3).await;
+
+        svc.shutdown().await.unwrap();
     }
 }

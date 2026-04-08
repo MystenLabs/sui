@@ -240,6 +240,7 @@ pub(crate) fn pipeline<H: Handler>(
     store: H::Store,
     task: Option<Task>,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
+    checkpoint_rx_backwards: mpsc::Receiver<Arc<CheckpointEnvelope>>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     info!(
@@ -332,10 +333,19 @@ pub(crate) fn pipeline<H: Handler>(
 
     let s_pruner = pruner(handler, pruner_config, store, metrics);
 
+    // STUB (commit 1): drain the backwards channel until the broadcaster closes its sender.
+    // Replaced in commit 2 with a real second processor → collector wiring.
+    let s_backwards_drain = Service::new().spawn_aborting(async move {
+        let mut checkpoint_rx_backwards = checkpoint_rx_backwards;
+        while checkpoint_rx_backwards.recv().await.is_some() {}
+        Ok(())
+    });
+
     s_processor
         .merge(s_collector)
         .merge(s_committer)
         .merge(s_commit_watermark)
+        .merge(s_backwards_drain)
         .attach(s_track_reader_lo)
         .attach(s_reader_watermark)
         .attach(s_pruner)
@@ -452,6 +462,11 @@ mod tests {
     impl TestSetup {
         async fn new(config: ConcurrentConfig, store: MockStore, next_checkpoint: u64) -> Self {
             let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
+            // The backwards channel is unused in this test; create an immediately-closed pair so
+            // the stub drain task exits cleanly.
+            let (_backwards_tx, checkpoint_rx_backwards) =
+                mpsc::channel::<Arc<CheckpointEnvelope>>(1);
+            drop(_backwards_tx);
             let metrics = IndexerMetrics::new(None, &Registry::default());
 
             let pipeline = pipeline(
@@ -461,6 +476,7 @@ mod tests {
                 store.clone(),
                 None,
                 checkpoint_rx,
+                checkpoint_rx_backwards,
                 metrics,
             );
 

@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use tracing::warn;
 
 pub use crate::config::ConcurrencyConfig as IngestConcurrencyConfig;
+use crate::ingestion::broadcaster::backwards_broadcaster;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
@@ -86,6 +87,10 @@ pub struct IngestionService {
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
+    /// Subscribers that receive checkpoints from the backwards broadcaster. Populated by
+    /// concurrent pipelines via [Self::subscribe_backwards]; sequential pipelines do not
+    /// subscribe.
+    subscribers_backwards: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
     metrics: Arc<IngestionMetrics>,
 }
 
@@ -170,6 +175,7 @@ impl IngestionService {
         });
 
         let subscribers = Vec::new();
+        let subscribers_backwards = Vec::new();
         let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
         Ok(Self {
             config,
@@ -178,6 +184,7 @@ impl IngestionService {
             commit_hi_tx,
             commit_hi_rx,
             subscribers,
+            subscribers_backwards,
             metrics,
         })
     }
@@ -223,6 +230,18 @@ impl IngestionService {
         (receiver, self.commit_hi_tx.clone())
     }
 
+    /// Add a backwards-indexing subscription. Concurrent pipelines call this in addition to
+    /// [Self::subscribe] when an indexer has a non-empty backwards range to process. Sequential
+    /// pipelines do not subscribe to backwards data.
+    ///
+    /// Returns only the receiver — there is no `commit_hi_tx` because the backwards broadcaster
+    /// has no regulator (sequential pipelines do not participate in backwards indexing).
+    pub fn subscribe_backwards(&mut self) -> mpsc::Receiver<Arc<CheckpointEnvelope>> {
+        let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
+        self.subscribers_backwards.push(sender);
+        receiver
+    }
+
     /// Start the ingestion service as a background task, consuming it in the process.
     ///
     /// Checkpoints are fetched concurrently from the `checkpoints` iterator, and pushed to
@@ -246,6 +265,7 @@ impl IngestionService {
         self,
         checkpoints: R,
         next_sequential_checkpoint: Option<u64>,
+        backwards_range: Option<(u64, u64)>,
     ) -> Result<Service>
     where
         R: std::ops::RangeBounds<u64> + Send + 'static,
@@ -257,6 +277,7 @@ impl IngestionService {
             commit_hi_tx: _,
             commit_hi_rx,
             subscribers,
+            subscribers_backwards,
             metrics,
         } = self;
 
@@ -264,7 +285,29 @@ impl IngestionService {
             return Err(Error::NoSubscribers);
         }
 
-        Ok(broadcaster(
+        // Spawn the backwards broadcaster, if there's any work to do. We always drop
+        // `subscribers_backwards` if no broadcaster is spawned so that the receivers held by
+        // pipelines see EOF immediately and their drain stubs exit cleanly.
+        let backwards_service = match backwards_range {
+            Some((start_exclusive, end_inclusive))
+                if !subscribers_backwards.is_empty() && start_exclusive > end_inclusive =>
+            {
+                Some(backwards_broadcaster(
+                    start_exclusive,
+                    end_inclusive,
+                    config.clone(),
+                    ingestion_client.clone(),
+                    subscribers_backwards,
+                    metrics.clone(),
+                ))
+            }
+            _ => {
+                drop(subscribers_backwards);
+                None
+            }
+        };
+
+        let forward_service = broadcaster(
             checkpoints,
             next_sequential_checkpoint,
             streaming_client,
@@ -273,7 +316,12 @@ impl IngestionService {
             commit_hi_rx,
             subscribers,
             metrics,
-        ))
+        );
+
+        Ok(match backwards_service {
+            Some(svc) => forward_service.merge(svc),
+            None => forward_service,
+        })
     }
 }
 
@@ -374,7 +422,7 @@ mod tests {
 
         let ingestion_service = test_ingestion(server.uri(), 1, 1).await;
 
-        let res = ingestion_service.run(0.., None).await;
+        let res = ingestion_service.run(0.., None, None).await;
         assert!(matches!(res, Err(Error::NoSubscribers)));
     }
 
@@ -394,7 +442,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(usize::MAX, rx).await;
-        let svc = ingestion_service.run(0.., None).await.unwrap();
+        let svc = ingestion_service.run(0.., None, None).await.unwrap();
 
         svc.shutdown().await.unwrap();
         subscriber.await.unwrap();
@@ -416,7 +464,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(1, rx).await;
-        let mut svc = ingestion_service.run(0.., None).await.unwrap();
+        let mut svc = ingestion_service.run(0.., None, None).await.unwrap();
 
         drop(subscriber);
         svc.join().await.unwrap();
@@ -444,7 +492,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(6, rx).await;
-        let _svc = ingestion_service.run(0.., None).await.unwrap();
+        let _svc = ingestion_service.run(0.., None, None).await.unwrap();
 
         let seqs = subscriber.await.unwrap();
         assert_eq!(seqs, vec![0, 1, 2, 3, 6, 7]);
@@ -471,7 +519,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(6, rx).await;
-        let _svc = ingestion_service.run(0.., None).await.unwrap();
+        let _svc = ingestion_service.run(0.., None, None).await.unwrap();
 
         let seqs = subscriber.await.unwrap();
         assert_eq!(seqs, vec![0, 1, 2, 3, 6, 7]);
@@ -503,7 +551,7 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(6, rx).await;
-        let _svc = ingestion_service.run(0.., None).await.unwrap();
+        let _svc = ingestion_service.run(0.., None, None).await.unwrap();
 
         // At this point, the service will have been able to pass 3 checkpoints to the non-lagging
         // subscriber, while the laggard's buffer fills up. Now the laggard will pull two

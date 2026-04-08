@@ -297,7 +297,14 @@ impl<S: Store> Indexer<S> {
 
         let start = self.next_checkpoint;
         let end = self.last_checkpoint;
-        info!(start, end, "Ingestion range");
+        let first_checkpoint = self.first_checkpoint.unwrap_or(0);
+        // Backwards range covers `[first_checkpoint, reader_lo)`. Only meaningful if at least one
+        // concurrent pipeline supplied a `reader_lo` and there is room below it to process.
+        let backwards_range = self
+            .reader_lo
+            .filter(|&reader_lo| reader_lo > first_checkpoint)
+            .map(|reader_lo| (reader_lo, first_checkpoint));
+        info!(start, end, ?backwards_range, "Ingestion range");
 
         let mut service = self
             .ingestion_service
@@ -307,6 +314,7 @@ impl<S: Store> Indexer<S> {
                     end.map_or(Bound::Unbounded, Bound::Included),
                 ),
                 self.next_sequential_checkpoint,
+                backwards_range,
             )
             .await
             .context("Failed to start ingestion service")?;
@@ -397,13 +405,17 @@ impl<S: ConcurrentStore> Indexer<S> {
         })?;
         self.reader_lo = Some(self.reader_lo.map_or(reader_lo, |r| r.max(reader_lo)));
 
+        let checkpoint_rx = self.ingestion_service.subscribe().0;
+        let checkpoint_rx_backwards = self.ingestion_service.subscribe_backwards();
+
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
             next_checkpoint,
             config,
             self.store.clone(),
             self.task.clone(),
-            self.ingestion_service.subscribe().0,
+            checkpoint_rx,
+            checkpoint_rx_backwards,
             self.metrics.clone(),
         ));
 
