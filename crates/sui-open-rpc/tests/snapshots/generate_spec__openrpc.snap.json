@@ -1350,6 +1350,7 @@
                 "disallow_jump_orphans": false,
                 "disallow_new_modules_in_deps_only_packages": false,
                 "disallow_self_identifier": false,
+                "early_return_receive_object_mismatched_type": false,
                 "enable_accumulators": false,
                 "enable_address_balance_gas_payments": false,
                 "enable_authenticated_event_streams": false,

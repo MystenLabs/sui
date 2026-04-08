@@ -4787,8 +4787,6 @@ impl ProtocolConfig {
                 }
                 120 => {
                     cfg.feature_flags.disallow_jump_orphans = true;
-                    cfg.feature_flags
-                        .early_return_receive_object_mismatched_type = true;
                 }
                 121 => {
                     // Re-enable unpaid amplification deferral protection (testnet + devnet)
@@ -4796,6 +4794,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.defer_unpaid_amplification = true;
                         cfg.gasless_max_tps = Some(50);
                     }
+                    cfg.feature_flags
+                        .early_return_receive_object_mismatched_type = true;
                 }
                 // Use this template when making changes:
                 //
