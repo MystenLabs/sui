@@ -83,17 +83,11 @@ The `balance` and `balances` fields on address types now include `addressBalance
 
 ## Changes to balance computation from checkpoint data
 
+It is recommended that you use the balance changes provided by JSON RPC or gRPC.
+
 If you compute balance changes from checkpoint data, you must now process accumulator events from `TransactionEffects` in addition to coin object diffs.
 
-Previously, you computed balance changes by comparing input and output coin objects. With address balances, the algorithm adds a third step:
-
-1. **Subtract input coins:** For each input coin object, subtract its value from `(owner, coin_type)`.
-2. **Add output coins:** For each mutated or created coin object, add its value to `(owner, coin_type)`.
-3. **Process accumulator events:** For each accumulator event with a `Balance<T>` type:
-   - `Split` operation: Subtract the amount (funds withdrawn from address balance).
-   - `Merge` operation: Add the amount (funds deposited to address balance).
-
-The Sui framework provides a helper that handles all three steps:
+The Sui framework provides a helper for this process:
 
 ```rust
 use sui_types::balance_change::{derive_balance_changes, BalanceChange};
@@ -125,7 +119,14 @@ Each event contains the target address, a balance type, an operation (`Split` fo
 
 ### Existing contracts
 
-Contracts that accept `Coin<T>` or `Balance<T>` remain callable without changes. The `redeem_funds` functions (in the `sui::coin` and `sui::balance` modules respectively) convert withdrawals to the expected types within the PTB.
+Contracts that accept `Coin<T>` or `Balance<T>` remain callable without changes. The `redeem_funds` functions (in the `sui::coin` and `sui::balance` modules respectively) convert withdrawals to the expected types within the PTB. For example:
+
+```
+inputs: [withdrawal<0x2::sui::SUI>(100)]
+commands:
+0: 0x2::coin::redeem_funds(inputs(0))
+1: 0x2::transfer::public_transfer(result(0))
+```
 
 ### Legacy clients
 
