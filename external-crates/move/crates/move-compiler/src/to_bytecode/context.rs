@@ -24,13 +24,6 @@ pub struct FunctionDeclaration {
 pub type DatatypeDeclarations =
     HashMap<(ModuleIdent, DatatypeName), (BTreeSet<IR::Ability>, Vec<IR::DatatypeTypeParameter>)>;
 
-/// Per-function macro color data collected during bytecode generation.
-pub struct FunctionColorData {
-    /// Post-optimization flat color vector: one entry per instruction in
-    /// block order. Used to build `macro_color_map`.
-    pub flat_colors: Vec<ExpansionColor>,
-}
-
 /// Compilation context for a single compilation unit (module).
 /// Contains all of the dependencies actually used in the module
 pub struct Context<'a> {
@@ -48,7 +41,7 @@ pub struct Context<'a> {
     pub current_block_colors: Vec<ExpansionColor>,
     /// Per-function color data for populating the source map's macro frame
     /// info and color map.
-    pub function_color_data: BTreeMap<Symbol, FunctionColorData>,
+    pub function_color_data: BTreeMap<Symbol, Vec<ExpansionColor>>,
 }
 
 impl<'a> Context<'a> {

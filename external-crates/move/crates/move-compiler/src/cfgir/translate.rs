@@ -2,7 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::csp;
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{
@@ -17,7 +16,6 @@ use crate::{
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
-    shared::csp,
     shared::macro_frames::ExpansionColor,
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };

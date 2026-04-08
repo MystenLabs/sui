@@ -5,7 +5,6 @@
 mod state;
 
 use super::absint::*;
-use crate::csp;
 use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
@@ -298,9 +297,9 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue, value: Value) {
 #[growing_stack]
 fn exp(context: &mut Context, parent_e: &Exp) -> Values {
     use UnannotatedExp_ as E;
-    let csp!(eloc, _, e_) = &parent_e.exp;
+    let eloc = &parent_e.exp.loc;
     let svalue = || vec![Value::NonRef];
-    match e_ {
+    match &parent_e.exp.value {
         E::Move { var, annotation } => {
             let last_usage = matches!(annotation, MoveOpAnnotation::InferredLastUsage);
             let (diags, value) = context.borrow_state.move_local(*eloc, var, last_usage);

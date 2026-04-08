@@ -2,7 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::csp;
 use crate::{
     debug_display, debug_display_verbose, diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
@@ -20,7 +19,6 @@ use crate::{
         VariantName,
     },
     shared::{
-        csp,
         macro_frames::{ExpansionColor, expansion_color_eq},
         matching::{MATCH_TEMP_PREFIX, MatchContext, new_match_var_name},
         program_info::TypingProgramInfo,
@@ -1028,6 +1026,31 @@ fn tail(
             let saved_color = context.current_color.clone();
             context.current_color = ec.clone();
             let result = tail_block(context, block, expected_type, seq);
+            // Preserve the block's expansion color on its result expression
+            // when the block introduced a new color and the result doesn't
+            // already carry one from an inner scope.
+            //
+            // Consider:
+            //
+            //   macro fun add_one($x: u64): u64 { $x + 1 }
+            //   fun test(v: u64): u64 { add_one!(v) }
+            //
+            // The by-name substitution wraps `v` in a Block(Argument).
+            // This guard tags the result with the Argument color so that
+            // to_bytecode sees the scope change.
+            // See test: macro_frames/argument_in_macro.
+            //
+            // The `result.color.is_none()` guard avoids overwriting colors
+            // from inner scopes. Consider:
+            //
+            //   macro fun inner($x: u64): u64 { $x + 1 }
+            //   macro fun outer($x: u64): u64 { inner!($x) }
+            //   fun test(v: u64): u64 { outer!(v) }
+            //
+            // Here inner's result already carries MacroBody(inner) color;
+            // overwriting it with MacroBody(outer) would make the inner
+            // transition invisible.
+            // See test: macro_frames/simple_nested_macros.
             let result = result.map(|mut e| {
                 if !expansion_color_eq(&ec, &saved_color) && e.exp.color.is_none() {
                     e.exp.color = Some(ec.clone());
@@ -1103,7 +1126,7 @@ fn value(
         } else {
             H::exp(
                 type_(&context.reporter, &e.ty),
-                sp(e.exp.loc, HE::Unreachable),
+                csp(e.exp.loc, None, HE::Unreachable),
             )
         };
         statement(context, block, e);
@@ -1120,7 +1143,7 @@ fn value(
             context,
             block,
             expected_type.cloned(),
-            H::exp(out_type, sp(eloc, HE::Multiple(out_vec))),
+            H::exp(out_type, csp(eloc, None, HE::Multiple(out_vec))),
         );
     }
 
@@ -1129,7 +1152,7 @@ fn value(
         exp: sp!(eloc, e_),
     } = e;
     let out_type = type_(&context.reporter, in_type);
-    let make_exp = |exp| H::exp(out_type.clone(), sp(eloc, exp));
+    let make_exp = |exp| H::exp(out_type.clone(), csp(eloc, None, exp));
 
     let preresult: H::Exp = match e_ {
         // ---------------------------------------------------------------------------------------
@@ -1778,7 +1801,10 @@ fn value_list_items_to_vec(
                 Freeze::NotNeeded => es,
                 Freeze::Point => unreachable!(),
                 Freeze::Sub(_) => {
-                    let current_exp = H::exp(current_ty, sp(loc, HE::Multiple(es)));
+                    let current_exp = H::Exp {
+                        ty: current_ty,
+                        exp: csp(loc, None, HE::Multiple(es)),
+                    };
                     let (mut freeze_block, frozen) = freeze(context, expected_ty, current_exp);
                     result.append(&mut freeze_block);
                     match frozen.exp.value {
@@ -1842,7 +1868,7 @@ fn value_list_opt(
 fn error_exp(loc: Loc) -> H::Exp {
     H::exp(
         H::Type_::base(sp(loc, H::BaseType_::UnresolvedError)),
-        sp(loc, H::UnannotatedExp_::UnresolvedError),
+        csp(loc, None, H::UnannotatedExp_::UnresolvedError),
     )
 }
 
@@ -2124,8 +2150,9 @@ fn tbool(loc: Loc) -> H::Type {
 fn bool_exp(loc: Loc, value: bool) -> H::Exp {
     H::exp(
         tbool(loc),
-        sp(
+        csp(
             loc,
+            None,
             H::UnannotatedExp_::Value(sp(loc, H::Value_::Bool(value))),
         ),
     )
@@ -2145,8 +2172,9 @@ fn typing_unit_exp(loc: Loc) -> T::Exp {
 fn unit_exp(loc: Loc) -> H::Exp {
     H::exp(
         tunit(loc),
-        sp(
+        csp(
             loc,
+            None,
             H::UnannotatedExp_::Unit {
                 case: H::UnitCase::Implicit,
             },
@@ -2157,8 +2185,9 @@ fn unit_exp(loc: Loc) -> H::Exp {
 fn trailing_unit_exp(loc: Loc) -> H::Exp {
     H::exp(
         tunit(loc),
-        sp(
+        csp(
             loc,
+            None,
             H::UnannotatedExp_::Unit {
                 case: H::UnitCase::Trailing,
             },
@@ -2213,7 +2242,7 @@ fn is_exp_list(e: &T::Exp) -> bool {
 
 macro_rules! hcmd {
     ($cmd:pat) => {
-        S::Command($crate::csp!(_, _, $cmd))
+        S::Command(csp!(_, _, $cmd))
     };
 }
 
@@ -2384,14 +2413,17 @@ fn assign(
                     from_user: false,
                     var: tmp,
                 };
-                H::exp(H::Type_::single(rvalue_ty.clone()), sp(loc, copy_tmp_))
+                H::exp(
+                    H::Type_::single(rvalue_ty.clone()),
+                    csp(loc, None, copy_tmp_),
+                )
             };
             let from_unpack = Some(loc);
             for (f, bt, tfa) in assign_struct_fields(context, &m, &s, tfields) {
                 let floc = tfa.loc;
                 let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f, from_unpack);
                 let borrow_ty = H::Type_::single(sp(floc, H::SingleType_::Ref(mut_, bt)));
-                let borrow = H::exp(borrow_ty, sp(floc, borrow_));
+                let borrow = H::exp(borrow_ty, csp(floc, None, borrow_));
                 make_assignments(context, &mut after, floc, case, sp(floc, vec![tfa]), borrow);
             }
             L::Var {
@@ -2670,8 +2702,9 @@ fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>
             vec![],
             H::exp(
                 tunit(loc),
-                sp(
+                csp(
                     loc,
+                    None,
                     E::Unit {
                         case: H::UnitCase::Implicit,
                     },
@@ -2691,7 +2724,7 @@ fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>
                 binders,
                 H::exp(
                     sp(loc, T::Multiple(types)),
-                    sp(loc, H::UnannotatedExp_::Multiple(vars)),
+                    csp(loc, None, H::UnannotatedExp_::Multiple(vars)),
                 ),
             )
         }
@@ -2706,8 +2739,9 @@ fn make_temp(context: &mut Context, loc: Loc, sp!(_, ty): H::SingleType) -> (H::
         unused_assignment: false,
     };
     let lvalue = sp(loc, lvalue_);
-    let uexp = sp(
+    let uexp = csp(
         loc,
+        None,
         H::UnannotatedExp_::Move {
             annotation: MoveOpAnnotation::InferredLastUsage,
             var: binder,
@@ -2936,7 +2970,10 @@ fn process_binops(
                 }
                 input_block.extend(lhs_block);
                 input_block.extend(rhs_block);
-                H::exp(result_type, sp(exp_loc, make_binop(lhs_exp, op, rhs_exp)))
+                H::exp(
+                    result_type,
+                    csp(exp_loc, None, make_binop(lhs_exp, op, rhs_exp)),
+                )
             }
             BinopEntry::ShortCircuitAnd { loc, tests, last } => {
                 let bool_ty = tbool(loc);
@@ -3129,7 +3166,10 @@ fn freeze(context: &mut Context, expected_type: &H::Type, e: H::Exp) -> (Block, 
                     .collect();
                 (
                     bind_stmts,
-                    H::exp(sp(eloc, T::Multiple(tys)), sp(eloc, E::Multiple(exps))),
+                    H::exp(
+                        sp(eloc, T::Multiple(tys)),
+                        csp(eloc, None, E::Multiple(exps)),
+                    ),
                 )
             } else {
                 unreachable!("ICE needs_freeze failed")
@@ -3142,7 +3182,7 @@ fn freeze_point(e: H::Exp) -> H::Exp {
     let frozen_ty = freeze_ty(e.ty.clone());
     let eloc = e.exp.loc;
     let e_ = H::UnannotatedExp_::Freeze(Box::new(e));
-    H::exp(frozen_ty, sp(eloc, e_))
+    H::exp(frozen_ty, csp(eloc, None, e_))
 }
 
 fn freeze_ty(sp!(tloc, t): H::Type) -> H::Type {

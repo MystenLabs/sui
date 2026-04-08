@@ -27,7 +27,7 @@ use std::{collections::BTreeMap, ops::Bound, path::PathBuf};
 
 pub type SourceName = (String, Loc);
 
-/// The current version of the trace format.
+/// The current version of the source map format.
 const CURRENT_VERSION: u64 = 3;
 
 /// The type of macro expansion scope a frame represents.
@@ -718,16 +718,19 @@ impl SourceMap {
         Ok(())
     }
 
+    /// Iterates over all function source maps keyed by table index.
     pub fn function_map_iter(&self) -> impl Iterator<Item = (TableIndex, &FunctionSourceMap)> {
         self.function_map.iter().map(|(k, v)| (*k, v))
     }
 
+    /// Mutable iterator over all function source maps keyed by table index.
     pub fn function_source_maps_mut(
         &mut self,
     ) -> impl Iterator<Item = (TableIndex, &mut FunctionSourceMap)> {
         self.function_map.iter_mut().map(|(k, v)| (*k, v))
     }
 
+    /// Records a macro expansion color for a bytecode instruction in a function's source map.
     pub fn add_color_mapping(
         &mut self,
         fdef_idx: FunctionDefinitionIndex,

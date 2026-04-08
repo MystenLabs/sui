@@ -9,12 +9,11 @@ use super::{
     cfg::{CFG, MutForwardCFG, MutReverseCFG, ReverseCFG},
     locals,
 };
-use crate::csp;
 use crate::{
     diagnostics::Diagnostics,
     expansion::ast::Mutability,
     hlir::ast::{self as H, *},
-    shared::{csp, unique_map::UniqueMap},
+    shared::unique_map::UniqueMap,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -182,7 +181,6 @@ pub fn last_usage(context: &super::CFGContext, cfg: &mut MutForwardCFG) {
 }
 
 mod last_usage {
-    use crate::csp;
     use move_proc_macros::growing_stack;
 
     use crate::{
@@ -481,7 +479,7 @@ fn pop_ref(loc: Loc, var: Var, ty: SingleType) -> Command {
         annotation: MoveOpAnnotation::InferredLastUsage,
         var,
     };
-    let move_e = H::exp(Type_::single(ty), sp(loc, move_e_));
+    let move_e = H::exp(Type_::single(ty), csp(loc, None, move_e_));
     let pop_ = C::IgnoreAndPop {
         pop_num: 1,
         exp: move_e,

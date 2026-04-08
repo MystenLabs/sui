@@ -84,12 +84,8 @@ pub type ResolvedUseFuns = BTreeMap<TypeName, UniqueMap<Name, UseFun>>;
 // Color for scopes of use funs and variables
 pub type Color = u16;
 
-/// Tracks scope identity and method aliases for a block or sequence.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct UseFuns {
-    /// Scope identity for method alias resolution. Each macro expansion gets a
-    /// unique color; method lookup only matches scopes with the same color. This
-    /// prevents aliases from different macro expansions from interfering.
     pub color: Color,
     pub resolved: ResolvedUseFuns,
     pub implicit_candidates: UniqueMap<Name, ImplicitUseFunCandidate>,

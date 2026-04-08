@@ -5,7 +5,6 @@
 pub mod state;
 
 use super::absint::*;
-use crate::csp;
 use crate::{
     cfgir::CFGContext,
     diag,
@@ -367,8 +366,8 @@ fn lvalue(context: &mut Context, case: AssignCase, sp!(loc, l_): &LValue) {
 #[growing_stack]
 fn exp(context: &mut Context, parent_e: &Exp) {
     use UnannotatedExp_ as E;
-    let csp!(eloc, _, e_) = &parent_e.exp;
-    match e_ {
+    let eloc = &parent_e.exp.loc;
+    match &parent_e.exp.value {
         E::Unit { .. }
         | E::Value(_)
         | E::Constant(_)

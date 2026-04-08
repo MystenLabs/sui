@@ -20,8 +20,8 @@ pub fn optimize(
         .map(|(sp!(_, v_), _)| v_.clone())
         .collect::<BTreeSet<_>>();
     for (_lbl, block) in blocks {
-        for instr in block.iter() {
-            match &instr.value {
+        for sp!(_, instr_) in block {
+            match instr_ {
                 IR::Bytecode_::CopyLoc(sp!(_, v_))
                 | IR::Bytecode_::MoveLoc(sp!(_, v_))
                 | IR::Bytecode_::StLoc(sp!(_, v_))

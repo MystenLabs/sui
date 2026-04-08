@@ -18,6 +18,7 @@ pub fn optimize(
     let mut changed = false;
     for (block_idx, (_lbl, block)) in blocks.iter_mut().enumerate() {
         let mut new_block = vec![];
+        // Track surviving colors when instruction pairs are removed
         let mut new_colors = vec![];
         let mut i = 0;
         while i < block.len() {
@@ -29,8 +30,8 @@ pub fn optimize(
                     changed = true;
                     i += 2
                 }
-                _ => {
-                    new_block.push(block[i].clone());
+                (instr, _) => {
+                    new_block.push(instr.clone());
                     new_colors.push(colors[block_idx][i].clone());
                     i += 1
                 }

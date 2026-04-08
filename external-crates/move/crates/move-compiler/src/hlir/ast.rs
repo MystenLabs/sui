@@ -13,8 +13,8 @@ use crate::{
         TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        Name, NumericalAddress, TName, ast_debug::*, program_info::TypingProgramInfo,
-        unique_map::UniqueMap,
+        ColorSpanned, Name, NumericalAddress, OptColorSpanned, TName, ast_debug::*,
+        program_info::TypingProgramInfo, unique_map::UniqueMap,
     },
 };
 use move_ir_types::location::*;
@@ -206,7 +206,7 @@ pub type Type = Spanned<Type_>;
 // Statements
 //**************************************************************************************************
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Statement_ {
     Command(Command),
@@ -235,8 +235,7 @@ pub enum Statement_ {
         block: Block,
     },
 }
-/// HLIR statement: a `ColorSpanned` wrapper around `Statement_`.
-pub type Statement = crate::shared::ColorSpanned<Statement_>;
+pub type Statement = ColorSpanned<Statement_>;
 
 pub type Block = VecDeque<Statement>;
 
@@ -283,9 +282,7 @@ pub enum Command_ {
         arms: Vec<(VariantName, Label)>,
     },
 }
-
-/// HLIR command: a `ColorSpanned` wrapper around `Command_`.
-pub type Command = crate::shared::ColorSpanned<Command_>;
+pub type Command = ColorSpanned<Command_>;
 
 // TODO: replace this with the `move_ir_types` one when possible.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -425,21 +422,14 @@ pub enum UnannotatedExp_ {
 
     UnresolvedError,
 }
-pub type UnannotatedExp = crate::shared::OptColorSpanned<UnannotatedExp_>;
+pub type UnannotatedExp = OptColorSpanned<UnannotatedExp_>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Exp {
     pub ty: Type,
     pub exp: UnannotatedExp,
 }
-pub fn exp(ty: Type, exp: Spanned<UnannotatedExp_>) -> Exp {
-    Exp {
-        ty,
-        exp: crate::shared::ColorSpanned {
-            loc: exp.loc,
-            color: None,
-            value: exp.value,
-        },
-    }
+pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
+    Exp { ty, exp }
 }
 
 //**************************************************************************************************
@@ -1315,12 +1305,6 @@ impl AstDebug for (Block, Box<Exp>) {
     }
 }
 
-impl AstDebug for crate::shared::ColorSpanned<Statement_> {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        self.value.ast_debug(w)
-    }
-}
-
 impl AstDebug for Statement_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use Statement_ as S;
@@ -1383,12 +1367,6 @@ impl AstDebug for Statement_ {
                 w.block(|w| block.ast_debug(w))
             }
         }
-    }
-}
-
-impl AstDebug for crate::shared::ColorSpanned<Command_> {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        self.value.ast_debug(w)
     }
 }
 

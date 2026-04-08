@@ -67,74 +67,14 @@ pub mod unique_set;
 pub use ast_debug::AstDebug;
 
 /// Like `Spanned<T>`, but also carries the macro expansion color for debugger
-/// frame tracking. Used as the wrapper for HLIR `Command`, `Statement`, and
-/// `UnannotatedExp`.
-///
-/// The `C` parameter defaults to `ExpansionColor` (always present, for
-/// `Command`/`Statement`). Use `OptColorSpanned<T>` (= `ColorSpanned<T,
-/// Option<ExpansionColor>>`) for expressions where color is optional (`None`
-/// means "inherit from enclosing command").
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ColorSpanned<T, C = macro_frames::ExpansionColor> {
-    pub loc: move_ir_types::location::Loc,
-    pub color: C,
-    pub value: T,
-}
+/// frame tracking. The `C` parameter defaults to `ExpansionColor` (always
+/// present, for `Command`/`Statement`).
+pub type ColorSpanned<T, C = macro_frames::ExpansionColor> =
+    move_ir_types::location::ColorSpanned<T, C>;
 
 /// A `ColorSpanned` with optional color, used for HLIR `UnannotatedExp`.
 /// `None` color means "inherit from the enclosing command's color".
 pub type OptColorSpanned<T> = ColorSpanned<T, Option<macro_frames::ExpansionColor>>;
-
-/// Construct a `ColorSpanned<T>` value (analogous to `sp()` for `Spanned<T>`).
-pub fn csp<T>(
-    loc: move_ir_types::location::Loc,
-    color: macro_frames::ExpansionColor,
-    value: T,
-) -> ColorSpanned<T> {
-    ColorSpanned { loc, color, value }
-}
-
-/// Destructure a `ColorSpanned<T>` value (analogous to `sp!` for `Spanned<T>`).
-#[macro_export]
-macro_rules! csp {
-    (_, _, $value:pat) => {
-        $crate::shared::ColorSpanned { value: $value, .. }
-    };
-    (_, $color:pat, _) => {
-        $crate::shared::ColorSpanned { color: $color, .. }
-    };
-    ($loc:pat, _, _) => {
-        $crate::shared::ColorSpanned { loc: $loc, .. }
-    };
-    ($loc:pat, $color:pat, _) => {
-        $crate::shared::ColorSpanned {
-            loc: $loc,
-            color: $color,
-            ..
-        }
-    };
-    ($loc:pat, _, $value:pat) => {
-        $crate::shared::ColorSpanned {
-            loc: $loc,
-            value: $value,
-            ..
-        }
-    };
-    (_, $color:pat, $value:pat) => {
-        $crate::shared::ColorSpanned {
-            color: $color,
-            value: $value,
-            ..
-        }
-    };
-    ($loc:pat, $color:pat, $value:pat) => {
-        $crate::shared::ColorSpanned {
-            loc: $loc,
-            color: $color,
-            value: $value,
-        }
-    };
-}
 
 //**************************************************************************************************
 // Numbers

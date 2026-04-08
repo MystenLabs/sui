@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{canonicalize_handles, context::*, optimize};
-use crate::csp;
 use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
@@ -643,7 +642,7 @@ fn populate_macro_frame_info(
     compiled_module: &F::CompiledModule,
     _env: &CompilationEnv,
     _module_ident: &ModuleIdent_,
-    function_color_data: &BTreeMap<Symbol, FunctionColorData>,
+    function_color_data: &BTreeMap<Symbol, Vec<ExpansionColor>>,
 ) {
     use move_bytecode_source_map::source_map::MacroFrameInfoEntry;
     use std::collections::HashMap as StdHashMap;
@@ -687,7 +686,7 @@ fn populate_macro_frame_info(
         }
 
         // Register nodes from post-optimization instruction colors.
-        for color in &color_data.flat_colors {
+        for color in color_data {
             if let Some(node) = color {
                 register_node(node, &mut ptr_to_index, &mut ordered_nodes);
             }
@@ -716,7 +715,6 @@ fn populate_macro_frame_info(
 
         // Build macro_color_map: instruction offset → frame index.
         fsm.macro_color_map = color_data
-            .flat_colors
             .iter()
             .enumerate()
             .map(|(offset, color)| {
@@ -1222,9 +1220,7 @@ fn function_body(
     );
 
     let flat_colors: Vec<ExpansionColor> = block_colors.into_iter().flatten().collect();
-    context
-        .function_color_data
-        .insert(f.0.value, FunctionColorData { flat_colors });
+    context.function_color_data.insert(f.0.value, flat_colors);
 
     (locals, bytecode_blocks)
 }

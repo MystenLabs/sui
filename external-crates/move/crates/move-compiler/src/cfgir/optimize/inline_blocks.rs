@@ -2,7 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::csp;
 use move_proc_macros::growing_stack;
 
 use crate::{

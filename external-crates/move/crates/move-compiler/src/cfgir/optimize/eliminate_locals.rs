@@ -50,7 +50,6 @@ fn count(signature: &FunctionSignature, cfg: &MutForwardCFG) -> BTreeSet<Var> {
 }
 
 mod count {
-    use crate::csp;
     use move_proc_macros::growing_stack;
 
     use crate::{
@@ -273,7 +272,6 @@ fn eliminate(cfg: &mut MutForwardCFG, ssa_temps: BTreeSet<Var>) {
 }
 
 mod eliminate {
-    use crate::csp;
     use crate::hlir::ast::{self as H, *};
     use move_ir_types::location::*;
     use move_proc_macros::growing_stack;
@@ -521,8 +519,9 @@ mod eliminate {
     fn unit(loc: Loc) -> Exp {
         H::exp(
             sp(loc, Type_::Unit),
-            sp(
+            csp(
                 loc,
+                None,
                 UnannotatedExp_::Unit {
                     case: UnitCase::Implicit,
                 },

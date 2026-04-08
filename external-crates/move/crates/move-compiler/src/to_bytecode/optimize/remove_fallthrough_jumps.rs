@@ -46,7 +46,7 @@ fn remove_fall_through(
         if remove_last {
             changed = true;
             block.pop();
-            colors[idx].pop();
+            colors[idx].pop(); // keep colors in sync
         }
     }
     changed
@@ -57,6 +57,7 @@ fn remove_empty_blocks(blocks: &mut IR::BytecodeBlocks, colors: &mut BlockColors
     let mut cur_label = None;
     let mut removed = false;
     let old_blocks = std::mem::take(blocks);
+    // Keep colors in sync with blocks
     let old_colors = std::mem::take(colors);
     for ((label, block), block_colors) in old_blocks.into_iter().zip(old_colors).rev() {
         if block.is_empty() {

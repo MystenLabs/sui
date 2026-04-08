@@ -3,7 +3,6 @@
 
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
-use crate::csp;
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{

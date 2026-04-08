@@ -2,7 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::csp;
 use crate::{
     diagnostics::filter::FilterScope,
     expansion::ast::{Attributes, Friend, ModuleIdent, Mutability},

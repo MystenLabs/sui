@@ -26,7 +26,6 @@
 // Label 2:
 //     ...
 
-use crate::csp;
 use move_proc_macros::growing_stack;
 
 use crate::{

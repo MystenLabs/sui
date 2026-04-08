@@ -100,6 +100,7 @@ pub(super) fn compile_match(
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(match_exp))));
     let exp_value = sp(
         eloc,
+        // No macro color -- compiler-generated match block
         T::UnannotatedExp_::Block(None, (UseFuns::new(0), seq)),
     );
     T::exp(result_type.clone(), exp_value)
@@ -754,6 +755,7 @@ fn make_arm_unpack(
     let nloc = next.exp.loc;
     seq.push_back(sp(nloc, T::SequenceItem_::Seq(Box::new(next))));
 
+    // No macro color -- compiler-generated match block
     let body = T::UnannotatedExp_::Block(None, (UseFuns::new(0), seq));
     T::exp(context.output_type(), sp(ploc, body))
 }
@@ -1022,6 +1024,7 @@ fn make_match_variant_unpack(
 
     let exp_value = sp(
         eloc,
+        // No macro color -- compiler-generated match block
         T::UnannotatedExp_::Block(None, (UseFuns::new(0), seq)),
     );
     T::exp(context.output_type(), exp_value)
@@ -1067,6 +1070,7 @@ fn make_match_struct_unpack(
 
     let exp_value = sp(
         eloc,
+        // No macro color -- compiler-generated match block
         T::UnannotatedExp_::Block(None, (UseFuns::new(0), seq)),
     );
     T::exp(context.output_type(), exp_value)
@@ -1189,6 +1193,7 @@ fn make_bindings(
         seq.push_back(binding);
     }
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
+    // No macro color -- compiler-generated match block
     let exp_value = sp(
         eloc,
         T::UnannotatedExp_::Block(None, (UseFuns::new(0), seq)),
