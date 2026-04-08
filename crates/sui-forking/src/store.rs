@@ -1,25 +1,44 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+
+use anyhow::Context as _;
+use anyhow::Error;
+use anyhow::anyhow;
+use anyhow::bail;
+
+use forking_data_store::Node;
+use forking_data_store::stores::GraphQLStore;
 use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 
-use crate::CheckpointRead;
-use crate::GraphQLClient;
-use crate::Node;
-use crate::ObjectKey;
-use crate::ObjectRead;
-use crate::VersionQuery;
-use crate::filesystem::FilesystemStore;
+use forking_data_store::CheckpointStore;
+use forking_data_store::ObjectKey;
+use forking_data_store::ObjectStore;
+use sui_types::messages_checkpoint::VerifiedCheckpoint;
 
-/// A data store for Sui data, with a local filesystem and a remote GraphQL endpoint to query for
-/// historical data.
-pub(crate) struct DataStore {
+/// Directory name appended to the configured filesystem store root.
+pub const DATA_STORE_DIR: &str = ".forking_data_store";
+/// Per-chain object storage directory.
+pub const OBJECTS_DIR: &str = "objects";
+/// Per-chain transaction storage directory.
+pub const TRANSACTION_DIR: &str = "transaction";
+/// Per-chain epoch storage directory.
+pub const EPOCH_DIR: &str = "epoch";
+/// Per-chain checkpoint storage directory.
+pub const CHECKPOINT_DIR: &str = "checkpoint";
+/// Marker file for the latest checkpoint sequence known to the store.
+pub const LATEST_FILE: &str = "latest";
+
+// `simulacrum` store adapter over a historical fork source.
+pub struct DataStore {
     forked_at_checkpoint: CheckpointSequenceNumber,
-    gql: GraphQLClient,
-    local: FilesystemStore,
+    node: Node,
+    gql: GraphQLStore,
 }
 
 impl DataStore {
@@ -63,8 +82,6 @@ impl DataStore {
 
     /// Get the object at the specified version. It will first try to load from disk, and if not
     /// found, it will fetch from remote rpc by making a query to fetch this version at the forked
-    /// checkpoint. If none is found, it will return None. If the object is successfully fetched
-    /// from remote rpc, it will be saved to disk for future use before returning the object.
     pub(crate) fn get_object_at_version(
         &self,
         object_id: ObjectID,
