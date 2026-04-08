@@ -316,7 +316,7 @@ const TESTNET_USDC: &str =
 // Version 119: Enable the new VM.
 // Version 120: Disallow unused jump tables
 // Version 121: Re-enable defer_unpaid_amplification (devnet + testnet).
-// Version 121: Add timestamp_based_epoch_close feature flag.
+//              Add timestamp_based_epoch_close feature flag.
 // Version 122: Framework update: vector::empty is deprecated.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
