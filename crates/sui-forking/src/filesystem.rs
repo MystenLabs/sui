@@ -282,3 +282,107 @@ mod tests {
         assert!(err.to_string().contains("Latest file not found"));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::digests::TransactionDigest;
+    use sui_types::object::MoveObject;
+    use sui_types::object::Object;
+    use sui_types::object::ObjectInner;
+    use sui_types::object::Owner;
+
+    use super::*;
+
+    fn test_store() -> (tempfile::TempDir, FilesystemStore) {
+        let dir = tempfile::tempdir().expect("failed to create tempdir");
+        let store = FilesystemStore::new_with_root(dir.path().to_path_buf());
+        (dir, store)
+    }
+
+    fn make_object(id: ObjectID, version: u64) -> Object {
+        let move_obj = MoveObject::new_gas_coin(SequenceNumber::from_u64(version), id, 1_000_000);
+        ObjectInner {
+            owner: Owner::Immutable,
+            data: sui_types::object::Data::Move(move_obj),
+            previous_transaction: TransactionDigest::genesis_marker(),
+            storage_rebate: 0,
+        }
+        .into()
+    }
+
+    #[test]
+    fn test_write_and_read_latest_object() {
+        let (_dir, store) = test_store();
+        let id = ObjectID::random();
+        let obj = make_object(id, 5);
+
+        store.write_object(&obj).unwrap();
+        let loaded = store.get_latest_object(id).unwrap();
+        assert_eq!(loaded.clone().unwrap(), obj);
+        assert_eq!(loaded.unwrap().version(), SequenceNumber::from_u64(5));
+    }
+
+    #[test]
+    fn test_write_and_read_object_at_version() {
+        let (_dir, store) = test_store();
+        let id = ObjectID::random();
+        let obj = make_object(id, 5);
+
+        store.write_object(&obj).unwrap();
+        let loaded = store.get_object_at_version(id, 5).unwrap();
+        assert_eq!(loaded.unwrap(), obj);
+    }
+
+    #[test]
+    fn test_get_latest_object_returns_none_for_unknown_id() {
+        let (_dir, store) = test_store();
+        let result = store.get_latest_object(ObjectID::random()).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_object_at_version_returns_none_for_unknown_version() {
+        let (_dir, store) = test_store();
+        let id = ObjectID::random();
+        let obj = make_object(id, 5);
+        store.write_object(&obj).unwrap();
+
+        let result = store.get_object_at_version(id, 99).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_latest_tracks_highest_written_version() {
+        let (_dir, store) = test_store();
+        let id = ObjectID::random();
+
+        let v1 = make_object(id, 1);
+        let v3 = make_object(id, 3);
+        store.write_object(&v1).unwrap();
+        store.write_object(&v3).unwrap();
+
+        let latest = store.get_latest_object(id).unwrap().unwrap();
+        assert_eq!(latest, v3);
+
+        // v1 is still accessible by version
+        let old = store.get_object_at_version(id, 1).unwrap().unwrap();
+        assert_eq!(old, v1);
+    }
+
+    #[test]
+    fn test_get_highest_checkpoint_errors_when_dir_missing() {
+        let (_dir, store) = test_store();
+        let err = store.get_highest_checkpoint().unwrap_err();
+        assert!(err.to_string().contains("does not exist"));
+    }
+
+    #[test]
+    fn test_get_highest_checkpoint_errors_when_latest_file_missing() {
+        let (_dir, store) = test_store();
+        fs::create_dir_all(store.checkpoints_dir()).unwrap();
+        let err = store.get_highest_checkpoint().unwrap_err();
+        assert!(err.to_string().contains("Latest file not found"));
+    }
+}

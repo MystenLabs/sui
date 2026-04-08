@@ -36,6 +36,7 @@ impl DataStore {
 
         Ok(Self {
             forked_at_checkpoint,
+            node,
             gql,
             local,
         })
