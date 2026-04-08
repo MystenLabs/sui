@@ -15135,9 +15135,14 @@ name = "sui-forking"
 version = "1.71.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "bin-version",
+ "forking-data-store",
+ "serde",
+ "sui-types",
  "tokio",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

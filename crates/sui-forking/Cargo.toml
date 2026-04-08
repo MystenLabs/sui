@@ -8,10 +8,15 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
+serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing-subscriber.workspace = true
+url.workspace = true
 
+bcs.workspace = true
 bin-version.workspace = true
+forking-data-store = { path = "../forking-data-store" }
+sui-types.workspace = true
 
 [lints]
 workspace = true
