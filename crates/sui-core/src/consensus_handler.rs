@@ -1477,7 +1477,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let start_state_is_reject_all_tx = reconfig_state.is_reject_all_tx();
 
         if reconfig_state.should_accept_user_certs() {
-            // First time closing: transition directly to RejectAllCerts.
             if timestamp_triggered {
                 info!(
                     "Timestamp-based epoch close: commit timestamp {} >= reconfiguration timestamp {}",
@@ -1488,11 +1487,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             if collected_eop {
                 info!("EndOfPublish quorum reached for manual epoch close");
             }
+            reconfig_state.close_all_certs();
             self.epoch_store
                 .record_epoch_close_for_timestamp_based_transition();
         }
-
-        reconfig_state.close_all_certs();
 
         let commit_has_deferred_txns = state.output.has_deferred_transactions();
         let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
