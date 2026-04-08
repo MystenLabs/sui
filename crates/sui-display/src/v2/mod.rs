@@ -246,10 +246,7 @@ impl<'s> Display<'s> {
         let (names, values) = join!(names, values);
 
         let names = names?;
-        debug_assert_eq!(self.fields.len(), names.len());
-
         let values = values?;
-        debug_assert_eq!(self.fields.len(), values.len());
 
         for ((field, name), value) in self.fields.iter().checked_zip(names).checked_zip(values) {
             use indexmap::map::Entry;

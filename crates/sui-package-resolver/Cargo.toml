@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 async-trait.workspace = true
 bcs.workspace = true
+itertools.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 # TODO: `move-command-line-common` is used for `ErrorBitset`. We should
