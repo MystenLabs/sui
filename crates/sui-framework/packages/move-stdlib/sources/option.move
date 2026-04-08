@@ -232,7 +232,7 @@ public macro fun is_some_and<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
     o.is_some() && $f(o.borrow())
 }
 
-/// Return `true` if the value is `None`, or the predicate `f` returns `true` for the contained
+/// Return `true` if the value is `None`, or if the predicate `f` returns `true` for the contained
 /// value.
 public macro fun is_none_or<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
     let o = $o;

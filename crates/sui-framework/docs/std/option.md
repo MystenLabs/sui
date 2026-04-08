@@ -901,7 +901,7 @@ Return <code><b>false</b></code> if the value is <code>None</code>, otherwise re
 
 ## Macro function `is_none_or`
 
-Return <code><b>true</b></code> if the value is <code>None</code>, or the predicate <code>f</code> returns <code><b>true</b></code> for the contained
+Return <code><b>true</b></code> if the value is <code>None</code>, or if the predicate <code>f</code> returns <code><b>true</b></code> for the contained
 value.
 
 
