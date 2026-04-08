@@ -14,6 +14,7 @@
 use anyhow::{Context, Error, anyhow};
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
+use itertools::Itertools;
 
 use crate::EpochData;
 use crate::stores::GraphQLStore;
@@ -347,7 +348,7 @@ pub(crate) mod object_query {
             );
         }
 
-        for (idx, object) in standard_indices.into_iter().zip(standard_results) {
+        for (idx, object) in standard_indices.into_iter().zip_eq(standard_results) {
             results[idx] = Some(object);
         }
 

@@ -13,6 +13,7 @@ chrono.workspace = true
 csv.workspace = true
 cynic.workspace = true
 fastcrypto.workspace = true
+itertools.workspace = true
 lru.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
