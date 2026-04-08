@@ -31,6 +31,9 @@ pub struct Transaction {
     /// All receiving inputs
     pub receiving: Vec<ReceivingInput>,
     pub withdrawal_compatibility_conversions: IndexMap<Location, WithdrawalCompatibilityConversion>,
+    /// Original number of commands in the transaction. All Spanned indices in the AST should be
+    /// < `original_command_len`
+    pub original_command_len: usize,
     pub commands: Commands,
 }
 

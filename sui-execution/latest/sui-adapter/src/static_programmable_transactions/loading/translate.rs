@@ -52,6 +52,7 @@ pub fn transaction<Mode: ExecutionMode>(
             input::<Mode>(env, tx_context, is_withdrawal_compatibility_input, arg)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let original_command_len = commands.len();
     let commands = commands
         .into_iter()
         .enumerate()
@@ -60,6 +61,7 @@ pub fn transaction<Mode: ExecutionMode>(
     let loaded_tx = L::Transaction {
         gas_payment,
         inputs,
+        original_command_len,
         commands,
     };
     metering::loading::meter(meter, &loaded_tx)?;

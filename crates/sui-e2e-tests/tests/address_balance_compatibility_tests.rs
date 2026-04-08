@@ -1190,3 +1190,176 @@ async fn test_coin_reservation_with_shared_object() {
 
     test_env.cluster.trigger_reconfiguration().await;
 }
+
+#[sim_test]
+async fn test_coin_reservation_split_without_move() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    // Split some amount from a coin reservation and transfer the split-off coin
+    // to a recipient, but leave the original coin reservation unmoved (not transferred
+    // by value).
+
+    let mut test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let reservation_amount = 100u64;
+    let split_amount = 40u64;
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, reservation_amount);
+
+    let initial_sender_balance = test_env.get_sui_balance_ab(sender);
+
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Build PTB: SplitCoins(coin_reservation, [split_amount]) -> TransferObjects([split], recipient)
+    // The original coin_reservation is not consumed by value.
+    let mut builder = TestTransactionBuilder::new(sender, gas, test_env.rgp);
+    let coin_arg = builder
+        .ptb_builder_mut()
+        .obj(ObjectArg::ImmOrOwnedObject(coin_reservation))
+        .unwrap();
+    let split_amount_arg = builder.ptb_builder_mut().pure(split_amount).unwrap();
+    let split_result = builder
+        .ptb_builder_mut()
+        .command(Command::SplitCoins(coin_arg, vec![split_amount_arg]));
+    let Argument::Result(split_idx) = split_result else {
+        panic!("Expected Result argument from SplitCoins");
+    };
+    let recipient_arg = builder.ptb_builder_mut().pure(recipient).unwrap();
+    builder.ptb_builder_mut().command(Command::TransferObjects(
+        vec![Argument::NestedResult(split_idx, 0)],
+        recipient_arg,
+    ));
+    let tx = builder.build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "Transaction failed: {:?}",
+        effects.status()
+    );
+
+    // Recipient should have a new coin with the split amount
+    let created = effects.created();
+    assert_eq!(created.len(), 1, "Expected exactly one created object");
+    let split_coin_id = created[0].0.0;
+    let split_coin_balance = test_env.get_coin_balance(split_coin_id).await;
+    assert_eq!(split_coin_balance, split_amount);
+
+    // The reservation withdraws reservation_amount, but only split_amount leaves
+    // as a real coin. The unused portion (reservation_amount - split_amount) returns
+    // to address balance. Net debit = split_amount.
+    let final_sender_balance = test_env.get_sui_balance_ab(sender);
+    assert_eq!(final_sender_balance, initial_sender_balance - split_amount);
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_mix_coin_reservations_real_coins_and_shared_object() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    // Mix a real coin and a coin reservation in a single PTB that also touches
+    // a shared object (Clock). Merge the real coin into the coin reservation,
+    // then split a portion off and transfer it.
+
+    let mut test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    let (_, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    let gas = all_gas.pop().unwrap();
+    let real_coin = all_gas.pop().unwrap();
+    let real_coin_balance = test_env.get_coin_balance(real_coin.0).await;
+
+    let sender = test_env.get_sender(0);
+    let reservation_amount = 200u64;
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, reservation_amount);
+
+    let initial_sender_balance = test_env.get_sui_balance_ab(sender);
+
+    let recipient = SuiAddress::random_for_testing_only();
+    let transfer_amount = 50u64;
+
+    // Build PTB:
+    // 1. clock::timestamp_ms(Clock) — touch a shared object
+    // 2. MergeCoins(coin_reservation, [real_coin])
+    // 3. SplitCoins(coin_reservation, [transfer_amount])
+    // 4. TransferObjects([split], recipient)
+    let mut builder = TestTransactionBuilder::new(sender, gas, test_env.rgp);
+    let coin_res_arg = builder
+        .ptb_builder_mut()
+        .obj(ObjectArg::ImmOrOwnedObject(coin_reservation))
+        .unwrap();
+    let real_coin_arg = builder
+        .ptb_builder_mut()
+        .obj(ObjectArg::ImmOrOwnedObject(real_coin))
+        .unwrap();
+
+    // Touch shared object
+    builder = builder.move_call(
+        sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+        "clock",
+        "timestamp_ms",
+        vec![CallArg::CLOCK_IMM],
+    );
+
+    // Merge real coin into coin reservation
+    builder
+        .ptb_builder_mut()
+        .command(Command::MergeCoins(coin_res_arg, vec![real_coin_arg]));
+
+    // Split a portion off the merged result
+    let amount_arg = builder.ptb_builder_mut().pure(transfer_amount).unwrap();
+    let split_result = builder
+        .ptb_builder_mut()
+        .command(Command::SplitCoins(coin_res_arg, vec![amount_arg]));
+    let Argument::Result(split_idx) = split_result else {
+        panic!("Expected Result argument from SplitCoins");
+    };
+
+    // Transfer the split coin to recipient
+    let recipient_arg = builder.ptb_builder_mut().pure(recipient).unwrap();
+    builder.ptb_builder_mut().command(Command::TransferObjects(
+        vec![Argument::NestedResult(split_idx, 0)],
+        recipient_arg,
+    ));
+    let tx = builder.build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "Transaction failed: {:?}",
+        effects.status()
+    );
+
+    // Recipient should have received a coin with transfer_amount
+    let created = effects.created();
+    assert_eq!(created.len(), 1, "Expected exactly one created object");
+    let new_coin_id = created[0].0.0;
+    let new_coin_balance = test_env.get_coin_balance(new_coin_id).await;
+    assert_eq!(new_coin_balance, transfer_amount);
+
+    // The real coin should be deleted (merged into the coin reservation)
+    assert_eq!(effects.deleted().len(), 1);
+    assert_eq!(effects.deleted()[0].0, real_coin.0);
+
+    // Sender's address balance: the real coin is merged into the fake coin, crediting
+    // real_coin_balance to address balance. The split removes transfer_amount. The
+    // reservation's unused portion (reservation_amount - transfer_amount) stays in
+    // address balance. Net change = +real_coin_balance - transfer_amount.
+    let final_sender_balance = test_env.get_sui_balance_ab(sender);
+    assert_eq!(
+        final_sender_balance,
+        initial_sender_balance + real_coin_balance - transfer_amount
+    );
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
