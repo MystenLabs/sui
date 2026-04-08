@@ -120,8 +120,14 @@ pub fn verify_bulletproofs_ristretto255(
                 .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
                 .and_then(|reference| reference.value_as::<VectorRef>())
                 .and_then(|v| Ok(v.as_bytes_ref()?.to_vec()))
-                .and_then(|v| v.try_into().map_err(|_| PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)))
-                .and_then(|b| RistrettoPoint::from_trusted_byte_array(&b).map_err(|_| PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)))
+                .and_then(|v| {
+                    v.try_into()
+                        .map_err(|_| PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))
+                })
+                .and_then(|b| {
+                    RistrettoPoint::from_trusted_byte_array(&b)
+                        .map_err(|_| PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))
+                })
                 .map(PedersenCommitment)
         })
         .collect::<PartialVMResult<Vec<PedersenCommitment>>>()?;
