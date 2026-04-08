@@ -11,12 +11,10 @@ const ENotSupported: u64 = 0; // Operation is not supported by the network.
 #[allow(unused_const)]
 const EInvalidProof: u64 = 1;
 #[allow(unused_const)]
-const EInvalidCommitment: u64 = 2;
+const EInvalidRange: u64 = 2;
 #[allow(unused_const)]
-const EInvalidRange: u64 = 3;
-#[allow(unused_const)]
-const EInvalidBatchSize: u64 = 4;
-const EUnsupportedVersion: u64 = 5;
+const EInvalidBatchSize: u64 = 3;
+const EUnsupportedVersion: u64 = 4;
 
 /// Verify a range proof over the Ristretto255 curve that all committed values are in the range [0, 2^bits).
 /// Currently, the only supported version is 0 which corresponds to the original Bulletproofs construction (https://eprint.iacr.org/2017/1066.pdf).

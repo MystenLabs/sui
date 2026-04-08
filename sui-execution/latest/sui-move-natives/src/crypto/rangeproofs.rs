@@ -9,7 +9,6 @@ use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::FromTrustedByteArray;
 use fastcrypto::groups::ristretto255::RistrettoPoint;
 use fastcrypto::pedersen::PedersenCommitment;
-use fastcrypto::serde_helpers::ToFromByteArray;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
@@ -23,9 +22,8 @@ use std::collections::VecDeque;
 
 pub const NOT_SUPPORTED: u64 = 0;
 pub const INVALID_PROOF: u64 = 1;
-pub const INVALID_COMMITMENT: u64 = 2;
-pub const INVALID_RANGE: u64 = 3;
-pub const INVALID_BATCH_SIZE: u64 = 4;
+pub const INVALID_RANGE: u64 = 2;
+pub const INVALID_BATCH_SIZE: u64 = 3;
 
 /// Upper bound for batch size * range in bits
 pub const MAX_TOTAL_BITS: u64 = 512;
@@ -116,30 +114,17 @@ pub fn verify_bulletproofs_ristretto255(
             * total_bits.into()
     );
 
-    let commitment_bytes = (0..length)
+    let commitments = (0..length)
         .map(|i| {
             commitments
                 .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
                 .and_then(|reference| reference.value_as::<VectorRef>())
                 .and_then(|v| Ok(v.as_bytes_ref()?.to_vec()))
-        })
-        .collect::<PartialVMResult<Vec<Vec<u8>>>>()?;
-
-    let Ok(commitments) = commitment_bytes
-        .into_iter()
-        .map(|b| {
-            b.try_into()
-                .map_err(|_| InvalidInput)
-                .and_then(|b| RistrettoPoint::from_trusted_byte_array(&b))
+                .and_then(|v| v.try_into().map_err(|_| PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)))
+                .and_then(|b| RistrettoPoint::from_trusted_byte_array(&b).map_err(|_| PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)))
                 .map(PedersenCommitment)
         })
-        .collect::<FastCryptoResult<Vec<PedersenCommitment>>>()
-    else {
-        return Err(
-            PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_ARGUMENT)
-                .with_message("Inputs are validated to be RistrettoPoint's".to_string()),
-        );
-    };
+        .collect::<PartialVMResult<Vec<PedersenCommitment>>>()?;
 
     let result = proof.verify_batch(&commitments, &range, &mut thread_rng());
 
