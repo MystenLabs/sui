@@ -119,10 +119,7 @@ fn test_charge_values_correct() {
         total_instructions > 0,
         "Expected some fixed-cost instructions, got 0",
     );
-    assert!(
-        total_pushes > 0,
-        "Expected some pushes, got 0",
-    );
+    assert!(total_pushes > 0, "Expected some pushes, got 0",);
     // Verify that Charge values are self-consistent: each block's charge should
     // have instructions >= pushes (most instructions push at most 1 value)
     for (_label, code) in &blocks {

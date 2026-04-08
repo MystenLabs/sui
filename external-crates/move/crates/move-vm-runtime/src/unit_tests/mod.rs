@@ -17,8 +17,8 @@
 mod bad_entry_point_tests;
 mod bad_storage_tests;
 mod basic_block_tests;
-mod charge_instruction_tests;
 mod binary_format_version;
+mod charge_instruction_tests;
 mod compatibility_tests;
 mod exec_func_effects_tests;
 mod function_arg_tests;

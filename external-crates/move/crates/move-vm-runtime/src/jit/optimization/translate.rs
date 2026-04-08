@@ -33,7 +33,13 @@ impl BlockGasCost {
         self.instructions > 0
     }
 
-    fn add(&mut self, pops: u64, pushes: u64, pop_size: AbstractMemorySize, push_size: AbstractMemorySize) {
+    fn add(
+        &mut self,
+        pops: u64,
+        pushes: u64,
+        pop_size: AbstractMemorySize,
+        push_size: AbstractMemorySize,
+    ) {
         self.instructions += 1;
         self.pushes += pushes;
         self.pops += pops;
@@ -54,7 +60,9 @@ const U256_SIZE: AbstractMemorySize = AbstractMemorySize::new(32);
 
 /// Returns Some((pops, pushes, pop_size, push_size)) for fixed-cost instructions,
 /// None for variable-cost instructions that need runtime charging.
-fn get_fixed_instruction_cost(instr: &ast::Bytecode) -> Option<(u64, u64, AbstractMemorySize, AbstractMemorySize)> {
+fn get_fixed_instruction_cost(
+    instr: &ast::Bytecode,
+) -> Option<(u64, u64, AbstractMemorySize, AbstractMemorySize)> {
     use ast::Bytecode::*;
     match instr {
         // No-op instructions
@@ -73,12 +81,15 @@ fn get_fixed_instruction_cost(instr: &ast::Bytecode) -> Option<(u64, u64, Abstra
         LdU256(_) => Some((0, 1, AbstractMemorySize::zero(), U256_SIZE)),
         LdTrue | LdFalse => Some((0, 1, AbstractMemorySize::zero(), BOOL_SIZE)),
 
-        // Reference operations with fixed cost
+        // Reference operations with fixed cost.
         FreezeRef => Some((1, 1, REFERENCE_SIZE, REFERENCE_SIZE)),
-        MutBorrowLoc(_) | ImmBorrowLoc(_) => Some((0, 1, AbstractMemorySize::zero(), REFERENCE_SIZE)),
-        MutBorrowField(_) | ImmBorrowField(_) | MutBorrowFieldGeneric(_) | ImmBorrowFieldGeneric(_) => {
-            Some((1, 1, REFERENCE_SIZE, REFERENCE_SIZE))
+        MutBorrowLoc(_) | ImmBorrowLoc(_) => {
+            Some((0, 1, AbstractMemorySize::zero(), REFERENCE_SIZE))
         }
+        MutBorrowField(_)
+        | ImmBorrowField(_)
+        | MutBorrowFieldGeneric(_)
+        | ImmBorrowFieldGeneric(_) => Some((1, 1, REFERENCE_SIZE, REFERENCE_SIZE)),
 
         // Cast operations - conservative estimate: smallest input, actual output
         CastU8 => Some((1, 1, U8_SIZE, U8_SIZE)),
@@ -117,12 +128,23 @@ fn get_fixed_instruction_cost(instr: &ast::Bytecode) -> Option<(u64, u64, Abstra
         // Pack/Unpack: depends on field count/sizes
         Pack(_) | PackGeneric(_) | Unpack(_) | UnpackGeneric(_) => None,
         // Vector operations: depend on element sizes
-        VecPack(_, _) | VecLen(_) | VecImmBorrow(_) | VecMutBorrow(_) |
-        VecPushBack(_) | VecPopBack(_) | VecUnpack(_, _) | VecSwap(_) => None,
+        VecPack(_, _)
+        | VecLen(_)
+        | VecImmBorrow(_)
+        | VecMutBorrow(_)
+        | VecPushBack(_)
+        | VecPopBack(_)
+        | VecUnpack(_, _)
+        | VecSwap(_) => None,
         // Variant operations: depend on field sizes
-        PackVariant(_) | PackVariantGeneric(_) |
-        UnpackVariant(_) | UnpackVariantImmRef(_) | UnpackVariantMutRef(_) |
-        UnpackVariantGeneric(_) | UnpackVariantGenericImmRef(_) | UnpackVariantGenericMutRef(_) => None,
+        PackVariant(_)
+        | PackVariantGeneric(_)
+        | UnpackVariant(_)
+        | UnpackVariantImmRef(_)
+        | UnpackVariantMutRef(_)
+        | UnpackVariantGeneric(_)
+        | UnpackVariantGenericImmRef(_)
+        | UnpackVariantGenericMutRef(_) => None,
         // VariantSwitch: depends on value size
         VariantSwitch(_) => None,
         // Call operations: handled separately
@@ -374,7 +396,12 @@ mod tests {
     use crate::jit::optimization::ast::{Bytecode, ChargeInfo};
     use move_binary_format::file_format::{FieldHandleIndex, FieldInstantiationIndex};
 
-    fn assert_cost(code: &[Bytecode], expected_instrs: u64, expected_pushes: u64, expected_pops: u64) {
+    fn assert_cost(
+        code: &[Bytecode],
+        expected_instrs: u64,
+        expected_pushes: u64,
+        expected_pops: u64,
+    ) {
         let cost = compute_block_fixed_costs(code);
         assert_eq!(
             cost.instructions, expected_instrs,
@@ -478,11 +505,7 @@ mod tests {
     #[test]
     fn test_casts() {
         // Each cast: 1 pop, 1 push
-        let code = vec![
-            Bytecode::CastU8,
-            Bytecode::CastU64,
-            Bytecode::CastU256,
-        ];
+        let code = vec![Bytecode::CastU8, Bytecode::CastU64, Bytecode::CastU256];
         assert_cost(&code, 3, 3, 3);
     }
 
@@ -576,12 +599,7 @@ mod tests {
     #[test]
     fn test_all_comparison_ops() {
         // Each: 2 pops, 1 push
-        let code = vec![
-            Bytecode::Lt,
-            Bytecode::Gt,
-            Bytecode::Le,
-            Bytecode::Ge,
-        ];
+        let code = vec![Bytecode::Lt, Bytecode::Gt, Bytecode::Le, Bytecode::Ge];
         assert_cost(&code, 4, 4, 8);
     }
 

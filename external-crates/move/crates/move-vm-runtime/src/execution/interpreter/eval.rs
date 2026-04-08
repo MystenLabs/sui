@@ -403,11 +403,17 @@ fn op_step_impl(
                 UNREACHABLE,
                 "Call/Return instructions should be handled in `step`, not `op_step_impl`"
             ));
-        },
+        }
         // -- GAS BATCHING ----------------------
         // Charge for a basic block's fixed-cost instructions at once.
         Bytecode::Charge(info) => {
-            gas_meter.charge_block(info.instructions, info.pushes, info.pops, info.push_size, info.pop_size)?;
+            gas_meter.charge_block(
+                info.instructions,
+                info.pushes,
+                info.pops,
+                info.push_size,
+                info.pop_size,
+            )?;
         }
         // -- INTERNAL CONTROL FLOW --------------
         // These all update the current frame's program counter.
@@ -592,30 +598,14 @@ fn op_step_impl(
             state.push_operand(Value::u256(integer_value.cast_u256()?))?;
         }
         // Arithmetic Operations
-        Bytecode::Add => {
-            binop_int(state, IntegerValue::add_checked)?
-        }
-        Bytecode::Sub => {
-            binop_int(state, IntegerValue::sub_checked)?
-        }
-        Bytecode::Mul => {
-            binop_int(state, IntegerValue::mul_checked)?
-        }
-        Bytecode::Mod => {
-            binop_int(state, IntegerValue::rem_checked)?
-        }
-        Bytecode::Div => {
-            binop_int(state, IntegerValue::div_checked)?
-        }
-        Bytecode::BitOr => {
-            binop_int(state, IntegerValue::bit_or)?
-        }
-        Bytecode::BitAnd => {
-            binop_int(state, IntegerValue::bit_and)?
-        }
-        Bytecode::Xor => {
-            binop_int(state, IntegerValue::bit_xor)?
-        }
+        Bytecode::Add => binop_int(state, IntegerValue::add_checked)?,
+        Bytecode::Sub => binop_int(state, IntegerValue::sub_checked)?,
+        Bytecode::Mul => binop_int(state, IntegerValue::mul_checked)?,
+        Bytecode::Mod => binop_int(state, IntegerValue::rem_checked)?,
+        Bytecode::Div => binop_int(state, IntegerValue::div_checked)?,
+        Bytecode::BitOr => binop_int(state, IntegerValue::bit_or)?,
+        Bytecode::BitAnd => binop_int(state, IntegerValue::bit_and)?,
+        Bytecode::Xor => binop_int(state, IntegerValue::bit_xor)?,
         Bytecode::Shl => {
             let rhs = state.pop_operand_as::<u8>()?;
             let lhs = state.pop_operand_as::<IntegerValue>()?;
@@ -626,24 +616,12 @@ fn op_step_impl(
             let lhs = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(lhs.shr_checked(rhs)?.into_value())?;
         }
-        Bytecode::Or => {
-            binop_bool(state, |l, r| Ok(l || r))?
-        }
-        Bytecode::And => {
-            binop_bool(state, |l, r| Ok(l && r))?
-        }
-        Bytecode::Lt => {
-            binop_bool(state, IntegerValue::lt)?
-        }
-        Bytecode::Gt => {
-            binop_bool(state, IntegerValue::gt)?
-        }
-        Bytecode::Le => {
-            binop_bool(state, IntegerValue::le)?
-        }
-        Bytecode::Ge => {
-            binop_bool(state, IntegerValue::ge)?
-        }
+        Bytecode::Or => binop_bool(state, |l, r| Ok(l || r))?,
+        Bytecode::And => binop_bool(state, |l, r| Ok(l && r))?,
+        Bytecode::Lt => binop_bool(state, IntegerValue::lt)?,
+        Bytecode::Gt => binop_bool(state, IntegerValue::gt)?,
+        Bytecode::Le => binop_bool(state, IntegerValue::le)?,
+        Bytecode::Ge => binop_bool(state, IntegerValue::ge)?,
         Bytecode::Abort => {
             let error_code = state.pop_operand_as::<u64>()?;
             let error = partial_vm_error!(ABORTED)
@@ -679,8 +657,7 @@ fn op_step_impl(
             let value = !state.pop_operand_as::<bool>()?;
             state.push_operand(Value::bool(value))?;
         }
-        Bytecode::Nop => {
-        }
+        Bytecode::Nop => {}
         Bytecode::VecPack(ty_ptr, num) => {
             let num = checked_as!(*num, u16)?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
