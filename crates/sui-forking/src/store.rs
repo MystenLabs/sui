@@ -25,12 +25,8 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 pub const DATA_STORE_DIR: &str = ".forking_data_store";
 /// Per-chain object storage directory.
 pub const OBJECTS_DIR: &str = "objects";
-/// Per-chain transaction storage directory.
-pub const TRANSACTION_DIR: &str = "transaction";
-/// Per-chain epoch storage directory.
-pub const EPOCH_DIR: &str = "epoch";
 /// Per-chain checkpoint storage directory.
-pub const CHECKPOINT_DIR: &str = "checkpoint";
+pub const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Marker file for the latest checkpoint sequence known to the store.
 pub const LATEST_FILE: &str = "latest";
 
