@@ -18,6 +18,7 @@ pub mod consensus_throughput_calculator;
 pub(crate) mod consensus_types;
 pub mod consensus_validator;
 pub mod db_checkpoint_handler;
+pub mod dynamic_rpc_validator;
 pub mod epoch;
 pub mod execution_cache;
 mod execution_driver;

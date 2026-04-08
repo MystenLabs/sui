@@ -80,6 +80,7 @@ mysten-metrics.workspace = true
 prost.workspace = true
 shared-crypto.workspace = true
 sui-config.workspace = true
+sui-dynamic-rpc-validator.workspace = true
 sui-rpc.workspace = true
 sui-authority-aggregation.workspace = true
 sui-execution.workspace = true

@@ -1,0 +1,54 @@
+[package]
+name = "sui-dynamic-rpc-validator"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[lints]
+workspace = true
+
+[lib]
+# Library providing the interface and loader for dynamic RPC validation
+name = "sui_dynamic_rpc_validator"
+path = "src/lib.rs"
+
+[[example]]
+# Reference implementation compiled as a shared object
+name = "reference_validator"
+path = "examples/reference_impl.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+# Parsing validator that validates messages by attempting to parse them
+name = "parsing_validator"
+path = "examples/parsing_validator.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+# Test validator that rejects transactions if sender ends in zero
+name = "reject_zero_sender"
+path = "examples/reject_zero_sender.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+libloading = "0.8"
+parking_lot.workspace = true
+prometheus.workspace = true
+tracing.workspace = true
+mysten-metrics.workspace = true
+
+# Dependencies for parsing validator example
+bcs.workspace = true
+prost.workspace = true
+sui-types = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+# Enable parsing validator functionality (requires sui-types)
+parsing = ["sui-types"]
+
+[build-dependencies]

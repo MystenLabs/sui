@@ -1573,6 +1573,39 @@ impl SuiNode {
         consensus_adapter: Arc<ConsensusAdapter>,
         prometheus_registry: &Registry,
     ) -> Result<SpawnOnce> {
+        use sui_config::dynamic_rpc_validator_config::{ValidatorInfo, get_validator_library_path};
+        use sui_core::dynamic_rpc_validator::{DynamicRpcValidator, DynamicValidatorMetrics};
+
+        // Get validator info for the callback
+        let authority_name = state.name;
+        let committee = state.epoch_store_for_testing().committee().clone();
+        let validator_index = committee
+            .voting_rights
+            .iter()
+            .position(|(name, _)| *name == authority_name)
+            .unwrap_or(0);
+
+        let validator_info = ValidatorInfo {
+            index: validator_index,
+            authority_name,
+        };
+
+        // Get library path (may come from config or test callback)
+        let library_path =
+            get_validator_library_path(&config.dynamic_rpc_validator_config, Some(&validator_info));
+
+        // Create dynamic RPC validator if a library path is configured
+        let dynamic_validator = if library_path.is_some() {
+            let validator_metrics = Arc::new(DynamicValidatorMetrics::new(prometheus_registry));
+            Some(Arc::new(DynamicRpcValidator::new(
+                library_path,
+                config.dynamic_rpc_validator_config.check_interval(),
+                validator_metrics,
+            )))
+        } else {
+            None
+        };
+
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
@@ -1587,7 +1620,8 @@ impl SuiNode {
         server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
         server_conf.load_shed = config.grpc_load_shed;
         let mut server_builder =
-            ServerBuilder::from_config(&server_conf, GrpcMetrics::new(prometheus_registry));
+            ServerBuilder::from_config(&server_conf, GrpcMetrics::new(prometheus_registry))
+                .with_dynamic_validator(dynamic_validator);
 
         server_builder = server_builder.add_service(ValidatorServer::new(validator_service));
 
