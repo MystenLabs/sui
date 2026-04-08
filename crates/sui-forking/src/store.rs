@@ -25,12 +25,8 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 pub const DATA_STORE_DIR: &str = ".forking_data_store";
 /// Per-chain object storage directory.
 pub const OBJECTS_DIR: &str = "objects";
-/// Per-chain transaction storage directory.
-pub const TRANSACTION_DIR: &str = "transaction";
-/// Per-chain epoch storage directory.
-pub const EPOCH_DIR: &str = "epoch";
 /// Per-chain checkpoint storage directory.
-pub const CHECKPOINT_DIR: &str = "checkpoint";
+pub const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Marker file for the latest checkpoint sequence known to the store.
 pub const LATEST_FILE: &str = "latest";
 
@@ -158,6 +154,15 @@ impl DataStore {
     }
 
     // *** Filesystem APIs *** //
+    // Folder structure:
+    // {base_path}/{network_name}/forked_at_{checkpoint}/
+    //     - objects/
+    //         - {object_id}/
+    //            - latest (contains the latest version number)
+    //            - {version} (contains the object data in BCS format)
+    //      - checkpoints/
+    //          - latest (contains the latest checkpoint sequence number)
+    //          - {checkpoint} (contains the checkpoint data in BCS format)
 
     /// Resolve the default base path for on-disk storage.
     pub fn base_path() -> Result<PathBuf, Error> {
@@ -182,12 +187,14 @@ impl DataStore {
             .join(format!("forked_at_{}", self.forked_at_checkpoint)))
     }
 
+    /// Return the directory path for storing objects data.
     fn objects_dir(&self) -> Result<PathBuf, Error> {
         Ok(self.node_dir()?.join(OBJECTS_DIR))
     }
 
+    /// Return the directory path for storing checkpoint data.
     fn checkpoints_dir(&self) -> Result<PathBuf, Error> {
-        Ok(self.node_dir()?.join(CHECKPOINT_DIR))
+        Ok(self.node_dir()?.join(CHECKPOINTS_DIR))
     }
 
     /// Get the latest object version available on disk for the given object ID.
