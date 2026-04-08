@@ -1,6 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Folder structure:
+//! {base_path}/{network_name}/forked_at_{checkpoint}/
+//!     - objects/
+//!         - {object_id}/
+//!            - latest (contains the latest version number)
+//!            - {version} (contains the object data in BCS format)
+//!      - checkpoints/
+//!          - latest (contains the latest checkpoint sequence number)
+//!          - {checkpoint} (contains the checkpoint data in BCS format)
+
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -24,28 +34,25 @@ pub const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Marker file for the latest checkpoint sequence known to the store.
 pub const LATEST_FILE: &str = "latest";
 
-// Folder structure:
-// {base_path}/{network_name}/forked_at_{checkpoint}/
-//     - objects/
-//         - {object_id}/
-//            - latest (contains the latest version number)
-//            - {version} (contains the object data in BCS format)
-//      - checkpoints/
-//          - latest (contains the latest checkpoint sequence number)
-//          - {checkpoint} (contains the checkpoint data in BCS format)
-
 /// Local filesystem-backed store for Sui data.
 pub struct FilesystemStore {
-    node: Node,
-    forked_at_checkpoint: CheckpointSequenceNumber,
+    root: PathBuf,
 }
 
 impl FilesystemStore {
-    pub fn new(node: Node, forked_at_checkpoint: CheckpointSequenceNumber) -> Self {
-        Self {
-            node,
-            forked_at_checkpoint,
-        }
+    /// Create a new filesystem store rooted at
+    /// `{base_path}/{network_name}/forked_at_{checkpoint}`.
+    pub fn new(node: &Node, forked_at_checkpoint: CheckpointSequenceNumber) -> Result<Self, Error> {
+        let root = Self::base_path()?
+            .join(node.network_name())
+            .join(format!("forked_at_{}", forked_at_checkpoint));
+        Ok(Self { root })
+    }
+
+    /// Create a filesystem store with an explicit root directory.
+    #[cfg(test)]
+    pub(crate) fn new_with_root(root: PathBuf) -> Self {
+        Self { root }
     }
 
     /// Resolve the default base path for on-disk storage.
@@ -62,28 +69,19 @@ impl FilesystemStore {
         Ok(PathBuf::from(home_dir).join(DATA_STORE_DIR))
     }
 
-    /// Get the directory path for the current node and forked checkpoint, which is used to store
-    /// all data related to this fork. The path is resolved as
-    /// `{base_path}/{network_name}/forked_at_{checkpoint}`.
-    fn node_dir(&self) -> Result<PathBuf, Error> {
-        Ok(Self::base_path()?
-            .join(self.node.network_name())
-            .join(format!("forked_at_{}", self.forked_at_checkpoint)))
-    }
-
     /// Return the directory path for storing objects data.
-    fn objects_dir(&self) -> Result<PathBuf, Error> {
-        Ok(self.node_dir()?.join(OBJECTS_DIR))
+    fn objects_dir(&self) -> PathBuf {
+        self.root.join(OBJECTS_DIR)
     }
 
     /// Return the directory path for storing checkpoint data.
-    fn checkpoints_dir(&self) -> Result<PathBuf, Error> {
-        Ok(self.node_dir()?.join(CHECKPOINTS_DIR))
+    fn checkpoints_dir(&self) -> PathBuf {
+        self.root.join(CHECKPOINTS_DIR)
     }
 
     /// Get the latest object version available on disk for the given object ID.
     pub fn get_latest_object(&self, object_id: ObjectID) -> anyhow::Result<Option<Object>> {
-        let object_dir = self.objects_dir()?.join(object_id.to_string());
+        let object_dir = self.objects_dir().join(object_id.to_string());
 
         if !object_dir.exists() {
             return Ok(None);
@@ -99,7 +97,7 @@ impl FilesystemStore {
         object_id: ObjectID,
         version: u64,
     ) -> anyhow::Result<Option<Object>> {
-        let object_dir = self.objects_dir()?.join(object_id.to_string());
+        let object_dir = self.objects_dir().join(object_id.to_string());
         let version_file = object_dir.join(version.to_string());
 
         if !version_file.exists() {
@@ -112,18 +110,19 @@ impl FilesystemStore {
     /// Write the given object to disk under the objects directory, using the object ID and version
     /// as the path. It will also update the latest file to point to this version.
     pub fn write_object(&self, object: &Object) -> anyhow::Result<()> {
-        let object_dir = self.objects_dir()?.join(object.id().to_string());
-        let version_file = object_dir.join(object.version().to_string());
+        let object_dir = self.objects_dir().join(object.id().to_string());
+        let version = object.version().value();
+        let version_file = object_dir.join(version.to_string());
         self.write_bcs_file(&version_file, object)?;
 
         let latest_file = object_dir.join(LATEST_FILE);
-        fs::write(latest_file, object.version().to_string())
+        fs::write(latest_file, version.to_string())
             .with_context(|| format!("Failed to write latest file for object {}", object.id()))
     }
 
     /// Get the highest checkpoint sequence number available on disk.
     pub fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
-        let checkpoint_dir = self.checkpoints_dir()?;
+        let checkpoint_dir = self.checkpoints_dir();
 
         anyhow::ensure!(
             checkpoint_dir.exists(),
@@ -168,5 +167,109 @@ impl FilesystemStore {
                 latest_path.display()
             )
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::digests::TransactionDigest;
+    use sui_types::object::MoveObject;
+    use sui_types::object::Object;
+    use sui_types::object::ObjectInner;
+    use sui_types::object::Owner;
+
+    use super::*;
+
+    fn test_store() -> (tempfile::TempDir, FilesystemStore) {
+        let dir = tempfile::tempdir().expect("failed to create tempdir");
+        let store = FilesystemStore::new_with_root(dir.path().to_path_buf());
+        (dir, store)
+    }
+
+    fn make_object(id: ObjectID, version: u64) -> Object {
+        let move_obj = MoveObject::new_gas_coin(SequenceNumber::from_u64(version), id, 1_000_000);
+        ObjectInner {
+            owner: Owner::Immutable,
+            data: sui_types::object::Data::Move(move_obj),
+            previous_transaction: TransactionDigest::genesis_marker(),
+            storage_rebate: 0,
+        }
+        .into()
+    }
+
+    #[test]
+    fn test_write_and_read_latest_object() {
+        let (_dir, store) = test_store();
+        let id = ObjectID::random();
+        let obj = make_object(id, 5);
+
+        store.write_object(&obj).unwrap();
+        let loaded = store.get_latest_object(id).unwrap();
+        assert_eq!(loaded.clone().unwrap(), obj);
+        assert_eq!(loaded.unwrap().version(), SequenceNumber::from_u64(5));
+    }
+
+    #[test]
+    fn test_write_and_read_object_at_version() {
+        let (_dir, store) = test_store();
+        let id = ObjectID::random();
+        let obj = make_object(id, 5);
+
+        store.write_object(&obj).unwrap();
+        let loaded = store.get_object_at_version(id, 5).unwrap();
+        assert_eq!(loaded.unwrap(), obj);
+    }
+
+    #[test]
+    fn test_get_latest_object_returns_none_for_unknown_id() {
+        let (_dir, store) = test_store();
+        let result = store.get_latest_object(ObjectID::random()).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_object_at_version_returns_none_for_unknown_version() {
+        let (_dir, store) = test_store();
+        let id = ObjectID::random();
+        let obj = make_object(id, 5);
+        store.write_object(&obj).unwrap();
+
+        let result = store.get_object_at_version(id, 99).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_latest_tracks_highest_written_version() {
+        let (_dir, store) = test_store();
+        let id = ObjectID::random();
+
+        let v1 = make_object(id, 1);
+        let v3 = make_object(id, 3);
+        store.write_object(&v1).unwrap();
+        store.write_object(&v3).unwrap();
+
+        let latest = store.get_latest_object(id).unwrap().unwrap();
+        assert_eq!(latest, v3);
+
+        // v1 is still accessible by version
+        let old = store.get_object_at_version(id, 1).unwrap().unwrap();
+        assert_eq!(old, v1);
+    }
+
+    #[test]
+    fn test_get_highest_checkpoint_errors_when_dir_missing() {
+        let (_dir, store) = test_store();
+        let err = store.get_highest_checkpoint().unwrap_err();
+        assert!(err.to_string().contains("does not exist"));
+    }
+
+    #[test]
+    fn test_get_highest_checkpoint_errors_when_latest_file_missing() {
+        let (_dir, store) = test_store();
+        fs::create_dir_all(store.checkpoints_dir()).unwrap();
+        let err = store.get_highest_checkpoint().unwrap_err();
+        assert!(err.to_string().contains("Latest file not found"));
     }
 }

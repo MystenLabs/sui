@@ -15141,6 +15141,7 @@ dependencies = [
  "forking-data-store",
  "serde",
  "sui-types",
+ "tempfile",
  "tokio",
  "tracing-subscriber",
  "url",

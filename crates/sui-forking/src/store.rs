@@ -32,7 +32,7 @@ impl DataStore {
         version: &str,
     ) -> Result<Self, anyhow::Error> {
         let gql = GraphQLStore::new(node.clone(), version)?;
-        let local = FilesystemStore::new(node.clone(), forked_at_checkpoint);
+        let local = FilesystemStore::new(&node, forked_at_checkpoint)?;
 
         Ok(Self {
             forked_at_checkpoint,

@@ -18,5 +18,8 @@ bin-version.workspace = true
 forking-data-store = { path = "../forking-data-store" }
 sui-types.workspace = true
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints]
 workspace = true
