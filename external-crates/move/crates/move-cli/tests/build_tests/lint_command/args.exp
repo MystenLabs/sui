@@ -26,5 +26,5 @@ warning[Lint W04004]: unneeded return
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-External Command `ls build`:
-ls: build: No such file or directory
+External Command `test -d /path/to/dir && echo "build/ EXISTS" || echo "build/ NOT FOUND"`:
+build/ NOT FOUND
