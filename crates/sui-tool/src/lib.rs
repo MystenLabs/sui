@@ -70,6 +70,7 @@ use typed_store::DBMetrics;
 pub mod commands;
 pub mod db_tool;
 mod formal_snapshot_util;
+pub mod snapshot_storage;
 
 #[derive(
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
@@ -713,14 +714,9 @@ fn start_summary_sync(
     })
 }
 
-pub async fn get_latest_available_epoch(
-    snapshot_store_config: &ObjectStoreConfig,
+pub async fn get_latest_available_epoch_from_store(
+    remote_object_store: &impl ObjectStoreGetExt,
 ) -> Result<u64, anyhow::Error> {
-    let remote_object_store = if snapshot_store_config.no_sign_request {
-        snapshot_store_config.make_http()?
-    } else {
-        snapshot_store_config.make().map(Arc::new)?
-    };
     let manifest_contents = remote_object_store
         .get_bytes(&get_path(MANIFEST_FILENAME))
         .await?;
@@ -734,22 +730,16 @@ pub async fn get_latest_available_epoch(
     Ok(*epoch)
 }
 
-pub async fn check_completed_snapshot(
-    snapshot_store_config: &ObjectStoreConfig,
+pub async fn check_completed_snapshot_from_store(
+    remote_object_store: &impl ObjectStoreGetExt,
     epoch: EpochId,
 ) -> Result<(), anyhow::Error> {
     let success_marker = format!("epoch_{}/_SUCCESS", epoch);
     let archive_success_marker = format!("archive/epoch_{}/_SUCCESS", epoch);
-    let remote_object_store = if snapshot_store_config.no_sign_request {
-        snapshot_store_config.make_http()?
-    } else {
-        snapshot_store_config.make().map(Arc::new)?
-    };
 
-    // Check regular location first, then archive location
-    if exists(&remote_object_store, &get_path(success_marker.as_str())).await
+    if exists(remote_object_store, &get_path(success_marker.as_str())).await
         || exists(
-            &remote_object_store,
+            remote_object_store,
             &get_path(archive_success_marker.as_str()),
         )
         .await
@@ -757,21 +747,8 @@ pub async fn check_completed_snapshot(
         Ok(())
     } else {
         Err(anyhow!(
-            "missing success marker at {}/{} or {}/{}",
-            snapshot_store_config.bucket.as_ref().unwrap_or(
-                &snapshot_store_config
-                    .clone()
-                    .aws_endpoint
-                    .unwrap_or("unknown_bucket".to_string())
-            ),
-            success_marker,
-            snapshot_store_config.bucket.as_ref().unwrap_or(
-                &snapshot_store_config
-                    .clone()
-                    .aws_endpoint
-                    .unwrap_or("unknown_bucket".to_string())
-            ),
-            archive_success_marker
+            "missing success marker at epoch_{0}/_SUCCESS or archive/epoch_{0}/_SUCCESS",
+            epoch
         ))
     }
 }
