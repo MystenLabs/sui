@@ -539,7 +539,7 @@ impl IndexedExecutionTimings {
                 );
                 continue;
             };
-            debug_assert!(!entry.is_abort() && entry.duration().is_zero());
+            debug_assert!(matches!(entry, ExecutionTiming::Success(d) if d.is_zero()));
             *entry = ExecutionTiming::Success(duration);
         }
 
@@ -549,7 +549,7 @@ impl IndexedExecutionTimings {
                 "error index should be last"
             );
             if let Some(entry) = coalesced.get_mut(index) {
-                debug_assert!(!entry.is_abort() && entry.duration().is_zero());
+                debug_assert!(matches!(entry, ExecutionTiming::Success(d) if d.is_zero()));
                 *entry = ExecutionTiming::Abort(error_duration);
             } else {
                 debug_assert!(
