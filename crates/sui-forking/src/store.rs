@@ -30,7 +30,8 @@ pub const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Marker file for the latest checkpoint sequence known to the store.
 pub const LATEST_FILE: &str = "latest";
 
-// `simulacrum` store adapter over a historical fork source.
+/// A data store for Sui data, with a local filesystem and a remote GraphQL endpoint to query for
+/// historical data.
 pub struct DataStore {
     forked_at_checkpoint: CheckpointSequenceNumber,
     node: Node,
