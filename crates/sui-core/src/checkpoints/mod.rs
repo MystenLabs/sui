@@ -25,7 +25,7 @@ use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use consensus_core::CommitRef;
 use diffy::create_patch;
 use itertools::Itertools;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::{CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME, NotifyRead};
 use mysten_common::{assert_reachable, debug_fatal, fatal, in_antithesis};
@@ -2189,7 +2189,7 @@ impl CheckpointBuilder {
         {
             let chunk: Vec<_> = effects_and_transaction_sizes
                 .into_iter()
-                .checked_zip(signatures)
+                .zip_debug_eq(signatures)
                 .map(|((effects, _size), sigs)| (effects, sigs))
                 .collect();
             return Ok(vec![chunk]);
@@ -2199,7 +2199,7 @@ impl CheckpointBuilder {
         let mut chunk_size: usize = 0;
         for ((effects, transaction_size), signatures) in effects_and_transaction_sizes
             .into_iter()
-            .checked_zip(signatures.into_iter())
+            .zip_debug_eq(signatures.into_iter())
         {
             // Roll over to a new chunk after either max count or max size is reached.
             // The size calculation here is intended to estimate the size of the
@@ -2314,7 +2314,7 @@ impl CheckpointBuilder {
 
             for (effects, transaction_and_size) in all_effects
                 .into_iter()
-                .checked_zip(transactions_and_sizes.into_iter())
+                .zip_debug_eq(transactions_and_sizes.into_iter())
             {
                 let (transaction, size) = transaction_and_size
                     .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
@@ -2669,7 +2669,7 @@ impl CheckpointBuilder {
 
             for (effect, tx_included) in roots
                 .into_iter()
-                .checked_zip(transactions_included.into_iter())
+                .zip_debug_eq(transactions_included.into_iter())
             {
                 let digest = effect.transaction_digest();
                 // Unnecessary to read effects of a dependency if the effect is already processed.
@@ -2692,7 +2692,7 @@ impl CheckpointBuilder {
                 for (dependency, effects_signature_exists) in effect
                     .dependencies()
                     .iter()
-                    .checked_zip(existing_effects.iter())
+                    .zip_debug_eq(existing_effects.iter())
                 {
                     // Skip here if dependency not executed in the current epoch.
                     // Note that the existence of an effects signature in the
@@ -2714,7 +2714,7 @@ impl CheckpointBuilder {
             let effects = self.effects_store.multi_get_executed_effects(&pending);
             let effects = effects
                 .into_iter()
-                .checked_zip(pending)
+                .zip_debug_eq(pending)
                 .map(|(opt, digest)| match opt {
                     Some(x) => x,
                     None => panic!(
@@ -3211,7 +3211,7 @@ async fn diagnose_split_brain(
     let response_data = futures::future::join_all(response_futures)
         .await
         .into_iter()
-        .checked_zip(digest_name_pair)
+        .zip_debug_eq(digest_name_pair)
         .filter_map(|(response, (digest, name))| match response {
             Ok(response) => match response {
                 CheckpointResponseV2 {

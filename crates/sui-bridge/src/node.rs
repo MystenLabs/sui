@@ -28,7 +28,7 @@ use crate::utils::{
 };
 use alloy::primitives::Address as EthAddress;
 use arc_swap::ArcSwap;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, HashMap};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -449,7 +449,7 @@ fn get_sui_modules_to_watch(
     let mut sui_modules_to_watch = HashMap::new();
     for (module_identifier, cursor) in sui_bridge_modules
         .iter()
-        .checked_zip(sui_bridge_module_stored_cursor)
+        .zip_debug_eq(sui_bridge_module_stored_cursor)
     {
         if cursor.is_none() {
             info!(
@@ -472,7 +472,7 @@ fn get_eth_contracts_to_watch(
         .get_eth_event_cursors(eth_contracts)
         .expect("Failed to get eth event cursors from storage");
     let mut eth_contracts_to_watch = HashMap::new();
-    for (contract, stored_cursor) in eth_contracts.iter().checked_zip(stored_eth_cursors) {
+    for (contract, stored_cursor) in eth_contracts.iter().zip_debug_eq(stored_eth_cursors) {
         // start block precedence:
         // eth_contracts_start_block_override > stored cursor > eth_contracts_start_block_fallback
         match (eth_contracts_start_block_override, stored_cursor) {

@@ -20,7 +20,7 @@ use futures::future::{Either, join_all, select};
 use itertools::Itertools;
 use moka::sync::SegmentedCache as MokaCache;
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_once::NotifyOnce;
@@ -2143,7 +2143,7 @@ impl AuthorityPerEpochStore {
             .unwrap_or_default();
 
         // Check for conflicts with existing locks (from earlier commits or crash recovery)
-        for (lock, obj_ref) in existing_locks.iter().checked_zip(owned_object_refs) {
+        for (lock, obj_ref) in existing_locks.iter().zip_debug_eq(owned_object_refs) {
             if let Some(locked_tx_digest) = lock
                 && *locked_tx_digest != tx_digest
             {
@@ -2416,7 +2416,7 @@ impl AuthorityPerEpochStore {
 
         let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
             .iter()
-            .checked_zip(objects_to_init)
+            .zip_debug_eq(objects_to_init)
             .filter_map(|(next_version, id_and_version)| match next_version {
                 None => Some(*id_and_version),
                 Some(_) => None,
@@ -2430,7 +2430,7 @@ impl AuthorityPerEpochStore {
             return Ok(objects_to_init
                 .iter()
                 .cloned()
-                .checked_zip(next_versions.into_iter().map(|v| v.unwrap()))
+                .zip_debug_eq(next_versions.into_iter().map(|v| v.unwrap()))
                 .collect());
         }
 
@@ -2463,7 +2463,7 @@ impl AuthorityPerEpochStore {
         let ret = objects_to_init
             .iter()
             .cloned()
-            .checked_zip(next_versions)
+            .zip_debug_eq(next_versions)
             // take all the previously initialized versions
             .filter_map(|(key, next_version)| next_version.map(|v| (key, v)))
             // add all the versions we're going to write
@@ -2724,7 +2724,7 @@ impl AuthorityPerEpochStore {
 
         let unprocessed_keys_registrations = registrations
             .into_iter()
-            .checked_zip(self.check_consensus_messages_processed(keys.into_iter())?)
+            .zip_debug_eq(self.check_consensus_messages_processed(keys.into_iter())?)
             .filter(|(_, processed)| !processed)
             .map(|(registration, _)| registration);
 
@@ -2785,15 +2785,14 @@ impl AuthorityPerEpochStore {
             .tables()?
             .transaction_key_to_digest
             .multi_get(&non_digest_keys)?;
-        let futures =
-            executed_digests
-                .into_iter()
-                .checked_zip(registrations)
-                .map(|(d, r)| match d {
-                    // Note that Some() clause also drops registration that is already fulfilled
-                    Some(ready) => Either::Left(futures::future::ready(ready)),
-                    None => Either::Right(r),
-                });
+        let futures = executed_digests
+            .into_iter()
+            .zip_debug_eq(registrations)
+            .map(|(d, r)| match d {
+                // Note that Some() clause also drops registration that is already fulfilled
+                Some(ready) => Either::Left(futures::future::ready(ready)),
+                None => Either::Right(r),
+            });
         let mut results = VecDeque::from(join_all(futures).await);
 
         Ok(keys
@@ -2834,7 +2833,7 @@ impl AuthorityPerEpochStore {
                 .lock();
             digests
                 .iter()
-                .checked_zip(transactions.iter())
+                .zip_debug_eq(transactions.iter())
                 .map(|(d, t)| {
                     // Some transactions (RandomnessStateUpdate and settlement transactions) don't go through
                     // consensus, but have system-generated signatures that are guaranteed to be the same,
@@ -3065,7 +3064,7 @@ impl AuthorityPerEpochStore {
                             tx_signatures
                                 .iter()
                                 .cloned()
-                                .checked_zip(tx.aliases().iter().map(|(_, seq)| *seq))
+                                .zip_debug_eq(tx.aliases().iter().map(|(_, seq)| *seq))
                                 .collect()
                         };
                     Some((*tx.tx().digest(), sigs_with_versions))

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Stake};
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::RwLock;
 use tracing::{debug, info};
 
@@ -285,7 +285,7 @@ impl AncestorStateManager {
 
         let mut high_quorum_rounds_with_stake = accepted_quorum_rounds
             .iter()
-            .checked_zip(committee.authorities())
+            .zip_debug_eq(committee.authorities())
             .map(|((_low, high), (_, authority))| (*high, authority.stake))
             .collect::<Vec<_>>();
         high_quorum_rounds_with_stake.sort();

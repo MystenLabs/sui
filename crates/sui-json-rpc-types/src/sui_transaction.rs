@@ -19,7 +19,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
 use sui_json::{SuiJsonValue, primitive_type};
@@ -1914,7 +1914,7 @@ impl SuiProgrammableTransactionBlock {
         Ok(SuiProgrammableTransactionBlock {
             inputs: inputs
                 .into_iter()
-                .checked_zip(input_types)
+                .zip_debug_eq(input_types)
                 .map(|(arg, layout)| SuiCallArg::try_from(arg, layout.as_ref()))
                 .collect::<Result<_, _>>()?,
             commands: commands.into_iter().map(SuiCommand::from).collect(),
@@ -1930,7 +1930,7 @@ impl SuiProgrammableTransactionBlock {
         Ok(SuiProgrammableTransactionBlock {
             inputs: inputs
                 .into_iter()
-                .checked_zip(input_types)
+                .zip_debug_eq(input_types)
                 .map(|(arg, layout)| SuiCallArg::try_from(arg, layout.as_ref()))
                 .collect::<Result<_, _>>()?,
             commands: commands.into_iter().map(SuiCommand::from).collect(),

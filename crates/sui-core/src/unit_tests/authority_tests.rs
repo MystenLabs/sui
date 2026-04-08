@@ -14,7 +14,7 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use rand::seq::SliceRandom;
 use rand::{SeedableRng, prelude::StdRng};
 use serde_json::json;
@@ -5907,7 +5907,7 @@ where
         let assigned_versions = schedulables
             .iter()
             .map(|s| s.key())
-            .checked_zip(versions)
+            .zip_debug_eq(versions)
             .collect();
         (schedulables, assigned_versions)
     }

@@ -4,14 +4,13 @@
 use crate::debug_fatal;
 use std::panic::Location;
 
-/// Extension trait providing `checked_zip` on all iterators.
-pub trait CheckedIteratorExt: Iterator + Sized {
-    /// Like `zip`, but fires `debug_fatal!` if the iterators have different lengths.
-    /// After the diagnostic, behaves like `zip` (returns `None`).
-    /// Uses `#[track_caller]` to include the callsite in the error message.
+/// Extension trait providing `zip_debug_eq` on all iterators.
+pub trait ZipDebugEqIteratorExt: Iterator + Sized {
+    /// Like `zip_eq`, but instead of panicking logs `debug_fatal!` if the iterators have
+    /// different lengths. After the diagnostic, behaves like `zip` (returns `None`).
     #[track_caller]
-    fn checked_zip<J: IntoIterator>(self, other: J) -> CheckedZip<Self, J::IntoIter> {
-        CheckedZip {
+    fn zip_debug_eq<J: IntoIterator>(self, other: J) -> ZipDebugEq<Self, J::IntoIter> {
+        ZipDebugEq {
             a: self,
             b: other.into_iter(),
             finished: false,
@@ -20,16 +19,16 @@ pub trait CheckedIteratorExt: Iterator + Sized {
     }
 }
 
-impl<I: Iterator> CheckedIteratorExt for I {}
+impl<I: Iterator> ZipDebugEqIteratorExt for I {}
 
-pub struct CheckedZip<A, B> {
+pub struct ZipDebugEq<A, B> {
     a: A,
     b: B,
     finished: bool,
     caller: &'static Location<'static>,
 }
 
-impl<A: Iterator, B: Iterator> Iterator for CheckedZip<A, B> {
+impl<A: Iterator, B: Iterator> Iterator for ZipDebugEq<A, B> {
     type Item = (A::Item, B::Item);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -42,7 +41,7 @@ impl<A: Iterator, B: Iterator> Iterator for CheckedZip<A, B> {
             (None, Some(_)) => {
                 self.finished = true;
                 debug_fatal!(
-                    "checked_zip: first iterator shorter than second (created at {})",
+                    "zip_debug_eq: first iterator shorter than second (created at {})",
                     self.caller
                 );
                 None
@@ -50,7 +49,7 @@ impl<A: Iterator, B: Iterator> Iterator for CheckedZip<A, B> {
             (Some(_), None) => {
                 self.finished = true;
                 debug_fatal!(
-                    "checked_zip: second iterator shorter than first (created at {})",
+                    "zip_debug_eq: second iterator shorter than first (created at {})",
                     self.caller
                 );
                 None
@@ -75,15 +74,15 @@ impl<A: Iterator, B: Iterator> Iterator for CheckedZip<A, B> {
     }
 }
 
-/// Like `itertools::izip!`, but uses `checked_zip` instead of `zip`.
+/// Like `itertools::izip!`, but uses `zip_debug_eq` instead of `zip`.
 #[macro_export]
-macro_rules! checked_izip {
+macro_rules! izip_debug_eq {
     // Closure helper for tuple flattening (same pattern as itertools::izip!)
     ( @closure $p:pat => $tup:expr ) => {
         |$p| $tup
     };
     ( @closure $p:pat => ( $($tup:tt)* ) , $_iter:expr $( , $tail:expr )* ) => {
-        $crate::checked_izip!(@closure ($p, b) => ( $($tup)*, b ) $( , $tail )*)
+        $crate::izip_debug_eq!(@closure ($p, b) => ( $($tup)*, b ) $( , $tail )*)
     };
 
     // unary
@@ -93,19 +92,19 @@ macro_rules! checked_izip {
 
     // binary
     ($first:expr, $second:expr $(,)*) => {{
-        use $crate::CheckedIteratorExt as _;
-        $crate::checked_izip!($first).checked_zip($second)
+        use $crate::ZipDebugEqIteratorExt as _;
+        $crate::izip_debug_eq!($first).zip_debug_eq($second)
     }};
 
     // n-ary where n > 2
     ( $first:expr $( , $rest:expr )* $(,)* ) => {{
-        use $crate::CheckedIteratorExt as _;
-        $crate::checked_izip!($first)
+        use $crate::ZipDebugEqIteratorExt as _;
+        $crate::izip_debug_eq!($first)
             $(
-                .checked_zip($rest)
+                .zip_debug_eq($rest)
             )*
             .map(
-                $crate::checked_izip!(@closure a => (a) $( , $rest )*)
+                $crate::izip_debug_eq!(@closure a => (a) $( , $rest )*)
             )
     }};
 }
@@ -118,7 +117,7 @@ mod tests {
     fn equal_length_iterators() {
         let a = vec![1, 2, 3];
         let b = vec!["a", "b", "c"];
-        let result: Vec<_> = a.into_iter().checked_zip(b).collect();
+        let result: Vec<_> = a.into_iter().zip_debug_eq(b).collect();
         assert_eq!(result, vec![(1, "a"), (2, "b"), (3, "c")]);
     }
 
@@ -126,7 +125,7 @@ mod tests {
     fn empty_iterators() {
         let a: Vec<i32> = vec![];
         let b: Vec<i32> = vec![];
-        let result: Vec<_> = a.into_iter().checked_zip(b).collect();
+        let result: Vec<_> = a.into_iter().zip_debug_eq(b).collect();
         assert_eq!(result, vec![]);
     }
 
@@ -135,7 +134,7 @@ mod tests {
     fn first_shorter_panics_in_debug() {
         let a = vec![1, 2];
         let b = vec!["a", "b", "c"];
-        let _: Vec<_> = a.into_iter().checked_zip(b).collect();
+        let _: Vec<_> = a.into_iter().zip_debug_eq(b).collect();
     }
 
     #[test]
@@ -143,32 +142,32 @@ mod tests {
     fn second_shorter_panics_in_debug() {
         let a = vec![1, 2, 3];
         let b = vec!["a", "b"];
-        let _: Vec<_> = a.into_iter().checked_zip(b).collect();
+        let _: Vec<_> = a.into_iter().zip_debug_eq(b).collect();
     }
 
     #[test]
-    fn checked_izip_binary() {
+    fn izip_debug_eq_binary() {
         let a = vec![1, 2, 3];
         let b = vec!["a", "b", "c"];
-        let result: Vec<_> = checked_izip!(a, b).collect();
+        let result: Vec<_> = izip_debug_eq!(a, b).collect();
         assert_eq!(result, vec![(1, "a"), (2, "b"), (3, "c")]);
     }
 
     #[test]
-    fn checked_izip_ternary() {
+    fn izip_debug_eq_ternary() {
         let a = vec![1, 2];
         let b = vec!["a", "b"];
         let c = vec![10.0, 20.0];
-        let result: Vec<_> = checked_izip!(a, b, c).collect();
+        let result: Vec<_> = izip_debug_eq!(a, b, c).collect();
         assert_eq!(result, vec![(1, "a", 10.0), (2, "b", 20.0)]);
     }
 
     #[test]
     #[should_panic]
-    fn checked_izip_mismatch_panics() {
+    fn izip_debug_eq_mismatch_panics() {
         let a = vec![1, 2, 3];
         let b = vec!["a", "b"];
         let c = vec![10.0, 20.0, 30.0];
-        let _: Vec<_> = checked_izip!(a, b, c).collect();
+        let _: Vec<_> = izip_debug_eq!(a, b, c).collect();
     }
 }

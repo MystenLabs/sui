@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use consensus_config::Stake;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::RwLock;
 use tracing::{debug, info};
 
@@ -125,7 +125,7 @@ impl TransactionCertifier {
         };
         let voted_blocks = blocks
             .into_iter()
-            .checked_zip(should_vote_blocks)
+            .zip_debug_eq(should_vote_blocks)
             .map(|(b, should_vote)| {
                 if !should_vote {
                     // Voting is unnecessary for blocks already included in own proposed blocks,
@@ -931,7 +931,7 @@ mod test {
             );
             for (actual, expected) in actual_certified_blocks
                 .iter()
-                .checked_zip(expected_certified_blocks.iter())
+                .zip_debug_eq(expected_certified_blocks.iter())
             {
                 assert_eq!(actual.block.reference(), expected.block.reference());
                 assert_eq!(actual.rejected, expected.rejected);

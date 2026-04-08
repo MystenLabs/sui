@@ -42,7 +42,7 @@ use typed_store::{
 
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::sync::notify_read::NotifyRead;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
@@ -959,7 +959,7 @@ impl AuthorityStore {
             .perpetual_tables
             .live_owned_object_markers
             .multi_get(objects)?;
-        for (lock, obj_ref) in locks.into_iter().checked_zip(objects) {
+        for (lock, obj_ref) in locks.into_iter().zip_debug_eq(objects) {
             if lock.is_none() {
                 let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
                 fp_bail!(
@@ -1005,7 +1005,7 @@ impl AuthorityStore {
             // object marker will not overwrite the lock and cause the validator to equivocate.
             let existing_live_object_markers: Vec<ObjectRef> = live_object_markers
                 .iter()
-                .checked_zip(objects)
+                .zip_debug_eq(objects)
                 .filter_map(|(lock_opt, objref)| {
                     lock_opt.clone().flatten().map(|_tx_digest| *objref)
                 })

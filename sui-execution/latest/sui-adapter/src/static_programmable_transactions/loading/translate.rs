@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag, u256::U256};
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     base_types::TxContext,
     error::ExecutionError,
@@ -47,7 +47,7 @@ pub fn transaction<Mode: ExecutionMode>(
     );
     let inputs = withdrawal_compatibility_inputs
         .into_iter()
-        .checked_zip(inputs)
+        .zip_debug_eq(inputs)
         .map(|(is_withdrawal_compatibility_input, arg)| {
             input::<Mode>(env, tx_context, is_withdrawal_compatibility_input, arg)
         })

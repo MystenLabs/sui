@@ -7,7 +7,7 @@ use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::fs;
@@ -346,7 +346,7 @@ impl Builder {
         for (validator, onchain_validator) in self
             .validators
             .values()
-            .checked_zip(system_state.validators.active_validators.iter())
+            .zip_debug_eq(system_state.validators.active_validators.iter())
         {
             let metadata = onchain_validator.verified_metadata();
 
@@ -1039,14 +1039,14 @@ fn process_package(
             // An object either exists on-chain, or is one of the packages to be published.
             dependencies
                 .iter()
-                .checked_zip(dependency_objects.iter())
+                .zip_debug_eq(dependency_objects.iter())
                 .all(|(dependency, obj_opt)| obj_opt.is_some()
                     || to_be_published_addresses.contains(&AccountAddress::from(*dependency)))
         );
     }
     let loaded_dependencies: Vec<_> = dependencies
         .iter()
-        .checked_zip(dependency_objects)
+        .zip_debug_eq(dependency_objects)
         .filter_map(|(dependency, object)| {
             Some(ObjectReadResult::new(
                 InputObjectKind::MovePackage(*dependency),

@@ -6,16 +6,16 @@ use tracing::warn;
 
 pub mod assert_reachable;
 pub mod backoff;
-pub mod checked_zip;
 pub mod decay_moving_average;
 pub mod logging;
 pub mod moving_window;
 pub mod random;
 pub mod random_util;
 pub mod sync;
+pub mod zip_debug_eq;
 
-pub use checked_zip::CheckedIteratorExt;
 pub use random_util::tempdir;
+pub use zip_debug_eq::ZipDebugEqIteratorExt;
 
 #[inline(always)]
 pub fn in_integration_test() -> bool {

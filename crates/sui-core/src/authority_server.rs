@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
@@ -541,7 +541,7 @@ impl ValidatorService {
         // All objects should be found, since owned input objects have been validated to exist.
         objects
             .into_iter()
-            .checked_zip(object_ids.iter())
+            .zip_debug_eq(object_ids.iter())
             .filter_map(|(obj, id)| {
                 let Some(o) = obj else {
                     return Some(Err::<ObjectID, SuiError>(
@@ -1041,8 +1041,8 @@ impl ValidatorService {
             // Otherwise, return the consensus position for each transaction.
             for ((idx, tx_digest), consensus_position) in transaction_indexes
                 .into_iter()
-                .checked_zip(tx_digests)
-                .checked_zip(consensus_positions)
+                .zip_debug_eq(tx_digests)
+                .zip_debug_eq(consensus_positions)
             {
                 debug!(
                     ?tx_digest,

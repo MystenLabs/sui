@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::*;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_storage::http_key_value_store::*;
@@ -76,12 +76,12 @@ impl Command {
 
                         if type_ == "tx" {
                             let tx = kv.multi_get_tx(&digests).await.unwrap();
-                            for (digest, tx) in digests.iter().checked_zip(tx.iter()) {
+                            for (digest, tx) in digests.iter().zip_debug_eq(tx.iter()) {
                                 println!("fetched tx: {:?} {:?}", digest, tx);
                             }
                         } else {
                             let fx = kv.multi_get_fx_by_tx_digest(&digests).await.unwrap();
-                            for (digest, fx) in digests.iter().checked_zip(fx.iter()) {
+                            for (digest, fx) in digests.iter().zip_debug_eq(fx.iter()) {
                                 println!("fetched fx: {:?} {:?}", digest, fx);
                             }
                         }
@@ -90,7 +90,7 @@ impl Command {
                     "ckpt_contents" => {
                         let ckpts = kv.multi_get_checkpoints(&[], &seqs, &[]).await.unwrap();
 
-                        for (seq, ckpt) in seqs.iter().checked_zip(ckpts.1.iter()) {
+                        for (seq, ckpt) in seqs.iter().zip_debug_eq(ckpts.1.iter()) {
                             // populate digest before printing
                             ckpt.as_ref().map(|c| c.digest());
                             println!("fetched ckpt contents: {:?} {:?}", seq, ckpt);
@@ -110,12 +110,12 @@ impl Command {
                             .await
                             .unwrap();
 
-                        for (seq, ckpt) in seqs.iter().checked_zip(ckpts.0.iter()) {
+                        for (seq, ckpt) in seqs.iter().zip_debug_eq(ckpts.0.iter()) {
                             // populate digest before printing
                             ckpt.as_ref().map(|c| c.digest());
                             println!("fetched ckpt summary: {:?} {:?}", seq, ckpt);
                         }
-                        for (digest, ckpt) in digests.iter().checked_zip(ckpts.2.iter()) {
+                        for (digest, ckpt) in digests.iter().zip_debug_eq(ckpts.2.iter()) {
                             // populate digest before printing
                             ckpt.as_ref().map(|c| c.digest());
                             println!("fetched ckpt summary: {:?} {:?}", digest, ckpt);

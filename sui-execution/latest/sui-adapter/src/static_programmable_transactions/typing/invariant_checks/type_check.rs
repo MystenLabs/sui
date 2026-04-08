@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 
 use crate::{
     execution_mode::ExecutionMode,
@@ -154,7 +154,7 @@ fn command<Mode: ExecutionMode>(
                 parameters.len(),
                 arguments.len()
             );
-            for (arg, param) in arguments.iter().checked_zip(parameters) {
+            for (arg, param) in arguments.iter().zip_debug_eq(parameters) {
                 argument(env, context, arg, param)?;
             }
             anyhow::ensure!(
@@ -163,7 +163,7 @@ fn command<Mode: ExecutionMode>(
                 return_.len(),
                 result_tys.len()
             );
-            for (actual, expected) in return_.iter().checked_zip(result_tys) {
+            for (actual, expected) in return_.iter().zip_debug_eq(result_tys) {
                 anyhow::ensure!(
                     actual == expected,
                     "return type mismatch. Expected {expected:?}, got {actual:?}"
@@ -290,7 +290,7 @@ fn command<Mode: ExecutionMode>(
         c.drop_values.len(),
         result_tys.len()
     );
-    for (drop_value, result_ty) in c.drop_values.iter().copied().checked_zip(result_tys) {
+    for (drop_value, result_ty) in c.drop_values.iter().copied().zip_debug_eq(result_tys) {
         // drop value ==> `ty: drop`
         assert_invariant!(
             !drop_value || result_ty.abilities().has_drop(),

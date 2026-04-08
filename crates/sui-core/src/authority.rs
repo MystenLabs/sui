@@ -36,7 +36,7 @@ use move_binary_format::CompiledModule;
 use move_binary_format::binary_config::BinaryConfig;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, fatal};
 use parking_lot::Mutex;
 use prometheus::{
@@ -4983,7 +4983,7 @@ impl AuthorityState {
             .get_object_store()
             .multi_get_objects_by_key(&object_ids);
 
-        for (o, id) in objects.into_iter().checked_zip(object_ids) {
+        for (o, id) in objects.into_iter().zip_debug_eq(object_ids) {
             let object = o.ok_or_else(|| {
                 SuiError::from(UserInputError::ObjectNotFound {
                     object_id: id.0,
@@ -5401,7 +5401,7 @@ impl AuthorityState {
 
         let events_map: HashMap<_, _> = transaction_digests
             .iter()
-            .checked_zip(events.into_iter())
+            .zip_debug_eq(events.into_iter())
             .collect();
 
         let stored_events = event_keys
@@ -5785,7 +5785,7 @@ impl AuthorityState {
         let objects = self.get_objects(&ids).await;
 
         let mut res = Vec::with_capacity(system_packages.len());
-        for (system_package_ref, object) in system_packages.into_iter().checked_zip(objects.iter())
+        for (system_package_ref, object) in system_packages.into_iter().zip_debug_eq(objects.iter())
         {
             let prev_transaction = match object {
                 Some(cur_object) if cur_object.compute_object_reference() == system_package_ref => {
@@ -6248,7 +6248,7 @@ impl AuthorityState {
             .multi_get_locally_computed_checkpoints(&sequence_numbers)
             .expect("typed store must not fail")
             .into_iter()
-            .checked_zip(sequence_numbers)
+            .zip_debug_eq(sequence_numbers)
             .map(|(maybe_checkpoint, sequence_number)| {
                 if let Some(checkpoint) = maybe_checkpoint {
                     checkpoint.content_digest

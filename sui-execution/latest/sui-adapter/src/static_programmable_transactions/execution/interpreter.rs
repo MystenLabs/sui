@@ -16,7 +16,7 @@ use crate::{
 };
 use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
 use sui_types::{
     base_types::TxContext,
@@ -219,7 +219,7 @@ fn execute_command<Mode: ExecutionMode>(
                 "object values and types mismatch"
             );
             trace_utils::trace_transfer(context, trace_builder_opt, &object_values, &object_tys)?;
-            for (object_value, ty) in object_values.into_iter().checked_zip(object_tys) {
+            for (object_value, ty) in object_values.into_iter().zip_debug_eq(object_tys) {
                 // TODO should we just call a Move function?
                 let recipient = Owner::AddressOwner(recipient.into());
                 context.transfer_object(recipient, ty, object_value)?;
@@ -414,7 +414,7 @@ fn execute_command<Mode: ExecutionMode>(
     context.charge_command(is_move_call, num_args, result.len())?;
     let result = result
         .into_iter()
-        .checked_zip(drop_values)
+        .zip_debug_eq(drop_values)
         .map(|(value, drop)| if !drop { Some(value) } else { None })
         .collect::<Vec<_>>();
     context.result(result)?;

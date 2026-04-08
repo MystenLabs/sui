@@ -10,7 +10,7 @@ use std::{
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_macros::fail_point;
 use typed_store::{
     DBMapUtils, Map as _,
@@ -226,7 +226,7 @@ impl Store for RocksDBStore {
             .collect::<Vec<_>>();
         let serialized = self.blocks.multi_get(keys)?;
         let mut blocks = vec![];
-        for (key, serialized) in refs.iter().checked_zip(serialized) {
+        for (key, serialized) in refs.iter().zip_debug_eq(serialized) {
             if let Some(serialized) = serialized {
                 let signed_block: SignedBlock =
                     bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
@@ -279,7 +279,7 @@ impl Store for RocksDBStore {
         }
         let results = self.read_blocks(refs.as_slice())?;
         let mut blocks = Vec::with_capacity(refs.len());
-        for (r, block) in refs.into_iter().checked_zip(results.into_iter()) {
+        for (r, block) in refs.into_iter().zip_debug_eq(results.into_iter()) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
             );
@@ -312,7 +312,7 @@ impl Store for RocksDBStore {
         let refs_slice = refs.make_contiguous();
         let results = self.read_blocks(refs_slice)?;
         let mut blocks = vec![];
-        for (r, block) in refs.into_iter().checked_zip(results.into_iter()) {
+        for (r, block) in refs.into_iter().zip_debug_eq(results.into_iter()) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
             );

@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use bincode::Options;
 use itertools::Itertools;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::ArcMutexGuard;
 use prometheus::{
     IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
@@ -359,7 +359,7 @@ impl IndexStoreTables {
                 entries_a.len(),
                 entries_b.len()
             );
-            for (i, (a, b)) in entries_a.iter().checked_zip(entries_b.iter()).enumerate() {
+            for (i, (a, b)) in entries_a.iter().zip_debug_eq(entries_b.iter()).enumerate() {
                 assert!(
                     a == b,
                     "{name}: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
@@ -412,7 +412,7 @@ impl IndexStoreTables {
                 entries_a.len(),
                 entries_b.len()
             );
-            for (i, (a, b)) in entries_a.iter().checked_zip(entries_b.iter()).enumerate() {
+            for (i, (a, b)) in entries_a.iter().zip_debug_eq(entries_b.iter()).enumerate() {
                 assert!(
                     a == b,
                     "{name}: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
@@ -479,7 +479,7 @@ impl IndexStoreTables {
                 entries_a.len(),
                 entries_b.len()
             );
-            for (i, (a, b)) in entries_a.iter().checked_zip(entries_b.iter()).enumerate() {
+            for (i, (a, b)) in entries_a.iter().zip_debug_eq(entries_b.iter()).enumerate() {
                 assert!(
                     a == b,
                     "transactions_by_move_function: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
@@ -514,7 +514,7 @@ impl IndexStoreTables {
                 vals_a.len(),
                 vals_b.len()
             );
-            for (i, (a, b)) in vals_a.iter().checked_zip(vals_b.iter()).enumerate() {
+            for (i, (a, b)) in vals_a.iter().zip_debug_eq(vals_b.iter()).enumerate() {
                 assert!(
                     a == b,
                     "event_order: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"
@@ -568,7 +568,7 @@ impl IndexStoreTables {
                 vals_a.len(),
                 vals_b.len()
             );
-            for (i, (a, b)) in vals_a.iter().checked_zip(vals_b.iter()).enumerate() {
+            for (i, (a, b)) in vals_a.iter().zip_debug_eq(vals_b.iter()).enumerate() {
                 assert!(
                     a == b,
                     "event_by_time: mismatch at sorted entry {i}:\n  a={a:?}\n  b={b:?}"

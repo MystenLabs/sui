@@ -9,7 +9,7 @@ mod upgrade_compatibility_tests;
 use formatting::{FormattedField, format_list, format_param, singular_or_plural};
 
 use anyhow::{Context, Error, anyhow};
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -1261,7 +1261,7 @@ fn function_signature_mismatch_diag(
             .parameters
             .iter()
             .enumerate()
-            .checked_zip(new_function.parameters.iter())
+            .zip_debug_eq(new_function.parameters.iter())
         {
             if old_param != new_param {
                 let param_loc = func_sourcemap
@@ -1347,7 +1347,7 @@ fn function_signature_mismatch_diag(
             .type_parameters
             .iter()
             .enumerate()
-            .checked_zip(new_function.type_parameters.iter())
+            .zip_debug_eq(new_function.type_parameters.iter())
         {
             if old_type_param != new_type_param {
                 let type_param_loc = func_sourcemap
@@ -1422,7 +1422,7 @@ fn function_signature_mismatch_diag(
             .return_
             .iter()
             .enumerate()
-            .checked_zip(new_function.return_.iter())
+            .zip_debug_eq(new_function.return_.iter())
         {
             let return_ = func_sourcemap
                 .returns
@@ -1734,11 +1734,11 @@ fn struct_field_mismatch_diag(
     } else {
         let fields_mismatch = !old_fields
             .iter()
-            .checked_zip(&new_fields)
+            .zip_debug_eq(&new_fields)
             .all(|(old_field, new_field)| old_field.equivalent(new_field));
         if fields_mismatch {
             for (i, (old_field, new_field)) in
-                old_fields.iter().checked_zip(&new_fields).enumerate()
+                old_fields.iter().zip_debug_eq(&new_fields).enumerate()
             {
                 if !old_field.equivalent(new_field) {
                     let field_loc = struct_sourcemap
@@ -1922,7 +1922,7 @@ fn enum_variant_field_message(
                     .fields
                     .0
                     .values()
-                    .checked_zip(new_variant.fields.0.values())
+                    .zip_debug_eq(new_variant.fields.0.values())
                 {
                     if !old_field.equivalent(new_field) {
                         let (code, label) =
@@ -2264,7 +2264,7 @@ fn enum_changed_diag(
         || !old_enum
             .variants
             .values()
-            .checked_zip(new_enum.variants.values())
+            .zip_debug_eq(new_enum.variants.values())
             .all(|(old_variant, new_variant)| old_variant.equivalent(new_variant));
     if variants_mismatch {
         diags.extend(enum_variant_mismatch_diag(
@@ -2424,7 +2424,7 @@ fn type_parameter_diag(
     } else if old_type_parameters != new_type_parameters {
         for (i, (old_type_param, new_type_param)) in old_type_parameters
             .iter()
-            .checked_zip(new_type_parameters.iter())
+            .zip_debug_eq(new_type_parameters.iter())
             .enumerate()
         {
             let type_param_loc = type_parameter_locs

@@ -839,7 +839,6 @@ pub(crate) mod tests {
     use std::sync::atomic::AtomicUsize;
 
     use itertools::Itertools;
-
     use move_core_types::annotated_value::MoveEnumLayout;
     use move_core_types::annotated_value::MoveFieldLayout;
     use move_core_types::annotated_value::MoveStructLayout;

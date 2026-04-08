@@ -513,7 +513,7 @@ impl ExecutionTimeObserver {
         let generated_timings: Vec<_> = tx
             .commands
             .iter()
-            // TODO: migrate to checked_zip once PR #26125 fixes the timings/commands length mismatch
+            // TODO: migrate to zip_debug_eq once PR #26125 fixes the timings/commands length mismatch
             .zip(timings.iter())
             .map(|(command, timing)| {
                 let key = ExecutionTimeObservationKey::from_command(command);

@@ -4,7 +4,7 @@
 use futures::future;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_json_rpc_types::DynamicFieldInfo as DynamicFieldInfoResponse;
 use sui_json_rpc_types::Page;
 use sui_json_rpc_types::SuiObjectResponse;
@@ -87,7 +87,7 @@ impl DynamicFieldsApiServer for DynamicFields {
         let data = future::join_all(df_futures)
             .await
             .into_iter()
-            .checked_zip(object_ids)
+            .zip_debug_eq(object_ids)
             .map(|(r, id)| {
                 r.with_internal_context(|| format!("Failed to get object {id} at latest version"))
             })

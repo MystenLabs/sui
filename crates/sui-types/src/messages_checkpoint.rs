@@ -27,7 +27,7 @@ use anyhow::Result;
 use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::merkle::MerkleTree;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
 use prometheus::Histogram;
@@ -657,7 +657,7 @@ impl CheckpointContents {
             digest: Default::default(),
             transactions: effects
                 .iter()
-                .checked_zip(signatures)
+                .zip_debug_eq(signatures)
                 .map(|(e, s)| CheckpointTransactionContents {
                     digest: e.execution_digests(),
                     user_signatures: s,
@@ -738,7 +738,7 @@ impl CheckpointContents {
             ..
         } = self.into_v1();
 
-        transactions.into_iter().checked_zip(user_signatures)
+        transactions.into_iter().zip_debug_eq(user_signatures)
     }
 
     /// Return an iterator that enumerates the transactions in the contents.
@@ -859,13 +859,14 @@ impl CheckpointContentsView<'_> {
                 transactions,
                 user_signatures,
             } => itertools::Either::Left(
-                transactions.iter().checked_zip(user_signatures.iter()).map(
-                    |(digests, signatures)| {
+                transactions
+                    .iter()
+                    .zip_debug_eq(user_signatures.iter())
+                    .map(|(digests, signatures)| {
                         let signatures_iter =
                             itertools::Either::Left(signatures.iter().map(|s| (s, None)));
                         (digests, signatures_iter)
-                    },
-                ),
+                    }),
             ),
             Self::V2(v) => itertools::Either::Right(v.iter().map(|t| {
                 (
@@ -1001,7 +1002,7 @@ impl FullCheckpointContentsV2 {
             transactions: self
                 .transactions
                 .iter()
-                .checked_zip(&self.user_signatures)
+                .zip_debug_eq(&self.user_signatures)
                 .map(|(tx, sigs)| CheckpointTransactionContents {
                     digest: tx.digests(),
                     user_signatures: sigs.clone(),
@@ -1016,7 +1017,7 @@ impl FullCheckpointContentsV2 {
             transactions: self
                 .transactions
                 .into_iter()
-                .checked_zip(self.user_signatures)
+                .zip_debug_eq(self.user_signatures)
                 .map(|(tx, sigs)| CheckpointTransactionContents {
                     digest: tx.digests(),
                     user_signatures: sigs,

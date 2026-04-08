@@ -15,7 +15,7 @@ use super::*;
 #[cfg(test)]
 use super::shared_object_version_manager::Schedulable;
 #[cfg(test)]
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 #[cfg(test)]
 use std::collections::HashMap;
 #[cfg(test)]
@@ -436,7 +436,7 @@ where
         let assigned_versions = schedulables
             .iter()
             .map(|s| s.key())
-            .checked_zip(versions)
+            .zip_debug_eq(versions)
             .collect();
         (schedulables, assigned_versions)
     };

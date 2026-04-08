@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 
 use futures::future::try_join_all;
 use futures::join;
@@ -248,7 +248,7 @@ impl<'s> Display<'s> {
         let names = names?;
         let values = values?;
 
-        for ((field, name), value) in self.fields.iter().checked_zip(names).checked_zip(values) {
+        for ((field, name), value) in self.fields.iter().zip_debug_eq(names).zip_debug_eq(values) {
             use indexmap::map::Entry;
 
             let src = field.key.src;

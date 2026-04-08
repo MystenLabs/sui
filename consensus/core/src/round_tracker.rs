@@ -13,7 +13,7 @@ use std::sync::Arc;
 use consensus_config::{AuthorityIndex, Committee};
 use consensus_types::block::Round;
 use itertools::Itertools;
-use mysten_common::CheckedIteratorExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use tracing::{debug, trace};
 
 use crate::{
@@ -131,7 +131,7 @@ impl RoundTracker {
         let accepted_quorum_rounds = self.compute_accepted_quorum_rounds();
         for ((low, high), (_, authority)) in received_quorum_rounds
             .iter()
-            .checked_zip(self.context.committee.authorities())
+            .zip_debug_eq(self.context.committee.authorities())
         {
             node_metrics
                 .round_tracker_received_quorum_round_gaps
@@ -150,7 +150,7 @@ impl RoundTracker {
 
         for ((low, high), (_, authority)) in accepted_quorum_rounds
             .iter()
-            .checked_zip(self.context.committee.authorities())
+            .zip_debug_eq(self.context.committee.authorities())
         {
             node_metrics
                 .round_tracker_accepted_quorum_round_gaps
@@ -204,11 +204,11 @@ impl RoundTracker {
         let highest_accepted_rounds = self
             .probed_accepted_rounds
             .iter()
-            .checked_zip(self.block_accepted_rounds.iter())
+            .zip_debug_eq(self.block_accepted_rounds.iter())
             .map(|(probed_rounds, block_rounds)| {
                 probed_rounds
                     .iter()
-                    .checked_zip(block_rounds.iter())
+                    .zip_debug_eq(block_rounds.iter())
                     .map(|(probed_round, block_round)| *probed_round.max(block_round))
                     .collect::<Vec<Round>>()
             })
@@ -227,7 +227,7 @@ impl RoundTracker {
             self.context
                 .committee
                 .authorities()
-                .checked_zip(accepted_quorum_rounds.iter())
+                .zip_debug_eq(accepted_quorum_rounds.iter())
                 .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
                 .join(", ")
         );
@@ -250,7 +250,7 @@ impl RoundTracker {
             self.context
                 .committee
                 .authorities()
-                .checked_zip(received_quorum_rounds.iter())
+                .zip_debug_eq(received_quorum_rounds.iter())
                 .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
                 .join(", ")
         );
@@ -267,7 +267,7 @@ fn compute_quorum_round(
 ) -> QuorumRound {
     let mut rounds_with_stake = highest_rounds
         .iter()
-        .checked_zip(committee.authorities())
+        .zip_debug_eq(committee.authorities())
         .map(|(rounds, (_, authority))| (rounds[target_index], authority.stake))
         .collect::<Vec<_>>();
     rounds_with_stake.sort();

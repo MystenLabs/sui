@@ -213,7 +213,7 @@ mod verify {
             typing::ast::{self as T, Type},
         },
     };
-    use mysten_common::CheckedIteratorExt;
+    use mysten_common::ZipDebugEqIteratorExt;
     use sui_types::error::{ExecutionError, SafeIndex};
     use sui_types::execution_status::ExecutionErrorKind;
 
@@ -298,7 +298,7 @@ mod verify {
             );
             let result_values = result
                 .into_iter()
-                .checked_zip(c.value.drop_values.iter().copied())
+                .zip_debug_eq(c.value.drop_values.iter().copied())
                 .map(|(v, drop)| {
                     if !drop {
                         Some(v)
@@ -327,10 +327,10 @@ mod verify {
         consume_value_opts(pure);
         consume_value_opts(receiving);
         assert_invariant!(results.len() == commands.len(), "result length mismatch");
-        for (i, (result, c)) in results.into_iter().checked_zip(&ast.commands).enumerate() {
+        for (i, (result, c)) in results.into_iter().zip_debug_eq(&ast.commands).enumerate() {
             let tys = &c.value.result_type;
             assert_invariant!(result.len() == tys.len(), "result length mismatch");
-            for (j, (vopt, ty)) in result.into_iter().checked_zip(tys).enumerate() {
+            for (j, (vopt, ty)) in result.into_iter().zip_debug_eq(tys).enumerate() {
                 drop_value_opt::<Mode>((i, j), vopt, ty)?;
             }
         }
