@@ -1461,13 +1461,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         end_of_publish_transactions: Vec<AuthorityName>,
     ) -> (bool, Option<RwLockWriteGuard<'_, ReconfigState>>, bool) {
         // Still process EndOfPublish transactions for manual epoch close support.
-        let collected_eop =
+        let collected_eop_quorum =
             self.process_end_of_publish_transactions(state, end_of_publish_transactions);
 
         let timestamp_triggered =
             commit_info.timestamp >= self.epoch_store.next_reconfiguration_timestamp_ms();
 
-        let should_close = timestamp_triggered || collected_eop;
+        let should_close = timestamp_triggered || collected_eop_quorum;
 
         if !should_close {
             return (true, None, false);
@@ -1484,7 +1484,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     self.epoch_store.next_reconfiguration_timestamp_ms(),
                 );
             }
-            if collected_eop {
+            if collected_eop_quorum {
                 info!("EndOfPublish quorum reached for manual epoch close");
             }
             reconfig_state.close_all_certs();
