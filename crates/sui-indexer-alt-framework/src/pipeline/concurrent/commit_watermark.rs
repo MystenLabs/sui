@@ -18,6 +18,7 @@ use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::WARN_PENDING_WATERMARKS;
 use crate::pipeline::WatermarkPart;
+use crate::pipeline::concurrent::Direction;
 use crate::pipeline::concurrent::Handler;
 use crate::pipeline::logging::WatermarkLogger;
 use crate::store::CommitterWatermark;
@@ -46,7 +47,7 @@ use crate::store::pipeline_task;
 pub(super) fn commit_watermark<H: Handler>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
-    mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
+    mut rx: mpsc::Receiver<(Direction, Vec<WatermarkPart>)>,
     store: H::Store,
     task: Option<String>,
     metrics: Arc<IndexerMetrics>,
@@ -89,7 +90,12 @@ pub(super) fn commit_watermark<H: Handler>(
                     next_wake = config.watermark_interval_with_jitter();
                     should_write_db = true;
                 }
-                Some(parts) = rx.recv() => {
+                Some((direction, parts)) = rx.recv() => {
+                    // STUB (commit 2): backwards-tagged watermark advancement is implemented in
+                    // commit 3. For now, drop them to keep forward semantics intact.
+                    if direction != Direction::Forward {
+                        continue;
+                    }
                     for part in parts {
                         match precommitted.entry(part.checkpoint()) {
                             Entry::Vacant(entry) => {
@@ -365,7 +371,7 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        watermark_tx: mpsc::Sender<Vec<WatermarkPart>>,
+        watermark_tx: mpsc::Sender<(Direction, Vec<WatermarkPart>)>,
         #[allow(unused)]
         commit_watermark: Service,
     }
@@ -415,7 +421,7 @@ mod tests {
         // Send watermark parts in order
         for cp in 1..4 {
             let part = create_watermark_part_for_checkpoint(cp);
-            setup.watermark_tx.send(vec![part]).await.unwrap();
+            setup.watermark_tx.send((Direction::Forward, vec![part])).await.unwrap();
         }
 
         // Wait for processing
@@ -437,7 +443,7 @@ mod tests {
             create_watermark_part_for_checkpoint(2),
             create_watermark_part_for_checkpoint(1),
         ];
-        setup.watermark_tx.send(parts).await.unwrap();
+        setup.watermark_tx.send((Direction::Forward, parts)).await.unwrap();
 
         // Wait for processing
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -449,7 +455,7 @@ mod tests {
         // Send checkpoint 3 to fill the gap
         setup
             .watermark_tx
-            .send(vec![create_watermark_part_for_checkpoint(3)])
+            .send((Direction::Forward, vec![create_watermark_part_for_checkpoint(3)]))
             .await
             .unwrap();
 
@@ -472,7 +478,7 @@ mod tests {
 
         // Send watermark part
         let part = create_watermark_part_for_checkpoint(1);
-        setup.watermark_tx.send(vec![part]).await.unwrap();
+        setup.watermark_tx.send((Direction::Forward, vec![part])).await.unwrap();
 
         // Wait for processing
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -507,7 +513,7 @@ mod tests {
             batch_rows: 1,
             total_rows: 1,
         };
-        setup.watermark_tx.send(vec![part]).await.unwrap();
+        setup.watermark_tx.send((Direction::Forward, vec![part])).await.unwrap();
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -539,7 +545,7 @@ mod tests {
             batch_rows: 1,
             total_rows: 1,
         };
-        setup.watermark_tx.send(vec![part]).await.unwrap();
+        setup.watermark_tx.send((Direction::Forward, vec![part])).await.unwrap();
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -554,7 +560,7 @@ mod tests {
             batch_rows: 1,
             total_rows: 1,
         };
-        setup.watermark_tx.send(vec![part]).await.unwrap();
+        setup.watermark_tx.send((Direction::Forward, vec![part])).await.unwrap();
 
         // Wait for retries to complete
         tokio::time::sleep(Duration::from_millis(1_200)).await;
@@ -580,7 +586,7 @@ mod tests {
             batch_rows: 1,
             total_rows: 3,
         };
-        setup.watermark_tx.send(vec![part.clone()]).await.unwrap();
+        setup.watermark_tx.send((Direction::Forward, vec![part.clone()])).await.unwrap();
 
         // Wait for processing
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -592,7 +598,7 @@ mod tests {
         // Send the other two parts to complete the watermark
         setup
             .watermark_tx
-            .send(vec![part.clone(), part.clone()])
+            .send((Direction::Forward, vec![part.clone(), part.clone()]))
             .await
             .unwrap();
 
@@ -612,7 +618,7 @@ mod tests {
         // Send the checkpoint 1 watermark
         setup
             .watermark_tx
-            .send(vec![create_watermark_part_for_checkpoint(1)])
+            .send((Direction::Forward, vec![create_watermark_part_for_checkpoint(1)]))
             .await
             .unwrap();
 
@@ -626,7 +632,7 @@ mod tests {
         // Send the checkpoint 0 watermark to fill the gap.
         setup
             .watermark_tx
-            .send(vec![create_watermark_part_for_checkpoint(0)])
+            .send((Direction::Forward, vec![create_watermark_part_for_checkpoint(0)]))
             .await
             .unwrap();
 

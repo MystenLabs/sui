@@ -45,6 +45,15 @@ pub enum BatchStatus {
     Ready,
 }
 
+/// Whether a batch (or watermark update) belongs to the forward indexing path or the backwards
+/// indexing path. Used by the collector, committer, and watermark task to route work to the
+/// correct cursor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Direction {
+    Forward,
+    Backwards,
+}
+
 /// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data (by
 /// implementing [Processor]) into rows for their table, and how to write those rows to the database.
 ///
@@ -169,6 +178,8 @@ pub struct PrunerConfig {
 /// Values inside each batch may or may not be from the same checkpoint. Values in the same
 /// checkpoint can also be split across multiple batches.
 struct BatchedRows<H: Handler> {
+    /// Whether this batch belongs to the forward or backwards indexing path.
+    direction: Direction,
     /// The batch to write
     batch: H::Batch,
     /// Number of rows in the batch
@@ -185,6 +196,7 @@ where
     pub fn from_vec(batch: Vec<V>, watermark: Vec<WatermarkPart>) -> Self {
         let batch_len = batch.len();
         Self {
+            direction: Direction::Forward,
             batch,
             batch_len,
             watermark,
@@ -272,6 +284,7 @@ pub(crate) fn pipeline<H: Handler>(
 
     let processor_channel_size = processor_channel_size.unwrap_or(num_cpus::get() / 2);
     let (processor_tx, collector_rx) = mpsc::channel(processor_channel_size);
+    let (processor_tx_backwards, collector_rx_backwards) = mpsc::channel(processor_channel_size);
 
     let collector_channel_size = collector_channel_size.unwrap_or(num_cpus::get() / 2);
     //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
@@ -288,6 +301,17 @@ pub(crate) fn pipeline<H: Handler>(
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
+        concurrency.clone(),
+        store.clone(),
+    );
+
+    // Second processor instance for backwards-direction checkpoints. Reuses the same handler and
+    // store and runs in parallel with the forward processor.
+    let s_processor_backwards = processor(
+        handler.clone(),
+        checkpoint_rx_backwards,
+        processor_tx_backwards,
+        metrics.clone(),
         concurrency,
         store.clone(),
     );
@@ -296,6 +320,7 @@ pub(crate) fn pipeline<H: Handler>(
         handler.clone(),
         committer_config.clone(),
         collector_rx,
+        collector_rx_backwards,
         collector_tx,
         main_reader_lo.clone(),
         metrics.clone(),
@@ -333,19 +358,11 @@ pub(crate) fn pipeline<H: Handler>(
 
     let s_pruner = pruner(handler, pruner_config, store, metrics);
 
-    // STUB (commit 1): drain the backwards channel until the broadcaster closes its sender.
-    // Replaced in commit 2 with a real second processor → collector wiring.
-    let s_backwards_drain = Service::new().spawn_aborting(async move {
-        let mut checkpoint_rx_backwards = checkpoint_rx_backwards;
-        while checkpoint_rx_backwards.recv().await.is_some() {}
-        Ok(())
-    });
-
     s_processor
+        .merge(s_processor_backwards)
         .merge(s_collector)
         .merge(s_committer)
         .merge(s_commit_watermark)
-        .merge(s_backwards_drain)
         .attach(s_track_reader_lo)
         .attach(s_reader_watermark)
         .attach(s_pruner)

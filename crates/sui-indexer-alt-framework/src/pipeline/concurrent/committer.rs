@@ -20,6 +20,7 @@ use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::BatchedRows;
+use crate::pipeline::concurrent::Direction;
 use crate::pipeline::concurrent::Handler;
 use crate::store::Store;
 
@@ -42,7 +43,7 @@ pub(super) fn committer<H: Handler>(
     handler: Arc<H>,
     config: CommitterConfig,
     rx: mpsc::Receiver<BatchedRows<H>>,
-    tx: mpsc::Sender<Vec<WatermarkPart>>,
+    tx: mpsc::Sender<(Direction, Vec<WatermarkPart>)>,
     db: H::Store,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
@@ -58,6 +59,7 @@ pub(super) fn committer<H: Handler>(
             .try_for_each_spawned(
                 config.write_concurrency,
                 |BatchedRows {
+                     direction,
                      batch,
                      batch_len,
                      watermark,
@@ -186,7 +188,7 @@ pub(super) fn committer<H: Handler>(
                         // not produce any permanent errors, but if it does, we need to shutdown
                         // the pipeline).
                         backoff::future::retry(backoff, commit).await?;
-                        if tx.send(watermark).await.is_err() {
+                        if tx.send((direction, watermark)).await.is_err() {
                             info!(pipeline = H::NAME, "Watermark closed channel");
                             return Err(Break::<anyhow::Error>::Break);
                         }
@@ -315,7 +317,7 @@ mod tests {
     struct TestSetup {
         store: MockStore,
         batch_tx: mpsc::Sender<BatchedRows<DataPipeline>>,
-        watermark_rx: mpsc::Receiver<Vec<WatermarkPart>>,
+        watermark_rx: mpsc::Receiver<(Direction, Vec<WatermarkPart>)>,
         committer: Service,
     }
 
@@ -415,8 +417,10 @@ mod tests {
         setup.batch_tx.send(batch2).await.unwrap();
 
         // Verify watermarks. Blocking until committer has processed.
-        let watermark1 = setup.watermark_rx.recv().await.unwrap();
-        let watermark2 = setup.watermark_rx.recv().await.unwrap();
+        let (dir1, watermark1) = setup.watermark_rx.recv().await.unwrap();
+        let (dir2, watermark2) = setup.watermark_rx.recv().await.unwrap();
+        assert_eq!(dir1, Direction::Forward);
+        assert_eq!(dir2, Direction::Forward);
         assert_eq!(watermark1.len(), 2);
         assert_eq!(watermark2.len(), 1);
 
@@ -482,7 +486,8 @@ mod tests {
 
             assert_eq!(data.get(&1).unwrap().value(), &vec![1, 2, 3]);
         }
-        let watermark = setup.watermark_rx.recv().await.unwrap();
+        let (dir, watermark) = setup.watermark_rx.recv().await.unwrap();
+        assert_eq!(dir, Direction::Forward);
         assert_eq!(watermark.len(), 1);
     }
 
@@ -544,7 +549,8 @@ mod tests {
             let data = setup.store.data.get(DataPipeline::NAME).unwrap();
             assert_eq!(data.get(&1).unwrap().value(), &vec![1, 2, 3]);
         }
-        let watermark = setup.watermark_rx.recv().await.unwrap();
+        let (dir, watermark) = setup.watermark_rx.recv().await.unwrap();
+        assert_eq!(dir, Direction::Forward);
         assert_eq!(watermark.len(), 1);
     }
 
@@ -570,7 +576,8 @@ mod tests {
         setup.batch_tx.send(empty_batch).await.unwrap();
 
         // Verify watermark is still sent (empty batches should still produce watermarks)
-        let watermark = setup.watermark_rx.recv().await.unwrap();
+        let (dir, watermark) = setup.watermark_rx.recv().await.unwrap();
+        assert_eq!(dir, Direction::Forward);
         assert_eq!(watermark.len(), 1);
         assert_eq!(watermark[0].batch_rows, 0);
         assert_eq!(watermark[0].total_rows, 0);

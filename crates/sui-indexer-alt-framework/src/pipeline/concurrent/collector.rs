@@ -21,6 +21,7 @@ use crate::pipeline::IndexedCheckpoint;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::BatchStatus;
 use crate::pipeline::concurrent::BatchedRows;
+use crate::pipeline::concurrent::Direction;
 use crate::pipeline::concurrent::Handler;
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
@@ -55,6 +56,77 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
     }
 }
 
+/// Drains up to one batch's worth of rows out of `pending` (advancing checkpoints in order),
+/// returning the batch, the number of rows it contains, and the watermark parts that describe
+/// what fraction of each checkpoint was taken. Used by both the forward and backwards flush
+/// loops in the collector — they differ only in which `BTreeMap` they pass in and which
+/// `Direction` they tag the resulting batch with.
+fn gather_batch<H: Handler>(
+    handler: &H,
+    pending: &mut BTreeMap<u64, PendingCheckpoint<H>>,
+    checkpoint_lag_reporter: &CheckpointLagMetricReporter,
+    metrics: &IndexerMetrics,
+    max_watermark_updates: usize,
+) -> (H::Batch, usize, Vec<WatermarkPart>) {
+    let guard = metrics
+        .collector_gather_latency
+        .with_label_values(&[H::NAME])
+        .start_timer();
+
+    let mut batch = H::Batch::default();
+    let mut watermark = Vec::new();
+    let mut batch_len = 0;
+
+    loop {
+        let Some(mut entry) = pending.first_entry() else {
+            break;
+        };
+
+        if watermark.len() >= max_watermark_updates {
+            break;
+        }
+
+        let indexed = entry.get_mut();
+        let before = indexed.values.len();
+        let status = handler.batch(&mut batch, &mut indexed.values);
+        let taken = before - indexed.values.len();
+
+        batch_len += taken;
+        watermark.push(indexed.watermark.take(taken));
+        if indexed.is_empty() {
+            checkpoint_lag_reporter.report_lag(
+                indexed.watermark.checkpoint(),
+                indexed.watermark.timestamp_ms(),
+            );
+            entry.remove();
+        }
+
+        if status == BatchStatus::Ready {
+            break;
+        }
+    }
+
+    let elapsed = guard.stop_and_record();
+    debug!(
+        pipeline = H::NAME,
+        elapsed_ms = elapsed * 1000.0,
+        rows = batch_len,
+        "Gathered batch",
+    );
+
+    metrics
+        .total_collector_batches_created
+        .with_label_values(&[H::NAME])
+        .inc();
+
+    metrics
+        .collector_batch_size
+        .with_label_values(&[H::NAME])
+        .observe(batch_len as f64);
+
+    (batch, batch_len, watermark)
+}
+
 /// The collector task is responsible for gathering rows into batches which it then sends to a
 /// committer task to write to the database. The task publishes batches in the following
 /// circumstances:
@@ -74,6 +146,7 @@ pub(super) fn collector<H: Handler>(
     handler: Arc<H>,
     config: CommitterConfig,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
+    mut rx_backwards: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
@@ -96,6 +169,9 @@ pub(super) fn collector<H: Handler>(
         // Data for checkpoints that are ready to be sent but haven't been written yet.
         let mut pending: BTreeMap<u64, PendingCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
+        // Same, but for backwards-direction checkpoints.
+        let mut pending_backwards: BTreeMap<u64, PendingCheckpoint<H>> = BTreeMap::new();
+        let mut pending_rows_backwards = 0;
 
         info!(pipeline = H::NAME, "Starting collector");
 
@@ -151,80 +227,62 @@ pub(super) fn collector<H: Handler>(
                         .with_label_values(&[H::NAME])
                         .inc_by(recv_cps as u64);
 
-                    if pending_rows < min_eager_rows {
+                    if pending_rows < min_eager_rows && pending_backwards.is_empty() {
                         continue;
                     }
                 }
                 // docs::/#collector
 
+                // Backwards intake: bypass the `reader_lo` filter (these checkpoints are
+                // intentionally below it) and route into the backwards pending map.
+                Some(mut indexed) = rx_backwards.recv(), if pending_rows_backwards < max_pending_rows => {
+                    let mut recv_rows = 0usize;
+                    loop {
+                        recv_rows += indexed.len();
+                        pending_rows_backwards += indexed.len();
+                        pending_backwards.insert(indexed.checkpoint(), indexed.into());
+
+                        if pending_rows_backwards >= max_pending_rows {
+                            break;
+                        }
+
+                        match rx_backwards.try_recv() {
+                            Ok(next) => indexed = next,
+                            Err(_) => break,
+                        }
+                    }
+
+                    metrics
+                        .total_collector_rows_received
+                        .with_label_values(&[H::NAME])
+                        .inc_by(recv_rows as u64);
+
+                    if pending_rows_backwards < min_eager_rows && pending_rows < min_eager_rows {
+                        continue;
+                    }
+                }
+
                 // Timer: always flush (even if empty, for watermark progress)
                 _ = poll.tick() => {}
             }
 
-            // === FLUSHING: send batches until pending is drained ===
+            // === FLUSHING: send forward batches until `pending` is drained ===
             //
             // Always executes at least once — on timer ticks this sends an empty
-            // heartbeat batch so watermarks make progress.
+            // forward heartbeat batch so the forward watermark makes progress.
             loop {
-                let guard = metrics
-                    .collector_gather_latency
-                    .with_label_values(&[H::NAME])
-                    .start_timer();
-
-                let mut batch = H::Batch::default();
-                let mut watermark = Vec::new();
-                let mut batch_len = 0;
-
-                loop {
-                    let Some(mut entry) = pending.first_entry() else {
-                        break;
-                    };
-
-                    if watermark.len() >= max_watermark_updates {
-                        break;
-                    }
-
-                    let indexed = entry.get_mut();
-                    let before = indexed.values.len();
-                    let status = handler.batch(&mut batch, &mut indexed.values);
-                    let taken = before - indexed.values.len();
-
-                    batch_len += taken;
-                    watermark.push(indexed.watermark.take(taken));
-                    if indexed.is_empty() {
-                        checkpoint_lag_reporter.report_lag(
-                            indexed.watermark.checkpoint(),
-                            indexed.watermark.timestamp_ms(),
-                        );
-                        entry.remove();
-                    }
-
-                    if status == BatchStatus::Ready {
-                        break;
-                    }
-                }
-
-                let elapsed = guard.stop_and_record();
-                debug!(
-                    pipeline = H::NAME,
-                    elapsed_ms = elapsed * 1000.0,
-                    rows = batch_len,
-                    "Gathered batch",
+                let (batch, batch_len, watermark) = gather_batch::<H>(
+                    handler.as_ref(),
+                    &mut pending,
+                    &checkpoint_lag_reporter,
+                    &metrics,
+                    max_watermark_updates,
                 );
-
-                metrics
-                    .total_collector_batches_created
-                    .with_label_values(&[H::NAME])
-                    .inc();
-
-                metrics
-                    .collector_batch_size
-                    .with_label_values(&[H::NAME])
-                    .observe(batch_len as f64);
 
                 pending_rows -= batch_len;
 
                 let batched_rows = BatchedRows {
+                    direction: Direction::Forward,
                     batch,
                     batch_len,
                     watermark,
@@ -242,10 +300,44 @@ pub(super) fn collector<H: Handler>(
                 }
             }
 
-            if rx.is_closed() && rx.is_empty() && pending_rows == 0 {
+            // === FLUSHING: send backwards batches until `pending_backwards` is drained ===
+            //
+            // No empty heartbeat: backwards watermark advancement only happens when there is
+            // actual completed work to flush.
+            while !pending_backwards.is_empty() {
+                let (batch, batch_len, watermark) = gather_batch::<H>(
+                    handler.as_ref(),
+                    &mut pending_backwards,
+                    &checkpoint_lag_reporter,
+                    &metrics,
+                    max_watermark_updates,
+                );
+
+                pending_rows_backwards -= batch_len;
+
+                let batched_rows = BatchedRows {
+                    direction: Direction::Backwards,
+                    batch,
+                    batch_len,
+                    watermark,
+                };
+                if tx.send(batched_rows).await.is_err() {
+                    info!(
+                        pipeline = H::NAME,
+                        "Committer closed channel, stopping collector"
+                    );
+                    return Ok(());
+                }
+            }
+
+            let forward_done = rx.is_closed() && rx.is_empty() && pending_rows == 0;
+            let backwards_done = rx_backwards.is_closed()
+                && rx_backwards.is_empty()
+                && pending_rows_backwards == 0;
+            if forward_done && backwards_done {
                 info!(
                     pipeline = H::NAME,
-                    "Processor closed channel, pending rows empty, stopping collector",
+                    "Both processor channels closed and pending empty, stopping collector",
                 );
                 break;
             }
@@ -324,6 +416,13 @@ mod tests {
         }
     }
 
+    /// Returns an immediately-closed `rx_backwards` for tests that exercise only the forward
+    /// path. The sender is dropped right away so the receiver sees EOF on first poll.
+    fn closed_backwards_rx() -> mpsc::Receiver<IndexedCheckpoint<TestHandler>> {
+        let (_tx, rx) = mpsc::channel(1);
+        rx
+    }
+
     /// Wait for a timeout on the channel, expecting this operation to timeout.
     async fn expect_timeout<H: Handler>(
         rx: &mut mpsc::Receiver<BatchedRows<H>>,
@@ -359,6 +458,7 @@ mod tests {
             handler,
             CommitterConfig::default(),
             processor_rx,
+            closed_backwards_rx(),
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
@@ -399,6 +499,7 @@ mod tests {
             handler,
             CommitterConfig::default(),
             processor_rx,
+            closed_backwards_rx(),
             collector_tx,
             main_reader_lo,
             test_metrics(),
@@ -442,6 +543,7 @@ mod tests {
             handler,
             CommitterConfig::default(),
             processor_rx,
+            closed_backwards_rx(),
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
@@ -499,6 +601,7 @@ mod tests {
             handler,
             config,
             processor_rx,
+            closed_backwards_rx(),
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
@@ -556,6 +659,7 @@ mod tests {
             handler,
             config,
             processor_rx,
+            closed_backwards_rx(),
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
@@ -602,6 +706,7 @@ mod tests {
             handler,
             config,
             processor_rx,
+            closed_backwards_rx(),
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
@@ -645,6 +750,7 @@ mod tests {
                 ..CommitterConfig::default()
             },
             processor_rx,
+            closed_backwards_rx(),
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
@@ -694,6 +800,7 @@ mod tests {
                 ..CommitterConfig::default()
             },
             processor_rx,
+            closed_backwards_rx(),
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
@@ -753,6 +860,7 @@ mod tests {
             Arc::new(TestHandler),
             CommitterConfig::default(),
             processor_rx,
+            closed_backwards_rx(),
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
@@ -815,5 +923,76 @@ mod tests {
         );
 
         collector.shutdown().await.unwrap();
+    }
+
+    /// Backwards-direction checkpoints flow through the collector unfiltered (regardless of
+    /// `main_reader_lo`) and are tagged with `Direction::Backwards` when sent to the committer.
+    /// Forward-direction batches stay tagged `Direction::Forward`.
+    #[tokio::test]
+    async fn test_collector_routes_backwards_checkpoints() {
+        let (processor_tx, processor_rx) = mpsc::channel(10);
+        let (processor_tx_backwards, processor_rx_backwards) = mpsc::channel(10);
+        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        // main_reader_lo is high enough that ANY backwards checkpoint would be filtered if
+        // it went through the forward arm.
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(100))));
+
+        let handler = Arc::new(TestHandler);
+        let _collector = collector::<TestHandler>(
+            handler,
+            CommitterConfig::default(),
+            processor_rx,
+            processor_rx_backwards,
+            collector_tx,
+            main_reader_lo.clone(),
+            test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
+        );
+
+        // Send a forward checkpoint at 150 (above reader_lo) and a backwards checkpoint at 5
+        // (well below reader_lo, would normally be filtered).
+        processor_tx
+            .send(IndexedCheckpoint::new(
+                0,
+                150,
+                10,
+                1000,
+                vec![Entry; TestHandler::MIN_EAGER_ROWS],
+            ))
+            .await
+            .unwrap();
+        processor_tx_backwards
+            .send(IndexedCheckpoint::new(
+                0,
+                5,
+                10,
+                1000,
+                vec![Entry; TestHandler::MIN_EAGER_ROWS],
+            ))
+            .await
+            .unwrap();
+
+        // Collect batches until we've seen one of each direction.
+        let mut saw_forward = false;
+        let mut saw_backwards = false;
+        while !(saw_forward && saw_backwards) {
+            let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
+            // Skip empty heartbeats from timer ticks.
+            if batch.batch_len == 0 {
+                continue;
+            }
+            match batch.direction {
+                Direction::Forward => {
+                    assert_eq!(batch.watermark[0].watermark.checkpoint_hi_inclusive, 150);
+                    saw_forward = true;
+                }
+                Direction::Backwards => {
+                    assert_eq!(batch.watermark[0].watermark.checkpoint_hi_inclusive, 5);
+                    saw_backwards = true;
+                }
+            }
+        }
     }
 }
