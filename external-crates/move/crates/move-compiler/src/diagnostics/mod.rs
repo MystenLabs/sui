@@ -151,9 +151,15 @@ pub fn unwrap_or_report_pass_diagnostics<T, Pass>(
     }
 }
 
-pub fn unwrap_or_report_diagnostics<T>(files: &MappedFiles, res: Result<T, Diagnostics>) -> T {
+pub fn unwrap_or_report_diagnostics<T>(
+    files: &MappedFiles,
+    res: Result<(T, Diagnostics), Diagnostics>,
+) -> T {
     match res {
-        Ok(t) => t,
+        Ok((t, warnings)) => {
+            report_warnings(files, warnings);
+            t
+        }
         Err(diags) => {
             assert!(!diags.is_empty());
             report_diagnostics(files, diags)
