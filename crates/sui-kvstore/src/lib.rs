@@ -248,13 +248,13 @@ pub trait KeyValueStoreReader {
     ) -> Result<Option<CheckpointData>>;
     /// Return the minimum watermark across the given pipelines, selecting the whole
     /// watermark with the lowest `checkpoint_hi_inclusive`. Returns `None` if any
-    /// pipeline is missing a watermark.
+    /// pipeline is missing a watermark or has `checkpoint_hi_inclusive < reader_lo`.
     async fn get_watermark_for_pipelines(
         &mut self,
         pipelines: &[&str],
-    ) -> Result<Option<WatermarkV0>>;
+    ) -> Result<Option<WatermarkV1>>;
     /// Return the minimum watermark across all pipelines.
-    async fn get_watermark(&mut self) -> Result<Option<WatermarkV0>> {
+    async fn get_watermark(&mut self) -> Result<Option<WatermarkV1>> {
         self.get_watermark_for_pipelines(&ALL_PIPELINE_NAMES).await
     }
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;

@@ -906,7 +906,7 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_watermark_for_pipelines(
         &mut self,
         pipelines: &[&str],
-    ) -> Result<Option<WatermarkV0>> {
+    ) -> Result<Option<WatermarkV1>> {
         let keys: Vec<Vec<u8>> = pipelines
             .iter()
             .map(|name| tables::watermarks::encode_key(name))
@@ -918,21 +918,23 @@ impl KeyValueStoreReader for BigTableClient {
             return Ok(None);
         }
 
-        // Reads the v0 `w` column. Every production write path in BigTableConnection keeps
-        // this column in sync alongside the v1 per-field columns, so consumers of this method
-        // see the same data they always have.
-        let mut min_wm: Option<WatermarkV0> = None;
+        // A row is hidden if `checkpoint_hi_inclusive == None` or
+        // `checkpoint_hi_inclusive < reader_lo`. If any pipeline is hidden, every consumer
+        // of this method (RPC/graphql) treats the whole result as missing, resulting in `Ok(None)`.
+        let mut min_wm: Option<(u64, WatermarkV1)> = None;
         for (_, row) in &rows {
-            let Some(wm) = tables::watermarks::decode_v0(row)? else {
+            let Some(wm) = tables::watermarks::decode_v1(row)? else {
                 return Ok(None);
             };
-            min_wm = Some(match min_wm {
-                Some(prev) if prev.checkpoint_hi_inclusive <= wm.checkpoint_hi_inclusive => prev,
-                _ => wm,
-            });
+            let Some(cp) = wm.checkpoint_hi_inclusive.filter(|cp| *cp >= wm.reader_lo) else {
+                return Ok(None);
+            };
+            if min_wm.as_ref().is_none_or(|(prev, _)| cp < *prev) {
+                min_wm = Some((cp, wm));
+            }
         }
 
-        Ok(min_wm)
+        Ok(min_wm.map(|(_, wm)| wm))
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
