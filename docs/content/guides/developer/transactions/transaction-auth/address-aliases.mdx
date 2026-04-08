@@ -107,3 +107,7 @@ $ sui client ptb \
         @<ALIAS_TO_REMOVE> \
     --gas-budget 50000000
 ```
+
+### Offline signing
+
+If you are using a hardware wallet or other external signer, add `--serialize-unsigned-transaction` to any of the commands above to output the raw transaction bytes instead of executing. You can then sign the transaction offline and submit it separately. See [Sui Client PTB CLI](/references/cli/ptb) for details.
