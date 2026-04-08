@@ -316,6 +316,7 @@ const TESTNET_USDC: &str =
 // Version 119: Enable the new VM.
 // Version 120: Disallow unused jump tables
 // Version 121: Re-enable defer_unpaid_amplification (devnet + testnet).
+// Version 121: Add timestamp_based_epoch_close feature flag.
 // Version 122: Framework update: vector::empty is deprecated.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -1054,6 +1055,13 @@ struct FeatureFlags {
     // If true, return early on type mismatch in receive_object.
     #[serde(skip_serializing_if = "is_false")]
     early_return_receive_object_mismatched_type: bool,
+
+    // If true, use consensus commit timestamps to determine epoch close instead of EndOfPublish voting.
+    // Each validator transitions from AcceptAllCerts to RejectAllCerts when the consensus commit
+    // timestamp exceeds the reconfiguration timestamp. EndOfPublish quorum still works as a
+    // fallback for manual epoch close.
+    #[serde(skip_serializing_if = "is_false")]
+    timestamp_based_epoch_close: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2749,6 +2757,10 @@ impl ProtocolConfig {
     pub fn early_return_receive_object_mismatched_type(&self) -> bool {
         self.feature_flags
             .early_return_receive_object_mismatched_type
+    }
+
+    pub fn timestamp_based_epoch_close(&self) -> bool {
+        self.feature_flags.timestamp_based_epoch_close
     }
 }
 
@@ -4799,6 +4811,9 @@ impl ProtocolConfig {
                     }
                     cfg.feature_flags
                         .early_return_receive_object_mismatched_type = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.timestamp_based_epoch_close = true;
+                    }
                 }
                 122 => {}
                 // Use this template when making changes:

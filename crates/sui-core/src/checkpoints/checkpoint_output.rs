@@ -128,7 +128,9 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
                 .set(checkpoint_seq as i64);
         }
 
-        if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms {
+        if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms
+            && !epoch_store.protocol_config().timestamp_based_epoch_close()
+        {
             // close_epoch is ok if called multiple times
             info!(
                 "Closing epoch at sequence {checkpoint_seq} at timestamp {checkpoint_timestamp}. next_reconfiguration_timestamp_ms {}",

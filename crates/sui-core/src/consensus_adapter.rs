@@ -347,7 +347,10 @@ impl ConsensusAdapter {
         // Send EndOfPublish if needed.
         // This handles the case where the node crashed after setting reconfig lock state
         // but before the EndOfPublish message was sent to consensus.
-        if epoch_store.should_send_end_of_publish() {
+        // Skip when timestamp_based_epoch_close is enabled (epoch close is timestamp-driven).
+        if !epoch_store.protocol_config().timestamp_based_epoch_close()
+            && epoch_store.should_send_end_of_publish()
+        {
             let transaction = ConsensusTransaction::new_end_of_publish(self.authority);
             info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
             self.submit_unchecked(&[transaction], epoch_store, None, None);
@@ -977,7 +980,10 @@ impl ConsensusAdapter {
                     | ConsensusTransactionKind::UserTransaction(_)
                     | ConsensusTransactionKind::UserTransactionV2(_)
             );
-        if is_user_tx && epoch_store.should_send_end_of_publish() {
+        if is_user_tx
+            && !epoch_store.protocol_config().timestamp_based_epoch_close()
+            && epoch_store.should_send_end_of_publish()
+        {
             // sending message outside of any locks scope
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
@@ -1212,6 +1218,11 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// It sets reconfig state to reject new certificates from user.
     /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained.
     fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) {
+        if epoch_store.protocol_config().timestamp_based_epoch_close() {
+            // With timestamp-based epoch close, the consensus handler handles the
+            // transition directly. No need to send EndOfPublish automatically.
+            return;
+        }
         {
             let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
             if !reconfig_guard.should_accept_user_certs() {

@@ -1256,8 +1256,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     user_transactions,
                 );
 
-            let (should_accept_tx, lock, final_round) =
-                self.handle_eop(&mut state, end_of_publish_transactions);
+            let (should_accept_tx, lock, final_round) = if self
+                .epoch_store
+                .protocol_config()
+                .timestamp_based_epoch_close()
+            {
+                self.handle_epoch_close(&mut state, &commit_info, end_of_publish_transactions)
+            } else {
+                self.handle_eop(&mut state, end_of_publish_transactions)
+            };
 
             let make_checkpoint = should_accept_tx || final_round;
             if !make_checkpoint {
@@ -1310,8 +1317,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 user_transactions,
             );
 
-            let (should_accept_tx, lock, final_round) =
-                self.handle_eop(&mut state, end_of_publish_transactions);
+            let (should_accept_tx, lock, final_round) = if self
+                .epoch_store
+                .protocol_config()
+                .timestamp_based_epoch_close()
+            {
+                self.handle_epoch_close(&mut state, &commit_info, end_of_publish_transactions)
+            } else {
+                self.handle_eop(&mut state, end_of_publish_transactions)
+            };
 
             let make_checkpoint = should_accept_tx || final_round;
             if !make_checkpoint {
@@ -1435,6 +1449,75 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         } else {
             (true, None, false)
         }
+    }
+
+    /// Timestamp-based epoch close: transitions to RejectAllCerts when consensus commit
+    /// timestamp exceeds reconfiguration timestamp. Also supports manual epoch close via
+    /// EndOfPublish quorum as a fallback.
+    fn handle_epoch_close(
+        &self,
+        state: &mut CommitHandlerState,
+        commit_info: &ConsensusCommitInfo,
+        end_of_publish_transactions: Vec<AuthorityName>,
+    ) -> (bool, Option<RwLockWriteGuard<'_, ReconfigState>>, bool) {
+        // Still process EndOfPublish transactions for manual epoch close support.
+        let collected_eop =
+            self.process_end_of_publish_transactions(state, end_of_publish_transactions);
+
+        let timestamp_triggered =
+            commit_info.timestamp >= self.epoch_store.next_reconfiguration_timestamp_ms();
+
+        let should_close = timestamp_triggered || collected_eop;
+
+        if !should_close {
+            return (true, None, false);
+        }
+
+        let mut reconfig_state = self.epoch_store.get_reconfig_state_write_lock_guard();
+        let start_state_is_reject_all_tx = reconfig_state.is_reject_all_tx();
+
+        if reconfig_state.should_accept_user_certs() {
+            // First time closing: transition directly to RejectAllCerts.
+            if timestamp_triggered {
+                info!(
+                    "Timestamp-based epoch close: commit timestamp {} >= reconfiguration timestamp {}",
+                    commit_info.timestamp,
+                    self.epoch_store.next_reconfiguration_timestamp_ms(),
+                );
+            }
+            if collected_eop {
+                info!("EndOfPublish quorum reached for manual epoch close");
+            }
+            self.epoch_store
+                .record_epoch_close_for_timestamp_based_transition();
+        }
+
+        reconfig_state.close_all_certs();
+
+        let commit_has_deferred_txns = state.output.has_deferred_transactions();
+        let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
+
+        if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
+            if !start_state_is_reject_all_tx {
+                info!("Transitioning to RejectAllTx");
+            }
+            reconfig_state.close_all_tx();
+        } else {
+            debug!(
+                "Blocking end of epoch on deferred transactions, from previous commits?={}, from this commit?={}",
+                previous_commits_have_deferred_txns, commit_has_deferred_txns,
+            );
+        }
+
+        state.output.store_reconfig_state(reconfig_state.clone());
+
+        let final_round = !start_state_is_reject_all_tx && reconfig_state.is_reject_all_tx();
+
+        (
+            reconfig_state.should_accept_tx(),
+            Some(reconfig_state),
+            final_round,
+        )
     }
 
     fn record_end_of_epoch_execution_time_observations(
@@ -2843,12 +2926,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     _ => {}
                 }
 
-                if matches!(
-                    &parsed.transaction.kind,
-                    ConsensusTransactionKind::UserTransaction(_)
-                        | ConsensusTransactionKind::UserTransactionV2(_)
-                        | ConsensusTransactionKind::CertifiedTransaction(_)
-                ) {
+                // When timestamp_based_epoch_close is enabled, validators don't
+                // automatically send EndOfPublish, so skip this filter.
+                if !self
+                    .epoch_store
+                    .protocol_config()
+                    .timestamp_based_epoch_close()
+                    && matches!(
+                        &parsed.transaction.kind,
+                        ConsensusTransactionKind::UserTransaction(_)
+                            | ConsensusTransactionKind::UserTransactionV2(_)
+                            | ConsensusTransactionKind::CertifiedTransaction(_)
+                    )
+                {
                     let author_name = self
                         .epoch_store
                         .committee()
@@ -3212,6 +3302,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     async fn send_end_of_publish_if_needed(&self) {
+        if self
+            .epoch_store
+            .protocol_config()
+            .timestamp_based_epoch_close()
+        {
+            return;
+        }
         if !self.epoch_store.should_send_end_of_publish() {
             return;
         }
