@@ -593,7 +593,7 @@ macro_rules! ast_stepped_compilers {
 
                 pub fn check_and_report(self, files: &MappedFiles)  {
                     let units_result = self.build().map_err(|(_, diags)| diags);
-                    let _ = unwrap_or_report_diagnostics(&files, units_result);
+                    let _units = unwrap_or_report_diagnostics(&files, units_result);
                 }
 
                 pub fn build_and_report(
