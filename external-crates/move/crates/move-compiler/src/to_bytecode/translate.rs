@@ -516,6 +516,12 @@ fn emit_macro_frame_diagnostics(
     /// change: `{line}: {source} {prev_stack} -> {new_stack}`.
     /// Uses instruction locations from code_map (not frame call_loc) so that
     /// the output reflects where the debugger would be when the transition happens.
+    ///
+    /// Also checks color/location consistency: a color of an instruction
+    /// describes a certain inlining level and the location of an
+    /// instruction must reflect this. In particular, we should not have
+    /// an instruction with some (inlined) color but its location
+    /// pointing to the body of the function where it was inlined.
     fn build_frame_transitions(
         fname: &str,
         frames: &[MacroFrameInfoEntry],
@@ -526,6 +532,30 @@ fn emit_macro_frame_diagnostics(
         let mut result = format!("Frame transitions ({}):\n", fname);
         let mut prev_stack: Vec<u32> = vec![];
         for &(pc, frame_idx) in color_map {
+            // Each instruction's color_map entry (frame_idx) points to
+            // a MacroFrameInfoEntry in the `frames` array. The
+            // instruction's source location (looked up in code_map) must
+            // fall within that entry's `source_loc` — the span of the
+            // macro definition, lambda body, or argument expression. If
+            // it doesn't (e.g., the instruction has MacroBody color but
+            // a call-site source location), that's a color/location
+            // mismatch.
+            if let Some(idx) = frame_idx {
+                let frame = &frames[idx as usize];
+                if let Some((_, instr_loc)) = code_map.range(..=pc).next_back() {
+                    if !frame.source_loc.contains(instr_loc) {
+                        let instr_line = resolve_loc_to_line(instr_loc, mapped_files);
+                        let kind = format_kind_short(&frame.kind);
+                        result.push_str(&format!(
+                            "  !! color/location mismatch at pc {}: \
+                             instruction at {} has {} color \
+                             but location outside {} source range\n",
+                            pc, instr_line, kind, kind,
+                        ));
+                    }
+                }
+            }
+
             let stack = build_frame_stack(frames, frame_idx);
             if stack == prev_stack {
                 continue;
