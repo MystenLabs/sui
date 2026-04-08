@@ -15,11 +15,12 @@ after the GraphQL schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
 
 ## Version Queries
 
-The `ObjectStore` trait supports three query modes via `VersionQuery`:
+The `ObjectStore` trait supports four query modes via `VersionQuery`:
 
 - `Version(v)` - Request object at exact version `v`
 - `RootVersion(v)` - Request object at version `<= v` (for dynamic field roots)
 - `AtCheckpoint(c)` - Request object as it existed at checkpoint `c`
+- `VersionAtCheckpoint { version, checkpoint }` - Request exact version `version` only if it existed by `checkpoint`
 
 ## Network Configuration
 

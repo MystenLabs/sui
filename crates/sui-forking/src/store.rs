@@ -82,22 +82,29 @@ impl DataStore {
 
     /// Get the object at the specified version. It will first try to load from disk, and if not
     /// found, it will fetch from remote rpc by making a query to fetch this version at the forked
-    /// checkpoint.
+    /// checkpoint. If none is found, it will return None. If the object is successfully fetched
+    /// from remote rpc, it will be saved to disk for future use before returning the object.
     pub fn get_object_at_version(
         &self,
         object_id: ObjectID,
         version: u64,
-    ) -> anyhow::Result<Object> {
+    ) -> anyhow::Result<Option<Object>> {
         // load from disk
         if let Some(object) = self.get_object_at_version_from_disk(object_id, version)? {
-            return Ok(object);
+            return Ok(Some(object));
         }
 
-        let object =
-            self.get_object_at_checkpoint_from_remote(object_id, self.forked_at_checkpoint)?;
-        self.write_object_to_disk(object.clone())?;
-
-        Ok(object)
+        let object = self.get_object_at_version_at_checkpoint_from_remote(
+            object_id,
+            version,
+            self.forked_at_checkpoint(),
+        )?;
+        if let Some(object) = object {
+            self.write_object_to_disk(object.clone())?;
+            Ok(Some(object))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Get the object at the latest version available on disk. If not found, it will fetch the
@@ -116,6 +123,28 @@ impl DataStore {
         self.write_object_to_disk(object)?;
 
         Ok(None)
+    }
+
+    /// Get the object at the specified version and specified checkpoint from remote rpc.
+    fn get_object_at_version_at_checkpoint_from_remote(
+        &self,
+        object_id: ObjectID,
+        version: u64,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Option<Object>> {
+        let objects = self.gql.get_objects(&[ObjectKey {
+            object_id,
+            version_query: forking_data_store::VersionQuery::VersionAtCheckpoint {
+                version,
+                checkpoint,
+            },
+        }])?;
+
+        Ok(objects
+            .into_iter()
+            .next()
+            .flatten()
+            .map(|(object, _)| object))
     }
 
     /// Get the object at the specified checkpoint from remote rpc.
@@ -209,7 +238,7 @@ impl DataStore {
         // find the latest version file in the object directory
         let latest_version = self.read_latest_file(&object_dir)?;
         let version_file = object_dir.join(latest_version.to_string());
-        self.read_bcs_file(&version_file)
+        self.read_bcs_file(&version_file).map(Some)
     }
 
     fn get_object_at_version_from_disk(

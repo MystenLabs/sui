@@ -208,6 +208,27 @@ mod tests {
         })
     }
 
+    fn versioned_object_at_checkpoint_response_body(object: Option<&Object>) -> serde_json::Value {
+        json!({
+            "data": {
+                "checkpoint": {
+                    "query": {
+                        "object": object.map(|object| {
+                            json!({
+                                "address": object.id().to_string(),
+                                "version": object.version().value(),
+                                "objectBcs": FastCryptoBase64::from_bytes(
+                                    &bcs::to_bytes(object).expect("object should serialize"),
+                                )
+                                .encoded(),
+                            })
+                        })
+                    }
+                }
+            }
+        })
+    }
+
     #[tokio::test]
     async fn test_run_query() {
         let server = MockServer::start().await;
@@ -376,5 +397,94 @@ mod tests {
             .expect("query string should be present");
         assert!(query.contains("multiGetObjects"));
         assert!(query.contains("objectBcs"));
+    }
+
+    #[tokio::test]
+    async fn test_get_object_exact_version_at_checkpoint() {
+        let server = MockServer::start().await;
+        let object = Object::immutable_with_id_for_testing(ObjectID::random());
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(header("user-agent", "forking-data-store-vtest-version"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "sequenceNumber": 31,
+                    "address": object.id().to_string(),
+                    "version": object.version().value(),
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(versioned_object_at_checkpoint_response_body(Some(&object))),
+            )
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let objects = store
+            .get_objects(&[ObjectKey {
+                object_id: object.id(),
+                version_query: VersionQuery::VersionAtCheckpoint {
+                    version: object.version().value(),
+                    checkpoint: 31,
+                },
+            }])
+            .expect("versioned object query should succeed");
+
+        assert_eq!(
+            objects,
+            vec![Some((object.clone(), object.version().value()))]
+        );
+
+        let requests = server
+            .received_requests()
+            .await
+            .expect("wiremock should record requests");
+        let request_body: serde_json::Value = requests[0]
+            .body_json()
+            .expect("request body should be json");
+        let query = request_body
+            .get("query")
+            .and_then(serde_json::Value::as_str)
+            .expect("query string should be present");
+        assert!(query.contains("checkpoint"));
+        assert!(query.contains("object(address: $address, version: $version)"));
+        assert!(!query.contains("multiGetObjects"));
+    }
+
+    #[tokio::test]
+    async fn test_get_object_exact_version_at_checkpoint_returns_none() {
+        let server = MockServer::start().await;
+        let object_id = ObjectID::random();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "sequenceNumber": 31,
+                    "address": object_id.to_string(),
+                    "version": 7,
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(versioned_object_at_checkpoint_response_body(None)),
+            )
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let objects = store
+            .get_objects(&[ObjectKey {
+                object_id,
+                version_query: VersionQuery::VersionAtCheckpoint {
+                    version: 7,
+                    checkpoint: 31,
+                },
+            }])
+            .expect("versioned object query should succeed");
+
+        assert_eq!(objects, vec![None]);
     }
 }

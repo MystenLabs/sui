@@ -248,6 +248,44 @@ pub(crate) mod object_query {
         pub object_bcs: Option<Base64>,
     }
 
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct VersionAtCheckpointVars {
+        pub sequence_number: Option<u64>,
+        pub address: SuiAddress,
+        pub version: Option<u64>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "VersionAtCheckpointVars",
+        graphql_type = "Query",
+        schema_module = "crate::gql_queries::schema"
+    )]
+    pub(crate) struct VersionAtCheckpointQuery {
+        #[arguments(sequenceNumber: $sequence_number)]
+        pub checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "VersionAtCheckpointVars",
+        schema_module = "crate::gql_queries::schema"
+    )]
+    pub(crate) struct Checkpoint {
+        pub query: Option<ScopedQuery>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "VersionAtCheckpointVars",
+        graphql_type = "Query",
+        schema_module = "crate::gql_queries::schema"
+    )]
+    pub(crate) struct ScopedQuery {
+        #[arguments(address: $address, version: $version)]
+        pub object: Option<ObjectFragment>,
+    }
+
     // Maximum number of keys to query in a single request.
     // REVIEW: not clear how this translate to the 5000B limit, so
     // we are picking a "random" and conservative number.
@@ -257,18 +295,36 @@ pub(crate) mod object_query {
         keys: &[GqlObjectKey],
         data_store: &GraphQLStore,
     ) -> Result<Vec<Option<(Object, u64)>>, Error> {
-        let mut keys = keys
-            .iter()
-            .cloned()
-            .map(ObjectKey::from)
-            .collect::<Vec<_>>();
+        let mut results: Vec<Option<Option<(Object, u64)>>> = vec![None; keys.len()];
+        let mut standard_indices = Vec::with_capacity(keys.len());
+        let mut standard_keys = Vec::with_capacity(keys.len());
+
+        for (idx, key) in keys.iter().cloned().enumerate() {
+            match key.version_query {
+                VersionQuery::VersionAtCheckpoint {
+                    version,
+                    checkpoint,
+                } => {
+                    results[idx] = Some(
+                        query_version_at_checkpoint(key.object_id, version, checkpoint, data_store)
+                            .await?,
+                    );
+                }
+                _ => {
+                    standard_indices.push(idx);
+                    standard_keys.push(ObjectKey::from(key));
+                }
+            }
+        }
+
+        let mut keys = standard_keys;
         let mut key_chunks = vec![];
         while !keys.is_empty() {
             let chunk: Vec<_> = keys.drain(..MAX_KEYS_SIZE.min(keys.len())).collect();
             key_chunks.push(chunk);
         }
 
-        let mut objects = vec![];
+        let mut standard_results = vec![];
 
         for keys in key_chunks {
             let query: cynic::Operation<MultiGetObjectsQuery, MultiGetObjectsVars> =
@@ -284,27 +340,64 @@ pub(crate) mod object_query {
                 ));
             };
 
-            let chunk = list
-                .into_iter()
-                .map(|frag| match frag {
-                    Some(frag) => {
-                        let b64 = frag
-                            .object_bcs
-                            .ok_or_else(|| anyhow!("Object bcs is None for object"))?
-                            .0;
-                        let bytes = CryptoBase64::decode(&b64)?;
-                        let obj: Object = bcs::from_bytes(&bytes)?;
-                        let version = frag
-                            .version
-                            .ok_or_else(|| anyhow!("Object version is None for object"))?;
-                        Ok::<_, Error>(Some((obj, version)))
-                    }
-                    None => Ok::<_, Error>(None),
-                })
-                .collect::<Result<Vec<Option<(Object, u64)>>, _>>()?;
-            objects.extend(chunk);
+            standard_results.extend(
+                list.into_iter()
+                    .map(decode_object_fragment)
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
         }
-        Ok(objects)
+
+        for (idx, object) in standard_indices.into_iter().zip(standard_results) {
+            results[idx] = Some(object);
+        }
+
+        Ok(results
+            .into_iter()
+            .map(|result| result.expect("every query key should produce a result"))
+            .collect())
+    }
+
+    async fn query_version_at_checkpoint(
+        object_id: sui_types::base_types::ObjectID,
+        version: u64,
+        checkpoint: u64,
+        data_store: &GraphQLStore,
+    ) -> Result<Option<(Object, u64)>, Error> {
+        let query = VersionAtCheckpointQuery::build(VersionAtCheckpointVars {
+            sequence_number: Some(checkpoint),
+            address: SuiAddress(object_id.to_string()),
+            version: Some(version),
+        });
+        let response = data_store.run_query(&query).await?;
+        let checkpoint = response
+            .data
+            .and_then(|data| data.checkpoint)
+            .ok_or_else(|| anyhow!("Missing checkpoint in object query response"))?;
+        let scoped_query = checkpoint
+            .query
+            .ok_or_else(|| anyhow!("Missing checkpoint-scoped query in object response"))?;
+
+        decode_object_fragment(scoped_query.object)
+    }
+
+    fn decode_object_fragment(
+        frag: Option<ObjectFragment>,
+    ) -> Result<Option<(Object, u64)>, Error> {
+        match frag {
+            Some(frag) => {
+                let b64 = frag
+                    .object_bcs
+                    .ok_or_else(|| anyhow!("Object bcs is None for object"))?
+                    .0;
+                let bytes = CryptoBase64::decode(&b64)?;
+                let obj: Object = bcs::from_bytes(&bytes)?;
+                let version = frag
+                    .version
+                    .ok_or_else(|| anyhow!("Object version is None for object"))?;
+                Ok(Some((obj, version)))
+            }
+            None => Ok(None),
+        }
     }
 
     impl From<GqlObjectKey> for ObjectKey {
@@ -361,6 +454,11 @@ pub(crate) mod object_query {
             assert_eq!(checkpoint_key.version, None);
             assert_eq!(checkpoint_key.root_version, None);
             assert_eq!(checkpoint_key.at_checkpoint, Some(19));
+        }
+
+        #[test]
+        fn decode_object_fragment_returns_none_for_missing_object() {
+            assert_eq!(decode_object_fragment(None).unwrap(), None);
         }
     }
 }

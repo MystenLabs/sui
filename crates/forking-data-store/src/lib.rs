@@ -94,11 +94,13 @@ pub struct ObjectKey {
 /// `Version` request an object at a specific version, or latest if no version is provided
 /// `RootVersion` request an object at a given version at most (<=)
 /// `AtCheckpoint` request an object at a given checkpoint. Useful for unknown `Version`.
+/// `VersionAtCheckpoint` requests an exact version, but only if it existed by the given checkpoint.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VersionQuery {
     Version(u64),
     RootVersion(u64),
     AtCheckpoint(u64),
+    VersionAtCheckpoint { version: u64, checkpoint: u64 },
 }
 
 /// The `ObjectStore` trait is used to retrieve objects by their keys,
