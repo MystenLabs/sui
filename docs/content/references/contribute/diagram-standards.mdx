@@ -40,7 +40,7 @@ The required tool depends on diagram type and complexity. Excalidraw is best for
 
 ### Excalidraw
 
-Excalidraw is the required tool for all diagrams with more than 5 nodes. It runs in the browser at [excalidraw.com](https://excalidraw.com) and produces clean SVG and PNG exports that conform to brand standards.
+Excalidraw is the recommended tool for diagrams with more than 5 nodes. It runs in the browser at [excalidraw.com](https://excalidraw.com) and produces clean SVG and PNG exports that conform to brand standards. For smaller diagrams, Mermaid.js is often the better choice.
 
 Configure the following options before creating a diagram.
 
@@ -130,7 +130,7 @@ The Sui brand core palette colors are:
 | Gray 500 | `#6C7584` | Secondary nodes, supporting components |
 | Sui Blue 500 | `#298DFF` | Arrows, tertiary nodes, callouts |
 
-Use Black, Gray 500, and Sui Blue 500 to encode emphasis level: Black for primary elements, Gray 500 for secondary elements, and Sui Blue 500 for tertiary elements and all arrows. If more than 3 fill colors are required to maintain clarity, expand into the Gray extended palette first, then the Blue extended palette. See the extended palette at [https://live.standards.site/sui-media-kit/sui-color](https://live.standards.site/sui-media-kit/sui-color).
+The recommended use column describes best-practice guidance, not hard requirements. Any color that exactly matches a hex value in the core palette, Extended Blue (Blue 50–900), or Extended Gray (Gray 50–900) palette is acceptable, provided it maintains WCAG AA graphic contrast (3:1). Colors outside these palettes are not permitted. If more than 3 fill colors are required to maintain clarity, expand into the Gray extended palette first, then the Blue extended palette. See the extended palette at [https://live.standards.site/sui-media-kit/sui-color](https://live.standards.site/sui-media-kit/sui-color).
 
 ### Typography
 
@@ -168,12 +168,14 @@ Each shape encodes a specific C4 element. Do not repurpose shapes for elements t
 
 ![Color and emphasis example](./images/color_emphasis_example.png)
 
-Use Black, Gray 500, and Sui Blue 500 to encode emphasis level across all elements:
+Use Black, Gray 500, and Sui Blue 500 as the recommended fill colors to encode emphasis level across all elements:
 
-- **Primary elements:** Black fill, white label text.
+- **Primary elements:** Black fill, white label.
 - **Secondary elements:** Gray 500 fill, white label text.
 - **Tertiary elements and arrows:** Sui Blue 500.
 - **Boundary outlines:** Extended Gray palette first, then extended Blue palette.
+
+Any on-palette color (core, Extended Blue, or Extended Gray) is acceptable as long as it maintains WCAG AA graphic contrast (3:1). Color role assignments are guidance and are never a hard requirement.
 
 ![Outline color example](./images/color_outline_example.png)
 
@@ -194,7 +196,7 @@ Use Black, Gray 500, and Sui Blue 500 to encode emphasis level across all elemen
 
 ### Arrows
 
-All arrows use Sui Blue 500 as the stroke color. The table below defines the 3 arrow styles and their C4 relationship types.
+Sui Blue 500 (`#298DFF`) is the recommended stroke color for all arrows. Any on-palette color that maintains sufficient contrast is also acceptable; off-palette colors are not permitted. The table below defines the 3 arrow styles and their C4 relationship types.
 
 | **Arrow style** | **C4 relationship type** | **When to use** |
 | --- | --- | --- |
@@ -206,9 +208,9 @@ All arrows use Sui Blue 500 as the stroke color. The table below defines the 3 a
 
 ![Text color accessibility](./images/text_color_wcag.png)
 
-- Meet WCAG AA minimum contrast for all text and aim for AAA.
+- Meet WCAG AA graphic minimum contrast (3:1) for all diagram text. Diagrams treat text as a graphic or UI component, so the 3:1 graphic threshold applies rather than the 4.5:1 normal-text threshold.
 - Do not rely on color alone to distinguish elements. Supplement color with shape, arrow style, or label.
-- Prefer white text on Black (`#000000`) or Gray 500 (`#6C7584`) fills. Avoid white text on Sui Blue 500 for normal-size text because the contrast ratio of 3.31:1 fails AA for normal text.
+- Prefer white text on Black (`#000000`) or Gray 500 (`#6C7584`) fills. White (`#FFFFFF`) on Sui Blue 500 (`#298DFF`) achieves approximately 3.31:1 contrast, which passes the 3:1 graphic AA threshold and is permitted.
 - Label every node. Do not rely on position or color alone to convey meaning.
 - Test readability at 400px wide (mobile) and 1200px wide (desktop) before committing.
 
