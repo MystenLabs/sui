@@ -125,7 +125,7 @@ Each event contains the target address, a balance type, an operation (`Split` fo
 
 ### Existing contracts
 
-Contracts that accept `Coin<T>` or `Balance<T>` remain callable without changes. The `redeem_funds` functions convert withdrawals to the expected types within the PTB.
+Contracts that accept `Coin<T>` or `Balance<T>` remain callable without changes. The `redeem_funds` functions (in the `sui::coin` and `sui::balance` modules respectively) convert withdrawals to the expected types within the PTB.
 
 ### Legacy clients
 
