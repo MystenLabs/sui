@@ -108,6 +108,21 @@ pub trait ConcurrentConnection: Connection {
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
 
+    /// Update the `reader_lo` of an existing watermark entry only if it *lowers* `reader_lo`.
+    /// Used by backwards indexing to extend the readable range backwards as older checkpoints
+    /// are processed and committed.
+    ///
+    /// Unlike [`Self::set_reader_watermark`], this does **not** touch `pruner_timestamp` — the
+    /// pruner is gated on backwards completion (see [`PrunerWatermark::wait_for_ms`]) and must
+    /// not be reset every time backwards advances.
+    ///
+    /// Returns a boolean indicating whether the watermark was actually updated or not.
+    async fn lower_reader_watermark(
+        &mut self,
+        pipeline: &'static str,
+        reader_lo: u64,
+    ) -> anyhow::Result<bool>;
+
     /// Update the pruner watermark, returns true if the watermark was actually updated.
     async fn set_pruner_watermark(
         &mut self,

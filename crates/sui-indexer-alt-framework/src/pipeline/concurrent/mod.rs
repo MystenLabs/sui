@@ -248,6 +248,8 @@ impl Default for PrunerConfig {
 pub(crate) fn pipeline<H: Handler>(
     handler: H,
     next_checkpoint: u64,
+    first_checkpoint: u64,
+    reader_lo: u64,
     config: ConcurrentConfig,
     store: H::Store,
     task: Option<Task>,
@@ -338,12 +340,21 @@ pub(crate) fn pipeline<H: Handler>(
         metrics.clone(),
     );
 
+    // Set by the commit_watermark task once backwards indexing is fully complete (or immediately
+    // at startup if there is no backwards range to process). The reader_watermark and pruner
+    // tasks will await this in a future commit before entering their main loops; for now they
+    // accept it but do not use it.
+    let backwards_complete: Arc<SetOnce<()>> = Arc::new(SetOnce::new());
+
     let s_commit_watermark = commit_watermark::<H>(
         next_checkpoint,
+        first_checkpoint,
+        reader_lo,
         committer_config,
         watermark_rx,
         store.clone(),
         task.as_ref().map(|t| t.task.clone()),
+        backwards_complete.clone(),
         metrics.clone(),
     );
 
@@ -353,10 +364,14 @@ pub(crate) fn pipeline<H: Handler>(
         store.clone(),
     );
 
-    let s_reader_watermark =
-        reader_watermark::<H>(pruner_config.clone(), store.clone(), metrics.clone());
+    let s_reader_watermark = reader_watermark::<H>(
+        pruner_config.clone(),
+        store.clone(),
+        backwards_complete.clone(),
+        metrics.clone(),
+    );
 
-    let s_pruner = pruner(handler, pruner_config, store, metrics);
+    let s_pruner = pruner(handler, pruner_config, store, backwards_complete, metrics);
 
     s_processor
         .merge(s_processor_backwards)
@@ -489,6 +504,8 @@ mod tests {
             let pipeline = pipeline(
                 DataPipeline,
                 next_checkpoint,
+                /* first_checkpoint */ 0,
+                /* reader_lo */ 0,
                 config,
                 store.clone(),
                 None,

@@ -287,6 +287,19 @@ impl ConcurrentConnection for MockConnection<'_> {
         curr.pruner_hi = pruner_hi;
         Ok(true)
     }
+
+    async fn lower_reader_watermark(
+        &mut self,
+        pipeline: &'static str,
+        reader_lo: u64,
+    ) -> anyhow::Result<bool> {
+        let mut curr = self.0.watermarks.get_mut(pipeline).unwrap();
+        if reader_lo >= curr.reader_lo {
+            return Ok(false);
+        }
+        curr.reader_lo = reader_lo;
+        Ok(true)
+    }
 }
 
 #[async_trait]

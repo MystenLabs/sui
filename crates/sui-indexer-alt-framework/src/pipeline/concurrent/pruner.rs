@@ -7,6 +7,7 @@ use std::sync::Arc;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use sui_futures::service::Service;
+use tokio::sync::SetOnce;
 use tokio::sync::Semaphore;
 use tokio::time::MissedTickBehavior;
 use tokio::time::interval;
@@ -99,6 +100,9 @@ pub(super) fn pruner<H: Handler>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
+    // Will be awaited in commit 4 so this task only starts once backwards indexing finishes.
+    // Accepted but unused in commit 3.
+    _backwards_complete: Arc<SetOnce<()>>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
@@ -549,7 +553,15 @@ mod tests {
 
         // Start the pruner
         let store_clone = store.clone();
-        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics);
+        let backwards_complete: Arc<SetOnce<()>> = Arc::new(SetOnce::new());
+        let _ = backwards_complete.set(());
+        let _pruner = pruner(
+            handler,
+            Some(pruner_config),
+            store_clone,
+            backwards_complete,
+            metrics,
+        );
 
         // Wait a short time within delay_ms
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -629,7 +641,15 @@ mod tests {
 
         // Start the pruner
         let store_clone = store.clone();
-        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics);
+        let backwards_complete: Arc<SetOnce<()>> = Arc::new(SetOnce::new());
+        let _ = backwards_complete.set(());
+        let _pruner = pruner(
+            handler,
+            Some(pruner_config),
+            store_clone,
+            backwards_complete,
+            metrics,
+        );
 
         // Because the `pruner_timestamp` is in the past, even with the delay_ms it should be pruned
         // close to immediately. To be safe, sleep for 1000ms before checking, which is well under
@@ -699,7 +719,15 @@ mod tests {
 
         // Start the pruner
         let store_clone = store.clone();
-        let _pruner = pruner(handler, Some(pruner_config), store_clone, metrics);
+        let backwards_complete: Arc<SetOnce<()>> = Arc::new(SetOnce::new());
+        let _ = backwards_complete.set(());
+        let _pruner = pruner(
+            handler,
+            Some(pruner_config),
+            store_clone,
+            backwards_complete,
+            metrics,
+        );
 
         // Wait for first pruning cycle - ranges [2,3) and [3,4) should succeed, [1,2) should fail
         tokio::time::sleep(Duration::from_millis(500)).await;

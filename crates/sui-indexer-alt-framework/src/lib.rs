@@ -407,10 +407,13 @@ impl<S: ConcurrentStore> Indexer<S> {
 
         let checkpoint_rx = self.ingestion_service.subscribe().0;
         let checkpoint_rx_backwards = self.ingestion_service.subscribe_backwards();
+        let first_checkpoint = self.first_checkpoint.unwrap_or(0);
 
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
             next_checkpoint,
+            first_checkpoint,
+            reader_lo,
             config,
             self.store.clone(),
             self.task.clone(),

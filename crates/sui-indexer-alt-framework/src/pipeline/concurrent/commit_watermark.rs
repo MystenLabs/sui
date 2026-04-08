@@ -7,6 +7,7 @@ use std::collections::btree_map::Entry;
 use std::sync::Arc;
 
 use sui_futures::service::Service;
+use tokio::sync::SetOnce;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
@@ -22,6 +23,7 @@ use crate::pipeline::concurrent::Direction;
 use crate::pipeline::concurrent::Handler;
 use crate::pipeline::logging::WatermarkLogger;
 use crate::store::CommitterWatermark;
+use crate::store::ConcurrentConnection;
 use crate::store::Connection;
 use crate::store::Store;
 use crate::store::pipeline_task;
@@ -46,10 +48,13 @@ use crate::store::pipeline_task;
 /// The task will shutdown if the `rx` channel closes and the watermark cannot be progressed.
 pub(super) fn commit_watermark<H: Handler>(
     mut next_checkpoint: u64,
+    first_checkpoint: u64,
+    reader_lo: u64,
     config: CommitterConfig,
     mut rx: mpsc::Receiver<(Direction, Vec<WatermarkPart>)>,
     store: H::Store,
     task: Option<String>,
+    backwards_complete: Arc<SetOnce<()>>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     // SAFETY: on indexer instantiation, we've checked that the pipeline name is valid.
@@ -61,6 +66,20 @@ pub(super) fn commit_watermark<H: Handler>(
         // watermark as much as possible without going over any holes in the sequence of
         // checkpoints (entirely missing watermarks, or incomplete watermarks).
         let mut precommitted: BTreeMap<u64, WatermarkPart> = BTreeMap::new();
+
+        // Backwards-direction state. The cursor starts at `reader_lo - 1` (the highest checkpoint
+        // *below* `reader_lo` that backwards needs to process) and decrements. `None` means there
+        // is no backwards work, or backwards has finished.
+        let mut precommitted_backward: BTreeMap<u64, WatermarkPart> = BTreeMap::new();
+        let mut next_backwards: Option<u64> = if reader_lo > first_checkpoint {
+            Some(reader_lo - 1)
+        } else {
+            // No backwards work to do — fire the signal immediately so the gated tasks
+            // (reader_watermark, pruner) can begin.
+            let _ = backwards_complete.set(());
+            None
+        };
+        let mut pending_reader_lo: Option<u64> = None;
 
         // The watermark task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
@@ -91,13 +110,12 @@ pub(super) fn commit_watermark<H: Handler>(
                     should_write_db = true;
                 }
                 Some((direction, parts)) = rx.recv() => {
-                    // STUB (commit 2): backwards-tagged watermark advancement is implemented in
-                    // commit 3. For now, drop them to keep forward semantics intact.
-                    if direction != Direction::Forward {
-                        continue;
-                    }
+                    let target = match direction {
+                        Direction::Forward => &mut precommitted,
+                        Direction::Backwards => &mut precommitted_backward,
+                    };
                     for part in parts {
-                        match precommitted.entry(part.checkpoint()) {
+                        match target.entry(part.checkpoint()) {
                             Entry::Vacant(entry) => {
                                 entry.insert(part);
                             }
@@ -152,6 +170,43 @@ pub(super) fn commit_watermark<H: Handler>(
                 }
             }
 
+            // Walk the backwards cursor downward through contiguous complete entries.
+            //
+            // The cursor starts at `reader_lo - 1` and moves down. After each successful step,
+            // `pending_reader_lo` records the new `reader_lo` value to write to the database
+            // (`= cursor`, since `cursor` is the lowest-numbered checkpoint we've now persisted).
+            // When the cursor reaches `first_checkpoint`, we fire `backwards_complete` so the
+            // gated reader_watermark and pruner tasks can begin.
+            while let Some(cursor) = next_backwards {
+                let Some(pending) = precommitted_backward.last_entry() else {
+                    break;
+                };
+
+                // Highest pending entry is *not* the cursor — there's a gap, wait.
+                if *pending.key() != cursor {
+                    break;
+                }
+
+                // Some rows from the cursor checkpoint have not landed yet.
+                if !pending.get().is_complete() {
+                    break;
+                }
+
+                pending.remove();
+                pending_reader_lo = Some(cursor);
+
+                if cursor == first_checkpoint {
+                    info!(
+                        pipeline = H::NAME,
+                        first_checkpoint, "Backwards range complete"
+                    );
+                    let _ = backwards_complete.set(());
+                    next_backwards = None;
+                } else {
+                    next_backwards = Some(cursor - 1);
+                }
+            }
+
             let elapsed = guard.stop_and_record();
 
             if let Some(ref watermark) = pending_watermark {
@@ -193,6 +248,14 @@ pub(super) fn commit_watermark<H: Handler>(
                 );
             }
 
+            if precommitted_backward.len() > WARN_PENDING_WATERMARKS {
+                warn!(
+                    pipeline = H::NAME,
+                    pending = precommitted_backward.len(),
+                    "Pipeline has a large number of pending backwards commit watermarks",
+                );
+            }
+
             // DB writes are deferred to the timer interval to avoid excessive DB load.
             if should_write_db
                 && let Some(watermark) = pending_watermark.take()
@@ -208,6 +271,15 @@ pub(super) fn commit_watermark<H: Handler>(
                 .is_err()
             {
                 pending_watermark = Some(watermark);
+            }
+
+            if should_write_db
+                && let Some(reader_lo) = pending_reader_lo.take()
+                && write_backwards_reader_lo::<H>(&store, reader_lo, &metrics)
+                    .await
+                    .is_err()
+            {
+                pending_reader_lo = Some(reader_lo);
             }
 
             if rx.is_closed() && rx.is_empty() {
@@ -235,9 +307,55 @@ pub(super) fn commit_watermark<H: Handler>(
             );
         }
 
+        if let Some(reader_lo) = pending_reader_lo
+            && write_backwards_reader_lo::<H>(&store, reader_lo, &metrics)
+                .await
+                .is_err()
+        {
+            warn!(
+                pipeline = H::NAME,
+                reader_lo,
+                "Failed to write final backwards reader_lo on shutdown, will not retry",
+            );
+        }
+
         info!(pipeline = H::NAME, "Stopping committer watermark task");
         Ok(())
     })
+}
+
+/// Lower the pipeline's `reader_lo` in the database to reflect backwards-indexing progress.
+/// Returns `Err` so the caller can preserve the value for retry on the next tick.
+async fn write_backwards_reader_lo<H: Handler>(
+    store: &H::Store,
+    reader_lo: u64,
+    metrics: &IndexerMetrics,
+) -> Result<(), ()> {
+    let Ok(mut conn) = store.connect().await else {
+        warn!(
+            pipeline = H::NAME,
+            "Backwards watermark write failed to get connection for DB"
+        );
+        return Err(());
+    };
+
+    match conn.lower_reader_watermark(H::NAME, reader_lo).await {
+        Err(e) => {
+            error!(
+                pipeline = H::NAME,
+                reader_lo, "Error lowering reader watermark: {e}",
+            );
+            Err(())
+        }
+        Ok(_) => {
+            metrics
+                .watermark_reader_lo_in_db
+                .with_label_values(&[H::NAME])
+                .set(reader_lo as i64);
+            debug!(pipeline = H::NAME, reader_lo, "Lowered backwards reader_lo");
+            Ok(())
+        }
+    }
 }
 
 /// Write the watermark to DB and update metrics. Returns `Err` on failure so the caller can
@@ -381,25 +499,42 @@ mod tests {
         next_checkpoint: u64,
         store: MockStore,
     ) -> TestSetup {
+        setup_test_with_backwards::<H>(config, next_checkpoint, 0, 0, store).0
+    }
+
+    fn setup_test_with_backwards<H: Handler<Store = MockStore>>(
+        config: CommitterConfig,
+        next_checkpoint: u64,
+        first_checkpoint: u64,
+        reader_lo: u64,
+        store: MockStore,
+    ) -> (TestSetup, Arc<SetOnce<()>>) {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         let store_clone = store.clone();
+        let backwards_complete: Arc<SetOnce<()>> = Arc::new(SetOnce::new());
 
         let commit_watermark = commit_watermark::<H>(
             next_checkpoint,
+            first_checkpoint,
+            reader_lo,
             config,
             watermark_rx,
             store_clone,
             None,
+            backwards_complete.clone(),
             metrics,
         );
 
-        TestSetup {
-            store,
-            watermark_tx,
-            commit_watermark,
-        }
+        (
+            TestSetup {
+                store,
+                watermark_tx,
+                commit_watermark,
+            },
+            backwards_complete,
+        )
     }
 
     fn create_watermark_part_for_checkpoint(checkpoint: u64) -> WatermarkPart {
@@ -642,5 +777,118 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, Some(1));
+    }
+
+    /// Backwards-tagged watermark parts walk the cursor downward through contiguous complete
+    /// entries from `reader_lo - 1` to `first_checkpoint`, lowering the persisted `reader_lo`.
+    /// Once the cursor reaches `first_checkpoint`, the `backwards_complete` Notify is fired.
+    #[tokio::test]
+    async fn test_backwards_cursor_advances_and_lowers_reader_lo() {
+        let store = MockStore::default().with_watermark(
+            DataPipeline::NAME,
+            MockWatermark {
+                reader_lo: 10,
+                ..Default::default()
+            },
+        );
+        let config = CommitterConfig::default();
+        // first_checkpoint = 0, reader_lo = 10 → backwards range [0..10).
+        let (setup, backwards_complete) =
+            setup_test_with_backwards::<DataPipeline>(config, 0, 0, 10, store);
+
+        // Send backwards watermark parts in order from 9 down to 0 (the order they would arrive
+        // from a descending broadcaster). We send them all together via separate sends to
+        // exercise the cursor advancing through contiguous completed entries.
+        for cp in (0..10).rev() {
+            setup
+                .watermark_tx
+                .send((Direction::Backwards, vec![create_watermark_part_for_checkpoint(cp)]))
+                .await
+                .unwrap();
+        }
+
+        // Wait for the watermark task to drain its input and walk the cursor + write the DB.
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        // The persisted reader_lo should now be 0 (the lowest backwards checkpoint we processed).
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
+        assert_eq!(
+            watermark.reader_lo, 0,
+            "Backwards cursor should have lowered reader_lo all the way to first_checkpoint",
+        );
+
+        // The signal should fire once the cursor reaches first_checkpoint.
+        tokio::time::timeout(Duration::from_millis(500), backwards_complete.wait())
+            .await
+            .expect("backwards_complete should be set");
+    }
+
+    /// The backwards cursor must NOT advance through gaps in the pending map. If a non-contiguous
+    /// part arrives, the cursor stops and waits for the gap to be filled.
+    #[tokio::test]
+    async fn test_backwards_cursor_waits_for_contiguous() {
+        let store = MockStore::default().with_watermark(
+            DataPipeline::NAME,
+            MockWatermark {
+                reader_lo: 10,
+                ..Default::default()
+            },
+        );
+        let config = CommitterConfig::default();
+        let (setup, _backwards_complete) =
+            setup_test_with_backwards::<DataPipeline>(config, 0, 0, 10, store);
+
+        // Send 9 and 8, then SKIP 7, then send 6 and 5. The cursor should advance to 8 and stop.
+        for cp in [9, 8, 6, 5] {
+            setup
+                .watermark_tx
+                .send((Direction::Backwards, vec![create_watermark_part_for_checkpoint(cp)]))
+                .await
+                .unwrap();
+        }
+
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        // reader_lo should be lowered to 8 (the lowest contiguous backwards checkpoint).
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
+        assert_eq!(
+            watermark.reader_lo, 8,
+            "Cursor should have stopped at the gap (missing checkpoint 7)",
+        );
+
+        // Now fill the gap.
+        setup
+            .watermark_tx
+            .send((Direction::Backwards, vec![create_watermark_part_for_checkpoint(7)]))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        // Cursor should have walked through 7, 6, 5 → reader_lo = 5.
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
+        assert_eq!(watermark.reader_lo, 5);
+    }
+
+    /// When `reader_lo == first_checkpoint`, there is no backwards work to do; the Notify must
+    /// fire immediately at startup so the gated tasks (reader_watermark, pruner) can begin.
+    #[tokio::test]
+    async fn test_backwards_complete_notifies_immediately_when_no_work() {
+        let store = MockStore::default().with_watermark(
+            DataPipeline::NAME,
+            MockWatermark {
+                reader_lo: 5,
+                ..Default::default()
+            },
+        );
+        let config = CommitterConfig::default();
+        // first_checkpoint = 5 == reader_lo → no backwards range.
+        let (_setup, backwards_complete) =
+            setup_test_with_backwards::<DataPipeline>(config, 0, 5, 5, store);
+
+        // The signal should fire essentially immediately.
+        tokio::time::timeout(Duration::from_millis(500), backwards_complete.wait())
+            .await
+            .expect("backwards_complete should be set immediately when no backwards work");
     }
 }

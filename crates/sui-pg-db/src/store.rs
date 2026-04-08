@@ -203,6 +203,20 @@ impl store::ConcurrentConnection for Connection<'_> {
             > 0)
     }
 
+    async fn lower_reader_watermark(
+        &mut self,
+        pipeline: &'static str,
+        reader_lo: u64,
+    ) -> anyhow::Result<bool> {
+        Ok(diesel::update(watermarks::table)
+            .set(watermarks::reader_lo.eq(reader_lo as i64))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::reader_lo.gt(reader_lo as i64))
+            .execute(self)
+            .await?
+            > 0)
+    }
+
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,

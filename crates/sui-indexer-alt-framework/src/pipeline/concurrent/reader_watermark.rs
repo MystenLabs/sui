@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use sui_futures::service::Service;
+use tokio::sync::SetOnce;
 use tokio::time::interval;
 use tracing::debug;
 use tracing::info;
@@ -28,6 +29,9 @@ use crate::store::Store;
 pub(super) fn reader_watermark<H: Handler>(
     config: Option<PrunerConfig>,
     store: H::Store,
+    // Will be awaited in commit 4 so this task only starts once backwards indexing finishes.
+    // Accepted but unused in commit 3.
+    _backwards_complete: Arc<SetOnce<()>>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
@@ -186,7 +190,14 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Default::default());
 
         let store_clone = store.clone();
-        let handle = reader_watermark::<DataPipeline>(Some(config), store_clone, metrics);
+        let backwards_complete: Arc<SetOnce<()>> = Arc::new(SetOnce::new());
+        let _ = backwards_complete.set(());
+        let handle = reader_watermark::<DataPipeline>(
+            Some(config),
+            store_clone,
+            backwards_complete,
+            metrics,
+        );
 
         TestSetup { store, handle }
     }

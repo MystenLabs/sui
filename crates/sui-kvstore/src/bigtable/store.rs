@@ -136,4 +136,12 @@ impl ConcurrentConnection for BigTableConnection<'_> {
     ) -> Result<bool> {
         Ok(false)
     }
+
+    async fn lower_reader_watermark(
+        &mut self,
+        _pipeline: &'static str,
+        _reader_lo: u64,
+    ) -> Result<bool> {
+        Ok(false)
+    }
 }

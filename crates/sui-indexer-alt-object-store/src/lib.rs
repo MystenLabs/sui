@@ -214,6 +214,14 @@ impl ConcurrentConnection for ObjectStoreConnection {
     ) -> anyhow::Result<bool> {
         bail!("Pruning not supported by this store");
     }
+
+    async fn lower_reader_watermark(
+        &mut self,
+        _pipeline: &'static str,
+        _reader_lo: u64,
+    ) -> anyhow::Result<bool> {
+        bail!("Backwards indexing not supported by this store");
+    }
 }
 
 #[cfg(test)]
