@@ -29,6 +29,8 @@ const EUnsupportedVersion: u64 = 5;
 /// The `commitments` are Pedersen commitments to the values used in the proof.
 /// The number of commitments must be a power of two, but if needed, the input to the prover can be padded with trivial commitments to zero.
 /// The number of commitments times `bits` can be at most 512.
+///
+/// Enabled only on devnet.
 public fun verify_bulletproofs_ristretto255(
     proof: &vector<u8>,
     bits: u8,

@@ -6,6 +6,7 @@ use crate::{NativesCostTable, get_extension};
 use fastcrypto::bulletproofs::{Range, RangeProof};
 use fastcrypto::error::FastCryptoError::InvalidInput;
 use fastcrypto::error::FastCryptoResult;
+use fastcrypto::groups::FromTrustedByteArray;
 use fastcrypto::groups::ristretto255::RistrettoPoint;
 use fastcrypto::pedersen::PedersenCommitment;
 use fastcrypto::serde_helpers::ToFromByteArray;
@@ -129,12 +130,15 @@ pub fn verify_bulletproofs_ristretto255(
         .map(|b| {
             b.try_into()
                 .map_err(|_| InvalidInput)
-                .and_then(|b| RistrettoPoint::from_byte_array(&b))
+                .and_then(|b| RistrettoPoint::from_trusted_byte_array(&b))
                 .map(PedersenCommitment)
         })
         .collect::<FastCryptoResult<Vec<PedersenCommitment>>>()
     else {
-        return Ok(NativeResult::err(context.gas_used(), INVALID_COMMITMENT));
+        return Err(
+            PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_ARGUMENT)
+                .with_message("Inputs are validated to be RistrettoPoint's".to_string()),
+        );
     };
 
     let result = proof.verify_batch(&commitments, &range, &mut thread_rng());
