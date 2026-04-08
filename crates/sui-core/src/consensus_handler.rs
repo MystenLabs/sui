@@ -1178,15 +1178,28 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .with_label_values(&[&leader_author.to_string()])
             .inc();
 
+        let mut initial_reconfig_state = self
+            .epoch_store
+            .get_reconfig_state_read_lock_guard()
+            .clone();
+
+        // When timestamp-based epoch close is enabled, reject user transactions
+        // starting from the first commit whose timestamp crosses the threshold.
+        if self
+            .epoch_store
+            .protocol_config()
+            .timestamp_based_epoch_close()
+            && commit_info.timestamp >= self.epoch_store.next_reconfiguration_timestamp_ms()
+        {
+            initial_reconfig_state.close_all_certs();
+        }
+
         let mut state = CommitHandlerState {
             output: ConsensusCommitOutput::new(commit_info.round),
             dkg_failed: false,
             randomness_round: None,
             indirect_state_observer: Some(IndirectStateObserver::new()),
-            initial_reconfig_state: self
-                .epoch_store
-                .get_reconfig_state_read_lock_guard()
-                .clone(),
+            initial_reconfig_state,
             occurrence_counts: HashMap::new(),
         };
 
