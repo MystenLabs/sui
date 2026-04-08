@@ -1,14 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-
-use anyhow::Context as _;
-use anyhow::Error;
 use anyhow::anyhow;
-use anyhow::bail;
 
 use forking_data_store::Node;
 use forking_data_store::stores::GraphQLStore;
@@ -21,14 +14,7 @@ use forking_data_store::ObjectKey;
 use forking_data_store::ObjectStore;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 
-/// Directory name appended to the configured filesystem store root.
-pub const DATA_STORE_DIR: &str = ".forking_data_store";
-/// Per-chain object storage directory.
-pub const OBJECTS_DIR: &str = "objects";
-/// Per-chain checkpoint storage directory.
-pub const CHECKPOINTS_DIR: &str = "checkpoints";
-/// Marker file for the latest checkpoint sequence known to the store.
-pub const LATEST_FILE: &str = "latest";
+use crate::filesystem::FilesystemStore;
 
 /// A data store for Sui data, with a local filesystem and a remote GraphQL endpoint to query for
 /// historical data.
@@ -36,6 +22,7 @@ pub struct DataStore {
     forked_at_checkpoint: CheckpointSequenceNumber,
     node: Node,
     gql: GraphQLStore,
+    local: FilesystemStore,
 }
 
 impl DataStore {
