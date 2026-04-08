@@ -213,10 +213,6 @@ jobs:
       - name: cargo test (sui-graphql staging)
         run: |
           cargo nextest run --profile ci --cargo-quiet --features staging -E 'package(sui-indexer-alt-graphql)'
-      # TODO: run stress against a local Sui network.
-      # - name: benchmark (smoke)
-      #   run: |
-      #     cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
       - name: doctests
         run: |
           cargo test --doc
@@ -251,6 +247,65 @@ jobs:
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
+
+  benchmark-smoke:
+    name: benchmark (smoke)
+    needs: [diff, rustfmt, clippy]
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    runs-on: [ ubuntu-ghcloud ]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ubuntu-ghcloud
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
+        with:
+          swap-size-gb: 256
+      - name: Build sui and stress binaries
+        run: |
+          cargo build --release --package sui --package sui-benchmark --bin sui --bin stress
+      - name: Start local Sui network
+        run: |
+          set -euo pipefail
+          CFG=$(mktemp -d)
+          target/release/sui genesis -f --working-dir "$CFG"
+          target/release/sui start --network.config "$CFG" &
+          SUI_PID=$!
+          for i in $(seq 1 60); do
+            if curl -sf -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"rpc.discover","id":1}' http://127.0.0.1:9000 -o /dev/null 2>&1; then echo "RPC is ready"; break; fi
+            if ! kill -0 $SUI_PID 2>/dev/null; then echo "sui start died"; exit 1; fi
+            sleep 2
+          done
+          curl -sf -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"rpc.discover","id":1}' http://127.0.0.1:9000 -o /dev/null || { echo "RPC not ready after 120s"; exit 1; }
+          echo "SUI_PID=$SUI_PID" >> "$GITHUB_ENV"
+          echo "SUI_CONFIG_DIR=$CFG" >> "$GITHUB_ENV"
+      - name: sui-benchmark stress (smoke)
+        run: |
+          set -euo pipefail
+          ADDR=$(grep active_address "$SUI_CONFIG_DIR/client.yaml" | awk '{print $2}' | tr -d '"')
+          target/release/stress \
+            --fullnode-rpc-addresses http://127.0.0.1:9000 \
+            --genesis-blob-path "$SUI_CONFIG_DIR/genesis.blob" \
+            --keystore-path "$SUI_CONFIG_DIR/sui.keystore" \
+            --primary-gas-owner-id "$ADDR" \
+            --use-fullnode-for-execution true \
+            --num-client-threads 10 --num-server-threads 24 \
+            --num-transfer-accounts 2 --run-duration 10s --min-tps 1 \
+            bench --target-qps 10 --num-workers 10 \
+            --transfer-object 1 --shared-counter 1 --delegation 1 \
+            --batch-payment 1 --shared-deletion 1 --randomness 1 \
+            --expected-failure 1 --randomized-transaction 1 \
+            --slow 1 --party 1 --composite 1
+          kill $SUI_PID 2>/dev/null || true
+      - name: consensus benchmark (smoke)
+        run: |
+          cargo bench --package consensus-core --bench commit_finalizer_bench -- --test
 
   windows-build:
     needs: [diff, rustfmt, clippy]
