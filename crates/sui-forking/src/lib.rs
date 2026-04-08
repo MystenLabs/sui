@@ -3,4 +3,5 @@
 
 //! Building blocks for the experimental `sui-forking` tool.
 
+pub mod filesystem;
 pub mod store;
