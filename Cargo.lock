@@ -15118,6 +15118,8 @@ dependencies = [
  "roaring 0.10.9",
  "serde",
  "serde_json",
+ "simulacrum",
+ "sui-config",
  "sui-types",
  "tempfile",
  "tokio",

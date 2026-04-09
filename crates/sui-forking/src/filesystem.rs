@@ -84,7 +84,7 @@ impl FilesystemStore {
     }
 
     /// Get the latest object version available on disk for the given object ID.
-    pub(crate) fn get_latest_object(&self, object_id: ObjectID) -> anyhow::Result<Option<Object>> {
+    pub(crate) fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
         let object_dir = self.objects_dir().join(object_id.to_string());
 
         if !object_dir.exists() {
@@ -100,10 +100,10 @@ impl FilesystemStore {
     /// file does not exist on disk.
     pub(crate) fn get_object_at_version(
         &self,
-        object_id: ObjectID,
+        object_id: &ObjectID,
         version: u64,
     ) -> anyhow::Result<Option<Object>> {
-        let object_dir = self.objects_dir().join(object_id.to_string());
+        let object_dir = self.objects_dir().join(&object_id.to_string());
         let version_file = object_dir.join(version.to_string());
 
         if !version_file.exists() {
@@ -116,7 +116,7 @@ impl FilesystemStore {
     /// Write the given object to disk under the objects directory, using the object ID and version
     /// as the path. It will also update the latest file to point to this version.
     pub(crate) fn write_object(&self, object: &Object) -> anyhow::Result<()> {
-        let object_dir = self.objects_dir().join(object.id().to_string());
+        let object_dir = self.objects_dir().join(&object.id().to_string());
         let version = object.version().value();
         let version_file = object_dir.join(version.to_string());
         self.write_bcs_file(&version_file, object)?;
@@ -215,7 +215,7 @@ mod tests {
         let obj = make_object(id, 5);
 
         store.write_object(&obj).unwrap();
-        let loaded = store.get_latest_object(id).unwrap();
+        let loaded = store.get_latest_object(&id).unwrap();
         assert_eq!(loaded.clone().unwrap(), obj);
         assert_eq!(loaded.unwrap().version(), SequenceNumber::from_u64(5));
     }
@@ -227,14 +227,14 @@ mod tests {
         let obj = make_object(id, 5);
 
         store.write_object(&obj).unwrap();
-        let loaded = store.get_object_at_version(id, 5).unwrap();
+        let loaded = store.get_object_at_version(&id, 5).unwrap();
         assert_eq!(loaded.unwrap(), obj);
     }
 
     #[test]
     fn test_get_latest_object_returns_none_for_unknown_id() {
         let (_dir, store) = test_store();
-        let result = store.get_latest_object(ObjectID::random()).unwrap();
+        let result = store.get_latest_object(&ObjectID::random()).unwrap();
         assert!(result.is_none());
     }
 
@@ -245,7 +245,7 @@ mod tests {
         let obj = make_object(id, 5);
         store.write_object(&obj).unwrap();
 
-        let result = store.get_object_at_version(id, 99).unwrap();
+        let result = store.get_object_at_version(&id, 99).unwrap();
         assert!(result.is_none());
     }
 
@@ -259,11 +259,11 @@ mod tests {
         store.write_object(&v1).unwrap();
         store.write_object(&v3).unwrap();
 
-        let latest = store.get_latest_object(id).unwrap().unwrap();
+        let latest = store.get_latest_object(&id).unwrap().unwrap();
         assert_eq!(latest, v3);
 
         // v1 is still accessible by version
-        let old = store.get_object_at_version(id, 1).unwrap().unwrap();
+        let old = store.get_object_at_version(&id, 1).unwrap().unwrap();
         assert_eq!(old, v1);
     }
 
