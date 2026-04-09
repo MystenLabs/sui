@@ -25,7 +25,7 @@ use tracing::{error, instrument};
 use std::{collections::BTreeMap, sync::Arc};
 
 pub(crate) mod package_resolution;
-pub(crate) mod telemetry;
+pub mod telemetry;
 
 #[allow(dead_code)]
 #[derive(Debug)]
