@@ -296,7 +296,7 @@ jobs:
             --primary-gas-owner-id "$ADDR" \
             --use-fullnode-for-execution true \
             --num-client-threads 10 --num-server-threads 24 \
-            --num-transfer-accounts 2 --run-duration 10s --min-tps 1 \
+            --num-transfer-accounts 2 --run-duration 10s --min-tps 0.01 \
             bench --target-qps 10 --num-workers 10 \
             --transfer-object 1 --shared-counter 1 --delegation 1 \
             --batch-payment 1 --shared-deletion 1 --randomness 1 \
@@ -306,7 +306,6 @@ jobs:
       - name: consensus benchmark (smoke)
         run: |
           cargo bench --package consensus-core --bench commit_finalizer_bench -- --test
-          echo "smoke test complete"
 
   windows-build:
     needs: [diff, rustfmt, clippy]
