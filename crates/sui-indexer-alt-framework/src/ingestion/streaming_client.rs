@@ -33,6 +33,17 @@ pub struct CheckpointStream {
 pub trait CheckpointStreamingClient {
     /// Returns the CheckpointStream and chain id.
     async fn connect(&mut self) -> Result<CheckpointStream>;
+
+    /// Returns the latest checkpoint number available from the streaming source.
+    async fn latest_checkpoint_number(&mut self) -> Result<u64> {
+        let mut stream = self.connect().await?;
+
+        match stream.stream.next().await {
+            Some(Ok(checkpoint)) => Ok(checkpoint.summary.sequence_number),
+            Some(Err(e)) => Err(e),
+            None => Err(Error::StreamingError(anyhow!("Stream ended unexpectedly"))),
+        }
+    }
 }
 
 #[derive(clap::Args, Clone, Debug, Default)]

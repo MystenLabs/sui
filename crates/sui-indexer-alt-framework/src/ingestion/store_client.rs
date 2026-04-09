@@ -20,14 +20,8 @@ use crate::ingestion::ingestion_client::CheckpointResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
 use crate::types::full_checkpoint_content::Checkpoint;
 
-/// Disable object_store's internal retries so that transient errors (429s, 5xx) propagate
-/// immediately to the framework's own retry logic.
-pub(super) fn retry_config() -> RetryConfig {
-    RetryConfig {
-        max_retries: 0,
-        ..Default::default()
-    }
-}
+// from sui-indexer-alt-object-store
+pub(crate) const WATERMARK_PATH: &str = "_metadata/watermark/checkpoint_blob.json";
 
 pub struct StoreIngestionClient {
     store: Arc<dyn ObjectStore>,
@@ -36,9 +30,6 @@ pub struct StoreIngestionClient {
     /// metadata fetches (e.g. `end_of_epoch_checkpoints`) and don't need a metric.
     total_ingested_bytes: Option<IntCounter>,
 }
-
-// from sui-indexer-alt-object-store
-pub(crate) const WATERMARK_PATH: &str = "_metadata/watermark/checkpoint_blob.json";
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub(crate) struct ObjectStoreWatermark {
@@ -82,8 +73,10 @@ impl StoreIngestionClient {
             Err(Error::NotFound { .. }) => return Ok(None),
             Err(e) => return Err(e).context(format!("error reading {WATERMARK_PATH}")),
         };
+
         let watermark: ObjectStoreWatermark =
             serde_json::from_slice(&bytes).context(format!("error parsing {WATERMARK_PATH}"))?;
+
         Ok(Some(watermark.checkpoint_hi_inclusive))
     }
 }
@@ -123,6 +116,15 @@ impl IngestionClientTrait for StoreIngestionClient {
         self.watermark_checkpoint_hi_inclusive()
             .await
             .map(|cp| cp.unwrap_or(0))
+    }
+}
+
+/// Disable object_store's internal retries so that transient errors (429s, 5xx) propagate
+/// immediately to the framework's own retry logic.
+pub(super) fn retry_config() -> RetryConfig {
+    RetryConfig {
+        max_retries: 0,
+        ..Default::default()
     }
 }
 
