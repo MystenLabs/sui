@@ -242,7 +242,7 @@ fun borrow_or_add_missing() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     assert!(!exists_<u64>(&id, 0));
-    // count should be 0 since it is newly adde
+    // count should be 0 since it is newly added
     assert_eq!(count(dynamic_object_field::borrow_or_add!(&mut id, 0u64, new(&mut scenario))), 0);
     scenario.end();
     id.delete();
