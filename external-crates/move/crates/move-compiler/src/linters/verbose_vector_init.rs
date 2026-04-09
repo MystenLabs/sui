@@ -25,15 +25,14 @@ simple_visitor!(
         }
 
         if mcall.name.value().as_str() == "empty" {
-            let msg = "'vector::empty()' can be replaced with literal 'vector[]'";
+            let msg = "'vector::empty()' should be replaced with 'vector[]'";
             let diag = diag!(
                 StyleCodes::VerboseVectorInit.diag_info(),
                 (exp.exp.loc, msg)
             );
             self.add_diag(diag);
         } else if mcall.name.value().as_str() == "singleton" {
-            let msg =
-                "'vector::singleton(arg0)' can be replaced with vector literal 'vector[arg0]'";
+            let msg = "'vector::singleton(arg0)' should be replaced with 'vector[arg0]'";
             let mut diag = diag!(
                 StyleCodes::VerboseVectorInit.diag_info(),
                 (exp.exp.loc, msg)

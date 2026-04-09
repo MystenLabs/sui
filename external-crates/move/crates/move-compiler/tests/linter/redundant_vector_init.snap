@@ -9,7 +9,7 @@ warning[Lint W04013]: vector instantiation can be simplified
   ┌─ tests/linter/redundant_vector_init.move:5:17
   │
 5 │         let a = vector::empty();
-  │                 ^^^^^^^^^^^^^^^ 'vector::empty()' can be replaced with literal 'vector[]'
+  │                 ^^^^^^^^^^^^^^^ 'vector::empty()' should be replaced with 'vector[]'
   │
   = This warning can be suppressed with '#[allow(lint(verbose_vector_init))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -21,7 +21,7 @@ warning[Lint W04013]: vector instantiation can be simplified
 10 │ │             let x = 1u64;
 11 │ │             x
 12 │ │         });
-   │ ╰──────────^ 'vector::singleton(arg0)' can be replaced with vector literal 'vector[arg0]'
+   │ ╰──────────^ 'vector::singleton(arg0)' should be replaced with 'vector[arg0]'
    │  
    = Instantiation through vector literal is more concise and efficient.
    = This warning can be suppressed with '#[allow(lint(verbose_vector_init))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
@@ -30,7 +30,7 @@ warning[Lint W04013]: vector instantiation can be simplified
    ┌─ tests/linter/redundant_vector_init.move:14:17
    │
 14 │         let _ = vector::singleton(1u64);
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^ 'vector::singleton(arg0)' can be replaced with vector literal 'vector[arg0]'
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^ 'vector::singleton(arg0)' should be replaced with 'vector[arg0]'
    │
    = Instantiation through vector literal is more concise and efficient.
    = This warning can be suppressed with '#[allow(lint(verbose_vector_init))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
