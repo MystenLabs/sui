@@ -343,14 +343,10 @@ impl ConsensusAdapter {
         self.num_inflight_transactions.load(Ordering::Relaxed)
     }
 
-    pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
-        // Send EndOfPublish if needed.
+    pub fn recover_end_of_publish(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
         // This handles the case where the node crashed after setting reconfig lock state
         // but before the EndOfPublish message was sent to consensus.
-        // Skip when timestamp_based_epoch_close is enabled (epoch close is timestamp-driven).
-        if epoch_store.should_send_end_of_publish()
-            && !epoch_store.protocol_config().timestamp_based_epoch_close()
-        {
+        if epoch_store.should_send_end_of_publish() {
             let transaction = ConsensusTransaction::new_end_of_publish(self.authority);
             info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
             self.submit_unchecked(&[transaction], epoch_store, None, None);

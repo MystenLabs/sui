@@ -886,7 +886,9 @@ impl SuiNode {
             )
             .await?;
 
-            components.consensus_adapter.submit_recovered(&epoch_store);
+            components
+                .consensus_adapter
+                .recover_end_of_publish(&epoch_store);
 
             // Start the gRPC server
             components.validator_server_handle = components.validator_server_handle.start().await;

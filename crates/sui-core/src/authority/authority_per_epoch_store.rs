@@ -3117,21 +3117,6 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    /// Record epoch close for the timestamp-based epoch transition path.
-    /// Sets epoch_close_time for metrics and fires user_certs_closed_notify
-    /// (needed by consensus adapter for submit delay cancellation).
-    /// Does NOT modify reconfig_state — that is handled by the consensus handler directly.
-    pub fn record_epoch_close_for_timestamp_based_transition(&self) {
-        let mut epoch_close_time = self.epoch_close_time.write();
-        if epoch_close_time.is_none() {
-            *epoch_close_time = Some(Instant::now());
-
-            self.user_certs_closed_notify
-                .notify()
-                .expect("user_certs_closed_notify called twice on same epoch store");
-        }
-    }
-
     pub async fn user_certs_closed_notify(&self) {
         self.user_certs_closed_notify.wait().await
     }
