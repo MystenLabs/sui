@@ -23,8 +23,13 @@ use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::Result;
+use anyhow::Context;
 use async_trait::async_trait;
+use object_store::Error as ObjectStoreError;
+use object_store::ObjectStore;
+use object_store::ObjectStoreExt as _;
+use object_store::PutMode;
+use object_store::PutOptions;
 use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
 use scoped_futures::ScopedBoxFuture;
@@ -162,6 +167,14 @@ pub struct AnalyticsConnection<'a> {
 }
 
 impl StoreMode {
+    /// Access the underlying object store, regardless of mode.
+    pub(crate) fn object_store(&self) -> &Arc<dyn ObjectStore> {
+        match self {
+            StoreMode::Live(store) => store.object_store(),
+            StoreMode::Migration(store) => store.object_store(),
+        }
+    }
+
     /// Split a batch of checkpoints into files.
     ///
     /// Delegates to mode-specific splitting logic:
@@ -287,7 +300,7 @@ impl AnalyticsStore {
         &self,
         first_checkpoint: Option<u64>,
         last_checkpoint: Option<u64>,
-    ) -> Result<(Option<u64>, Option<u64>)> {
+    ) -> anyhow::Result<(Option<u64>, Option<u64>)> {
         match &self.mode {
             StoreMode::Live(_) => Ok((first_checkpoint, last_checkpoint)),
             StoreMode::Migration(store) => {
@@ -533,7 +546,7 @@ impl<'a> AnalyticsConnection<'a> {
     pub async fn commit_batch<P: Processor>(
         &mut self,
         batch_from_framework: &[CheckpointRows],
-    ) -> Result<usize> {
+    ) -> anyhow::Result<usize> {
         let pipeline = P::NAME;
         let pipeline_config = self.pipeline_config(pipeline);
 
@@ -629,18 +642,51 @@ impl Connection for AnalyticsConnection<'_> {
         &mut self,
         pipeline_task: &str,
         checkpoint_hi_inclusive: Option<u64>,
-    ) -> Result<Option<InitWatermark>> {
+    ) -> anyhow::Result<Option<InitWatermark>> {
         self.delegate_to_committer_watermark(pipeline_task, checkpoint_hi_inclusive)
             .await
     }
 
+    /// Stores the chain_id at `_metadata/chain_id/{pipeline_task}` on first call,
+    /// and on subsequent calls verifies that the provided chain_id matches the stored value.
+    ///
+    /// This guards against pointing the indexer at an object store that was previously
+    /// populated with data from a different chain.
     async fn accepts_chain_id(
         &mut self,
-        _pipeline_task: &str,
-        _chain_id: [u8; 32],
+        pipeline_task: &str,
+        chain_id: [u8; 32],
     ) -> anyhow::Result<bool> {
-        // TODO: Implement storing chain_id
-        Ok(true)
+        let object_store = self.store.mode.object_store();
+        let path = chain_id_path(pipeline_task);
+
+        // Try to claim the path with a conditional create first. If it doesn't exist,
+        // we win the race and accept. If it already exists, fall back to read + compare.
+        match object_store
+            .put_opts(
+                &path,
+                chain_id.to_vec().into(),
+                PutOptions {
+                    mode: PutMode::Create,
+                    ..Default::default()
+                },
+            )
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(ObjectStoreError::AlreadyExists { .. }) => {
+                let bytes = object_store.get(&path).await?.bytes().await?;
+                let stored: [u8; 32] = bytes.as_ref().try_into().ok().with_context(|| {
+                    format!(
+                        "stored chain_id at {} has wrong length: {}",
+                        path,
+                        bytes.len()
+                    )
+                })?;
+                Ok(stored == chain_id)
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     /// Determine the watermark.
@@ -678,6 +724,12 @@ impl Connection for AnalyticsConnection<'_> {
 
 #[async_trait]
 impl SequentialConnection for AnalyticsConnection<'_> {}
+
+/// Construct the object store path for a chain_id file.
+/// Path format: `_metadata/chain_id/{pipeline_task}`
+pub(crate) fn chain_id_path(pipeline_task: &str) -> ObjectPath {
+    ObjectPath::from(format!("_metadata/chain_id/{}", pipeline_task))
+}
 
 /// Construct the object store path for an analytics file.
 /// Path format: {pipeline}/epoch_{epoch}/{start}_{end}.{ext}

@@ -34,6 +34,10 @@ impl LiveStore {
         Self { object_store }
     }
 
+    pub(crate) fn object_store(&self) -> &Arc<dyn ObjectStore> {
+        &self.object_store
+    }
+
     /// Determine the watermark by scanning file names in the object store.
     ///
     /// 1. Find epoch directories under `{pipeline}/epoch_*`
@@ -222,6 +226,30 @@ mod tests {
         store.put(&path, payload).await.unwrap();
     }
 
+    /// Build an in-memory `AnalyticsStore` plus the raw object store handle so tests can
+    /// both drive the connection and inspect the underlying bytes.
+    fn in_memory_store() -> (Arc<dyn object_store::ObjectStore>, AnalyticsStore) {
+        let object_store: Arc<dyn object_store::ObjectStore> = Arc::new(InMemory::new());
+        let config = test_config(object_store.clone());
+        let store = AnalyticsStore::new(object_store.clone(), config, test_metrics());
+        (object_store, store)
+    }
+
+    async fn read_stored_chain_id(
+        object_store: &Arc<dyn object_store::ObjectStore>,
+        pipeline_task: &str,
+    ) -> Vec<u8> {
+        let path = ObjectPath::from(format!("_metadata/chain_id/{pipeline_task}"));
+        object_store
+            .get(&path)
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap()
+            .to_vec()
+    }
+
     #[tokio::test]
     async fn test_committer_watermark_multiple_epochs() {
         let object_store: Arc<dyn object_store::ObjectStore> = Arc::new(InMemory::new());
@@ -243,5 +271,55 @@ mod tests {
         // Should use latest epoch (1) and max checkpoint from that epoch
         assert_eq!(watermark.epoch_hi_inclusive, 1);
         assert_eq!(watermark.checkpoint_hi_inclusive, 399); // max(300, 400) - 1
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_first_call_writes_and_accepts() {
+        let (object_store, store) = in_memory_store();
+        let mut conn = store.connect().await.unwrap();
+
+        let chain_id = [1u8; 32];
+        assert!(conn.accepts_chain_id("Checkpoint", chain_id).await.unwrap());
+        assert_eq!(
+            read_stored_chain_id(&object_store, "Checkpoint").await,
+            chain_id
+        );
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_matching_accepts() {
+        let (_object_store, store) = in_memory_store();
+        let mut conn = store.connect().await.unwrap();
+
+        let chain_id = [1u8; 32];
+        assert!(conn.accepts_chain_id("Checkpoint", chain_id).await.unwrap());
+        // Second call with the same chain_id should also accept
+        assert!(conn.accepts_chain_id("Checkpoint", chain_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_mismatching_rejects() {
+        let (object_store, store) = in_memory_store();
+        let mut conn = store.connect().await.unwrap();
+
+        let chain_id_a = [1u8; 32];
+        let chain_id_b = [2u8; 32];
+        assert!(
+            conn.accepts_chain_id("Checkpoint", chain_id_a)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !conn
+                .accepts_chain_id("Checkpoint", chain_id_b)
+                .await
+                .unwrap()
+        );
+
+        // Stored bytes are unchanged (still chain_id_a)
+        assert_eq!(
+            read_stored_chain_id(&object_store, "Checkpoint").await,
+            chain_id_a
+        );
     }
 }
