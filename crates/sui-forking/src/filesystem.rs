@@ -103,7 +103,7 @@ impl FilesystemStore {
         object_id: &ObjectID,
         version: u64,
     ) -> anyhow::Result<Option<Object>> {
-        let object_dir = self.objects_dir().join(&object_id.to_string());
+        let object_dir = self.objects_dir().join(object_id.to_string());
         let version_file = object_dir.join(version.to_string());
 
         if !version_file.exists() {
@@ -116,7 +116,7 @@ impl FilesystemStore {
     /// Write the given object to disk under the objects directory, using the object ID and version
     /// as the path. It will also update the latest file to point to this version.
     pub(crate) fn write_object(&self, object: &Object) -> anyhow::Result<()> {
-        let object_dir = self.objects_dir().join(&object.id().to_string());
+        let object_dir = self.objects_dir().join(object.id().to_string());
         let version = object.version().value();
         let version_file = object_dir.join(version.to_string());
         self.write_bcs_file(&version_file, object)?;
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn test_get_highest_checkpoint_errors_when_dir_missing() {
         let (_dir, store) = test_store();
-        let err = store.get_highest_checkpoint().unwrap_err();
+        let err = store.get_highest_checkpoint_sequence_number().unwrap_err();
         assert!(err.to_string().contains("does not exist"));
     }
 
@@ -280,7 +280,7 @@ mod tests {
     fn test_get_highest_checkpoint_errors_when_latest_file_missing() {
         let (_dir, store) = test_store();
         fs::create_dir_all(store.checkpoints_dir()).unwrap();
-        let err = store.get_highest_checkpoint().unwrap_err();
+        let err = store.get_highest_checkpoint_sequence_number().unwrap_err();
         assert!(err.to_string().contains("Latest file not found"));
     }
 }

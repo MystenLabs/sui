@@ -374,7 +374,7 @@ impl SimulatorStore for DataStore {
         written_objects: BTreeMap<ObjectID, Object>,
         _deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
-        for (_, object) in &written_objects {
+        for object in written_objects.values() {
             self.local
                 .write_object(object)
                 .expect("failed to write object to disk");
