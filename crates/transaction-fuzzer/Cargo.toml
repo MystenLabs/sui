@@ -22,9 +22,16 @@ tracing.workspace = true
 once_cell.workspace = true
 sui-core.workspace = true
 sui-protocol-config.workspace = true
-sui-types = { workspace = true, features = ["fuzzing"] }
+sui-types = { workspace = true, features = ["fuzzing", "testing"] }
 sui-move-build.workspace = true
 
 
 [dev-dependencies]
+prometheus.workspace = true
+shared-crypto.workspace = true
+sui-keys.workspace = true
+sui-macros.workspace = true
 sui-protocol-config.workspace = true
+sui-simulator.workspace = true
+test-cluster.workspace = true
+sui-test-transaction-builder.workspace = true

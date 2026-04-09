@@ -139,6 +139,7 @@ impl CallArg {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub enum ObjectArg {
     // A Move object from fastpath.
     ImmOrOwnedObject(ObjectRef),
@@ -1177,6 +1178,7 @@ pub enum Command {
 
 /// An argument to a programmable transaction command
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub enum Argument {
     /// The gas coin. The gas coin can only be used by-ref, except for with
     /// `TransferObjects`, which can use it by-value.
@@ -4584,6 +4586,7 @@ pub enum InputObjectKind {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub enum SharedObjectMutability {
     // The "classic" mutable/immutable modes.
     Immutable,

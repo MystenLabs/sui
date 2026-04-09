@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod account_universe;
+pub mod addr_balance_fuzzer;
 pub mod config_fuzzer;
 pub mod executor;
 pub mod programmable_transaction_gen;

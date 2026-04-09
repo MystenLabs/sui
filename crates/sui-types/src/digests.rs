@@ -21,6 +21,7 @@ use tracing::info;
 #[derive(
     Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct Digest(
     #[schemars(with = "Base58")]
     #[serde_as(as = "Readable<Base58, Bytes>")]
@@ -159,6 +160,7 @@ impl fmt::UpperHex for Digest {
     Deserialize,
     JsonSchema,
 )]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct ChainIdentifier(CheckpointDigest);
 
 pub const MAINNET_CHAIN_IDENTIFIER_BASE58: &str = "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S";
@@ -279,6 +281,7 @@ impl From<CheckpointDigest> for ChainIdentifier {
 #[derive(
     Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct CheckpointDigest(Digest);
 
 impl CheckpointDigest {
@@ -873,6 +876,7 @@ impl std::str::FromStr for EffectsAuxDataDigest {
 
 // Each object has a unique digest
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct ObjectDigest(Digest);
 
 impl ObjectDigest {
