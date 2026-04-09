@@ -230,6 +230,7 @@ impl GasStatus {
 
     /// Given: pushes + pops + increase + decrease in size for an instruction charge for the
     /// execution of the instruction.
+    #[track_caller]
     pub fn charge(
         &mut self,
         num_instructions: u64,
@@ -238,6 +239,24 @@ impl GasStatus {
         incr_size: u64,
         _decr_size: u64,
     ) -> PartialVMResult<()> {
+        {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            use std::io::Write;
+            static SEQ: AtomicU64 = AtomicU64::new(0);
+            let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+            let before = self.stack_height_current;
+            let caller = std::panic::Location::caller();
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true).append(true)
+                .open("/tmp/charge_trace.txt")
+            {
+                let _ = writeln!(f,
+                    "{} seq={} instrs={} pushes={} pops={} sh_before={}",
+                    caller, seq, num_instructions, pushes, pops, before
+                );
+            }
+        }
+
         self.push_stack(pushes)?;
         self.increase_instruction_count(num_instructions)?;
         self.increase_stack_size(incr_size)?;
@@ -259,6 +278,17 @@ impl GasStatus {
 
         // self.decrease_stack_size(decr_size);
         self.pop_stack(pops);
+
+        {
+            use std::io::Write;
+            let after = self.stack_height_current;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true).append(true)
+                .open("/tmp/charge_trace.txt")
+            {
+                let _ = writeln!(f, "  -> sh_after={}", after);
+            }
+        }
         Ok(())
     }
 

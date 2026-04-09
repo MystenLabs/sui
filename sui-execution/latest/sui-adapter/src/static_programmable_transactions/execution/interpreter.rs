@@ -178,6 +178,23 @@ fn execute_command<Mode: ExecutionMode>(
         "stack height did not start at 0"
     );
     let is_move_call = matches!(command, T::Command__::MoveCall(_));
+    {
+        use std::io::Write;
+        let cmd_name = match &command {
+            T::Command__::MoveCall(_) => "MoveCall",
+            T::Command__::TransferObjects(..) => "TransferObjects",
+            T::Command__::MakeMoveVec(..) => "MakeMoveVec",
+            T::Command__::Publish(..) => "Publish",
+            T::Command__::Upgrade(..) => "Upgrade",
+            _ => "Other",
+        };
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true).append(true)
+            .open("/tmp/charge_funcs.txt")
+        {
+            let _ = writeln!(f, "CMD {}", cmd_name);
+        }
+    }
     let num_args = command.arguments_len();
     let mut args_to_update = vec![];
     let result = match command {
