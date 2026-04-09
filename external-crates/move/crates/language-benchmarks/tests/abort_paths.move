@@ -3,7 +3,7 @@
 
 /// Benchmarks for abort propagation overhead.
 /// Measures the cost of abort unwinding through various call depths.
-module 0x1::bench {
+module 0x2::bench {
     const COUNT: u64 = 10_000;
 
     public fun bench_abort_shallow() {

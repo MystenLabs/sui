@@ -13,7 +13,7 @@
 /// Use these benchmarks to validate tracing optimizations by comparing:
 /// - `cargo bench -p language-benchmarks -- interpreter_step` (without tracing)
 /// - `cargo bench -p language-benchmarks --features move-vm-runtime/tracing -- interpreter_step` (with tracing)
-module 0x1::bench {
+module 0x2::bench {
     /// High iteration count to amortize setup costs and get stable measurements
     const ITERATIONS: u64 = 200_000;
 
@@ -217,14 +217,14 @@ module 0x1::bench {
         let mut i: u64 = 0;
         let mut acc: u64 = 0;
         while (i < ITERATIONS) {
-            acc = 0x1::bench_xmodule::compute(i, acc);
+            acc = 0x2::bench_xmodule::compute(i, acc);
             i = i + 1;
         }
     }
 }
 
 /// Helper module for cross-module call benchmarks
-module 0x1::bench_xmodule {
+module 0x2::bench_xmodule {
     /// Compute function for cross-module call overhead testing.
     /// Does loads, stores, and arithmetic to ensure measurable work per call.
     public fun compute(x: u64, y: u64): u64 {

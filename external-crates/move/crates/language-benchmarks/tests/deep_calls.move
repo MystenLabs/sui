@@ -3,7 +3,7 @@
 
 /// Benchmarks for deep call stack overhead.
 /// Measures frame push/pop cost at increasing call depths.
-module 0x1::bench {
+module 0x2::bench {
     const COUNT: u64 = 10_000;
 
     public fun bench_call_depth_4() {

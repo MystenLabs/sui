@@ -3,7 +3,7 @@
 
 /// Benchmarks for constant pool loading overhead.
 /// Measures the cost of loading constants of various types and sizes.
-module 0x1::bench {
+module 0x2::bench {
     const COUNT: u64 = 10_000;
 
     const C0: u64 = 100;

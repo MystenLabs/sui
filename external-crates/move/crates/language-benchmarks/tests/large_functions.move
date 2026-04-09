@@ -4,7 +4,7 @@
 /// Benchmarks for large function bodies with many locals.
 /// Measures frame allocation, local variable slot overhead, and
 /// how the interpreter scales with function complexity.
-module 0x1::bench {
+module 0x2::bench {
     const COUNT: u64 = 10_000;
 
     public fun bench_many_locals_8() {

@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x1::bench {
+module 0x2::bench {
     const COUNT: u64 = 10_000;
 
     public enum Color has copy, drop {

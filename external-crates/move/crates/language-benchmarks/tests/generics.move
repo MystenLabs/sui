@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x1::bench {
+module 0x2::bench {
     const COUNT: u64 = 10_000;
 
     public struct Box<T> has copy, drop {
@@ -114,11 +114,11 @@ module 0x1::bench {
         NestedBox { inner, tag }
     }
 
-    fun unwrap_nested<T: copy>(nb: NestedBox<T>): u64 {
+    fun unwrap_nested<T: copy + drop>(nb: NestedBox<T>): u64 {
         nb.tag
     }
 
-    fun extract_first<T: copy, U>(p: Pair<T, U>): T {
+    fun extract_first<T: copy + drop, U: drop>(p: Pair<T, U>): T {
         p.first
     }
 }
