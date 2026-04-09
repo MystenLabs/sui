@@ -11,6 +11,7 @@ use forking_data_store::ObjectKey;
 use forking_data_store::ObjectStore as GqlObjectStore;
 use forking_data_store::stores::GraphQLStore;
 use simulacrum::store::SimulatorStore;
+use sui_protocol_config::Chain;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
@@ -67,6 +68,10 @@ impl DataStore {
 
     fn forked_at_checkpoint(&self) -> CheckpointSequenceNumber {
         self.forked_at_checkpoint
+    }
+
+    pub fn get_chain_identifier(&self) -> Chain {
+        self.gql.chain()
     }
 
     /// Get a verified checkpoint from remote rpc. If `checkpoint` is `None`, use the store's forked
