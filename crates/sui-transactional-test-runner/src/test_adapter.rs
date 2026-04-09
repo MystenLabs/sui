@@ -428,6 +428,62 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         self.default_syntax
     }
 
+    fn object_enumeration_dump(&self) -> Option<String> {
+        let mut out = String::new();
+        writeln!(out, "=== OBJECT ENUMERATION DUMP ===").unwrap();
+        let mut entries: Vec<_> = self.object_enumeration.iter().collect();
+        entries.sort_by_key(|(_, fake)| *fake);
+        for (real_id, fake_id) in entries {
+            let label = match fake_id {
+                FakeID::Known(id) => format!("  known({id})"),
+                FakeID::Enumerated(task, idx) => format!("  {task},{idx}"),
+            };
+            let detail = match ObjectStore::get_object(&*self.executor, real_id) {
+                Some(obj) => {
+                    let type_str = match &obj.data {
+                        object::Data::Move(move_obj) => {
+                            format!(
+                                "object type={}",
+                                self.stabilize_str(format!("{}", move_obj.type_()))
+                            )
+                        }
+                        object::Data::Package(pkg) => {
+                            let modules = pkg
+                                .serialized_module_map()
+                                .keys()
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join(",");
+                            format!("package type={modules}")
+                        }
+                    };
+                    let owner_str = match obj.owner() {
+                        object::Owner::AddressOwner(addr) => format!(
+                            "Account Address ( {} )",
+                            self.stabilize_str(format!("{addr}"))
+                        ),
+                        object::Owner::ObjectOwner(id) => {
+                            format!("Object( {} )", self.stabilize_str(format!("{id}")))
+                        }
+                        object::Owner::Shared {
+                            initial_shared_version,
+                        } => format!("Shared( {} )", initial_shared_version.value()),
+                        object::Owner::Immutable => "Immutable".to_string(),
+                        object::Owner::ConsensusAddressOwner { owner, .. } => format!(
+                            "ConsensusAddressOwner( {} )",
+                            self.stabilize_str(format!("{owner}"))
+                        ),
+                    };
+                    format!("{type_str} owner={owner_str}")
+                }
+                None => "<not in storage>".to_string(),
+            };
+            writeln!(out, "{label}: {detail}").unwrap();
+        }
+        write!(out, "=== END OBJECT ENUMERATION DUMP ===").unwrap();
+        Some(out)
+    }
+
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,

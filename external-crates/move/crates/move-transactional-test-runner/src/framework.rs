@@ -180,6 +180,10 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         None
     }
 
+    fn object_enumeration_dump(&self) -> Option<String> {
+        None
+    }
+
     async fn process_error(&self, error: anyhow::Error) -> anyhow::Error;
 
     async fn handle_command(
@@ -908,6 +912,13 @@ where
 
     for task in tasks {
         handle_known_task(&mut output, &mut adapter, task).await;
+    }
+
+    if let Some(dump) = adapter.object_enumeration_dump() {
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        output.push_str(&dump);
     }
 
     if let Some(options) = insta_options {
