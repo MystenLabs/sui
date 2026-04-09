@@ -111,13 +111,28 @@ fn zklogin_sign_personal_message() {
         true,
         true,
     );
+    let cache = Arc::new(VerifiedDigestCache::new_empty());
     let res = authenticator.verify_authenticator(
         &intent_msg,
         user_address,
         0,
         &aux_verify_data,
-        Arc::new(VerifiedDigestCache::new_empty()),
+        cache.clone(),
     );
     // Verify passes.
     assert!(res.is_ok());
+    assert_eq!(cache.cache_misses(), 1);
+    assert_eq!(cache.cache_hits(), 0);
+
+    // Second verification with same inputs should hit the cache.
+    let res = authenticator.verify_authenticator(
+        &intent_msg,
+        user_address,
+        0,
+        &aux_verify_data,
+        cache.clone(),
+    );
+    assert!(res.is_ok());
+    assert_eq!(cache.cache_hits(), 1);
+    assert_eq!(cache.cache_misses(), 1);
 }

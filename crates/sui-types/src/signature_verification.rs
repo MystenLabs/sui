@@ -90,6 +90,16 @@ impl<D: Hash + Eq + Copy, V: Clone> VerifiedDigestCache<D, V> {
             IntCounter::new("test_cache_evictions", "test cache evictions").unwrap(),
         )
     }
+
+    #[cfg(test)]
+    pub fn cache_hits(&self) -> u64 {
+        self.cache_hits_counter.get()
+    }
+
+    #[cfg(test)]
+    pub fn cache_misses(&self) -> u64 {
+        self.cache_misses_counter.get()
+    }
 }
 
 impl<D: Hash + Eq + Copy> VerifiedDigestCache<D, ()> {
