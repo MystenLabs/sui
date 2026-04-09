@@ -52,7 +52,7 @@ pub async fn initialize(
     let mut rng = OsRng;
     let config = ConfigBuilder::new_with_temp_dir()
         .rng(&mut rng)
-        .with_chain_start_timestamp_ms(0)
+        .with_chain_start_timestamp_ms(checkpoint.timestamp_ms)
         .deterministic_committee_size(NonZeroUsize::MIN)
         .with_protocol_version(ProtocolVersion::new(protocol_version))
         .with_chain_override(node.chain())

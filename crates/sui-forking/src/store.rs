@@ -284,7 +284,7 @@ impl SimulatorStore for DataStore {
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        self.get_highest_checkpoint();
+        todo!()
     }
 
     fn get_checkpoint_contents(
