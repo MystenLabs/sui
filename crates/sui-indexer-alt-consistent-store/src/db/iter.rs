@@ -6,23 +6,24 @@ use std::marker::PhantomData;
 use bincode::Decode;
 use serde::de::DeserializeOwned;
 
+use crate::db::DBRawIterator;
 use crate::db::error::Error;
 use crate::db::key;
 
 /// An iterator that scans through elements in increasing key order.
 pub(crate) struct FwdIter<'d, K, V> {
-    inner: Option<rocksdb::DBRawIterator<'d>>,
+    inner: Option<DBRawIterator<'d>>,
     _data: PhantomData<(K, V)>,
 }
 
 /// An iterator that scans through elements in decreasing key order.
 pub(crate) struct RevIter<'d, K, V> {
-    inner: Option<rocksdb::DBRawIterator<'d>>,
+    inner: Option<DBRawIterator<'d>>,
     _data: PhantomData<(K, V)>,
 }
 
 impl<'d, K, V> FwdIter<'d, K, V> {
-    pub(crate) fn new(inner: Option<rocksdb::DBRawIterator<'d>>) -> Self {
+    pub(crate) fn new(inner: Option<DBRawIterator<'d>>) -> Self {
         Self {
             inner,
             _data: PhantomData,
@@ -73,7 +74,7 @@ impl<'d, K, V> FwdIter<'d, K, V> {
 }
 
 impl<'d, K, V> RevIter<'d, K, V> {
-    pub(crate) fn new(inner: Option<rocksdb::DBRawIterator<'d>>) -> Self {
+    pub(crate) fn new(inner: Option<DBRawIterator<'d>>) -> Self {
         Self {
             inner,
             _data: PhantomData,
@@ -165,7 +166,7 @@ where
     }
 }
 
-fn decode_item<K, V>(iter: &rocksdb::DBRawIterator<'_>) -> Option<Result<(K, V), Error>>
+fn decode_item<K, V>(iter: &DBRawIterator<'_>) -> Option<Result<(K, V), Error>>
 where
     K: Decode<()>,
     V: DeserializeOwned,

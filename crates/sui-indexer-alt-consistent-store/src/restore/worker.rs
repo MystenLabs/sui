@@ -12,6 +12,7 @@ use tracing::error;
 use tracing::info;
 
 use crate::db::Db;
+use crate::db::WriteBatch;
 use crate::restore::LiveObjects;
 use crate::restore::Restore;
 use crate::restore::RestorerMetrics;
@@ -57,7 +58,7 @@ pub(super) fn worker<S: Schema + Send + Sync + 'static, R: Restore<S>>(
                         .with_label_values(&[R::NAME])
                         .start_timer();
 
-                    let mut batch = rocksdb::WriteBatch::default();
+                    let mut batch = WriteBatch::default();
                     for object in &objects.objects {
                         tokio::task::yield_now().await;
 

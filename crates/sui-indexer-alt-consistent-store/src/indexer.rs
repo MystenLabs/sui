@@ -157,6 +157,7 @@ mod tests {
     use tokio::fs;
 
     use crate::db::Db;
+    use crate::db::WriteBatch;
     use crate::db::tests::wm;
     use crate::restore::Restore;
     use crate::store::Connection;
@@ -178,7 +179,7 @@ mod tests {
     }
 
     impl Restore<TestSchema> for TestHandler {
-        fn restore(_: &TestSchema, _: &Object, _: &mut rocksdb::WriteBatch) -> anyhow::Result<()> {
+        fn restore(_: &TestSchema, _: &Object, _: &mut WriteBatch) -> anyhow::Result<()> {
             Ok(())
         }
     }

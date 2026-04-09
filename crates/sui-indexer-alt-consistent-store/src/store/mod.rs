@@ -19,6 +19,7 @@ use sui_indexer_alt_framework::store::{self};
 
 use crate::db::Db;
 use crate::db::Watermark;
+use crate::db::WriteBatch;
 use crate::db::config::DbConfig;
 use crate::metrics::ColumnFamilyStatsCollector;
 use crate::store::synchronizer::Queue;
@@ -44,7 +45,7 @@ pub(crate) struct Store<S>(Arc<Inner<S>>);
 /// A connection to the store that supports reads, writes and watermarking.
 pub(crate) struct Connection<'s, S> {
     pub store: &'s Store<S>,
-    pub batch: rocksdb::WriteBatch,
+    pub batch: WriteBatch,
     watermark: Option<(String, Watermark)>,
 }
 
@@ -129,7 +130,7 @@ impl<S: Send + Sync + 'static> store::Store for Store<S> {
     async fn connect(&self) -> anyhow::Result<Connection<'_, S>> {
         Ok(Connection {
             store: self,
-            batch: rocksdb::WriteBatch::default(),
+            batch: WriteBatch::default(),
             watermark: None,
         })
     }
@@ -312,7 +313,7 @@ mod tests {
         mutator: M,
     ) -> anyhow::Result<()>
     where
-        M: Send + 'static + FnOnce(&TestSchema, &mut rocksdb::WriteBatch) -> anyhow::Result<()>,
+        M: Send + 'static + FnOnce(&TestSchema, &mut WriteBatch) -> anyhow::Result<()>,
     {
         store
             .transaction(move |c| {
@@ -431,7 +432,7 @@ mod tests {
             // Initialize the database with some data for the pipeline
             let (db, schema) = test_db.db();
 
-            let mut batch = rocksdb::WriteBatch::default();
+            let mut batch = WriteBatch::default();
             schema.b.insert(42, "x".to_owned(), &mut batch).unwrap();
             db.write("b", CommitterWatermark::new_for_testing(0).into(), batch)
                 .unwrap();
@@ -462,12 +463,12 @@ mod tests {
             // Initialize the database with some data for both pipelines
             let (db, schema) = test_db.db();
 
-            let mut batch = rocksdb::WriteBatch::default();
+            let mut batch = WriteBatch::default();
             schema.a.insert("x".to_owned(), 42, &mut batch).unwrap();
             db.write("a", CommitterWatermark::new_for_testing(0).into(), batch)
                 .unwrap();
 
-            let mut batch = rocksdb::WriteBatch::default();
+            let mut batch = WriteBatch::default();
             schema.b.insert(42, "x".to_owned(), &mut batch).unwrap();
             db.write("b", CommitterWatermark::new_for_testing(0).into(), batch)
                 .unwrap();
@@ -499,7 +500,7 @@ mod tests {
             // Initialize the database with some data for one of the pipelines.
             let (db, schema) = test_db.db();
 
-            let mut batch = rocksdb::WriteBatch::default();
+            let mut batch = WriteBatch::default();
             schema.b.insert(42, "x".to_owned(), &mut batch).unwrap();
             db.write("b", CommitterWatermark::new_for_testing(0).into(), batch)
                 .unwrap();

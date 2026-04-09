@@ -12,6 +12,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::db::Db;
+use crate::db::WriteBatch;
 use crate::db::error::Error;
 use crate::db::iter;
 use crate::db::key;
@@ -118,7 +119,7 @@ where
         &self,
         k: impl Borrow<K>,
         v: impl Borrow<V>,
-        batch: &mut rocksdb::WriteBatch,
+        batch: &mut WriteBatch,
     ) -> Result<(), Error> {
         batch.put_cf(
             &self.cf()?,
@@ -141,7 +142,7 @@ where
         &self,
         k: impl Borrow<K>,
         v: impl Borrow<V>,
-        batch: &mut rocksdb::WriteBatch,
+        batch: &mut WriteBatch,
     ) -> Result<(), Error> {
         batch.merge_cf(
             &self.cf()?,
@@ -154,11 +155,7 @@ where
     /// Record the removal of `k` from the map's column family in the given `batch`. The removal is
     /// not performed until the batch is written to the database, and its effects will not be
     /// visible until a snapshot is created after the batch is written.
-    pub(crate) fn remove(
-        &self,
-        k: impl Borrow<K>,
-        batch: &mut rocksdb::WriteBatch,
-    ) -> Result<(), Error> {
+    pub(crate) fn remove(&self, k: impl Borrow<K>, batch: &mut WriteBatch) -> Result<(), Error> {
         batch.delete_cf(&self.cf()?, key::encode(k.borrow()));
         Ok(())
     }
@@ -231,13 +228,13 @@ mod tests {
         let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
         let map: DbMap<u64, u64> = DbMap::new(db.clone(), "test");
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         map.insert(42, 43, &mut batch).unwrap();
         map.insert(44, 45, &mut batch).unwrap();
         db.write("batch", wm(0), batch).unwrap();
         db.take_snapshot(wm(0));
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         map.remove(42, &mut batch).unwrap();
         map.insert(43, 42, &mut batch).unwrap();
         db.write("batch", wm(1), batch).unwrap();
@@ -331,19 +328,19 @@ mod tests {
         let counts: DbMap<u64, u64> = DbMap::new(db.clone(), "counts");
 
         // Successfully perform a merge to counts.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         counts.merge(42, 1, &mut batch).unwrap();
         db.write("counts", wm(0), batch).unwrap();
         db.take_snapshot(wm(0));
 
         // Merges allow for the accumulation of values.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         counts.merge(42, 2, &mut batch).unwrap();
         db.write("counts", wm(1), batch).unwrap();
         db.take_snapshot(wm(1));
 
         // A single batch can include multiple merges for the same key.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         counts.merge(42, 3, &mut batch).unwrap();
         counts.merge(42, 4, &mut batch).unwrap();
         db.write("counts", wm(2), batch).unwrap();
@@ -366,17 +363,17 @@ mod tests {
         let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
         let values: DbMap<u64, u64> = DbMap::new(db.clone(), "test");
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         values.insert(42, 1, &mut batch).unwrap();
         db.write("values", wm(0), batch).unwrap();
 
         // Trying to merge to a map that has not had a merge operator set-up will fail.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         values.merge(42, 2, &mut batch).unwrap();
         assert!(db.write("values", wm(0), batch).is_err());
 
         // Subsequent writes will also fail, as the invalid merge has been written to the database.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         values.insert(43, 3, &mut batch).unwrap();
         assert!(db.write("values", wm(1), batch).is_err());
     }
@@ -393,7 +390,7 @@ mod tests {
         let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
         let map: DbMap<u32, u64> = DbMap::new(db.clone(), "test");
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         map.insert(0x0000_0001, 10, &mut batch).unwrap();
         map.insert(0xffff_0002, 20, &mut batch).unwrap();
         map.insert(0x0000_0003, 30, &mut batch).unwrap();

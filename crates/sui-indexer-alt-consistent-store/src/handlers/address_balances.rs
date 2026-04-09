@@ -16,6 +16,7 @@ use sui_indexer_alt_framework::types::object::Object;
 use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
 use sui_indexer_alt_framework::types::transaction::TransactionKind;
 
+use crate::db::WriteBatch;
 use crate::restore::Restore;
 use crate::schema::Schema;
 use crate::schema::address_balances::Key;
@@ -71,11 +72,7 @@ impl Processor for AddressBalances {
 }
 
 impl Restore<Schema> for AddressBalances {
-    fn restore(
-        schema: &Schema,
-        object: &Object,
-        batch: &mut rocksdb::WriteBatch,
-    ) -> anyhow::Result<()> {
+    fn restore(schema: &Schema, object: &Object, batch: &mut WriteBatch) -> anyhow::Result<()> {
         if let Some(entry) = try_extract_balance(object)? {
             schema.address_balances.insert(&entry.0, entry.1, batch)?;
         }

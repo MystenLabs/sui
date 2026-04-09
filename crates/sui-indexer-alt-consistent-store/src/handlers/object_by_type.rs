@@ -10,6 +10,7 @@ use sui_indexer_alt_framework::types::base_types::VersionDigest;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::object::Object;
 
+use crate::db::WriteBatch;
 use crate::handlers::checkpoint_input_objects;
 use crate::handlers::checkpoint_output_objects;
 use crate::restore::Restore;
@@ -70,11 +71,7 @@ impl Processor for ObjectByType {
 }
 
 impl Restore<Schema> for ObjectByType {
-    fn restore(
-        schema: &Schema,
-        object: &Object,
-        batch: &mut rocksdb::WriteBatch,
-    ) -> anyhow::Result<()> {
+    fn restore(schema: &Schema, object: &Object, batch: &mut WriteBatch) -> anyhow::Result<()> {
         if let Some(key) = Key::from_object(object) {
             let val = (object.version(), object.digest());
             schema.object_by_type.insert(key, val, batch)?;

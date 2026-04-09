@@ -42,6 +42,23 @@ const CHAIN_ID_CF: &str = "$chain_id";
 // Constants for periodic metrics reporting
 const METRICS_ERROR: i64 = -1;
 
+/// The concrete RocksDB type used by this crate. We use `OptimisticTransactionDB` so that
+/// individual operations can be composed into transactions with optimistic concurrency control
+/// (via `get_for_update_cf` + `commit`), while still supporting non-transactional writes through
+/// the usual `WriteBatch` flow.
+pub(crate) type RocksDB = rocksdb::OptimisticTransactionDB;
+
+/// `WriteBatch` flavour accepted by [`RocksDB::write`]. `OptimisticTransactionDB` requires the
+/// `TRANSACTION = true` variant to ensure batches carry the metadata needed for conflict
+/// detection against open transactions.
+pub(crate) type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
+
+/// Snapshot handle bound to [`RocksDB`].
+pub(crate) type Snapshot<'a> = rocksdb::SnapshotWithThreadMode<'a, RocksDB>;
+
+/// Raw iterator bound to [`RocksDB`].
+pub(crate) type DBRawIterator<'a> = rocksdb::DBRawIteratorWithThreadMode<'a, RocksDB>;
+
 /// A wrapper around RocksDB that provides arbitrary writes and snapshot-based reads (reads must
 /// specify the checkpoint they want to read from). Keys and values are encoded (using Bincode and
 /// BCS respectively) to provide a type-safe API.
@@ -107,7 +124,7 @@ struct Inner {
     capacity: usize,
 
     /// The underlying RocksDB database.
-    db: rocksdb::DB,
+    db: RocksDB,
 
     /// ColumnFamily in `db` that watermarks are written to.
     #[borrows(db)]
@@ -127,16 +144,12 @@ struct Inner {
     /// Snapshots from `db`, ordered by checkpoint sequence number, along with their watermarks.
     #[borrows()]
     #[covariant]
-    snapshots: BTreeMap<u64, (Arc<rocksdb::Snapshot<'this>>, Watermark)>,
+    snapshots: BTreeMap<u64, (Arc<Snapshot<'this>>, Watermark)>,
 }
 
 /// A raw iterator along with its encoded upper and lower bounds.
 #[derive(Default)]
-struct IterBounds<'d>(
-    Option<Vec<u8>>,
-    Option<Vec<u8>>,
-    Option<rocksdb::DBRawIterator<'d>>,
-);
+struct IterBounds<'d>(Option<Vec<u8>>, Option<Vec<u8>>, Option<DBRawIterator<'d>>);
 
 /// Metrics related to memory usage and backpressure.
 pub struct RocksMetrics {
@@ -192,7 +205,10 @@ impl Db {
         cfs.push((CHAIN_ID_CF, rocksdb::Options::default()));
         options.create_missing_column_families(true);
 
-        let db = rocksdb::DB::open_cf_with_opts(&options, path, cfs)?;
+        let descriptors = cfs
+            .into_iter()
+            .map(|(name, opts)| rocksdb::ColumnFamilyDescriptor::new(name, opts));
+        let db = RocksDB::open_cf_descriptors(&options, path, descriptors)?;
         let inner = Inner::try_new(
             capacity,
             db,
@@ -211,7 +227,7 @@ impl Db {
         &self,
         pipeline: &str,
         watermark: Watermark,
-        mut batch: rocksdb::WriteBatch,
+        mut batch: WriteBatch,
     ) -> Result<(), Error> {
         let checkpoint = bcs::to_bytes(&watermark).context("Failed to serialize watermark")?;
 
@@ -235,7 +251,7 @@ impl Db {
             }
 
             let Some(existing) = f.db.get_pinned_cf(f.restore_cf, &p)? else {
-                let mut batch = rocksdb::WriteBatch::default();
+                let mut batch = WriteBatch::default();
                 batch.put_cf(f.restore_cf, &p, bcs::to_bytes(&watermark)?);
                 f.db.write_opt(batch, &sync_write_options())?;
                 return Ok(());
@@ -259,7 +275,7 @@ impl Db {
         bucket: u32,
         partition: u32,
         pipeline: &str,
-        mut batch: rocksdb::WriteBatch,
+        mut batch: WriteBatch,
     ) -> Result<(), Error> {
         let key = key::encode(&Restored {
             pipeline,
@@ -314,12 +330,37 @@ impl Db {
                 return Ok(());
             };
 
+            // Collect every key in `restore_cf` that starts with the encoded pipeline name:
+            // this covers both the `restore_at` marker (at exactly `p`) and the per-partition
+            // markers written by `restore()` (keyed by `Restored { pipeline, .. }`, which
+            // bincode-encodes with the pipeline bytes as its prefix). The transactional
+            // `WriteBatch` used by `OptimisticTransactionDB` does not expose `delete_range_cf`,
+            // so we enumerate the keys up front and delete each one individually.
             let mut q = p.clone();
-            let q = if key::next(&mut q) { &q[..] } else { &[][..] };
+            let end: Option<Vec<u8>> = if key::next(&mut q) { Some(q) } else { None };
 
-            let mut batch = rocksdb::WriteBatch::default();
+            let mut opts = rocksdb::ReadOptions::default();
+            opts.set_iterate_lower_bound(p.clone());
+            if let Some(ref e) = end {
+                opts.set_iterate_upper_bound(e.clone());
+            }
+            let mut iter = f.db.raw_iterator_cf_opt(f.restore_cf, opts);
+            iter.seek(&p);
+
+            let mut to_delete: Vec<Vec<u8>> = Vec::new();
+            while iter.valid() {
+                if let Some(k) = iter.key() {
+                    to_delete.push(k.to_vec());
+                }
+                iter.next();
+            }
+            iter.status()?;
+
+            let mut batch = WriteBatch::default();
             batch.put_cf(f.watermark_cf, &p, &existing);
-            batch.delete_range_cf(f.restore_cf, &p[..], q);
+            for k in &to_delete {
+                batch.delete_cf(f.restore_cf, k);
+            }
 
             Ok(f.db.write_opt(batch, &sync_write_options())?)
         })
@@ -714,7 +755,7 @@ impl Db {
         }
     }
 
-    fn at_snapshot(&self, checkpoint: u64) -> Result<Arc<rocksdb::Snapshot<'_>>, Error> {
+    fn at_snapshot(&self, checkpoint: u64) -> Result<Arc<Snapshot<'_>>, Error> {
         self.0.read().expect("poisoned").with(|f| {
             let Some((snapshot, _)) = f.snapshots.get(&checkpoint) else {
                 return Err(Error::NotInRange { checkpoint });
@@ -726,8 +767,7 @@ impl Db {
             // The lifetime annotation on Snapshot couples its lifetime with the DB it came from,
             // which is owned by `self` through `Inner`, so it is safe to extend the lifetime of
             // the column family from that of the read guard, to that of `self` using `transmute`.
-            let snapshot: Arc<rocksdb::Snapshot<'_>> =
-                unsafe { std::mem::transmute(snapshot.clone()) };
+            let snapshot: Arc<Snapshot<'_>> = unsafe { std::mem::transmute(snapshot.clone()) };
 
             Ok(snapshot)
         })
@@ -785,7 +825,7 @@ impl Db {
         // The lifetime annotation on Snapshot couples its lifetime with the DB it came from,
         // which is owned by `self` through `Inner`, so it is safe to extend the lifetime of
         // the column family from that of the read guard, to that of `self` using `transmute`.
-        let inner: rocksdb::DBRawIterator<'_> =
+        let inner: DBRawIterator<'_> =
             unsafe { std::mem::transmute(s.raw_iterator_cf_opt(cf, opts)) };
 
         Ok(IterBounds(lo, hi, Some(inner)))
@@ -856,7 +896,7 @@ impl Default for RocksMetrics {
 
 /// Retrieves a RocksDB property from db and maps it to a metric value.
 fn cf_property_int_to_metric(
-    db: &rocksdb::DB,
+    db: &RocksDB,
     cf: &impl AsColumnFamilyRef,
     property_name: &std::ffi::CStr,
 ) -> i64 {
@@ -972,7 +1012,7 @@ pub(crate) mod tests {
         let v1 = 44u64;
 
         // Write a value.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k), bcs::to_bytes(&v0).unwrap());
         db.write("test", wm(1), batch).unwrap();
 
@@ -1003,7 +1043,7 @@ pub(crate) mod tests {
             assert_eq!(db.get(0, &cf, &k).unwrap(), None::<u64>);
         }
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k), bcs::to_bytes(&v1).unwrap());
         db.write("test", wm(2), batch).unwrap();
         db.take_snapshot(wm(2));
@@ -1028,7 +1068,7 @@ pub(crate) mod tests {
         let (k2, v2) = (46u64, 47u64);
         let (k3, v3) = (48u64, 49u32);
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k0), bcs::to_bytes(&v0).unwrap());
         batch.put_cf(&cf, key::encode(&k2), bcs::to_bytes(&v2).unwrap());
         batch.put_cf(&cf, key::encode(&k3), bcs::to_bytes(&v3).unwrap());
@@ -1051,7 +1091,7 @@ pub(crate) mod tests {
         // Perform another batch of writes correcting the mistakes from the previous batch.
         let v3 = 49u64;
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k1), bcs::to_bytes(&v1).unwrap());
         batch.put_cf(&cf, key::encode(&k3), bcs::to_bytes(&v3).unwrap());
         db.write("test", wm(1), batch).unwrap();
@@ -1099,7 +1139,7 @@ pub(crate) mod tests {
         assert_eq!(db.commit_watermark("p1").unwrap(), None);
 
         // Write a batch for the pipeline p0.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         batch.put_cf(&p0, key::encode(&42u64), bcs::to_bytes(&43u64).unwrap());
         db.write("p0", wm(0), batch).unwrap();
 
@@ -1109,7 +1149,7 @@ pub(crate) mod tests {
         assert_eq!(db.commit_watermark("p1").unwrap(), None);
 
         // Write a batch for the pipeline p1.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         batch.put_cf(&p1, key::encode(&44u64), bcs::to_bytes(&45u64).unwrap());
         db.write("p1", wm(1), batch).unwrap();
 
@@ -1127,7 +1167,7 @@ pub(crate) mod tests {
             let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
             let cf = db.cf("test").unwrap();
 
-            let mut batch = rocksdb::WriteBatch::default();
+            let mut batch = WriteBatch::default();
             batch.put_cf(&cf, key::encode(&42u64), bcs::to_bytes(&43u64).unwrap());
             db.write("test", wm(1), batch).unwrap();
 
@@ -1169,7 +1209,7 @@ pub(crate) mod tests {
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (0u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
@@ -1302,7 +1342,7 @@ pub(crate) mod tests {
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (0u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
@@ -1347,7 +1387,7 @@ pub(crate) mod tests {
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (0u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
@@ -1363,7 +1403,7 @@ pub(crate) mod tests {
         assert_eq!(kv0.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "i0: first 3");
 
         // Write some more data, in the next snapshot.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (0u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
         }
@@ -1383,7 +1423,7 @@ pub(crate) mod tests {
         assert_eq!(kv1.unwrap(), vec![(0, 1), (1, 0), (2, 3)], "i1: first 3");
 
         // Delete the data from the original batch.
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (0u64..10).step_by(2) {
             batch.delete_cf(&cf, key::encode(&i));
         }
@@ -1427,7 +1467,7 @@ pub(crate) mod tests {
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (0u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
@@ -1466,7 +1506,7 @@ pub(crate) mod tests {
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (0u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
         }
@@ -1604,7 +1644,7 @@ pub(crate) mod tests {
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (0u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
         }
@@ -1690,7 +1730,7 @@ pub(crate) mod tests {
         assert_eq!(r, vec![false, false]);
 
         // Write to one of the pipelines for (0, 0)
-        let batch = rocksdb::WriteBatch::default();
+        let batch = WriteBatch::default();
         db.restore(0, 0, "p0", batch).unwrap();
 
         // p0 has restored (0, 0), p1 has not. (1, 1) is empty for both.
@@ -1701,7 +1741,7 @@ pub(crate) mod tests {
         assert_eq!(r, vec![false, false]);
 
         // Write to the other pipeline for (0, 0)
-        let batch = rocksdb::WriteBatch::default();
+        let batch = WriteBatch::default();
         db.restore(0, 0, "p1", batch).unwrap();
 
         // (0, 0) is fully restored, and (1, 1) is not.
@@ -1729,7 +1769,7 @@ pub(crate) mod tests {
         // Mark several buckets/partitions as restored for all pipelines
         for (bucket, partition) in [(0, 0), (0, 1)] {
             for pipeline in ["tess", "test", "tesu"] {
-                let batch = rocksdb::WriteBatch::default();
+                let batch = WriteBatch::default();
                 db.restore(bucket, partition, pipeline, batch).unwrap();
             }
         }
@@ -1777,7 +1817,7 @@ pub(crate) mod tests {
         let cf = db.cf("test").unwrap();
 
         // Insert keys: 0, 2, 4, 6, 8 with values 1, 3, 5, 7, 9
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (0u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
@@ -1810,7 +1850,7 @@ pub(crate) mod tests {
         let cf = db.cf("test").unwrap();
 
         // Insert keys: 1, 3, 5, 7, 9 with values 2, 4, 6, 8, 10
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         for i in (1u64..10).step_by(2) {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }

@@ -17,6 +17,7 @@ use tracing::info;
 use tracing::warn;
 
 use crate::db::Db;
+use crate::db::WriteBatch;
 use crate::db::config::DbConfig;
 use crate::handlers::address_balances::AddressBalances;
 use crate::handlers::balances::Balances;
@@ -44,7 +45,7 @@ pub(crate) trait Restore<S: crate::store::Schema>: Processor {
     /// How much concurrency to use when processing live objects.
     const FANOUT: usize = 10;
 
-    fn restore(schema: &S, object: &Object, batch: &mut rocksdb::WriteBatch) -> anyhow::Result<()>;
+    fn restore(schema: &S, object: &Object, batch: &mut WriteBatch) -> anyhow::Result<()>;
 }
 
 #[derive(clap::Args, Clone, Debug)]

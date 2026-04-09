@@ -19,6 +19,7 @@ use tracing::warn;
 
 use crate::db::Db;
 use crate::db::Watermark;
+use crate::db::WriteBatch;
 
 /// The synchronizer will emit a message if it has been waiting to synchronize with other tasks for
 /// this long without making progress.
@@ -46,7 +47,7 @@ pub(crate) struct Synchronizer {
 }
 
 /// Write access to each pipeline's synchronizer task.
-pub(super) type Queue = HashMap<&'static str, mpsc::Sender<(Watermark, rocksdb::WriteBatch)>>;
+pub(super) type Queue = HashMap<&'static str, mpsc::Sender<(Watermark, WriteBatch)>>;
 
 impl Synchronizer {
     /// Create a new synchronizer service that coordinates write and snapshots to `db`.
@@ -150,7 +151,7 @@ impl Synchronizer {
 /// during writes).
 async fn synchronizer(
     db: Arc<Db>,
-    mut rx: mpsc::Receiver<(Watermark, rocksdb::WriteBatch)>,
+    mut rx: mpsc::Receiver<(Watermark, WriteBatch)>,
     pipeline: &'static str,
     first_checkpoint: u64,
     stride: u64,

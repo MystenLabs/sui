@@ -328,6 +328,7 @@ mod tests {
 
     use crate::db::Db;
     use crate::db::Watermark;
+    use crate::db::WriteBatch;
     use crate::db::key;
 
     use super::*;
@@ -355,7 +356,7 @@ mod tests {
         let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
         let map: DbMap<u32, u64> = DbMap::new(db.clone(), "test");
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         map.insert(0x0000_0001, 10, &mut batch).unwrap();
         map.insert(0x0000_0003, 30, &mut batch).unwrap();
         map.insert(0x0000_0005, 50, &mut batch).unwrap();
@@ -364,7 +365,7 @@ mod tests {
         db.write("batch", wm(0), batch).unwrap();
         db.take_snapshot(wm(0));
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         map.insert(0x0000_0000, 0, &mut batch).unwrap();
         map.insert(0x0000_0002, 20, &mut batch).unwrap();
         map.insert(0x0000_0004, 40, &mut batch).unwrap();
@@ -780,7 +781,7 @@ mod tests {
 
         let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         map.insert((0, 1, 0x0001), 10, &mut batch).unwrap();
         map.insert((0, 1, 0x0002), 20, &mut batch).unwrap();
         map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
@@ -833,7 +834,7 @@ mod tests {
 
         let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         map.insert((0, 1, 0x0001), 10, &mut batch).unwrap();
         map.insert((0, 1, 0x0002), 20, &mut batch).unwrap();
         map.insert((0, 2, 0x0003), 30, &mut batch).unwrap();
@@ -887,7 +888,7 @@ mod tests {
         let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
         let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         // 2 non-excluded, then 2 excluded at the end
         map.insert((0, 1, 0x0001), 10, &mut batch).unwrap();
         map.insert((0, 1, 0x0002), 20, &mut batch).unwrap();
@@ -926,7 +927,7 @@ mod tests {
         let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
         let map: DbMap<(u8, u8, u16), u64> = DbMap::new(db.clone(), "test");
 
-        let mut batch = rocksdb::WriteBatch::default();
+        let mut batch = WriteBatch::default();
         // 2 excluded at the start, then 2 non-excluded
         map.insert((0, 1, 0x0001), 10, &mut batch).unwrap(); // excluded
         map.insert((0, 1, 0x0002), 20, &mut batch).unwrap(); // excluded
