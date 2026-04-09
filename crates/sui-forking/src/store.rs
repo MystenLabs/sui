@@ -42,8 +42,12 @@ use sui_types::transaction::VerifiedTransaction;
 
 use crate::filesystem::FilesystemStore;
 
-/// A data store for Sui data, with a local filesystem and a remote GraphQL endpoint to query for
-/// historical data.
+/// A data store for Sui data, combining a local filesystem cache with a remote GraphQL endpoint
+/// for historical reads. Pre-fork data is fetched on demand and cached locally; post-fork data
+/// (written by the executor) lives on disk only.
+///
+/// Implements [`SimulatorStore`] so it can be passed directly into
+/// [`simulacrum::Simulacrum::new_from_custom_state`].
 pub(crate) struct DataStore {
     forked_at_checkpoint: CheckpointSequenceNumber,
     gql: GraphQLClient,
@@ -51,6 +55,11 @@ pub(crate) struct DataStore {
 }
 
 impl DataStore {
+    /// Create a new `DataStore` for the given network, anchored at `forked_at_checkpoint`.
+    ///
+    /// The local filesystem cache is rooted under a per-network, per-checkpoint directory
+    /// (see [`FilesystemStore`]). The GraphQL client is constructed eagerly but no remote
+    /// requests are made until reads happen.
     pub(crate) async fn new(
         node: Node,
         forked_at_checkpoint: CheckpointSequenceNumber,
@@ -70,12 +79,13 @@ impl DataStore {
         self.forked_at_checkpoint
     }
 
+    /// Return the chain (mainnet/testnet/devnet/unknown) this store is connected to.
     pub fn get_chain_identifier(&self) -> Chain {
         self.gql.chain()
     }
 
-    /// Get a verified checkpoint from remote rpc. If `checkpoint` is `None`, use the store's forked
-    /// checkpoint as the default.
+    /// Fetch a verified checkpoint from the remote GraphQL endpoint. When `checkpoint` is `None`,
+    /// the store's `forked_at_checkpoint` is used as the default.
     pub(crate) async fn get_verified_checkpoint_from_rpc(
         &self,
         checkpoint: Option<CheckpointSequenceNumber>,
@@ -116,8 +126,8 @@ impl DataStore {
         Ok(object)
     }
 
-    /// Get the object at the latest version available on disk. If not found, it will fetch the
-    /// object at the forked checkpoint from remote rpc and save it to disk for future use.
+    /// Local-first lookup for the latest known version of an object. Falls back to a remote
+    /// `AtCheckpoint(forked_at_checkpoint)` query and caches the result on disk.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
         if let Some(object) = self.local.get_latest_object(object_id)? {
             return Ok(Some(object));
@@ -174,6 +184,9 @@ impl DataStore {
 // SimulatorStore super-traits
 // ============================================================================
 
+/// Object reads delegate to the inherent `DataStore::get_object` / `get_object_at_version`,
+/// which provide local-first lookups with remote fallback. Errors are swallowed and surfaced
+/// as `None` because the trait signature does not allow propagating them.
 impl ObjectStore for DataStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.get_object(object_id).ok().flatten()
@@ -186,12 +199,16 @@ impl ObjectStore for DataStore {
     }
 }
 
+/// Package reads go through the standard `load_package_object_from_object_store` helper, which
+/// validates that the resolved object is actually a Move package.
 impl BackingPackageStore for DataStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         load_package_object_from_object_store(self, package_id)
     }
 }
 
+/// `ParentSync` is only required by older protocol versions and is never called by the executor
+/// for the protocol versions we target. Calling it indicates a misconfiguration.
 impl ParentSync for DataStore {
     fn get_latest_parent_entry_ref_deprecated(&self, _object_id: ObjectID) -> Option<ObjectRef> {
         panic!("Never called in newer protocol versions")
@@ -267,7 +284,7 @@ impl SimulatorStore for DataStore {
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        todo!("SimulatorStore::get_highest_checkpint")
+        self.get_highest_checkpoint();
     }
 
     fn get_checkpoint_contents(
