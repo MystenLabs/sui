@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Detects `vector::empty()` calls that can be replaced with `vector[]`.
+//! Detects `vector::empty()` and `vector::singleton()` calls that can be replaced with `vector[]`.
 
 use crate::{
     diag,
