@@ -25,6 +25,7 @@ pub mod unnecessary_conditional;
 pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
+pub mod verbose_vector_init;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -176,6 +177,12 @@ lints!(
         "combinable_comparisons",
         "comparison operations condition can be simplified"
     ),
+    (
+        VerboseVectorInit,
+        LinterDiagnosticCategory::Style,
+        "verbose_vector_init",
+        "vector instantiation can be simplified"
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -215,6 +222,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
+                verbose_vector_init::VerboseVectorInit.visitor(),
             ]
         }
     }
