@@ -132,7 +132,7 @@ impl FilesystemStore {
             .with_context(|| format!("Failed to write latest file for object {}", object.id()))
     }
 
-    /// Get the highest checkpoint sequence number available on disk.
+    /// Get the highest checkpoint available on disk.
     pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<VerifiedCheckpoint> {
         let checkpoint_dir = self.checkpoints_dir();
 
