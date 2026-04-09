@@ -127,6 +127,18 @@ impl TryFrom<sui_rpc_api::grpc::alpha::event_service_proto::AuthenticatedEvent>
     }
 }
 
+/// Prevent ratcheting to an arbitrarily large epoch in case of malformed node response.
+const MAX_RATCHET_GAP: u64 = 10_000;
+
+/// Maximum number of epoch fetches to run concurrently during trust ratcheting.
+const RATCHET_FETCH_CONCURRENCY: usize = 20;
+
+struct EpochCheckpointData {
+    epoch: u64,
+    end_checkpoint_seq: u64,
+    summary: sui_types::messages_checkpoint::CertifiedCheckpointSummary,
+}
+
 /// Configuration for the authenticated events client.
 ///
 /// Controls streaming behavior (page size, polling, pagination) and RPC communication (timeouts).
@@ -246,10 +258,16 @@ impl AuthenticatedEventsClient {
         genesis_committee: Committee,
         config: ClientConfig,
     ) -> Result<Self, ClientError> {
-        let endpoint = Channel::from_shared(rpc_url.to_string())
+        let mut endpoint = Channel::from_shared(rpc_url.to_string())
             .map_err(|e| ClientError::InternalError(format!("Invalid RPC URL: {}", e)))?
             .connect_timeout(Duration::from_secs(5))
             .timeout(config.rpc_timeout);
+
+        if rpc_url.starts_with("https") {
+            endpoint = endpoint
+                .tls_config(tonic::transport::ClientTlsConfig::new().with_webpki_roots())
+                .map_err(|e| ClientError::InternalError(format!("TLS config error: {}", e)))?;
+        }
 
         const MAX_RETRIES: u32 = 10;
         let mut last_err = None;
@@ -467,62 +485,192 @@ impl AuthenticatedEventsClient {
         .await
     }
 
-    async fn get_committee_for_checkpoint(
+    /// Ratchet the trusted committee cache forward to (at least) `target_epoch` and return
+    /// the committee for that epoch. Holds the cache lock for the entire ratchet so
+    /// concurrent callers serialize on it.
+    async fn ratchet_and_get_committee(
         &self,
-        checkpoint: u64,
-    ) -> Result<Committee, ClientError> {
-        self.trust_ratchet_to_checkpoint(checkpoint).await?;
+        target_epoch: u64,
+    ) -> Result<Arc<Committee>, ClientError> {
+        let mut epoch_cache = self.epoch_cache.lock().await;
 
-        let epoch_cache = self.epoch_cache.lock().await;
-        let committee = epoch_cache
-            .get_committee_for_checkpoint(checkpoint)
-            .expect("Committee must exist after ensure_committee_for_checkpoint succeeded")
-            .clone();
+        if target_epoch > epoch_cache.current_epoch() {
+            self.ratchet_locked(&mut epoch_cache, target_epoch).await?;
+        }
 
-        Ok(committee)
+        epoch_cache
+            .get_committee_for_epoch(target_epoch)
+            .ok_or_else(|| {
+                ClientError::InternalError(format!(
+                    "No committee in cache for epoch {} after ratcheting",
+                    target_epoch,
+                ))
+            })
     }
 
-    // TODO: Move trust ratcheting to a shared module since it will be useful for all light clients,
-    // not just authenticated events.
-    async fn trust_ratchet_to_checkpoint(&self, checkpoint: u64) -> Result<(), ClientError> {
-        loop {
-            let (is_in_completed_epoch, current_epoch, current_committee, current_epoch_start) = {
-                let epoch_cache = self.epoch_cache.lock().await;
-                let is_in_completed_epoch =
-                    checkpoint < epoch_cache.current_epoch_start_checkpoint();
-                let current_epoch = epoch_cache.current_epoch();
-                let current_epoch_start = epoch_cache.current_epoch_start_checkpoint();
-                let current_committee = epoch_cache.current_committee().clone();
-                (
-                    is_in_completed_epoch,
-                    current_epoch,
-                    current_committee,
-                    current_epoch_start,
-                )
-            };
+    async fn ratchet_locked(
+        &self,
+        epoch_cache: &mut EpochCache,
+        target_epoch: u64,
+    ) -> Result<(), ClientError> {
+        let starting_epoch = epoch_cache.current_epoch();
 
-            if is_in_completed_epoch {
-                return Ok(());
+        let gap = target_epoch - starting_epoch;
+        if gap > MAX_RATCHET_GAP {
+            return Err(ClientError::InternalError(format!(
+                "Refusing to trust ratchet across {} epochs (max allowed: {}). \
+                 Current epoch {}, target epoch {}.",
+                gap, MAX_RATCHET_GAP, starting_epoch, target_epoch,
+            )));
+        }
+
+        tracing::debug!(
+            "Trust ratcheting from epoch {} to {} ({} epochs)",
+            starting_epoch,
+            target_epoch,
+            gap,
+        );
+
+        // fetch every epoch up to target_epoch, exclusive. each epoch's
+        // final checkpoint contains the next epoch's committee, so we ratchet
+        // up to epoch k by fetching up to k-1, inclusive.
+        let epochs_to_fetch: Vec<u64> = (starting_epoch..target_epoch).collect();
+        let checkpoint_data = self.parallel_fetch_epoch_data(&epochs_to_fetch).await?;
+
+        for EpochCheckpointData {
+            epoch,
+            end_checkpoint_seq,
+            summary,
+        } in checkpoint_data
+        {
+            let current_committee = epoch_cache.current_committee().clone();
+
+            summary
+                .verify_with_contents(&current_committee, None)
+                .map_err(|e| {
+                    ClientError::VerificationError(format!(
+                        "Failed to verify checkpoint {} for epoch {}: {}",
+                        end_checkpoint_seq, epoch, e
+                    ))
+                })?;
+
+            let next_committee = extract_new_committee_info(&summary).map_err(|e| {
+                ClientError::VerificationError(format!(
+                    "Failed to extract committee from checkpoint {} for epoch {}: {}",
+                    end_checkpoint_seq, epoch, e
+                ))
+            })?;
+
+            epoch_cache.apply_ratchet_update(next_committee);
+        }
+
+        Ok(())
+    }
+
+    async fn fetch_epoch_data(
+        &self,
+        epoch: u64,
+    ) -> Result<Option<EpochCheckpointData>, ClientError> {
+        let mut ledger_client = self.ledger_service.clone();
+
+        let end_checkpoint_seq = match ledger_client.get_epoch(GetEpochRequest::new(epoch)).await {
+            Ok(resp) => {
+                let epoch_info = resp.into_inner().epoch.ok_or_else(|| {
+                    ClientError::InternalError(format!(
+                        "Failed to get epoch {}: Missing epoch info",
+                        epoch,
+                    ))
+                })?;
+                match epoch_info.last_checkpoint {
+                    Some(end) => end,
+                    None => return Ok(None),
+                }
             }
+            Err(status) if status.code() == tonic::Code::NotFound => return Ok(None),
+            Err(status) => {
+                return Err(ClientError::InternalError(format!(
+                    "Failed to get epoch {}: {}",
+                    epoch, status,
+                )));
+            }
+        };
 
-            let result = self
-                .fetch_and_verify_next_epoch(current_epoch, &current_committee, checkpoint)
-                .await?;
+        let checkpoint_response = ledger_client
+            .get_checkpoint(
+                GetCheckpointRequest::by_sequence_number(end_checkpoint_seq)
+                    .with_read_mask(FieldMask::from_paths(["summary.bcs", "signature"])),
+            )
+            .await
+            .map_err(|status| {
+                ClientError::InternalError(format!(
+                    "Failed to fetch checkpoint {} for epoch {}: {}",
+                    end_checkpoint_seq, epoch, status,
+                ))
+            })?
+            .into_inner();
 
-            let Some((end_of_epoch_checkpoint, next_committee)) = result else {
-                return Ok(());
-            };
+        let proto_checkpoint = checkpoint_response.checkpoint.ok_or_else(|| {
+            ClientError::InternalError(format!(
+                "Missing checkpoint in response for epoch {}",
+                epoch,
+            ))
+        })?;
 
-            let mut epoch_cache = self.epoch_cache.lock().await;
-            if epoch_cache.current_epoch() == current_epoch {
-                epoch_cache.apply_ratchet_update(
-                    current_epoch_start,
-                    end_of_epoch_checkpoint,
-                    current_committee,
-                    next_committee,
-                );
+        let summary_data: sui_types::messages_checkpoint::CheckpointSummary = proto_checkpoint
+            .summary()
+            .bcs()
+            .deserialize()
+            .map_err(|e| {
+                ClientError::InternalError(format!(
+                    "Failed to deserialize summary for epoch {}: {}",
+                    epoch, e,
+                ))
+            })?;
+
+        let signature = sui_types::crypto::AuthorityStrongQuorumSignInfo::try_from(
+            proto_checkpoint.signature(),
+        )
+        .map_err(|e| {
+            ClientError::InternalError(format!(
+                "Failed to convert signature for epoch {}: {:?}",
+                epoch, e,
+            ))
+        })?;
+
+        let summary =
+            sui_types::messages_checkpoint::CertifiedCheckpointSummary::new_from_data_and_sig(
+                summary_data,
+                signature,
+            );
+
+        Ok(Some(EpochCheckpointData {
+            epoch,
+            end_checkpoint_seq,
+            summary,
+        }))
+    }
+
+    async fn parallel_fetch_epoch_data(
+        &self,
+        epochs: &[u64],
+    ) -> Result<Vec<EpochCheckpointData>, ClientError> {
+        use futures::StreamExt as _;
+
+        let results: Vec<Result<Option<EpochCheckpointData>, ClientError>> =
+            futures::stream::iter(epochs.iter().copied())
+                .map(|epoch| self.fetch_epoch_data(epoch))
+                .buffer_unordered(RATCHET_FETCH_CONCURRENCY)
+                .collect()
+                .await;
+
+        let mut checkpoints = Vec::with_capacity(results.len());
+        for result in results {
+            if let Some(data) = result? {
+                checkpoints.push(data);
             }
         }
+        checkpoints.sort_by_key(|c| c.epoch);
+        Ok(checkpoints)
     }
 
     pub(crate) fn event_service(&self) -> EventServiceClient<tonic::transport::Channel> {
@@ -534,8 +682,6 @@ impl AuthenticatedEventsClient {
         stream_object_id: sui_types::base_types::ObjectID,
         checkpoint: u64,
     ) -> Result<EventStreamHead, ClientError> {
-        let committee = self.get_committee_for_checkpoint(checkpoint).await?;
-
         let mut proof_client = self.proof_service.clone();
 
         let mut request =
@@ -554,6 +700,14 @@ impl AuthenticatedEventsClient {
             }
             Err(status) => return Err(ClientError::RpcError(status)),
         };
+
+        let checkpoint_summary: sui_types::messages_checkpoint::CertifiedCheckpointSummary =
+            bcs::from_bytes(response.checkpoint_summary.as_ref().ok_or_else(|| {
+                ClientError::InternalError("Missing checkpoint summary".to_string())
+            })?)?;
+        let epoch = checkpoint_summary.epoch();
+
+        let committee = self.ratchet_and_get_committee(epoch).await?;
 
         let object_data_bytes = response
             .object_data
@@ -606,89 +760,6 @@ impl AuthenticatedEventsClient {
             .await?;
 
         Ok(Some((verified_head, checkpoint)))
-    }
-
-    async fn fetch_and_verify_next_epoch(
-        &self,
-        current_epoch: u64,
-        current_committee: &Committee,
-        to_checkpoint: u64,
-    ) -> Result<Option<(u64, Committee)>, ClientError> {
-        let mut ledger_client = self.ledger_service.clone();
-        let response = ledger_client
-            .get_epoch(GetEpochRequest::new(current_epoch))
-            .await;
-
-        let end_of_epoch_checkpoint_seq = match response {
-            Ok(resp) => {
-                let epoch_info =
-                    resp.into_inner()
-                        .epoch
-                        .ok_or(ClientError::InternalError(format!(
-                            "Failed to get last checkpoint of epoch {}: Missing epoch info",
-                            current_epoch
-                        )))?;
-                match epoch_info.last_checkpoint {
-                    Some(end) => end,
-                    None => return Ok(None),
-                }
-            }
-            Err(status) if status.code() == tonic::Code::NotFound => return Ok(None),
-            Err(status) => {
-                return Err(ClientError::InternalError(format!(
-                    "Failed to get last checkpoint of epoch {}: {}",
-                    current_epoch, status
-                )));
-            }
-        };
-
-        if to_checkpoint <= end_of_epoch_checkpoint_seq {
-            return Ok(None);
-        }
-
-        let checkpoint_response = ledger_client
-            .get_checkpoint(
-                GetCheckpointRequest::by_sequence_number(end_of_epoch_checkpoint_seq)
-                    .with_read_mask(FieldMask::from_paths(["summary", "signature", "contents"])),
-            )
-            .await
-            .map_err(|status| {
-                ClientError::InternalError(format!(
-                    "Failed to fetch checkpoint {}: {}",
-                    end_of_epoch_checkpoint_seq, status
-                ))
-            })?
-            .into_inner();
-
-        let proto_checkpoint = checkpoint_response
-            .checkpoint
-            .ok_or(ClientError::InternalError(
-                "Missing checkpoint in response".to_string(),
-            ))?;
-
-        let checkpoint: sui_types::full_checkpoint_content::Checkpoint =
-            (&proto_checkpoint).try_into().map_err(|e| {
-                ClientError::InternalError(format!("Failed to convert checkpoint: {:?}", e))
-            })?;
-
-        checkpoint
-            .summary
-            .verify_with_contents(current_committee, None)
-            .map_err(|e| {
-                ClientError::VerificationError(format!(
-                    "Failed to verify checkpoint {}: {}",
-                    end_of_epoch_checkpoint_seq, e
-                ))
-            })?;
-
-        let next_committee = extract_new_committee_info(&checkpoint.summary).map_err(|e| {
-            ClientError::VerificationError(format!(
-                "Failed to extract committee from checkpoint {}: {}",
-                end_of_epoch_checkpoint_seq, e
-            ))
-        })?;
-
-        Ok(Some((end_of_epoch_checkpoint_seq, next_committee)))
     }
 
     fn verify_ocs_inclusion_proof(
