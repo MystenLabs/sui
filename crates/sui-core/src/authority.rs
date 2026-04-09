@@ -158,7 +158,7 @@ use sui_types::messages_grpc::{
     LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
     TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
-use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
+use sui_types::metrics::{BytecodeVerifierMetrics, ExecutionMetrics};
 use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{
@@ -342,7 +342,7 @@ pub struct AuthorityMetrics {
     pub consensus_block_handler_fastpath_executions: IntCounter,
     pub consensus_timestamp_bias: Histogram,
 
-    pub limits_metrics: Arc<LimitsMetrics>,
+    pub execution_metrics: Arc<ExecutionMetrics>,
 
     /// bytecode verifier metrics for tracking timeouts
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
@@ -715,7 +715,7 @@ impl AuthorityMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
-            limits_metrics: Arc::new(LimitsMetrics::new(registry)),
+            execution_metrics: Arc::new(ExecutionMetrics::new(registry)),
             bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
             zklogin_sig_count: register_int_counter_with_registry!(
                 "zklogin_sig_count",
@@ -1943,7 +1943,7 @@ impl AuthorityState {
             .execute_transaction_to_effects_and_execution_error(
                 store,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
+                self.metrics.execution_metrics.clone(),
                 enable_expensive_checks,
                 execution_params,
                 epoch_id,
@@ -2641,7 +2641,7 @@ impl AuthorityState {
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             &tracking_store,
             protocol_config,
-            self.metrics.limits_metrics.clone(),
+            self.metrics.execution_metrics.clone(),
             false, // expensive_checks
             execution_params,
             &epoch_id,
@@ -2677,7 +2677,7 @@ impl AuthorityState {
                 let (store, _, effects, result) = executor.dev_inspect_transaction(
                     &tracking_store,
                     protocol_config,
-                    self.metrics.limits_metrics.clone(),
+                    self.metrics.execution_metrics.clone(),
                     false,
                     ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
                     &epoch_id,
@@ -2928,7 +2928,7 @@ impl AuthorityState {
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
             protocol_config,
-            self.metrics.limits_metrics.clone(),
+            self.metrics.execution_metrics.clone(),
             /* expensive checks */ false,
             execution_params,
             &epoch_store.epoch_start_config().epoch_data().epoch_id(),
