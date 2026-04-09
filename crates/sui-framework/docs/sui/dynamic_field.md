@@ -378,7 +378,7 @@ Returns true if and only if the <code><a href="../sui/object.md#sui_object">obje
 
 ## Macro function `borrow_or_add`
 
-Immutably borrow the field value, adding it with <code>$default</code> if it doesn't exist.
+Immutably borrows the field value, adding it with <code>$default</code> if it doesn't exist.
 Note that <code>$default</code> is evaluated only if the field does not already exist.
 
 
@@ -411,7 +411,7 @@ Note that <code>$default</code> is evaluated only if the field does not already 
 
 ## Macro function `borrow_mut_or_add`
 
-Mutably borrow the field value, adding it with <code>$default</code> if it doesn't exist.
+Mutably borrows the field value, adding it with <code>$default</code> if it doesn't exist.
 Note that <code>$default</code> is evaluated only if the field does not already exist.
 
 
@@ -444,7 +444,7 @@ Note that <code>$default</code> is evaluated only if the field does not already 
 
 ## Macro function `get_do`
 
-If the field exists, call <code>$f</code> on an immutable reference to the value.
+If the field exists, calls <code>$f</code> on an immutable reference to the value; otherwise, does nothing.
 This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a href="../std/option.md#std_option_do">std::option::do</a></code>.
 
 
@@ -476,7 +476,7 @@ This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a 
 
 ## Macro function `get_mut_do`
 
-If the field exists, call <code>$f</code> on a mutable reference to the value.
+If the field exists, calls <code>$f</code> on a mutable reference to the value; otherwise, does nothing.
 This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then calling <code><a href="../std/option.md#std_option_do">std::option::do</a></code>.
 
 
@@ -508,7 +508,7 @@ This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then callin
 
 ## Macro function `get_fold`
 
-If the field exists, apply <code>$some</code> to an immutable reference to the value; otherwise return
+If the field exists, applys <code>$some</code> to an immutable reference to the value; otherwise, returns
 <code>$none</code>.
 This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
 
@@ -542,7 +542,7 @@ This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a 
 
 ## Macro function `get_mut_fold`
 
-If the field exists, apply <code>$some</code> to a mutable reference to the value; otherwise return
+If the field exists, apply <code>$some</code> to a mutable reference to the value; otherwise, returns
 <code>$none</code>.
 This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
 
