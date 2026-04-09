@@ -3289,7 +3289,7 @@ impl From<crate::effects::AccumulatorWriteV1> for AccumulatorWrite {
             crate::effects::AccumulatorOperation::Split => AccumulatorOperation::Split,
         });
         match value.value {
-            crate::effects::AccumulatorValue::Integer(value) => message.set_integer_value(value),
+            crate::effects::AccumulatorValue::Integer(value) => message.set_value(value),
             //TODO unsupported value types
             crate::effects::AccumulatorValue::IntegerTuple(_, _)
             | crate::effects::AccumulatorValue::EventDigest(_) => {}

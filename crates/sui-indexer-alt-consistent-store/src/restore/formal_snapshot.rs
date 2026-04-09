@@ -146,7 +146,7 @@ impl FormalSnapshot {
         info!(epoch, "Connected to valid formal snapshot");
 
         // Use the remote store to associate the epoch with a watermark pointing to its last
-        // transaction. We only use `end_of_epoch_checkpoints` here, so no byte counter is needed.
+        // transaction.
         let client = StoreIngestionClient::new(
             HttpBuilder::new()
                 .with_url(snapshot_args.remote_store_url.to_string())
@@ -154,7 +154,6 @@ impl FormalSnapshot {
                 .build()
                 .map(Arc::new)
                 .context("Failed to connect to remote checkpoint store")?,
-            None,
         );
 
         let end_of_epoch_checkpoints: Vec<_> = client
