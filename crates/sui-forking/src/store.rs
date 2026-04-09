@@ -20,7 +20,6 @@ use crate::filesystem::FilesystemStore;
 /// historical data.
 pub struct DataStore {
     forked_at_checkpoint: CheckpointSequenceNumber,
-    node: Node,
     gql: GraphQLStore,
     local: FilesystemStore,
 }
@@ -36,7 +35,6 @@ impl DataStore {
 
         Ok(Self {
             forked_at_checkpoint,
-            node,
             gql,
             local,
         })
