@@ -5,7 +5,7 @@ expression: item
 {
   "data": {
     "checkpoints": {
-      "sequenceNumber": 1,
+      "sequenceNumber": "[seq]",
       "digest": "[digest]",
       "contentDigest": "[contentDigest]",
       "timestamp": "[timestamp]",

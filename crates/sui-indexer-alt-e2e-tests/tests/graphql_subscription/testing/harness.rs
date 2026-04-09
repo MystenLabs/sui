@@ -76,9 +76,18 @@ impl SubscriptionTestCluster {
 
     /// Subscribe and return a stream of GraphQL payloads.
     /// Use `tokio_stream::StreamExt` methods (`next`, `take`, `collect`, etc.) to consume.
+    /// Optionally pass GraphQL variables (e.g. `json!({"sender": "0x..."})`).
     pub async fn subscribe(
         &self,
         query: &str,
+    ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
+        self.subscribe_with_variables(query, None).await
+    }
+
+    pub async fn subscribe_with_variables(
+        &self,
+        query: &str,
+        variables: Option<Value>,
     ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
         let request = Request::builder()
             .uri(&self.subscription_url)
@@ -119,11 +128,15 @@ impl SubscriptionTestCluster {
         let ack: Value = serde_json::from_str(ack.to_text().unwrap()).unwrap();
         assert_eq!(ack["type"], "connection_ack");
 
+        let mut payload = json!({ "query": query });
+        if let Some(vars) = variables {
+            payload["variables"] = vars;
+        }
         sink.send(Message::Text(
             json!({
                 "id": "1",
                 "type": "subscribe",
-                "payload": { "query": query }
+                "payload": payload
             })
             .to_string()
             .into(),
@@ -209,4 +222,47 @@ pub fn checkpoint_tx_digests(item: &Value) -> Vec<&str> {
         .as_array()
         .map(|nodes| nodes.iter().filter_map(|n| n["digest"].as_str()).collect())
         .unwrap_or_default()
+}
+
+/// Common snapshot redactions for GraphQL subscription tests.
+///
+/// Redacts seed-dependent fields (digests, addresses, versions, timestamps, etc.)
+/// and sorts object changes by type name for stable ordering across sim_test seeds.
+///
+/// Usage:
+/// ```ignore
+/// graphql_redactions().bind(|| {
+///     insta::assert_json_snapshot!("my_snapshot", data);
+/// });
+/// ```
+pub fn graphql_redactions() -> insta::Settings {
+    let mut settings = insta::Settings::clone_current();
+    settings.add_redaction(".**.sequenceNumber", "[seq]");
+    settings.add_redaction(".**.digest", "[digest]");
+    settings.add_redaction(".**.contentDigest", "[contentDigest]");
+    settings.add_redaction(".**.address", "[address]");
+    settings.add_redaction(".**.version", "[version]");
+    settings.add_redaction(".**.timestamp", "[timestamp]");
+    settings.add_redaction(".**.networkTotalTransactions", "[networkTotalTransactions]");
+    settings.add_redaction(".**.cursor", "[cursor]");
+    settings.add_redaction(".**.signature", "[signature]");
+    settings.add_dynamic_redaction(".**.repr", |value, _path| {
+        let s = value.as_str().unwrap();
+        if let Some(idx) = s.find("::") {
+            insta::internals::Content::from(format!("[pkg]{}", &s[idx..]))
+        } else {
+            insta::internals::Content::from(s.to_string())
+        }
+    });
+    settings.add_dynamic_redaction(".**.objectChanges.nodes", |mut value, _path| {
+        // Sort object changes by type name (after ::) for stable ordering across seeds.
+        if let insta::internals::Content::Seq(ref mut items) = value {
+            items.sort_by_key(|item| {
+                let s = format!("{:?}", item);
+                s.find("::").map(|i| s[i..].to_string()).unwrap_or(s)
+            });
+        }
+        value
+    });
+    settings
 }
