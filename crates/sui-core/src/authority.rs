@@ -235,6 +235,10 @@ pub mod move_integration_tests;
 mod gas_tests;
 
 #[cfg(test)]
+#[path = "unit_tests/gas_data_tests.rs"]
+mod gas_data_tests;
+
+#[cfg(test)]
 #[path = "unit_tests/batch_verification_tests.rs"]
 mod batch_verification_tests;
 
