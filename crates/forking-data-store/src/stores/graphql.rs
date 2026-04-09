@@ -128,6 +128,12 @@ impl GraphQLStore {
             .context("Failed to read response in GQL query")
     }
 
+    pub fn get_latest_checkpoint_sequence_number(&self) -> Result<CheckpointSequenceNumber, Error> {
+        block_on!(crate::gql_queries::latest_checkpoint_sequence_query::query(
+            self
+        ))
+    }
+
     async fn get_verified_checkpoint(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,

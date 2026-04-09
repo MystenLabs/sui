@@ -553,3 +553,28 @@ pub(crate) mod chain_id_query {
         Ok(chain_id)
     }
 }
+
+pub(crate) mod latest_checkpoint_sequence_query {
+    use super::*;
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(graphql_type = "Query")]
+    pub(crate) struct Query {
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Checkpoint {
+        sequence_number: u64,
+    }
+
+    pub(crate) async fn query(data_store: &GraphQLStore) -> Result<u64, Error> {
+        let query = Query::build(());
+        let response = data_store.run_query(&query).await?;
+        let checkpoint = response
+            .data
+            .and_then(|data| data.checkpoint)
+            .ok_or_else(|| anyhow!("missing checkpoint in latest checkpoint sequence response"))?;
+        Ok(checkpoint.sequence_number)
+    }
+}
