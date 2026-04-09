@@ -31,7 +31,7 @@
   "params": []
 }
 
-//# programmable --sender A --inputs object(0x5) object(2,1)
+//# programmable --sender A --inputs object(0x5) object(2,0)
 //> 0: sui_system::sui_system::request_withdraw_stake(Input(0), Input(1))
 
 //# create-checkpoint

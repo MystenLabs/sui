@@ -73,7 +73,7 @@ module test::mod {
 //> 0: test::mod::versioned();
 //> 1: TransferObjects([Result(0)], Input(0))
 
-//# programmable --sender A --inputs object(3,1)
+//# programmable --sender A --inputs object(3,0)
 //> 0: test::mod::upgrade(Input(0))
 
 //# programmable --sender A --inputs object(2,0)

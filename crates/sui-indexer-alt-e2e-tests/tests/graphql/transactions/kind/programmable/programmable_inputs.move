@@ -53,7 +53,7 @@ module test::simple {
 //# create-checkpoint
 
 // Test 2: SharedInput only - demonstrates SharedInput TransactionInput type
-//# programmable --sender A --inputs object(1,0) 10
+//# programmable --sender A --inputs object(1,1) 10
 //> 0: test::simple::add(Input(0), Input(1))
 
 //# create-checkpoint

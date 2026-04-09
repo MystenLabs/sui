@@ -83,7 +83,7 @@ fragment CM on CoinMetadata {
   allowGlobalPause
 }
 
-//# programmable --sender A --inputs object(1,2) 100 @A
+//# programmable --sender A --inputs object(1,1) 100 @A
 //> 0: sui::coin::mint<P::fake::FAKE>(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
 
