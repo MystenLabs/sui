@@ -80,7 +80,7 @@ impl FilesystemStore {
     }
 
     /// Get the latest object version available on disk for the given object ID.
-    pub fn get_latest_object(&self, object_id: ObjectID) -> anyhow::Result<Option<Object>> {
+    pub(crate) fn get_latest_object(&self, object_id: ObjectID) -> anyhow::Result<Option<Object>> {
         let object_dir = self.objects_dir().join(object_id.to_string());
 
         if !object_dir.exists() {
@@ -92,7 +92,7 @@ impl FilesystemStore {
         self.read_bcs_file(&version_file).map(Some)
     }
 
-    pub fn get_object_at_version(
+    pub(crate) fn get_object_at_version(
         &self,
         object_id: ObjectID,
         version: u64,
@@ -109,7 +109,7 @@ impl FilesystemStore {
 
     /// Write the given object to disk under the objects directory, using the object ID and version
     /// as the path. It will also update the latest file to point to this version.
-    pub fn write_object(&self, object: &Object) -> anyhow::Result<()> {
+    pub(crate) fn write_object(&self, object: &Object) -> anyhow::Result<()> {
         let object_dir = self.objects_dir().join(object.id().to_string());
         let version = object.version().value();
         let version_file = object_dir.join(version.to_string());
@@ -121,7 +121,7 @@ impl FilesystemStore {
     }
 
     /// Get the highest checkpoint sequence number available on disk.
-    pub fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
+    pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
         let checkpoint_dir = self.checkpoints_dir();
 
         anyhow::ensure!(
