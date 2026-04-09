@@ -208,9 +208,19 @@ mod simulator {
 
     fn default_fetch_jwks(
         _authority: AuthorityName,
-        _provider: &OIDCProvider,
+        provider: &OIDCProvider,
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         use fastcrypto_zkp::bn254::zk_login::parse_jwks;
+
+        if *provider == OIDCProvider::TestIssuerKey8192 {
+            return parse_jwks(
+                sui_types::zk_login_util::DEFAULT_JWK_BYTES_V2,
+                &OIDCProvider::TestIssuerKey8192,
+                true,
+            )
+            .map_err(|_| SuiErrorKind::JWKRetrievalError.into());
+        }
+
         // Just load a default Twitch jwk for testing.
         parse_jwks(
             sui_types::zk_login_util::DEFAULT_JWK_BYTES,

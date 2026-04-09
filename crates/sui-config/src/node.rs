@@ -745,6 +745,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Apple".to_string(),
         "Slack".to_string(),
         "TestIssuer".to_string(),
+        "TestIssuerKey8192".to_string(),
         "Microsoft".to_string(),
         "KarrierOne".to_string(),
         "Credenza3".to_string(),

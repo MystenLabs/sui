@@ -1,6 +1,7 @@
 ---
 source: crates/sui-swarm-config/tests/snapshot_tests.rs
 expression: network_config
+snapshot_kind: text
 ---
 validator_configs:
   - protocol-key-pair:
@@ -128,6 +129,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -298,6 +300,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -468,6 +471,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -638,6 +642,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -808,6 +813,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -978,6 +984,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
@@ -1148,6 +1155,7 @@ validator_configs:
         - Slack
         - TestEveFrontier
         - TestIssuer
+        - TestIssuerKey8192
         - Threedos
         - Twitch
     authority-overload-config:
