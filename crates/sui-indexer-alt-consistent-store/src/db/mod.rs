@@ -42,6 +42,21 @@ const CHAIN_ID_CF: &str = "$chain_id";
 // Constants for periodic metrics reporting
 const METRICS_ERROR: i64 = -1;
 
+/// Maximum number of times an optimistic-transaction commit will be retried on a conflict
+/// (`Busy` / `TryAgain`) before we give up and surface the error. These read-modify-write paths
+/// run at pipeline startup / restoration boundaries where contention is essentially zero, so a
+/// small bound is plenty.
+const OCC_MAX_RETRIES: usize = 5;
+
+/// Returns whether a RocksDB error represents an optimistic-transaction commit conflict, which
+/// the caller should handle by retrying the transaction.
+fn is_occ_conflict(e: &rocksdb::Error) -> bool {
+    matches!(
+        e.kind(),
+        rocksdb::ErrorKind::Busy | rocksdb::ErrorKind::TryAgain
+    )
+}
+
 /// The concrete RocksDB type used by this crate. We use `OptimisticTransactionDB` so that
 /// individual operations can be composed into transactions with optimistic concurrency control
 /// (via `get_for_update_cf` + `commit`), while still supporting non-transactional writes through
@@ -242,29 +257,49 @@ impl Db {
     /// fail if a restoration is already in-progress for that pipeline at a different watermark, or
     /// if there is already a commit watermark for the pipeline (meaning restoration has completed
     /// and/or indexing has started).
+    ///
+    /// The read-check-write sequence runs inside an `OptimisticTransactionDB` transaction so that
+    /// concurrent callers — and a concurrent `complete_restore` on the same pipeline — are
+    /// serialized: two threads can't both observe "no existing restore" and both write, and we
+    /// can't miss a racing `complete_restore` that sets `watermark_cf[p]` between our guard check
+    /// and our write.
     pub(crate) fn restore_at(&self, pipeline: &str, watermark: Watermark) -> Result<(), Error> {
         self.0.read().expect("poisoned").with(|f| {
             let p = key::encode(pipeline.as_bytes());
+            let encoded = bcs::to_bytes(&watermark)?;
 
-            if f.db.get_pinned_cf(f.watermark_cf, &p)?.is_some() {
-                return Err(Error::RestoreOverwrite);
+            for _ in 0..OCC_MAX_RETRIES {
+                let txn = f.db.transaction();
+
+                // Guard against overwriting a pipeline that has already begun indexing.
+                if txn.get_for_update_cf(f.watermark_cf, &p, true)?.is_some() {
+                    return Err(Error::RestoreOverwrite);
+                }
+
+                // Check for — and acquire a write-lock on — any existing restore marker.
+                if let Some(existing) = txn.get_for_update_cf(f.restore_cf, &p, true)? {
+                    let existing: Watermark = bcs::from_bytes(&existing)
+                        .context("Failed to deserialize existing restore watermark")?;
+
+                    // Read-only path: dropping the transaction rolls it back.
+                    return if existing != watermark {
+                        Err(Error::RestoreInProgress(existing.epoch_hi_inclusive))
+                    } else {
+                        Ok(())
+                    };
+                }
+
+                txn.put_cf(f.restore_cf, &p, &encoded)?;
+                match txn.commit() {
+                    Ok(()) => return Ok(()),
+                    Err(e) if is_occ_conflict(&e) => continue,
+                    Err(e) => return Err(Error::Storage(e)),
+                }
             }
 
-            let Some(existing) = f.db.get_pinned_cf(f.restore_cf, &p)? else {
-                let mut batch = WriteBatch::default();
-                batch.put_cf(f.restore_cf, &p, bcs::to_bytes(&watermark)?);
-                f.db.write_opt(batch, &sync_write_options())?;
-                return Ok(());
-            };
-
-            let existing: Watermark = bcs::from_bytes(&existing)
-                .context("Failed to deserialize existing restore watermark")?;
-
-            if existing != watermark {
-                Err(Error::RestoreInProgress(existing.epoch_hi_inclusive))
-            } else {
-                Ok(())
-            }
+            Err(Error::Internal(anyhow::anyhow!(
+                "restore_at: OCC retry limit exceeded for pipeline {pipeline:?}"
+            )))
         })
     }
 
@@ -322,47 +357,75 @@ impl Db {
 
     /// Record the restoration of `pipeline` as completed by setting its watermark and removing its
     /// restoration state.
+    ///
+    /// The whole promotion — reading the restore marker, enumerating per-partition markers,
+    /// deleting them, and writing the commit watermark — runs inside an
+    /// `OptimisticTransactionDB` transaction, so a racing `restore_at` on the same pipeline is
+    /// serialized against us: whichever side commits first wins, and the loser retries and
+    /// observes the up-to-date state.
+    ///
+    /// **Caller invariant — phantom writes are not protected.** Optimistic concurrency control
+    /// in rust-rocksdb's `Transaction` only tracks keys touched via `get_for_update_cf`; it does
+    /// not detect new rows inserted into a range that our iterator scanned. In particular, a
+    /// concurrent `Db::restore()` call that inserts a `Restored { pipeline, bucket, partition }`
+    /// row *after* our enumeration but *before* our commit will leave an orphaned marker in
+    /// `restore_cf` that survives the delete set. Callers must therefore drain all restore
+    /// workers for `pipeline` before calling `complete_restore`.
     pub(crate) fn complete_restore(&self, pipeline: &str) -> Result<(), Error> {
         self.0.read().expect("poisoned").with(|f| {
             let p = key::encode(pipeline.as_bytes());
 
-            let Some(existing) = f.db.get_cf(f.restore_cf, &p)? else {
-                return Ok(());
-            };
-
-            // Collect every key in `restore_cf` that starts with the encoded pipeline name:
-            // this covers both the `restore_at` marker (at exactly `p`) and the per-partition
-            // markers written by `restore()` (keyed by `Restored { pipeline, .. }`, which
-            // bincode-encodes with the pipeline bytes as its prefix). The transactional
-            // `WriteBatch` used by `OptimisticTransactionDB` does not expose `delete_range_cf`,
-            // so we enumerate the keys up front and delete each one individually.
+            // Compute the prefix upper bound once, outside the retry loop.
             let mut q = p.clone();
             let end: Option<Vec<u8>> = if key::next(&mut q) { Some(q) } else { None };
 
-            let mut opts = rocksdb::ReadOptions::default();
-            opts.set_iterate_lower_bound(p.clone());
-            if let Some(ref e) = end {
-                opts.set_iterate_upper_bound(e.clone());
-            }
-            let mut iter = f.db.raw_iterator_cf_opt(f.restore_cf, opts);
-            iter.seek(&p);
+            for _ in 0..OCC_MAX_RETRIES {
+                let txn = f.db.transaction();
 
-            let mut to_delete: Vec<Vec<u8>> = Vec::new();
-            while iter.valid() {
-                if let Some(k) = iter.key() {
-                    to_delete.push(k.to_vec());
+                // Lock the restore marker. Absence means the restore has already been completed
+                // (or was never started) — nothing to do.
+                let Some(existing) = txn.get_for_update_cf(f.restore_cf, &p, true)? else {
+                    return Ok(());
+                };
+
+                // Enumerate every key in `restore_cf` that starts with the encoded pipeline
+                // name: the `restore_at` marker (at exactly `p`) plus the per-partition markers
+                // written by `restore()`, whose bincode encoding begins with the pipeline bytes.
+                // The transactional `WriteBatch` used by `OptimisticTransactionDB` does not
+                // expose `delete_range_cf`, so we enumerate and delete individually.
+                let mut opts = rocksdb::ReadOptions::default();
+                opts.set_iterate_lower_bound(p.clone());
+                if let Some(ref e) = end {
+                    opts.set_iterate_upper_bound(e.clone());
                 }
-                iter.next();
-            }
-            iter.status()?;
+                let mut iter = txn.raw_iterator_cf_opt(f.restore_cf, opts);
+                iter.seek(&p);
 
-            let mut batch = WriteBatch::default();
-            batch.put_cf(f.watermark_cf, &p, &existing);
-            for k in &to_delete {
-                batch.delete_cf(f.restore_cf, k);
+                let mut to_delete: Vec<Vec<u8>> = Vec::new();
+                while iter.valid() {
+                    if let Some(k) = iter.key() {
+                        to_delete.push(k.to_vec());
+                    }
+                    iter.next();
+                }
+                iter.status()?;
+                drop(iter);
+
+                for k in &to_delete {
+                    txn.delete_cf(f.restore_cf, k)?;
+                }
+                txn.put_cf(f.watermark_cf, &p, &existing)?;
+
+                match txn.commit() {
+                    Ok(()) => return Ok(()),
+                    Err(e) if is_occ_conflict(&e) => continue,
+                    Err(e) => return Err(Error::Storage(e)),
+                }
             }
 
-            Ok(f.db.write_opt(batch, &sync_write_options())?)
+            Err(Error::Internal(anyhow::anyhow!(
+                "complete_restore: OCC retry limit exceeded for pipeline {pipeline:?}"
+            )))
         })
     }
 
