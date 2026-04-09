@@ -306,6 +306,7 @@ jobs:
       - name: consensus benchmark (smoke)
         run: |
           cargo bench --package consensus-core --bench commit_finalizer_bench -- --test
+          echo "smoke test complete"
 
   windows-build:
     needs: [diff, rustfmt, clippy]
