@@ -63,7 +63,9 @@ impl GrpcStreamingClient {
 #[async_trait]
 impl CheckpointStreamingClient for GrpcStreamingClient {
     async fn connect(&mut self) -> Result<CheckpointStream> {
-        let endpoint = Endpoint::from(self.uri.clone()).connect_timeout(self.connection_timeout);
+        let endpoint = Endpoint::from(self.uri.clone())
+            .connect_timeout(self.connection_timeout)
+            .timeout(self.connection_timeout);
 
         let mut client = SubscriptionServiceClient::connect(endpoint)
             .await
@@ -119,6 +121,68 @@ fn wrap_stream(
         })
         .boxed();
     tokio_stream::StreamExt::peekable(stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::SocketAddr;
+    use std::time::Duration;
+
+    use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
+    use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
+    use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
+    use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceServer;
+    use tonic::transport::Server;
+
+    use super::*;
+
+    /// A gRPC server that accepts connections but never responds to
+    /// subscribe_checkpoints, simulating a stalled RPC handshake.
+    struct HangingSubscriptionService;
+
+    #[tonic::async_trait]
+    impl SubscriptionService for HangingSubscriptionService {
+        async fn subscribe_checkpoints(
+            &self,
+            _request: tonic::Request<SubscribeCheckpointsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<
+                BoxStream<'static, std::result::Result<SubscribeCheckpointsResponse, Status>>,
+            >,
+            Status,
+        > {
+            futures::future::pending().await
+        }
+    }
+
+    #[tokio::test]
+    async fn subscribe_checkpoints_times_out_on_stalled_server() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr: SocketAddr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+            Server::builder()
+                .add_service(SubscriptionServiceServer::new(HangingSubscriptionService))
+                .serve_with_incoming(incoming)
+                .await
+                .unwrap();
+        });
+
+        let timeout = Duration::from_millis(200);
+        let uri: Uri = format!("http://{addr}").parse().unwrap();
+        let mut client = GrpcStreamingClient::new(uri, timeout, timeout);
+
+        let start = std::time::Instant::now();
+        let result = client.connect().await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err(), "expected timeout error");
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "connect() took {elapsed:?}, should have timed out in ~200ms"
+        );
+    }
 }
 
 #[cfg(test)]
