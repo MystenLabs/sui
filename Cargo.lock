@@ -12224,19 +12224,9 @@ dependencies = [
 
 [[package]]
 name = "roaring"
-version = "0.10.9"
+version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41589aba99537475bf697f2118357cad1c31590c5a1b9f6d9fc4ad6d07503661"
-dependencies = [
- "bytemuck",
- "byteorder",
-]
-
-[[package]]
-name = "roaring"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f08d6a905edb32d74a5d5737a0c9d7e950c312f3c46cb0ca0a2ca09ea11878a0"
+checksum = "8ba9ce64a8f45d7fc86358410bb1a82e8c987504c0d4900e9141d69a9f26c885"
 dependencies = [
  "bytemuck",
  "byteorder",
@@ -14480,7 +14470,7 @@ dependencies = [
  "rand 0.8.5",
  "rayon",
  "reqwest",
- "roaring 0.10.9",
+ "roaring",
  "rstest",
  "scopeguard",
  "serde",
@@ -14847,7 +14837,7 @@ dependencies = [
  "prost 0.14.1",
  "rand 0.8.5",
  "reqwest",
- "roaring 0.10.9",
+ "roaring",
  "serde",
  "serde_json",
  "simulacrum",
@@ -14987,6 +14977,15 @@ dependencies = [
  "tokio-util 0.7.18",
  "tower 0.5.3",
  "tracing",
+]
+
+[[package]]
+name = "sui-index-dimensions"
+version = "1.72.0"
+dependencies = [
+ "bcs",
+ "move-core-types",
+ "sui-types",
 ]
 
 [[package]]
@@ -15626,16 +15625,23 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.8.3",
+ "bcs",
  "bin-version",
+ "bytes",
  "clap",
+ "futures",
  "move-core-types",
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "prometheus",
+ "prost 0.14.1",
  "prost-types 0.14.1",
+ "protox",
  "rustls",
+ "serde_json",
  "sui-futures",
+ "sui-index-dimensions",
  "sui-kvstore",
  "sui-package-resolver",
  "sui-protocol-config",
@@ -15647,8 +15653,11 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tonic 0.14.5",
+ "tonic-prost",
+ "tonic-prost-build",
  "tonic-reflection",
  "tracing",
+ "walkdir",
 ]
 
 [[package]]
@@ -15657,7 +15666,9 @@ version = "1.72.0"
 dependencies = [
  "anyhow",
  "arc-swap",
+ "async-stream",
  "async-trait",
+ "backoff",
  "base64 0.21.7",
  "bcs",
  "bytes",
@@ -15666,14 +15677,21 @@ dependencies = [
  "gcp_auth",
  "governor",
  "http 1.3.1",
+ "move-core-types",
  "mysten-common",
+ "num_cpus",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
  "rand 0.8.5",
+ "roaring",
+ "rustc-hash 2.1.1",
  "rustls",
+ "scoped-futures",
  "serde",
  "sui-default-config",
+ "sui-futures",
+ "sui-index-dimensions",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
@@ -15714,7 +15732,7 @@ dependencies = [
  "object_store 0.13.0",
  "prost-types 0.14.1",
  "reqwest",
- "roaring 0.10.9",
+ "roaring",
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
@@ -16661,7 +16679,7 @@ dependencies = [
  "bytes",
  "bytestring",
  "itertools 0.14.0",
- "roaring 0.11.2",
+ "roaring",
  "serde",
  "serde_derive",
  "serde_json",
@@ -17216,7 +17234,7 @@ dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
  "rand 0.8.5",
- "roaring 0.10.9",
+ "roaring",
  "rustls-pki-types",
  "schemars 0.8.21",
  "serde",

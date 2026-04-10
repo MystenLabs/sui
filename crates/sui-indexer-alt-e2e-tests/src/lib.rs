@@ -848,8 +848,9 @@ async fn start_archival(
     .await
     .context("Failed to create BigTable indexer")?;
 
+    // Use the BigTable wrapper, not the raw framework indexer, so bitmap
+    // committer background tasks are supervised for the duration of the test.
     let bt_indexer_service = bt_indexer
-        .indexer
         .run()
         .await
         .context("Failed to start BigTable indexer")?;

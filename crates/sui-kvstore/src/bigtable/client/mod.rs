@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod auth_channel;
+pub mod bitmap_query;
 mod channel_pool;
 
 use std::future::Future;
+use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,6 +17,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use gcp_auth::TokenProvider;
+use mysten_common::ZipDebugEqIteratorExt;
 use prometheus::Registry;
 use sui_types::base_types::EpochId;
 use sui_types::base_types::ObjectID;
@@ -417,6 +420,26 @@ impl BigTableClient {
         Ok(!predicate_matched)
     }
 
+    /// Convenience wrapper over [`Self::cas_write_pipeline_watermark_cells`] for the
+    /// committer-watermark cell bundle. Writes the v1 committer fields + BCS v0 + optional
+    /// bitmap `b` cell atomically, guarded by CAS on `chi`. Returns `true` iff the
+    /// checkpoint strictly advanced.
+    pub async fn set_committer_watermark_cells(
+        &mut self,
+        pipeline: &str,
+        watermark: &sui_indexer_alt_framework_store_traits::CommitterWatermark,
+        bucket_start_cp: Option<u64>,
+    ) -> Result<bool> {
+        let cells = tables::watermarks::encode_committer_cells(watermark, bucket_start_cp)?;
+        self.cas_write_pipeline_watermark_cells(
+            pipeline,
+            tables::watermarks::col::CHECKPOINT_HI,
+            watermark.checkpoint_hi_inclusive,
+            cells,
+        )
+        .await
+    }
+
     /// Returns `true` iff the supplied `chain_id` matches the chain_id stored for `pipeline`.
     /// On the first call (no chain_id cell yet) writes `chain_id` and returns `true`. The
     /// chain_id cell is independent of the v1 watermark cells, so this can be invoked before
@@ -483,6 +506,9 @@ impl BigTableClient {
             };
             cells.push((col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)));
         }
+        if let Some(bucket_start_cp) = new.bucket_start_cp {
+            cells.push((col::BUCKET_START_CP, u64_be(bucket_start_cp)));
+        }
         let mutations = build_set_cell_mutations(cells);
         let predicate = column_exists_filter(tables::watermarks::col::SCHEMA_VERSION);
         // Predicate is "row has any schema-version cell" → false_mutations write the new row.
@@ -525,6 +551,25 @@ impl BigTableClient {
             .await?
             .into_inner();
         Ok(response.predicate_matched)
+    }
+
+    /// Read the `bucket_start_cp` column for a bitmap-index pipeline, if
+    /// present. Returns `None` for non-bitmap pipelines and for bitmap
+    /// pipelines that haven't yet written the column.
+    pub async fn get_bitmap_bucket_start_cp(&mut self, pipeline: &str) -> Result<Option<u64>> {
+        let pipeline_key = tables::watermarks::encode_key(pipeline);
+
+        let rows = self
+            .multi_get(tables::watermarks::NAME, vec![pipeline_key.clone()], None)
+            .await?;
+
+        for (key, row) in rows {
+            if key.as_ref() == pipeline_key.as_slice() {
+                return Ok(tables::watermarks::decode_v1(&row)?.and_then(|wm| wm.bucket_start_cp));
+            }
+        }
+
+        Ok(None)
     }
 
     /// Write pre-built entries to BigTable.
@@ -584,110 +629,128 @@ impl BigTableClient {
 
     pub async fn read_rows(
         &mut self,
-        mut request: ReadRowsRequest,
+        request: ReadRowsRequest,
         table_name: &str,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
-        // Zero-copy accumulator for cell values. BigTable streams cell data in chunks,
-        // and prost deserializes each chunk.value as a Bytes view into the gRPC buffer
-        // (no allocation). This enum preserves that zero-copy benefit:
-        //
-        // - Single chunk (common): stays as Bytes, no copies at all
-        // - Multiple chunks (only for values >1MB): copies into Vec<u8>
-        #[derive(Default)]
-        enum CellValue {
-            #[default]
-            Empty,
-            Single(Bytes),
-            Multi(Vec<u8>),
+        use futures::StreamExt;
+        let stream = self.read_rows_stream(request, table_name).await?;
+        futures::pin_mut!(stream);
+        let mut result = vec![];
+        while let Some(row) = stream.next().await {
+            result.push(row?);
         }
+        Ok(result)
+    }
 
-        impl CellValue {
-            fn extend(&mut self, data: Bytes) {
-                *self = match std::mem::take(self) {
-                    CellValue::Empty => CellValue::Single(data),
-                    // Second chunk arrives - must allocate and copy
-                    CellValue::Single(existing) => {
-                        let mut vec = existing.to_vec();
-                        vec.extend_from_slice(&data);
-                        CellValue::Multi(vec)
-                    }
-                    CellValue::Multi(mut vec) => {
-                        vec.extend_from_slice(&data);
-                        CellValue::Multi(vec)
-                    }
-                };
-            }
-
-            fn replace(&mut self, data: Bytes) {
-                *self = CellValue::Single(data);
-            }
-
-            fn into_bytes(self) -> Bytes {
-                match self {
-                    CellValue::Empty => Bytes::new(),
-                    CellValue::Single(b) => b, // zero-copy: return the original Bytes
-                    CellValue::Multi(v) => Bytes::from(v),
-                }
-            }
-        }
-
+    /// Streaming variant of `read_rows`. Returns rows as they arrive from the
+    /// underlying gRPC stream rather than collecting into a Vec.
+    pub async fn read_rows_stream(
+        &mut self,
+        mut request: ReadRowsRequest,
+        table_name: &str,
+    ) -> Result<impl futures::Stream<Item = Result<(Bytes, Vec<(Bytes, Bytes)>)>> + use<>> {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
-        let mut result = vec![];
-        let mut response = self.client.clone().read_rows(request).await?.into_inner();
+        let response = self.client.clone().read_rows(request).await?.into_inner();
+        let metrics = self.metrics.clone();
+        let client_name = self.client_name.clone();
+        let table_name = table_name.to_owned();
 
-        let mut row_key: Option<Bytes> = None;
-        let mut row = vec![];
-        let mut cell_value = CellValue::Empty;
-        let mut cell_name: Option<Bytes> = None;
-        let mut timestamp = 0;
+        Ok(async_stream::try_stream! {
+            // Zero-copy accumulator for cell values. BigTable streams cell data
+            // in chunks, and prost deserializes each chunk.value as a Bytes view
+            // into the gRPC buffer (no allocation).
+            //
+            // - Single chunk (common): stays as Bytes, no copies at all
+            // - Multiple chunks (only for values >1MB): copies into Vec<u8>
+            enum CellValue {
+                Empty,
+                Single(Bytes),
+                Multi(Vec<u8>),
+            }
 
-        while let Some(message) = response.message().await? {
-            self.report_bt_stats(&message.request_stats, table_name);
-            for chunk in message.chunks.into_iter() {
-                // new row check
-                if !chunk.row_key.is_empty() {
-                    row_key = Some(chunk.row_key);
+            impl CellValue {
+                fn extend(&mut self, data: Bytes) {
+                    let prev = std::mem::replace(self, CellValue::Empty);
+                    *self = match prev {
+                        CellValue::Empty => CellValue::Single(data),
+                        CellValue::Single(existing) => {
+                            let mut vec = existing.to_vec();
+                            vec.extend_from_slice(&data);
+                            CellValue::Multi(vec)
+                        }
+                        CellValue::Multi(mut vec) => {
+                            vec.extend_from_slice(&data);
+                            CellValue::Multi(vec)
+                        }
+                    };
                 }
-                match chunk.qualifier {
-                    // new cell started
-                    Some(qualifier) => {
-                        if let Some(name) = cell_name.take() {
-                            row.push((name, cell_value.into_bytes()));
-                            cell_value = CellValue::Empty;
-                        }
-                        cell_name = Some(Bytes::from(qualifier));
-                        timestamp = chunk.timestamp_micros;
-                        cell_value.extend(chunk.value);
-                    }
-                    None => {
-                        if chunk.timestamp_micros == 0 {
-                            cell_value.extend(chunk.value);
-                        } else if chunk.timestamp_micros >= timestamp {
-                            // newer version of cell is available
-                            timestamp = chunk.timestamp_micros;
-                            cell_value.replace(chunk.value);
-                        }
-                    }
+
+                fn replace(&mut self, data: Bytes) {
+                    *self = CellValue::Single(data);
                 }
-                if chunk.row_status.is_some() {
-                    if let Some(RowStatus::CommitRow(_)) = chunk.row_status {
-                        if let Some(name) = cell_name.take() {
-                            row.push((name, cell_value.into_bytes()));
-                        }
-                        if let Some(key) = row_key.take() {
-                            result.push((key, row));
-                        }
+
+                fn into_bytes(self) -> Bytes {
+                    match self {
+                        CellValue::Empty => Bytes::new(),
+                        CellValue::Single(b) => b,
+                        CellValue::Multi(v) => Bytes::from(v),
                     }
-                    row_key = None;
-                    row = vec![];
-                    cell_value = CellValue::Empty;
-                    cell_name = None;
                 }
             }
-        }
-        Ok(result)
+
+            let mut response = response;
+            let mut row_key: Option<Bytes> = None;
+            let mut row = vec![];
+            let mut cell_value = CellValue::Empty;
+            let mut cell_name: Option<Bytes> = None;
+            let mut timestamp = 0i64;
+
+            while let Some(message) = response.message().await? {
+                if let Some(ref metrics) = metrics {
+                    report_bt_stats_inner(metrics, &client_name, &table_name, &message.request_stats);
+                }
+                for chunk in message.chunks.into_iter() {
+                    if !chunk.row_key.is_empty() {
+                        row_key = Some(chunk.row_key);
+                    }
+                    match chunk.qualifier {
+                        Some(qualifier) => {
+                            if let Some(name) = cell_name.take() {
+                                row.push((name, cell_value.into_bytes()));
+                                cell_value = CellValue::Empty;
+                            }
+                            cell_name = Some(Bytes::from(qualifier));
+                            timestamp = chunk.timestamp_micros;
+                            cell_value.extend(chunk.value);
+                        }
+                        None => {
+                            if chunk.timestamp_micros == 0 {
+                                cell_value.extend(chunk.value);
+                            } else if chunk.timestamp_micros >= timestamp {
+                                timestamp = chunk.timestamp_micros;
+                                cell_value.replace(chunk.value);
+                            }
+                        }
+                    }
+                    if chunk.row_status.is_some() {
+                        if let Some(RowStatus::CommitRow(_)) = chunk.row_status {
+                            if let Some(name) = cell_name.take() {
+                                row.push((name, cell_value.into_bytes()));
+                            }
+                            if let Some(key) = row_key.take() {
+                                yield (key, std::mem::take(&mut row));
+                            }
+                        }
+                        row_key = None;
+                        row = vec![];
+                        cell_value = CellValue::Empty;
+                        cell_name = None;
+                    }
+                }
+            }
+        })
     }
 
     pub async fn multi_get(
@@ -743,47 +806,12 @@ impl BigTableClient {
         result
     }
 
-    fn report_bt_stats(&self, request_stats: &Option<RequestStats>, table_name: &str) {
-        let Some(metrics) = &self.metrics else {
-            return;
-        };
-        let labels = [&self.client_name, table_name];
-        if let Some(StatsView::FullReadStatsView(view)) =
-            request_stats.as_ref().and_then(|r| r.stats_view.as_ref())
-        {
-            if let Some(latency) = view
-                .request_latency_stats
-                .as_ref()
-                .and_then(|s| s.frontend_server_latency)
-            {
-                if latency.seconds < 0 || latency.nanos < 0 {
-                    return;
-                }
-                let duration = Duration::new(latency.seconds as u64, latency.nanos as u32);
-                metrics
-                    .kv_bt_chunk_latency_ms
-                    .with_label_values(&labels)
-                    .observe(duration.as_millis() as f64);
-            }
-            if let Some(iteration_stats) = &view.read_iteration_stats {
-                metrics
-                    .kv_bt_chunk_rows_returned_count
-                    .with_label_values(&labels)
-                    .inc_by(iteration_stats.rows_returned_count as u64);
-                metrics
-                    .kv_bt_chunk_rows_seen_count
-                    .with_label_values(&labels)
-                    .inc_by(iteration_stats.rows_seen_count as u64);
-            }
-        }
-    }
-
-    async fn multi_get_internal(
-        &mut self,
+    fn build_multi_get_request(
+        &self,
         table_name: &str,
         keys: Vec<Vec<u8>>,
         filter: Option<RowFilter>,
-    ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
+    ) -> ReadRowsRequest {
         let version_filter = RowFilter {
             filter: Some(Filter::CellsPerColumnLimitFilter(1)),
         };
@@ -795,7 +823,7 @@ impl BigTableClient {
             },
             None => version_filter,
         });
-        let request = ReadRowsRequest {
+        ReadRowsRequest {
             table_name: format!("{}{}", self.table_prefix, table_name),
             rows_limit: keys.len() as i64,
             rows: Some(RowSet {
@@ -805,12 +833,44 @@ impl BigTableClient {
             filter,
             request_stats_view: 2,
             ..ReadRowsRequest::default()
-        };
-        let mut result = vec![];
-        for (key, cells) in self.read_rows(request, table_name).await? {
-            result.push((key, cells));
         }
-        Ok(result)
+    }
+
+    async fn multi_get_internal(
+        &mut self,
+        table_name: &str,
+        keys: Vec<Vec<u8>>,
+        filter: Option<RowFilter>,
+    ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
+        let request = self.build_multi_get_request(table_name, keys, filter);
+        self.read_rows(request, table_name).await
+    }
+
+    /// Build a `RowFilter` restricting the read to the given column qualifiers.
+    /// Intended for callers of streaming APIs that need to construct the filter
+    /// ahead of time (so the returned stream doesn't borrow caller scope).
+    pub fn column_filter(columns: &[&str]) -> RowFilter {
+        let pattern = format!("^({})$", columns.join("|"));
+        RowFilter {
+            filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+        }
+    }
+
+    /// Streaming variant of `multi_get`. Rows arrive on the stream as soon as
+    /// BigTable writes them on the wire, so downstream stages in a pipeline
+    /// can start work before the full batch completes. Emits rows in arrival
+    /// order, which is not necessarily key order — callers that need stable
+    /// ordering should sort at the end.
+    pub async fn multi_get_stream(
+        &mut self,
+        table_name: &str,
+        keys: Vec<Vec<u8>>,
+        filter: Option<RowFilter>,
+    ) -> Result<futures::stream::BoxStream<'static, Result<(Bytes, Vec<(Bytes, Bytes)>)>>> {
+        use futures::StreamExt;
+        let request = self.build_multi_get_request(table_name, keys, filter);
+        let stream = self.read_rows_stream(request, table_name).await?;
+        Ok(stream.boxed())
     }
 
     /// Scan a range of rows with optional start/end keys, limit, and direction.
@@ -890,6 +950,371 @@ impl BigTableClient {
             ..ReadRowsRequest::default()
         };
         self.read_rows(request, table_name).await
+    }
+
+    /// Streaming variant of `range_scan`. Returns rows as they arrive from the
+    /// underlying gRPC stream.
+    async fn range_scan_stream(
+        &mut self,
+        table_name: &str,
+        start_key: Option<Bytes>,
+        end_key: Option<Bytes>,
+        limit: i64,
+        reversed: bool,
+        filter: Option<RowFilter>,
+    ) -> Result<impl futures::Stream<Item = Result<(Bytes, Vec<(Bytes, Bytes)>)>> + use<>> {
+        let range = RowRange {
+            start_key: start_key.map(StartKey::StartKeyClosed),
+            end_key: end_key.map(EndKey::EndKeyClosed),
+        };
+        let version_filter = RowFilter {
+            filter: Some(Filter::CellsPerColumnLimitFilter(1)),
+        };
+        let filter = Some(match filter {
+            Some(filter) => RowFilter {
+                filter: Some(Filter::Chain(Chain {
+                    filters: vec![filter, version_filter],
+                })),
+            },
+            None => version_filter,
+        });
+        let request = ReadRowsRequest {
+            table_name: format!("{}{}", self.table_prefix, table_name),
+            rows_limit: limit,
+            rows: Some(RowSet {
+                row_keys: vec![],
+                row_ranges: vec![range],
+            }),
+            filter,
+            reversed,
+            request_stats_view: 2,
+            ..ReadRowsRequest::default()
+        };
+        self.read_rows_stream(request, table_name).await
+    }
+
+    /// Resolve tx_sequence_numbers to `(TransactionDigest, checkpoint_seq, event_count)`
+    /// via a single `multi_get` on the `tx_seq_digest` table.
+    ///
+    /// Returns a vector parallel to the input: `None` for any tx_seq that has
+    /// no row (e.g. not yet indexed).
+    pub async fn resolve_tx_digests(
+        &mut self,
+        tx_sequence_numbers: &[u64],
+    ) -> Result<Vec<Option<(TransactionDigest, u64, u32)>>> {
+        use crate::tables::tx_seq_digest;
+
+        if tx_sequence_numbers.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let keys: Vec<Vec<u8>> = tx_sequence_numbers
+            .iter()
+            .map(|s| tx_seq_digest::encode_key(*s))
+            .collect();
+
+        let rows = self.multi_get(tx_seq_digest::NAME, keys, None).await?;
+
+        let mut by_seq: std::collections::HashMap<u64, (TransactionDigest, u64, u32)> =
+            std::collections::HashMap::with_capacity(rows.len());
+        for (row_key, cells) in &rows {
+            let tx_seq = tx_seq_digest::decode_key(row_key.as_ref())?;
+            let (digest, cp_seq, event_count) = tx_seq_digest::decode(cells)?;
+            by_seq.insert(tx_seq, (digest, cp_seq, event_count));
+        }
+
+        Ok(tx_sequence_numbers
+            .iter()
+            .map(|s| by_seq.get(s).copied())
+            .collect())
+    }
+
+    /// Streaming variant of `resolve_tx_digests`. Emits each resolved row as
+    /// it arrives from BigTable. Rows missing from the table are silently
+    /// dropped (same contract as the non-streaming version, minus the
+    /// position-preserving `Option` wrapping).
+    pub async fn resolve_tx_digests_stream(
+        &mut self,
+        tx_sequence_numbers: Vec<u64>,
+    ) -> Result<impl futures::Stream<Item = Result<(u64, TransactionDigest, u64, u32)>> + use<>>
+    {
+        use crate::tables::tx_seq_digest;
+
+        let keys: Vec<Vec<u8>> = tx_sequence_numbers
+            .into_iter()
+            .map(tx_seq_digest::encode_key)
+            .collect();
+
+        let rows = self
+            .multi_get_stream(tx_seq_digest::NAME, keys, None)
+            .await?;
+
+        Ok(async_stream::try_stream! {
+            use futures::StreamExt;
+            futures::pin_mut!(rows);
+            while let Some(row) = rows.next().await {
+                let (row_key, cells) = row?;
+                let tx_seq = tx_seq_digest::decode_key(row_key.as_ref())?;
+                let (digest, cp_seq, event_count) = tx_seq_digest::decode(&cells)?;
+                yield (tx_seq, digest, cp_seq, event_count);
+            }
+        })
+    }
+
+    /// Streaming variant of `get_transactions_filtered`. Yields
+    /// `(TransactionDigest, TransactionData)` per row as it arrives.
+    /// Takes an owned `column_filter` so the returned stream does not borrow
+    /// from caller-scoped values (avoids lifetime capture in `impl Stream`).
+    pub async fn get_transactions_stream(
+        &mut self,
+        digests: Vec<TransactionDigest>,
+        column_filter: Option<RowFilter>,
+    ) -> Result<impl futures::Stream<Item = Result<(TransactionDigest, TransactionData)>> + use<>>
+    {
+        let keys = digests
+            .iter()
+            .map(tables::transactions::encode_key)
+            .collect();
+        let filter = column_filter;
+        let rows = self
+            .multi_get_stream(tables::transactions::NAME, keys, filter)
+            .await?;
+
+        Ok(async_stream::try_stream! {
+            use futures::StreamExt;
+            futures::pin_mut!(rows);
+            while let Some(row) = rows.next().await {
+                let (key, cells) = row?;
+                let digest = TransactionDigest::from(
+                    <[u8; 32]>::try_from(key.as_ref())
+                        .context("invalid transaction digest key length")?,
+                );
+                let tx = tables::transactions::decode(digest, &cells)?;
+                yield (digest, tx);
+            }
+        })
+    }
+
+    /// Streaming variant of `get_objects`. Yields each `Object` as it arrives.
+    pub async fn get_objects_stream(
+        &mut self,
+        object_keys: Vec<ObjectKey>,
+    ) -> Result<impl futures::Stream<Item = Result<Object>> + use<>> {
+        let keys: Vec<Vec<u8>> = object_keys.iter().map(Self::raw_object_key).collect();
+        let rows = self
+            .multi_get_stream(tables::objects::NAME, keys, None)
+            .await?;
+
+        Ok(async_stream::try_stream! {
+            use futures::StreamExt;
+            futures::pin_mut!(rows);
+            while let Some(row) = rows.next().await {
+                let (_key, cells) = row?;
+                yield tables::objects::decode(&cells)?;
+            }
+        })
+    }
+
+    /// Range-scan `tx_seq_digest` across `tx_range` (half-open) and yield
+    /// each row's `(tx_seq, digest, cp_seq, event_count)` in strictly
+    /// ascending tx_seq order.
+    ///
+    /// Because the row key is salt-prefixed (see
+    /// `tables::tx_seq_digest::encode_key`), a single range scan would only
+    /// cover one of the `SALT_COUNT` shards. We fan out one `range_scan_stream`
+    /// per salt bucket, interleave arrivals with `select_all`, and yield as
+    /// soon as the expected next tx_seq is available. This relies on the
+    /// density invariant that every tx_seq in range has exactly one row
+    /// (the indexer writes for every tx in every checkpoint), so the next
+    /// row to yield is always `prev + 1`. Rows from fast shards buffer in a
+    /// min-heap while we wait for the slow shard that owns the current
+    /// expected tx_seq. Dropping the returned stream cancels all underlying
+    /// scans.
+    pub async fn scan_tx_seq_digest_stream(
+        &mut self,
+        tx_range: Range<u64>,
+    ) -> Result<impl futures::Stream<Item = Result<(u64, TransactionDigest, u64, u32)>>> {
+        use crate::tables::tx_seq_digest;
+        use std::cmp::Reverse;
+        use std::collections::BinaryHeap;
+
+        // range_scan_stream uses EndKeyClosed, so use an inclusive upper bound
+        // by shifting the exclusive `tx_range.end` down by 1. Within a bucket,
+        // keys stay ordered by tx_seq; only keys written satisfy
+        // `salt == tx_seq % SALT_COUNT`, so each shard's range yields exactly
+        // the rows for its salt in ascending tx_seq order.
+        let inclusive_end = tx_range.end - 1;
+        let mut streams = Vec::with_capacity(tx_seq_digest::SALT_COUNT as usize);
+        for salt in 0..tx_seq_digest::SALT_COUNT {
+            let mut start = Vec::with_capacity(9);
+            start.push(salt as u8);
+            start.extend_from_slice(&tx_range.start.to_be_bytes());
+            let mut end = Vec::with_capacity(9);
+            end.push(salt as u8);
+            end.extend_from_slice(&inclusive_end.to_be_bytes());
+
+            let s = self
+                .range_scan_stream(
+                    tx_seq_digest::NAME,
+                    Some(Bytes::from(start)),
+                    Some(Bytes::from(end)),
+                    // i64::MAX — stream stops when caller drops or range ends.
+                    i64::MAX,
+                    false,
+                    None,
+                )
+                .await?;
+            streams.push(Box::pin(s));
+        }
+        let merged = futures::stream::select_all(streams);
+        let start = tx_range.start;
+
+        Ok(async_stream::try_stream! {
+            use futures::StreamExt;
+
+            let mut heap: BinaryHeap<Reverse<(u64, TransactionDigest, u64, u32)>> =
+                BinaryHeap::new();
+            let mut next_expected = start;
+
+            futures::pin_mut!(merged);
+            while let Some(row) = merged.next().await {
+                let (key, cells) = row?;
+                let tx_seq = tx_seq_digest::decode_key(key.as_ref())?;
+                let (digest, cp_seq, event_count) = tx_seq_digest::decode(&cells)?;
+                heap.push(Reverse((tx_seq, digest, cp_seq, event_count)));
+
+                while heap.peek().is_some_and(|Reverse((ts, ..))| *ts == next_expected) {
+                    let Reverse((ts, d, cp, ec)) = heap.pop().unwrap();
+                    yield (ts, d, cp, ec);
+                    next_expected += 1;
+                }
+            }
+
+            // Tail drain: if the table has any hole in the range (shouldn't
+            // happen under the density invariant, but don't stall forever if
+            // it does), flush whatever's left in ascending order.
+            while let Some(Reverse((ts, d, cp, ec))) = heap.pop() {
+                yield (ts, d, cp, ec);
+            }
+        })
+    }
+
+    /// Resolve inclusive checkpoint bounds to a tx_sequence_number range.
+    ///
+    /// Returns `[start_tx, end_tx)` where `start_tx` is the first tx in
+    /// `start_checkpoint` and `end_tx` is one past the last tx in `end_checkpoint`.
+    /// Reads checkpoint summaries from the checkpoints table.
+    pub async fn checkpoint_to_tx_range(
+        &mut self,
+        checkpoint_range: Range<u64>,
+    ) -> Result<Range<u64>> {
+        use crate::tables::checkpoints;
+
+        let start_checkpoint = checkpoint_range.start;
+        let end_checkpoint = checkpoint_range.end.saturating_sub(1);
+
+        let start_tx = if start_checkpoint == 0 {
+            0u64
+        } else {
+            let prev = self
+                .get_checkpoints_filtered(
+                    &[start_checkpoint - 1],
+                    Some(&[checkpoints::col::SUMMARY]),
+                )
+                .await?;
+            let summary = prev
+                .first()
+                .and_then(|cp| cp.summary.as_ref())
+                .context("checkpoint summary not found for start bound")?;
+            summary.network_total_transactions
+        };
+
+        let end_cps = self
+            .get_checkpoints_filtered(&[end_checkpoint], Some(&[checkpoints::col::SUMMARY]))
+            .await?;
+        let end_summary = end_cps
+            .first()
+            .and_then(|cp| cp.summary.as_ref())
+            .context("checkpoint summary not found for end bound")?;
+        let end_tx = end_summary.network_total_transactions;
+
+        Ok(start_tx..end_tx)
+    }
+
+    /// Resolve `tx_sequence_number`s to fully-populated transaction rows in
+    /// two multi_gets: one against `tx_seq_digest` for the digest+cp_seq, one
+    /// against `transactions` for the row bodies. Tx_seqs that don't resolve
+    /// (not yet indexed) or whose row is missing are silently dropped.
+    ///
+    /// Output ordering is not tx_seq order — callers that need a sorted page
+    /// should sort by `tx_seq` at the end. Callers should pass a bounded
+    /// slice (typically `page_size + 1`) so the multi_gets stay well-sized.
+    pub async fn get_transactions_for_seqs(
+        &mut self,
+        seqs: Vec<u64>,
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<(u64, u64, crate::TransactionData)>> {
+        if seqs.is_empty() {
+            return Ok(Vec::new());
+        }
+        let resolved = self.resolve_tx_digests(&seqs).await?;
+        let mut pairs: Vec<(u64, TransactionDigest, u64)> = Vec::with_capacity(resolved.len());
+        let mut digests: Vec<TransactionDigest> = Vec::with_capacity(resolved.len());
+        for (seq, r) in seqs.iter().zip_debug_eq(resolved) {
+            if let Some((digest, cp_seq, _)) = r {
+                pairs.push((*seq, digest, cp_seq));
+                digests.push(digest);
+            }
+        }
+        if digests.is_empty() {
+            return Ok(Vec::new());
+        }
+        let tx_data_vec = self.get_transactions_filtered(&digests, columns).await?;
+        let mut by_digest: std::collections::HashMap<TransactionDigest, crate::TransactionData> =
+            tx_data_vec.into_iter().map(|tx| (tx.digest, tx)).collect();
+        Ok(pairs
+            .into_iter()
+            .filter_map(|(seq, digest, cp_seq)| {
+                by_digest.remove(&digest).map(|tx| (seq, cp_seq, tx))
+            })
+            .collect())
+    }
+}
+
+fn report_bt_stats_inner(
+    metrics: &KvMetrics,
+    client_name: &str,
+    table_name: &str,
+    request_stats: &Option<RequestStats>,
+) {
+    let labels = [client_name, table_name];
+    if let Some(StatsView::FullReadStatsView(view)) =
+        request_stats.as_ref().and_then(|r| r.stats_view.as_ref())
+    {
+        if let Some(latency) = view
+            .request_latency_stats
+            .as_ref()
+            .and_then(|s| s.frontend_server_latency)
+        {
+            if latency.seconds < 0 || latency.nanos < 0 {
+                return;
+            }
+            let duration = Duration::new(latency.seconds as u64, latency.nanos as u32);
+            metrics
+                .kv_bt_chunk_latency_ms
+                .with_label_values(&labels)
+                .observe(duration.as_millis() as f64);
+        }
+        if let Some(iteration_stats) = &view.read_iteration_stats {
+            metrics
+                .kv_bt_chunk_rows_returned_count
+                .with_label_values(&labels)
+                .inc_by(iteration_stats.rows_returned_count as u64);
+            metrics
+                .kv_bt_chunk_rows_seen_count
+                .with_label_values(&labels)
+                .inc_by(iteration_stats.rows_seen_count as u64);
+        }
     }
 }
 

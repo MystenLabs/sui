@@ -146,6 +146,7 @@ members = [
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
     "crates/sui-kv-rpc",
+    "crates/sui-index-dimensions",
     "crates/sui-kvstore",
     "crates/sui-light-client",
     "crates/sui-macros",
@@ -473,9 +474,10 @@ reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
-roaring = "0.10.6"
+roaring = "0.11.3"
 ron = "0.8.0"
 rstest = "0.16.0"
+rustc-hash = "2"
 rustls = { version = "0.23", default-features = false, features = [
   "std",
   "tls12",
@@ -697,6 +699,7 @@ sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
+sui-index-dimensions = { path = "crates/sui-index-dimensions" }
 sui-kvstore = { path = "crates/sui-kvstore" }
 sui-kv-rpc = { path = "crates/sui-kv-rpc" }
 sui-light-client = { path = "crates/sui-light-client" }
@@ -776,4 +779,3 @@ tonic-reflection = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce6
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
-
