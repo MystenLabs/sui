@@ -41,6 +41,18 @@ fn vector<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "vector.move");
 }
 
+fn const_u64<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_u64_constants.move"); }
+fn const_many_u64<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_many_u64_constants.move"); }
+fn const_address<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_address_constants.move"); }
+fn const_bool<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_bool_constants.move"); }
+fn const_vec_small<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_vector_constant.move"); }
+fn const_vec_256<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_vec_256.move"); }
+fn const_vec_1k<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_vec_1k.move"); }
+fn const_vec_u64<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_vec_u64_128.move"); }
+fn const_vec_addr<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_vec_addr_32.move"); }
+fn const_vec_256_acc<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_vec_256_accumulate.move"); }
+fn const_vec_1k_acc<M: Measurement + 'static>(c: &mut Criterion<M>) { bench(c, "const_bench_load_vec_1k_accumulate.move"); }
+
 criterion_group!(
     name = vm_benches;
     config = wall_time_measurement();
@@ -53,6 +65,17 @@ criterion_group!(
         natives,
         transfers,
         vector,
+        const_u64,
+        const_many_u64,
+        const_address,
+        const_bool,
+        const_vec_small,
+        const_vec_256,
+        const_vec_1k,
+        const_vec_u64,
+        const_vec_addr,
+        const_vec_256_acc,
+        const_vec_1k_acc,
 );
 
 criterion_main!(vm_benches);
