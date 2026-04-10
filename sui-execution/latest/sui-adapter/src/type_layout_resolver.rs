@@ -42,19 +42,26 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         let tag_linkage = ExecutableLinkage::type_linkage(ids, &resolver)?;
         let link_context = tag_linkage.linkage_context()?;
         let data_store = TransactionPackageStore::new(&null_resolver);
-        let Ok(vm) = self.vm.make_vm(data_store, link_context) else {
-            return Err(SuiErrorKind::FailObjectLayout {
-                st: format!("{}", struct_tag),
+        let vm = match self.vm.make_vm(data_store, link_context) {
+            Ok(vm) => vm,
+            Err(e) => {
+                return Err(SuiErrorKind::FailObjectLayout {
+                    st: format!("{struct_tag} [make_vm error: {e:?}]"),
+                }
+                .into());
             }
-            .into());
         };
 
         let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
         match vm.annotated_type_layout(&type_tag) {
             Ok(A::MoveTypeLayout::Struct(s)) => Ok(A::MoveDatatypeLayout::Struct(s)),
             Ok(A::MoveTypeLayout::Enum(e)) => Ok(A::MoveDatatypeLayout::Enum(e)),
-            _ => Err(SuiErrorKind::FailObjectLayout {
-                st: format!("{}", struct_tag),
+            Ok(other) => Err(SuiErrorKind::FailObjectLayout {
+                st: format!("{struct_tag} [unexpected layout kind: {other:?}]"),
+            }
+            .into()),
+            Err(e) => Err(SuiErrorKind::FailObjectLayout {
+                st: format!("{struct_tag} [annotated_type_layout error: {e:?}]"),
             }
             .into()),
         }
