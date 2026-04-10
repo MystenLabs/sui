@@ -550,7 +550,7 @@ impl CheckpointExecutor {
             .checkpoint_store
             .get_checkpoint_contents(&checkpoint.content_digest)
             .expect("db error")
-            .expect("checkpoint contents not found");
+            .unwrap_or_else(|| panic!("checkpoint contents not found for digest {}", checkpoint.content_digest));
 
         let (tx_digests, fx_digests): (Vec<_>, Vec<_>) = checkpoint_contents
             .iter()
@@ -749,7 +749,7 @@ impl CheckpointExecutor {
             .checkpoint_store
             .get_checkpoint_contents(&checkpoint.content_digest)
             .expect("db error")
-            .expect("checkpoint contents not found");
+            .unwrap_or_else(|| panic!("checkpoint contents not found for digest {}", checkpoint.content_digest));
 
         // attempt to load full checkpoint contents in bulk
         // Tolerate db error in case of data corruption.
