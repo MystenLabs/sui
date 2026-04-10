@@ -443,6 +443,7 @@ module deepbook::clob {
         }
     }
 
+    #[allow(deprecated_usage)]
     public fun list_open_orders<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
         account_cap: &AccountCap
@@ -491,6 +492,7 @@ module deepbook::clob {
         return (bid_price, ask_price)
     }
 
+    #[allow(deprecated_usage)]
     /// Enter a price range and return the level2 order depth of all valid prices within this price range in bid side
     /// returns two vectors of u64
     /// The previous is a list of all valid prices
@@ -525,6 +527,7 @@ module deepbook::clob {
         (price_vec, depth_vec)
     }
 
+    #[allow(deprecated_usage)]
     /// Enter a price range and return the level2 order depth of all valid prices within this price range in ask side
     /// returns two vectors of u64
     /// The previous is a list of all valid prices

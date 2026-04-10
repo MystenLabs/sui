@@ -76,7 +76,7 @@ module 0x6::Bench {
     // `natives` benchmark
     //
     fun test_vector_ops<T>(x1: T, x2: T): (T, T) {
-        let v: vector<T> = vector::empty();
+        let v: vector<T> = vector[];
         check(vector::length(&v) == 0, 100);
         vector::push_back(&mut v, x1);
         check(vector::length(&v) == 1, 101);
@@ -97,7 +97,7 @@ module 0x6::Bench {
         test_vector_ops<u128>(1u128, 2u128);
         test_vector_ops<bool>(true, false);
         test_vector_ops<address>(@0x1, @0x2);
-        test_vector_ops<vector<u8>>(vector::empty(), vector::empty());
+        test_vector_ops<vector<u8>>(vector[], vector[]);
     }
 
     public fun natives() {

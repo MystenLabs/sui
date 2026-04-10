@@ -306,7 +306,7 @@ module deepbook::clob_v2 {
 
     #[deprecated(note = b"Creating new account is deprecated in Deepbook V2. Please use Deepbook V3.")]
     public fun create_account(_ctx: &mut TxContext): AccountCap {
-        
+
         abort 1337
     }
 
@@ -317,7 +317,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ) {
-        
+
         abort 1337
     }
 
@@ -333,7 +333,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ) {
-        
+
         abort 1337
     }
 
@@ -345,7 +345,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ): Pool<BaseAsset, QuoteAsset> {
-        
+
         abort 1337
     }
 
@@ -361,7 +361,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ) : Pool<BaseAsset, QuoteAsset> {
-        
+
         abort 1337
     }
 
@@ -377,7 +377,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ) : (Pool<BaseAsset, QuoteAsset>, PoolOwnerCap) {
-        
+
         abort 1337
     }
 
@@ -387,7 +387,7 @@ module deepbook::clob_v2 {
         _coin: Coin<BaseAsset>,
         _account_cap: &AccountCap
     ) {
-        
+
         abort 1337
     }
 
@@ -397,7 +397,7 @@ module deepbook::clob_v2 {
         _coin: Coin<QuoteAsset>,
         _account_cap: &AccountCap
     ) {
-        
+
         abort 1337
     }
 
@@ -443,7 +443,7 @@ module deepbook::clob_v2 {
         _clock: &Clock,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
-        
+
         abort 1337
     }
 
@@ -459,7 +459,7 @@ module deepbook::clob_v2 {
         _clock: &Clock,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        
+
         abort 1337
     }
 
@@ -474,7 +474,7 @@ module deepbook::clob_v2 {
         _quote_coin: Coin<QuoteAsset>,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
-       
+
        abort 1337
     }
 
@@ -488,7 +488,7 @@ module deepbook::clob_v2 {
         _quote_coin: Coin<QuoteAsset>,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        
+
         abort 1337
     }
 
@@ -505,7 +505,7 @@ module deepbook::clob_v2 {
         _clock: &Clock,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
-        
+
         abort 1337
     }
 
@@ -521,7 +521,7 @@ module deepbook::clob_v2 {
         _clock: &Clock,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        
+
         abort 1337
     }
 
@@ -544,7 +544,7 @@ module deepbook::clob_v2 {
         _account_cap: &AccountCap,
         _ctx: &mut TxContext
     ): (u64, u64, bool, u64) {
-        
+
         abort 1337
     }
 
@@ -567,7 +567,7 @@ module deepbook::clob_v2 {
         _account_cap: &AccountCap,
         _ctx: &mut TxContext
     ): (u64, u64, bool, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        
+
         abort 1337
     }
 
@@ -844,6 +844,7 @@ module deepbook::clob_v2 {
         };
     }
 
+    #[allow(deprecated_usage)]
     public fun list_open_orders<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
         account_cap: &AccountCap
@@ -909,6 +910,7 @@ module deepbook::clob_v2 {
         return (bid_price, ask_price)
     }
 
+    #[allow(deprecated_usage)]
     /// Enter a price range and return the level2 order depth of all valid prices within this price range in bid side
     /// returns two vectors of u64
     /// The previous is a list of all valid prices
@@ -951,6 +953,7 @@ module deepbook::clob_v2 {
         (price_vec, depth_vec)
     }
 
+    #[allow(deprecated_usage)]
     /// Enter a price range and return the level2 order depth of all valid prices within this price range in ask side
     /// returns two vectors of u64
     /// The previous is a list of all valid prices
@@ -1035,7 +1038,7 @@ module deepbook::clob_v2 {
     public fun matched_order_metadata_info<BaseAsset, QuoteAsset>(
         _matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
     ) : ( ID, u64, bool, address, address, u64, u64, u64, u64) {
-        
+
         abort 1337
     }
 

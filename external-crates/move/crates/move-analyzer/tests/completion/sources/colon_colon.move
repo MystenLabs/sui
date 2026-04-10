@@ -23,15 +23,15 @@ module Completion::colon_colon {
         Completion::dot::shadowed();
         0xCAFE::colon_colon::SomeEnum::SomeVariant;
         option::none<u64>();
-        std::hash::sha2_256(vector::empty());
+        std::hash::sha2_256(vector[]);
         CC::SomeEnum::SomeVariant;
         CC::sbar(42, s);
         SE::SomeVariant;
         SE::SomePositionalVariant(7, 42);
         SE::SomeNamedVariant{name1: 7, name2: 42};
 
-        let _struct_vec: vector<CC::SomeStruct> = vector::empty();
-        let _prim_vec: vector<u64> = vector::empty();
+        let _struct_vec: vector<CC::SomeStruct> = vector[];
+        let _prim_vec: vector<u64> = vector[];
     }
 
     public fun single_ident() {

@@ -17,7 +17,7 @@ module 0x7::Collection {
 
     public fun make_collection<T>(): Collection<T> {
         Collection {
-            items: vector::empty(),
+            items: vector[],
             owner: @0x2,
         }
     }

@@ -29,7 +29,7 @@ module Test::M1_12345678912345678901234567890 {
 module Test::M1_1234567891234567890123456789012345678912345678901234567 {
 
     public entry fun create_n_(n: u64, ctx: &mut TxContext) {
-        let mut v: vector<UID> = vector::empty();
+        let mut v: vector<UID> = vector[];
         let mut i = 0;
         while (i < n) {
             let id = object::new(ctx);
