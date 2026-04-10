@@ -850,7 +850,7 @@ module deepbook::clob_v2 {
         account_cap: &AccountCap
     ): vector<Order> {
         let owner = account_owner(account_cap);
-        let mut open_orders = vector::empty<Order>();
+        let mut open_orders = vector[];
         if (!usr_open_orders_exist(pool, owner)) {
             return open_orders
         };
@@ -910,7 +910,6 @@ module deepbook::clob_v2 {
         return (bid_price, ask_price)
     }
 
-    #[allow(deprecated_usage)]
     /// Enter a price range and return the level2 order depth of all valid prices within this price range in bid side
     /// returns two vectors of u64
     /// The previous is a list of all valid prices
@@ -921,8 +920,8 @@ module deepbook::clob_v2 {
         mut price_high: u64,
         clock: &Clock
     ): (vector<u64>, vector<u64>) {
-        let mut price_vec = vector::empty<u64>();
-        let mut depth_vec = vector::empty<u64>();
+        let mut price_vec = vector[];
+        let mut depth_vec = vector[];
         if (critbit::is_empty(&pool.bids)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.bids);
         let (price_high_, _) = critbit::max_leaf(&pool.bids);
@@ -953,7 +952,6 @@ module deepbook::clob_v2 {
         (price_vec, depth_vec)
     }
 
-    #[allow(deprecated_usage)]
     /// Enter a price range and return the level2 order depth of all valid prices within this price range in ask side
     /// returns two vectors of u64
     /// The previous is a list of all valid prices
@@ -964,8 +962,8 @@ module deepbook::clob_v2 {
         mut price_high: u64,
         clock: &Clock
     ): (vector<u64>, vector<u64>) {
-        let mut price_vec = vector::empty<u64>();
-        let mut depth_vec = vector::empty<u64>();
+        let mut price_vec = vector[];
+        let mut depth_vec = vector[];
         if (critbit::is_empty(&pool.asks)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
 
