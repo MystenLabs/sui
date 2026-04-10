@@ -30,7 +30,7 @@ Programmable transaction blocks have the following metadata fields:
 
 - **Authenticator:** A cryptographic signature paired with a public key. The public key must verify the signature and match the sender address.
 
-- **Expiration:** Optional. An epoch number that acts as a deadline. Validators only accept the transaction if the current epoch is less than or equal to the expiration epoch. If the deadline passes, the transaction never executes. By default, transactions do not expire. Transactions that use address balance gas payments must use ValidDuring expiration with both a minimum and maximum epoch specified.
+- **Expiration:** Optional. An epoch number that acts as a deadline. Validators only accept the transaction if the current epoch is less than or equal to the expiration epoch. If the deadline passes, the transaction never executes. By default, transactions do not expire. Transactions that use address balance gas payments must use `ValidDuring` expiration with both a minimum and maximum epoch specified.
 
 System transactions do not have gas input, price, or budget, and do not have an expiration. The sender address of a system transaction is always `0x0`.
 
