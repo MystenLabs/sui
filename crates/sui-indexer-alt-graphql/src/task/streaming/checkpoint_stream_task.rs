@@ -245,17 +245,19 @@ fn process_transaction(
 
     let digest = *effects.transaction_digest();
 
-    let contents = NativeTransactionContents::ExecutedTransaction {
-        effects: Box::new(effects),
-        events,
-        transaction_data: Box::new(transaction_data),
-        signatures,
-        balance_changes: proto.balance_changes.clone(),
-        proto_effects: proto.effects.clone(),
-        proto_transaction: proto.transaction.clone(),
-        timestamp_ms: Some(timestamp_ms),
-        cp_sequence_number: Some(cp_sequence_number),
-    };
+    let contents = NativeTransactionContents::ExecutedTransaction(
+        sui_indexer_alt_reader::kv_loader::ExecutedTransactionData {
+            effects: Box::new(effects),
+            events,
+            transaction_data: Box::new(transaction_data),
+            signatures,
+            balance_changes: proto.balance_changes.clone(),
+            proto_effects: proto.effects.clone(),
+            proto_transaction: proto.transaction.clone(),
+            timestamp_ms: Some(timestamp_ms),
+            cp_sequence_number: Some(cp_sequence_number),
+        },
+    );
 
     Ok(ProcessedTransaction {
         tx_sequence_number,
