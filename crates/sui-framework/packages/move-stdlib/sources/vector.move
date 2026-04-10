@@ -536,11 +536,11 @@ public macro fun skip_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector
 // === Deprecated ===
 
 #[bytecode_instruction]
-#[deprecated(note = b"Use 'vector[]' instead")]
+#[deprecated(note = b"Use `vector[]` literal instead")]
 /// Create an empty vector.
 public native fun empty<Element>(): vector<Element>;
 
-#[deprecated(note = b"Use 'vector[e]' instead")]
+#[deprecated(note = b"Use `vector[e]` literal instead")]
 /// Return an vector of size one containing element `e`.
 public fun singleton<Element>(e: Element): vector<Element> {
     vector[e]
