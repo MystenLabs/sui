@@ -10,5 +10,5 @@ fun foo(v: vector<u64>): u64 {
 
 #[test]
 fun test() {
-    foo(vector[]);
+    foo(vector::empty());
 }
