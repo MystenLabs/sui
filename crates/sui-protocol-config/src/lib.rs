@@ -28,7 +28,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 121;
+const MAX_PROTOCOL_VERSION: u64 = 122;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -316,6 +316,7 @@ const TESTNET_USDC: &str =
 // Version 119: Enable the new VM.
 // Version 120: Disallow unused jump tables
 // Version 121: Re-enable defer_unpaid_amplification (devnet + testnet).
+// Version 122: Framework update: vector::empty is deprecated.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4797,6 +4798,7 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .early_return_receive_object_mismatched_type = true;
                 }
+                122 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
