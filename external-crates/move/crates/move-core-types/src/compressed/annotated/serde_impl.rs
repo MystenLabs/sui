@@ -6,6 +6,7 @@ use super::layout::*;
 use crate::annotated_value::{
     MoveStruct as AnnStruct, MoveValue as AnnValue, MoveVariant as AnnVariant,
 };
+use crate::compressed::VariantTag;
 use crate::identifier::Identifier;
 use crate::{VARIANT_TAG_MAX_VALUE, account_address::AccountAddress, u256};
 use serde::{Deserialize, de::Error as _};
@@ -110,7 +111,7 @@ impl<'d> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'_> {
 struct CompressedEnumFieldVisitor<'a>(&'a MoveEnumLayout);
 
 impl<'d> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'_> {
-    type Value = (Identifier, u16, Vec<(Identifier, AnnValue)>);
+    type Value = (Identifier, VariantTag, Vec<(Identifier, AnnValue)>);
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("Enum")
@@ -121,7 +122,7 @@ impl<'d> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'_> {
         A: serde::de::SeqAccess<'d>,
     {
         let tag = match seq.next_element::<u8>()? {
-            Some(tag) if tag as u64 <= VARIANT_TAG_MAX_VALUE => tag as u16,
+            Some(tag) if tag as u64 <= VARIANT_TAG_MAX_VALUE => tag as VariantTag,
             Some(tag) => return Err(A::Error::invalid_length(tag as usize, &self)),
             None => return Err(A::Error::invalid_length(0, &self)),
         };

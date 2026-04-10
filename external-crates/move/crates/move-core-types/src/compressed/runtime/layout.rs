@@ -2,16 +2,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compressed::{LayoutRef, LeafType, ResolvedRef, Shared};
+use crate::compressed::{LayoutRef, LeafType, ResolvedRef};
 use crate::runtime_value as RV;
 use anyhow::Result as AResult;
 use indexmap::IndexSet;
 use std::fmt;
+use std::sync::Arc;
 
 pub use crate::compressed::LayoutHandle;
 
-static EMPTY_POOL: std::sync::LazyLock<Shared<MoveTypeLayoutPool>> =
-    std::sync::LazyLock::new(|| Shared::from(Vec::<MoveTypeNode>::new()));
+static EMPTY_POOL: std::sync::LazyLock<Arc<MoveTypeLayoutPool>> =
+    std::sync::LazyLock::new(|| Arc::from(Vec::<MoveTypeNode>::new()));
 
 // =============================================================================
 // Type declarations
@@ -50,9 +51,14 @@ pub(crate) type MoveTypeLayoutPool = [MoveTypeNode];
 
 /// A deduplicated, flat representation of a [`RV::MoveTypeLayout`] tree.
 /// Cloning is cheap — the pool is shared via `Arc`.
+///
+/// NOTE: `Eq`/`PartialEq`/`Hash` are intentionally not derived. Two layouts
+/// representing the same type may have different pool orderings (node
+/// permutations), so structural equality on the raw fields would produce
+/// false negatives. Compare by inflating to tree form or by comparing views.
 #[derive(Debug, Clone)]
 pub struct MoveTypeLayout {
-    pool: Shared<MoveTypeLayoutPool>,
+    pool: Arc<MoveTypeLayoutPool>,
     root: LayoutRef,
 }
 
@@ -103,7 +109,7 @@ pub enum VariantLayout {
 /// The field layout of a struct or enum variant, as a view into a shared pool.
 #[derive(Debug, Clone)]
 pub struct MoveFieldsLayout {
-    pool: Shared<MoveTypeLayoutPool>,
+    pool: Arc<MoveTypeLayoutPool>,
     fields: Box<[LayoutRef]>,
 }
 
@@ -185,7 +191,7 @@ impl TryFrom<&RV::MoveTypeLayout> for MoveTypeLayout {
     type Error = anyhow::Error;
     fn try_from(layout: &RV::MoveTypeLayout) -> Result<Self, Self::Error> {
         let mut b = MoveTypeLayoutBuilder::new();
-        let root = b.intern_tree(layout)?;
+        let root = b.from_tree(layout)?;
         Ok(b.build(root))
     }
 }
@@ -378,7 +384,7 @@ impl MoveTypeLayoutBuilder {
         }
     }
 
-    fn intern(&mut self, node: MoveTypeNode) -> AResult<LayoutHandle> {
+    fn add_node(&mut self, node: MoveTypeNode) -> AResult<LayoutHandle> {
         let (idx, _) = self.nodes.insert_full(node);
         Ok(LayoutHandle(LayoutRef::index(idx)?))
     }
@@ -412,12 +418,12 @@ impl MoveTypeLayoutBuilder {
     }
 
     pub fn vector(&mut self, element: LayoutHandle) -> AResult<LayoutHandle> {
-        self.intern(MoveTypeNode::Vector(element.0))
+        self.add_node(MoveTypeNode::Vector(element.0))
     }
 
     pub fn struct_layout(&mut self, fields: &[LayoutHandle]) -> AResult<LayoutHandle> {
         let field_refs: Box<[LayoutRef]> = fields.iter().map(|h| h.0).collect();
-        self.intern(MoveTypeNode::Struct(MoveStructNode { fields: field_refs }))
+        self.add_node(MoveTypeNode::Struct(MoveStructNode { fields: field_refs }))
     }
 
     pub fn enum_layout(&mut self, variants: &[Option<&[LayoutHandle]>]) -> AResult<LayoutHandle> {
@@ -425,7 +431,7 @@ impl MoveTypeLayoutBuilder {
             .iter()
             .map(|v| v.map(|fields| fields.iter().map(|h| h.0).collect()))
             .collect();
-        self.intern(MoveTypeNode::Enum(MoveEnumNode {
+        self.add_node(MoveTypeNode::Enum(MoveEnumNode {
             variants: variant_refs,
         }))
     }
@@ -433,7 +439,7 @@ impl MoveTypeLayoutBuilder {
     /// Recursively intern a tree-based layout, deduplicating shared subtrees.
     /// Tree-based enum layouts always have known variants, so all variants
     /// are wrapped in `Some`.
-    pub fn intern_tree(&mut self, layout: &RV::MoveTypeLayout) -> AResult<LayoutHandle> {
+    pub fn from_tree(&mut self, layout: &RV::MoveTypeLayout) -> AResult<LayoutHandle> {
         Ok(match layout {
             RV::MoveTypeLayout::Bool => self.bool(),
             RV::MoveTypeLayout::U8 => self.u8(),
@@ -445,14 +451,14 @@ impl MoveTypeLayoutBuilder {
             RV::MoveTypeLayout::Address => self.address(),
             RV::MoveTypeLayout::Signer => self.signer(),
             RV::MoveTypeLayout::Vector(inner) => {
-                let inner_h = self.intern_tree(inner)?;
+                let inner_h = self.from_tree(inner)?;
                 self.vector(inner_h)?
             }
             RV::MoveTypeLayout::Struct(s) => {
                 let fields = s
                     .fields()
                     .iter()
-                    .map(|f| self.intern_tree(f))
+                    .map(|f| self.from_tree(f))
                     .collect::<AResult<Vec<_>>>()?;
                 self.struct_layout(&fields)?
             }
@@ -461,7 +467,7 @@ impl MoveTypeLayoutBuilder {
                     e.0.iter()
                         .map(|v| {
                             v.iter()
-                                .map(|f| self.intern_tree(f))
+                                .map(|f| self.from_tree(f))
                                 .collect::<AResult<Vec<_>>>()
                         })
                         .collect::<AResult<Vec<_>>>()?;
@@ -476,7 +482,7 @@ impl MoveTypeLayoutBuilder {
     pub fn build(self, root: LayoutHandle) -> MoveTypeLayout {
         let nodes: Vec<MoveTypeNode> = self.nodes.into_iter().collect();
         MoveTypeLayout {
-            pool: Shared::from(nodes),
+            pool: Arc::from(nodes),
             root: root.0,
         }
     }
@@ -509,7 +515,7 @@ fn leaf_to_layout_view(leaf: LeafType) -> MoveLayoutView {
 /// Resolve a [`LayoutRef`] against the pool into a [`MoveLayoutView`].
 ///
 /// Panics if the reference points to an out-of-bounds table index.
-fn resolve_ref(pool: &Shared<MoveTypeLayoutPool>, r: LayoutRef) -> MoveLayoutView {
+fn resolve_ref(pool: &Arc<MoveTypeLayoutPool>, r: LayoutRef) -> MoveLayoutView {
     match r.resolve() {
         ResolvedRef::Leaf(leaf) => leaf_to_layout_view(leaf),
         ResolvedRef::Index(idx) => match &pool[idx] {
