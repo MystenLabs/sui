@@ -2614,7 +2614,14 @@ impl AuthorityState {
         )
         .expect("Creating an executor should not fail here");
 
-        let (kind, signer, gas_data) = transaction.execution_parts();
+        let (mut kind, signer, gas_data) = transaction.execution_parts();
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            signer,
+            &mut kind,
+            None,
+        );
         let early_execution_error = get_early_execution_error(
             &transaction.digest(),
             &checked_input_objects,
@@ -2650,7 +2657,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             kind,
-            None, // rewritten_inputs - not needed for dev_inspect
+            rewritten_inputs.clone(),
             signer,
             tx_digest,
             dev_inspect,
@@ -2686,7 +2693,7 @@ impl AuthorityState {
                     cloned_gas,
                     retry_gas_status,
                     cloned_kind,
-                    None, // rewritten_inputs
+                    rewritten_inputs,
                     signer,
                     tx_digest,
                     dev_inspect,
@@ -2925,6 +2932,14 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
+        let mut transaction_kind = transaction_kind;
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            sender,
+            &mut transaction_kind,
+            None,
+        );
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
             protocol_config,
@@ -2940,7 +2955,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             transaction_kind,
-            None, // rewritten_inputs - not needed for dev_inspect
+            rewritten_inputs,
             sender,
             transaction_digest,
             skip_checks,
