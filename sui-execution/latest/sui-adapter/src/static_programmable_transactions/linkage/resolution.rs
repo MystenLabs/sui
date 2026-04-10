@@ -5,7 +5,7 @@ use crate::data_store::PackageStore;
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, btree_map::Entry},
+    collections::{BTreeMap, BTreeSet, VecDeque, btree_map::Entry},
     sync::Arc,
 };
 use sui_types::{
@@ -44,6 +44,15 @@ impl ResolutionTable {
     /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
     /// Since this linkage analysis should only be used for types, all packages are resolved
     /// "upwards" (i.e., later versions of the package are preferred).
+    ///
+    /// This walks the dependency graph transitively: for every package added, its full
+    /// `linkage_table` is also pulled in, and each of those deps is walked in turn. A
+    /// single-level walk is not sufficient, because a package's `linkage_table` only
+    /// captures the transitive closure as of *its own* publish time — if any of its deps
+    /// have since been upgraded (and the upgraded versions introduced new deps of their
+    /// own), loading a module from the upgraded dep would hit a missing address. Walking
+    /// transitively ensures the resulting linkage covers every package the Move VM may
+    /// touch while verifying the target package and its transitive deps.
     pub fn add_type_linkages_to_table<I>(
         &mut self,
         ids: I,
@@ -53,13 +62,23 @@ impl ResolutionTable {
         I: IntoIterator,
         I::Item: Borrow<ObjectID>,
     {
-        for id in ids {
-            let pkg = get_package(id.borrow(), store)?;
-            let transitive_deps = pkg.linkage_table().values().copied().map(ObjectID::from);
-            let package_id = pkg.version_id().into();
+        let mut worklist: VecDeque<ObjectID> =
+            ids.into_iter().map(|id| *id.borrow()).collect();
+        let mut visited: BTreeSet<ObjectID> = BTreeSet::new();
+
+        while let Some(id) = worklist.pop_front() {
+            if !visited.insert(id) {
+                continue;
+            }
+            let pkg = get_package(&id, store)?;
+            let package_id: ObjectID = pkg.version_id().into();
             add_and_unify(&package_id, store, self, VersionConstraint::at_least)?;
-            for object_id in transitive_deps {
-                add_and_unify(&object_id, store, self, VersionConstraint::at_least)?;
+
+            for dep_id in pkg.linkage_table().values().copied().map(ObjectID::from) {
+                add_and_unify(&dep_id, store, self, VersionConstraint::at_least)?;
+                if !visited.contains(&dep_id) {
+                    worklist.push_back(dep_id);
+                }
             }
         }
         Ok(())
