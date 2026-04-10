@@ -108,20 +108,20 @@ impl TransactionFilter {
     /// Check that checkpoint bounds don't contradict each other across fields.
     /// e.g. `afterCheckpoint: 100` with `atCheckpoint: 5` is inconsistent.
     fn checkpoint_bounds_are_valid(&self) -> bool {
-        if let (Some(after), Some(at)) = (self.after_checkpoint, self.at_checkpoint) {
-            if after >= at {
-                return false;
-            }
+        if let (Some(after), Some(at)) = (self.after_checkpoint, self.at_checkpoint)
+            && after >= at
+        {
+            return false;
         }
-        if let (Some(before), Some(at)) = (self.before_checkpoint, self.at_checkpoint) {
-            if before <= at {
-                return false;
-            }
+        if let (Some(before), Some(at)) = (self.before_checkpoint, self.at_checkpoint)
+            && before <= at
+        {
+            return false;
         }
-        if let (Some(after), Some(before)) = (self.after_checkpoint, self.before_checkpoint) {
-            if after >= before {
-                return false;
-            }
+        if let (Some(after), Some(before)) = (self.after_checkpoint, self.before_checkpoint)
+            && after >= before
+        {
+            return false;
         }
         true
     }
@@ -190,6 +190,10 @@ impl TransactionFilter {
             return false;
         }
 
+        // TODO: Verify consistency with the indexed path (tx_affected_addresses).
+        // The indexed path includes sender, gas payer, and recipients from
+        // all_changed_objects(). Confirm this matches for sponsored transactions
+        // and edge cases (deleted/wrapped object owners).
         if let Some(affected_address) = &self.affected_address {
             let in_changed_objects = effects.all_changed_objects().iter().any(|(_, owner, _)| {
                 owner
@@ -197,11 +201,15 @@ impl TransactionFilter {
                     .is_ok_and(|addr| SuiAddress::from(addr) == *affected_address)
             });
             let is_sender = SuiAddress::from(data.sender()) == *affected_address;
-            if !in_changed_objects && !is_sender {
+            let is_payer = SuiAddress::from(data.gas_data().owner) == *affected_address;
+            if !in_changed_objects && !is_sender && !is_payer {
                 return false;
             }
         }
 
+        // TODO: Verify consistency with the indexed path (tx_affected_objects).
+        // The indexed path uses object_changes() which includes deleted/wrapped
+        // objects, while all_changed_objects() excludes them.
         if let Some(affected_object) = &self.affected_object {
             let has_match = effects
                 .all_changed_objects()

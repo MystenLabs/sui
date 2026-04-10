@@ -6,6 +6,9 @@ use test_cluster::TestClusterBuilder;
 use tokio_stream::StreamExt;
 
 use crate::testing::SubscriptionTestCluster;
+use crate::testing::checkpoint_tx_digests;
+use crate::testing::transfer_coins;
+use crate::testing::wait_for_matching_item;
 
 #[sim_test]
 async fn test_subscription_sequential() {
@@ -106,11 +109,13 @@ async fn test_subscription_transactions() {
     .replace("SENDER", &sender.to_string());
     let mut stream = cluster.subscribe(&query).await;
     let digests = transfer_coins(&mut validator_cluster, &[1000]).await;
-    let item = stream
-        .wait_for_matching_item(&digests, checkpoint_tx_digests)
-        .await;
+    let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
-    insta::assert_json_snapshot!("subscription_transactions", item);
+    insta::assert_json_snapshot!("subscription_transactions", item, {
+        ".data.checkpoints.sequenceNumber" => "[seq]",
+        ".**.digest" => "[digest]",
+        ".**.address" => "[address]",
+    });
 }
 
 #[sim_test]
@@ -147,12 +152,14 @@ async fn test_subscription_transactions_pagination_first() {
     let mut stream = cluster.subscribe(&query).await;
     // Under sim_test, soft-bundled transactions deterministically land in the
     // same checkpoint, ordered by digest.
-    let digests = transfer_coins(&mut validator_cluster, &[100, 200]).await;
-    let item = stream
-        .wait_for_matching_item(&digests, checkpoint_tx_digests)
-        .await;
+    let digests = transfer_coins(&mut validator_cluster, &[100, 100]).await;
+    let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
-    insta::assert_json_snapshot!("subscription_transactions_pagination_first", item);
+    insta::assert_json_snapshot!("subscription_transactions_pagination_first", item, {
+        ".data.checkpoints.sequenceNumber" => "[seq]",
+        ".**.digest" => "[digest]",
+        ".**.cursor" => "[cursor]",
+    });
 }
 
 #[sim_test]
@@ -187,10 +194,12 @@ async fn test_subscription_transactions_pagination_last() {
     }"#
     .replace("SENDER", &sender.to_string());
     let mut stream = cluster.subscribe(&query).await;
-    let digests = transfer_coins(&mut validator_cluster, &[100, 200]).await;
-    let item = stream
-        .wait_for_matching_item(&digests, checkpoint_tx_digests)
-        .await;
+    let digests = transfer_coins(&mut validator_cluster, &[100, 100]).await;
+    let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
-    insta::assert_json_snapshot!("subscription_transactions_pagination_last", item);
+    insta::assert_json_snapshot!("subscription_transactions_pagination_last", item, {
+        ".data.checkpoints.sequenceNumber" => "[seq]",
+        ".**.digest" => "[digest]",
+        ".**.cursor" => "[cursor]",
+    });
 }

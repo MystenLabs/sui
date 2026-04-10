@@ -143,29 +143,6 @@ impl SubscriptionTestCluster {
             msg["payload"].clone()
         }))
     }
-
-    /// Wait for a subscription item where `find_digests` extracts digests from the
-    /// response and any of them match the expected digests.
-    pub async fn wait_for_matching_item(
-        &mut self,
-        digests: &[String],
-        find_digests: impl Fn(&Value) -> Vec<&str>,
-    ) -> Value {
-        timeout(Duration::from_secs(60), async {
-            loop {
-                let item = self.next_item().await;
-                let found = find_digests(&item);
-                if found
-                    .iter()
-                    .any(|d| digests.iter().any(|expected| expected == d))
-                {
-                    return item;
-                }
-            }
-        })
-        .await
-        .unwrap()
-    }
 }
 
 /// Execute SUI transfers as a soft bundle and return Base58-encoded digests.
@@ -203,16 +180,33 @@ pub async fn transfer_coins(
         .collect()
 }
 
+/// Wait for a stream item where `find_digests` extracts digests and any match the expected ones.
+pub async fn wait_for_matching_item(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+    digests: &[String],
+    find_digests: impl Fn(&Value) -> Vec<&str>,
+) -> Value {
+    tokio::time::timeout(Duration::from_secs(60), async {
+        loop {
+            let item = stream.next().await.expect("Stream ended");
+            let found = find_digests(&item);
+            if found
+                .iter()
+                .any(|d| digests.iter().any(|expected| expected == d))
+            {
+                return item;
+            }
+        }
+    })
+    .await
+    .expect("Timed out waiting for matching item")
+}
+
 /// Extract digests from a checkpoint subscription response.
 /// Path: data.checkpoints.transactions.nodes[].digest
 pub fn checkpoint_tx_digests(item: &Value) -> Vec<&str> {
     item["data"]["checkpoints"]["transactions"]["nodes"]
         .as_array()
-        .map(|nodes| {
-            nodes
-                .iter()
-                .filter_map(|n| n["digest"].as_str())
-                .collect()
-        })
+        .map(|nodes| nodes.iter().filter_map(|n| n["digest"].as_str()).collect())
         .unwrap_or_default()
 }
