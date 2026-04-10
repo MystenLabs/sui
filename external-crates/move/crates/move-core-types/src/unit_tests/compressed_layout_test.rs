@@ -183,7 +183,7 @@ fn annotated_struct_roundtrip() {
 }
 
 #[test]
-fn annotated_string_dedup() {
+fn annotated_nested_struct_roundtrip() {
     let layout = A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout {
         type_: test_struct_tag("Outer"),
         fields: vec![
@@ -268,11 +268,11 @@ fn annotated_shared_subtree_dedup() {
 }
 
 // =============================================================================
-// View type tests
+// Layout navigation tests
 // =============================================================================
 
 #[test]
-fn runtime_view_inflate_matches_owned() {
+fn runtime_view_inflate_matches_layout_inflate() {
     let inner = R::MoveStructLayout::new(vec![R::MoveTypeLayout::U64, R::MoveTypeLayout::Bool]);
     let layout = R::MoveTypeLayout::Struct(Box::new(R::MoveStructLayout::new(vec![
         R::MoveTypeLayout::Struct(Box::new(inner.clone())),
@@ -321,21 +321,21 @@ fn runtime_enum_view_navigate() {
     assert_eq!(ev.variant_count(), 2);
 
     let v0 = match ev.variant(0).unwrap() {
-        RC::VariantFieldView::Known(fv) => fv,
-        RC::VariantFieldView::Unknown => panic!("expected known variant"),
+        RC::VariantLayout::Known(fv) => fv,
+        RC::VariantLayout::Unknown => panic!("expected known variant"),
     };
     assert_eq!(v0.field_count(), 1);
     assert_eq!(format!("{}", v0.field(0).unwrap().inflate().unwrap()), "u8");
 
     let v1 = match ev.variant(1).unwrap() {
-        RC::VariantFieldView::Known(fv) => fv,
-        RC::VariantFieldView::Unknown => panic!("expected known variant"),
+        RC::VariantLayout::Known(fv) => fv,
+        RC::VariantLayout::Unknown => panic!("expected known variant"),
     };
     assert_eq!(v1.field_count(), 2);
 }
 
 #[test]
-fn runtime_view_at_navigation() {
+fn runtime_vector_element_navigate() {
     let inner = R::MoveStructLayout::new(vec![R::MoveTypeLayout::U64, R::MoveTypeLayout::Bool]);
     let layout = R::MoveTypeLayout::Vector(Box::new(R::MoveTypeLayout::Struct(Box::new(inner))));
     let compressed = RC::MoveTypeLayout::try_from(&layout).unwrap();
@@ -345,7 +345,7 @@ fn runtime_view_at_navigation() {
         RC::MoveLayoutView::Vector(vv) => vv,
         _ => panic!("expected vector"),
     };
-    let fv = match vv.element() {
+    let fv = match vv.as_view() {
         RC::MoveLayoutView::Struct(fv) => fv,
         _ => panic!("expected struct"),
     };
@@ -402,24 +402,165 @@ fn annotated_view_enum_navigate() {
     };
     assert_eq!(ev.type_().name.as_str(), "MyEnum");
 
-    let (name, vfv) = ev.variant_by_tag(1).unwrap();
-    assert_eq!(name.as_str(), "Some");
-    let fv = match vfv {
-        AC::VariantFieldView::Known(fv) => fv,
-        AC::VariantFieldView::Unknown => panic!("expected known variant"),
-    };
+    let vl = ev.variant_by_tag(1).unwrap();
+    assert_eq!(vl.name().as_str(), "Some");
+    let fv = vl.fields().expect("expected known variant");
     assert_eq!(fv.field_count(), 1);
-    let (field_name, field_view) = fv.field(0).unwrap();
+    let (field_name, field_layout) = fv.field(0).unwrap();
     assert_eq!(field_name.as_str(), "value");
-    assert_eq!(field_view.inflate().unwrap(), A::MoveTypeLayout::U64);
+    assert_eq!(field_layout.inflate().unwrap(), A::MoveTypeLayout::U64);
 
-    let (name, vfv) = ev.variant_by_tag(0).unwrap();
-    assert_eq!(name.as_str(), "None");
-    let fv = match vfv {
-        AC::VariantFieldView::Known(fv) => fv,
-        AC::VariantFieldView::Unknown => panic!("expected known variant"),
-    };
+    let vl = ev.variant_by_tag(0).unwrap();
+    assert_eq!(vl.name().as_str(), "None");
+    let fv = vl.fields().expect("expected known variant");
     assert_eq!(fv.field_count(), 0);
+}
+
+// =============================================================================
+// Unknown variant tests
+// =============================================================================
+
+#[test]
+fn runtime_unknown_variant_inflate_fails() {
+    let mut b = RC::MoveTypeLayoutBuilder::new();
+    let u64_h = b.u64();
+    // variant 0: known (one u64 field), variant 1: unknown
+    let handle = b.enum_layout(&[Some(&[u64_h]), None]).unwrap();
+    let layout = b.build(handle);
+
+    let err = layout.inflate().unwrap_err();
+    assert!(
+        err.to_string().contains("unknown variant"),
+        "expected unknown variant error, got: {err}"
+    );
+}
+
+#[test]
+fn runtime_unknown_variant_deser_fails() {
+    let mut b = RC::MoveTypeLayoutBuilder::new();
+    let u64_h = b.u64();
+    // variant 0: known, variant 1: unknown
+    let handle = b.enum_layout(&[Some(&[u64_h]), None]).unwrap();
+    let layout = b.build(handle);
+
+    // BCS for variant tag=1, followed by a u64
+    let blob = bcs::to_bytes(&(1u8, (42u64,))).unwrap();
+    let err = bcs::from_bytes_seed(&layout, &blob)
+        .map(|_: R::MoveValue| ())
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("layout unknown"),
+        "expected layout unknown error, got: {err}"
+    );
+}
+
+#[test]
+fn runtime_unknown_variant_known_variant_deser_succeeds() {
+    let mut b = RC::MoveTypeLayoutBuilder::new();
+    let u64_h = b.u64();
+    // variant 0: known (one u64 field), variant 1: unknown
+    let handle = b.enum_layout(&[Some(&[u64_h]), None]).unwrap();
+    let layout = b.build(handle);
+
+    // BCS for variant tag=0 with one u64 field — should succeed
+    let blob = bcs::to_bytes(&(0u8, (999u64,))).unwrap();
+    let result: R::MoveValue = bcs::from_bytes_seed(&layout, &blob).unwrap();
+    assert_eq!(
+        result,
+        R::MoveValue::Variant(R::MoveVariant {
+            tag: 0,
+            fields: vec![R::MoveValue::U64(999)],
+        })
+    );
+}
+
+#[test]
+fn annotated_unknown_variant_inflate_fails() {
+    let mut b = AC::MoveTypeLayoutBuilder::new();
+    let u64_h = b.u64();
+    let some_name = Identifier::new("Some").unwrap();
+    let none_name = Identifier::new("None").unwrap();
+    let value_name = Identifier::new("value").unwrap();
+    // variant 0 "Some": known, variant 1 "None": unknown
+    let handle = b
+        .enum_layout(
+            &test_struct_tag("MyEnum"),
+            &[
+                (&some_name, 0, Some(&[(&value_name, u64_h)])),
+                (&none_name, 1, None),
+            ],
+        )
+        .unwrap();
+    let layout = b.build(handle);
+
+    let err = layout.inflate().unwrap_err();
+    assert!(
+        err.to_string().contains("unknown variant"),
+        "expected unknown variant error, got: {err}"
+    );
+}
+
+#[test]
+fn annotated_unknown_variant_deser_fails() {
+    let mut b = AC::MoveTypeLayoutBuilder::new();
+    let u64_h = b.u64();
+    let some_name = Identifier::new("Some").unwrap();
+    let none_name = Identifier::new("None").unwrap();
+    let value_name = Identifier::new("value").unwrap();
+    // variant 0 "Some": known, variant 1 "None": unknown
+    let handle = b
+        .enum_layout(
+            &test_struct_tag("MyEnum"),
+            &[
+                (&some_name, 0, Some(&[(&value_name, u64_h)])),
+                (&none_name, 1, None),
+            ],
+        )
+        .unwrap();
+    let layout = b.build(handle);
+
+    // BCS for variant tag=1 (the unknown variant)
+    let blob = bcs::to_bytes(&(1u8, ())).unwrap();
+    let err = bcs::from_bytes_seed(&layout, &blob)
+        .map(|_: A::MoveValue| ())
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("layout unknown"),
+        "expected layout unknown error, got: {err}"
+    );
+}
+
+#[test]
+fn annotated_unknown_variant_known_variant_deser_succeeds() {
+    let mut b = AC::MoveTypeLayoutBuilder::new();
+    let u64_h = b.u64();
+    let some_name = Identifier::new("Some").unwrap();
+    let none_name = Identifier::new("None").unwrap();
+    let value_name = Identifier::new("value").unwrap();
+    // variant 0 "Some": known, variant 1 "None": unknown
+    let handle = b
+        .enum_layout(
+            &test_struct_tag("MyEnum"),
+            &[
+                (&some_name, 0, Some(&[(&value_name, u64_h)])),
+                (&none_name, 1, None),
+            ],
+        )
+        .unwrap();
+    let layout = b.build(handle);
+
+    // BCS for variant tag=0 with one u64 field — should succeed
+    let blob = bcs::to_bytes(&(0u8, (42u64,))).unwrap();
+    let result: A::MoveValue = bcs::from_bytes_seed(&layout, &blob).unwrap();
+    match result {
+        A::MoveValue::Variant(v) => {
+            assert_eq!(v.variant_name.as_str(), "Some");
+            assert_eq!(v.tag, 0);
+            assert_eq!(v.fields.len(), 1);
+            assert_eq!(v.fields[0].1, A::MoveValue::U64(42));
+        }
+        _ => panic!("expected variant"),
+    }
 }
 
 // =============================================================================
@@ -432,8 +573,7 @@ fn assert_runtime_deser_parity(layout: &R::MoveTypeLayout, value: &R::MoveValue)
     let blob = value.simple_serialize().unwrap();
     let tree_result = R::MoveValue::simple_deserialize(&blob, layout).unwrap();
     let compressed = RC::MoveTypeLayout::try_from(layout).unwrap();
-    let compressed_result: R::MoveValue =
-        bcs::from_bytes_seed(compressed.as_view(), &blob).unwrap();
+    let compressed_result: R::MoveValue = bcs::from_bytes_seed(&compressed, &blob).unwrap();
     assert_eq!(
         tree_result, compressed_result,
         "tree vs compressed mismatch for layout {:?}",
@@ -444,9 +584,9 @@ fn assert_runtime_deser_parity(layout: &R::MoveTypeLayout, value: &R::MoveValue)
 /// Helper: given an annotated layout and its BCS blob, assert that tree-based
 /// and compressed deserialization produce the exact same annotated MoveValue.
 fn assert_annotated_deser_parity(layout: &A::MoveTypeLayout, blob: &[u8]) {
-    let tree_result = A::MoveValue::simple_deserialize(blob, layout).unwrap();
+    let tree_result: A::MoveValue = bcs::from_bytes_seed(layout, blob).unwrap();
     let compressed = AC::MoveTypeLayout::try_from(layout).unwrap();
-    let compressed_result: A::MoveValue = bcs::from_bytes_seed(compressed.as_view(), blob).unwrap();
+    let compressed_result: A::MoveValue = bcs::from_bytes_seed(&compressed, blob).unwrap();
     assert_eq!(
         tree_result, compressed_result,
         "tree vs compressed mismatch for annotated layout"
