@@ -13,4 +13,12 @@ module emit_test_event::emit_test_event {
             value: 1,
         });
     }
+
+    public fun emit_many(n: u64) {
+        let mut i = 0;
+        while (i < n) {
+            event::emit(TestEvent { value: i });
+            i = i + 1;
+        }
+    }
 }

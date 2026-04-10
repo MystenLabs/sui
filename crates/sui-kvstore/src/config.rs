@@ -8,6 +8,7 @@ use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::{self as framework};
 use tracing::warn;
 
@@ -185,6 +186,75 @@ impl PipelineIngestionLayer {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+pub struct SequentialLayer {
+    // Framework sequential surface — mirrors the fields actually read by
+    // `sui_indexer_alt_framework::pipeline::sequential`.
+    pub committer: Option<CommitterLayer>,
+    pub ingestion: Option<PipelineIngestionLayer>,
+    pub fanout: Option<ConcurrencyConfig>,
+    pub min_eager_rows: Option<usize>,
+    pub max_pending_rows: Option<usize>,
+    pub max_batch_checkpoints: Option<usize>,
+    pub processor_channel_size: Option<usize>,
+    /// Depth of the queue between the committer's accumulator and writer tasks — see
+    /// `sui_indexer_alt_framework::pipeline::sequential::SequentialConfig::pipeline_depth`.
+    /// Default (unspecified) is the framework default of 1.
+    pub pipeline_depth: Option<usize>,
+
+    // sui-kvstore extensions: the sequential framework doesn't expose a
+    // `write_concurrency` of its own, and in-handler BigTable writes aren't
+    // part of the framework's surface — these fill those gaps for handlers
+    // (e.g. `BitmapIndexHandler`) that drive parallel RPCs themselves.
+    /// Parallelism of in-handler BigTable writes.
+    pub write_concurrency: Option<usize>,
+    /// Maximum rows per in-handler BigTable write RPC. Same semantic as
+    /// `ConcurrentLayer::max_rows`.
+    pub max_rows: Option<usize>,
+    /// Per-pipeline rate limit (rows per second). Overrides the default
+    /// `IndexerConfig::max_rows_per_second` when set.
+    pub max_rows_per_second: Option<u64>,
+    /// Backfill-mode switch for bitmap handlers: when `true`, `commit()` only
+    /// writes buckets sealed by the current watermark and suppresses the
+    /// watermark write entirely on commits that seal nothing. Cuts BigTable
+    /// writes ~2x at steady state by not persisting partial-bucket states
+    /// that will be overwritten once more bits arrive. Do NOT enable at
+    /// tip-of-chain — readers rely on partial-bucket writes to see fresh
+    /// data. Default: `false`.
+    pub flush_only_when_sealed: Option<bool>,
+    /// Capacity of the bounded channel from the framework's writer task to
+    /// the bitmap handler's merge loop. Primary backpressure gate: when
+    /// full, `commit()` blocks and the framework's writer blocks, which
+    /// cascades up to the adaptive ingestion controller. Default:
+    /// `num_cpus / 2`.
+    pub commit_channel_capacity: Option<usize>,
+}
+
+impl SequentialLayer {
+    pub fn finish(self, base: ConcurrentConfig) -> SequentialConfig {
+        let committer = if let Some(c) = self.committer {
+            c.finish(base.committer)
+        } else {
+            base.committer
+        };
+        SequentialConfig {
+            committer,
+            ingestion: if let Some(i) = self.ingestion {
+                i.finish(base.ingestion)
+            } else {
+                base.ingestion
+            },
+            fanout: self.fanout.or(base.fanout),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
+            max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
+            max_batch_checkpoints: self.max_batch_checkpoints,
+            processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
+            pipeline_depth: self.pipeline_depth,
+        }
+    }
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
 pub struct PipelineLayer {
     pub checkpoints: ConcurrentLayer,
     pub checkpoints_by_digest: ConcurrentLayer,
@@ -197,6 +267,9 @@ pub struct PipelineLayer {
     pub packages_by_id: ConcurrentLayer,
     pub packages_by_checkpoint: ConcurrentLayer,
     pub system_packages: ConcurrentLayer,
+    pub tx_seq_digest: ConcurrentLayer,
+    pub transaction_bitmap_index: SequentialLayer,
+    pub event_bitmap_index: SequentialLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be

@@ -19,13 +19,16 @@ use crate::bigtable::proto::bigtable::v2::{Mutation, mutation};
 pub mod checkpoints;
 pub mod checkpoints_by_digest;
 pub mod epochs;
+pub mod event_bitmap_index;
 pub mod objects;
 pub mod packages;
 pub mod packages_by_checkpoint;
 pub mod packages_by_id;
 pub mod protocol_configs;
 pub mod system_packages;
+pub mod transaction_bitmap_index;
 pub mod transactions;
+pub mod tx_seq_digest;
 pub mod watermarks;
 
 /// Column family name used by all tables.

@@ -146,6 +146,7 @@ members = [
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
     "crates/sui-kv-rpc",
+    "crates/sui-index-dimensions",
     "crates/sui-kvstore",
     "crates/sui-light-client",
     "crates/sui-macros",
@@ -376,6 +377,7 @@ futures-core = "0.3.21"
 git-version = "0.3.5"
 governor = "0.6.0"
 gcp_auth = "0.12.6"
+hashbrown = "0.15"
 hdrhistogram = "7.5.1"
 headers = "0.4.0"
 hex = "0.4.3"
@@ -473,9 +475,11 @@ reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
-roaring = "0.10.6"
+roaring = "0.11.3"
 ron = "0.8.0"
 rstest = "0.16.0"
+rust-version = "1.56.1"
+rustc-hash = "2"
 rustls = { version = "0.23", default-features = false, features = [
   "std",
   "tls12",
@@ -697,6 +701,7 @@ sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
+sui-index-dimensions = { path = "crates/sui-index-dimensions" }
 sui-kvstore = { path = "crates/sui-kvstore" }
 sui-kv-rpc = { path = "crates/sui-kv-rpc" }
 sui-light-client = { path = "crates/sui-light-client" }

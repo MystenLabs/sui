@@ -45,27 +45,37 @@ use sui_types::transaction::Transaction;
 
 pub use crate::bigtable::client::BigTableClient;
 pub use crate::bigtable::client::PoolConfig;
+pub use crate::bigtable::client::bitmap_query::BitmapIndexSpec;
+pub use crate::bigtable::client::bitmap_query::BitmapQuery;
 pub use crate::bigtable::store::BigTableConnection;
 pub use crate::bigtable::store::BigTableStore;
 pub use crate::handlers::BigTableHandler;
+pub use crate::handlers::BitmapIndexHandler;
+pub use crate::handlers::BitmapIndexProcessor;
 pub use crate::handlers::CheckpointsByDigestPipeline;
 pub use crate::handlers::CheckpointsPipeline;
 pub use crate::handlers::EpochEndPipeline;
 pub use crate::handlers::EpochStartPipeline;
+pub use crate::handlers::EventBitmapProcessor;
 pub use crate::handlers::ObjectsPipeline;
 pub use crate::handlers::PackagesByCheckpointPipeline;
 pub use crate::handlers::PackagesByIdPipeline;
 pub use crate::handlers::PackagesPipeline;
 pub use crate::handlers::ProtocolConfigsPipeline;
 pub use crate::handlers::SystemPackagesPipeline;
+pub use crate::handlers::TransactionBitmapProcessor;
 pub use crate::handlers::TransactionsPipeline;
+pub use crate::handlers::TxSeqDigestPipeline;
 pub use config::BigtablePoolLayer;
 pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
 pub use config::IndexerConfig;
 pub use config::IngestionConfig;
 pub use config::PipelineLayer;
+pub use config::SequentialLayer;
 
+pub const BITMAP_INDEX_PIPELINE: &str =
+    <BitmapIndexHandler<TransactionBitmapProcessor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const CHECKPOINTS_PIPELINE: &str =
     <BigTableHandler<CheckpointsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const CHECKPOINTS_BY_DIGEST_PIPELINE: &str =
@@ -88,9 +98,14 @@ pub const PACKAGES_BY_CHECKPOINT_PIPELINE: &str =
     <BigTableHandler<PackagesByCheckpointPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const SYSTEM_PACKAGES_PIPELINE: &str =
     <BigTableHandler<SystemPackagesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const TX_SEQ_DIGEST_PIPELINE: &str =
+    <BigTableHandler<TxSeqDigestPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const EVENT_BITMAP_INDEX_PIPELINE: &str =
+    <BitmapIndexHandler<EventBitmapProcessor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 
 /// All pipeline names registered by the indexer.
-pub const ALL_PIPELINE_NAMES: [&str; 11] = [
+pub const ALL_PIPELINE_NAMES: [&str; 14] = [
+    BITMAP_INDEX_PIPELINE,
     CHECKPOINTS_PIPELINE,
     CHECKPOINTS_BY_DIGEST_PIPELINE,
     TRANSACTIONS_PIPELINE,
@@ -102,6 +117,8 @@ pub const ALL_PIPELINE_NAMES: [&str; 11] = [
     PACKAGES_BY_ID_PIPELINE,
     PACKAGES_BY_CHECKPOINT_PIPELINE,
     SYSTEM_PACKAGES_PIPELINE,
+    TX_SEQ_DIGEST_PIPELINE,
+    EVENT_BITMAP_INDEX_PIPELINE,
 ];
 
 static WRITE_LEGACY_DATA: OnceLock<bool> = OnceLock::new();
@@ -325,12 +342,12 @@ impl BigTableIndexer {
         let base_rps = config.max_rows_per_second;
 
         fn build_rate_limiter(
-            layer: &ConcurrentLayer,
+            layer_rps: Option<u64>,
             base_rps: Option<u64>,
             global: &Option<Arc<RateLimiter>>,
         ) -> Arc<CompositeRateLimiter> {
             let mut limiters = Vec::new();
-            if let Some(rps) = layer.max_rows_per_second.or(base_rps) {
+            if let Some(rps) = layer_rps.or(base_rps) {
                 limiters.push(RateLimiter::new(rps));
             }
             if let Some(g) = global {
@@ -346,11 +363,30 @@ impl BigTableIndexer {
         };
 
         indexer
+            .sequential_pipeline(
+                BitmapIndexHandler::new(
+                    TransactionBitmapProcessor,
+                    &pipeline.transaction_bitmap_index,
+                    base.committer.write_concurrency,
+                    build_rate_limiter(
+                        pipeline.transaction_bitmap_index.max_rows_per_second,
+                        base_rps,
+                        &global,
+                    ),
+                    Some(registry),
+                ),
+                pipeline
+                    .transaction_bitmap_index
+                    .clone()
+                    .finish(base.clone()),
+            )
+            .await?;
+        indexer
             .concurrent_pipeline(
                 BigTableHandler::new(
                     CheckpointsPipeline,
                     &pipeline.checkpoints,
-                    build_rate_limiter(&pipeline.checkpoints, base_rps, &global),
+                    build_rate_limiter(pipeline.checkpoints.max_rows_per_second, base_rps, &global),
                 ),
                 pipeline.checkpoints.finish(base.clone()),
             )
@@ -360,7 +396,11 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     CheckpointsByDigestPipeline,
                     &pipeline.checkpoints_by_digest,
-                    build_rate_limiter(&pipeline.checkpoints_by_digest, base_rps, &global),
+                    build_rate_limiter(
+                        pipeline.checkpoints_by_digest.max_rows_per_second,
+                        base_rps,
+                        &global,
+                    ),
                 ),
                 pipeline.checkpoints_by_digest.finish(base.clone()),
             )
@@ -370,7 +410,11 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     TransactionsPipeline,
                     &pipeline.transactions,
-                    build_rate_limiter(&pipeline.transactions, base_rps, &global),
+                    build_rate_limiter(
+                        pipeline.transactions.max_rows_per_second,
+                        base_rps,
+                        &global,
+                    ),
                 ),
                 pipeline.transactions.finish(base.clone()),
             )
@@ -380,7 +424,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     ObjectsPipeline,
                     &pipeline.objects,
-                    build_rate_limiter(&pipeline.objects, base_rps, &global),
+                    build_rate_limiter(pipeline.objects.max_rows_per_second, base_rps, &global),
                 ),
                 pipeline.objects.finish(base.clone()),
             )
@@ -390,7 +434,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     EpochStartPipeline,
                     &pipeline.epoch_start,
-                    build_rate_limiter(&pipeline.epoch_start, base_rps, &global),
+                    build_rate_limiter(pipeline.epoch_start.max_rows_per_second, base_rps, &global),
                 ),
                 pipeline.epoch_start.finish(base.clone()),
             )
@@ -400,7 +444,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     EpochEndPipeline,
                     &pipeline.epoch_end,
-                    build_rate_limiter(&pipeline.epoch_end, base_rps, &global),
+                    build_rate_limiter(pipeline.epoch_end.max_rows_per_second, base_rps, &global),
                 ),
                 pipeline.epoch_end.finish(base.clone()),
             )
@@ -410,7 +454,11 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     ProtocolConfigsPipeline(chain),
                     &pipeline.protocol_configs,
-                    build_rate_limiter(&pipeline.protocol_configs, base_rps, &global),
+                    build_rate_limiter(
+                        pipeline.protocol_configs.max_rows_per_second,
+                        base_rps,
+                        &global,
+                    ),
                 ),
                 pipeline.protocol_configs.finish(base.clone()),
             )
@@ -420,7 +468,7 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     PackagesPipeline,
                     &pipeline.packages,
-                    build_rate_limiter(&pipeline.packages, base_rps, &global),
+                    build_rate_limiter(pipeline.packages.max_rows_per_second, base_rps, &global),
                 ),
                 pipeline.packages.finish(base.clone()),
             )
@@ -430,7 +478,11 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     PackagesByIdPipeline,
                     &pipeline.packages_by_id,
-                    build_rate_limiter(&pipeline.packages_by_id, base_rps, &global),
+                    build_rate_limiter(
+                        pipeline.packages_by_id.max_rows_per_second,
+                        base_rps,
+                        &global,
+                    ),
                 ),
                 pipeline.packages_by_id.finish(base.clone()),
             )
@@ -440,7 +492,11 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     PackagesByCheckpointPipeline,
                     &pipeline.packages_by_checkpoint,
-                    build_rate_limiter(&pipeline.packages_by_checkpoint, base_rps, &global),
+                    build_rate_limiter(
+                        pipeline.packages_by_checkpoint.max_rows_per_second,
+                        base_rps,
+                        &global,
+                    ),
                 ),
                 pipeline.packages_by_checkpoint.finish(base.clone()),
             )
@@ -450,9 +506,43 @@ impl BigTableIndexer {
                 BigTableHandler::new(
                     SystemPackagesPipeline,
                     &pipeline.system_packages,
-                    build_rate_limiter(&pipeline.system_packages, base_rps, &global),
+                    build_rate_limiter(
+                        pipeline.system_packages.max_rows_per_second,
+                        base_rps,
+                        &global,
+                    ),
                 ),
                 pipeline.system_packages.finish(base.clone()),
+            )
+            .await?;
+        indexer
+            .concurrent_pipeline(
+                BigTableHandler::new(
+                    TxSeqDigestPipeline,
+                    &pipeline.tx_seq_digest,
+                    build_rate_limiter(
+                        pipeline.tx_seq_digest.max_rows_per_second,
+                        base_rps,
+                        &global,
+                    ),
+                ),
+                pipeline.tx_seq_digest.finish(base.clone()),
+            )
+            .await?;
+        indexer
+            .sequential_pipeline(
+                BitmapIndexHandler::new(
+                    EventBitmapProcessor,
+                    &pipeline.event_bitmap_index,
+                    base.committer.write_concurrency,
+                    build_rate_limiter(
+                        pipeline.event_bitmap_index.max_rows_per_second,
+                        base_rps,
+                        &global,
+                    ),
+                    Some(registry),
+                ),
+                pipeline.event_bitmap_index.clone().finish(base.clone()),
             )
             .await?;
 

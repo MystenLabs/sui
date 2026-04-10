@@ -25,7 +25,11 @@ use tonic::transport::ServerTlsConfig;
 use tracing::error;
 
 mod package_store;
+pub mod proto;
 mod v2;
+mod v2alpha;
+
+use proto::sui::rpc::kv::v2alpha::list_service_server::ListServiceServer;
 
 use package_store::BigTablePackageStore;
 
@@ -171,7 +175,8 @@ impl KvRpcServer {
             .layer(CallbackLayer::new(RpcMetricsMakeCallbackHandler::new(
                 Arc::new(RpcMetrics::new(&registry)),
             )))
-            .add_service(LedgerServiceServer::new(self));
+            .add_service(LedgerServiceServer::new(self.clone()))
+            .add_service(ListServiceServer::new(self));
 
         if config.enable_reflection {
             let reflection_v1 = tonic_reflection::server::Builder::configure()
@@ -184,6 +189,9 @@ impl KvRpcServer {
                 .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
                 )
+                .register_encoded_file_descriptor_set(
+                    crate::proto::sui::rpc::kv::v2alpha::FILE_DESCRIPTOR_SET,
+                )
                 .build_v1()?;
             let reflection_v1alpha = tonic_reflection::server::Builder::configure()
                 .register_encoded_file_descriptor_set(
@@ -194,6 +202,9 @@ impl KvRpcServer {
                 )
                 .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
+                )
+                .register_encoded_file_descriptor_set(
+                    crate::proto::sui::rpc::kv::v2alpha::FILE_DESCRIPTOR_SET,
                 )
                 .build_v1alpha()?;
             router = router

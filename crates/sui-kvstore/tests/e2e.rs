@@ -24,6 +24,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
+use sui_kvstore::BitmapQuery;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
@@ -681,6 +682,85 @@ async fn test_indexer_e2e() -> Result<()> {
     assert!(partial.summary.is_some(), "summary should be present");
     assert!(partial.signatures.is_none(), "signatures should be absent");
     assert!(partial.contents.is_none(), "contents should be absent");
+
+    // -- tx_seq_digest pipeline: verify tx_sequence_number resolution --
+    // Every transaction we indexed should be resolvable via resolve_tx_digests.
+    // Gather all tx_sequence_numbers from the checkpoints we saw.
+    let mut all_tx_seqs: Vec<u64> = Vec::new();
+    for cp in &checkpoints {
+        let summary = cp.summary.as_ref().unwrap();
+        let contents = cp.contents.as_ref().unwrap();
+        let tx_lo = summary.network_total_transactions - contents.size() as u64;
+        for i in 0..contents.size() {
+            all_tx_seqs.push(tx_lo + i as u64);
+        }
+    }
+    let resolved_digests = harness
+        .bigtable_client()
+        .resolve_tx_digests(&all_tx_seqs)
+        .await?;
+    // Every tx_seq from these checkpoints should resolve
+    assert_eq!(
+        resolved_digests.len(),
+        all_tx_seqs.len(),
+        "all tx_sequence_numbers should resolve to digests"
+    );
+    assert!(
+        resolved_digests.iter().all(|r| r.is_some()),
+        "every tx_seq should resolve to Some((digest, cp_seq, event_count))"
+    );
+    // The resolved digests should include our known transfer digests
+    let resolved_digest_set: std::collections::HashSet<_> = resolved_digests
+        .iter()
+        .filter_map(|r| r.map(|(d, _, _)| d))
+        .collect();
+    for d in &tx_digests {
+        assert!(
+            resolved_digest_set.contains(d),
+            "tx_seq_digest pipeline should contain digest {d}"
+        );
+    }
+
+    // -- bitmap_index pipeline: verify scan returns matching tx_sequence_numbers --
+    // The bitmap index indexes at tx_sequence_number granularity.
+    // Query the Sender dimension for our sender address — should find our txns.
+    {
+        let sender = harness.cluster.get_address_0();
+        let sender_dim_key = sui_index_dimensions::encode_dimension_key(
+            sui_index_dimensions::IndexDimension::Sender,
+            sender.as_ref(),
+        );
+        // Scan across a range that covers all our checkpoints
+        let first_cp = checkpoints
+            .iter()
+            .map(|c| c.summary.as_ref().unwrap().sequence_number)
+            .min()
+            .unwrap();
+        let last_cp = max_checkpoint;
+        let tx_range = harness
+            .bigtable_client()
+            .checkpoint_to_tx_range(first_cp..last_cp + 1)
+            .await?;
+
+        let matching_tx_seqs = harness
+            .bigtable_client()
+            .eval_bitmap_query(&BitmapQuery::scan(sender_dim_key.clone()), tx_range)
+            .await?;
+
+        // Our transfer tx_digests should map to tx_seqs that appear in the scan
+        for (i, resolved) in resolved_digests.iter().enumerate() {
+            let Some((digest, _, _)) = resolved else {
+                continue;
+            };
+            let tx_seq = all_tx_seqs[i];
+            if tx_digests.contains(digest) {
+                assert!(
+                    matching_tx_seqs.contains(&tx_seq),
+                    "bitmap index should contain tx_seq {tx_seq} for sender {sender}"
+                );
+            }
+        }
+    }
 
     // -- Column-filtered epoch partial reads --
     // Fetch epoch with only small scalar columns — no system_state.

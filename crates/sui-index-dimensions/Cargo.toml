@@ -1,0 +1,12 @@
+[package]
+name = "sui-index-dimensions"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+bcs.workspace = true
+move-core-types.workspace = true
+sui-types.workspace = true
