@@ -43,6 +43,7 @@ pub struct StreamingClientArgs {
 }
 
 /// gRPC-based implementation of the CheckpointStreamingClient trait.
+#[derive(Clone)]
 pub struct GrpcStreamingClient {
     uri: Uri,
     connection_timeout: Duration,
