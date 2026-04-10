@@ -6,7 +6,6 @@ use std::sync::Arc;
 use anyhow::Context;
 use prometheus::Registry;
 use prost_types::FieldMask;
-use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_types::signature::GenericSignature;
@@ -76,11 +75,12 @@ impl FullnodeClient {
     }
 
     /// Execute a transaction on the Sui network via gRPC.
-    #[instrument(skip(self, transaction_data, signatures), level = "debug")]
+    #[instrument(skip(self, transaction_data, signatures, read_mask), level = "debug")]
     pub async fn execute_transaction(
         &self,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
+        read_mask: FieldMask,
     ) -> Result<proto::ExecuteTransactionResponse, Error> {
         let transaction = Transaction::from_generic_sig_data(transaction_data, signatures);
 
@@ -104,13 +104,7 @@ impl FullnodeClient {
             tx
         })
         .with_signatures(signatures)
-        .with_read_mask(FieldMask::from_paths([
-            "effects",
-            "transaction",
-            "events.bcs",
-            "balance_changes",
-            "objects.objects.bcs",
-        ]));
+        .with_read_mask(read_mask);
 
         self.request(
             "execute_transaction",
@@ -123,14 +117,15 @@ impl FullnodeClient {
     /// Simulate a transaction on the Sui network via gRPC.
     /// Note: Simulation does not require signatures since the transaction is not committed to the blockchain.
     ///
-    /// - `checks_enabled`: If true, enables transaction validation checks during simulation. Defaults to true.
-    /// - `do_gas_selection`: If true, enables automatic gas coin selection and budget estimation. Defaults to false.
-    #[instrument(skip(self, transaction), level = "debug")]
+    /// - `checks_enabled`: If true, enables transaction validation checks during simulation.
+    /// - `do_gas_selection`: If true, enables automatic gas coin selection and budget estimation.
+    #[instrument(skip(self, transaction, read_mask), level = "debug")]
     pub async fn simulate_transaction(
         &self,
         transaction: proto::Transaction,
         checks_enabled: bool,
         do_gas_selection: bool,
+        read_mask: FieldMask,
     ) -> Result<proto::SimulateTransactionResponse, Error> {
         use proto::simulate_transaction_request::TransactionChecks;
 
@@ -141,15 +136,7 @@ impl FullnodeClient {
         };
 
         let request = proto::SimulateTransactionRequest::new(transaction)
-            .with_read_mask(FieldMask::from_paths([
-                "transaction.effects",
-                "transaction.transaction",
-                "transaction.events.bcs",
-                "transaction.balance_changes",
-                "transaction.objects.objects.bcs",
-                "transaction.transaction.bcs",
-                "command_outputs",
-            ]))
+            .with_read_mask(read_mask)
             .with_checks(checks)
             .with_do_gas_selection(do_gas_selection);
 

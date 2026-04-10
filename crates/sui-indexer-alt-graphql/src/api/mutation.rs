@@ -6,9 +6,11 @@ use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::Result;
 use fastcrypto::error::FastCryptoError;
+use prost_types::FieldMask;
 
 use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
+use sui_rpc::field::FieldMaskUtil;
 use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
@@ -79,9 +81,17 @@ impl Mutation {
             parsed_signatures.push(signature);
         }
 
+        let read_mask = FieldMask::from_paths([
+            "effects",
+            "transaction",
+            "events.bcs",
+            "balance_changes",
+            "objects.objects.bcs",
+        ]);
+
         // Execute transaction via gRPC
         match fullnode_client
-            .execute_transaction(tx_data.clone(), parsed_signatures.clone())
+            .execute_transaction(tx_data.clone(), parsed_signatures.clone(), read_mask)
             .await
         {
             Ok(response) => {
