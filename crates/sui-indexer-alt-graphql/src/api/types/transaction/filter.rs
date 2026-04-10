@@ -91,7 +91,7 @@ impl TransactionFilter {
             };
         }
 
-        Some(Self {
+        let result = Self {
             after_checkpoint: intersect!(after_checkpoint, intersect::by_max)?,
             at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
@@ -100,7 +100,30 @@ impl TransactionFilter {
             affected_address: intersect!(affected_address, intersect::by_eq)?,
             affected_object: intersect!(affected_object, intersect::by_eq)?,
             sent_address: intersect!(sent_address, intersect::by_eq)?,
-        })
+        };
+
+        result.checkpoint_bounds_are_valid().then_some(result)
+    }
+
+    /// Check that checkpoint bounds don't contradict each other across fields.
+    /// e.g. `afterCheckpoint: 100` with `atCheckpoint: 5` is inconsistent.
+    fn checkpoint_bounds_are_valid(&self) -> bool {
+        if let (Some(after), Some(at)) = (self.after_checkpoint, self.at_checkpoint) {
+            if after >= at {
+                return false;
+            }
+        }
+        if let (Some(before), Some(at)) = (self.before_checkpoint, self.at_checkpoint) {
+            if before <= at {
+                return false;
+            }
+        }
+        if let (Some(after), Some(before)) = (self.after_checkpoint, self.before_checkpoint) {
+            if after >= before {
+                return false;
+            }
+        }
+        true
     }
 
     /// The active filters in TransactionFilter. Used to find the pipelines that are available to serve queries with these filters applied.
