@@ -844,7 +844,6 @@ module deepbook::clob_v2 {
         };
     }
 
-    #[allow(deprecated_usage)]
     public fun list_open_orders<BaseAsset, QuoteAsset>(
         pool: &Pool<BaseAsset, QuoteAsset>,
         account_cap: &AccountCap
