@@ -7,7 +7,7 @@ use crate::{
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, btree_map::Entry},
+    collections::{BTreeMap, BTreeSet, VecDeque, btree_map::Entry},
     sync::Arc,
 };
 use sui_types::{
@@ -57,17 +57,27 @@ impl ResolutionTable {
         I: IntoIterator,
         I::Item: Borrow<ObjectID>,
     {
-        for id in ids {
-            let pkg = get_package(id.borrow(), store)?;
-            let transitive_deps = self
+        let mut worklist: VecDeque<ObjectID> = ids.into_iter().map(|id| *id.borrow()).collect();
+        let mut visited: BTreeSet<ObjectID> = BTreeSet::new();
+
+        while let Some(id) = worklist.pop_front() {
+            if !visited.insert(id) {
+                continue;
+            }
+            let pkg = get_package(&id, store)?;
+            let package_id: ObjectID = pkg.version_id().into();
+            add_and_unify(&package_id, store, self, VersionConstraint::at_least)?;
+
+            for dep_id in self
                 .config
                 .linkage_table(&pkg)
                 .into_values()
-                .map(ObjectID::from);
-            let package_id = pkg.version_id().into();
-            add_and_unify(&package_id, store, self, VersionConstraint::at_least)?;
-            for object_id in transitive_deps {
-                add_and_unify(&object_id, store, self, VersionConstraint::at_least)?;
+                .map(ObjectID::from)
+            {
+                add_and_unify(&dep_id, store, self, VersionConstraint::at_least)?;
+                if !visited.contains(&dep_id) {
+                    worklist.push_back(dep_id);
+                }
             }
         }
         Ok(())
