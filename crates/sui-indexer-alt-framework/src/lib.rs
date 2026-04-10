@@ -30,7 +30,6 @@ use crate::pipeline::sequential::SequentialConfig;
 use crate::pipeline::sequential::{self};
 use crate::service::Service;
 
-pub use anyhow::Result;
 pub use sui_field_count::FieldCount;
 pub use sui_futures::service;
 /// External users access the store trait through framework::store
@@ -210,7 +209,7 @@ impl<S: Store> Indexer<S> {
         ingestion_config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
-    ) -> Result<Self> {
+    ) -> anyhow::Result<Self> {
         let IndexerArgs {
             first_checkpoint,
             last_checkpoint,
@@ -225,7 +224,7 @@ impl<S: Store> Indexer<S> {
 
         let latest_checkpoint = ingestion_service.latest_checkpoint_number().await?;
 
-        info!(latest_checkpoint, "Ingestion store state");
+        info!(latest_checkpoint);
 
         Ok(Self {
             store,
@@ -288,7 +287,7 @@ impl<S: Store> Indexer<S> {
     /// respective watermarks.
     ///
     /// Ingestion will stop after consuming the configured `last_checkpoint` if one is provided.
-    pub async fn run(self) -> Result<Service> {
+    pub async fn run(self) -> anyhow::Result<Service> {
         if let Some(enabled_pipelines) = self.enabled_pipelines {
             ensure!(
                 enabled_pipelines.is_empty(),
@@ -332,7 +331,7 @@ impl<S: Store> Indexer<S> {
         &mut self,
         pipeline_task: String,
         retention: Option<u64>,
-    ) -> Result<Option<u64>> {
+    ) -> anyhow::Result<Option<u64>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
             "Pipeline {:?} already added",
@@ -388,7 +387,7 @@ impl<S: ConcurrentStore> Indexer<S> {
         &mut self,
         handler: H,
         config: ConcurrentConfig,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         let pipeline_task =
             pipeline_task::<S>(H::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
         let retention = config.pruner.as_ref().map(|p| p.retention);
@@ -425,7 +424,7 @@ impl<T: SequentialStore> Indexer<T> {
         &mut self,
         handler: H,
         config: SequentialConfig,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         if self.task.is_some() {
             bail!(
                 "Sequential pipelines do not support pipeline tasks. \
@@ -510,7 +509,7 @@ mod tests {
         async fn process(
             &self,
             checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
-        ) -> Result<Vec<Self::Value>> {
+        ) -> anyhow::Result<Vec<Self::Value>> {
             let cp_num = checkpoint.summary.sequence_number;
 
             // Wait until the checkpoint is allowed to be processed
@@ -542,7 +541,7 @@ mod tests {
             &self,
             batch: &Self::Batch,
             conn: &mut <Self::Store as Store>::Connection<'a>,
-        ) -> Result<usize> {
+        ) -> anyhow::Result<usize> {
             for value in batch {
                 conn.0
                     .commit_data(Self::NAME, value.0, vec![value.0])
@@ -563,7 +562,7 @@ mod tests {
                 async fn process(
                     &self,
                     checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
-                ) -> Result<Vec<Self::Value>> {
+                ) -> anyhow::Result<Vec<Self::Value>> {
                     Ok(vec![MockValue(checkpoint.summary.sequence_number)])
                 }
             }
@@ -586,7 +585,7 @@ mod tests {
                     &self,
                     batch: &Self::Batch,
                     conn: &mut <Self::Store as Store>::Connection<'a>,
-                ) -> Result<usize> {
+                ) -> anyhow::Result<usize> {
                     for value in batch {
                         conn.0
                             .commit_data(Self::NAME, value.0, vec![value.0])
@@ -609,7 +608,7 @@ mod tests {
                     &self,
                     _batch: &Self::Batch,
                     _conn: &mut <Self::Store as Store>::Connection<'a>,
-                ) -> Result<usize> {
+                ) -> anyhow::Result<usize> {
                     Ok(1)
                 }
             }

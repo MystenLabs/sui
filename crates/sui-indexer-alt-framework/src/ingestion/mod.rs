@@ -23,13 +23,11 @@ use crate::ingestion::error::Result;
 use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::ingestion::ingestion_client::IngestionClient;
 use crate::ingestion::ingestion_client::IngestionClientArgs;
-use crate::ingestion::streaming_client::CheckpointStream;
+use crate::ingestion::ingestion_client::retry_transient_with_slow_monitor;
 use crate::ingestion::streaming_client::CheckpointStreamingClient;
 use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
-
-use self::ingestion_client::retry_transient_with_slow_monitor;
 
 mod broadcaster;
 mod byte_count;
@@ -43,8 +41,6 @@ pub mod streaming_client;
 mod test_utils;
 
 pub(crate) const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
-
-const OPERATION: &str = "latest_checkpoint_number";
 
 /// Combined arguments for both ingestion and streaming clients.
 /// This is a convenience wrapper that flattens both argument types.
@@ -151,6 +147,8 @@ impl IngestionService {
         &self.ingestion_client
     }
 
+    /// Return the latest checkpoint number known to the ingestion service, preferably via the
+    /// streaming client, and failing that via the ingestion client.
     pub async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
         let streaming_client = self.streaming_client.clone();
         let ingestion_client = self.ingestion_client.clone();
@@ -163,8 +161,9 @@ impl IngestionService {
                     .map_err(|e| backoff::Error::transient(Error::LatestCheckpointError(e)))
             }
         };
+
         Ok(retry_transient_with_slow_monitor(
-            OPERATION,
+            "latest_checkpoint_number",
             future,
             &self.metrics.ingested_latest_checkpoint_latency,
         )
@@ -269,39 +268,22 @@ impl Default for IngestionConfig {
     }
 }
 
-/// Try to get the latest checkpoint number from the streaming client first, falling back to
-/// the ingestion client if the streaming client is unavailable or fails.
 async fn latest_checkpoint_number(
-    streaming_client: &mut Option<impl CheckpointStreamingClient>,
+    streaming_client: &mut Option<impl CheckpointStreamingClient + Send>,
     ingestion_client: &IngestionClient,
 ) -> anyhow::Result<u64> {
     if let Some(streaming_client) = streaming_client.as_mut() {
-        match streaming_client.connect().await {
-            Ok(CheckpointStream { mut stream, .. }) => match stream.peek().await {
-                Some(Ok(checkpoint)) => {
-                    return Ok(checkpoint.summary.sequence_number);
-                }
-                Some(Err(e)) => {
-                    warn!(
-                        operation = OPERATION,
-                        "Failed to peek checkpoint stream: {e}"
-                    );
-                }
-                None => {
-                    warn!(
-                        operation = OPERATION,
-                        "Checkpoint stream ended unexpectedly"
-                    );
-                }
-            },
+        match streaming_client.latest_checkpoint_number().await {
+            Ok(checkpoint_number) => return Ok(checkpoint_number),
             Err(e) => {
                 warn!(
-                    operation = OPERATION,
-                    "Failed to connect streaming client: {e}"
+                    operation = "latest_checkpoint_number",
+                    "Failed to get latest checkpoint number from streaming client: {e}"
                 );
             }
         }
     }
+
     ingestion_client.latest_checkpoint_number().await
 }
 

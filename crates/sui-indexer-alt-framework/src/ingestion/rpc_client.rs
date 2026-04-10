@@ -3,6 +3,7 @@
 
 use std::str::FromStr;
 
+use anyhow::Context as _;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use prost_types::FieldMask;
@@ -60,11 +61,10 @@ impl IngestionClientTrait for RpcClient {
     }
 
     async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-        let response = get_service_info_request(self).await?;
-        let Some(latest_checkpoint_number) = response.checkpoint_height else {
-            return Err(anyhow!("Checkpoint height not found {response:?}"));
-        };
-        Ok(latest_checkpoint_number)
+        get_service_info_request(self)
+            .await?
+            .checkpoint_height
+            .context("Checkpoint height not found")
     }
 }
 
