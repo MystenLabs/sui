@@ -203,11 +203,10 @@ pub fn on_prepare_rename_request(context: &Context, request: &Request) {
 /// definition and its uses, not the original name or its direct uses, and vice versa.
 ///
 /// Known limitations:
-/// - Module definitions cannot be renamed (would require file/directory changes).
+/// - Module definitions cannot be renamed (technically they could but it wouldn't work
+///   well with module extensions).
 /// - Symbols defined in dependency packages cannot be renamed.
-/// - References inside macro expansions are not tracked and won't be updated.
-/// - Cross-package references are not found; only references within the current package
-///   (and its dependencies compiled together) are updated.
+/// - References inside macros are not tracked and won't be updated.
 pub fn on_rename_request(context: &Context, request: &Request) {
     let symbols_map = &context.symbols.lock().unwrap();
     let parameters = serde_json::from_value::<RenameParams>(request.params.clone())
