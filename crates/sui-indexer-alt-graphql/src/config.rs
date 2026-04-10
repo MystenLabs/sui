@@ -163,6 +163,27 @@ pub struct Limits {
     /// Maximum number of "rich" queries that can be performed in a single request. Rich queries are
     /// queries that require dedicated requests to the backing store.
     pub max_rich_queries: usize,
+
+    /// Maximum number of Move packages to cache in memory for type resolution.
+    ///
+    /// This cache is shared by both the query and subscription paths. Packages are
+    /// inserted on first access (query) or when seen in streamed checkpoints
+    /// (subscription). LRU eviction removes the least recently used entries when the
+    /// cache is full.
+    ///
+    /// The default of 1024 is based on the median package size of ~1.2 KB on mainnet
+    /// (as of April 2025), giving a typical memory footprint of ~1.2 MB. The maximum
+    /// per-package size is bounded by the protocol's `max_move_package_size` (100 KB as
+    /// of writing — check the latest protocol config for exact values).
+    ///
+    /// System packages (~130 entries totaling ~6 MB as of writing) are few in number
+    /// and constant in count (only growing when new system packages are added via
+    /// protocol upgrades). They are rarely evicted due to frequent access, so most
+    /// cache capacity is available for user packages.
+    ///
+    /// Increasing this value improves cache hit rate and reduces database calls for
+    /// type resolution, at the cost of additional memory.
+    pub package_cache_capacity: usize,
 }
 
 #[DefaultConfig]
@@ -192,6 +213,7 @@ pub struct LimitsLayer {
     pub max_display_output_size: Option<usize>,
     pub max_disassembled_module_size: Option<usize>,
     pub max_rich_queries: Option<usize>,
+    pub package_cache_capacity: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -422,6 +444,9 @@ impl LimitsLayer {
                 .max_disassembled_module_size
                 .unwrap_or(base.max_disassembled_module_size),
             max_rich_queries: self.max_rich_queries.unwrap_or(base.max_rich_queries),
+            package_cache_capacity: self
+                .package_cache_capacity
+                .unwrap_or(base.package_cache_capacity),
         }
     }
 }
@@ -492,6 +517,7 @@ impl From<Limits> for LimitsLayer {
             max_display_output_size: Some(value.max_display_output_size),
             max_disassembled_module_size: Some(value.max_disassembled_module_size),
             max_rich_queries: Some(value.max_rich_queries),
+            package_cache_capacity: Some(value.package_cache_capacity),
         }
     }
 }
@@ -592,6 +618,7 @@ impl Default for Limits {
             max_display_output_size: 1024 * 1024,
             max_disassembled_module_size: 1024 * 1024,
             max_rich_queries: 21,
+            package_cache_capacity: 1024,
         }
     }
 }

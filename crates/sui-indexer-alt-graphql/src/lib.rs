@@ -3,6 +3,7 @@
 
 use std::any::Any;
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -342,7 +343,11 @@ pub async fn start_rpc(
         pg_loader.clone(),
     );
 
-    let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
+    let package_store = Arc::new(PackageCache::new_with_capacity(
+        DbPackageStore::new(pg_loader.clone()),
+        NonZeroUsize::new(config.limits.package_cache_capacity)
+            .expect("package_cache_capacity must be non-zero"),
+    ));
 
     let system_package_task = SystemPackageTask::new(
         system_package_task_args,
@@ -366,9 +371,9 @@ pub async fn start_rpc(
         metrics.clone(),
     );
 
-    let streaming_task = subscription_args
-        .checkpoint_stream_url
-        .map(|uri| task::streaming::CheckpointStreamTask::new(uri, &config.subscription));
+    let streaming_task = subscription_args.checkpoint_stream_url.map(|uri| {
+        task::streaming::CheckpointStreamTask::new(uri, &config.subscription, package_store.clone())
+    });
 
     let mut rpc = rpc
         .route(GRAPHQL_PATH, post(graphql).get(graphql_get))

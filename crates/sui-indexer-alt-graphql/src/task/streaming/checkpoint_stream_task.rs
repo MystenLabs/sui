@@ -9,6 +9,8 @@ use anyhow::Context as _;
 use futures::StreamExt;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
+use sui_indexer_alt_reader::package_resolver::PackageCache;
+use sui_package_resolver::Package;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
@@ -97,15 +99,21 @@ pub(crate) struct CheckpointStreamTask {
     uri: Uri,
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
     broadcaster: CheckpointBroadcaster,
+    package_cache: Arc<PackageCache>,
 }
 
 impl CheckpointStreamTask {
-    pub(crate) fn new(uri: Uri, config: &SubscriptionConfig) -> Self {
+    pub(crate) fn new(
+        uri: Uri,
+        config: &SubscriptionConfig,
+        package_cache: Arc<PackageCache>,
+    ) -> Self {
         let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
         Self {
             uri,
             sender,
             broadcaster,
+            package_cache,
         }
     }
 
@@ -145,6 +153,7 @@ impl CheckpointStreamTask {
             while let Some(result) = stream.next().await {
                 let response = result.context("Checkpoint stream error")?;
                 if let Some(checkpoint) = response.checkpoint {
+                    cache_packages(&checkpoint, &self.package_cache);
                     let processed = process_checkpoint(checkpoint)?;
                     // Ignore send errors — no active subscribers is a normal state
                     // (e.g., no clients have connected yet). The checkpoint is simply dropped.
@@ -288,6 +297,33 @@ fn process_transaction(
         contents,
         execution_objects,
     })
+}
+
+/// Extract package objects from the checkpoint and insert them into the package cache.
+/// This allows type resolution (e.g. `contents.type.repr`) to work from streaming
+/// without database access for recently published or upgraded packages.
+///
+/// TODO(DVX-2051): On cache miss, the DB fallback may fail if kv_packages hasn't indexed
+/// the package yet (streaming ahead of indexer). Phase 2 should stall resolution until
+/// the kv_packages watermark catches up to the streamed checkpoint, rather than returning
+/// a partial error.
+fn cache_packages(checkpoint: &ProtoCheckpoint, package_cache: &PackageCache) {
+    let Some(object_set) = &checkpoint.objects else {
+        return;
+    };
+    for obj in &object_set.objects {
+        let Some(bcs) = &obj.bcs else { continue };
+        let Ok(native_obj) = bcs.deserialize::<NativeObject>() else {
+            continue;
+        };
+        let Some(move_package) = native_obj.data.try_as_package() else {
+            continue;
+        };
+        let Ok(package) = Package::read_from_package(move_package) else {
+            continue;
+        };
+        package_cache.insert(*move_package.id(), Arc::new(package));
+    }
 }
 
 /// Deserialize all objects from the checkpoint-level ObjectSet.

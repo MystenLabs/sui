@@ -1,0 +1,53 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/checkpoint_subscription.rs
+expression: checkpoint
+---
+{
+  "data": {
+    "checkpoints": {
+      "transactions": {
+        "nodes": [
+          {
+            "digest": "[digest]",
+            "effects": {
+              "objectChanges": {
+                "nodes": [
+                  {
+                    "outputState": {
+                      "asMoveObject": {
+                        "contents": {
+                          "type": {
+                            "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                          },
+                          "json": {
+                            "id": "[id]",
+                            "balance": "[balance]"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "outputState": {
+                      "asMoveObject": {
+                        "contents": {
+                          "type": {
+                            "repr": "[pkg]::wrapping::Item"
+                          },
+                          "json": {
+                            "id": "[id]",
+                            "value": "42"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

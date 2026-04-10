@@ -638,7 +638,11 @@ impl<S: PackageStore> Resolver<S> {
 
 impl<T> PackageStoreWithLruCache<T> {
     pub fn new(inner: T) -> Self {
-        let packages = Mutex::new(LruCache::new(PACKAGE_CACHE_SIZE));
+        Self::new_with_capacity(inner, PACKAGE_CACHE_SIZE)
+    }
+
+    pub fn new_with_capacity(inner: T, capacity: NonZeroUsize) -> Self {
+        let packages = Mutex::new(LruCache::new(capacity));
         Self { packages, inner }
     }
 
@@ -648,6 +652,19 @@ impl<T> PackageStoreWithLruCache<T> {
         let mut packages = self.packages.lock().unwrap();
         for id in ids {
             packages.pop(&id);
+        }
+    }
+
+    /// Insert a package directly into the cache, keeping the newer version on conflict.
+    pub fn insert(&self, id: AccountAddress, package: Arc<Package>) {
+        let mut packages = self.packages.lock().unwrap();
+        match packages.peek(&id) {
+            Some(prev) if package.version <= prev.version => {
+                packages.promote(&id);
+            }
+            Some(_) | None => {
+                packages.push(id, package);
+            }
         }
     }
 }

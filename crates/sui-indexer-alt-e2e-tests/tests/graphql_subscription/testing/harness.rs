@@ -40,12 +40,26 @@ pub struct SubscriptionTestCluster {
 
 impl SubscriptionTestCluster {
     pub async fn new(validator_cluster: &test_cluster::TestCluster) -> Self {
+        Self::new_impl(validator_cluster, None).await
+    }
+
+    pub async fn new_with_db(
+        validator_cluster: &test_cluster::TestCluster,
+        database_url: url::Url,
+    ) -> Self {
+        Self::new_impl(validator_cluster, Some(database_url)).await
+    }
+
+    async fn new_impl(
+        validator_cluster: &test_cluster::TestCluster,
+        database_url: Option<url::Url>,
+    ) -> Self {
         let graphql_port = get_available_port();
         let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
         let rpc_url = validator_cluster.rpc_url();
 
         let service = start_graphql(
-            None,
+            database_url,
             FullnodeArgs::new(rpc_url.parse().unwrap()),
             DbArgs::default(),
             KvArgs::default(),
@@ -263,4 +277,46 @@ pub fn graphql_redactions() -> insta::Settings {
         value
     });
     settings
+}
+
+/// Poll the kv_packages watermark until it reaches `target_checkpoint`.
+pub async fn wait_for_kv_packages(db: &sui_pg_db::temp::TempDb, target_checkpoint: u64) {
+    use diesel::QueryableByName;
+    use diesel::sql_types::BigInt;
+
+    let reader = sui_indexer_alt_reader::pg_reader::PgReader::new(
+        Some("wait_for_kv_packages"),
+        Some(db.database().url().clone()),
+        DbArgs::default(),
+        &Registry::new(),
+    )
+    .await
+    .expect("Failed to create PgReader");
+
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            if let Ok(mut conn) = reader.connect().await {
+                #[derive(QueryableByName)]
+                struct W {
+                    #[diesel(sql_type = BigInt)]
+                    checkpoint_hi_inclusive: i64,
+                }
+                if let Ok(rows) = conn
+                    .results::<_, _, W>(sui_sql_macro::query!(
+                        "SELECT checkpoint_hi_inclusive FROM watermarks \
+                         WHERE pipeline = 'kv_packages'"
+                    ))
+                    .await
+                    && rows
+                        .first()
+                        .is_some_and(|r| r.checkpoint_hi_inclusive as u64 >= target_checkpoint)
+                {
+                    return;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("Timed out waiting for kv_packages indexer");
 }
