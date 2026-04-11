@@ -162,23 +162,19 @@ fn resolve_literal_to_type(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Re
         Type::Vector(ty) => resolve_as_vector(buf, ty, value),
 
         // Signed integer literal resolution is not yet supported.
-        Type::I8
-        | Type::I16
-        | Type::I32
-        | Type::I64
-        | Type::I128
-        | Type::I256 => Err(RpcError::new(
-            tonic::Code::InvalidArgument,
-            format!("signed integer literal resolution not yet supported for type {type_}"),
-        )),
+        Type::I8 | Type::I16 | Type::I32 | Type::I64 | Type::I128 | Type::I256 => {
+            Err(RpcError::new(
+                tonic::Code::InvalidArgument,
+                format!("signed integer literal resolution not yet supported for type {type_}"),
+            ))
+        }
 
-        Type::Signer
-        | Type::Datatype(_)
-        | Type::TypeParameter(_)
-        | Type::Reference(_, _) => Err(RpcError::new(
-            tonic::Code::InvalidArgument,
-            format!("literal cannot be resolved into type {type_}"),
-        )),
+        Type::Signer | Type::Datatype(_) | Type::TypeParameter(_) | Type::Reference(_, _) => {
+            Err(RpcError::new(
+                tonic::Code::InvalidArgument,
+                format!("literal cannot be resolved into type {type_}"),
+            ))
+        }
     }
 }
 

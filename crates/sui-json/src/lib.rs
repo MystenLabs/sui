@@ -406,6 +406,12 @@ fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
         MoveValue::U16(v) => json!(v),
         MoveValue::U32(v) => json!(v),
         MoveValue::U256(v) => json!(v.to_string()),
+        MoveValue::I8(v) => json!(v),
+        MoveValue::I16(v) => json!(v),
+        MoveValue::I32(v) => json!(v),
+        MoveValue::I64(v) => json!(v.to_string()),
+        MoveValue::I128(v) => json!(v.to_string()),
+        MoveValue::I256(v) => json!(v.to_string()),
         MoveValue::Struct(move_struct) => match move_struct {
             MoveStruct { fields, type_ } if is_move_string_type(type_) => {
                 // ascii::string and utf8::string has a single bytes field.
@@ -616,7 +622,7 @@ pub fn primitive_type(
 
         SignatureToken::Signer => return None,
 
-        // Signed integer primitive layouts are not yet supported in sui-json
+        // Signed integer types are not accepted as pure transaction inputs on Sui.
         SignatureToken::I8
         | SignatureToken::I16
         | SignatureToken::I32
@@ -642,6 +648,13 @@ fn layout_of_primitive_typetag(tag: &TypeTag) -> Option<MoveTypeLayout> {
         TypeTag::U256 => MTL::U256,
         TypeTag::Address => MTL::Address,
         TypeTag::Signer => return None,
+        // Signed integer types are not accepted as pure transaction inputs on Sui.
+        TypeTag::I8
+        | TypeTag::I16
+        | TypeTag::I32
+        | TypeTag::I64
+        | TypeTag::I128
+        | TypeTag::I256 => return None,
         TypeTag::Vector(tag) => MTL::Vector(Box::new(layout_of_primitive_typetag(tag)?)),
         TypeTag::Struct(stag) => {
             let StructTag {

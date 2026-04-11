@@ -231,6 +231,7 @@ impl ValidatorSetContents {
             type Error = Error;
 
             visitor_default! { <'_, '_> u8, u16, u32, u64, u128, u256 = Ok(None) }
+            visitor_default! { <'_, '_> i8, i16, i32, i64, i128, i256 = Ok(None) }
             visitor_default! { <'_, '_> bool, signer, vector, struct, variant = Ok(None) }
 
             fn visit_address(

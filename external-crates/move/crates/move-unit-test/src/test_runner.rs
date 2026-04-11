@@ -24,6 +24,7 @@ use move_compiler::{
 };
 use move_core_types::{
     account_address::AccountAddress,
+    i256::I256,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     runtime_value::{MoveValue, serialize_values},
@@ -448,6 +449,12 @@ impl<V: VMTestSetup> SharedTestingConfig<V> {
                 )
             }
             TypeTag::Signer => unreachable!("Signer arguments not allowed"),
+            TypeTag::I8 => MoveValue::I8(rng.r#gen::<i8>()),
+            TypeTag::I16 => MoveValue::I16(rng.r#gen::<i16>()),
+            TypeTag::I32 => MoveValue::I32(rng.r#gen::<i32>()),
+            TypeTag::I64 => MoveValue::I64(rng.r#gen::<i64>()),
+            TypeTag::I128 => MoveValue::I128(rng.r#gen::<i128>()),
+            TypeTag::I256 => MoveValue::I256(rng.r#gen::<I256>()),
         }
     }
 

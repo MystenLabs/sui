@@ -448,6 +448,14 @@ impl Type {
                 Datatype(qid.module_id, qid.id, type_args)
             }
             TypeTag::Vector(type_param) => Vector(Box::new(Self::from_type_tag(type_param, env))),
+            // move-model does not yet have PrimitiveType variants for signed integers.
+            // Representing them as Error is intentionally lossy until the prover supports them.
+            TypeTag::I8
+            | TypeTag::I16
+            | TypeTag::I32
+            | TypeTag::I64
+            | TypeTag::I128
+            | TypeTag::I256 => Error,
         }
     }
 

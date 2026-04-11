@@ -1711,6 +1711,15 @@ mod checked {
             I::U64 => T::U64,
             I::U128 => T::U128,
             I::U256 => T::U256,
+            // Signed integer types are not accepted as transaction inputs on Sui.
+            I::I8 | I::I16 | I::I32 | I::I64 | I::I128 | I::I256 => {
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::TypeArgumentError {
+                        argument_idx: idx as u16,
+                        kind: TypeArgumentError::TypeNotFound,
+                    },
+                ));
+            }
             I::Address => T::Address,
             I::Signer => T::Signer,
             I::Vector(t) => T::Vector(Box::new(to_type_tag_(context, *t, idx)?)),

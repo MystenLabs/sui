@@ -650,6 +650,12 @@ pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
             TypeTag::U16 => Ok(Some(MoveTypeLayout::U16)),
             TypeTag::U32 => Ok(Some(MoveTypeLayout::U32)),
             TypeTag::U256 => Ok(Some(MoveTypeLayout::U256)),
+            TypeTag::I8 => Ok(Some(MoveTypeLayout::I8)),
+            TypeTag::I16 => Ok(Some(MoveTypeLayout::I16)),
+            TypeTag::I32 => Ok(Some(MoveTypeLayout::I32)),
+            TypeTag::I64 => Ok(Some(MoveTypeLayout::I64)),
+            TypeTag::I128 => Ok(Some(MoveTypeLayout::I128)),
+            TypeTag::I256 => Ok(Some(MoveTypeLayout::I256)),
         }
     }
     fn get_struct_layout(&self, type_tag: &StructTag) -> Result<Option<MoveTypeLayout>>;

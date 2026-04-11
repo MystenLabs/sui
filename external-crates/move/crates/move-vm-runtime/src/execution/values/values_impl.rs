@@ -3039,6 +3039,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             L::Address => AccountAddress::deserialize(deserializer).map(Value::address),
             L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
 
+            L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => {
+                Err(<D::Error as serde::de::Error>::custom(
+                    "signed integer values not yet supported in VM runtime",
+                ))
+            }
+
             L::Struct(struct_layout) => Ok(SeedWrapper {
                 layout: struct_layout.as_ref(),
             }
@@ -3715,6 +3721,12 @@ impl Value {
                             UNREACHABLE,
                             "Expected a primitive type for the primitive vector, got {:?}",
                             inner_layout.as_ref()
+                        ));
+                    }
+                    (L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256, _) => {
+                        return Err(partial_vm_error!(
+                            UNREACHABLE,
+                            "signed integer values not yet supported in VM runtime"
                         ));
                     }
                 }

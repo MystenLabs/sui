@@ -192,6 +192,60 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
         Ok(MoveValue::U256(value))
     }
 
+    fn visit_i8(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i8,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i8", self.depth).unwrap();
+        Ok(MoveValue::I8(value))
+    }
+
+    fn visit_i16(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i16,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i16", self.depth).unwrap();
+        Ok(MoveValue::I16(value))
+    }
+
+    fn visit_i32(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i32,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i32", self.depth).unwrap();
+        Ok(MoveValue::I32(value))
+    }
+
+    fn visit_i64(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i64,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i64", self.depth).unwrap();
+        Ok(MoveValue::I64(value))
+    }
+
+    fn visit_i128(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i128,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i128", self.depth).unwrap();
+        Ok(MoveValue::I128(value))
+    }
+
+    fn visit_i256(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: crate::i256::I256,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i256", self.depth).unwrap();
+        Ok(MoveValue::I256(value))
+    }
+
     fn visit_bool(
         &mut self,
         _driver: &ValueDriver<'_, 'b, 'l>,
@@ -625,6 +679,54 @@ fn peek_field_test() {
             &mut self,
             _: &ValueDriver<'_, 'b, 'l>,
             _: U256,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(None)
+        }
+
+        fn visit_i8(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: i8,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(None)
+        }
+
+        fn visit_i16(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: i16,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(None)
+        }
+
+        fn visit_i32(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: i32,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(None)
+        }
+
+        fn visit_i64(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: i64,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(None)
+        }
+
+        fn visit_i128(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: i128,
+        ) -> Result<Self::Value, Self::Error> {
+            Ok(None)
+        }
+
+        fn visit_i256(
+            &mut self,
+            _: &ValueDriver<'_, 'b, 'l>,
+            _: crate::i256::I256,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }

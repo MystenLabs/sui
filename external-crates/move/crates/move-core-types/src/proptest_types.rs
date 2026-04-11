@@ -23,6 +23,12 @@ impl Arbitrary for TypeTag {
             Just(U64),
             Just(U128),
             Just(U256),
+            Just(I8),
+            Just(I16),
+            Just(I32),
+            Just(I64),
+            Just(I128),
+            Just(I256),
             Just(Address),
             Just(Vector(Box::new(Bool))),
         ];

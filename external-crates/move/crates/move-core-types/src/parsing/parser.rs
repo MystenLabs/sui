@@ -8,6 +8,7 @@ use crate::parsing::{
 };
 use crate::{
     account_address::AccountAddress,
+    i256::{I256, I256FromStrError},
     u256::{U256, U256FromStrError},
 };
 use anyhow::{Result, anyhow, bail};
@@ -208,6 +209,12 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
             (TypeToken::Ident, "u64") => ParsedType::U64,
             (TypeToken::Ident, "u128") => ParsedType::U128,
             (TypeToken::Ident, "u256") => ParsedType::U256,
+            (TypeToken::Ident, "i8") => ParsedType::I8,
+            (TypeToken::Ident, "i16") => ParsedType::I16,
+            (TypeToken::Ident, "i32") => ParsedType::I32,
+            (TypeToken::Ident, "i64") => ParsedType::I64,
+            (TypeToken::Ident, "i128") => ParsedType::I128,
+            (TypeToken::Ident, "i256") => ParsedType::I256,
             (TypeToken::Ident, "bool") => ParsedType::Bool,
             (TypeToken::Ident, "address") => ParsedType::Address,
             (TypeToken::Ident, "signer") => ParsedType::Signer,
@@ -271,9 +278,28 @@ impl<'a, I: Iterator<Item = (ValueToken, &'a str)>> Parser<'a, ValueToken, I> {
                 } else if let Some(s) = contents.strip_suffix("u128") {
                     let (u, _) = parse_u128(s)?;
                     ParsedValue::U128(u)
-                } else {
-                    let (u, _) = parse_u256(contents.strip_suffix("u256").unwrap())?;
+                } else if let Some(s) = contents.strip_suffix("u256") {
+                    let (u, _) = parse_u256(s)?;
                     ParsedValue::U256(u)
+                } else if let Some(s) = contents.strip_suffix("i8") {
+                    let (i, _) = parse_i8(s)?;
+                    ParsedValue::I8(i)
+                } else if let Some(s) = contents.strip_suffix("i16") {
+                    let (i, _) = parse_i16(s)?;
+                    ParsedValue::I16(i)
+                } else if let Some(s) = contents.strip_suffix("i32") {
+                    let (i, _) = parse_i32(s)?;
+                    ParsedValue::I32(i)
+                } else if let Some(s) = contents.strip_suffix("i64") {
+                    let (i, _) = parse_i64(s)?;
+                    ParsedValue::I64(i)
+                } else if let Some(s) = contents.strip_suffix("i128") {
+                    let (i, _) = parse_i128(s)?;
+                    ParsedValue::I128(i)
+                } else {
+                    let s = contents.strip_suffix("i256").unwrap();
+                    let (i, _) = parse_i256(s)?;
+                    ParsedValue::I256(i)
                 }
             }
             ValueToken::True => ParsedValue::Bool(true),
@@ -443,6 +469,60 @@ pub fn parse_u256(s: &str) -> Result<(U256, NumberFormat), U256FromStrError> {
     let (txt, base) = determine_num_text_and_base(s);
     Ok((
         U256::from_str_radix(&txt.replace('_', ""), base as u32)?,
+        base,
+    ))
+}
+
+// Parse an i8 from a decimal or hex encoding
+pub fn parse_i8(s: &str) -> Result<(i8, NumberFormat), ParseIntError> {
+    let (txt, base) = determine_num_text_and_base(s);
+    Ok((
+        i8::from_str_radix(&txt.replace('_', ""), base as u32)?,
+        base,
+    ))
+}
+
+// Parse an i16 from a decimal or hex encoding
+pub fn parse_i16(s: &str) -> Result<(i16, NumberFormat), ParseIntError> {
+    let (txt, base) = determine_num_text_and_base(s);
+    Ok((
+        i16::from_str_radix(&txt.replace('_', ""), base as u32)?,
+        base,
+    ))
+}
+
+// Parse an i32 from a decimal or hex encoding
+pub fn parse_i32(s: &str) -> Result<(i32, NumberFormat), ParseIntError> {
+    let (txt, base) = determine_num_text_and_base(s);
+    Ok((
+        i32::from_str_radix(&txt.replace('_', ""), base as u32)?,
+        base,
+    ))
+}
+
+// Parse an i64 from a decimal or hex encoding
+pub fn parse_i64(s: &str) -> Result<(i64, NumberFormat), ParseIntError> {
+    let (txt, base) = determine_num_text_and_base(s);
+    Ok((
+        i64::from_str_radix(&txt.replace('_', ""), base as u32)?,
+        base,
+    ))
+}
+
+// Parse an i128 from a decimal or hex encoding
+pub fn parse_i128(s: &str) -> Result<(i128, NumberFormat), ParseIntError> {
+    let (txt, base) = determine_num_text_and_base(s);
+    Ok((
+        i128::from_str_radix(&txt.replace('_', ""), base as u32)?,
+        base,
+    ))
+}
+
+// Parse an i256 from a decimal or hex encoding
+pub fn parse_i256(s: &str) -> Result<(I256, NumberFormat), I256FromStrError> {
+    let (txt, base) = determine_num_text_and_base(s);
+    Ok((
+        I256::from_str_radix(&txt.replace('_', ""), base as u32)?,
         base,
     ))
 }

@@ -1029,6 +1029,16 @@ mod checked {
             TypeTag::U64 => Type::U64,
             TypeTag::U128 => Type::U128,
             TypeTag::U256 => Type::U256,
+            // Signed integer types are not supported at the Sui layer for this
+            // execution version, and the VM runtime has no signed integer types.
+            TypeTag::I8
+            | TypeTag::I16
+            | TypeTag::I32
+            | TypeTag::I64
+            | TypeTag::I128
+            | TypeTag::I256 => {
+                return verification_error(StatusCode::TYPE_RESOLUTION_FAILURE);
+            }
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
 
