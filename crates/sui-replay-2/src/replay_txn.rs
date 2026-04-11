@@ -730,7 +730,13 @@ fn packages_from_type_tag(typ: &TypeTag, packages: &mut BTreeSet<ObjectID>) {
         | TypeTag::Signer
         | TypeTag::U16
         | TypeTag::U32
-        | TypeTag::U256 => (),
+        | TypeTag::U256
+        | TypeTag::I8
+        | TypeTag::I16
+        | TypeTag::I32
+        | TypeTag::I64
+        | TypeTag::I128
+        | TypeTag::I256 => (),
     }
 }
 

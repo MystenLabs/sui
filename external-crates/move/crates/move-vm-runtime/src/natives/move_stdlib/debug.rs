@@ -524,6 +524,14 @@ mod testing {
                     write!(out, "u256").map_err(fmt_error_to_partial_vm_error)?;
                 }
             }
+            A::MoveValue::I8(_)
+            | A::MoveValue::I16(_)
+            | A::MoveValue::I32(_)
+            | A::MoveValue::I64(_)
+            | A::MoveValue::I128(_)
+            | A::MoveValue::I256(_) => {
+                write!(out, "<signed int>").map_err(fmt_error_to_partial_vm_error)?;
+            }
             A::MoveValue::Bool(b) => {
                 // Note that when `include_int_types` is enabled, the boolean `true` and `false`
                 // values unambiguously encode their type, since they are different than any integer

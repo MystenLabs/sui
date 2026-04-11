@@ -312,6 +312,18 @@ pub fn type_tag_core_to_sdk(
         move_core_types::language_storage::TypeTag::U16 => TypeTag::U16,
         move_core_types::language_storage::TypeTag::U32 => TypeTag::U32,
         move_core_types::language_storage::TypeTag::U256 => TypeTag::U256,
+        // Signed integer types are not representable in the current SDK TypeTag.
+        move_core_types::language_storage::TypeTag::I8
+        | move_core_types::language_storage::TypeTag::I16
+        | move_core_types::language_storage::TypeTag::I32
+        | move_core_types::language_storage::TypeTag::I64
+        | move_core_types::language_storage::TypeTag::I128
+        | move_core_types::language_storage::TypeTag::I256 => {
+            return Err(SdkTypeConversionError(format!(
+                "signed integer TypeTag {:?} not yet supported by the Sui SDK",
+                value
+            )));
+        }
     }
     .pipe(Ok)
 }
@@ -404,6 +416,18 @@ impl TryFrom<crate::type_input::TypeInput> for TypeTag {
             crate::type_input::TypeInput::U16 => Self::U16,
             crate::type_input::TypeInput::U32 => Self::U32,
             crate::type_input::TypeInput::U256 => Self::U256,
+            // Signed integer types are not representable in the current SDK TypeTag.
+            crate::type_input::TypeInput::I8
+            | crate::type_input::TypeInput::I16
+            | crate::type_input::TypeInput::I32
+            | crate::type_input::TypeInput::I64
+            | crate::type_input::TypeInput::I128
+            | crate::type_input::TypeInput::I256 => {
+                return Err(SdkTypeConversionError(format!(
+                    "signed integer TypeInput {:?} not yet supported by the Sui SDK",
+                    value
+                )));
+            }
         }
         .pipe(Ok)
     }

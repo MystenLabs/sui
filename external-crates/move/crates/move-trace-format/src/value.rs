@@ -11,6 +11,7 @@ use core::fmt;
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{DebugAsDisplay, MoveStruct, MoveValue, MoveVariant},
+    i256,
     identifier::Identifier,
     language_storage::StructTag,
     u256,
@@ -33,6 +34,12 @@ pub enum SerializableMoveValue {
     Struct(SimplifiedMoveStruct),
     Vector(Vec<SerializableMoveValue>),
     Variant(SimplifiedMoveVariant),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    I256(i256::I256),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -81,6 +88,12 @@ impl From<MoveValue> for SerializableMoveValue {
                 fields: fields.into_iter().map(|(id, v)| (id, v.into())).collect(),
             }),
             MoveValue::Signer(account_address) => SerializableMoveValue::Address(account_address),
+            MoveValue::I8(n) => SerializableMoveValue::I8(n),
+            MoveValue::I16(n) => SerializableMoveValue::I16(n),
+            MoveValue::I32(n) => SerializableMoveValue::I32(n),
+            MoveValue::I64(n) => SerializableMoveValue::I64(n),
+            MoveValue::I128(n) => SerializableMoveValue::I128(n),
+            MoveValue::I256(n) => SerializableMoveValue::I256(n),
         }
     }
 }
@@ -95,6 +108,12 @@ impl fmt::Display for SerializableMoveValue {
             SerializableMoveValue::U64(n) => write!(f, "{}u64", n),
             SerializableMoveValue::U128(n) => write!(f, "{}u128", n),
             SerializableMoveValue::U256(n) => write!(f, "{}u256", n),
+            SerializableMoveValue::I8(n) => write!(f, "{}i8", n),
+            SerializableMoveValue::I16(n) => write!(f, "{}i16", n),
+            SerializableMoveValue::I32(n) => write!(f, "{}i32", n),
+            SerializableMoveValue::I64(n) => write!(f, "{}i64", n),
+            SerializableMoveValue::I128(n) => write!(f, "{}i128", n),
+            SerializableMoveValue::I256(n) => write!(f, "{}i256", n),
             SerializableMoveValue::Address(a) => write!(f, "{}", a),
             SerializableMoveValue::Struct(s) => {
                 write!(f, "{} {{", s.type_)?;

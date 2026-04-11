@@ -1166,9 +1166,12 @@ fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLa
         T::Address => L::Address,
         T::Vector(inner) => L::Vector(Box::new(annotated_constant_layout(inner))),
 
-        T::I8 | T::I16 | T::I32 | T::I64 | T::I128 | T::I256 => {
-            unreachable!("Signed integer constants are not yet supported")
-        }
+        T::I8 => L::I8,
+        T::I16 => L::I16,
+        T::I32 => L::I32,
+        T::I64 => L::I64,
+        T::I128 => L::I128,
+        T::I256 => L::I256,
 
         T::Datatype(_) | T::Reference(_, _) | T::TypeParameter(_) | T::Signer => {
             unreachable!("{ty:?} is not supported in constants")

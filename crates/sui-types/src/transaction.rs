@@ -249,7 +249,13 @@ fn type_input_validity_check(
             | TypeInput::Signer
             | TypeInput::U16
             | TypeInput::U32
-            | TypeInput::U256 => (),
+            | TypeInput::U256
+            | TypeInput::I8
+            | TypeInput::I16
+            | TypeInput::I32
+            | TypeInput::I64
+            | TypeInput::I128
+            | TypeInput::I256 => (),
             TypeInput::Vector(t) => {
                 stack.push((t, depth + 1));
             }
@@ -937,7 +943,13 @@ fn add_type_input_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &Ty
             | TypeInput::Signer
             | TypeInput::U16
             | TypeInput::U32
-            | TypeInput::U256 => (),
+            | TypeInput::U256
+            | TypeInput::I8
+            | TypeInput::I16
+            | TypeInput::I32
+            | TypeInput::I64
+            | TypeInput::I128
+            | TypeInput::I256 => (),
             TypeInput::Vector(inner) => stack.push(inner),
             TypeInput::Struct(struct_tag) => {
                 packages.insert(struct_tag.address.into());

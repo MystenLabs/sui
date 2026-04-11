@@ -161,6 +161,7 @@ fn resolve_literal_to_type(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Re
         // Vec<T>
         Type::Vector(ty) => resolve_as_vector(buf, ty, value),
 
+        // Signed integer types are not accepted as pure transaction inputs on Sui.
         Type::I8
         | Type::I16
         | Type::I32

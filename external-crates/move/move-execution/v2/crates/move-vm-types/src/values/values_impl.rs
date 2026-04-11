@@ -3510,6 +3510,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             L::Address => AccountAddress::deserialize(deserializer).map(Value::address),
             L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
 
+            L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => {
+                return Err(D::Error::custom(
+                    "signed integer types not supported in this execution version",
+                ));
+            }
+
             L::Struct(struct_layout) => Ok(SeedWrapper {
                 layout: &**struct_layout,
             }

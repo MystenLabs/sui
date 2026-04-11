@@ -310,6 +310,26 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             NormalizedType::U64 => SuiMoveNormalizedType::U64,
             NormalizedType::U128 => SuiMoveNormalizedType::U128,
             NormalizedType::U256 => SuiMoveNormalizedType::U256,
+            // TODO(signed-ints): the public JSON-RPC schema (`SuiMoveNormalizedType`) does
+            // not have variants for signed integers. This is safe in the Branch-0 plumbing
+            // state because `VERSION_MAX` is still `VERSION_7` and no modules containing
+            // signed-int signature tokens can be published or loaded. Once signed-int
+            // modules become reachable on-chain (e.g. when the `move-stdlib` i8..i256
+            // modules ship as part of the framework), this arm must either grow new schema
+            // variants or switch to a fallible conversion. Until then, reaching this arm
+            // is a loud invariant-violation rather than a silent misrender.
+            NormalizedType::I8
+            | NormalizedType::I16
+            | NormalizedType::I32
+            | NormalizedType::I64
+            | NormalizedType::I128
+            | NormalizedType::I256 => {
+                unreachable!(
+                    "BUG: SuiMoveNormalizedType conversion reached for a signed integer type. \
+                     The public RPC schema must be extended before signed-int modules can be \
+                     published."
+                )
+            }
             NormalizedType::Address => SuiMoveNormalizedType::Address,
             NormalizedType::Signer => SuiMoveNormalizedType::Signer,
             NormalizedType::Datatype(dt) => {
@@ -338,14 +358,6 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             NormalizedType::Reference(true, mr) => SuiMoveNormalizedType::MutableReference(
                 Box::new(SuiMoveNormalizedType::from(&**mr)),
             ),
-            NormalizedType::I8
-            | NormalizedType::I16
-            | NormalizedType::I32
-            | NormalizedType::I64
-            | NormalizedType::I128
-            | NormalizedType::I256 => {
-                panic!("Signed integer types are not yet supported in sui-json-rpc-types")
-            }
         }
     }
 }
@@ -463,6 +475,15 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
+            // Signed integer types are not accepted as pure transaction inputs on Sui, but
+            // may appear in Move values read back from on-chain data. Render them as strings
+            // for consistency with the larger unsigned integer types.
+            MoveValue::I8(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I16(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I32(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I64(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I128(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I256(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Vector(values) => {
                 SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())

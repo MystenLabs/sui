@@ -283,6 +283,9 @@ impl Value<'_> {
                 L::U64 => bcs::from_bytes::<u64>(data).ok(),
                 L::U128 => bcs::from_bytes::<u128>(data).ok()?.try_into().ok(),
                 L::U256 => bcs::from_bytes::<U256>(data).ok()?.try_into().ok(),
+                // Signed integer types are not supported on Sui, so they cannot
+                // be coerced to `u64`.
+                L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => None,
                 L::Address | L::Bool | L::Enum(_) | L::Signer | L::Struct(_) | L::Vector(_) => None,
             },
 
@@ -776,6 +779,11 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                 L::U64 => A::U64(bcs::from_bytes(bytes)?),
                 L::U128 => A::U128(bcs::from_bytes(bytes)?),
                 L::U256 => A::U256(bcs::from_bytes(bytes)?),
+                // Signed integer types are not supported on Sui, and the
+                // display `Atom` has no variants for them.
+                L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => {
+                    return Err(FormatError::TransformInvalid("unexpected signed integer"));
+                }
 
                 L::Vector(layout) if layout.as_ref() == &L::U8 => {
                     A::Bytes(Cow::Borrowed(bcs::from_bytes(bytes)?))

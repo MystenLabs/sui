@@ -83,6 +83,7 @@ impl<'b, 'l> Visitor<'b, 'l> for FieldVisitor {
     //
     // A dynamic field must be a struct, so if the visitor is fed anything else, it complains.
     visitor_default! { <'b, 'l> u8, u16, u32, u64, u128, u256 = Err(Error::NotADynamicField) }
+    visitor_default! { <'b, 'l> i8, i16, i32, i64, i128, i256 = Err(Error::NotADynamicField) }
     visitor_default! { <'b, 'l> bool, address, signer, vector, variant = Err(Error::NotADynamicField) }
 
     fn visit_struct(

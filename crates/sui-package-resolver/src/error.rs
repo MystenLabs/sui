@@ -90,6 +90,9 @@ pub enum Error {
     #[error("Unexpected type: 'signer'.")]
     UnexpectedSigner,
 
+    #[error("Unexpected signed integer type.")]
+    UnexpectedSignedInteger,
+
     #[error("Unexpected error: {0}")]
     UnexpectedError(Arc<dyn std::error::Error + Send + Sync + 'static>),
 

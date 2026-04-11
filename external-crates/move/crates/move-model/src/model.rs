@@ -1877,6 +1877,12 @@ impl<'env> ModuleEnv<'env> {
             SignatureToken::U64 => Type::Primitive(PrimitiveType::U64),
             SignatureToken::U128 => Type::Primitive(PrimitiveType::U128),
             SignatureToken::U256 => Type::Primitive(PrimitiveType::U256),
+            SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => Type::Error,
             SignatureToken::Address => Type::Primitive(PrimitiveType::Address),
             SignatureToken::Signer => Type::Primitive(PrimitiveType::Signer),
             SignatureToken::Reference(t) => {
@@ -1904,14 +1910,6 @@ impl<'env> ModuleEnv<'env> {
                     .or_else(|| declaring_module_env.find_enum(name).map(|env| env.get_id()))
                     .expect("undefined datatype");
                 Type::Datatype(declaring_module_env.data.id, datatype_id, vec![])
-            }
-            SignatureToken::I8
-            | SignatureToken::I16
-            | SignatureToken::I32
-            | SignatureToken::I64
-            | SignatureToken::I128
-            | SignatureToken::I256 => {
-                panic!("Signed integer types are not yet supported in move-model")
             }
             SignatureToken::DatatypeInstantiation(inst) => {
                 let (handle_idx, args) = &**inst;
