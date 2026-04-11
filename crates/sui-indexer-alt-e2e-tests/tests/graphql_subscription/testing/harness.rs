@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Subscription tests using sim_test for deterministic execution.
-//! No postgres/indexer needed — streaming resolves from gRPC proto in memory.
-
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
@@ -23,25 +20,21 @@ use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
-use sui_macros::sim_test;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::get_available_port;
-use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::http::Request;
 
-// -- Test infrastructure --
-
-struct SubscriptionTestCluster {
-    subscription_url: String,
+pub struct SubscriptionTestCluster {
+    pub subscription_url: String,
     #[allow(unused)]
     service: Service,
 }
 
 impl SubscriptionTestCluster {
-    async fn new(validator_cluster: &test_cluster::TestCluster) -> Self {
+    pub async fn new(validator_cluster: &test_cluster::TestCluster) -> Self {
         let graphql_port = get_available_port();
         let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
         let rpc_url = validator_cluster.rpc_url();
@@ -76,7 +69,7 @@ impl SubscriptionTestCluster {
         }
     }
 
-    async fn subscribe(&self, query: &str) -> SubscriptionStream {
+    pub async fn subscribe(&self, query: &str) -> SubscriptionStream {
         let request = Request::builder()
             .uri(&self.subscription_url)
             .header("Sec-WebSocket-Protocol", "graphql-transport-ws")
@@ -123,7 +116,7 @@ impl SubscriptionTestCluster {
     }
 }
 
-struct SubscriptionStream {
+pub struct SubscriptionStream {
     stream: futures::stream::SplitStream<
         tokio_tungstenite::WebSocketStream<
             tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
@@ -132,7 +125,7 @@ struct SubscriptionStream {
 }
 
 impl SubscriptionStream {
-    async fn next_item(&mut self) -> Value {
+    pub async fn next_item(&mut self) -> Value {
         let msg = timeout(Duration::from_secs(30), self.stream.next())
             .await
             .expect("Timeout waiting for subscription item")
@@ -149,68 +142,11 @@ impl SubscriptionStream {
         msg["payload"].clone()
     }
 
-    async fn collect_items(&mut self, n: usize) -> Vec<Value> {
+    pub async fn collect_items(&mut self, n: usize) -> Vec<Value> {
         let mut items = Vec::with_capacity(n);
         for _ in 0..n {
             items.push(self.next_item().await);
         }
         items
     }
-}
-
-// -- Tests --
-
-#[sim_test]
-async fn test_subscription_sequential() {
-    let validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
-
-    let mut stream = cluster
-        .subscribe("subscription { checkpoints { sequenceNumber } }")
-        .await;
-    let items = stream.collect_items(3).await;
-
-    insta::assert_json_snapshot!("subscription_sequential", items);
-}
-
-#[sim_test]
-async fn test_subscription_fields() {
-    let validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
-
-    let mut stream = cluster
-        .subscribe(
-            r#"subscription {
-                checkpoints {
-                    sequenceNumber
-                    digest
-                    contentDigest
-                    timestamp
-                    networkTotalTransactions
-                    rollingGasSummary {
-                        computationCost
-                        storageCost
-                        storageRebate
-                        nonRefundableStorageFee
-                    }
-                    epoch {
-                        epochId
-                    }
-                    validatorSignatures {
-                        signature
-                        signersMap
-                    }
-                }
-            }"#,
-        )
-        .await;
-    let item = stream.next_item().await;
-
-    insta::assert_json_snapshot!("subscription_fields", item);
 }

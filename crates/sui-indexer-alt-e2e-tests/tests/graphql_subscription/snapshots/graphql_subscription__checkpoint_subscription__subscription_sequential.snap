@@ -1,5 +1,5 @@
 ---
-source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription_tests.rs
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/checkpoint_subscription.rs
 expression: items
 ---
 [
