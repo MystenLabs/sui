@@ -543,6 +543,18 @@ where
             VRT::Type::U64 => Type::U64,
             VRT::Type::U128 => Type::U128,
             VRT::Type::U256 => Type::U256,
+            // Signed integer types are not supported at the Sui layer.
+            VRT::Type::I8
+            | VRT::Type::I16
+            | VRT::Type::I32
+            | VRT::Type::I64
+            | VRT::Type::I128
+            | VRT::Type::I256 => {
+                invariant_violation!(
+                    "Signed integer types are not supported at the Sui layer: {:?}",
+                    vm_type
+                );
+            }
             VRT::Type::Address => Type::Address,
             VRT::Type::Signer => Type::Signer,
 

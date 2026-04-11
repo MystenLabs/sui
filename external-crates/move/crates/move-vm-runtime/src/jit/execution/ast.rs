@@ -12,7 +12,7 @@ use crate::{
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
-        TypeLimits, TypeSize,
+        constants::TYPE_DEPTH_MAX,
         safe_ops::SafeArithmetic as _,
         types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
@@ -138,11 +138,7 @@ impl Drop for Module {
 pub(crate) struct Constant {
     pub(crate) value: ConstantValue,
     pub(crate) type_: ArenaType,
-    // Size of constant -- used for gas charging. When
-    // `VMConfig::charge_ld_const_abstract_size` is set this is the abstract value size of the
-    // constant; otherwise it is the serialized byte length.
-    // TODO(Gas): Once `charge_ld_const_abstract_size` is the only behavior, rename this to
-    // `abstract_size` and charge it as an abstract size rather than as `NumBytes`.
+    // Size of constant -- used for gas charging.
     pub size: u64,
 }
 
@@ -301,6 +297,12 @@ pub(crate) enum ArenaType {
     U16,
     U32,
     U256,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
 }
 
 #[derive(Debug)]
@@ -347,6 +349,12 @@ pub enum Type {
     U16,
     U32,
     U256,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -814,6 +822,19 @@ pub(crate) enum Bytecode {
     ///
     /// ```..., integer_value -> ..., u256_value```
     CastU256,
+    LdI8(i8),
+    LdI16(i16),
+    LdI32(i32),
+    LdI64(i64),
+    LdI128(ArenaBox<i128>),
+    LdI256(ArenaBox<move_core_types::i256::I256>),
+    CastI8,
+    CastI16,
+    CastI32,
+    CastI64,
+    CastI128,
+    CastI256,
+    Neg,
     /// Create a variant of the enum type specified via `VariantHandleIndex` and push it on the stack.
     /// The values of the fields of the variant, in the order they appear in the variant declaration,
     /// must be pushed on the stack. All fields for the variant must be provided.
@@ -889,7 +910,6 @@ impl Function {
         self.return_.len()
     }
 
-    #[allow(dead_code)]
     pub fn name_str(&self, interner: &IdentifierInterner) -> String {
         self.name(interner).to_string()
     }
@@ -986,43 +1006,34 @@ impl VariantInstantiation {
 
 impl ArenaType {
     /// Convert to a runtime type by performing a deep copy
-    pub fn to_type(&self) -> PartialVMResult<Type> {
-        self.to_type_with_limits(&TypeLimits::VM_DEFAULT)
-    }
-
-    pub fn to_type_with_limits(&self, limits: &TypeLimits) -> PartialVMResult<Type> {
-        self.to_type_impl(&mut limits.traversal())
-    }
-
-    fn to_type_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<Type> {
-        type_size.enter_type(|type_size| {
-            Ok(match self {
-                ArenaType::TyParam(idx) => Type::TyParam(*idx),
-                ArenaType::Bool => Type::Bool,
-                ArenaType::U8 => Type::U8,
-                ArenaType::U16 => Type::U16,
-                ArenaType::U32 => Type::U32,
-                ArenaType::U64 => Type::U64,
-                ArenaType::U128 => Type::U128,
-                ArenaType::U256 => Type::U256,
-                ArenaType::Address => Type::Address,
-                ArenaType::Signer => Type::Signer,
-                ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type_impl(type_size)?)),
-                ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type_impl(type_size)?)),
-                ArenaType::MutableReference(ty) => {
-                    Type::MutableReference(Box::new(ty.to_type_impl(type_size)?))
-                }
-                ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
-                ArenaType::DatatypeInstantiation(def_inst) => {
-                    let (def_idx, instantiation) = &**def_inst;
-                    let inst = instantiation
-                        .iter()
-                        .map(|ty| ty.to_type_impl(type_size))
-                        .collect::<PartialVMResult<Vec<_>>>()?;
-                    Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
-                }
-            })
-        })
+    pub fn to_type(&self) -> Type {
+        match self {
+            ArenaType::TyParam(idx) => Type::TyParam(*idx),
+            ArenaType::Bool => Type::Bool,
+            ArenaType::U8 => Type::U8,
+            ArenaType::U16 => Type::U16,
+            ArenaType::U32 => Type::U32,
+            ArenaType::U64 => Type::U64,
+            ArenaType::U128 => Type::U128,
+            ArenaType::U256 => Type::U256,
+            ArenaType::I8 => Type::I8,
+            ArenaType::I16 => Type::I16,
+            ArenaType::I32 => Type::I32,
+            ArenaType::I64 => Type::I64,
+            ArenaType::I128 => Type::I128,
+            ArenaType::I256 => Type::I256,
+            ArenaType::Address => Type::Address,
+            ArenaType::Signer => Type::Signer,
+            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type())),
+            ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type())),
+            ArenaType::MutableReference(ty) => Type::MutableReference(Box::new(ty.to_type())),
+            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+            ArenaType::DatatypeInstantiation(def_inst) => {
+                let (def_idx, instantiation) = &**def_inst;
+                let inst = instantiation.iter().map(|ty| ty.to_type()).collect();
+                Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+            }
+        }
     }
 }
 
@@ -1098,80 +1109,63 @@ impl Type {
     ///
     /// This kept only for legacy reasons.
     /// New applications should not use this.
-    pub fn size(&self) -> PartialVMResult<AbstractMemorySize> {
-        self.size_impl(&mut TypeSize::for_type_traversal())
-    }
-
+    ///
     /// SAFETY: Addition over `AbstractMemorySize` is saturating and so this is safe against
     /// overflow. See the implementation of [`Add`] for [`AbstractMemorySize`] in the
     /// [`move_core_types::gas_algebra`] module for more details on this and why this is safe.
     #[allow(clippy::arithmetic_side_effects)]
-    fn size_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<AbstractMemorySize> {
+    pub fn size(&self) -> AbstractMemorySize {
         use Type::*;
 
-        type_size.enter_type(|type_size| {
-            Ok(match self {
-                TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => {
-                    Self::LEGACY_BASE_MEMORY_SIZE
-                }
-                Vector(ty) | Reference(ty) | MutableReference(ty) => {
-                    Self::LEGACY_BASE_MEMORY_SIZE + ty.size_impl(type_size)?
-                }
-                Datatype(_) => Self::LEGACY_BASE_MEMORY_SIZE,
-                DatatypeInstantiation(inst) => {
-                    let (_, tys) = &**inst;
-                    let mut acc = Self::LEGACY_BASE_MEMORY_SIZE;
-                    for ty in tys {
-                        acc += ty.size_impl(type_size)?;
-                    }
-                    acc
-                }
-            })
-        })
+        match self {
+            TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64
+            | I128 | I256 | Address | Signer => Self::LEGACY_BASE_MEMORY_SIZE,
+            Vector(ty) | Reference(ty) | MutableReference(ty) => {
+                Self::LEGACY_BASE_MEMORY_SIZE + ty.size()
+            }
+            Datatype(_) => Self::LEGACY_BASE_MEMORY_SIZE,
+            DatatypeInstantiation(inst) => {
+                let (_, tys) = &**inst;
+                tys.iter()
+                    .fold(Self::LEGACY_BASE_MEMORY_SIZE, |acc, ty| acc + ty.size())
+            }
+        }
     }
 
     pub fn from_const_signature(constant_signature: &SignatureToken) -> PartialVMResult<Self> {
-        Self::from_const_signature_impl(constant_signature, &mut TypeSize::for_type_traversal())
-    }
-
-    fn from_const_signature_impl(
-        constant_signature: &SignatureToken,
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<Self> {
         use SignatureToken as S;
         use Type as L;
 
-        type_size.enter_type(|type_size| {
-            Ok(match constant_signature {
-                S::Bool => L::Bool,
-                S::U8 => L::U8,
-                S::U16 => L::U16,
-                S::U32 => L::U32,
-                S::U64 => L::U64,
-                S::U128 => L::U128,
-                S::U256 => L::U256,
-                S::Address => L::Address,
-                S::Vector(inner) => {
-                    L::Vector(Box::new(Self::from_const_signature_impl(inner, type_size)?))
-                }
-                // Not yet supported
-                S::Datatype(_) | S::DatatypeInstantiation(_) => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "Unable to load const type signature"
-                    ));
-                }
-                S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
-                    todo!("[signed-ints] signed integer constants in the VM runtime")
-                }
-                // Not allowed/Not meaningful
-                S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "Unable to load const type signature"
-                    ));
-                }
-            })
+        Ok(match constant_signature {
+            S::Bool => L::Bool,
+            S::U8 => L::U8,
+            S::U16 => L::U16,
+            S::U32 => L::U32,
+            S::U64 => L::U64,
+            S::U128 => L::U128,
+            S::U256 => L::U256,
+            S::Address => L::Address,
+            S::Vector(inner) => L::Vector(Box::new(Self::from_const_signature(inner)?)),
+            // Not yet supported
+            S::Datatype(_) | S::DatatypeInstantiation(_) => {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Unable to load const type signature"
+                ));
+            }
+            S::I8 => L::I8,
+            S::I16 => L::I16,
+            S::I32 => L::I32,
+            S::I64 => L::I64,
+            S::I128 => L::I128,
+            S::I256 => L::I256,
+            // Not allowed/Not meaningful
+            S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Unable to load const type signature"
+                ));
+            }
         })
     }
 
@@ -1252,80 +1246,71 @@ impl DatatypeDescriptor {
 // -------------------------------------------------------------------------------------------------
 
 pub trait TypeSubst {
-    fn clone_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<Type>;
-    fn apply_subst<F>(&self, subst: F, type_size: &mut TypeSize) -> PartialVMResult<Type>
+    fn clone_impl(&self, depth: usize) -> PartialVMResult<Type>;
+    fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
     where
-        F: Fn(u16, &mut TypeSize) -> PartialVMResult<Type> + Copy;
+        F: Fn(u16, usize) -> PartialVMResult<Type> + Copy;
     fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type>;
-    fn subst_with_limits(&self, limits: &TypeLimits, ty_args: &[Type]) -> PartialVMResult<Type>;
 }
 
 // Macro that generates the implementations.
 macro_rules! impl_deep_subst {
     ($ty:ident) => {
         impl TypeSubst for $ty {
-            fn clone_impl(
-                &self,
-                type_size: &mut $crate::shared::TypeSize,
-            ) -> PartialVMResult<Type> {
-                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), type_size)
+            fn clone_impl(&self, depth: usize) -> PartialVMResult<Type> {
+                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), depth.safe_add(1)?)
             }
 
-            fn apply_subst<F>(
-                &self,
-                subst: F,
-                type_size: &mut $crate::shared::TypeSize,
-            ) -> PartialVMResult<Type>
+            fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
             where
-                F: Fn(u16, &mut $crate::shared::TypeSize) -> PartialVMResult<Type> + Copy,
+                F: Fn(u16, usize) -> PartialVMResult<Type> + Copy,
             {
-                type_size.enter_type(|type_size| {
-                    let res = match self {
-                        $ty::TyParam(idx) => subst(*idx, type_size)?,
-                        $ty::Bool => Type::Bool,
-                        $ty::U8 => Type::U8,
-                        $ty::U16 => Type::U16,
-                        $ty::U32 => Type::U32,
-                        $ty::U64 => Type::U64,
-                        $ty::U128 => Type::U128,
-                        $ty::U256 => Type::U256,
-                        $ty::Address => Type::Address,
-                        $ty::Signer => Type::Signer,
-                        $ty::Vector(ty) => {
-                            Type::Vector(Box::new(ty.apply_subst(subst, type_size)?))
-                        }
-                        $ty::Reference(ty) => {
-                            Type::Reference(Box::new(ty.apply_subst(subst, type_size)?))
-                        }
-                        $ty::MutableReference(ty) => {
-                            Type::MutableReference(Box::new(ty.apply_subst(subst, type_size)?))
-                        }
-                        $ty::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
-                        $ty::DatatypeInstantiation(def_inst) => {
-                            let (def_idx, instantiation) = &**def_inst;
-                            let inst = instantiation
-                                .iter()
-                                .map(|ty| ty.apply_subst(subst, type_size))
-                                .collect::<PartialVMResult<Vec<_>>>()?;
-                            Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
-                        }
-                    };
-                    Ok(res)
-                })
+                if depth > TYPE_DEPTH_MAX {
+                    return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
+                }
+                let res = match self {
+                    $ty::TyParam(idx) => subst(*idx, depth)?,
+                    $ty::Bool => Type::Bool,
+                    $ty::U8 => Type::U8,
+                    $ty::U16 => Type::U16,
+                    $ty::U32 => Type::U32,
+                    $ty::U64 => Type::U64,
+                    $ty::U128 => Type::U128,
+                    $ty::U256 => Type::U256,
+                    $ty::I8 => Type::I8,
+                    $ty::I16 => Type::I16,
+                    $ty::I32 => Type::I32,
+                    $ty::I64 => Type::I64,
+                    $ty::I128 => Type::I128,
+                    $ty::I256 => Type::I256,
+                    $ty::Address => Type::Address,
+                    $ty::Signer => Type::Signer,
+                    $ty::Vector(ty) => {
+                        Type::Vector(Box::new(ty.apply_subst(subst, depth.safe_add(1)?)?))
+                    }
+                    $ty::Reference(ty) => {
+                        Type::Reference(Box::new(ty.apply_subst(subst, depth.safe_add(1)?)?))
+                    }
+                    $ty::MutableReference(ty) => {
+                        Type::MutableReference(Box::new(ty.apply_subst(subst, depth.safe_add(1)?)?))
+                    }
+                    $ty::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+                    $ty::DatatypeInstantiation(def_inst) => {
+                        let (def_idx, instantiation) = &**def_inst;
+                        let inst = instantiation
+                            .iter()
+                            .map(|ty| ty.apply_subst(subst, depth.safe_add(1)?))
+                            .collect::<PartialVMResult<Vec<_>>>()?;
+                        Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+                    }
+                };
+                Ok(res)
             }
 
             fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
-                self.subst_with_limits(&$crate::shared::TypeLimits::VM_DEFAULT, ty_args)
-            }
-
-            fn subst_with_limits(
-                &self,
-                limits: &$crate::shared::TypeLimits,
-                ty_args: &[Type],
-            ) -> PartialVMResult<Type> {
                 self.apply_subst(
-                    |idx, type_size| match ty_args.get(idx as usize) {
-                        Some(ty) => ty.clone_impl(type_size),
+                    |idx, depth| match ty_args.get(idx as usize) {
+                        Some(ty) => ty.clone_impl(depth),
                         None => Err(move_binary_format::partial_vm_error!(
                             UNKNOWN_INVARIANT_VIOLATION_ERROR,
                             "type substitution failed: index out of bounds -- len {} got {}",
@@ -1333,7 +1318,7 @@ macro_rules! impl_deep_subst {
                             idx
                         )),
                     },
-                    &mut limits.traversal(),
+                    1,
                 )
             }
         }
@@ -1460,6 +1445,19 @@ impl From<&Bytecode> for Opcodes {
             Bytecode::CastU16 => Opcodes::CAST_U16,
             Bytecode::CastU32 => Opcodes::CAST_U32,
             Bytecode::CastU256 => Opcodes::CAST_U256,
+            Bytecode::LdI8(_) => Opcodes::LD_I8,
+            Bytecode::LdI16(_) => Opcodes::LD_I16,
+            Bytecode::LdI32(_) => Opcodes::LD_I32,
+            Bytecode::LdI64(_) => Opcodes::LD_I64,
+            Bytecode::LdI128(_) => Opcodes::LD_I128,
+            Bytecode::LdI256(_) => Opcodes::LD_I256,
+            Bytecode::CastI8 => Opcodes::CAST_I8,
+            Bytecode::CastI16 => Opcodes::CAST_I16,
+            Bytecode::CastI32 => Opcodes::CAST_I32,
+            Bytecode::CastI64 => Opcodes::CAST_I64,
+            Bytecode::CastI128 => Opcodes::CAST_I128,
+            Bytecode::CastI256 => Opcodes::CAST_I256,
+            Bytecode::Neg => Opcodes::NEG,
             Bytecode::PackVariant(_) => Opcodes::PACK_VARIANT,
             Bytecode::PackVariantGeneric(_) => Opcodes::PACK_VARIANT_GENERIC,
             Bytecode::UnpackVariant(_) => Opcodes::UNPACK_VARIANT,
@@ -1503,6 +1501,19 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CastU64 => write!(f, "CastU64"),
             Bytecode::CastU128 => write!(f, "CastU128"),
             Bytecode::CastU256 => write!(f, "CastU256"),
+            Bytecode::LdI8(a) => write!(f, "LdI8({})", a),
+            Bytecode::LdI16(a) => write!(f, "LdI16({})", a),
+            Bytecode::LdI32(a) => write!(f, "LdI32({})", a),
+            Bytecode::LdI64(a) => write!(f, "LdI64({})", a),
+            Bytecode::LdI128(a) => write!(f, "LdI128({})", **a),
+            Bytecode::LdI256(a) => write!(f, "LdI256({})", **a),
+            Bytecode::CastI8 => write!(f, "CastI8"),
+            Bytecode::CastI16 => write!(f, "CastI16"),
+            Bytecode::CastI32 => write!(f, "CastI32"),
+            Bytecode::CastI64 => write!(f, "CastI64"),
+            Bytecode::CastI128 => write!(f, "CastI128"),
+            Bytecode::CastI256 => write!(f, "CastI256"),
+            Bytecode::Neg => write!(f, "Neg"),
             Bytecode::LdConst(a) => write!(f, "LdConst({})", a.to_ref().value),
             Bytecode::LdTrue => write!(f, "LdTrue"),
             Bytecode::LdFalse => write!(f, "LdFalse"),
@@ -1631,6 +1642,12 @@ impl std::fmt::Debug for ArenaType {
             ArenaType::U16 => write!(f, "u16"),
             ArenaType::U32 => write!(f, "u32"),
             ArenaType::U256 => write!(f, "u256"),
+            ArenaType::I8 => write!(f, "i8"),
+            ArenaType::I16 => write!(f, "i16"),
+            ArenaType::I32 => write!(f, "i32"),
+            ArenaType::I64 => write!(f, "i64"),
+            ArenaType::I128 => write!(f, "i128"),
+            ArenaType::I256 => write!(f, "i256"),
         }
     }
 }
@@ -1856,6 +1873,22 @@ impl<B: std::fmt::Write> InternedDisplay<B> for Bytecode {
             Bytecode::CastU128 => write!(f, "CastU128"),
             Bytecode::CastU256 => write!(f, "CastU256"),
 
+            Bytecode::LdI8(a) => write!(f, "LdI8({})", a),
+            Bytecode::LdI16(a) => write!(f, "LdI16({})", a),
+            Bytecode::LdI32(a) => write!(f, "LdI32({})", a),
+            Bytecode::LdI64(a) => write!(f, "LdI64({})", a),
+            Bytecode::LdI128(a) => write!(f, "LdI128({})", **a),
+            Bytecode::LdI256(a) => write!(f, "LdI256({})", **a),
+
+            Bytecode::CastI8 => write!(f, "CastI8"),
+            Bytecode::CastI16 => write!(f, "CastI16"),
+            Bytecode::CastI32 => write!(f, "CastI32"),
+            Bytecode::CastI64 => write!(f, "CastI64"),
+            Bytecode::CastI128 => write!(f, "CastI128"),
+            Bytecode::CastI256 => write!(f, "CastI256"),
+
+            Bytecode::Neg => write!(f, "Neg"),
+
             Bytecode::LdConst(a) => write!(f, "LdConst({})", a.to_ref().value),
 
             Bytecode::LdTrue => write!(f, "LdTrue"),
@@ -2068,6 +2101,12 @@ impl<B: std::fmt::Write> InternedDisplay<B> for ArenaType {
             ArenaType::U64 => write!(f, "u64"),
             ArenaType::U128 => write!(f, "u128"),
             ArenaType::U256 => write!(f, "u256"),
+            ArenaType::I8 => write!(f, "i8"),
+            ArenaType::I16 => write!(f, "i16"),
+            ArenaType::I32 => write!(f, "i32"),
+            ArenaType::I64 => write!(f, "i64"),
+            ArenaType::I128 => write!(f, "i128"),
+            ArenaType::I256 => write!(f, "i256"),
             ArenaType::Address => write!(f, "address"),
             ArenaType::Signer => write!(f, "signer"),
             ArenaType::Vector(ty) => {
