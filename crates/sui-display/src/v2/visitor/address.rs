@@ -19,6 +19,7 @@ impl AV::Visitor<'_, '_> for AddressExtractor {
     type Error = FormatError;
 
     visitor_default! { <'_, '_> u8, u16, u32, u64, u128, u256 = Ok(None) }
+    visitor_default! { <'_, '_> i8, i16, i32, i64, i128, i256 = Ok(None) }
     visitor_default! { <'_, '_> bool, signer, vector, variant = Ok(None) }
 
     fn visit_address(

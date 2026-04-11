@@ -453,6 +453,12 @@ impl TypeLayoutBuilder {
             U64 => A::MoveTypeLayout::U64,
             U128 => A::MoveTypeLayout::U128,
             U256 => A::MoveTypeLayout::U256,
+            I8 => A::MoveTypeLayout::I8,
+            I16 => A::MoveTypeLayout::I16,
+            I32 => A::MoveTypeLayout::I32,
+            I64 => A::MoveTypeLayout::I64,
+            I128 => A::MoveTypeLayout::I128,
+            I256 => A::MoveTypeLayout::I256,
             Address => A::MoveTypeLayout::Address,
             Signer => bail!("Type layouts cannot contain signer"),
             Vector(elem_t) => {
@@ -508,9 +514,12 @@ impl TypeLayoutBuilder {
             U64 => A::MoveTypeLayout::U64,
             U128 => A::MoveTypeLayout::U128,
             U256 => A::MoveTypeLayout::U256,
-            I8 | I16 | I32 | I64 | I128 | I256 => {
-                bail!("Signed integer type layouts are not yet supported")
-            }
+            I8 => A::MoveTypeLayout::I8,
+            I16 => A::MoveTypeLayout::I16,
+            I32 => A::MoveTypeLayout::I32,
+            I64 => A::MoveTypeLayout::I64,
+            I128 => A::MoveTypeLayout::I128,
+            I256 => A::MoveTypeLayout::I256,
             Address => A::MoveTypeLayout::Address,
             Signer => bail!("Type layouts cannot contain signer"),
             Reference(_) | MutableReference(_) => bail!("Type layouts cannot contain references"),

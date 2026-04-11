@@ -243,6 +243,7 @@ impl MoveType {
                 | RE::NoTypeOrigin(_, _, _)
                 | RE::UnexpectedReference
                 | RE::UnexpectedSigner
+                | RE::UnexpectedSignedInteger
                 | RE::UnexpectedError(_)),
             ) => {
                 return Err(anyhow!(err)
@@ -370,6 +371,11 @@ impl TryFrom<TypeInput> for MoveTypeSignature {
             T::U128 => Self::U128,
             T::U256 => Self::U256,
 
+            // Signed integer types are not accepted on Sui.
+            T::I8 | T::I16 | T::I32 | T::I64 | T::I128 | T::I256 => {
+                return Err(anyhow!("Unexpected signed integer type").into());
+            }
+
             T::Bool => Self::Bool,
             T::Address => Self::Address,
 
@@ -404,6 +410,11 @@ impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
             TL::U64 => Self::U64,
             TL::U128 => Self::U128,
             TL::U256 => Self::U256,
+
+            // Signed integer types are not accepted on Sui.
+            TL::I8 | TL::I16 | TL::I32 | TL::I64 | TL::I128 | TL::I256 => {
+                return Err(anyhow!("Unexpected signed integer type").into());
+            }
 
             TL::Bool => Self::Bool,
             TL::Address => Self::Address,
@@ -514,6 +525,7 @@ where
         | RE::TypeParamOOB(_, _)
         | RE::UnexpectedReference
         | RE::UnexpectedSigner
+        | RE::UnexpectedSignedInteger
         | RE::UnexpectedError(_) => anyhow!(err).context(context()).into(),
     }
 }

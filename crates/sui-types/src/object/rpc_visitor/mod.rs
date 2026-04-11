@@ -13,6 +13,7 @@ use std::marker::PhantomData;
 
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_visitor as AV;
+use move_core_types::i256::I256;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::u256::U256;
 
@@ -108,6 +109,58 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
         &mut self,
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: U256,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::string(&mut self.meter, value.to_string())?)
+    }
+
+    fn visit_i8(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i8,
+    ) -> Result<Self::Value, Self::Error> {
+        // The `Format::number` API takes an unsigned `u32`, so negative values would
+        // be garbled if reinterpreted bit-wise. Render as a string until `Format` grows a
+        // signed-number entry point. Consumers that rely on a native numeric JSON value
+        // will need to parse the string themselves.
+        Ok(F::string(&mut self.meter, value.to_string())?)
+    }
+
+    fn visit_i16(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i16,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::string(&mut self.meter, value.to_string())?)
+    }
+
+    fn visit_i32(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i32,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::string(&mut self.meter, value.to_string())?)
+    }
+
+    fn visit_i64(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i64,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::string(&mut self.meter, value.to_string())?)
+    }
+
+    fn visit_i128(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i128,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::string(&mut self.meter, value.to_string())?)
+    }
+
+    fn visit_i256(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: I256,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::string(&mut self.meter, value.to_string())?)
     }
