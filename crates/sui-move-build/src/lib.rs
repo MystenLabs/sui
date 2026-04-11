@@ -472,6 +472,12 @@ impl CompiledPackage {
                             | Type::U64
                             | Type::U128
                             | Type::U256
+                            | Type::I8
+                            | Type::I16
+                            | Type::I32
+                            | Type::I64
+                            | Type::I128
+                            | Type::I256
                             | Type::Vector(_) => continue,
                             Type::Reference(_, inner) => inner.to_struct_tag(pool),
                             Type::Datatype(_) => t.to_struct_tag(pool),

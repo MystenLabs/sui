@@ -18,6 +18,12 @@ fn sig_to_ty(sig: &SignatureToken) -> Option<MoveTypeLayout> {
         SignatureToken::U128 => Some(MoveTypeLayout::U128),
         SignatureToken::U256 => Some(MoveTypeLayout::U256),
         SignatureToken::Vector(v) => Some(MoveTypeLayout::Vector(Box::new(sig_to_ty(v.as_ref())?))),
+        SignatureToken::I8
+        | SignatureToken::I16
+        | SignatureToken::I32
+        | SignatureToken::I64
+        | SignatureToken::I128
+        | SignatureToken::I256 => None,
         SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_)
         | SignatureToken::Datatype(_)

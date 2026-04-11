@@ -153,6 +153,13 @@ impl<'a> InstructionConsistency<'a> {
                 | StLoc(_) | MutBorrowLoc(_) | ImmBorrowLoc(_) | VecLen(_) | VecImmBorrow(_)
                 | VecMutBorrow(_) | VecPushBack(_) | VecPopBack(_) | VecSwap(_) | Abort | Nop
                 | VariantSwitch(_) => (),
+                LdI8(_) | LdI16(_) | LdI32(_) | LdI64(_) | LdI128(_) | LdI256(_) | CastI8
+                | CastI16 | CastI32 | CastI64 | CastI128 | CastI256 | Neg => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message("Unexpected signed int opcode in version 3".to_string()),
+                    );
+                }
                 PackVariant(v_handle)
                 | UnpackVariant(v_handle)
                 | UnpackVariantImmRef(v_handle)

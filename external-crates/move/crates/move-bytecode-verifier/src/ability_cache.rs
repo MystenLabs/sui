@@ -40,9 +40,20 @@ impl<'a> AbilityCache<'a> {
         use SignatureToken as S;
 
         Ok(match ty {
-            S::Bool | S::U8 | S::U16 | S::U32 | S::U64 | S::U128 | S::U256 | S::Address => {
-                AbilitySet::PRIMITIVES
-            }
+            S::Bool
+            | S::U8
+            | S::U16
+            | S::U32
+            | S::U64
+            | S::U128
+            | S::U256
+            | S::I8
+            | S::I16
+            | S::I32
+            | S::I64
+            | S::I128
+            | S::I256
+            | S::Address => AbilitySet::PRIMITIVES,
 
             S::Reference(_) | S::MutableReference(_) => AbilitySet::REFERENCES,
             S::Signer => AbilitySet::SIGNER,

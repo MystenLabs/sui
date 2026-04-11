@@ -1905,6 +1905,14 @@ impl<'env> ModuleEnv<'env> {
                     .expect("undefined datatype");
                 Type::Datatype(declaring_module_env.data.id, datatype_id, vec![])
             }
+            SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => {
+                panic!("Signed integer types are not yet supported in move-model")
+            }
             SignatureToken::DatatypeInstantiation(inst) => {
                 let (handle_idx, args) = &**inst;
                 let module = &self.data.module;
