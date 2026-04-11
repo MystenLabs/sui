@@ -1,0 +1,8 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+task 7, lines 128-146:
+//# run
+Error: Signed integer types (i8..i256) not supported in bytecode version 7

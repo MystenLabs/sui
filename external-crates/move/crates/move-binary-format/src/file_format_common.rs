@@ -613,8 +613,10 @@ pub const VERSION_7: u32 = 7;
 ///  + signed integer bytecodes (i8–i256): LdI8–LdI256, CastI8–CastI256, Neg
 pub const VERSION_8: u32 = 8;
 
-// Mark which version is the latest version
-pub const VERSION_MAX: u32 = VERSION_7;
+// Mark which version is the latest version.
+// Network acceptance of VERSION_8 modules is gated by `move_binary_format_version`
+// in the Sui protocol config — validators reject modules above that threshold.
+pub const VERSION_MAX: u32 = VERSION_8;
 
 // Mark which oldest version is supported.
 // TODO(#145): finish v4 compatibility; as of now, only metadata is implemented

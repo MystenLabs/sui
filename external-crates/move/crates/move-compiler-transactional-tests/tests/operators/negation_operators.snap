@@ -1,0 +1,70 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+task 2, lines 45-54:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x2::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot negate i8(-128)",
+}
+
+task 3, lines 55-64:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x3::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot negate i16(-32768)",
+}
+
+task 4, lines 65-74:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x4::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot negate i32(-2147483648)",
+}
+
+task 5, lines 75-84:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x5::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot negate i64(-9223372036854775808)",
+}
+
+task 6, lines 85-94:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x6::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot negate i128(-170141183460469231731687303715884105728)",
+}
+
+task 7, lines 95-102:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x7::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "Cannot negate i256(-57896044618658097711785492504343953926634992332820282019728792003956564819968)",
+}

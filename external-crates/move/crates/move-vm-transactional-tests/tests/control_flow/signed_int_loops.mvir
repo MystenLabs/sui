@@ -1,0 +1,125 @@
+//# init --edition development
+
+// While loop counting from negative to positive
+//# run
+module 0x42.m {
+
+entry foo() {
+    let i: i32;
+label b0:
+    i = -5i32;
+label loop_start:
+    jump_if_false (copy(i) < 5i32) loop_end;
+label loop_body:
+    i = move(i) + 1i32;
+    jump loop_start;
+label loop_end:
+    assert(move(i) == 5i32, 1);
+    return;
+}
+
+}
+
+// While loop counting down from positive to negative
+//# run
+module 0x43.m {
+
+entry foo() {
+    let i: i32;
+label b0:
+    i = 5i32;
+label loop_start:
+    jump_if_false (copy(i) > -5i32) loop_end;
+label loop_body:
+    i = move(i) - 1i32;
+    jump loop_start;
+label loop_end:
+    assert(move(i) == -5i32, 2);
+    return;
+}
+
+}
+
+// Loop with negative step (decrement by 2)
+//# run
+module 0x44.m {
+
+entry foo() {
+    let i: i64;
+label b0:
+    i = 10i64;
+label loop_start:
+    jump_if_false (copy(i) > -10i64) loop_end;
+label loop_body:
+    i = move(i) - 2i64;
+    jump loop_start;
+label loop_end:
+    assert(move(i) == -10i64, 3);
+    return;
+}
+
+}
+
+// Accumulator with negative values: sum of -5..=5 is 0
+//# run
+module 0x45.m {
+
+entry foo() {
+    let sum: i32;
+    let i: i32;
+label b0:
+    sum = 0i32;
+    i = -5i32;
+label loop_start:
+    jump_if_false (copy(i) <= 5i32) loop_end;
+label loop_body:
+    sum = move(sum) + copy(i);
+    i = move(i) + 1i32;
+    jump loop_start;
+label loop_end:
+    assert(move(sum) == 0i32, 4);
+    return;
+}
+
+}
+
+// Loop with i8, counting 20 iterations from -10 to 10
+//# run
+module 0x46.m {
+
+entry foo() {
+    let i: i8;
+    let count: i8;
+label b0:
+    i = -10i8;
+    count = 0i8;
+label loop_start:
+    jump_if_false (copy(i) < 10i8) loop_end;
+label loop_body:
+    count = move(count) + 1i8;
+    i = move(i) + 1i8;
+    jump loop_start;
+label loop_end:
+    assert(move(count) == 20i8, 6);
+    return;
+}
+
+}
+
+// Break out of loop on negative condition
+//# run
+module 0x47.m {
+
+entry foo() {
+    let i: i32;
+label b0:
+    i = 0i32;
+label loop_start:
+    i = move(i) - 1i32;
+    jump_if_false (copy(i) <= -10i32) loop_start;
+label loop_end:
+    assert(move(i) == -10i32, 8);
+    return;
+}
+
+}

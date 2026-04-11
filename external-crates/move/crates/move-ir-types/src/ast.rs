@@ -161,6 +161,18 @@ pub enum Type_ {
     U128,
     /// `u256`
     U256,
+    /// `i8`
+    I8,
+    /// `i16`
+    I16,
+    /// `i32`
+    I32,
+    /// `i64`
+    I64,
+    /// `i128`
+    I128,
+    /// `i256`
+    I256,
     /// `bool`
     Bool,
     /// `vector`
@@ -428,6 +440,20 @@ pub enum Builtin {
     ToU128,
     /// Cast an integer into u256.
     ToU256,
+    /// Cast an integer into i8.
+    ToI8,
+    /// Cast an integer into i16.
+    ToI16,
+    /// Cast an integer into i32.
+    ToI32,
+    /// Cast an integer into i64.
+    ToI64,
+    /// Cast an integer into i128.
+    ToI128,
+    /// Cast an integer into i256.
+    ToI256,
+    /// Negate an integer.
+    Neg,
 }
 
 /// Enum for different function calls
@@ -535,6 +561,18 @@ pub enum CopyableVal_ {
     U128(u128),
     /// An unsigned 256-bit integer
     U256(move_core_types::u256::U256),
+    /// A signed 8-bit integer
+    I8(i8),
+    /// A signed 16-bit integer
+    I16(i16),
+    /// A signed 32-bit integer
+    I32(i32),
+    /// A signed 64-bit integer
+    I64(i64),
+    /// A signed 128-bit integer
+    I128(i128),
+    /// A signed 256-bit integer
+    I256(move_core_types::i256::I256),
     /// true or false
     Bool(bool),
     /// `b"<bytes>"`
@@ -680,6 +718,19 @@ pub enum Bytecode_ {
     CastU64,
     CastU128,
     CastU256,
+    LdI8(i8),
+    LdI16(i16),
+    LdI32(i32),
+    LdI64(i64),
+    LdI128(i128),
+    LdI256(move_core_types::i256::I256),
+    CastI8,
+    CastI16,
+    CastI32,
+    CastI64,
+    CastI128,
+    CastI256,
+    Neg,
     LdTrue,
     LdFalse,
     LdConst(Type, MoveValue),
@@ -1433,6 +1484,12 @@ impl fmt::Display for Type_ {
             Type_::U64 => write!(f, "u64"),
             Type_::U128 => write!(f, "u128"),
             Type_::U256 => write!(f, "u256"),
+            Type_::I8 => write!(f, "i8"),
+            Type_::I16 => write!(f, "i16"),
+            Type_::I32 => write!(f, "i32"),
+            Type_::I64 => write!(f, "i64"),
+            Type_::I128 => write!(f, "i128"),
+            Type_::I256 => write!(f, "i256"),
             Type_::Bool => write!(f, "bool"),
             Type_::Address => write!(f, "address"),
             Type_::Signer => write!(f, "signer"),
@@ -1472,6 +1529,13 @@ impl fmt::Display for Builtin {
             Builtin::ToU64 => write!(f, "to_u64"),
             Builtin::ToU128 => write!(f, "to_u128"),
             Builtin::ToU256 => write!(f, "to_u256"),
+            Builtin::ToI8 => write!(f, "to_i8"),
+            Builtin::ToI16 => write!(f, "to_i16"),
+            Builtin::ToI32 => write!(f, "to_i32"),
+            Builtin::ToI64 => write!(f, "to_i64"),
+            Builtin::ToI128 => write!(f, "to_i128"),
+            Builtin::ToI256 => write!(f, "to_i256"),
+            Builtin::Neg => write!(f, "neg"),
         }
     }
 }
@@ -1601,6 +1665,12 @@ impl fmt::Display for CopyableVal_ {
             CopyableVal_::U64(v) => write!(f, "{}", v),
             CopyableVal_::U128(v) => write!(f, "{}u128", v),
             CopyableVal_::U256(v) => write!(f, "{}u256", v),
+            CopyableVal_::I8(v) => write!(f, "{}i8", v),
+            CopyableVal_::I16(v) => write!(f, "{}i16", v),
+            CopyableVal_::I32(v) => write!(f, "{}i32", v),
+            CopyableVal_::I64(v) => write!(f, "{}i64", v),
+            CopyableVal_::I128(v) => write!(f, "{}i128", v),
+            CopyableVal_::I256(v) => write!(f, "{}i256", v),
             CopyableVal_::Bool(v) => write!(f, "{}", v),
             CopyableVal_::ByteArray(v) => write!(f, "0b{}", hex::encode(v)),
             CopyableVal_::Address(v) => write!(f, "0x{}", hex::encode(v)),
@@ -1734,6 +1804,19 @@ impl fmt::Display for Bytecode_ {
             Bytecode_::CastU64 => write!(f, "CastU64"),
             Bytecode_::CastU128 => write!(f, "CastU128"),
             Bytecode_::CastU256 => write!(f, "CastU256"),
+            Bytecode_::LdI8(v) => write!(f, "LdI8 {}", v),
+            Bytecode_::LdI16(v) => write!(f, "LdI16 {}", v),
+            Bytecode_::LdI32(v) => write!(f, "LdI32 {}", v),
+            Bytecode_::LdI64(v) => write!(f, "LdI64 {}", v),
+            Bytecode_::LdI128(v) => write!(f, "LdI128 {}", v),
+            Bytecode_::LdI256(v) => write!(f, "LdI256 {}", v),
+            Bytecode_::CastI8 => write!(f, "CastI8"),
+            Bytecode_::CastI16 => write!(f, "CastI16"),
+            Bytecode_::CastI32 => write!(f, "CastI32"),
+            Bytecode_::CastI64 => write!(f, "CastI64"),
+            Bytecode_::CastI128 => write!(f, "CastI128"),
+            Bytecode_::CastI256 => write!(f, "CastI256"),
+            Bytecode_::Neg => write!(f, "Neg"),
             Bytecode_::LdTrue => write!(f, "LdTrue"),
             Bytecode_::LdFalse => write!(f, "LdFalse"),
             Bytecode_::LdConst(ty, v) => write!(f, "LdConst<{}> {}", ty, format_move_value(v)),

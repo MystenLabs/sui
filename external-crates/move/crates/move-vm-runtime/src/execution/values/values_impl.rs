@@ -3924,10 +3924,14 @@ impl Value {
             S::Address => L::Address,
             S::Signer => return None,
             S::Vector(inner) => L::Vector(Box::new(Self::constant_sig_token_to_layout(inner)?)),
+            S::I8 => L::I8,
+            S::I16 => L::I16,
+            S::I32 => L::I32,
+            S::I64 => L::I64,
+            S::I128 => L::I128,
+            S::I256 => L::I256,
             // Not yet supported
             S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
-            // Signed integers not yet supported in constants
-            S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => return None,
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) => return None,
         })
