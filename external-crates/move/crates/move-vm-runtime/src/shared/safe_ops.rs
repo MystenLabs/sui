@@ -132,3 +132,4 @@ macro_rules! impl_safe_add_for_int {
 }
 
 impl_safe_add_for_int!(u8, u16, u32, u64, u128, move_core_types::u256::U256, usize);
+impl_safe_add_for_int!(i8, i16, i32, i64, i128, move_core_types::i256::I256);

@@ -378,7 +378,8 @@ impl TransferFunctions for NumberOperationAnalysis<'_> {
             Call(id, dests, oper, srcs, _) => {
                 match oper {
                     BorrowLoc | ReadRef | CastU8 | CastU16 | CastU32 | CastU64 | CastU128
-                    | CastU256 => {
+                    | CastU256 | CastI8 | CastI16 | CastI32 | CastI64 | CastI128 | CastI256
+                    | Neg => {
                         self.check_and_propagate(
                             id,
                             state,

@@ -159,7 +159,8 @@ impl TransferFunctions for EscapeAnalysis<'_> {
                     state.insert(rets[0], AbsValue::InternalRef);
                 }
                 ReadRef | MoveFrom(..) | Exists(..) | Pack(..) | Eq | Neq | CastU8 | CastU16
-                | CastU32 | CastU64 | CastU128 | CastU256 | Not | Add | Sub | Mul | Div | Mod
+                | CastU32 | CastU64 | CastU128 | CastU256 | CastI8 | CastI16 | CastI32
+                | CastI64 | CastI128 | CastI256 | Neg | Not | Add | Sub | Mul | Div | Mod
                 | BitOr | BitAnd | Xor | Shl | Shr | Lt | Gt | Le | Ge | Or | And => {
                     // These operations all produce a non-reference value
                     state.insert(rets[0], AbsValue::NonRef);

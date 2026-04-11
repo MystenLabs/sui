@@ -19,6 +19,7 @@ use move_binary_format::{
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
+    i256,
     runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,
     vm_status::sub_status::NFE_VECTOR_ERROR_BASE,
@@ -53,6 +54,12 @@ pub enum Value {
     U64(u64),
     U128(Box<u128>),
     U256(Box<u256::U256>),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(Box<i128>),
+    I256(Box<i256::I256>),
     Bool(bool),
     Address(Box<AccountAddress>),
 
@@ -74,6 +81,12 @@ pub enum PrimVec {
     VecU64(Vec<u64>),
     VecU128(Vec<u128>),
     VecU256(Vec<u256::U256>),
+    VecI8(Vec<i8>),
+    VecI16(Vec<i16>),
+    VecI32(Vec<i32>),
+    VecI64(Vec<i64>),
+    VecI128(Vec<i128>),
+    VecI256(Vec<i256::I256>),
     VecBool(Vec<bool>),
     VecAddress(Vec<AccountAddress>),
 }
@@ -106,6 +119,12 @@ pub enum IntegerValue {
     U64(u64),
     U128(u128),
     U256(u256::U256),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    I256(i256::I256),
 }
 
 #[derive(Debug)]
@@ -179,6 +198,12 @@ pub(crate) enum ConstantValue {
     U64(u64),
     U128(u128),
     U256(u256::U256),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    I256(i256::I256),
     Bool(bool),
     Address(AccountAddress),
     Container(ConstantContainer),
@@ -198,6 +223,12 @@ pub(crate) enum ConstantContainer {
     VecU16(ArenaVec<u16>),
     VecU32(ArenaVec<u32>),
     VecU256(ArenaVec<u256::U256>),
+    VecI8(ArenaVec<i8>),
+    VecI16(ArenaVec<i16>),
+    VecI32(ArenaVec<i32>),
+    VecI64(ArenaVec<i64>),
+    VecI128(ArenaVec<i128>),
+    VecI256(ArenaVec<i256::I256>),
     Variant(VariantTag, ArenaVec<ConstantValue>),
 }
 
@@ -215,6 +246,12 @@ macro_rules! match_prim_vec {
             PrimVec::VecU64($items) => $rhs,
             PrimVec::VecU128($items) => $rhs,
             PrimVec::VecU256($items) => $rhs,
+            PrimVec::VecI8($items) => $rhs,
+            PrimVec::VecI16($items) => $rhs,
+            PrimVec::VecI32($items) => $rhs,
+            PrimVec::VecI64($items) => $rhs,
+            PrimVec::VecI128($items) => $rhs,
+            PrimVec::VecI256($items) => $rhs,
             PrimVec::VecBool($items) => $rhs,
             PrimVec::VecAddress($items) => $rhs,
         }
@@ -230,6 +267,12 @@ macro_rules! match_prim_vec_pair {
             (PrimVec::VecU64($items_1), PrimVec::VecU64($items_2)) => Ok($rhs),
             (PrimVec::VecU128($items_1), PrimVec::VecU128($items_2)) => Ok($rhs),
             (PrimVec::VecU256($items_1), PrimVec::VecU256($items_2)) => Ok($rhs),
+            (PrimVec::VecI8($items_1), PrimVec::VecI8($items_2)) => Ok($rhs),
+            (PrimVec::VecI16($items_1), PrimVec::VecI16($items_2)) => Ok($rhs),
+            (PrimVec::VecI32($items_1), PrimVec::VecI32($items_2)) => Ok($rhs),
+            (PrimVec::VecI64($items_1), PrimVec::VecI64($items_2)) => Ok($rhs),
+            (PrimVec::VecI128($items_1), PrimVec::VecI128($items_2)) => Ok($rhs),
+            (PrimVec::VecI256($items_1), PrimVec::VecI256($items_2)) => Ok($rhs),
             (PrimVec::VecBool($items_1), PrimVec::VecBool($items_2)) => Ok($rhs),
             (PrimVec::VecAddress($items_1), PrimVec::VecAddress($items_2)) => Ok($rhs),
             _ => Err($err),
@@ -246,6 +289,12 @@ macro_rules! map_prim_vec {
             PrimVec::VecU64($items) => PrimVec::VecU64($rhs),
             PrimVec::VecU128($items) => PrimVec::VecU128($rhs),
             PrimVec::VecU256($items) => PrimVec::VecU256($rhs),
+            PrimVec::VecI8($items) => PrimVec::VecI8($rhs),
+            PrimVec::VecI16($items) => PrimVec::VecI16($rhs),
+            PrimVec::VecI32($items) => PrimVec::VecI32($rhs),
+            PrimVec::VecI64($items) => PrimVec::VecI64($rhs),
+            PrimVec::VecI128($items) => PrimVec::VecI128($rhs),
+            PrimVec::VecI256($items) => PrimVec::VecI256($rhs),
             PrimVec::VecBool($items) => PrimVec::VecBool($rhs),
             PrimVec::VecAddress($items) => PrimVec::VecAddress($rhs),
         }
@@ -309,6 +358,12 @@ impl Value {
             | Value::U64(_)
             | Value::U128(_)
             | Value::U256(_)
+            | Value::I8(_)
+            | Value::I16(_)
+            | Value::I32(_)
+            | Value::I64(_)
+            | Value::I128(_)
+            | Value::I256(_)
             | Value::Bool(_)
             | Value::Address(_)
             | Value::Struct(_)
@@ -332,6 +387,12 @@ impl Value {
             | Value::U64(_)
             | Value::U128(_)
             | Value::U256(_)
+            | Value::I8(_)
+            | Value::I16(_)
+            | Value::I32(_)
+            | Value::I64(_)
+            | Value::I128(_)
+            | Value::I256(_)
             | Value::Bool(_)
             | Value::Address(_)
             | Value::Struct(_)
@@ -474,6 +535,12 @@ impl IndexRef for Box<(MemBox<Value>, usize)> {
             PrimVec::VecU64(items) => items.get(*ndx).copied().map(Value::U64),
             PrimVec::VecU128(items) => items.get(*ndx).copied().map(|v| Value::U128(Box::new(v))),
             PrimVec::VecU256(items) => items.get(*ndx).cloned().map(|v| Value::U256(Box::new(v))),
+            PrimVec::VecI8(items) => items.get(*ndx).copied().map(Value::I8),
+            PrimVec::VecI16(items) => items.get(*ndx).copied().map(Value::I16),
+            PrimVec::VecI32(items) => items.get(*ndx).copied().map(Value::I32),
+            PrimVec::VecI64(items) => items.get(*ndx).copied().map(Value::I64),
+            PrimVec::VecI128(items) => items.get(*ndx).copied().map(|v| Value::I128(Box::new(v))),
+            PrimVec::VecI256(items) => items.get(*ndx).cloned().map(|v| Value::I256(Box::new(v))),
             PrimVec::VecBool(items) => items.get(*ndx).copied().map(Value::Bool),
             PrimVec::VecAddress(items) => items
                 .get(*ndx)
@@ -502,6 +569,12 @@ impl Value {
             Self::U64(x) => Self::U64(*x),
             Self::U128(v) => Self::U128(Box::new(**v)),
             Self::U256(v) => Self::U256(Box::new(**v)),
+            Self::I8(x) => Self::I8(*x),
+            Self::I16(x) => Self::I16(*x),
+            Self::I32(x) => Self::I32(*x),
+            Self::I64(x) => Self::I64(*x),
+            Self::I128(v) => Self::I128(Box::new(**v)),
+            Self::I256(v) => Self::I256(Box::new(**v)),
             Self::Bool(x) => Self::Bool(*x),
             Self::Address(x) => Self::Address(Box::new(*x.clone())),
 
@@ -578,6 +651,12 @@ impl Value {
             Value::U64(value) => Ok(ConstantValue::U64(value)),
             Value::U128(value) => Ok(ConstantValue::U128(*value)),
             Value::U256(value) => Ok(ConstantValue::U256(*value)),
+            Value::I8(value) => Ok(ConstantValue::I8(value)),
+            Value::I16(value) => Ok(ConstantValue::I16(value)),
+            Value::I32(value) => Ok(ConstantValue::I32(value)),
+            Value::I64(value) => Ok(ConstantValue::I64(value)),
+            Value::I128(value) => Ok(ConstantValue::I128(*value)),
+            Value::I256(value) => Ok(ConstantValue::I256(*value)),
             Value::Bool(value) => Ok(ConstantValue::Bool(value)),
             Value::Address(value) => Ok(ConstantValue::Address(*value)),
 
@@ -596,6 +675,12 @@ impl Value {
                 PrimVec::VecU64(values) => ConstantContainer::VecU64(alloc_vec!(values)),
                 PrimVec::VecU128(values) => ConstantContainer::VecU128(alloc_vec!(values)),
                 PrimVec::VecU256(values) => ConstantContainer::VecU256(alloc_vec!(values)),
+                PrimVec::VecI8(values) => ConstantContainer::VecI8(alloc_vec!(values)),
+                PrimVec::VecI16(values) => ConstantContainer::VecI16(alloc_vec!(values)),
+                PrimVec::VecI32(values) => ConstantContainer::VecI32(alloc_vec!(values)),
+                PrimVec::VecI64(values) => ConstantContainer::VecI64(alloc_vec!(values)),
+                PrimVec::VecI128(values) => ConstantContainer::VecI128(alloc_vec!(values)),
+                PrimVec::VecI256(values) => ConstantContainer::VecI256(alloc_vec!(values)),
                 PrimVec::VecBool(values) => ConstantContainer::VecBool(alloc_vec!(values)),
                 PrimVec::VecAddress(values) => ConstantContainer::VecAddress(alloc_vec!(values)),
             })),
@@ -636,6 +721,12 @@ impl ConstantValue {
             ConstantValue::U64(value) => Value::U64(*value),
             ConstantValue::U128(value) => Value::U128(Box::new(*value)),
             ConstantValue::U256(value) => Value::U256(Box::new(*value)),
+            ConstantValue::I8(value) => Value::I8(*value),
+            ConstantValue::I16(value) => Value::I16(*value),
+            ConstantValue::I32(value) => Value::I32(*value),
+            ConstantValue::I64(value) => Value::I64(*value),
+            ConstantValue::I128(value) => Value::I128(Box::new(*value)),
+            ConstantValue::I256(value) => Value::I256(Box::new(*value)),
             ConstantValue::Bool(value) => Value::Bool(*value),
             ConstantValue::Address(value) => Value::Address(Box::new(*value)),
             ConstantValue::Container(container) => container.to_value(),
@@ -688,6 +779,24 @@ impl ConstantContainer {
             ConstantContainer::VecU256(const_values) => {
                 Value::PrimVec(PrimVec::VecU256(const_values.to_vec()))
             }
+            ConstantContainer::VecI8(const_values) => {
+                Value::PrimVec(PrimVec::VecI8(const_values.to_vec()))
+            }
+            ConstantContainer::VecI16(const_values) => {
+                Value::PrimVec(PrimVec::VecI16(const_values.to_vec()))
+            }
+            ConstantContainer::VecI32(const_values) => {
+                Value::PrimVec(PrimVec::VecI32(const_values.to_vec()))
+            }
+            ConstantContainer::VecI64(const_values) => {
+                Value::PrimVec(PrimVec::VecI64(const_values.to_vec()))
+            }
+            ConstantContainer::VecI128(const_values) => {
+                Value::PrimVec(PrimVec::VecI128(const_values.to_vec()))
+            }
+            ConstantContainer::VecI256(const_values) => {
+                Value::PrimVec(PrimVec::VecI256(const_values.to_vec()))
+            }
             ConstantContainer::Variant(tag, const_values) => {
                 let values = const_values
                     .iter()
@@ -724,6 +833,12 @@ impl Value {
             (Self::U64(v1), Self::U64(v2)) => Ok(v1 == v2),
             (Self::U128(v1), Self::U128(v2)) => Ok(v1 == v2),
             (Self::U256(v1), Self::U256(v2)) => Ok(v1 == v2),
+            (Self::I8(v1), Self::I8(v2)) => Ok(v1 == v2),
+            (Self::I16(v1), Self::I16(v2)) => Ok(v1 == v2),
+            (Self::I32(v1), Self::I32(v2)) => Ok(v1 == v2),
+            (Self::I64(v1), Self::I64(v2)) => Ok(v1 == v2),
+            (Self::I128(v1), Self::I128(v2)) => Ok(v1 == v2),
+            (Self::I256(v1), Self::I256(v2)) => Ok(v1 == v2),
             (Self::Bool(v1), Self::Bool(v2)) => Ok(v1 == v2),
             (Self::Address(v1), Self::Address(v2)) => Ok(v1 == v2),
             (Self::PrimVec(v1), Self::PrimVec(v2)) => Ok(v1.len() == v2.len()
@@ -821,6 +936,12 @@ impl Reference {
                     (PrimVec::VecU64(lhs), Value::U64(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
                     (PrimVec::VecU128(lhs), Value::U128(rhs)) => Ok(lhs.safe_get(*ndx)? == &**rhs),
                     (PrimVec::VecU256(lhs), Value::U256(rhs)) => Ok(lhs.safe_get(*ndx)? == &**rhs),
+                    (PrimVec::VecI8(lhs), Value::I8(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
+                    (PrimVec::VecI16(lhs), Value::I16(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
+                    (PrimVec::VecI32(lhs), Value::I32(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
+                    (PrimVec::VecI64(lhs), Value::I64(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
+                    (PrimVec::VecI128(lhs), Value::I128(rhs)) => Ok(lhs.safe_get(*ndx)? == &**rhs),
+                    (PrimVec::VecI256(lhs), Value::I256(rhs)) => Ok(lhs.safe_get(*ndx)? == &**rhs),
                     (PrimVec::VecBool(lhs), Value::Bool(rhs)) => Ok(lhs.safe_get(*ndx)? == rhs),
                     (PrimVec::VecAddress(lhs), Value::Address(rhs)) => {
                         Ok(lhs.safe_get(*ndx)? == &**rhs)
@@ -931,6 +1052,12 @@ impl Reference {
                     PrimVec::VecU64(items) => assign!(items, *ndx, U64, value),
                     PrimVec::VecU128(items) => assign!(Box, items, *ndx, U128, value),
                     PrimVec::VecU256(items) => assign!(Box, items, *ndx, U256, value),
+                    PrimVec::VecI8(items) => assign!(items, *ndx, I8, value),
+                    PrimVec::VecI16(items) => assign!(items, *ndx, I16, value),
+                    PrimVec::VecI32(items) => assign!(items, *ndx, I32, value),
+                    PrimVec::VecI64(items) => assign!(items, *ndx, I64, value),
+                    PrimVec::VecI128(items) => assign!(Box, items, *ndx, I128, value),
+                    PrimVec::VecI256(items) => assign!(Box, items, *ndx, I256, value),
                     PrimVec::VecBool(items) => assign!(items, *ndx, Bool, value),
                     PrimVec::VecAddress(items) => assign!(Box, items, *ndx, Address, value),
                 };
@@ -1065,6 +1192,12 @@ impl VectorRef {
                     PrimVec::VecU64(items) => items.len(),
                     PrimVec::VecU128(items) => items.len(),
                     PrimVec::VecU256(items) => items.len(),
+                    PrimVec::VecI8(items) => items.len(),
+                    PrimVec::VecI16(items) => items.len(),
+                    PrimVec::VecI32(items) => items.len(),
+                    PrimVec::VecI64(items) => items.len(),
+                    PrimVec::VecI128(items) => items.len(),
+                    PrimVec::VecI256(items) => items.len(),
                     PrimVec::VecBool(items) => items.len(),
                     PrimVec::VecAddress(items) => items.len(),
                 };
@@ -1166,6 +1299,30 @@ impl Value {
         Value::U256(Box::new(x))
     }
 
+    pub fn i8(x: i8) -> Self {
+        Value::I8(x)
+    }
+
+    pub fn i16(x: i16) -> Self {
+        Value::I16(x)
+    }
+
+    pub fn i32(x: i32) -> Self {
+        Value::I32(x)
+    }
+
+    pub fn i64(x: i64) -> Self {
+        Value::I64(x)
+    }
+
+    pub fn i128(x: i128) -> Self {
+        Value::I128(Box::new(x))
+    }
+
+    pub fn i256(x: i256::I256) -> Self {
+        Value::I256(Box::new(x))
+    }
+
     pub fn bool(x: bool) -> Self {
         Value::Bool(x)
     }
@@ -1211,6 +1368,12 @@ impl Value {
     impl_vector_fn!(vector_u64, VecU64, u64);
     impl_vector_fn!(vector_u128, VecU128, u128);
     impl_vector_fn!(vector_u256, VecU256, u256::U256);
+    impl_vector_fn!(vector_i8, VecI8, i8);
+    impl_vector_fn!(vector_i16, VecI16, i16);
+    impl_vector_fn!(vector_i32, VecI32, i32);
+    impl_vector_fn!(vector_i64, VecI64, i64);
+    impl_vector_fn!(vector_i128, VecI128, i128);
+    impl_vector_fn!(vector_i256, VecI256, i256::I256);
     impl_vector_fn!(vector_bool, VecBool, bool);
     impl_vector_fn!(vector_address, VecAddress, AccountAddress);
 }
@@ -1255,6 +1418,12 @@ impl_vm_value_cast_primitive!(u32, U32, |x| x);
 impl_vm_value_cast_primitive!(u64, U64, |x| x);
 impl_vm_value_cast_primitive!(u128, U128, |x: Box<u128>| *x);
 impl_vm_value_cast_primitive!(u256::U256, U256, |x: Box<u256::U256>| *x);
+impl_vm_value_cast_primitive!(i8, I8, |x| x);
+impl_vm_value_cast_primitive!(i16, I16, |x| x);
+impl_vm_value_cast_primitive!(i32, I32, |x| x);
+impl_vm_value_cast_primitive!(i64, I64, |x| x);
+impl_vm_value_cast_primitive!(i128, I128, |x: Box<i128>| *x);
+impl_vm_value_cast_primitive!(i256::I256, I256, |x: Box<i256::I256>| *x);
 impl_vm_value_cast_primitive!(bool, Bool, |x| x);
 impl_vm_value_cast_primitive!(AccountAddress, Address, |x: Box<AccountAddress>| *x);
 impl_vm_value_cast_primitive!(Reference, Reference, |x| x);
@@ -1459,6 +1628,12 @@ impl VMValueCast<IntegerValue> for Value {
             Value::U64(x) => Ok(IntegerValue::U64(x)),
             Value::U128(x) => Ok(IntegerValue::U128(*x)),
             Value::U256(x) => Ok(IntegerValue::U256(*x)),
+            Value::I8(x) => Ok(IntegerValue::I8(x)),
+            Value::I16(x) => Ok(IntegerValue::I16(x)),
+            Value::I32(x) => Ok(IntegerValue::I32(x)),
+            Value::I64(x) => Ok(IntegerValue::I64(x)),
+            Value::I128(x) => Ok(IntegerValue::I128(*x)),
+            Value::I256(x) => Ok(IntegerValue::I256(*x)),
             v => Err(partial_vm_error!(
                 INTERNAL_TYPE_ERROR,
                 "cannot cast {:?} to integer",
@@ -1527,6 +1702,12 @@ impl_vm_value_cast_integer!(u32, U32, "cannot cast {:?} to u32");
 impl_vm_value_cast_integer!(u64, U64, "cannot cast {:?} to u64");
 impl_vm_value_cast_integer!(u128, U128, "cannot cast {:?} to u128");
 impl_vm_value_cast_integer!(u256::U256, U256, "cannot cast {:?} to u256");
+impl_vm_value_cast_integer!(i8, I8, "cannot cast {:?} to i8");
+impl_vm_value_cast_integer!(i16, I16, "cannot cast {:?} to i16");
+impl_vm_value_cast_integer!(i32, I32, "cannot cast {:?} to i32");
+impl_vm_value_cast_integer!(i64, I64, "cannot cast {:?} to i64");
+impl_vm_value_cast_integer!(i128, I128, "cannot cast {:?} to i128");
+impl_vm_value_cast_integer!(i256::I256, I256, "cannot cast {:?} to i256");
 
 impl IntegerValue {
     pub fn value_as<T>(self) -> PartialVMResult<T>
@@ -1562,6 +1743,12 @@ macro_rules! checked_arithmetic_op {
                 (U64(l), U64(r)) => u64::$op(l, r).map(IntegerValue::U64),
                 (U128(l), U128(r)) => u128::$op(l, r).map(IntegerValue::U128),
                 (U256(l), U256(r)) => u256::U256::$op(l, r).map(IntegerValue::U256),
+                (I8(l), I8(r)) => i8::$op(l, r).map(IntegerValue::I8),
+                (I16(l), I16(r)) => i16::$op(l, r).map(IntegerValue::I16),
+                (I32(l), I32(r)) => i32::$op(l, r).map(IntegerValue::I32),
+                (I64(l), I64(r)) => i64::$op(l, r).map(IntegerValue::I64),
+                (I128(l), I128(r)) => i128::$op(l, r).map(IntegerValue::I128),
+                (I256(l), I256(r)) => i256::I256::$op(l, r).map(IntegerValue::I256),
                 (l, r) => {
                     return Err(partial_vm_error!(INTERNAL_TYPE_ERROR, $error_msg, l, r));
                 }
@@ -1582,6 +1769,12 @@ macro_rules! simple_bitwise_op {
                 (U64(l), U64(r)) => IntegerValue::U64(l $op r),
                 (U128(l), U128(r)) => IntegerValue::U128(l $op r),
                 (U256(l), U256(r)) => IntegerValue::U256(l $op r),
+                (I8(l), I8(r)) => IntegerValue::I8(l $op r),
+                (I16(l), I16(r)) => IntegerValue::I16(l $op r),
+                (I32(l), I32(r)) => IntegerValue::I32(l $op r),
+                (I64(l), I64(r)) => IntegerValue::I64(l $op r),
+                (I128(l), I128(r)) => IntegerValue::I128(l $op r),
+                (I256(l), I256(r)) => IntegerValue::I256(l $op r),
                 (l, r) => {
                     return Err(partial_vm_error!(INTERNAL_TYPE_ERROR,$error_msg, l, r));
                 }
@@ -1626,6 +1819,37 @@ macro_rules! shift_op {
                     IntegerValue::U128(x.$op(n_bits)?)
                 }
                 U256(x) => IntegerValue::U256(x.$op(n_bits)?),
+                I8(x) => {
+                    if n_bits >= 8 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I8(x.$op(n_bits)?)
+                }
+                I16(x) => {
+                    if n_bits >= 16 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I16(x.$op(n_bits)?)
+                }
+                I32(x) => {
+                    if n_bits >= 32 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I32(x.$op(n_bits)?)
+                }
+                I64(x) => {
+                    if n_bits >= 64 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I64(x.$op(n_bits)?)
+                }
+                I128(x) => {
+                    if n_bits >= 128 {
+                        return Err(partial_vm_error!(ARITHMETIC_ERROR));
+                    }
+                    IntegerValue::I128(x.$op(n_bits)?)
+                }
+                I256(x) => IntegerValue::I256(x.$op(n_bits)?),
             })
         }
     };
@@ -1642,6 +1866,12 @@ macro_rules! comparison_op {
                 (U64(l), U64(r)) => l $op r,
                 (U128(l), U128(r)) => l $op r,
                 (U256(l), U256(r)) => l $op r,
+                (I8(l), I8(r)) => l $op r,
+                (I16(l), I16(r)) => l $op r,
+                (I32(l), I32(r)) => l $op r,
+                (I64(l), I64(r)) => l $op r,
+                (I128(l), I128(r)) => l $op r,
+                (I256(l), I256(r)) => l $op r,
                 (l, r) => {
                     return Err(partial_vm_error!(INTERNAL_TYPE_ERROR, $error_msg, l, r));
                 }
@@ -1708,6 +1938,181 @@ macro_rules! cast_integer {
                         move_binary_format::checked_as!(x, $target_type)
                     }
                 }
+                I8(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i8({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I16(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i16({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I32(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i32({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I64(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i64({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I128(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i128({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I256(x) => {
+                    if x < i256::I256::zero() {
+                        return Err(partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "Cannot cast negative i256 to {}",
+                            stringify!($target_type)
+                        ));
+                    }
+                    let u = x.to_u256_bits();
+                    if u > move_core_types::u256::U256::from(<$target_type>::MAX) {
+                        Err(partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "Cannot cast i256 to {}: value too large",
+                            stringify!($target_type)
+                        ))
+                    } else {
+                        move_binary_format::checked_as!(u, $target_type)
+                    }
+                }
+            }
+        }
+    };
+}
+
+macro_rules! cast_signed_integer {
+    ($func_name:ident, $target_type:ty) => {
+        pub fn $func_name(self) -> PartialVMResult<$target_type> {
+            use IntegerValue::*;
+
+            match self {
+                U8(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u8({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U16(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u16({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U32(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u32({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U64(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u64({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U128(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u128({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                U256(x) => {
+                    let as_i256 = i256::I256::from_u256_bits(x);
+                    if as_i256 < i256::I256::zero() {
+                        return Err(partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "Cannot cast u256 to {}: value too large",
+                            stringify!($target_type)
+                        ));
+                    }
+                    <$target_type>::try_from(as_i256).map_err(|_| {
+                        partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "Cannot cast u256 to {}",
+                            stringify!($target_type)
+                        )
+                    })
+                }
+                I8(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i8({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I16(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i16({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I32(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i32({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I64(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i64({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I128(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i128({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
+                I256(x) => <$target_type>::try_from(x).map_err(|_| {
+                    partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast i256({}) to {}",
+                        x,
+                        stringify!($target_type)
+                    )
+                }),
             }
         }
     };
@@ -1760,6 +2165,88 @@ impl IntegerValue {
             U64(x) => Ok(u256::U256::from(x)),
             U128(x) => Ok(u256::U256::from(x)),
             U256(x) => Ok(x),
+            I8(x) if x >= 0 => Ok(u256::U256::from(x as u8)),
+            I16(x) if x >= 0 => Ok(u256::U256::from(x as u16)),
+            I32(x) if x >= 0 => Ok(u256::U256::from(x as u32)),
+            I64(x) if x >= 0 => Ok(u256::U256::from(x as u64)),
+            I128(x) if x >= 0 => Ok(u256::U256::from(x as u128)),
+            I256(x) if x >= i256::I256::zero() => Ok(x.to_u256_bits()),
+            I8(_) | I16(_) | I32(_) | I64(_) | I128(_) | I256(_) => Err(partial_vm_error!(
+                ARITHMETIC_ERROR,
+                "Cannot cast negative signed integer to u256"
+            )),
+        }
+    }
+
+    cast_signed_integer!(cast_i8, i8);
+    cast_signed_integer!(cast_i16, i16);
+    cast_signed_integer!(cast_i32, i32);
+    cast_signed_integer!(cast_i64, i64);
+    cast_signed_integer!(cast_i128, i128);
+
+    pub fn cast_i256(self) -> PartialVMResult<i256::I256> {
+        use IntegerValue::*;
+        match self {
+            I8(x) => Ok(i256::I256::from(x)),
+            I16(x) => Ok(i256::I256::from(x)),
+            I32(x) => Ok(i256::I256::from(x)),
+            I64(x) => Ok(i256::I256::from(x)),
+            I128(x) => Ok(i256::I256::from(x)),
+            I256(x) => Ok(x),
+            U8(x) => Ok(i256::I256::from(x as i16)),
+            U16(x) => Ok(i256::I256::from(x as i32)),
+            U32(x) => Ok(i256::I256::from(x as i64)),
+            U64(x) => Ok(i256::I256::from(x as i128)),
+            U128(x) => {
+                let mut bytes = [0u8; 32];
+                bytes[..16].copy_from_slice(&x.to_le_bytes());
+                Ok(i256::I256::from_le_bytes(&bytes))
+            }
+            U256(x) => {
+                let result = i256::I256::from_u256_bits(x);
+                if result < i256::I256::zero() {
+                    Err(partial_vm_error!(
+                        ARITHMETIC_ERROR,
+                        "Cannot cast u256 to i256: value exceeds i256::MAX"
+                    ))
+                } else {
+                    Ok(result)
+                }
+            }
+        }
+    }
+
+    pub fn neg(self) -> PartialVMResult<Self> {
+        use IntegerValue::*;
+        match self {
+            I8(x) => x
+                .checked_neg()
+                .map(IntegerValue::I8)
+                .ok_or_else(|| partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i8({})", x)),
+            I16(x) => x
+                .checked_neg()
+                .map(IntegerValue::I16)
+                .ok_or_else(|| partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i16({})", x)),
+            I32(x) => x
+                .checked_neg()
+                .map(IntegerValue::I32)
+                .ok_or_else(|| partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i32({})", x)),
+            I64(x) => x
+                .checked_neg()
+                .map(IntegerValue::I64)
+                .ok_or_else(|| partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i64({})", x)),
+            I128(x) => x
+                .checked_neg()
+                .map(IntegerValue::I128)
+                .ok_or_else(|| partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i128({})", x)),
+            I256(x) => x
+                .checked_neg()
+                .map(IntegerValue::I256)
+                .ok_or_else(|| partial_vm_error!(ARITHMETIC_ERROR, "Cannot negate i256({})", x)),
+            U8(_) | U16(_) | U32(_) | U64(_) | U128(_) | U256(_) => Err(partial_vm_error!(
+                ARITHMETIC_ERROR,
+                "Cannot negate unsigned integer"
+            )),
         }
     }
 
@@ -1772,6 +2259,12 @@ impl IntegerValue {
             U64(x) => Value::u64(x),
             U128(x) => Value::u128(x),
             U256(x) => Value::u256(x),
+            I8(x) => Value::i8(x),
+            I16(x) => Value::i16(x),
+            I32(x) => Value::i32(x),
+            I64(x) => Value::i64(x),
+            I128(x) => Value::i128(x),
+            I256(x) => Value::i256(x),
         }
     }
 }
@@ -1911,6 +2404,12 @@ fn check_elem_layout(ty: &Type, v: &Value) -> PartialVMResult<()> {
             PrimVec::VecU64(_) => allowed_types!(ty; v; Type::U64),
             PrimVec::VecU128(_) => allowed_types!(ty; v; Type::U128),
             PrimVec::VecU256(_) => allowed_types!(ty; v; Type::U256),
+            PrimVec::VecI8(_) => allowed_types!(ty; v; Type::I8),
+            PrimVec::VecI16(_) => allowed_types!(ty; v; Type::I16),
+            PrimVec::VecI32(_) => allowed_types!(ty; v; Type::I32),
+            PrimVec::VecI64(_) => allowed_types!(ty; v; Type::I64),
+            PrimVec::VecI128(_) => allowed_types!(ty; v; Type::I128),
+            PrimVec::VecI256(_) => allowed_types!(ty; v; Type::I256),
             PrimVec::VecBool(_) => allowed_types!(ty; v; Type::Bool),
             PrimVec::VecAddress(_) => allowed_types!(ty; v; Type::Address),
         },
@@ -1920,6 +2419,12 @@ fn check_elem_layout(ty: &Type, v: &Value) -> PartialVMResult<()> {
         | Value::U64(_)
         | Value::U128(_)
         | Value::U256(_)
+        | Value::I8(_)
+        | Value::I16(_)
+        | Value::I32(_)
+        | Value::I64(_)
+        | Value::I128(_)
+        | Value::I256(_)
         | Value::Bool(_)
         | Value::Address(_)
         | Value::Struct(_)
@@ -2057,6 +2562,12 @@ impl VectorRef {
             | Value::U64(_)
             | Value::U128(_)
             | Value::U256(_)
+            | Value::I8(_)
+            | Value::I16(_)
+            | Value::I32(_)
+            | Value::I64(_)
+            | Value::I128(_)
+            | Value::I256(_)
             | Value::Bool(_)
             | Value::Address(_)
             | Value::Vec(_)
@@ -2096,6 +2607,12 @@ impl VectorRef {
             V::PrimVec(PV::VecU64(xs)) => pop_vec_item!(xs, x, Value::U64(x)),
             V::PrimVec(PV::VecU128(xs)) => pop_vec_item!(xs, x, Value::U128(Box::new(x))),
             V::PrimVec(PV::VecU256(xs)) => pop_vec_item!(xs, x, Value::U256(Box::new(x))),
+            V::PrimVec(PV::VecI8(xs)) => pop_vec_item!(xs, x, Value::I8(x)),
+            V::PrimVec(PV::VecI16(xs)) => pop_vec_item!(xs, x, Value::I16(x)),
+            V::PrimVec(PV::VecI32(xs)) => pop_vec_item!(xs, x, Value::I32(x)),
+            V::PrimVec(PV::VecI64(xs)) => pop_vec_item!(xs, x, Value::I64(x)),
+            V::PrimVec(PV::VecI128(xs)) => pop_vec_item!(xs, x, Value::I128(Box::new(x))),
+            V::PrimVec(PV::VecI256(xs)) => pop_vec_item!(xs, x, Value::I256(Box::new(x))),
             V::PrimVec(PV::VecBool(xs)) => pop_vec_item!(xs, x, Value::Bool(x)),
             V::PrimVec(PV::VecAddress(xs)) => pop_vec_item!(xs, x, Value::Address(Box::new(x))),
             V::Vec(items) => pop_vec_item!(items, value, value.take()),
@@ -2127,6 +2644,12 @@ impl VectorRef {
             V::PrimVec(PV::VecU64(xs)) => swap!(xs),
             V::PrimVec(PV::VecU128(xs)) => swap!(xs),
             V::PrimVec(PV::VecU256(xs)) => swap!(xs),
+            V::PrimVec(PV::VecI8(xs)) => swap!(xs),
+            V::PrimVec(PV::VecI16(xs)) => swap!(xs),
+            V::PrimVec(PV::VecI32(xs)) => swap!(xs),
+            V::PrimVec(PV::VecI64(xs)) => swap!(xs),
+            V::PrimVec(PV::VecI128(xs)) => swap!(xs),
+            V::PrimVec(PV::VecI256(xs)) => swap!(xs),
             V::PrimVec(PV::VecBool(xs)) => swap!(xs),
             V::PrimVec(PV::VecAddress(xs)) => swap!(xs),
             V::Vec(items) => swap!(items),
@@ -2159,6 +2682,12 @@ pub enum VectorSpecialization {
     U64,
     U128,
     U256,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
     Bool,
     Address,
     Container,
@@ -2177,6 +2706,12 @@ impl TryFrom<&Type> for VectorSpecialization {
             Type::U256 => VectorSpecialization::U256,
             Type::Bool => VectorSpecialization::Bool,
             Type::Address => VectorSpecialization::Address,
+            Type::I8 => VectorSpecialization::I8,
+            Type::I16 => VectorSpecialization::I16,
+            Type::I32 => VectorSpecialization::I32,
+            Type::I64 => VectorSpecialization::I64,
+            Type::I128 => VectorSpecialization::I128,
+            Type::I256 => VectorSpecialization::I256,
             Type::Vector(_) | Type::Signer | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
                 VectorSpecialization::Container
             }
@@ -2203,6 +2738,12 @@ impl Vector {
             VectorSpecialization::U64 => pack_vector!(elements, Value::vector_u64),
             VectorSpecialization::U128 => pack_vector!(elements, Value::vector_u128),
             VectorSpecialization::U256 => pack_vector!(elements, Value::vector_u256),
+            VectorSpecialization::I8 => pack_vector!(elements, Value::vector_i8),
+            VectorSpecialization::I16 => pack_vector!(elements, Value::vector_i16),
+            VectorSpecialization::I32 => pack_vector!(elements, Value::vector_i32),
+            VectorSpecialization::I64 => pack_vector!(elements, Value::vector_i64),
+            VectorSpecialization::I128 => pack_vector!(elements, Value::vector_i128),
+            VectorSpecialization::I256 => pack_vector!(elements, Value::vector_i256),
             VectorSpecialization::Bool => pack_vector!(elements, Value::vector_bool),
             VectorSpecialization::Address => pack_vector!(elements, Value::vector_address),
 
@@ -2231,6 +2772,12 @@ impl Vector {
             V::PrimVec(PV::VecU64(xs)) => take_and_map!(xs, Value::U64),
             V::PrimVec(PV::VecU128(xs)) => take_and_map!(xs, |x| Value::U128(Box::new(x))),
             V::PrimVec(PV::VecU256(xs)) => take_and_map!(xs, |x| Value::U256(Box::new(x))),
+            V::PrimVec(PV::VecI8(xs)) => take_and_map!(xs, Value::I8),
+            V::PrimVec(PV::VecI16(xs)) => take_and_map!(xs, Value::I16),
+            V::PrimVec(PV::VecI32(xs)) => take_and_map!(xs, Value::I32),
+            V::PrimVec(PV::VecI64(xs)) => take_and_map!(xs, Value::I64),
+            V::PrimVec(PV::VecI128(xs)) => take_and_map!(xs, |x| Value::I128(Box::new(x))),
+            V::PrimVec(PV::VecI256(xs)) => take_and_map!(xs, |x| Value::I256(Box::new(x))),
             V::PrimVec(PV::VecBool(xs)) => take_and_map!(xs, Value::Bool),
             V::PrimVec(PV::VecAddress(xs)) => take_and_map!(xs, |x| Value::Address(Box::new(x))),
             V::Vec(items) => items.into_iter().map(|v| v.take()).collect(),
@@ -2362,6 +2909,12 @@ impl GlobalValueImpl {
                 | Value::U64(_)
                 | Value::U128(_)
                 | Value::U256(_)
+                | Value::I8(_)
+                | Value::I16(_)
+                | Value::I32(_)
+                | Value::I64(_)
+                | Value::I128(_)
+                | Value::I256(_)
                 | Value::Bool(_)
                 | Value::Address(_)
                 | Value::Vec(_)
@@ -2441,6 +2994,12 @@ impl Display for Value {
             Value::U64(x) => write!(f, "U64({})", x),
             Value::U128(x) => write!(f, "U128({})", x),
             Value::U256(x) => write!(f, "U256({})", x),
+            Value::I8(x) => write!(f, "I8({})", x),
+            Value::I16(x) => write!(f, "I16({})", x),
+            Value::I32(x) => write!(f, "I32({})", x),
+            Value::I64(x) => write!(f, "I64({})", x),
+            Value::I128(x) => write!(f, "I128({})", x),
+            Value::I256(x) => write!(f, "I256({})", x),
             Value::Bool(x) => write!(f, "Bool({})", x),
             Value::Address(addr) => write!(f, "Address({})", addr.short_str_lossless()),
 
@@ -2479,6 +3038,12 @@ impl Display for PrimVec {
             PrimVec::VecU64(items) => display_items!("VecU64", items),
             PrimVec::VecU128(items) => display_items!("VecU128", items),
             PrimVec::VecU256(items) => display_items!("VecU256", items),
+            PrimVec::VecI8(items) => display_items!("VecI8", items),
+            PrimVec::VecI16(items) => display_items!("VecI16", items),
+            PrimVec::VecI32(items) => display_items!("VecI32", items),
+            PrimVec::VecI64(items) => display_items!("VecI64", items),
+            PrimVec::VecI128(items) => display_items!("VecI128", items),
+            PrimVec::VecI256(items) => display_items!("VecI256", items),
             PrimVec::VecBool(items) => display_items!("VecBool", items),
             PrimVec::VecAddress(items) => display_items!("VecAddress", items),
         }
@@ -2523,6 +3088,12 @@ impl fmt::Display for ConstantValue {
             ConstantValue::U64(x) => write!(f, "{}", x),
             ConstantValue::U128(x) => write!(f, "{}", x),
             ConstantValue::U256(x) => write!(f, "{}", x),
+            ConstantValue::I8(x) => write!(f, "{}", x),
+            ConstantValue::I16(x) => write!(f, "{}", x),
+            ConstantValue::I32(x) => write!(f, "{}", x),
+            ConstantValue::I64(x) => write!(f, "{}", x),
+            ConstantValue::I128(x) => write!(f, "{}", x),
+            ConstantValue::I256(x) => write!(f, "{}", x),
             ConstantValue::Bool(b) => write!(f, "{}", b),
             ConstantValue::Address(addr) => write!(f, "{}", addr),
             ConstantValue::Container(c) => write!(f, "{}", c),
@@ -2543,6 +3114,12 @@ impl fmt::Display for ConstantContainer {
             ConstantContainer::VecU16(vec) => display_list_of_items(vec.iter(), f),
             ConstantContainer::VecU32(vec) => display_list_of_items(vec.iter(), f),
             ConstantContainer::VecU256(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI8(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI16(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI32(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI64(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI128(vec) => display_list_of_items(vec.iter(), f),
+            ConstantContainer::VecI256(vec) => display_list_of_items(vec.iter(), f),
             ConstantContainer::Variant(tag, vec) => {
                 write!(f, "|tag: {}|", tag)?;
                 display_list_of_items(vec.iter(), f)
@@ -2624,6 +3201,30 @@ pub mod debug {
             Value::U64(x) => print_u64(buf, x),
             Value::U128(x) => print_u128(buf, x),
             Value::U256(x) => print_u256(buf, x),
+            Value::I8(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I16(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I32(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I64(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I128(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
+            Value::I256(x) => {
+                debug_write!(buf, "{}", x);
+                Ok(())
+            }
             Value::Bool(x) => print_bool(buf, x),
             Value::Address(x) => print_address(buf, x),
             Value::Reference(r) => {
@@ -2638,6 +3239,66 @@ pub mod debug {
                 PrimVec::VecU64(items) => print_list(buf, "[", items.iter(), print_u64, "]"),
                 PrimVec::VecU128(items) => print_list(buf, "[", items.iter(), print_u128, "]"),
                 PrimVec::VecU256(u256s) => print_list(buf, "[", u256s.iter(), print_u256, "]"),
+                PrimVec::VecI8(items) => print_list(
+                    buf,
+                    "[",
+                    items.iter(),
+                    |buf, x| {
+                        debug_write!(buf, "{}", x);
+                        Ok(())
+                    },
+                    "]",
+                ),
+                PrimVec::VecI16(items) => print_list(
+                    buf,
+                    "[",
+                    items.iter(),
+                    |buf, x| {
+                        debug_write!(buf, "{}", x);
+                        Ok(())
+                    },
+                    "]",
+                ),
+                PrimVec::VecI32(items) => print_list(
+                    buf,
+                    "[",
+                    items.iter(),
+                    |buf, x| {
+                        debug_write!(buf, "{}", x);
+                        Ok(())
+                    },
+                    "]",
+                ),
+                PrimVec::VecI64(items) => print_list(
+                    buf,
+                    "[",
+                    items.iter(),
+                    |buf, x| {
+                        debug_write!(buf, "{}", x);
+                        Ok(())
+                    },
+                    "]",
+                ),
+                PrimVec::VecI128(items) => print_list(
+                    buf,
+                    "[",
+                    items.iter(),
+                    |buf, x| {
+                        debug_write!(buf, "{}", x);
+                        Ok(())
+                    },
+                    "]",
+                ),
+                PrimVec::VecI256(items) => print_list(
+                    buf,
+                    "[",
+                    items.iter(),
+                    |buf, x| {
+                        debug_write!(buf, "{}", x);
+                        Ok(())
+                    },
+                    "]",
+                ),
                 PrimVec::VecBool(items) => print_list(buf, "[", items.iter(), print_bool, "]"),
                 PrimVec::VecAddress(items) => {
                     print_list(buf, "[", items.iter(), print_address, "]")
@@ -2770,6 +3431,12 @@ impl serde::Serialize for Value {
             Value::U64(x) => serializer.serialize_u64(*x),
             Value::U128(x) => serializer.serialize_u128(**x),
             Value::U256(x) => x.serialize(serializer),
+            Value::I8(x) => serializer.serialize_i8(*x),
+            Value::I16(x) => serializer.serialize_i16(*x),
+            Value::I32(x) => serializer.serialize_i32(*x),
+            Value::I64(x) => serializer.serialize_i64(*x),
+            Value::I128(x) => serializer.serialize_i128(**x),
+            Value::I256(x) => x.serialize(serializer),
             Value::Bool(x) => serializer.serialize_bool(*x),
             Value::Address(x) => x.serialize(serializer),
 
@@ -2822,6 +3489,12 @@ impl serde::Serialize for PrimVec {
             PrimVec::VecU64(r) => r.serialize(serializer),
             PrimVec::VecU128(r) => r.serialize(serializer),
             PrimVec::VecU256(r) => r.serialize(serializer),
+            PrimVec::VecI8(r) => r.serialize(serializer),
+            PrimVec::VecI16(r) => r.serialize(serializer),
+            PrimVec::VecI32(r) => r.serialize(serializer),
+            PrimVec::VecI64(r) => r.serialize(serializer),
+            PrimVec::VecI128(r) => r.serialize(serializer),
+            PrimVec::VecI256(r) => r.serialize(serializer),
             PrimVec::VecBool(r) => r.serialize(serializer),
             PrimVec::VecAddress(r) => r.serialize(serializer),
         }
@@ -2857,6 +3530,12 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveTypeLayout, Value> {
             (MoveTypeLayout::U64, Value::U64(x)) => serializer.serialize_u64(*x),
             (MoveTypeLayout::U128, Value::U128(x)) => serializer.serialize_u128(**x),
             (MoveTypeLayout::U256, Value::U256(x)) => x.serialize(serializer),
+            (MoveTypeLayout::I8, Value::I8(x)) => serializer.serialize_i8(*x),
+            (MoveTypeLayout::I16, Value::I16(x)) => serializer.serialize_i16(*x),
+            (MoveTypeLayout::I32, Value::I32(x)) => serializer.serialize_i32(*x),
+            (MoveTypeLayout::I64, Value::I64(x)) => serializer.serialize_i64(*x),
+            (MoveTypeLayout::I128, Value::I128(x)) => serializer.serialize_i128(**x),
+            (MoveTypeLayout::I256, Value::I256(x)) => x.serialize(serializer),
             (MoveTypeLayout::Bool, Value::Bool(x)) => serializer.serialize_bool(*x),
             (MoveTypeLayout::Address, Value::Address(x)) => x.serialize(serializer),
 
@@ -2881,6 +3560,12 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveTypeLayout, Value> {
                     (MoveTypeLayout::U64, PrimVec::VecU64(r)) => r.serialize(serializer),
                     (MoveTypeLayout::U128, PrimVec::VecU128(r)) => r.serialize(serializer),
                     (MoveTypeLayout::U256, PrimVec::VecU256(r)) => r.serialize(serializer),
+                    (MoveTypeLayout::I8, PrimVec::VecI8(r)) => r.serialize(serializer),
+                    (MoveTypeLayout::I16, PrimVec::VecI16(r)) => r.serialize(serializer),
+                    (MoveTypeLayout::I32, PrimVec::VecI32(r)) => r.serialize(serializer),
+                    (MoveTypeLayout::I64, PrimVec::VecI64(r)) => r.serialize(serializer),
+                    (MoveTypeLayout::I128, PrimVec::VecI128(r)) => r.serialize(serializer),
+                    (MoveTypeLayout::I256, PrimVec::VecI256(r)) => r.serialize(serializer),
                     (MoveTypeLayout::Bool, PrimVec::VecBool(r)) => r.serialize(serializer),
                     (MoveTypeLayout::Address, PrimVec::VecAddress(r)) => r.serialize(serializer),
                     (layout, container) => Err(invariant_violation::<S>(format!(
@@ -3038,12 +3723,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             L::U256 => u256::U256::deserialize(deserializer).map(Value::u256),
             L::Address => AccountAddress::deserialize(deserializer).map(Value::address),
             L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
-
-            L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => {
-                Err(<D::Error as serde::de::Error>::custom(
-                    "signed integer values not yet supported in VM runtime",
-                ))
-            }
+            L::I8 => i8::deserialize(deserializer).map(Value::i8),
+            L::I16 => i16::deserialize(deserializer).map(Value::i16),
+            L::I32 => i32::deserialize(deserializer).map(Value::i32),
+            L::I64 => i64::deserialize(deserializer).map(Value::i64),
+            L::I128 => i128::deserialize(deserializer).map(Value::i128),
+            L::I256 => i256::I256::deserialize(deserializer).map(Value::i256),
 
             L::Struct(struct_layout) => Ok(SeedWrapper {
                 layout: struct_layout.as_ref(),
@@ -3063,6 +3748,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
                     L::U64 => V::PrimVec(PV::VecU64(Vec::deserialize(deserializer)?)),
                     L::U128 => V::PrimVec(PV::VecU128(Vec::deserialize(deserializer)?)),
                     L::U256 => V::PrimVec(PV::VecU256(Vec::deserialize(deserializer)?)),
+                    L::I8 => V::PrimVec(PV::VecI8(Vec::deserialize(deserializer)?)),
+                    L::I16 => V::PrimVec(PV::VecI16(Vec::deserialize(deserializer)?)),
+                    L::I32 => V::PrimVec(PV::VecI32(Vec::deserialize(deserializer)?)),
+                    L::I64 => V::PrimVec(PV::VecI64(Vec::deserialize(deserializer)?)),
+                    L::I128 => V::PrimVec(PV::VecI128(Vec::deserialize(deserializer)?)),
+                    L::I256 => V::PrimVec(PV::VecI256(Vec::deserialize(deserializer)?)),
                     L::Bool => V::PrimVec(PV::VecBool(Vec::deserialize(deserializer)?)),
                     L::Address => V::PrimVec(PV::VecAddress(Vec::deserialize(deserializer)?)),
                     layout => {
@@ -3233,7 +3924,7 @@ impl Value {
             S::Vector(inner) => L::Vector(Box::new(Self::constant_sig_token_to_layout(inner)?)),
             // Not yet supported
             S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
-            // Signed integer constants are not yet supported in the VM runtime
+            // Signed integers not yet supported in constants
             S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => return None,
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) => return None,
@@ -3267,6 +3958,12 @@ impl PrimVec {
             PrimVec::VecU64(xs) => visitor.visit_u64(depth, *xs.safe_get(ndx)?),
             PrimVec::VecU128(xs) => visitor.visit_u128(depth, *xs.safe_get(ndx)?),
             PrimVec::VecU256(xs) => visitor.visit_u256(depth, *xs.safe_get(ndx)?),
+            PrimVec::VecI8(xs) => visitor.visit_u8(depth, *xs.safe_get(ndx)? as u8),
+            PrimVec::VecI16(xs) => visitor.visit_u16(depth, *xs.safe_get(ndx)? as u16),
+            PrimVec::VecI32(xs) => visitor.visit_u32(depth, *xs.safe_get(ndx)? as u32),
+            PrimVec::VecI64(xs) => visitor.visit_u64(depth, *xs.safe_get(ndx)? as u64),
+            PrimVec::VecI128(xs) => visitor.visit_u128(depth, *xs.safe_get(ndx)? as u128),
+            PrimVec::VecI256(xs) => visitor.visit_u256(depth, xs.safe_get(ndx)?.to_u256_bits()),
             PrimVec::VecBool(xs) => visitor.visit_bool(depth, *xs.safe_get(ndx)?),
             PrimVec::VecAddress(xs) => visitor.visit_address(depth, *xs.safe_get(ndx)?),
         }
@@ -3305,6 +4002,12 @@ impl Value {
             Value::U64(val) => visitor.visit_u64(depth, *val),
             Value::U128(val) => visitor.visit_u128(depth, *val.as_ref()),
             Value::U256(val) => visitor.visit_u256(depth, *val.as_ref()),
+            Value::I8(val) => visitor.visit_u8(depth, *val as u8),
+            Value::I16(val) => visitor.visit_u16(depth, *val as u16),
+            Value::I32(val) => visitor.visit_u32(depth, *val as u32),
+            Value::I64(val) => visitor.visit_u64(depth, *val as u64),
+            Value::I128(val) => visitor.visit_u128(depth, *val.as_ref() as u128),
+            Value::I256(val) => visitor.visit_u256(depth, val.as_ref().to_u256_bits()),
             Value::Bool(val) => visitor.visit_bool(depth, *val),
             Value::Address(val) => visitor.visit_address(depth, **val),
             Value::Reference(r) => r.visit_impl(visitor, depth),
@@ -3323,6 +4026,54 @@ impl Value {
                 PrimVec::VecU64(r) => visitor.visit_vec_u64(depth, r),
                 PrimVec::VecU128(r) => visitor.visit_vec_u128(depth, r),
                 PrimVec::VecU256(r) => visitor.visit_vec_u256(depth, r),
+                PrimVec::VecI8(r) => {
+                    if visitor.visit_vec(depth, r.len())? {
+                        for item in r {
+                            visitor.visit_u8(depth.safe_add(1)?, *item as u8)?;
+                        }
+                    }
+                    Ok(())
+                }
+                PrimVec::VecI16(r) => {
+                    if visitor.visit_vec(depth, r.len())? {
+                        for item in r {
+                            visitor.visit_u16(depth.safe_add(1)?, *item as u16)?;
+                        }
+                    }
+                    Ok(())
+                }
+                PrimVec::VecI32(r) => {
+                    if visitor.visit_vec(depth, r.len())? {
+                        for item in r {
+                            visitor.visit_u32(depth.safe_add(1)?, *item as u32)?;
+                        }
+                    }
+                    Ok(())
+                }
+                PrimVec::VecI64(r) => {
+                    if visitor.visit_vec(depth, r.len())? {
+                        for item in r {
+                            visitor.visit_u64(depth.safe_add(1)?, *item as u64)?;
+                        }
+                    }
+                    Ok(())
+                }
+                PrimVec::VecI128(r) => {
+                    if visitor.visit_vec(depth, r.len())? {
+                        for item in r {
+                            visitor.visit_u128(depth.safe_add(1)?, *item as u128)?;
+                        }
+                    }
+                    Ok(())
+                }
+                PrimVec::VecI256(r) => {
+                    if visitor.visit_vec(depth, r.len())? {
+                        for item in r {
+                            visitor.visit_u256(depth.safe_add(1)?, item.to_u256_bits())?;
+                        }
+                    }
+                    Ok(())
+                }
                 PrimVec::VecBool(r) => visitor.visit_vec_bool(depth, r),
                 PrimVec::VecAddress(r) => visitor.visit_vec_address(depth, r),
             },
@@ -3387,6 +4138,12 @@ impl ValueView for IntegerValue {
             U64(val) => visitor.visit_u64(0, *val),
             U128(val) => visitor.visit_u128(0, *val),
             U256(val) => visitor.visit_u256(0, *val),
+            I8(val) => visitor.visit_u8(0, *val as u8),
+            I16(val) => visitor.visit_u16(0, *val as u16),
+            I32(val) => visitor.visit_u32(0, *val as u32),
+            I64(val) => visitor.visit_u64(0, *val as u64),
+            I128(val) => visitor.visit_u128(0, *val as u128),
+            I256(val) => visitor.visit_u256(0, val.to_u256_bits()),
         }
     }
 }
@@ -3546,6 +4303,12 @@ pub mod prop {
             L::U64 => any::<u64>().prop_map(Value::u64).boxed(),
             L::U128 => any::<u128>().prop_map(Value::u128).boxed(),
             L::U256 => any::<u256::U256>().prop_map(Value::u256).boxed(),
+            L::I8 => any::<i8>().prop_map(Value::i8).boxed(),
+            L::I16 => any::<i16>().prop_map(Value::i16).boxed(),
+            L::I32 => any::<i32>().prop_map(Value::i32).boxed(),
+            L::I64 => any::<i64>().prop_map(Value::i64).boxed(),
+            L::I128 => any::<i128>().prop_map(Value::i128).boxed(),
+            L::I256 => any::<i256::I256>().prop_map(Value::i256).boxed(),
             L::Bool => any::<bool>().prop_map(Value::bool).boxed(),
             L::Address => any::<AccountAddress>().prop_map(Value::address).boxed(),
             L::Signer => any::<AccountAddress>().prop_map(Value::signer).boxed(),
@@ -3560,6 +4323,16 @@ pub mod prop {
                     .boxed(),
                 L::U256 => vec(any::<u256::U256>(), 0..10)
                     .prop_map(Value::vector_u256)
+                    .boxed(),
+                L::I8 => vec(any::<i8>(), 0..10).prop_map(Value::vector_i8).boxed(),
+                L::I16 => vec(any::<i16>(), 0..10).prop_map(Value::vector_i16).boxed(),
+                L::I32 => vec(any::<i32>(), 0..10).prop_map(Value::vector_i32).boxed(),
+                L::I64 => vec(any::<i64>(), 0..10).prop_map(Value::vector_i64).boxed(),
+                L::I128 => vec(any::<i128>(), 0..10)
+                    .prop_map(Value::vector_i128)
+                    .boxed(),
+                L::I256 => vec(any::<i256::I256>(), 0..10)
+                    .prop_map(Value::vector_i256)
                     .boxed(),
                 L::Bool => vec(any::<bool>(), 0..10)
                     .prop_map(Value::vector_bool)
@@ -3610,6 +4383,12 @@ pub mod prop {
             1 => Just(L::U64),
             1 => Just(L::U128),
             1 => Just(L::U256),
+            1 => Just(L::I8),
+            1 => Just(L::I16),
+            1 => Just(L::I32),
+            1 => Just(L::I64),
+            1 => Just(L::I128),
+            1 => Just(L::I256),
             1 => Just(L::Bool),
             1 => Just(L::Address),
             1 => Just(L::Signer),
@@ -3650,6 +4429,12 @@ impl Value {
             (L::U64, Value::U64(x)) => RuntimeValue::U64(*x),
             (L::U128, Value::U128(x)) => RuntimeValue::U128(**x),
             (L::U256, Value::U256(x)) => RuntimeValue::U256(**x),
+            (L::I8, Value::I8(x)) => RuntimeValue::I8(*x),
+            (L::I16, Value::I16(x)) => RuntimeValue::I16(*x),
+            (L::I32, Value::I32(x)) => RuntimeValue::I32(*x),
+            (L::I64, Value::I64(x)) => RuntimeValue::I64(*x),
+            (L::I128, Value::I128(x)) => RuntimeValue::I128(**x),
+            (L::I256, Value::I256(x)) => RuntimeValue::I256(**x),
             (L::Bool, Value::Bool(x)) => RuntimeValue::Bool(*x),
             (L::Address, Value::Address(x)) => RuntimeValue::Address(**x),
 
@@ -3696,6 +4481,12 @@ impl Value {
                     (L::U64, PV::VecU64(xs)) => make_vec!(xs, U64),
                     (L::U128, PV::VecU128(xs)) => make_vec!(xs, U128),
                     (L::U256, PV::VecU256(xs)) => make_vec!(xs, U256),
+                    (L::I8, PV::VecI8(xs)) => make_vec!(xs, I8),
+                    (L::I16, PV::VecI16(xs)) => make_vec!(xs, I16),
+                    (L::I32, PV::VecI32(xs)) => make_vec!(xs, I32),
+                    (L::I64, PV::VecI64(xs)) => make_vec!(xs, I64),
+                    (L::I128, PV::VecI128(xs)) => make_vec!(xs, I128),
+                    (L::I256, PV::VecI256(xs)) => make_vec!(xs, I256),
                     (L::Bool, PV::VecBool(xs)) => make_vec!(xs, Bool),
                     (L::Address, PV::VecAddress(xs)) => make_vec!(xs, Address),
                     (
@@ -3706,7 +4497,13 @@ impl Value {
                         | L::Address
                         | L::U16
                         | L::U32
-                        | L::U256),
+                        | L::U256
+                        | L::I8
+                        | L::I16
+                        | L::I32
+                        | L::I64
+                        | L::I128
+                        | L::I256),
                         vec,
                     ) => {
                         return Err(partial_vm_error!(
@@ -3721,12 +4518,6 @@ impl Value {
                             UNREACHABLE,
                             "Expected a primitive type for the primitive vector, got {:?}",
                             inner_layout.as_ref()
-                        ));
-                    }
-                    (L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256, _) => {
-                        return Err(partial_vm_error!(
-                            UNREACHABLE,
-                            "signed integer values not yet supported in VM runtime"
                         ));
                     }
                 }
@@ -3783,6 +4574,12 @@ impl Value {
             (L::U64, Value::U64(x)) => Some(AnnValue::U64(*x)),
             (L::U128, Value::U128(x)) => Some(AnnValue::U128(**x)),
             (L::U256, Value::U256(x)) => Some(AnnValue::U256(**x)),
+            (L::I8, Value::I8(x)) => Some(AnnValue::I8(*x)),
+            (L::I16, Value::I16(x)) => Some(AnnValue::I16(*x)),
+            (L::I32, Value::I32(x)) => Some(AnnValue::I32(*x)),
+            (L::I64, Value::I64(x)) => Some(AnnValue::I64(*x)),
+            (L::I128, Value::I128(x)) => Some(AnnValue::I128(**x)),
+            (L::I256, Value::I256(x)) => Some(AnnValue::I256(**x)),
             (L::Bool, Value::Bool(x)) => Some(AnnValue::Bool(*x)),
             (L::Address, Value::Address(x)) => Some(AnnValue::Address(**x)),
             (L::Enum(e_layout), Value::Variant(var_box)) => {
@@ -3837,6 +4634,12 @@ impl Value {
                     (L::U64, PrimVec::VecU64(xs)) => make_vec!(xs, U64),
                     (L::U128, PrimVec::VecU128(xs)) => make_vec!(xs, U128),
                     (L::U256, PrimVec::VecU256(xs)) => make_vec!(xs, U256),
+                    (L::I8, PrimVec::VecI8(xs)) => make_vec!(xs, I8),
+                    (L::I16, PrimVec::VecI16(xs)) => make_vec!(xs, I16),
+                    (L::I32, PrimVec::VecI32(xs)) => make_vec!(xs, I32),
+                    (L::I64, PrimVec::VecI64(xs)) => make_vec!(xs, I64),
+                    (L::I128, PrimVec::VecI128(xs)) => make_vec!(xs, I128),
+                    (L::I256, PrimVec::VecI256(xs)) => make_vec!(xs, I256),
                     (L::Bool, PrimVec::VecBool(xs)) => make_vec!(xs, Bool),
                     (L::Address, PrimVec::VecAddress(xs)) => make_vec!(xs, Address),
                     (_, _) => None,
@@ -3897,6 +4700,24 @@ impl Reference {
                                 }
                                 (L::U256, PrimVec::VecU256(xs)) => {
                                     Some(AV::Vector(xs.iter().map(|u| AV::U256(*u)).collect()))
+                                }
+                                (L::I8, PrimVec::VecI8(xs)) => {
+                                    Some(AV::Vector(xs.iter().map(|x| AV::I8(*x)).collect()))
+                                }
+                                (L::I16, PrimVec::VecI16(xs)) => {
+                                    Some(AV::Vector(xs.iter().map(|x| AV::I16(*x)).collect()))
+                                }
+                                (L::I32, PrimVec::VecI32(xs)) => {
+                                    Some(AV::Vector(xs.iter().map(|x| AV::I32(*x)).collect()))
+                                }
+                                (L::I64, PrimVec::VecI64(xs)) => {
+                                    Some(AV::Vector(xs.iter().map(|x| AV::I64(*x)).collect()))
+                                }
+                                (L::I128, PrimVec::VecI128(xs)) => {
+                                    Some(AV::Vector(xs.iter().map(|x| AV::I128(*x)).collect()))
+                                }
+                                (L::I256, PrimVec::VecI256(xs)) => {
+                                    Some(AV::Vector(xs.iter().map(|x| AV::I256(*x)).collect()))
                                 }
                                 (L::Bool, PrimVec::VecBool(xs)) => {
                                     Some(AV::Vector(xs.iter().map(|b| AV::Bool(*b)).collect()))

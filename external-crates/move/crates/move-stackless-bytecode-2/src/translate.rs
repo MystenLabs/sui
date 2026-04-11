@@ -660,6 +660,23 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::LdU128(bx) => assign_reg!([push!(Type::U128.into())] = imm!(Value::U128(*(*bx)))),
         IB::LdU256(_bx) => assign_reg!([push!(Type::U256.into())] = imm!(Value::U256(*(*_bx)))),
 
+        IB::LdI8(value) => assign_reg!([push!(Type::I8.into())] = imm!(Value::I8(*value))),
+        IB::LdI16(value) => {
+            assign_reg!([push!(Type::I16.into())] = imm!(Value::I16(*value)))
+        }
+        IB::LdI32(value) => {
+            assign_reg!([push!(Type::I32.into())] = imm!(Value::I32(*value)))
+        }
+        IB::LdI64(value) => {
+            assign_reg!([push!(Type::I64.into())] = imm!(Value::I64(*value)))
+        }
+        IB::LdI128(bx) => {
+            assign_reg!([push!(Type::I128.into())] = imm!(Value::I128(**bx)))
+        }
+        IB::LdI256(_bx) => {
+            assign_reg!([push!(Type::I256.into())] = imm!(Value::I256(**_bx)))
+        }
+
         IB::CastU16 => {
             assign_reg!([push!(Type::U16.into())] = primitive_op!(Op::CastU16, R(pop!())))
         }
@@ -670,6 +687,36 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::CastU256 => {
             assign_reg!([push!(Type::U256.into())] = primitive_op!(Op::CastU256, R(pop!())))
+        }
+
+        IB::CastI8 => {
+            assign_reg!([push!(Type::I8.into())] = primitive_op!(Op::CastI8, R(pop!())))
+        }
+
+        IB::CastI16 => {
+            assign_reg!([push!(Type::I16.into())] = primitive_op!(Op::CastI16, R(pop!())))
+        }
+
+        IB::CastI32 => {
+            assign_reg!([push!(Type::I32.into())] = primitive_op!(Op::CastI32, R(pop!())))
+        }
+
+        IB::CastI64 => {
+            assign_reg!([push!(Type::I64.into())] = primitive_op!(Op::CastI64, R(pop!())))
+        }
+
+        IB::CastI128 => {
+            assign_reg!([push!(Type::I128.into())] = primitive_op!(Op::CastI128, R(pop!())))
+        }
+
+        IB::CastI256 => {
+            assign_reg!([push!(Type::I256.into())] = primitive_op!(Op::CastI256, R(pop!())))
+        }
+
+        IB::Neg => {
+            let operand = pop!();
+            let operand_type = operand.ty.clone();
+            assign_reg!([push!(operand_type)] = primitive_op!(Op::Neg, R(operand)))
         }
 
         IB::PackVariant(bx) => {
@@ -745,21 +792,6 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::ExistsDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveFromDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
-
-        // Signed integer bytecodes are not yet supported
-        IB::LdI8(_)
-        | IB::LdI16(_)
-        | IB::LdI32(_)
-        | IB::LdI64(_)
-        | IB::LdI128(_)
-        | IB::LdI256(_)
-        | IB::CastI8
-        | IB::CastI16
-        | IB::CastI32
-        | IB::CastI64
-        | IB::CastI128
-        | IB::CastI256
-        | IB::Neg => Instruction::NotImplemented(format!("{:?}", op)),
     }
 }
 
