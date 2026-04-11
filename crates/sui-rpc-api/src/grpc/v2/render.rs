@@ -81,10 +81,7 @@ impl RpcService {
             .ok()
             .flatten()?;
 
-        let root = sui_display::v2::OwnedSlice {
-            bytes: contents.to_owned(),
-            layout,
-        };
+        let root = sui_display::v2::OwnedSlice::new(layout, contents.to_owned());
         let interpreter = sui_display::v2::Interpreter::new(root, DisplayStore::new(&self.reader));
 
         let mut display = Display::default();
