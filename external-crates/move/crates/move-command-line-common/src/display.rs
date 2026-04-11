@@ -52,6 +52,31 @@ pub fn try_render_constant(constant: &Constant) -> RenderResult {
             .map(|x| x.to_string())
             .map_or(RenderResult::NotRendered, RenderResult::AsValue),
 
+        SignatureToken::I8 => bcs::from_bytes::<i8>(bytes)
+            .ok()
+            .map(|x| x.to_string())
+            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
+        SignatureToken::I16 => bcs::from_bytes::<i16>(bytes)
+            .ok()
+            .map(|x| x.to_string())
+            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
+        SignatureToken::I32 => bcs::from_bytes::<i32>(bytes)
+            .ok()
+            .map(|x| x.to_string())
+            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
+        SignatureToken::I64 => bcs::from_bytes::<i64>(bytes)
+            .ok()
+            .map(|x| x.to_string())
+            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
+        SignatureToken::I128 => bcs::from_bytes::<i128>(bytes)
+            .ok()
+            .map(|x| x.to_string())
+            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
+        SignatureToken::I256 => bcs::from_bytes::<move_core_types::i256::I256>(bytes)
+            .ok()
+            .map(|x| x.to_string())
+            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
+
         SignatureToken::Signer
         | SignatureToken::Vector(_)
         | SignatureToken::Datatype(_)

@@ -1046,6 +1046,18 @@ pub enum SignatureToken {
     U32,
     /// Unsigned integers, 256 bits length.
     U256,
+    /// Signed integers, 8 bits length.
+    I8,
+    /// Signed integers, 16 bits length.
+    I16,
+    /// Signed integers, 32 bits length.
+    I32,
+    /// Signed integers, 64 bits length.
+    I64,
+    /// Signed integers, 128 bits length.
+    I128,
+    /// Signed integers, 256 bits length.
+    I256,
 }
 
 /// An iterator to help traverse the `SignatureToken` in a non-recursive fashion to avoid
@@ -1074,8 +1086,8 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIter<'a> {
                         self.stack.extend(inner_toks.iter().rev())
                     }
 
-                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Datatype(_)
-                    | TypeParameter(_) => (),
+                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16
+                    | I32 | I64 | I128 | I256 | Datatype(_) | TypeParameter(_) => (),
                 }
                 Some(tok)
             }
@@ -1109,8 +1121,8 @@ impl<'a> Iterator for SignatureTokenPreorderTraversalIterWithDepth<'a> {
                             .extend(inner_toks.iter().map(|tok| (tok, depth + 1)).rev())
                     }
 
-                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Datatype(_)
-                    | TypeParameter(_) => (),
+                    Signer | Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16
+                    | I32 | I64 | I128 | I256 | Datatype(_) | TypeParameter(_) => (),
                 }
                 Some((tok, depth))
             }
@@ -1136,6 +1148,12 @@ impl Arbitrary for SignatureToken {
             Just(U64),
             Just(U128),
             Just(U256),
+            Just(I8),
+            Just(I16),
+            Just(I32),
+            Just(I64),
+            Just(I128),
+            Just(I256),
             Just(Address),
             any::<DatatypeHandleIndex>().prop_map(Datatype),
             any::<TypeParameterIndex>().prop_map(TypeParameter),
@@ -1166,6 +1184,12 @@ impl std::fmt::Debug for SignatureToken {
             SignatureToken::U64 => write!(f, "U64"),
             SignatureToken::U128 => write!(f, "U128"),
             SignatureToken::U256 => write!(f, "U256"),
+            SignatureToken::I8 => write!(f, "I8"),
+            SignatureToken::I16 => write!(f, "I16"),
+            SignatureToken::I32 => write!(f, "I32"),
+            SignatureToken::I64 => write!(f, "I64"),
+            SignatureToken::I128 => write!(f, "I128"),
+            SignatureToken::I256 => write!(f, "I256"),
             SignatureToken::Address => write!(f, "Address"),
             SignatureToken::Signer => write!(f, "Signer"),
             SignatureToken::Vector(boxed) => write!(f, "Vector({:?})", boxed),
@@ -1186,7 +1210,7 @@ impl SignatureToken {
     pub fn is_integer(&self) -> bool {
         use SignatureToken::*;
         match self {
-            U8 | U16 | U32 | U64 | U128 | U256 => true,
+            U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256 => true,
             Bool
             | Address
             | Signer
@@ -1197,6 +1221,12 @@ impl SignatureToken {
             | MutableReference(_)
             | TypeParameter(_) => false,
         }
+    }
+
+    /// Returns true if the `SignatureToken` is a signed integer type.
+    pub fn is_signed_integer(&self) -> bool {
+        use SignatureToken::*;
+        matches!(self, I8 | I16 | I32 | I64 | I128 | I256)
     }
 
     /// Returns true if the `SignatureToken` is any kind of reference (mutable and immutable).
@@ -1226,7 +1256,8 @@ impl SignatureToken {
         use SignatureToken::*;
 
         match self {
-            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => true,
+            Bool | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256
+            | Address => true,
             Vector(inner) => inner.is_valid_for_constant(),
             Signer
             | Datatype(_)
@@ -1790,6 +1821,33 @@ pub enum Bytecode {
     /// ```..., enum_value_ref -> ...```
     VariantSwitch(VariantJumpTableIndex),
 
+    /// Push an i8 constant onto the stack.
+    LdI8(i8),
+    /// Push an i16 constant onto the stack.
+    LdI16(i16),
+    /// Push an i32 constant onto the stack.
+    LdI32(i32),
+    /// Push an i64 constant onto the stack.
+    LdI64(i64),
+    /// Push an i128 constant onto the stack.
+    LdI128(Box<i128>),
+    /// Push an I256 constant onto the stack.
+    LdI256(Box<move_core_types::i256::I256>),
+    /// Convert the value at the top of the stack into i8.
+    CastI8,
+    /// Convert the value at the top of the stack into i16.
+    CastI16,
+    /// Convert the value at the top of the stack into i32.
+    CastI32,
+    /// Convert the value at the top of the stack into i64.
+    CastI64,
+    /// Convert the value at the top of the stack into i128.
+    CastI128,
+    /// Convert the value at the top of the stack into I256.
+    CastI256,
+    /// Negate the integer value at the top of the stack.
+    Neg,
+
     // ******** DEPRECATED BYTECODES ********
     ExistsDeprecated(StructDefinitionIndex),
     ExistsGenericDeprecated(StructDefInstantiationIndex),
@@ -1909,6 +1967,19 @@ impl ::std::fmt::Debug for Bytecode {
                 write!(f, "UnpackVariantGenericMutRef({:?})", handle)
             }
             Bytecode::VariantSwitch(jt) => write!(f, "VariantSwitch({:?})", jt),
+            Bytecode::LdI8(a) => write!(f, "LdI8({})", a),
+            Bytecode::LdI16(a) => write!(f, "LdI16({})", a),
+            Bytecode::LdI32(a) => write!(f, "LdI32({})", a),
+            Bytecode::LdI64(a) => write!(f, "LdI64({})", a),
+            Bytecode::LdI128(a) => write!(f, "LdI128({})", a),
+            Bytecode::LdI256(a) => write!(f, "LdI256({})", a),
+            Bytecode::CastI8 => write!(f, "CastI8"),
+            Bytecode::CastI16 => write!(f, "CastI16"),
+            Bytecode::CastI32 => write!(f, "CastI32"),
+            Bytecode::CastI64 => write!(f, "CastI64"),
+            Bytecode::CastI128 => write!(f, "CastI128"),
+            Bytecode::CastI256 => write!(f, "CastI256"),
+            Bytecode::Neg => write!(f, "Neg"),
         }
     }
 }
@@ -1993,6 +2064,19 @@ impl Bytecode {
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
             | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::ExistsDeprecated(_)
             | Bytecode::ExistsGenericDeprecated(_)
             | Bytecode::MoveFromDeprecated(_)
@@ -2087,6 +2171,19 @@ impl Bytecode {
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
             | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::ExistsDeprecated(_)
             | Bytecode::ExistsGenericDeprecated(_)
             | Bytecode::MoveFromDeprecated(_)
@@ -2197,6 +2294,19 @@ impl Bytecode {
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
             | Bytecode::UnpackVariantGenericMutRef(_)
+            | Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg
             | Bytecode::ExistsDeprecated(_)
             | Bytecode::ExistsGenericDeprecated(_)
             | Bytecode::MoveFromDeprecated(_)
@@ -2745,7 +2855,8 @@ impl CompiledModule {
         use SignatureToken::*;
 
         match ty {
-            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => Ok(AbilitySet::PRIMITIVES),
+            Bool | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256
+            | Address => Ok(AbilitySet::PRIMITIVES),
 
             Reference(_) | MutableReference(_) => Ok(AbilitySet::REFERENCES),
             Signer => Ok(AbilitySet::SIGNER),

@@ -185,6 +185,24 @@ impl<'a> AcquiresVerifier<'a> {
             | Bytecode::UnpackVariantGenericImmRef(_)
             | Bytecode::UnpackVariantGenericMutRef(_)
             | Bytecode::VariantSwitch(_) => Ok(()),
+            Bytecode::LdI8(_)
+            | Bytecode::LdI16(_)
+            | Bytecode::LdI32(_)
+            | Bytecode::LdI64(_)
+            | Bytecode::LdI128(_)
+            | Bytecode::LdI256(_)
+            | Bytecode::CastI8
+            | Bytecode::CastI16
+            | Bytecode::CastI32
+            | Bytecode::CastI64
+            | Bytecode::CastI128
+            | Bytecode::CastI256
+            | Bytecode::Neg => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Unexpected signed int opcode in version 3".to_string()),
+                );
+            }
         }
     }
 

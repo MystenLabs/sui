@@ -338,6 +338,14 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             NormalizedType::Reference(true, mr) => SuiMoveNormalizedType::MutableReference(
                 Box::new(SuiMoveNormalizedType::from(&**mr)),
             ),
+            NormalizedType::I8
+            | NormalizedType::I16
+            | NormalizedType::I32
+            | NormalizedType::I64
+            | NormalizedType::I128
+            | NormalizedType::I256 => {
+                panic!("Signed integer types are not yet supported in sui-json-rpc-types")
+            }
         }
     }
 }

@@ -142,7 +142,8 @@ impl<'a> InstantiationLoopChecker<'a> {
 
         fn rec(type_params: &mut HashSet<TypeParameterIndex>, ty: &SignatureToken) {
             match ty {
-                Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Signer | Datatype(_) => (),
+                Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Signer | Datatype(_) | I8
+                | I16 | I32 | I64 | I128 | I256 => (),
                 TypeParameter(idx) => {
                     type_params.insert(*idx);
                 }
