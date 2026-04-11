@@ -877,6 +877,18 @@ impl Loader {
                     Type::DatatypeInstantiation(Box::new((idx, type_params)))
                 }
             }
+            TypeTag::I8
+            | TypeTag::I16
+            | TypeTag::I32
+            | TypeTag::I64
+            | TypeTag::I128
+            | TypeTag::I256 => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Unexpected signed int type tag in version 0".to_string())
+                        .finish(Location::Undefined),
+                )
+            }
         })
     }
 

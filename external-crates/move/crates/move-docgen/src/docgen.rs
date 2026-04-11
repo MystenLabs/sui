@@ -956,6 +956,12 @@ impl<'env> Docgen<'env> {
                 MoveValue::Struct(_) | MoveValue::Variant(_) => {
                     unimplemented!("struct/variant are not supported in consts")
                 }
+                MoveValue::I8(i) => format!("{i}"),
+                MoveValue::I16(i) => format!("{i}"),
+                MoveValue::I32(i) => format!("{i}"),
+                MoveValue::I64(i) => format!("{i}"),
+                MoveValue::I128(i) => format!("{i}"),
+                MoveValue::I256(i) => format!("{i}"),
             }
         }
 

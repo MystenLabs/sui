@@ -451,6 +451,16 @@ impl MoveTypeLayoutBuilder {
             RV::MoveTypeLayout::U256 => self.u256(),
             RV::MoveTypeLayout::Address => self.address(),
             RV::MoveTypeLayout::Signer => self.signer(),
+            RV::MoveTypeLayout::I8
+            | RV::MoveTypeLayout::I16
+            | RV::MoveTypeLayout::I32
+            | RV::MoveTypeLayout::I64
+            | RV::MoveTypeLayout::I128
+            | RV::MoveTypeLayout::I256 => {
+                anyhow::bail!(crate::signed_ints_unsupported!(
+                    "compressed runtime layouts"
+                ))
+            }
             RV::MoveTypeLayout::Vector(inner) => {
                 let inner_h = self.from_tree(inner)?;
                 self.vector(inner_h)?

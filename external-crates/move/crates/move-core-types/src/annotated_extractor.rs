@@ -156,6 +156,72 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
         })
     }
 
+    fn visit_i8(
+        &mut self,
+        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i8,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(match &self.path {
+            [] | [Element::Type(TypeTag::I8)] => Some(self.inner.visit_i8(driver, value)?),
+            _ => None,
+        })
+    }
+
+    fn visit_i16(
+        &mut self,
+        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i16,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(match &self.path {
+            [] | [Element::Type(TypeTag::I16)] => Some(self.inner.visit_i16(driver, value)?),
+            _ => None,
+        })
+    }
+
+    fn visit_i32(
+        &mut self,
+        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i32,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(match &self.path {
+            [] | [Element::Type(TypeTag::I32)] => Some(self.inner.visit_i32(driver, value)?),
+            _ => None,
+        })
+    }
+
+    fn visit_i64(
+        &mut self,
+        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i64,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(match &self.path {
+            [] | [Element::Type(TypeTag::I64)] => Some(self.inner.visit_i64(driver, value)?),
+            _ => None,
+        })
+    }
+
+    fn visit_i128(
+        &mut self,
+        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i128,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(match &self.path {
+            [] | [Element::Type(TypeTag::I128)] => Some(self.inner.visit_i128(driver, value)?),
+            _ => None,
+        })
+    }
+
+    fn visit_i256(
+        &mut self,
+        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        value: crate::i256::I256,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(match &self.path {
+            [] | [Element::Type(TypeTag::I256)] => Some(self.inner.visit_i256(driver, value)?),
+            _ => None,
+        })
+    }
+
     fn visit_bool(
         &mut self,
         driver: &AV::ValueDriver<'_, 'b, 'l>,

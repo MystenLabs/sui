@@ -1141,12 +1141,12 @@ impl OpenSignatureBody {
             S::U64 => O::U64,
             S::U128 => O::U128,
             S::U256 => O::U256,
-            // TODO (signed-ints): signature tokens are not yet supported in the package resolver
-            S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
-                return Err(Error::UnexpectedError(std::sync::Arc::new(
-                    std::io::Error::other("Signed integer types are not yet supported"),
-                )));
-            }
+            S::I8 => O::I8,
+            S::I16 => O::I16,
+            S::I32 => O::I32,
+            S::I64 => O::I64,
+            S::I128 => O::I128,
+            S::I256 => O::I256,
             S::TypeParameter(ix) => O::TypeParameter(*ix),
 
             S::Vector(sig) => O::Vector(Box::new(OpenSignatureBody::read(sig, bytecode)?)),
@@ -1282,6 +1282,12 @@ impl<'l> ResolutionContext<'l> {
                 | T::U64
                 | T::U128
                 | T::U256
+                | T::I8
+                | T::I16
+                | T::I32
+                | T::I64
+                | T::I128
+                | T::I256
                 | T::Signer => {
                     // Nothing further to add to context
                 }
@@ -1448,9 +1454,20 @@ impl<'l> ResolutionContext<'l> {
 
         match tag {
             T::Signer => return Err(Error::UnexpectedSigner),
-            T::Address | T::Bool | T::U8 | T::U16 | T::U32 | T::U64 | T::U128 | T::U256 => {
-                /* nop */
-            }
+            T::Address
+            | T::Bool
+            | T::U8
+            | T::U16
+            | T::U32
+            | T::U64
+            | T::U128
+            | T::U256
+            | T::I8
+            | T::I16
+            | T::I32
+            | T::I64
+            | T::I128
+            | T::I256 => { /* nop */ }
 
             T::Vector(tag) => self.canonicalize_type(tag.as_mut())?,
 
@@ -1501,6 +1518,12 @@ impl<'l> ResolutionContext<'l> {
             T::U64 => (L::U64, 1),
             T::U128 => (L::U128, 1),
             T::U256 => (L::U256, 1),
+            T::I8 => (L::I8, 1),
+            T::I16 => (L::I16, 1),
+            T::I32 => (L::I32, 1),
+            T::I64 => (L::I64, 1),
+            T::I128 => (L::I128, 1),
+            T::I256 => (L::I256, 1),
 
             T::Vector(tag) => {
                 let (layout, depth) = self.resolve_type_layout(tag, max_depth - 1)?;
@@ -1706,9 +1729,20 @@ impl<'l> ResolutionContext<'l> {
         Ok(match tag {
             T::Signer => return Err(Error::UnexpectedSigner),
 
-            T::Bool | T::U8 | T::U16 | T::U32 | T::U64 | T::U128 | T::U256 | T::Address => {
-                AbilitySet::PRIMITIVES
-            }
+            T::Bool
+            | T::U8
+            | T::U16
+            | T::U32
+            | T::U64
+            | T::U128
+            | T::U256
+            | T::I8
+            | T::I16
+            | T::I32
+            | T::I64
+            | T::I128
+            | T::I256
+            | T::Address => AbilitySet::PRIMITIVES,
 
             T::Vector(tag) => self.resolve_abilities(tag)?.intersect(AbilitySet::VECTOR),
 
@@ -1805,6 +1839,12 @@ pub fn as_type_tag(type_input: &TypeInput) -> Result<TypeTag> {
         I::U64 => T::U64,
         I::U128 => T::U128,
         I::U256 => T::U256,
+        I::I8 => T::I8,
+        I::I16 => T::I16,
+        I::I32 => T::I32,
+        I::I64 => T::I64,
+        I::I128 => T::I128,
+        I::I256 => T::I256,
         I::Address => T::Address,
         I::Signer => T::Signer,
         I::Vector(t) => T::Vector(Box::new(as_type_tag(t)?)),

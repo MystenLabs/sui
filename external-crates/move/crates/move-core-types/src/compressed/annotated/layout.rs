@@ -743,6 +743,16 @@ impl MoveTypeLayoutBuilder {
             AV::MoveTypeLayout::U256 => self.u256(),
             AV::MoveTypeLayout::Address => self.address(),
             AV::MoveTypeLayout::Signer => self.signer(),
+            AV::MoveTypeLayout::I8
+            | AV::MoveTypeLayout::I16
+            | AV::MoveTypeLayout::I32
+            | AV::MoveTypeLayout::I64
+            | AV::MoveTypeLayout::I128
+            | AV::MoveTypeLayout::I256 => {
+                anyhow::bail!(crate::signed_ints_unsupported!(
+                    "compressed annotated layouts"
+                ))
+            }
             AV::MoveTypeLayout::Vector(inner) => {
                 let inner_h = self.from_tree(inner)?;
                 self.vector(inner_h)?

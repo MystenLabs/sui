@@ -72,6 +72,7 @@ pub(super) async fn function(
                 | PRE::TypeParamOOB(_, _)
                 | PRE::UnexpectedReference
                 | PRE::UnexpectedSigner
+                | PRE::UnexpectedSignedInteger
                 | PRE::UnexpectedError(_)
                 | PRE::ValueNesting(_) => {
                     RpcError::from(anyhow!(e).context("Failed to resolve type layout"))

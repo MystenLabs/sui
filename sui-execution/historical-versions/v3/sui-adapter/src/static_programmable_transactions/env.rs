@@ -425,6 +425,21 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 TypeTag::U64 => VMR::Type::U64,
                 TypeTag::U128 => VMR::Type::U128,
                 TypeTag::U256 => VMR::Type::U256,
+                // Signed integer types are not supported at the Sui layer for v3
+                // execution, and the v3 VM runtime has no signed integer types. User
+                // type arguments hit a dedicated `TypeNotFound` rejection earlier in
+                // `to_type_tag_internal`, so reaching this arm means a signed-int
+                // `TypeTag` was synthesized internally (e.g. during layout loading of an
+                // on-chain module). Such a module cannot currently exist in v3, so this
+                // is an invariant violation rather than a user-facing error.
+                TypeTag::I8
+                | TypeTag::I16
+                | TypeTag::I32
+                | TypeTag::I64
+                | TypeTag::I128
+                | TypeTag::I256 => {
+                    invariant_violation!("v3 VM runtime cannot load signed integer type {:?}", tag);
+                }
                 TypeTag::Address => VMR::Type::Address,
                 TypeTag::Signer => VMR::Type::Signer,
 
@@ -648,6 +663,20 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 TypeInput::U64 => TypeTag::U64,
                 TypeInput::U128 => TypeTag::U128,
                 TypeInput::U256 => TypeTag::U256,
+                // Signed integer types are not accepted as transaction inputs on Sui.
+                TypeInput::I8
+                | TypeInput::I16
+                | TypeInput::I32
+                | TypeInput::I64
+                | TypeInput::I128
+                | TypeInput::I256 => {
+                    return Err(ExecutionError::from_kind(
+                        ExecutionErrorKind::TypeArgumentError {
+                            argument_idx: checked_as!(type_arg_idx, u16)?,
+                            kind: TypeArgumentError::TypeNotFound,
+                        },
+                    ));
+                }
                 TypeInput::Address => TypeTag::Address,
                 TypeInput::Signer => TypeTag::Signer,
                 TypeInput::Vector(type_input) => {

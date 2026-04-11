@@ -175,6 +175,7 @@ async fn resolve_type(ctx: &Context, type_: &TypeTag) -> Result<MoveTypeLayout, 
                 | PRE::TypeParamOOB(_, _)
                 | PRE::UnexpectedReference
                 | PRE::UnexpectedSigner
+                | PRE::UnexpectedSignedInteger
                 | PRE::UnexpectedError(_)
                 | PRE::ValueNesting(_) => {
                     RpcError::from(anyhow!(e).context("Failed to resolve type layout"))
