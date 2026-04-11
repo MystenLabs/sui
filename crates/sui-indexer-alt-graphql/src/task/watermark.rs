@@ -519,13 +519,47 @@ async fn watermark_from_consistent(
         }
 
         Err(consistent_reader::Error::OutOfRange(status)) => {
-            let unknown = AsciiMetadataValue::from_static("<unknown>");
+            // The requested checkpoint is outside the consistent store's current
+            // range. This can happen after a deploy restarts the consistent store
+            // and its snapshot window hasn't expanded to cover the indexer DB's
+            // watermark yet. Instead of bailing (which causes the watermark task
+            // to skip the update entirely, leaving GraphQL stuck returning 500),
+            // retry with the consistent store's current max checkpoint.
+            if let Some(max_val) = status.metadata().get(CHECKPOINT_HEIGHT_METADATA)
+                && let Ok(max_cp) = max_val.to_str().unwrap_or("").parse::<u64>()
+            {
+                warn!(
+                    requested = checkpoint,
+                    consistent_max = max_cp,
+                    "Checkpoint out of consistent range, retrying with consistent store max"
+                );
+                if let Ok(AvailableRangeResponse {
+                    min_checkpoint: Some(min_checkpoint),
+                    max_checkpoint: Some(max_checkpoint),
+                    max_epoch: Some(max_epoch),
+                    total_transactions: Some(total_transactions),
+                    max_timestamp_ms: Some(max_timestamp_ms),
+                    stride: _,
+                }) = consistent_reader.available_range(max_cp).await
+                {
+                    return Ok(Some(WatermarkRow {
+                        pipeline: "consistent".to_owned(),
+                        epoch_hi_inclusive: max_epoch as i64,
+                        checkpoint_hi_inclusive: max_checkpoint as i64,
+                        tx_hi: total_transactions as i64,
+                        timestamp_ms_hi_inclusive: max_timestamp_ms as i64,
+                        epoch_lo: 0,
+                        checkpoint_lo: min_checkpoint as i64,
+                        tx_lo: 0,
+                    }));
+                }
+            }
 
+            let unknown = AsciiMetadataValue::from_static("<unknown>");
             let min = status
                 .metadata()
                 .get(LOWEST_AVAILABLE_CHECKPOINT_METADATA)
                 .unwrap_or(&unknown);
-
             let max = status
                 .metadata()
                 .get(CHECKPOINT_HEIGHT_METADATA)
