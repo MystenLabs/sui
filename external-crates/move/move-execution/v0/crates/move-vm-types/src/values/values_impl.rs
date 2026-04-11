@@ -4045,6 +4045,12 @@ pub mod prop {
             L::U64 => any::<u64>().prop_map(Value::u64).boxed(),
             L::U128 => any::<u128>().prop_map(Value::u128).boxed(),
             L::U256 => any::<u256::U256>().prop_map(Value::u256).boxed(),
+            // v0 execution does not support signed integer values, so no fuzzing
+            // strategy can construct one. Reaching this arm means a caller built an
+            // invalid layout and is a test bug.
+            L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => unimplemented!(
+                "v0 execution does not support signed integer values in proptest layouts"
+            ),
             L::Bool => any::<bool>().prop_map(Value::bool).boxed(),
             L::Address => any::<AccountAddress>().prop_map(Value::address).boxed(),
             L::Signer => any::<AccountAddress>().prop_map(Value::signer).boxed(),

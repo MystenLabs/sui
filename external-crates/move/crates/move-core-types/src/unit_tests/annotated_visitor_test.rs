@@ -15,6 +15,7 @@ use crate::{
     identifier::Identifier,
     language_storage::StructTag,
     u256::U256,
+    visitor_default,
 };
 use std::{fmt::Write, str::FromStr};
 

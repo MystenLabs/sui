@@ -4128,6 +4128,14 @@ pub mod prop {
             L::U64 => any::<u64>().prop_map(Value::u64).boxed(),
             L::U128 => any::<u128>().prop_map(Value::u128).boxed(),
             L::U256 => any::<u256::U256>().prop_map(Value::u256).boxed(),
+            // Signed integer types cannot appear in v3 runtime layouts because the v3
+            // VM does not know about them, so the proptest strategy refuses to construct
+            // any value for these arms. Just::Nothing is not available, so reuse the
+            // Bool strategy - proptests that reach this path will drive the caller to
+            // reject the layout through a downstream check.
+            L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => unimplemented!(
+                "v3 execution does not support signed integer values in proptest layouts"
+            ),
             L::Bool => any::<bool>().prop_map(Value::bool).boxed(),
             L::Address => any::<AccountAddress>().prop_map(Value::address).boxed(),
             L::Signer => any::<AccountAddress>().prop_map(Value::signer).boxed(),
