@@ -18,7 +18,7 @@ use sui_types::{
     base_types::SuiAddress,
     coin_reservation::ParsedDigest,
     effects::TransactionEffectsAPI,
-    gas_coin::MIST_PER_SUI,
+    gas_coin::{GAS, MIST_PER_SUI},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Argument, TransactionData, TransactionDataAPI},
 };
@@ -734,5 +734,222 @@ async fn test_combined_ab_and_coins_needed() {
     assert!(
         ParsedDigest::is_coin_reservation_digest(&first_payment.2),
         "First gas payment should be a coin reservation when combining AB + coins"
+    );
+}
+
+/// Convert an internal ObjectRef to a proto ObjectReference with all fields set.
+fn object_ref_to_proto(
+    obj_ref: &sui_types::base_types::ObjectRef,
+) -> sui_rpc::proto::sui::rpc::v2::ObjectReference {
+    let mut message = sui_rpc::proto::sui::rpc::v2::ObjectReference::default();
+    message.object_id = Some(obj_ref.0.to_hex_uncompressed());
+    message.version = Some(obj_ref.1.value());
+    message.digest = Some(obj_ref.2.to_string());
+    message
+}
+
+// =============================================================================
+// Test 9: Resolve handles coin reservation ObjectRefs in gas payment
+// Expected: The resolve path recognizes coin reservation ObjectRefs and passes
+// them through without trying to look them up as regular gas coins.
+// =============================================================================
+
+#[sim_test]
+async fn test_resolve_handles_coin_reservation_in_gas_payment() {
+    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::{
+        Argument, Command, GasPayment, Input, MoveCall, ObjectReference, ProgrammableTransaction,
+        SimulateTransactionRequest, Transaction, TransactionKind,
+    };
+
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let mut test_env = test_env;
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    // Fund sender's address balance with 10 SUI.
+    let ab_amount = 10 * MIST_PER_SUI;
+    test_env.fund_one_address_balance(sender, ab_amount).await;
+
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let gas_budget = 50_000_000;
+
+    // Skip if mainnet override disabled coin reservation.
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    // Look up the actual address balance and construct a coin reservation
+    // directly rather than relying on a prior simulate to produce one.
+    let balance = test_env.get_sui_balance_ab(sender);
+    assert!(balance > 0, "sender should have address balance");
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, balance);
+
+    // Build a proto-format transaction with the coin reservation in gas
+    // payment alongside a regular gas coin. Using an unresolved clock input
+    // (object_id only, no version/digest) forces the resolve path.
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_env.cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+
+    let gas_objects: Vec<ObjectReference> = vec![
+        object_ref_to_proto(&coin_reservation),
+        object_ref_to_proto(&gas),
+    ];
+
+    let mut unresolved_transaction = Transaction::default();
+    unresolved_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![{
+            let mut message = Input::default();
+            message.object_id = Some("0x6".to_owned());
+            message
+        }];
+        ptb.commands = vec![Command::from({
+            let mut message = MoveCall::default();
+            message.package = Some("0x2".to_owned());
+            message.module = Some("clock".to_owned());
+            message.function = Some("timestamp_ms".to_owned());
+            message.arguments = vec![Argument::new_input(0)];
+            message
+        })];
+        ptb
+    }));
+    unresolved_transaction.sender = Some(sender.to_string());
+    unresolved_transaction.gas_payment = Some({
+        let mut gp = GasPayment::default();
+        gp.owner = Some(sender.to_string());
+        gp.objects = gas_objects;
+        gp.budget = Some(gas_budget);
+        gp.price = Some(test_env.rgp);
+        gp
+    });
+
+    // Simulate through the resolve path. Before the fix, this fails because
+    // resolve_gas_object_reference tries to look up the masked coin
+    // reservation ObjectID as a regular object.
+    let result = alpha_client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
+        .await;
+
+    assert!(
+        result.is_ok(),
+        "Resolve should handle coin reservation ObjectRefs in gas payment: {:?}",
+        result.err()
+    );
+
+    let response = result.unwrap().into_inner();
+    assert!(
+        response.transaction().effects().status().success(),
+        "Resolved transaction with coin reservation should simulate successfully"
+    );
+}
+
+// =============================================================================
+// Test 10: Resolve handles coin reservation ObjectRefs as PTB inputs
+// Expected: The resolve path recognizes coin reservation ObjectRefs used as
+// ImmutableOrOwned inputs and passes them through without a storage lookup.
+// =============================================================================
+
+#[sim_test]
+async fn test_resolve_handles_coin_reservation_in_ptb_input() {
+    use sui_rpc::proto::sui::rpc::v2::input::InputKind;
+    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::{
+        Argument, Command, Input, MoveCall, ProgrammableTransaction, SimulateTransactionRequest,
+        Transaction, TransactionKind,
+    };
+
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let mut test_env = test_env;
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    // Fund sender's address balance with 10 SUI.
+    let ab_amount = 10 * MIST_PER_SUI;
+    test_env.fund_one_address_balance(sender, ab_amount).await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    // Skip if mainnet override disabled coin reservation.
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    // Look up the actual address balance and construct a coin reservation
+    // directly rather than relying on a prior simulate to produce one.
+    let balance = test_env.get_sui_balance_ab(sender);
+    assert!(balance > 0, "sender should have address balance");
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, balance);
+
+    // Build a proto-format transaction that includes the coin reservation
+    // ObjectRef as a PTB input (ImmutableOrOwned). Using an unresolved clock
+    // input alongside it forces the resolve path.
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_env.cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+
+    let coin_res_input = {
+        let mut message = Input::default();
+        message.set_kind(InputKind::ImmutableOrOwned);
+        message.object_id = Some(coin_reservation.0.to_hex_uncompressed());
+        message.version = Some(coin_reservation.1.value());
+        message.digest = Some(coin_reservation.2.to_string());
+        message
+    };
+
+    let mut unresolved_transaction = Transaction::default();
+    unresolved_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![
+            // Input 0: coin reservation ObjectRef as ImmutableOrOwned.
+            coin_res_input,
+        ];
+        ptb.commands = vec![Command::from({
+            let mut message = MoveCall::default();
+            message.package = Some("0x2".to_owned());
+            message.module = Some("coin".to_owned());
+            message.function = Some("send_funds".to_owned());
+            message.arguments = vec![Argument::new_input(0)];
+            message.type_arguments = vec![GAS::type_().to_string()];
+            message
+        })];
+        ptb
+    }));
+    unresolved_transaction.sender = Some(sender.to_string());
+
+    // Simulate through the resolve path. Before the fix, this fails because
+    // resolve_object_reference tries to look up the masked coin reservation
+    // ObjectID as a regular object.
+    let result = alpha_client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
+        .await;
+
+    assert!(
+        result.is_ok(),
+        "Resolve should handle coin reservation ObjectRefs as PTB inputs: {:?}",
+        result.err()
     );
 }
