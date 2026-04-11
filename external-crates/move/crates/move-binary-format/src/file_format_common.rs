@@ -614,7 +614,7 @@ pub const VERSION_7: u32 = 7;
 pub const VERSION_8: u32 = 8;
 
 // Mark which version is the latest version
-pub const VERSION_MAX: u32 = VERSION_7;
+pub const VERSION_MAX: u32 = VERSION_8;
 
 // Mark which oldest version is supported.
 // TODO(#145): finish v4 compatibility; as of now, only metadata is implemented

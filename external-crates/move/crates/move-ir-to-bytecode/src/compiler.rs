@@ -498,7 +498,7 @@ fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
     #[allow(clippy::assertions_on_constants)]
     const PRE_MAX_VERSION: u32 = {
         assert!(
-            VERSION_MAX == 7,
+            VERSION_MAX == 8,
             "Need to update this code if the version changes"
         );
         VERSION_MAX - 1
@@ -512,6 +512,28 @@ fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
                 .as_ref()
                 .map(|c| c.jump_tables.is_empty())
                 .unwrap_or(true)
+        })
+        && !module.function_defs.iter().any(|f| {
+            f.code.as_ref().is_some_and(|c| {
+                c.code.iter().any(|instr| {
+                    matches!(
+                        instr,
+                        Bytecode::LdI8(_)
+                            | Bytecode::LdI16(_)
+                            | Bytecode::LdI32(_)
+                            | Bytecode::LdI64(_)
+                            | Bytecode::LdI128(_)
+                            | Bytecode::LdI256(_)
+                            | Bytecode::CastI8
+                            | Bytecode::CastI16
+                            | Bytecode::CastI32
+                            | Bytecode::CastI64
+                            | Bytecode::CastI128
+                            | Bytecode::CastI256
+                            | Bytecode::Neg
+                    )
+                })
+            })
         }) {
         PRE_MAX_VERSION
     } else {
@@ -700,6 +722,12 @@ fn compile_type(
         Type_::U64 => SignatureToken::U64,
         Type_::U128 => SignatureToken::U128,
         Type_::U256 => SignatureToken::U256,
+        Type_::I8 => SignatureToken::I8,
+        Type_::I16 => SignatureToken::I16,
+        Type_::I32 => SignatureToken::I32,
+        Type_::I64 => SignatureToken::I64,
+        Type_::I128 => SignatureToken::I128,
+        Type_::I256 => SignatureToken::I256,
         Type_::Bool => SignatureToken::Bool,
         Type_::Vector(inner_type) => SignatureToken::Vector(Box::new(compile_type(
             context,
@@ -1325,6 +1353,30 @@ fn compile_expression(
                 push_instr!(exp.loc, Bytecode::LdU256(Box::new(i)));
                 function_frame.push()?;
             }
+            CopyableVal_::I8(i) => {
+                push_instr!(exp.loc, Bytecode::LdI8(i));
+                function_frame.push()?;
+            }
+            CopyableVal_::I16(i) => {
+                push_instr!(exp.loc, Bytecode::LdI16(i));
+                function_frame.push()?;
+            }
+            CopyableVal_::I32(i) => {
+                push_instr!(exp.loc, Bytecode::LdI32(i));
+                function_frame.push()?;
+            }
+            CopyableVal_::I64(i) => {
+                push_instr!(exp.loc, Bytecode::LdI64(i));
+                function_frame.push()?;
+            }
+            CopyableVal_::I128(i) => {
+                push_instr!(exp.loc, Bytecode::LdI128(Box::new(i)));
+                function_frame.push()?;
+            }
+            CopyableVal_::I256(i) => {
+                push_instr!(exp.loc, Bytecode::LdI256(Box::new(i)));
+                function_frame.push()?;
+            }
             CopyableVal_::ByteArray(buf) => {
                 let vec_value = MoveValue::vector_u8(buf);
                 let ty = MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8));
@@ -1669,6 +1721,41 @@ fn compile_call(
                     function_frame.pop()?;
                     function_frame.push()?;
                 }
+                Builtin::ToI8 => {
+                    push_instr!(call.loc, Bytecode::CastI8);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI16 => {
+                    push_instr!(call.loc, Bytecode::CastI16);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI32 => {
+                    push_instr!(call.loc, Bytecode::CastI32);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI64 => {
+                    push_instr!(call.loc, Bytecode::CastI64);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI128 => {
+                    push_instr!(call.loc, Bytecode::CastI128);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::ToI256 => {
+                    push_instr!(call.loc, Bytecode::CastI256);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
+                Builtin::Neg => {
+                    push_instr!(call.loc, Bytecode::Neg);
+                    function_frame.pop()?;
+                    function_frame.push()?;
+                }
             }
         }
         FunctionCall_::ModuleFunctionCall {
@@ -1708,6 +1795,12 @@ fn type_to_constant_type_layout(ty: Type) -> Result<MoveTypeLayout> {
         Type_::U64 => MoveTypeLayout::U64,
         Type_::U128 => MoveTypeLayout::U128,
         Type_::U256 => MoveTypeLayout::U256,
+        Type_::I8 => MoveTypeLayout::I8,
+        Type_::I16 => MoveTypeLayout::I16,
+        Type_::I32 => MoveTypeLayout::I32,
+        Type_::I64 => MoveTypeLayout::I64,
+        Type_::I128 => MoveTypeLayout::I128,
+        Type_::I256 => MoveTypeLayout::I256,
         Type_::Bool => MoveTypeLayout::Bool,
         Type_::Vector(inner_type) => {
             MoveTypeLayout::Vector(Box::new(type_to_constant_type_layout(*inner_type)?))
@@ -1831,6 +1924,19 @@ fn compile_bytecode(
         IRBytecode_::CastU64 => Bytecode::CastU64,
         IRBytecode_::CastU128 => Bytecode::CastU128,
         IRBytecode_::CastU256 => Bytecode::CastU256,
+        IRBytecode_::LdI8(v) => Bytecode::LdI8(v),
+        IRBytecode_::LdI16(v) => Bytecode::LdI16(v),
+        IRBytecode_::LdI32(v) => Bytecode::LdI32(v),
+        IRBytecode_::LdI64(v) => Bytecode::LdI64(v),
+        IRBytecode_::LdI128(v) => Bytecode::LdI128(Box::new(v)),
+        IRBytecode_::LdI256(v) => Bytecode::LdI256(Box::new(v)),
+        IRBytecode_::CastI8 => Bytecode::CastI8,
+        IRBytecode_::CastI16 => Bytecode::CastI16,
+        IRBytecode_::CastI32 => Bytecode::CastI32,
+        IRBytecode_::CastI64 => Bytecode::CastI64,
+        IRBytecode_::CastI128 => Bytecode::CastI128,
+        IRBytecode_::CastI256 => Bytecode::CastI256,
+        IRBytecode_::Neg => Bytecode::Neg,
         IRBytecode_::LdTrue => Bytecode::LdTrue,
         IRBytecode_::LdFalse => Bytecode::LdFalse,
         IRBytecode_::LdConst(ty, v) => {

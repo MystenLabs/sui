@@ -106,7 +106,7 @@ impl<'a> ModuleGenerator<'a> {
             .cloned()
             .collect();
 
-        let mut end = 5;
+        let mut end = 14;
         if !ty_param_context.is_empty() {
             end += 1;
         };
@@ -119,7 +119,16 @@ impl<'a> ModuleGenerator<'a> {
             2 => Type_::U64,
             3 => Type_::U128,
             4 => Type_::Bool,
-            5 if !structs.is_empty() => {
+            5 => Type_::U16,
+            6 => Type_::U32,
+            7 => Type_::U256,
+            8 => Type_::I8,
+            9 => Type_::I16,
+            10 => Type_::I32,
+            11 => Type_::I64,
+            12 => Type_::I128,
+            13 => Type_::I256,
+            14 if !structs.is_empty() => {
                 let index = self.index(structs.len());
                 let struct_def = structs[index].value.clone();
                 let ty_instants = {
@@ -134,9 +143,6 @@ impl<'a> ModuleGenerator<'a> {
                 };
                 Type_::Datatype(struct_ident, ty_instants)
             }
-            6 => Type_::U16,
-            7 => Type_::U32,
-            8 => Type_::U256,
             _ => {
                 let index = self.index(ty_param_context.len());
                 let ty_var = ty_param_context[index].value.clone();
