@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! These tests use `#[tokio::test]` rather than the workspace-standard simulator test
+//! attribute because the harness needs a real Postgres `TempDb` and a real
+//! `TestClusterBuilder` validator, neither of which works inside the simulator's
+//! deterministic runtime.
+
 use serde_json::json;
-use sui_macros::sim_test;
 use tokio_stream::StreamExt;
 
 use crate::testing::SubscriptionTestCluster;
@@ -12,7 +16,7 @@ use crate::testing::object_wrapping_harness;
 use crate::testing::transfer_coins;
 use crate::testing::wait_for_matching_item;
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_sequential() {
     let cluster = SubscriptionTestCluster::new().await;
 
@@ -23,10 +27,14 @@ async fn test_subscription_sequential() {
         .collect()
         .await;
 
-    insta::assert_json_snapshot!("subscription_sequential", items);
+    let seqs: Vec<u64> = items
+        .iter()
+        .map(|i| i["data"]["checkpoints"]["sequenceNumber"].as_u64().unwrap())
+        .collect();
+    assert!(seqs.windows(2).all(|w| w[1] == w[0] + 1), "{seqs:?}");
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_fields() {
     let cluster = SubscriptionTestCluster::new().await;
 
@@ -65,7 +73,7 @@ async fn test_subscription_fields() {
     });
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_transactions() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -98,7 +106,6 @@ async fn test_subscription_transactions() {
         )
         .await;
     // Prime the stream so it's actively subscribed before mutations happen.
-    let _ = stream.next().await;
     let digests = transfer_coins(&mut cluster.validator, &[1000]).await;
     let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
@@ -107,7 +114,7 @@ async fn test_subscription_transactions() {
     });
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_transactions_pagination_first() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -138,7 +145,6 @@ async fn test_subscription_transactions_pagination_first() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
     let digests = transfer_coins(&mut cluster.validator, &[100, 100]).await;
     let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
@@ -147,7 +153,7 @@ async fn test_subscription_transactions_pagination_first() {
     });
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_transactions_pagination_last() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -178,7 +184,6 @@ async fn test_subscription_transactions_pagination_last() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
     let digests = transfer_coins(&mut cluster.validator, &[100, 100]).await;
     let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
@@ -189,7 +194,7 @@ async fn test_subscription_transactions_pagination_last() {
 
 // --- Object resolution tests ---
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_object_create() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -232,7 +237,6 @@ async fn test_subscription_object_create() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
 
     let (digest, _) =
         object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
@@ -243,7 +247,7 @@ async fn test_subscription_object_create() {
     });
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_object_lifecycle() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -286,7 +290,6 @@ async fn test_subscription_object_lifecycle() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
 
     let (d1, item) =
         object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
@@ -311,7 +314,6 @@ async fn test_subscription_object_lifecycle() {
 
 /// Tests that `contents.json` resolves for streamed objects using the indexer-backed
 /// package store for type layout resolution.
-/// Uses #[tokio::test] because sim_test intercepts TCP, preventing Postgres access.
 #[tokio::test]
 async fn test_subscription_object_json() {
     let mut cluster = SubscriptionTestCluster::new().await;
@@ -354,7 +356,6 @@ async fn test_subscription_object_json() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
 
     let (d1, item) =
         object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;

@@ -81,6 +81,7 @@ insta.workspace = true
 reqwest.workspace = true
 regex.workspace = true
 sui-package-resolver = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["test-util"] }
 
 [features]
 staging = []

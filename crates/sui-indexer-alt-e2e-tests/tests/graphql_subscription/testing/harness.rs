@@ -321,6 +321,15 @@ pub fn graphql_redactions() -> insta::Settings {
     settings
 }
 
+/// Extract digest from a top-level transaction subscription response.
+/// Path: data.transactions.digest
+pub fn transaction_digest(item: &Value) -> Vec<&str> {
+    item["data"]["transactions"]["digest"]
+        .as_str()
+        .into_iter()
+        .collect()
+}
+
 /// Poll the kv_packages watermark until it reaches `target_checkpoint`.
 pub async fn wait_for_kv_packages(db: &sui_pg_db::temp::TempDb, target_checkpoint: u64) {
     use diesel::ExpressionMethods;

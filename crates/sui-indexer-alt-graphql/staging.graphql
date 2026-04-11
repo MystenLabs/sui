@@ -4062,6 +4062,16 @@ type Subscription {
 	This subscription is not yet available for use.
 	"""
 	checkpoints: Checkpoint!
+	"""
+	Subscribe to transactions as they are finalized, with optional filtering.
+	
+	Each matching transaction is yielded individually as it appears in finalized
+	checkpoints. Transactions are ordered by checkpoint, then by position within
+	the checkpoint.
+	
+	This subscription is not yet available for use.
+	"""
+	transactions(filter: TransactionFilter): Transaction!
 }
 
 """

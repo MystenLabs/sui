@@ -1643,6 +1643,9 @@ StoreExecutionTimeObservationsTransaction._
 Subscription.checkpoints
   => {}
 
+Subscription.transactions
+  => {}
+
 Transaction.id
   => {}
 
