@@ -891,6 +891,12 @@ impl<'a> Context<'a> {
             | x @ SignatureToken::U64
             | x @ SignatureToken::U128
             | x @ SignatureToken::U256
+            | x @ SignatureToken::I8
+            | x @ SignatureToken::I16
+            | x @ SignatureToken::I32
+            | x @ SignatureToken::I64
+            | x @ SignatureToken::I128
+            | x @ SignatureToken::I256
             | x @ SignatureToken::Address
             | x @ SignatureToken::Signer
             | x @ SignatureToken::TypeParameter(_) => x,

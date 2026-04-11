@@ -350,6 +350,13 @@ fn execute_inner(
         | Bytecode::CastU64
         | Bytecode::CastU128
         | Bytecode::CastU256
+        | Bytecode::CastI8
+        | Bytecode::CastI16
+        | Bytecode::CastI32
+        | Bytecode::CastI64
+        | Bytecode::CastI128
+        | Bytecode::CastI256
+        | Bytecode::Neg
         | Bytecode::Not => (),
         Bytecode::ExistsDeprecated(_) | Bytecode::ExistsGenericDeprecated(_) => {
             safe_assert!(!verifier.config.deprecate_global_storage_ops);
@@ -375,6 +382,12 @@ fn execute_inner(
         Bytecode::LdU64(_) => verifier.push(state.value_for(&SignatureToken::U64))?,
         Bytecode::LdU128(_) => verifier.push(state.value_for(&SignatureToken::U128))?,
         Bytecode::LdU256(_) => verifier.push(state.value_for(&SignatureToken::U256))?,
+        Bytecode::LdI8(_) => verifier.push(state.value_for(&SignatureToken::I8))?,
+        Bytecode::LdI16(_) => verifier.push(state.value_for(&SignatureToken::I16))?,
+        Bytecode::LdI32(_) => verifier.push(state.value_for(&SignatureToken::I32))?,
+        Bytecode::LdI64(_) => verifier.push(state.value_for(&SignatureToken::I64))?,
+        Bytecode::LdI128(_) => verifier.push(state.value_for(&SignatureToken::I128))?,
+        Bytecode::LdI256(_) => verifier.push(state.value_for(&SignatureToken::I256))?,
         Bytecode::LdConst(idx) => {
             let signature = &verifier.module.constant_at(*idx).type_;
             verifier.push(state.value_for(signature))?

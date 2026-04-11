@@ -30,6 +30,10 @@ const SIGNER: &str = "Signer";
 /// Name of the Move `u256` type in the serde registry
 const U256_SERDE_NAME: &str = "u256";
 
+/// Name of the Move `i256` type in the serde registry. `serde-reflection::Format` has no
+/// native 256-bit integer, so we mirror the `u256` treatment and expose it as a named type.
+const I256_SERDE_NAME: &str = "i256";
+
 /// The maximal value depth that we allow creating a layout for.
 const MAX_VALUE_DEPTH: u64 = 128;
 
@@ -179,6 +183,14 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             T::U64 => Format::U64,
             T::U128 => Format::U128,
             T::U256 => Format::TypeName(U256_SERDE_NAME.to_string()),
+            T::I8 => Format::I8,
+            T::I16 => Format::I16,
+            T::I32 => Format::I32,
+            T::I64 => Format::I64,
+            T::I128 => Format::I128,
+            // i256 has no native `Format` primitive, so fall back to a named type the same way
+            // `u256` does (see `U256_SERDE_NAME`). Downstream codegen must know how to resolve it.
+            T::I256 => Format::TypeName(I256_SERDE_NAME.to_string()),
             T::Address => Format::TypeName(ADDRESS.to_string()),
             T::Signer => Format::TypeName(SIGNER.to_string()),
             T::Datatype(dt) => {
@@ -496,6 +508,9 @@ impl TypeLayoutBuilder {
             U64 => A::MoveTypeLayout::U64,
             U128 => A::MoveTypeLayout::U128,
             U256 => A::MoveTypeLayout::U256,
+            I8 | I16 | I32 | I64 | I128 | I256 => {
+                bail!("Signed integer type layouts are not yet supported")
+            }
             Address => A::MoveTypeLayout::Address,
             Signer => bail!("Type layouts cannot contain signer"),
             Reference(_) | MutableReference(_) => bail!("Type layouts cannot contain references"),

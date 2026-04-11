@@ -3778,7 +3778,7 @@ impl Value {
             S::U128 => L::U128,
             S::U256 => L::U256,
             S::Address => L::Address,
-            S::Signer => return None,
+            S::Signer | S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => return None,
             S::Vector(inner) => L::Vector(Box::new(Self::constant_sig_token_to_layout(inner)?)),
             // Not yet supported
             S::Datatype(_) | S::DatatypeInstantiation(_) => return None,

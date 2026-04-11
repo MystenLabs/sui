@@ -1483,6 +1483,23 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 self.code
                     .push(Bytecode::VariantSwitch(attr_id, temp_index, labels));
             }
+
+            // Signed integer bytecodes are not yet supported in stackless-bytecode
+            MoveBytecode::LdI8(_)
+            | MoveBytecode::LdI16(_)
+            | MoveBytecode::LdI32(_)
+            | MoveBytecode::LdI64(_)
+            | MoveBytecode::LdI128(_)
+            | MoveBytecode::LdI256(_)
+            | MoveBytecode::CastI8
+            | MoveBytecode::CastI16
+            | MoveBytecode::CastI32
+            | MoveBytecode::CastI64
+            | MoveBytecode::CastI128
+            | MoveBytecode::CastI256
+            | MoveBytecode::Neg => {
+                panic!("Signed integer bytecodes are not yet supported in stackless-bytecode");
+            }
         }
     }
 

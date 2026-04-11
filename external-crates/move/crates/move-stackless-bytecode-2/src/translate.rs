@@ -745,6 +745,21 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::ExistsDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveFromDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
+
+        // Signed integer bytecodes are not yet supported
+        IB::LdI8(_)
+        | IB::LdI16(_)
+        | IB::LdI32(_)
+        | IB::LdI64(_)
+        | IB::LdI128(_)
+        | IB::LdI256(_)
+        | IB::CastI8
+        | IB::CastI16
+        | IB::CastI32
+        | IB::CastI64
+        | IB::CastI128
+        | IB::CastI256
+        | IB::Neg => Instruction::NotImplemented(format!("{:?}", op)),
     }
 }
 
