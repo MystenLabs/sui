@@ -150,6 +150,14 @@ impl<'a> InstructionConsistency<'a> {
                             .with_message("Unexpected variant opcode in version 0".to_string()),
                     );
                 }
+                LdI8(_) | LdI16(_) | LdI32(_) | LdI64(_) | LdI128(_) | LdI256(_) | CastI8
+                | CastI16 | CastI32 | CastI64 | CastI128 | CastI256 | Neg => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .at_code_offset(self.current_function(), offset as CodeOffset)
+                            .with_message("Unexpected signed int opcode in version 0".to_string()),
+                    );
+                }
             }
         }
         Ok(())

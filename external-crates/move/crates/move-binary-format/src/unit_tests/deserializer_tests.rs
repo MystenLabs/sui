@@ -207,8 +207,8 @@ fn malformed_simple() {
         StatusCode::UNKNOWN_VERSION
     );
 
-    // versioned tests
-    for version in VERSION_1..VERSION_MAX {
+    // versioned tests (only up to VERSION_6 since version 7+ requires flavor encoding)
+    for version in VERSION_1..=VERSION_6 {
         malformed_simple_versioned_test(version);
     }
 }
@@ -475,7 +475,8 @@ fn serialize_deserialize_v7_with_no_flavor() {
 
 #[test]
 fn serialize_deserialize_v7_with_flavor() {
-    let module = basic_test_module_with_enum();
+    let mut module = basic_test_module_with_enum();
+    module.version = VERSION_7;
     let mut bin = vec![];
     module.serialize_with_version(VERSION_7, &mut bin).unwrap();
     let x = CompiledModule::deserialize_with_defaults(&bin).unwrap();
@@ -506,7 +507,8 @@ fn serialize_deserialize_unpublishable_v7_with_no_flavor() {
 
 #[test]
 fn serialize_deserialize_unpublishable_v7_with_flavor() {
-    let module = basic_unpublishable_test_module_with_enum();
+    let mut module = basic_unpublishable_test_module_with_enum();
+    module.version = VERSION_7;
     let mut bin = vec![];
     // Deserialization will now fail because of bad magic with the default config.
     module.serialize_with_version(VERSION_7, &mut bin).unwrap();

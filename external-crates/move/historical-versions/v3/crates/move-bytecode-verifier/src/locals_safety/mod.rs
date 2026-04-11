@@ -13,7 +13,7 @@ use crate::absint::{FunctionContext, TransferFunctions, analyze_function};
 use abstract_state::{AbstractState, LocalState, RET_COST, STEP_BASE_COST};
 use move_binary_format::{
     CompiledModule,
-    errors::PartialVMResult,
+    errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset},
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
@@ -174,6 +174,24 @@ fn execute_inner(
         | Bytecode::UnpackVariantGenericImmRef(_)
         | Bytecode::UnpackVariantGenericMutRef(_)
         | Bytecode::VariantSwitch(_) => (),
+        Bytecode::LdI8(_)
+        | Bytecode::LdI16(_)
+        | Bytecode::LdI32(_)
+        | Bytecode::LdI64(_)
+        | Bytecode::LdI128(_)
+        | Bytecode::LdI256(_)
+        | Bytecode::CastI8
+        | Bytecode::CastI16
+        | Bytecode::CastI32
+        | Bytecode::CastI64
+        | Bytecode::CastI128
+        | Bytecode::CastI256
+        | Bytecode::Neg => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Unexpected signed int opcode in version 3".to_string()),
+            );
+        }
     };
     Ok(())
 }

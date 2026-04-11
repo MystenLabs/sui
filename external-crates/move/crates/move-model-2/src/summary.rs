@@ -548,6 +548,12 @@ impl Type {
             normalized::Type::U64 => Self::U64,
             normalized::Type::U128 => Self::U128,
             normalized::Type::U256 => Self::U256,
+            normalized::Type::I8 => Self::I8,
+            normalized::Type::I16 => Self::I16,
+            normalized::Type::I32 => Self::I32,
+            normalized::Type::I64 => Self::I64,
+            normalized::Type::I128 => Self::I128,
+            normalized::Type::I256 => Self::I256,
             normalized::Type::Address => Self::Address,
             normalized::Type::Signer => Self::Signer,
             normalized::Type::Datatype(d) => {

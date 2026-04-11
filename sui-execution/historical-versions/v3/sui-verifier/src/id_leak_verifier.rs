@@ -436,6 +436,13 @@ fn execute_inner(
         | Bytecode::CastU64
         | Bytecode::CastU128
         | Bytecode::CastU256
+        | Bytecode::CastI8
+        | Bytecode::CastI16
+        | Bytecode::CastI32
+        | Bytecode::CastI64
+        | Bytecode::CastI128
+        | Bytecode::CastI256
+        | Bytecode::Neg
         | Bytecode::Not
         | Bytecode::VecLen(_)
         | Bytecode::VecPopBack(_) => {
@@ -523,7 +530,7 @@ fn execute_inner(
         }
 
         // These bytecodes produce constants, and hence cannot be ID.
-        Bytecode::LdTrue | Bytecode::LdFalse | Bytecode::LdU8(_) | Bytecode::LdU16(_)| Bytecode::LdU32(_)  | Bytecode::LdU64(_) | Bytecode::LdU128(_)| Bytecode::LdU256(_)  | Bytecode::LdConst(_) => {
+        Bytecode::LdTrue | Bytecode::LdFalse | Bytecode::LdU8(_) | Bytecode::LdU16(_)| Bytecode::LdU32(_)  | Bytecode::LdU64(_) | Bytecode::LdU128(_)| Bytecode::LdU256(_) | Bytecode::LdI8(_) | Bytecode::LdI16(_) | Bytecode::LdI32(_) | Bytecode::LdI64(_) | Bytecode::LdI128(_) | Bytecode::LdI256(_) | Bytecode::LdConst(_) => {
             verifier.stack_push(AbstractValue::Other)?;
         }
 

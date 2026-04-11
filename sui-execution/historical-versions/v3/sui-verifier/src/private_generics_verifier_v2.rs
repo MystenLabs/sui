@@ -304,6 +304,12 @@ fn is_defined_in_current_module(module: &CompiledModule, type_arg: &SignatureTok
         | SignatureToken::U64
         | SignatureToken::U128
         | SignatureToken::U256
+        | SignatureToken::I8
+        | SignatureToken::I16
+        | SignatureToken::I32
+        | SignatureToken::I64
+        | SignatureToken::I128
+        | SignatureToken::I256
         | SignatureToken::Address
         | SignatureToken::Vector(_)
         | SignatureToken::Signer

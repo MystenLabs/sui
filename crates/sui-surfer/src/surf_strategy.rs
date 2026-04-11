@@ -109,7 +109,16 @@ impl SurfStrategy {
                         }
                     }
                 }
-                Type::U256 | Type::Signer | Type::Vector(_) | Type::TypeParameter(_) => {
+                Type::U256
+                | Type::I8
+                | Type::I16
+                | Type::I32
+                | Type::I64
+                | Type::I128
+                | Type::I256
+                | Type::Signer
+                | Type::Vector(_)
+                | Type::TypeParameter(_) => {
                     failed = true;
                     break;
                 }

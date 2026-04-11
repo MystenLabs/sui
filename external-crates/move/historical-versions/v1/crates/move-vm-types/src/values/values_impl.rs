@@ -3710,6 +3710,7 @@ impl Value {
             S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) => return None,
+            S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => return None,
         })
     }
 

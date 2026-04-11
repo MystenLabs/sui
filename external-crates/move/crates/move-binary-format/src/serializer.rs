@@ -219,11 +219,61 @@ fn validate_version(version: u32) -> Result<()> {
     }
 }
 
+/// Returns `true` if the signature token (or anything it transitively references) is a
+/// signed integer type. Used to reject signature tokens that rely on bytecode version 8
+/// features when serializing at an earlier version.
+fn signature_token_contains_signed_integer(token: &SignatureToken) -> bool {
+    token.preorder_traversal().any(|t| {
+        matches!(
+            t,
+            SignatureToken::I8
+                | SignatureToken::I16
+                | SignatureToken::I32
+                | SignatureToken::I64
+                | SignatureToken::I128
+                | SignatureToken::I256
+        )
+    })
+}
+
+/// Walks the signatures, field definitions, and constants of a module and errors if any of
+/// them reference a signed integer type while serializing at a version that predates them.
+/// The signature-token serializer emits 0x10..0x15 tags unconditionally, so we must catch the
+/// version mismatch up-front instead of silently producing a blob the deserializer cannot
+/// load.
+fn validate_no_signed_integers_for_version(module: &CompiledModule, version: u32) -> Result<()> {
+    if version >= VERSION_8 {
+        return Ok(());
+    }
+    for signature in &module.signatures {
+        for token in &signature.0 {
+            if signature_token_contains_signed_integer(token) {
+                bail!(
+                    "Signed integer types (i8..i256) not supported in bytecode version {}",
+                    version
+                );
+            }
+        }
+    }
+    for constant in &module.constant_pool {
+        if signature_token_contains_signed_integer(&constant.type_) {
+            bail!(
+                "Signed integer constants not supported in bytecode version {}",
+                version
+            );
+        }
+    }
+    // Field definitions reuse the signature pool, so the `signatures` walk above already
+    // covers them; no separate pass needed.
+    Ok(())
+}
+
 impl CompiledModule {
     /// Serializes a `CompiledModule` into a binary at `version`. The mutable `Vec<u8>` will
     /// contain the binary blob on return.
     pub fn serialize_with_version(&self, version: u32, binary: &mut Vec<u8>) -> Result<()> {
         validate_version(version)?;
+        validate_no_signed_integers_for_version(self, version)?;
         let mut binary_data = BinaryData::from(binary.clone());
         let mut ser = if self.publishable {
             ModuleSerializer::new(version)
@@ -677,6 +727,12 @@ fn serialize_signature_token_single_node_impl(
         SignatureToken::U64 => binary.push(SerializedType::U64 as u8)?,
         SignatureToken::U128 => binary.push(SerializedType::U128 as u8)?,
         SignatureToken::U256 => binary.push(SerializedType::U256 as u8)?,
+        SignatureToken::I8 => binary.push(SerializedType::I8 as u8)?,
+        SignatureToken::I16 => binary.push(SerializedType::I16 as u8)?,
+        SignatureToken::I32 => binary.push(SerializedType::I32 as u8)?,
+        SignatureToken::I64 => binary.push(SerializedType::I64 as u8)?,
+        SignatureToken::I128 => binary.push(SerializedType::I128 as u8)?,
+        SignatureToken::I256 => binary.push(SerializedType::I256 as u8)?,
         SignatureToken::Address => binary.push(SerializedType::ADDRESS as u8)?,
         SignatureToken::Signer => binary.push(SerializedType::SIGNER as u8)?,
         SignatureToken::Vector(_) => {
@@ -822,6 +878,26 @@ fn serialize_instruction_inner(
         {
             return Err(anyhow!(
                 "Loading or casting u16, u32, u256 integers not supported in bytecode version {}",
+                major_version
+            ));
+        }
+        Bytecode::LdI8(_)
+        | Bytecode::LdI16(_)
+        | Bytecode::LdI32(_)
+        | Bytecode::LdI64(_)
+        | Bytecode::LdI128(_)
+        | Bytecode::LdI256(_)
+        | Bytecode::CastI8
+        | Bytecode::CastI16
+        | Bytecode::CastI32
+        | Bytecode::CastI64
+        | Bytecode::CastI128
+        | Bytecode::CastI256
+        | Bytecode::Neg
+            if (major_version < VERSION_8) =>
+        {
+            return Err(anyhow!(
+                "Signed integer bytecodes not supported in bytecode version {}",
                 major_version
             ));
         }
@@ -1082,6 +1158,37 @@ fn serialize_instruction_inner(
             binary.push(Opcodes::VARIANT_SWITCH as u8)?;
             serialize_jump_table_index(binary, jti.0)
         }
+        Bytecode::LdI8(value) => {
+            binary.push(Opcodes::LD_I8 as u8)?;
+            write_i8(binary, *value)
+        }
+        Bytecode::LdI16(value) => {
+            binary.push(Opcodes::LD_I16 as u8)?;
+            write_i16(binary, *value)
+        }
+        Bytecode::LdI32(value) => {
+            binary.push(Opcodes::LD_I32 as u8)?;
+            write_i32(binary, *value)
+        }
+        Bytecode::LdI64(value) => {
+            binary.push(Opcodes::LD_I64 as u8)?;
+            write_i64(binary, *value)
+        }
+        Bytecode::LdI128(value) => {
+            binary.push(Opcodes::LD_I128 as u8)?;
+            write_i128(binary, **value)
+        }
+        Bytecode::LdI256(value) => {
+            binary.push(Opcodes::LD_I256 as u8)?;
+            write_i256(binary, **value)
+        }
+        Bytecode::CastI8 => binary.push(Opcodes::CAST_I8 as u8),
+        Bytecode::CastI16 => binary.push(Opcodes::CAST_I16 as u8),
+        Bytecode::CastI32 => binary.push(Opcodes::CAST_I32 as u8),
+        Bytecode::CastI64 => binary.push(Opcodes::CAST_I64 as u8),
+        Bytecode::CastI128 => binary.push(Opcodes::CAST_I128 as u8),
+        Bytecode::CastI256 => binary.push(Opcodes::CAST_I256 as u8),
+        Bytecode::Neg => binary.push(Opcodes::NEG as u8),
     };
     res?;
     Ok(())

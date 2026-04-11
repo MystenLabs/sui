@@ -3710,6 +3710,8 @@ impl Value {
             S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) => return None,
+            // Signed integers not supported in version 2
+            S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => return None,
         })
     }
 
