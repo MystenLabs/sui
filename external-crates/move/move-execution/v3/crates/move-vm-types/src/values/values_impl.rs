@@ -3586,7 +3586,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
 
             L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => {
                 return Err(D::Error::custom(
-                    "signed integer types not yet supported in this execution version (will be backpatched)",
+                    "signed integer types not supported in this execution version",
                 ));
             }
 

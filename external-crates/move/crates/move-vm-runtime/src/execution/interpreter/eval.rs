@@ -383,7 +383,20 @@ fn control_flow_instruction(instruction: &Bytecode) -> bool {
         | Bytecode::UnpackVariantMutRef(_)
         | Bytecode::UnpackVariantGeneric(_)
         | Bytecode::UnpackVariantGenericImmRef(_)
-        | Bytecode::UnpackVariantGenericMutRef(_) => false,
+        | Bytecode::UnpackVariantGenericMutRef(_)
+        | Bytecode::LdI8(_)
+        | Bytecode::LdI16(_)
+        | Bytecode::LdI32(_)
+        | Bytecode::LdI64(_)
+        | Bytecode::LdI128(_)
+        | Bytecode::LdI256(_)
+        | Bytecode::CastI8
+        | Bytecode::CastI16
+        | Bytecode::CastI32
+        | Bytecode::CastI64
+        | Bytecode::CastI128
+        | Bytecode::CastI256
+        | Bytecode::Neg => false,
     }
 }
 
@@ -859,6 +872,66 @@ fn op_step_impl(
                 state.push_operand(reference)?;
             }
         }
+        // -- SIGNED INTEGER OPERATIONS --------
+        Bytecode::LdI8(int_const) => {
+            gas_meter.charge_simple_instr(S::LdI8)?;
+            state.push_operand(Value::i8(*int_const))?;
+        }
+        Bytecode::LdI16(int_const) => {
+            gas_meter.charge_simple_instr(S::LdI16)?;
+            state.push_operand(Value::i16(*int_const))?;
+        }
+        Bytecode::LdI32(int_const) => {
+            gas_meter.charge_simple_instr(S::LdI32)?;
+            state.push_operand(Value::i32(*int_const))?;
+        }
+        Bytecode::LdI64(int_const) => {
+            gas_meter.charge_simple_instr(S::LdI64)?;
+            state.push_operand(Value::i64(*int_const))?;
+        }
+        Bytecode::LdI128(int_const) => {
+            gas_meter.charge_simple_instr(S::LdI128)?;
+            state.push_operand(Value::i128(**int_const))?;
+        }
+        Bytecode::LdI256(int_const) => {
+            gas_meter.charge_simple_instr(S::LdI256)?;
+            state.push_operand(Value::i256(**int_const))?;
+        }
+        Bytecode::CastI8 => {
+            gas_meter.charge_simple_instr(S::CastI8)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::i8(integer_value.cast_i8()?))?;
+        }
+        Bytecode::CastI16 => {
+            gas_meter.charge_simple_instr(S::CastI16)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::i16(integer_value.cast_i16()?))?;
+        }
+        Bytecode::CastI32 => {
+            gas_meter.charge_simple_instr(S::CastI32)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::i32(integer_value.cast_i32()?))?;
+        }
+        Bytecode::CastI64 => {
+            gas_meter.charge_simple_instr(S::CastI64)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::i64(integer_value.cast_i64()?))?;
+        }
+        Bytecode::CastI128 => {
+            gas_meter.charge_simple_instr(S::CastI128)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::i128(integer_value.cast_i128()?))?;
+        }
+        Bytecode::CastI256 => {
+            gas_meter.charge_simple_instr(S::CastI256)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::i256(integer_value.cast_i256()?))?;
+        }
+        Bytecode::Neg => {
+            gas_meter.charge_simple_instr(S::Neg)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(integer_value.neg()?.into_value())?;
+        }
     }
     if !control_flow_instruction(instruction) {
         state.call_stack.current_frame.pc = state
@@ -1108,16 +1181,7 @@ fn binop_int<F>(state: &mut MachineState, f: F) -> PartialVMResult<()>
 where
     F: FnOnce(IntegerValue, IntegerValue) -> PartialVMResult<IntegerValue>,
 {
-    binop(state, |lhs, rhs| {
-        Ok(match f(lhs, rhs)? {
-            IntegerValue::U8(x) => Value::u8(x),
-            IntegerValue::U16(x) => Value::u16(x),
-            IntegerValue::U32(x) => Value::u32(x),
-            IntegerValue::U64(x) => Value::u64(x),
-            IntegerValue::U128(x) => Value::u128(x),
-            IntegerValue::U256(x) => Value::u256(x),
-        })
-    })
+    binop(state, |lhs, rhs| Ok(f(lhs, rhs)?.into_value()))
 }
 
 /// Perform a binary operation for boolean values.
@@ -1197,6 +1261,12 @@ fn check_depth_of_type_impl(
         | Type::U64
         | Type::U128
         | Type::U256
+        | Type::I8
+        | Type::I16
+        | Type::I32
+        | Type::I64
+        | Type::I128
+        | Type::I256
         | Type::Address
         | Type::Signer => check_depth!(1),
         // Even though this is recursive this is OK since the depth of this recursion is

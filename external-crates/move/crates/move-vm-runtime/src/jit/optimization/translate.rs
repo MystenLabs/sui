@@ -201,25 +201,19 @@ fn bytecode(code: &FF::Bytecode) -> PartialVMResult<ast::Bytecode> {
         FF::Bytecode::UnpackVariantGenericMutRef(ndx) => Bytecode::UnpackVariantGenericMutRef(*ndx),
         FF::Bytecode::VariantSwitch(ndx) => Bytecode::VariantSwitch(*ndx),
 
-        // Signed integer bytecodes are not yet supported in the VM runtime
-        FF::Bytecode::LdI8(_)
-        | FF::Bytecode::LdI16(_)
-        | FF::Bytecode::LdI32(_)
-        | FF::Bytecode::LdI64(_)
-        | FF::Bytecode::LdI128(_)
-        | FF::Bytecode::LdI256(_)
-        | FF::Bytecode::CastI8
-        | FF::Bytecode::CastI16
-        | FF::Bytecode::CastI32
-        | FF::Bytecode::CastI64
-        | FF::Bytecode::CastI128
-        | FF::Bytecode::CastI256
-        | FF::Bytecode::Neg => {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Signed integer bytecodes are not yet supported"
-            ));
-        }
+        FF::Bytecode::LdI8(n) => Bytecode::LdI8(*n),
+        FF::Bytecode::LdI16(n) => Bytecode::LdI16(*n),
+        FF::Bytecode::LdI32(n) => Bytecode::LdI32(*n),
+        FF::Bytecode::LdI64(n) => Bytecode::LdI64(*n),
+        FF::Bytecode::LdI128(n) => Bytecode::LdI128(n.clone()),
+        FF::Bytecode::LdI256(n) => Bytecode::LdI256(n.clone()),
+        FF::Bytecode::CastI8 => Bytecode::CastI8,
+        FF::Bytecode::CastI16 => Bytecode::CastI16,
+        FF::Bytecode::CastI32 => Bytecode::CastI32,
+        FF::Bytecode::CastI64 => Bytecode::CastI64,
+        FF::Bytecode::CastI128 => Bytecode::CastI128,
+        FF::Bytecode::CastI256 => Bytecode::CastI256,
+        FF::Bytecode::Neg => Bytecode::Neg,
 
         // Deprecated bytecodes -- bail
         FF::Bytecode::ExistsDeprecated(_)

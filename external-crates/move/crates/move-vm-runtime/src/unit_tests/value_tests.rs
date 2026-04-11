@@ -1276,3 +1276,186 @@ fn vector_specialization_from_type() {
     assert!(VS::try_from(&Type::Reference(Box::new(Type::U8))).is_err());
     assert!(VS::try_from(&Type::TyParam(0)).is_err());
 }
+
+// ---------------------------------------------------------------------------
+// Signed integer value tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn signed_integer_value_constructors_and_equals() -> PartialVMResult<()> {
+    use move_core_types::i256::I256;
+
+    assert!(Value::i8(0).equals(&Value::i8(0))?);
+    assert!(Value::i8(-1).equals(&Value::i8(-1))?);
+    assert!(!Value::i8(-1).equals(&Value::i8(1))?);
+    assert!(Value::i16(i16::MIN).equals(&Value::i16(i16::MIN))?);
+    assert!(Value::i32(i32::MAX).equals(&Value::i32(i32::MAX))?);
+    assert!(Value::i64(0).equals(&Value::i64(0))?);
+    assert!(Value::i128(i128::MIN).equals(&Value::i128(i128::MIN))?);
+    assert!(Value::i256(I256::from(-1i128)).equals(&Value::i256(I256::from(-1i128)))?);
+    // Cross-type comparison is a type error
+    assert!(Value::i8(1).equals(&Value::u8(1)).is_err());
+    assert!(Value::i32(0).equals(&Value::u32(0)).is_err());
+    Ok(())
+}
+
+#[test]
+fn signed_integer_copy_and_move() -> PartialVMResult<()> {
+    let mut heap = MachineHeap::new();
+    let mut locals = heap.allocate_stack_frame(vec![], 2)?;
+
+    locals.store_loc(0, Value::i32(-42))?;
+    assert!(locals.copy_loc(0)?.equals(&Value::i32(-42))?);
+    assert!(locals.move_loc(0)?.equals(&Value::i32(-42))?);
+    assert!(locals.copy_loc(0).is_err());
+
+    locals.store_loc(1, Value::i128(i128::MAX))?;
+    let r: Reference = VMValueCast::cast(locals.borrow_loc(1)?)?;
+    assert!(r.read_ref()?.equals(&Value::i128(i128::MAX))?);
+    Ok(())
+}
+
+#[test]
+fn signed_integer_casting() -> PartialVMResult<()> {
+    // Helper: extract the i-value back out via Value round-trip.
+    let iv = |v: Value| -> PartialVMResult<IntegerValue> { VMValueCast::cast(v) };
+
+    // Widen: i8 → i32
+    assert_eq!(iv(Value::i8(42))?.cast_i32()?, 42i32);
+    // Widen: i8 → i128
+    assert_eq!(iv(Value::i8(-1))?.cast_i128()?, -1i128);
+
+    // Narrow: i64 → i8 (in range)
+    assert_eq!(iv(Value::i64(100))?.cast_i8()?, 100i8);
+    // Narrow: i64 → i8 (out of range)
+    assert!(iv(Value::i64(200))?.cast_i8().is_err());
+
+    // Cross-sign: u8 → i16 (always fits)
+    assert_eq!(iv(Value::u8(255))?.cast_i16()?, 255i16);
+    // Cross-sign: negative → unsigned (should fail)
+    assert!(iv(Value::i8(-1))?.cast_u256().is_err());
+    // Cross-sign: u256 max → i256 (should fail)
+    assert!(
+        iv(Value::u256(move_core_types::u256::U256::max_value()))?
+            .cast_i256()
+            .is_err()
+    );
+
+    // Cross-sign boundary cases: casts use try_from, so negative-to-unsigned errors
+    assert!(iv(Value::i8(i8::MIN))?.cast_u8().is_err());
+    assert!(iv(Value::u8(u8::MAX))?.cast_i8().is_err()); // 255 > i8::MAX
+    assert_eq!(iv(Value::u8(127))?.cast_i8()?, 127i8);
+    assert!(iv(Value::i64(-1))?.cast_u64().is_err());
+    assert_eq!(iv(Value::u128(0))?.cast_i128()?, 0i128);
+    assert!(iv(Value::i128(i128::MIN))?.cast_u128().is_err());
+
+    Ok(())
+}
+
+#[test]
+fn signed_integer_negation() -> PartialVMResult<()> {
+    let iv = |v: Value| -> PartialVMResult<IntegerValue> { VMValueCast::cast(v) };
+
+    assert_eq!(iv(Value::i8(42))?.neg()?.cast_i8()?, -42i8);
+    assert_eq!(iv(Value::i64(-1))?.neg()?.cast_i64()?, 1i64);
+    assert_eq!(iv(Value::i32(0))?.neg()?.cast_i32()?, 0i32);
+    assert_eq!(iv(Value::i8(i8::MAX))?.neg()?.cast_i8()?, -127i8);
+
+    // MIN cannot be negated (overflow)
+    assert!(iv(Value::i8(i8::MIN))?.neg().is_err());
+    assert!(iv(Value::i64(i64::MIN))?.neg().is_err());
+
+    Ok(())
+}
+
+#[test]
+fn signed_integer_arithmetic() -> PartialVMResult<()> {
+    let iv = |v: Value| -> PartialVMResult<IntegerValue> { VMValueCast::cast(v) };
+
+    // add
+    assert_eq!(
+        iv(Value::i32(10))?
+            .add_checked(iv(Value::i32(-3))?)?
+            .cast_i32()?,
+        7
+    );
+    // sub
+    assert_eq!(
+        iv(Value::i16(0))?
+            .sub_checked(iv(Value::i16(1))?)?
+            .cast_i16()?,
+        -1
+    );
+    // mul
+    assert_eq!(
+        iv(Value::i8(-2))?
+            .mul_checked(iv(Value::i8(3))?)?
+            .cast_i8()?,
+        -6
+    );
+    // div (truncates toward zero)
+    assert_eq!(
+        iv(Value::i64(-10))?
+            .div_checked(iv(Value::i64(3))?)?
+            .cast_i64()?,
+        -3
+    );
+    // rem
+    assert_eq!(
+        iv(Value::i64(-10))?
+            .rem_checked(iv(Value::i64(3))?)?
+            .cast_i64()?,
+        -1
+    );
+
+    // overflow: i8 MAX + 1
+    assert!(
+        iv(Value::i8(i8::MAX))?
+            .add_checked(iv(Value::i8(1))?)
+            .is_err()
+    );
+    // underflow: i8 MIN - 1
+    assert!(
+        iv(Value::i8(i8::MIN))?
+            .sub_checked(iv(Value::i8(1))?)
+            .is_err()
+    );
+    // div by zero
+    assert!(iv(Value::i32(1))?.div_checked(iv(Value::i32(0))?).is_err());
+
+    Ok(())
+}
+
+#[test]
+fn signed_integer_bitwise_and_shift() -> PartialVMResult<()> {
+    let iv = |v: Value| -> PartialVMResult<IntegerValue> { VMValueCast::cast(v) };
+
+    // bitwise xor: -1 ^ -1 == 0
+    assert_eq!(
+        iv(Value::i32(-1))?
+            .bit_xor(iv(Value::i32(-1))?)?
+            .cast_i32()?,
+        0
+    );
+    // shift left
+    assert_eq!(iv(Value::i8(1))?.shl_checked(6)?.cast_i8()?, 64);
+    // shift right (arithmetic: preserves sign)
+    assert_eq!(iv(Value::i8(-4))?.shr_checked(1)?.cast_i8()?, -2);
+
+    Ok(())
+}
+
+#[test]
+fn signed_integer_comparisons() -> PartialVMResult<()> {
+    let mk = |v| -> PartialVMResult<IntegerValue> { VMValueCast::cast(Value::i32(v)) };
+
+    assert!(mk(-1)?.lt(mk(0)?)?);
+    assert!(mk(-1)?.le(mk(0)?)?);
+    assert!(mk(1)?.gt(mk(0)?)?);
+    assert!(mk(1)?.ge(mk(0)?)?);
+    assert!(mk(0)?.le(mk(0)?)?);
+    assert!(mk(0)?.ge(mk(0)?)?);
+    assert!(!mk(0)?.lt(mk(0)?)?);
+
+    Ok(())
+}

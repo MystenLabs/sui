@@ -335,21 +335,15 @@ impl VMDispatchTables {
             TypeTag::U64 => Type::U64,
             TypeTag::U128 => Type::U128,
             TypeTag::U256 => Type::U256,
+            TypeTag::I8 => Type::I8,
+            TypeTag::I16 => Type::I16,
+            TypeTag::I32 => Type::I32,
+            TypeTag::I64 => Type::I64,
+            TypeTag::I128 => Type::I128,
+            TypeTag::I256 => Type::I256,
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
             TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt)?)),
-            TypeTag::I8
-            | TypeTag::I16
-            | TypeTag::I32
-            | TypeTag::I64
-            | TypeTag::I128
-            | TypeTag::I256 => {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "signed integer types not yet supported in VM runtime"
-                )
-                .finish(Location::Undefined));
-            }
             // NB: Note that this tag is slightly misnamed and used for all Datatypes.
             TypeTag::Struct(struct_tag) => {
                 let defining_id = struct_tag.address;
@@ -436,6 +430,12 @@ impl VMDispatchTables {
             | Type::U64
             | Type::U128
             | Type::U256
+            | Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::I128
+            | Type::I256
             | Type::Address => Ok(AbilitySet::PRIMITIVES),
 
             // Technically unreachable but, no point in erroring if we don't have to
@@ -487,7 +487,13 @@ impl VMDispatchTables {
             | Type::TyParam(_)
             | Type::U16
             | Type::U32
-            | Type::U256 => None,
+            | Type::U256
+            | Type::I8
+            | Type::I16
+            | Type::I32
+            | Type::I64
+            | Type::I128
+            | Type::I256 => None,
             Type::Datatype(vtable_key) => {
                 let descriptor = self.resolve_type(vtable_key)?.to_ref();
                 Some(DatatypeInfo {
@@ -575,7 +581,13 @@ impl VMDispatchTables {
             | ArenaType::Signer
             | ArenaType::U16
             | ArenaType::U32
-            | ArenaType::U256 => DepthFormula::constant(1),
+            | ArenaType::U256
+            | ArenaType::I8
+            | ArenaType::I16
+            | ArenaType::I32
+            | ArenaType::I64
+            | ArenaType::I128
+            | ArenaType::I256 => DepthFormula::constant(1),
             // we should not see the reference here, we could instead give an invariant violation
             ArenaType::Vector(ty) | ArenaType::Reference(ty) | ArenaType::MutableReference(ty) => {
                 let mut inner = self.calculate_depth_of_type_and_cache(ty)?;
@@ -657,6 +669,12 @@ impl VMDispatchTables {
             Type::U64 => TypeTag::U64,
             Type::U128 => TypeTag::U128,
             Type::U256 => TypeTag::U256,
+            Type::I8 => TypeTag::I8,
+            Type::I16 => TypeTag::I16,
+            Type::I32 => TypeTag::I32,
+            Type::I64 => TypeTag::I64,
+            Type::I128 => TypeTag::I128,
+            Type::I256 => TypeTag::I256,
             Type::Address => TypeTag::Address,
             Type::Signer => TypeTag::Signer,
             Type::Vector(ty) => {
@@ -759,6 +777,12 @@ impl VMDispatchTables {
                 self.datatype_to_type_layout(gidx, ty_args, count, depth)?
                     .into_layout()
             }
+            Type::I8 => runtime_value::MoveTypeLayout::I8,
+            Type::I16 => runtime_value::MoveTypeLayout::I16,
+            Type::I32 => runtime_value::MoveTypeLayout::I32,
+            Type::I64 => runtime_value::MoveTypeLayout::I64,
+            Type::I128 => runtime_value::MoveTypeLayout::I128,
+            Type::I256 => runtime_value::MoveTypeLayout::I256,
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
@@ -885,6 +909,12 @@ impl VMDispatchTables {
                 self.datatype_to_fully_annotated_layout(gidx, ty_args, count, depth)?
                     .into_layout()
             }
+            Type::I8 => annotated_value::MoveTypeLayout::I8,
+            Type::I16 => annotated_value::MoveTypeLayout::I16,
+            Type::I32 => annotated_value::MoveTypeLayout::I32,
+            Type::I64 => annotated_value::MoveTypeLayout::I64,
+            Type::I128 => annotated_value::MoveTypeLayout::I128,
+            Type::I256 => annotated_value::MoveTypeLayout::I256,
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
