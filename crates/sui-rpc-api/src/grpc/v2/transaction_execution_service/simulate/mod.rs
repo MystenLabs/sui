@@ -385,12 +385,14 @@ fn select_gas(
     let address_balance = reader
         .lookup_address_balance(owner, GAS::type_())
         .map(|balance| {
-            // Sum up the total SUI reservations for the `owner` so that we can deduct that from the
-            // available address balance for determining if an account has sufficient funds.
+            // Sum up the explicit SUI reservations (excluding the implicit gas payment) for the
+            // `owner` so that we can deduct that from the available address balance. We use the
+            // estimation variant to avoid double-counting: the gas budget is what we're trying to
+            // satisfy, not a pre-existing reservation.
             let coin_resolver = CoinReservationResolver::new(reader.inner().clone());
 
             let reserved_sui = transaction
-                .process_funds_withdrawals_for_signing(service.chain_id, &coin_resolver)
+                .process_funds_withdrawals_for_estimation(service.chain_id, &coin_resolver)
                 .ok()
                 .and_then(|withdrawals| {
                     let sui_type = Balance::type_tag(GAS::type_tag());
