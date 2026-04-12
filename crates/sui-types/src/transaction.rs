@@ -2884,6 +2884,15 @@ pub trait TransactionDataAPI {
         coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>>;
 
+    /// Like `process_funds_withdrawals_for_signing`, but excludes the implicit gas payment
+    /// withdrawal. This is used during gas selection estimation to avoid double-counting the
+    /// gas budget when determining available address balance.
+    fn process_funds_withdrawals_for_estimation(
+        &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>>;
+
     /// Like `process_funds_withdrawals_for_signing`, but must only be called on a certified
     /// transaction, i.e. one that is known to be valid.
     fn process_funds_withdrawals_for_execution(
@@ -3036,47 +3045,15 @@ impl TransactionDataAPI for TransactionDataV1 {
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
-        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
+        self.accumulate_funds_withdrawals(chain_identifier, coin_resolver, true)
+    }
 
-        for withdraw in self.parsed_coin_reservations(chain_identifier) {
-            // During signing, use latest accumulator version (None).
-            let withdrawal_arg =
-                coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw, None)?;
-            withdraws.push(withdrawal_arg);
-        }
-
-        withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
-
-        // Accumulate all withdraws per account.
-        let mut withdraw_map: BTreeMap<AccumulatorObjId, (u64, TypeTag)> = BTreeMap::new();
-        for withdraw in withdraws {
-            let reserved_amount = match &withdraw.reservation {
-                Reservation::MaxAmountU64(amount) => {
-                    assert!(*amount > 0, "verified in validity check");
-                    *amount
-                }
-            };
-
-            let account_address = withdraw.owner_for_withdrawal(self);
-            let type_tag = withdraw.type_arg.to_type_tag();
-            let account_id =
-                AccumulatorValue::get_field_id(account_address, &type_tag).map_err(|e| {
-                    UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    }
-                })?;
-
-            let (current_amount, _) = withdraw_map
-                .entry(account_id)
-                .or_insert_with(|| (0, type_tag));
-            *current_amount = current_amount.checked_add(reserved_amount).ok_or(
-                UserInputError::InvalidWithdrawReservation {
-                    error: "Balance withdraw reservation overflow".to_string(),
-                },
-            )?;
-        }
-
-        Ok(withdraw_map)
+    fn process_funds_withdrawals_for_estimation(
+        &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+        self.accumulate_funds_withdrawals(chain_identifier, coin_resolver, false)
     }
 
     fn process_funds_withdrawals_for_execution(
@@ -3559,6 +3536,55 @@ impl TransactionDataAPI for TransactionDataV1 {
 }
 
 impl TransactionDataV1 {
+    fn accumulate_funds_withdrawals(
+        &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
+        include_gas_payment: bool,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
+
+        for withdraw in self.parsed_coin_reservations(chain_identifier) {
+            let withdrawal_arg =
+                coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw, None)?;
+            withdraws.push(withdrawal_arg);
+        }
+
+        if include_gas_payment {
+            withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
+        }
+
+        let mut withdraw_map: BTreeMap<AccumulatorObjId, (u64, TypeTag)> = BTreeMap::new();
+        for withdraw in withdraws {
+            let reserved_amount = match &withdraw.reservation {
+                Reservation::MaxAmountU64(amount) => {
+                    assert!(*amount > 0, "verified in validity check");
+                    *amount
+                }
+            };
+
+            let account_address = withdraw.owner_for_withdrawal(self);
+            let type_tag = withdraw.type_arg.to_type_tag();
+            let account_id =
+                AccumulatorValue::get_field_id(account_address, &type_tag).map_err(|e| {
+                    UserInputError::InvalidWithdrawReservation {
+                        error: e.to_string(),
+                    }
+                })?;
+
+            let (current_amount, _) = withdraw_map
+                .entry(account_id)
+                .or_insert_with(|| (0, type_tag));
+            *current_amount = current_amount.checked_add(reserved_amount).ok_or(
+                UserInputError::InvalidWithdrawReservation {
+                    error: "Balance withdraw reservation overflow".to_string(),
+                },
+            )?;
+        }
+
+        Ok(withdraw_map)
+    }
+
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
         if self.is_gas_paid_from_address_balance() && self.gas_data().budget > 0 {
             Some(if self.sender() != self.gas_owner() {
