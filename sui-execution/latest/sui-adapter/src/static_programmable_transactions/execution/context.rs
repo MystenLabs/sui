@@ -998,15 +998,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         linkage: &ExecutableLinkage,
         tracer: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
-        {
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true).append(true)
-                .open("/tmp/charge_funcs.txt")
-            {
-                let _ = writeln!(f, "CALL {}::{}", original_mid, function_name);
-            }
-        }
         let gas_status = self.gas_charger.move_gas_status_mut();
         let values = vm
             .execute_function_bypass_visibility(

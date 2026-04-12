@@ -230,7 +230,6 @@ impl GasStatus {
 
     /// Given: pushes + pops + increase + decrease in size for an instruction charge for the
     /// execution of the instruction.
-    #[track_caller]
     pub fn charge(
         &mut self,
         num_instructions: u64,
@@ -239,24 +238,6 @@ impl GasStatus {
         incr_size: u64,
         _decr_size: u64,
     ) -> PartialVMResult<()> {
-        {
-            use std::sync::atomic::{AtomicU64, Ordering};
-            use std::io::Write;
-            static SEQ: AtomicU64 = AtomicU64::new(0);
-            let seq = SEQ.fetch_add(1, Ordering::Relaxed);
-            let before = self.stack_height_current;
-            let caller = std::panic::Location::caller();
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true).append(true)
-                .open("/tmp/charge_trace.txt")
-            {
-                let _ = writeln!(f,
-                    "{} seq={} instrs={} pushes={} pops={} sh_before={}",
-                    caller, seq, num_instructions, pushes, pops, before
-                );
-            }
-        }
-
         self.push_stack(pushes)?;
         self.increase_instruction_count(num_instructions)?;
         self.increase_stack_size(incr_size)?;
@@ -278,17 +259,6 @@ impl GasStatus {
 
         // self.decrease_stack_size(decr_size);
         self.pop_stack(pops);
-
-        {
-            use std::io::Write;
-            let after = self.stack_height_current;
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true).append(true)
-                .open("/tmp/charge_trace.txt")
-            {
-                let _ = writeln!(f, "  -> sh_after={}", after);
-            }
-        }
         Ok(())
     }
 
@@ -625,24 +595,18 @@ mod tests {
     ///   2. charge_native_function_before_execution: pops args AGAIN (the double-pop bug)
     ///   3. charge_native_function: pushes return values
     fn simulate_native_call(s: &mut GasStatus, num_args: u64, num_returns: u64) {
-        // Caller pushes args
         for _ in 0..num_args {
             s.push_stack(1).unwrap();
         }
-        // charge_call pops args
         s.pop_stack(num_args);
-        // charge_native_function_before_execution: double-pop in v11, no-op in v12
         if !fix_native_double_pop(s.gas_model_version) {
-            s.pop_stack(num_args); // the bug
+            s.pop_stack(num_args);
         }
-        // charge_native_function pushes returns
         s.push_stack(num_returns).unwrap();
     }
 
     #[test]
     fn test_v12_native_call_stack_height_is_exact() {
-        // In v12, after 10 native calls each returning 1 value,
-        // the stack height should be exactly 10.
         let mut s = unmetered_with_version(12);
         for _ in 0..10 {
             simulate_native_call(&mut s, 1, 1);
@@ -652,9 +616,6 @@ mod tests {
 
     #[test]
     fn test_v11_native_call_stack_height_is_wrong() {
-        // In v11, the double-pop saturates the height to 0 after each call.
-        // After 10 native calls each returning 1 value, the height should be
-        // 10 but is stuck at 1 because saturation prevents accumulation.
         let mut s = unmetered_with_version(11);
         for _ in 0..10 {
             simulate_native_call(&mut s, 1, 1);
@@ -670,11 +631,9 @@ mod tests {
     #[cfg_attr(not(debug_assertions), ignore)]
     #[should_panic(expected = "stack height underflow")]
     fn test_v12_debug_assert_catches_double_pop() {
-        // Verify that the debug_assert in pop_stack fires if we attempt a
-        // double-pop in v12. This is the safety net that prevents regressions.
         let mut s = unmetered_with_version(12);
-        s.push_stack(2).unwrap(); // sh=2
-        s.pop_stack(2); // sh=0  (charge_call)
-        s.pop_stack(2); // sh=-2 → debug_assert fires
+        s.push_stack(2).unwrap();
+        s.pop_stack(2);
+        s.pop_stack(2); // underflow → debug_assert fires
     }
 }

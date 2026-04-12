@@ -93,11 +93,19 @@ fn get_simple_instruction_stack_change(
 }
 
 impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
-    /// Charge an instruction and fail if not enough gas units are left.
+    /// In gas model v12+, gas is batched by the Charge instruction so this only
+    /// tracks stack height. In older versions, this charges gas as before.
     fn charge_simple_instr(&mut self, instr: SimpleInstruction) -> PartialVMResult<()> {
         let (pops, pushes, pop_size, push_size) = get_simple_instruction_stack_change(instr)?;
-        self.0
-            .charge(1, pushes, pops, push_size.into(), pop_size.into())
+        if use_charge_batching(self.0.gas_model_version) {
+            // Gas is charged by the Charge instruction. Only update stack height.
+            self.0.push_stack(pushes)?;
+            self.0.pop_stack(pops);
+            Ok(())
+        } else {
+            self.0
+                .charge(1, pushes, pops, push_size.into(), pop_size.into())
+        }
     }
 
     fn charge_pop(&mut self, popped_val: impl ValueView) -> PartialVMResult<()> {
@@ -392,13 +400,14 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
     fn charge_block(
         &mut self,
         instructions: u64,
-        pushes: u64,
-        pops: u64,
+        _pushes: u64,
+        _pops: u64,
         push_size: u64,
         pop_size: u64,
     ) -> PartialVMResult<()> {
-        self.0
-            .charge(instructions, pushes, pops, push_size, pop_size)
+        // Do not pass pushes/pops — stack height is tracked per-instruction by
+        // charge_simple_instr. Only charge gas (instruction count + sizes).
+        self.0.charge(instructions, 0, 0, push_size, pop_size)
     }
 
     fn remaining_gas(&self) -> InternalGas {
@@ -442,6 +451,13 @@ fn reweight_move_loc(gas_model_version: u64) -> bool {
 fn reduce_stack_size(gas_model_version: u64) -> bool {
     // Reducing stack size is only done in gas model versions 10 and above.
     gas_model_version > 10
+}
+
+fn use_charge_batching(gas_model_version: u64) -> bool {
+    // In gas model v12+, the Charge instruction batches gas deduction for
+    // fixed-cost instructions. charge_simple_instr then only tracks stack
+    // height without charging gas.
+    gas_model_version > 11
 }
 
 fn size_config_for_gas_model_version(
