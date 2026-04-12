@@ -738,15 +738,8 @@ async fn test_combined_ab_and_coins_needed() {
 }
 
 // =============================================================================
-// Test: AB-only gas payment fails when budget > half of address balance
-// This reproduces a bug where select_gas double-counts the gas budget.
-//
-// When gas_data.payment is empty (required for do_gas_selection),
-// is_gas_paid_from_address_balance() returns true. This causes
-// process_funds_withdrawals_for_signing to include the gas budget as a
-// reservation, so the computed address_balance = raw_balance - budget.
-// Then the check `address_balance >= budget` requires raw_balance >= 2*budget,
-// even though the user has sufficient funds.
+// Test: AB-only gas payment succeeds when budget > half of address balance
+// Regression test for double-counting of gas budget in select_gas.
 // =============================================================================
 
 #[sim_test]
@@ -802,20 +795,12 @@ async fn test_ab_only_budget_exceeds_half_balance() {
     let ab_balance = test_env.get_sui_balance_ab(sender1);
     assert!(ab_balance > 0, "sender1 should have address balance");
 
-    // Set a budget that is MORE than half the AB but LESS than the full AB.
-    // With the bug, select_gas computes:
-    //   reserved_sui = budget  (because payment is empty → gas paid from AB)
-    //   address_balance = ab_balance - budget
-    //   check: address_balance >= budget  →  ab_balance >= 2 * budget  →  FAILS
-    //
-    // Without the bug, the full ab_balance should be available and the check
-    // should pass since ab_balance >= budget.
-    let gas_budget = (ab_balance * 3) / 4; // 75% of AB — more than half but within total
-    assert!(
-        gas_budget > ab_balance / 2,
-        "budget must exceed half of AB to trigger the bug"
-    );
-    assert!(gas_budget <= ab_balance, "budget must not exceed total AB");
+    // Budget is more than half the AB but less than the full AB. Before the fix,
+    // select_gas would double-count the budget when computing available balance,
+    // requiring raw_balance >= 2 * budget instead of raw_balance >= budget.
+    let gas_budget = (ab_balance * 3) / 4; // 75% of AB
+    assert!(gas_budget > ab_balance / 2);
+    assert!(gas_budget <= ab_balance);
 
     let ptb = ProgrammableTransactionBuilder::new();
     let pt = ptb.finish();
@@ -824,14 +809,9 @@ async fn test_ab_only_budget_exceeds_half_balance() {
     let client = test_env.cluster.grpc_client();
     let result = client.simulate_transaction(&tx, true, true).await;
 
-    // This should succeed: sender1 has enough AB to cover the budget.
-    // With the bug, this fails with "insufficient SUI balance" because
-    // the budget is double-counted.
     assert!(
         result.is_ok(),
-        "Simulation should succeed when AB covers the budget, but got: {:?}. \
-         This is likely the double-counting bug where select_gas subtracts the budget \
-         from address_balance before checking if address_balance >= budget.",
+        "Simulation should succeed when AB covers the budget, got: {:?}",
         result.err()
     );
 
