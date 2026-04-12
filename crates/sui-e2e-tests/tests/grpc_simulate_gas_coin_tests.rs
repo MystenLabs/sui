@@ -737,6 +737,122 @@ async fn test_combined_ab_and_coins_needed() {
     );
 }
 
+// =============================================================================
+// Test: AB-only gas payment succeeds when budget > half of address balance
+// Regression test for double-counting of gas budget in select_gas.
+// =============================================================================
+
+#[sim_test]
+async fn test_ab_only_budget_exceeds_half_balance() {
+    use sui_test_transaction_builder::TestTransactionBuilder;
+    use sui_types::transaction::TransactionExpiration;
+
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let mut test_env = test_env;
+
+    let (sender1, _) = test_env.get_sender_and_gas(0);
+    let (sender2, _) = test_env.get_sender_and_gas(1);
+
+    // Fund sender1's address balance with 1 SUI.
+    let ab_amount = MIST_PER_SUI;
+    test_env.fund_one_address_balance(sender1, ab_amount).await;
+
+    // Transfer all of sender1's coins to sender2 so sender1 only has AB.
+    let (_, all_gas) = test_env.get_sender_and_all_gas(0);
+    let mut transfer_digests = Vec::new();
+    for coin in all_gas {
+        let transfer_tx = TestTransactionBuilder::new(sender1, coin, test_env.rgp)
+            .transfer_sui(None, sender2)
+            .build();
+        let tx = test_env.cluster.wallet.sign_transaction(&transfer_tx).await;
+        let executed = test_env.cluster.execute_transaction(tx).await;
+        assert!(executed.effects.status().is_ok(), "Transfer should succeed");
+        transfer_digests.push(*executed.effects.transaction_digest());
+    }
+    test_env
+        .cluster
+        .wait_for_tx_settlement(&transfer_digests)
+        .await;
+    test_env.update_all_gas().await;
+
+    // Verify sender1 has no coins but does have AB.
+    let sender1_coins = test_env
+        .gas_objects
+        .get(&sender1)
+        .cloned()
+        .unwrap_or_default();
+    assert!(sender1_coins.is_empty(), "sender1 should have no coins");
+
+    let ab_balance = test_env.get_sui_balance_ab(sender1);
+    assert!(ab_balance > 0, "sender1 should have address balance");
+
+    // Budget is more than half the AB but less than the full AB. Before the fix,
+    // select_gas would double-count the budget when computing available balance,
+    // requiring raw_balance >= 2 * budget instead of raw_balance >= budget.
+    let gas_budget = (ab_balance * 3) / 4; // 75% of AB
+    assert!(gas_budget > ab_balance / 2);
+    assert!(gas_budget <= ab_balance);
+
+    let ptb = ProgrammableTransactionBuilder::new();
+    let pt = ptb.finish();
+    let tx = TransactionData::new_programmable(sender1, vec![], pt, gas_budget, test_env.rgp);
+
+    let client = test_env.cluster.grpc_client();
+    let result = client.simulate_transaction(&tx, true, true).await;
+
+    assert!(
+        result.is_ok(),
+        "Simulation should succeed when AB covers the budget, got: {:?}",
+        result.err()
+    );
+
+    let response = result.unwrap();
+    assert!(
+        response.transaction.effects.status().is_ok(),
+        "Expected successful execution with pure AB payment, got: {:?}",
+        response.transaction.effects.status()
+    );
+
+    // Verify pure AB payment path was taken.
+    let gas_payment = response.transaction.transaction.gas_data().payment.clone();
+    assert!(
+        gas_payment.is_empty(),
+        "Gas payment should be empty for pure AB payment, got: {:?}",
+        gas_payment
+    );
+
+    assert!(
+        matches!(
+            response.transaction.transaction.expiration(),
+            TransactionExpiration::ValidDuring { .. }
+        ),
+        "Expected ValidDuring expiration for pure AB payment, got: {:?}",
+        response.transaction.transaction.expiration()
+    );
+
+    // Execute the simulated transaction to verify it's actually valid.
+    let simulated_tx = &response.transaction.transaction;
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(simulated_tx)
+        .await
+        .expect("Simulated transaction should execute successfully");
+    assert!(
+        effects.status().is_ok(),
+        "Executed transaction should succeed, got: {:?}",
+        effects.status()
+    );
+}
+
 /// Convert an internal ObjectRef to a proto ObjectReference with all fields set.
 fn object_ref_to_proto(
     obj_ref: &sui_types::base_types::ObjectRef,
