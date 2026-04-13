@@ -3,13 +3,15 @@
 
 //! Building blocks for the experimental `sui-forking` tool.
 
-pub mod filesystem;
-mod gql_client;
-pub mod node;
-pub mod store;
+#![allow(unused)]
 
-pub use gql_client::GraphQLStore;
-pub use node::Node;
+pub(crate) mod filesystem;
+mod gql;
+pub(crate) mod node;
+pub(crate) mod store;
+
+pub(crate) use gql::GraphQLClient;
+pub(crate) use node::Node;
 
 use anyhow::{Error, Result};
 
@@ -21,22 +23,22 @@ use sui_types::supported_protocol_versions::ProtocolConfig;
 use sui_types::transaction::TransactionData;
 
 // ============================================================================
-// Data store read traits
+// Read traits
 // ============================================================================
 
 /// Transaction data with effects and checkpoint.
 #[derive(Clone, Debug)]
-pub struct TransactionInfo {
-    pub data: TransactionData,
-    pub effects: TransactionEffects,
-    pub checkpoint: u64,
+pub(crate) struct TransactionInfo {
+    pub(crate) data: TransactionData,
+    pub(crate) effects: TransactionEffects,
+    pub(crate) checkpoint: u64,
 }
 
 /// A `TransactionStore` has to be able to retrieve transaction data for a given digest.
 /// The data provided to `sui_execution::executor::Executor::execute_transaction_to_effects`
 /// must be available. Some of that data is not provided by the user. It is naturally available
 /// at runtime on a live system and later saved in effects and in the context of a checkpoint.
-pub trait TransactionStore {
+pub(crate) trait TransactionRead {
     /// Given a transaction digest, return transaction info including data, effects,
     /// and the checkpoint that transaction was executed in.
     /// Returns `None` if the transaction is not found.
@@ -48,11 +50,11 @@ pub trait TransactionStore {
 
 /// Epoch data.
 #[derive(Clone, Debug)]
-pub struct EpochData {
-    pub epoch_id: u64,
-    pub protocol_version: u64,
-    pub rgp: u64,
-    pub start_timestamp: u64,
+pub(crate) struct EpochData {
+    pub(crate) epoch_id: u64,
+    pub(crate) protocol_version: u64,
+    pub(crate) rgp: u64,
+    pub(crate) start_timestamp: u64,
 }
 
 /// An `EpochStore` retrieves the epoch data and protocol configuration
@@ -60,7 +62,7 @@ pub struct EpochData {
 /// Epoch data is collected by an indexer and it is not stored anywhere otherwise.
 /// This is a very small amount of information and could conceivably be saved locally
 /// and never hit a server.
-pub trait EpochStore {
+pub(crate) trait EpochRead {
     /// Return the `EpochData` for a given epoch.
     fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error>;
     /// Return the `ProtocolConfig` for a given epoch.
@@ -70,9 +72,9 @@ pub trait EpochStore {
 /// Query for an object.
 /// Specifies an `ObjectID` and the "rule" to retrieve it.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ObjectKey {
-    pub object_id: ObjectID,
-    pub version_query: VersionQuery,
+pub(crate) struct ObjectKey {
+    pub(crate) object_id: ObjectID,
+    pub(crate) version_query: VersionQuery,
 }
 
 /// Query options for an object.
@@ -81,7 +83,7 @@ pub struct ObjectKey {
 /// `AtCheckpoint` request an object at a given checkpoint. Useful for unknown `Version`.
 /// `VersionAtCheckpoint` requests an exact version, but only if it existed by the given checkpoint.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum VersionQuery {
+pub(crate) enum VersionQuery {
     Version(u64),
     RootVersion(u64),
     AtCheckpoint(u64),
@@ -95,7 +97,7 @@ pub enum VersionQuery {
 /// `crates/sui-indexer-alt-graphql/schema.graphql::multiGetObjects`.
 /// That query likely allows more than what most clients need, which is fairly limited in
 /// its usage.
-pub trait ObjectStore {
+pub(crate) trait ObjectRead {
     /// Retrieve objects by their keys, with different query options.
     ///
     /// If the object is not found, the element in the vector is `None`.
@@ -106,7 +108,7 @@ pub trait ObjectStore {
 }
 
 /// Checkpoint read data.
-pub trait CheckpointStore {
+pub(crate) trait CheckpointRead {
     /// Return the verified checkpoint data. If `sequence` is `None`, return the latest checkpoint.
     fn get_verified_checkpoint(
         &self,

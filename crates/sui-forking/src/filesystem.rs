@@ -27,23 +27,26 @@ use sui_types::object::Object;
 use crate::Node;
 
 /// Directory name appended to the configured filesystem store root.
-pub const DATA_STORE_DIR: &str = ".forking_data_store";
+const DATA_STORE_DIR: &str = ".forking_data_store";
 /// Per-chain object storage directory.
-pub const OBJECTS_DIR: &str = "objects";
+const OBJECTS_DIR: &str = "objects";
 /// Per-chain checkpoint storage directory.
-pub const CHECKPOINTS_DIR: &str = "checkpoints";
+const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Marker file for the latest checkpoint sequence known to the store.
-pub const LATEST_FILE: &str = "latest";
+const LATEST_FILE: &str = "latest";
 
 /// Local filesystem-backed store for Sui data.
-pub struct FilesystemStore {
+pub(crate) struct FilesystemStore {
     root: PathBuf,
 }
 
 impl FilesystemStore {
     /// Create a new filesystem store rooted at
     /// `{base_path}/{network_name}/forked_at_{checkpoint}`.
-    pub fn new(node: &Node, forked_at_checkpoint: CheckpointSequenceNumber) -> Result<Self, Error> {
+    pub(crate) fn new(
+        node: &Node,
+        forked_at_checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Self, Error> {
         let root = Self::base_path()?
             .join(node.network_name())
             .join(format!("forked_at_{}", forked_at_checkpoint));
@@ -57,14 +60,14 @@ impl FilesystemStore {
     }
 
     /// Resolve the default base path for on-disk storage.
-    pub fn base_path() -> Result<PathBuf, Error> {
+    pub(crate) fn base_path() -> Result<PathBuf, Error> {
         let home_dir = std::env::var("FORKING_DATA_STORE")
             .or_else(|_| std::env::var("SUI_CONFIG_DIR"))
             .or_else(|_| std::env::var("HOME"))
             .or_else(|_| std::env::var("USERPROFILE"))
             .map_err(|_| {
                 anyhow!(
-                    "Cannot determine home directory. Define a SUI_DATA_STORE environment variable"
+                    "Cannot determine home directory. Define a FORKING_DATA_STORE environment variable"
                 )
             })?;
         Ok(PathBuf::from(home_dir).join(DATA_STORE_DIR))

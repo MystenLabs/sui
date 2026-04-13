@@ -10,14 +10,15 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 
-use crate::CheckpointStore;
+use crate::CheckpointRead;
 use crate::EpochData;
-use crate::EpochStore;
+use crate::EpochRead;
 use crate::Node;
 use crate::ObjectKey;
-use crate::ObjectStore;
+use crate::ObjectRead;
 use crate::TransactionInfo;
-use crate::TransactionStore;
+use crate::TransactionRead;
+use crate::gql::queries;
 
 macro_rules! block_on {
     ($expr:expr) => {{
@@ -47,16 +48,16 @@ macro_rules! block_on {
     }};
 }
 
-/// Remote GraphQL-backed store.
+/// GraphQL Client for querying the GraphQL service.
 #[derive(Debug, Clone)]
-pub struct GraphQLStore {
+pub struct GraphQLClient {
     client: reqwest::Client,
     rpc: reqwest::Url,
     version: String,
 }
 
-impl GraphQLStore {
-    /// Create a new GraphQL-backed store.
+impl GraphQLClient {
+    /// Create a new GraphQL client
     pub fn new(node: Node, version: &str) -> Result<Self, Error> {
         let rpc = reqwest::Url::parse(node.gql_url())
             .with_context(|| format!("invalid GraphQL URL '{}'", node.gql_url()))?;
@@ -104,11 +105,11 @@ impl GraphQLStore {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
     ) -> Result<Option<VerifiedCheckpoint>, Error> {
-        super::gql_queries::checkpoint_query::query(sequence_number, self).await
+        queries::checkpoint_query::query(sequence_number, self).await
     }
 }
 
-impl TransactionStore for GraphQLStore {
+impl TransactionRead for GraphQLClient {
     fn transaction_data_and_effects(
         &self,
         _tx_digest: &str,
@@ -117,7 +118,7 @@ impl TransactionStore for GraphQLStore {
     }
 }
 
-impl EpochStore for GraphQLStore {
+impl EpochRead for GraphQLClient {
     fn epoch_info(&self, _epoch: u64) -> Result<Option<EpochData>, Error> {
         todo!("GraphQL epoch reads are not implemented in the skeleton")
     }
@@ -127,13 +128,13 @@ impl EpochStore for GraphQLStore {
     }
 }
 
-impl ObjectStore for GraphQLStore {
+impl ObjectRead for GraphQLClient {
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
-        block_on!(super::gql_queries::object_query::query(keys, self))
+        block_on!(crate::gql::queries::object_query::query(keys, self))
     }
 }
 
-impl CheckpointStore for GraphQLStore {
+impl CheckpointRead for GraphQLClient {
     fn get_verified_checkpoint(
         &self,
         sequence: Option<CheckpointSequenceNumber>,
@@ -151,12 +152,12 @@ mod tests {
     use wiremock::matchers::{body_partial_json, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    use super::super::gql_queries::checkpoint_query::{CheckpointArgs, Query as CheckpointQuery};
+    use super::super::queries::checkpoint_query::{CheckpointArgs, Query as CheckpointQuery};
     use super::*;
     use crate::VersionQuery;
 
-    fn mock_store(server: &MockServer) -> GraphQLStore {
-        GraphQLStore::new(Node::Custom(server.uri()), "test-version").expect("store should build")
+    fn mock_store(server: &MockServer) -> GraphQLClient {
+        GraphQLClient::new(Node::Custom(server.uri()), "test-version").expect("store should build")
     }
 
     fn checkpoint_response_body(

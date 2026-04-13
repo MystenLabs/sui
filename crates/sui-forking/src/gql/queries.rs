@@ -6,8 +6,6 @@
 //! Built in modules for epochs, transactions, objects, and checkpoints.
 //! No GQL type escapes this module. From here we return structures defined in this crate
 //! or bcs encoded data of runtime structures.
-//!
-//! This module is private to the `GraphQLStore` and packaged in its own module for convenience.
 
 #![allow(unused)]
 
@@ -16,8 +14,8 @@ use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
 use itertools::Itertools;
 
-use super::graphql::GraphQLStore;
 use crate::EpochData;
+use crate::gql::client::GraphQLClient;
 
 // Register the schema which was loaded in the build.rs call.
 #[cynic::schema("rpc")]
@@ -62,7 +60,7 @@ pub(crate) mod epoch_query {
 
     pub(crate) async fn query(
         epoch_id: u64,
-        data_store: &GraphQLStore,
+        data_store: &GraphQLClient,
     ) -> Result<Option<EpochData>, Error> {
         let query = Query::build(EpochDataArgs {
             epoch: Some(epoch_id),
@@ -140,12 +138,12 @@ pub(crate) mod txn_query {
 
     pub(crate) async fn query(
         digest: String,
-        data_store: &GraphQLStore,
+        client: &GraphQLClient,
     ) -> Result<Option<(TransactionData, sui_types::effects::TransactionEffects, u64)>, Error> {
         let query = Query::build(TransactionDataArgs {
             digest: digest.clone(),
         });
-        let response = data_store
+        let response = client
             .run_query(&query)
             .await
             .context("Failed to run transaction query")?;
@@ -241,10 +239,7 @@ pub(crate) mod object_query {
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(
-        graphql_type = "Object",
-        schema_module = "crate::gql_client::gql_queries::schema"
-    )]
+    #[cynic(graphql_type = "Object", schema_module = "crate::gql::queries::schema")]
     pub(crate) struct ObjectFragment {
         #[allow(dead_code)]
         pub address: SuiAddress,
@@ -263,7 +258,7 @@ pub(crate) mod object_query {
     #[cynic(
         variables = "VersionAtCheckpointVars",
         graphql_type = "Query",
-        schema_module = "crate::gql_client::gql_queries::schema"
+        schema_module = "crate::gql::queries::schema"
     )]
     pub(crate) struct VersionAtCheckpointQuery {
         #[arguments(sequenceNumber: $sequence_number)]
@@ -273,7 +268,7 @@ pub(crate) mod object_query {
     #[derive(cynic::QueryFragment)]
     #[cynic(
         variables = "VersionAtCheckpointVars",
-        schema_module = "crate::gql_client::gql_queries::schema"
+        schema_module = "crate::gql::queries::schema"
     )]
     pub(crate) struct Checkpoint {
         pub query: Option<ScopedQuery>,
@@ -283,7 +278,7 @@ pub(crate) mod object_query {
     #[cynic(
         variables = "VersionAtCheckpointVars",
         graphql_type = "Query",
-        schema_module = "crate::gql_client::gql_queries::schema"
+        schema_module = "crate::gql::queries::schema"
     )]
     pub(crate) struct ScopedQuery {
         #[arguments(address: $address, version: $version)]
@@ -297,7 +292,7 @@ pub(crate) mod object_query {
 
     pub(crate) async fn query(
         keys: &[GqlObjectKey],
-        data_store: &GraphQLStore,
+        data_store: &GraphQLClient,
     ) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let mut results: Vec<Option<Option<(Object, u64)>>> = vec![None; keys.len()];
         let mut standard_indices = Vec::with_capacity(keys.len());
@@ -365,7 +360,7 @@ pub(crate) mod object_query {
         object_id: sui_types::base_types::ObjectID,
         version: u64,
         checkpoint: u64,
-        data_store: &GraphQLStore,
+        data_store: &GraphQLClient,
     ) -> Result<Option<(Object, u64)>, Error> {
         let query = VersionAtCheckpointQuery::build(VersionAtCheckpointVars {
             sequence_number: Some(checkpoint),
@@ -507,7 +502,7 @@ pub(crate) mod checkpoint_query {
 
     pub(crate) async fn query(
         sequence_number: Option<u64>,
-        data_store: &GraphQLStore,
+        data_store: &GraphQLClient,
     ) -> Result<Option<VerifiedCheckpoint>, Error> {
         let query = Query::build(CheckpointArgs { sequence_number });
         let response = data_store.run_query(&query).await?;
@@ -681,7 +676,7 @@ pub(crate) mod chain_id_query {
         chain_identifier: Option<String>,
     }
 
-    pub(crate) async fn query(data_store: &GraphQLStore) -> Result<String, Error> {
+    pub(crate) async fn query(data_store: &GraphQLClient) -> Result<String, Error> {
         let query = Query::build(());
         let response = data_store.run_query(&query).await?;
         let Some(chain_id) = response.data.and_then(|data| data.chain_identifier) else {

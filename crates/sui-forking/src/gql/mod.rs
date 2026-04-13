@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod gql_queries;
-mod graphql;
+mod client;
+mod queries;
 
-pub use graphql::GraphQLStore;
+pub use client::GraphQLClient;
