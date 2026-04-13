@@ -6,7 +6,7 @@ keywords: [ closed-loop tokens, closed-loop, closed loop, loyalty tokens, token 
 
 Using the Sui [Closed-Loop Token](/standards/closed-loop-token.mdx) standard, you can create tokens that are valid only for a specific service, like an airline that wants to grant tokens to frequent flyers to purchase tickets or upgrades. 
 
-In this example, the Admin sends `LOYALTY` tokens to the users of your service as a reward for their contiunued buisness. The example creates a `GiftShop` where holders can spend `LOYALTY` tokens to buy `Gift`s.
+In this example, the Admin sends `LOYALTY` tokens to the users of your service as a reward for their contiunued business. The example creates a `GiftShop` where holders can spend `LOYALTY` tokens to buy `Gift`s.
 
 The `loyalty.move` source file contains the `examples::loyalty` module code that creates the loyalty token. The module includes the One-Time Witness (OTW) that creates the coin (with the same name as the module, `LOYALTY`), possesses only the `drop` ability, and has no fields. 
 
