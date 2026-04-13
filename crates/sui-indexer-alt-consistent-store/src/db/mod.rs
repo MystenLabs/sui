@@ -492,23 +492,35 @@ impl Db {
         self.0.read().expect("poisoned").with(|f| {
             let p = key::encode(pipeline.as_bytes());
 
-            match f.db.get_pinned_cf(f.chain_id_cf, &p)? {
-                Some(existing) => {
-                    let stored_len = existing.len();
-                    let stored: [u8; 32] = existing.as_ref().try_into().map_err(|_| {
-                        Error::Internal(anyhow::anyhow!(
-                            "stored chain_id for pipeline {pipeline:?} has wrong length: {stored_len}",
-                        ))
-                    })?;
-                    Ok(stored == chain_id)
-                }
-                None => {
-                    let mut batch = rocksdb::WriteBatch::default();
-                    batch.put_cf(f.chain_id_cf, &p, chain_id);
-                    f.db.write_opt(batch, &sync_write_options())?;
-                    Ok(true)
+            for _ in 0..OCC_MAX_RETRIES {
+                let txn = f.db.transaction();
+                match txn.get_for_update_cf(f.chain_id_cf, &p, true)? {
+                    Some(existing) => {
+                        let stored_len = existing.len();
+                        let stored: [u8; 32] = existing.try_into().map_err(|_| {
+                            Error::Internal(anyhow::anyhow!(
+                                "stored chain_id for pipeline {pipeline:?} has wrong length: {stored_len}",
+                            ))
+                        })?;
+                        // Read-only path: dropping the transaction rolls it back. Returning
+                        // the observed value is correct — a concurrent update to the same
+                        // slot after our read would only matter if we were writing.
+                        return Ok(stored == chain_id);
+                    }
+                    None => {
+                        txn.put_cf(f.chain_id_cf, &p, chain_id)?;
+                        match txn.commit() {
+                            Ok(()) => return Ok(true),
+                            Err(e) if is_occ_conflict(&e) => continue,
+                            Err(e) => return Err(Error::Storage(e)),
+                        }
+                    }
                 }
             }
+
+            Err(Error::Internal(anyhow::anyhow!(
+                "accepts_chain_id: OCC retry limit exceeded for pipeline {pipeline:?}"
+            )))
         })
     }
 
