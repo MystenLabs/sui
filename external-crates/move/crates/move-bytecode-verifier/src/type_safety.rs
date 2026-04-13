@@ -1145,6 +1145,9 @@ fn verify_instr(
         }
         Bytecode::Neg => {
             let operand = safe_unwrap_err!(verifier.stack.pop());
+            // Neg is restricted to signed integer types only. Unsigned integers use
+            // wrapping subtraction from zero instead. The operand type is preserved
+            // (negating an i32 produces an i32, etc.).
             if !operand.is_signed_integer() {
                 return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
             }

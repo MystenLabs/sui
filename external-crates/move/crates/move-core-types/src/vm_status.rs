@@ -375,6 +375,12 @@ pub enum StatusCode {
     UNKNOWN_JUMP_TABLE_FLAG = 3028,
     DEPRECATED_BYTECODE_FORMAT = 3029,
     EMPTY_PACKAGE = 3030,
+    BAD_I8 = 3031,
+    BAD_I16 = 3032,
+    BAD_I32 = 3033,
+    BAD_I64 = 3034,
+    BAD_I128 = 3035,
+    BAD_I256 = 3036,
 
     // Errors that can arise at runtime
     // Runtime Errors: 4000-4999

@@ -219,52 +219,46 @@ fn validate_version(version: u32) -> Result<()> {
     }
 }
 
-/// Returns `true` if the signature token (or anything it transitively references) is a
-/// signed integer type. Used to reject signature tokens that rely on bytecode version 8
-/// features when serializing at an earlier version.
-fn signature_token_contains_signed_integer(token: &SignatureToken) -> bool {
-    token.preorder_traversal().any(|t| {
-        matches!(
-            t,
-            SignatureToken::I8
-                | SignatureToken::I16
-                | SignatureToken::I32
-                | SignatureToken::I64
-                | SignatureToken::I128
-                | SignatureToken::I256
-        )
-    })
-}
-
 /// Walks the signatures, field definitions, and constants of a module and errors if any of
 /// them reference a signed integer type while serializing at a version that predates them.
 /// The signature-token serializer emits 0x10..0x15 tags unconditionally, so we must catch the
 /// version mismatch up-front instead of silently producing a blob the deserializer cannot
 /// load.
 fn validate_no_signed_integers_for_version(module: &CompiledModule, version: u32) -> Result<()> {
-    if version >= VERSION_8 {
-        return Ok(());
-    }
-    for signature in &module.signatures {
-        for token in &signature.0 {
-            if signature_token_contains_signed_integer(token) {
+    if version < VERSION_8 {
+        fn contains_signed_integer(token: &SignatureToken) -> bool {
+            token.preorder_traversal().any(|t| {
+                matches!(
+                    t,
+                    SignatureToken::I8
+                        | SignatureToken::I16
+                        | SignatureToken::I32
+                        | SignatureToken::I64
+                        | SignatureToken::I128
+                        | SignatureToken::I256
+                )
+            })
+        }
+
+        for signature in &module.signatures {
+            for token in &signature.0 {
+                if contains_signed_integer(token) {
+                    bail!(
+                        "Signed integer types (i8..i256) not supported in bytecode version {}",
+                        version
+                    );
+                }
+            }
+        }
+        for constant in &module.constant_pool {
+            if contains_signed_integer(&constant.type_) {
                 bail!(
-                    "Signed integer types (i8..i256) not supported in bytecode version {}",
+                    "Signed integer constants not supported in bytecode version {}",
                     version
                 );
             }
         }
     }
-    for constant in &module.constant_pool {
-        if signature_token_contains_signed_integer(&constant.type_) {
-            bail!(
-                "Signed integer constants not supported in bytecode version {}",
-                version
-            );
-        }
-    }
-    // Field definitions reuse the signature pool, so the `signatures` walk above already
-    // covers them; no separate pass needed.
     Ok(())
 }
 

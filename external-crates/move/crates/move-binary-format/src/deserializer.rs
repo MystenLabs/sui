@@ -120,7 +120,7 @@ fn read_u256_internal(
 fn read_i8_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i8> {
     let byte = cursor
         .read_u8()
-        .map_err(|_| PartialVMError::new(StatusCode::MALFORMED))?;
+        .map_err(|_| PartialVMError::new(StatusCode::BAD_I8))?;
     Ok(byte as i8)
 }
 
@@ -128,7 +128,7 @@ fn read_i16_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i16> {
     let mut bytes = [0; 2];
     cursor
         .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U16))?;
+        .map_err(|_| PartialVMError::new(StatusCode::BAD_I16))?;
     Ok(i16::from_le_bytes(bytes))
 }
 
@@ -136,7 +136,7 @@ fn read_i32_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i32> {
     let mut bytes = [0; 4];
     cursor
         .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U32))?;
+        .map_err(|_| PartialVMError::new(StatusCode::BAD_I32))?;
     Ok(i32::from_le_bytes(bytes))
 }
 
@@ -144,7 +144,7 @@ fn read_i64_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i64> {
     let mut bytes = [0; 8];
     cursor
         .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U64))?;
+        .map_err(|_| PartialVMError::new(StatusCode::BAD_I64))?;
     Ok(i64::from_le_bytes(bytes))
 }
 
@@ -152,7 +152,7 @@ fn read_i128_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i128> 
     let mut bytes = [0; 16];
     cursor
         .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U128))?;
+        .map_err(|_| PartialVMError::new(StatusCode::BAD_I128))?;
     Ok(i128::from_le_bytes(bytes))
 }
 
@@ -162,7 +162,7 @@ fn read_i256_internal(
     let mut bytes = [0; 32];
     cursor
         .read_exact(&mut bytes)
-        .map_err(|_| PartialVMError::new(StatusCode::BAD_U256))?;
+        .map_err(|_| PartialVMError::new(StatusCode::BAD_I256))?;
     Ok(move_core_types::i256::I256::from_le_bytes(&bytes))
 }
 
