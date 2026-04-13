@@ -76,9 +76,13 @@ impl RocksDBStore {
         // boundary. Use Universal compaction (or FIFO when enabled) which handles this
         // pattern better than Level compaction.
         let blocks_cf_options = if use_fifo_compaction {
-            default_db_options().optimize_for_no_deletion()
+            default_db_options()
+                .optimize_for_no_deletion()
+                .disable_write_throttling()
         } else {
-            default_db_options().optimize_for_write_throughput_no_deletion()
+            default_db_options()
+                .optimize_for_write_throughput_no_deletion()
+                .disable_write_throttling()
         };
         let column_family_options = DBMapTableConfigMap::new(BTreeMap::from([
             (
