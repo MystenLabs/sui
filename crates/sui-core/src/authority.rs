@@ -158,7 +158,7 @@ use sui_types::messages_grpc::{
     LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
     TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
-use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
+use sui_types::metrics::{BytecodeVerifierMetrics, ExecutionMetrics};
 use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{
@@ -233,6 +233,10 @@ pub mod move_integration_tests;
 #[cfg(test)]
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/gas_data_tests.rs"]
+mod gas_data_tests;
 
 #[cfg(test)]
 #[path = "unit_tests/batch_verification_tests.rs"]
@@ -342,7 +346,7 @@ pub struct AuthorityMetrics {
     pub consensus_block_handler_fastpath_executions: IntCounter,
     pub consensus_timestamp_bias: Histogram,
 
-    pub limits_metrics: Arc<LimitsMetrics>,
+    pub execution_metrics: Arc<ExecutionMetrics>,
 
     /// bytecode verifier metrics for tracking timeouts
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
@@ -715,7 +719,7 @@ impl AuthorityMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
-            limits_metrics: Arc::new(LimitsMetrics::new(registry)),
+            execution_metrics: Arc::new(ExecutionMetrics::new(registry)),
             bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
             zklogin_sig_count: register_int_counter_with_registry!(
                 "zklogin_sig_count",
@@ -1943,7 +1947,7 @@ impl AuthorityState {
             .execute_transaction_to_effects_and_execution_error(
                 store,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
+                self.metrics.execution_metrics.clone(),
                 enable_expensive_checks,
                 execution_params,
                 epoch_id,
@@ -2614,7 +2618,14 @@ impl AuthorityState {
         )
         .expect("Creating an executor should not fail here");
 
-        let (kind, signer, gas_data) = transaction.execution_parts();
+        let (mut kind, signer, gas_data) = transaction.execution_parts();
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            signer,
+            &mut kind,
+            None,
+        );
         let early_execution_error = get_early_execution_error(
             &transaction.digest(),
             &checked_input_objects,
@@ -2641,7 +2652,7 @@ impl AuthorityState {
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             &tracking_store,
             protocol_config,
-            self.metrics.limits_metrics.clone(),
+            self.metrics.execution_metrics.clone(),
             false, // expensive_checks
             execution_params,
             &epoch_id,
@@ -2650,7 +2661,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             kind,
-            None, // rewritten_inputs - not needed for dev_inspect
+            rewritten_inputs.clone(),
             signer,
             tx_digest,
             dev_inspect,
@@ -2677,7 +2688,7 @@ impl AuthorityState {
                 let (store, _, effects, result) = executor.dev_inspect_transaction(
                     &tracking_store,
                     protocol_config,
-                    self.metrics.limits_metrics.clone(),
+                    self.metrics.execution_metrics.clone(),
                     false,
                     ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
                     &epoch_id,
@@ -2686,7 +2697,7 @@ impl AuthorityState {
                     cloned_gas,
                     retry_gas_status,
                     cloned_kind,
-                    None, // rewritten_inputs
+                    rewritten_inputs,
                     signer,
                     tx_digest,
                     dev_inspect,
@@ -2925,10 +2936,18 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
+        let mut transaction_kind = transaction_kind;
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            sender,
+            &mut transaction_kind,
+            None,
+        );
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
             protocol_config,
-            self.metrics.limits_metrics.clone(),
+            self.metrics.execution_metrics.clone(),
             /* expensive checks */ false,
             execution_params,
             &epoch_store.epoch_start_config().epoch_data().epoch_id(),
@@ -2940,7 +2959,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             transaction_kind,
-            None, // rewritten_inputs - not needed for dev_inspect
+            rewritten_inputs,
             sender,
             transaction_digest,
             skip_checks,

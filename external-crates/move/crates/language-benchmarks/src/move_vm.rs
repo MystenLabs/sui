@@ -27,10 +27,6 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use anyhow::Result;
-use move_package::BuildConfig;
-use move_package::compilation::compiled_package::CompiledPackage;
-
 const BENCH_FUNCTION_PREFIX: &str = "bench_";
 const BENCH_ADDR: AccountAddress = AccountAddress::new([
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
@@ -124,6 +120,30 @@ fn publish_stdlib(adapter: &mut InMemoryTestAdapter) {
     adapter.insert_package_into_storage(pkg);
 }
 
+// TODO: cross_module benchmark is broken — uses multi-address packages not supported by current setup
+// fn build_package(path: PathBuf) -> anyhow::Result<move_package::compilation::compiled_package::CompiledPackage> {
+//     let config = move_package::BuildConfig {
+//         dev_mode: true,
+//         test_mode: false,
+//         generate_docs: false,
+//         install_dir: Some(path.clone()),
+//         force_recompilation: false,
+//         ..Default::default()
+//     };
+//     config.compile_package(&path, &mut Vec::new())
+// }
+//
+// pub fn run_cross_module_tests<M: Measurement + 'static>(c: &mut Criterion<M>, path: PathBuf) {
+//     let modules_a1 = build_package(path).unwrap();
+//     let modules = modules_a1
+//         .all_modules()
+//         .map(|m| m.unit.module.clone())
+//         .collect::<Vec<_>>();
+//     let mut adapter = create_vm();
+//     publish_stdlib(&mut adapter);
+//     execute(c, &mut adapter, CORE_CODE_ADDRESS, modules, "cross_module/a1/sources/m.move");
+// }
+
 fn find_bench_functions(modules: &[CompiledModule]) -> Vec<(Identifier, ModuleId)> {
     modules
         .iter()
@@ -142,36 +162,6 @@ fn find_bench_functions(modules: &[CompiledModule]) -> Vec<(Identifier, ModuleId
             })
         })
         .collect()
-}
-
-fn build_package(path: PathBuf) -> Result<CompiledPackage> {
-    let config = BuildConfig {
-        dev_mode: true,
-        test_mode: false,
-        generate_docs: false,
-        install_dir: Some(path.clone()),
-        force_recompilation: false,
-        ..Default::default()
-    };
-
-    config.compile_package(&path, &mut Vec::new())
-}
-
-pub fn run_cross_module_tests<M: Measurement + 'static>(c: &mut Criterion<M>, path: PathBuf) {
-    let modules_a1 = build_package(path).unwrap();
-    let modules = modules_a1
-        .all_modules()
-        .map(|m| m.unit.module.clone())
-        .collect::<Vec<_>>();
-    let mut adapter = create_vm();
-    publish_stdlib(&mut adapter);
-    execute(
-        c,
-        &mut adapter,
-        CORE_CODE_ADDRESS,
-        modules,
-        "cross_module/a1/sources/m.move",
-    );
 }
 
 // execute a given function in the Bench module

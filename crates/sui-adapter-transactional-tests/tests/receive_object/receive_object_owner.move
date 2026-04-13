@@ -29,14 +29,14 @@ module tto::M1 {
 
 //# run tto::M1::start --sender A
 
-//# view-object 2,0
+//# view-object 2,2
 
 //# view-object 2,1
 
-//# view-object 2,2
+//# view-object 2,0
 
 // Try to receive an object with an object
-//# run tto::M1::receive --args object(2,2) receiving(2,1) --sender A
+//# run tto::M1::receive --args object(2,0) receiving(2,1) --sender A
 
 // Try to receive another object with an object owner
-//# run tto::M1::receive --args object(2,2) receiving(2,0) --sender A
+//# run tto::M1::receive --args object(2,0) receiving(2,2) --sender A

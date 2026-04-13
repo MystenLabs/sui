@@ -32,15 +32,15 @@ module test::shared_object_tests {
     }
 }
 
-//# view-object 1,0
+//# view-object 1,1
 
-//# programmable --inputs immshared(1,0)
+//# programmable --inputs immshared(1,1)
 //> 0: test::shared_object_tests::get_value(Input(0))
 
-//# programmable --inputs object(1,0)
+//# programmable --inputs object(1,1)
 //> 0: test::shared_object_tests::increment(Input(0))
 
-//# programmable --inputs immshared(1,0)
+//# programmable --inputs immshared(1,1)
 //> 0: test::shared_object_tests::get_value(Input(0))
 
 //# create-checkpoint

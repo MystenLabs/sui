@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 16 tasks
 
@@ -19,67 +20,67 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 18749200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 80:
-//# view-object 2,1
-Owner: Object ID: ( fake(2,8) )
+//# view-object 2,7
+Owner: Object ID: ( fake(2,2) )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,1),
+            bytes: fake(2,7),
         },
     },
     name: sui::dynamic_object_field::Wrapper<u64> {
         name: 0u64,
     },
     value: sui::object::ID {
-        bytes: fake(2,6),
+        bytes: fake(2,3),
     },
 }
 
 task 4, line 82:
-//# view-object 2,2
+//# view-object 2,8
 Owner: Object ID: ( _ )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,2),
+            bytes: fake(2,8),
         },
     },
     name: sui::dynamic_object_field::Wrapper<u64> {
         name: 0u64,
     },
     value: sui::object::ID {
-        bytes: fake(2,7),
+        bytes: fake(2,4),
     },
 }
 
 task 5, line 84:
-//# view-object 2,0
-Owner: Object ID: ( fake(2,5) )
+//# view-object 2,6
+Owner: Object ID: ( fake(2,1) )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,0),
+            bytes: fake(2,6),
         },
     },
     name: sui::dynamic_object_field::Wrapper<u64> {
         name: 0u64,
     },
     value: sui::object::ID {
-        bytes: fake(2,8),
+        bytes: fake(2,2),
     },
 }
 
 task 6, line 86:
-//# view-object 2,3
-Owner: Object ID: ( fake(2,8) )
+//# view-object 2,9
+Owner: Object ID: ( fake(2,2) )
 Version: 2
 Contents: sui::dynamic_field::Field<u64, tto::M1::A> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,3),
+            bytes: fake(2,9),
         },
     },
     name: 1u64,
@@ -111,13 +112,13 @@ Contents: sui::dynamic_field::Field<u64, tto::M1::A> {
 }
 
 task 7, line 88:
-//# view-object 2,6
-Owner: Object ID: ( fake(2,1) )
+//# view-object 2,3
+Owner: Object ID: ( fake(2,7) )
 Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,6),
+            bytes: fake(2,3),
         },
     },
     value: vector[
@@ -138,13 +139,13 @@ Contents: tto::M1::A {
 }
 
 task 8, line 90:
-//# view-object 2,7
-Owner: Object ID: ( fake(2,2) )
+//# view-object 2,4
+Owner: Object ID: ( fake(2,8) )
 Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,7),
+            bytes: fake(2,4),
         },
     },
     value: vector[
@@ -162,13 +163,13 @@ Contents: tto::M1::A {
 }
 
 task 9, line 92:
-//# view-object 2,5
-Owner: Account Address ( fake(2,4) )
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
 Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,5),
+            bytes: fake(2,1),
         },
     },
     value: vector[
@@ -184,13 +185,13 @@ Contents: tto::M1::A {
 }
 
 task 10, line 94:
-//# view-object 2,8
-Owner: Object ID: ( fake(2,0) )
+//# view-object 2,2
+Owner: Object ID: ( fake(2,6) )
 Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,8),
+            bytes: fake(2,2),
         },
     },
     value: vector[
@@ -205,13 +206,13 @@ Contents: tto::M1::A {
 }
 
 task 11, line 96:
-//# view-object 2,4
+//# view-object 2,0
 Owner: Account Address ( A )
 Version: 2
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,4),
+            bytes: fake(2,0),
         },
     },
     value: vector[
@@ -227,13 +228,13 @@ Contents: tto::M1::A {
 }
 
 task 12, lines 98-101:
-//# view-object 2,9
-Owner: Account Address ( fake(2,4) )
+//# view-object 2,5
+Owner: Account Address ( fake(2,0) )
 Version: 2
 Contents: tto::M1::Wrapper<tto::M1::A> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,9),
+            bytes: fake(2,5),
         },
     },
     value: tto::M1::A {
@@ -255,18 +256,18 @@ Contents: tto::M1::Wrapper<tto::M1::A> {
 }
 
 task 13, line 102:
-//# run tto::M1::receive_b_parent --args object(2,4) receiving(2,9) --sender A
+//# run tto::M1::receive_b_parent --args object(2,0) receiving(2,5) --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 15) at offset 0, Abort Code: 2
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 15, instruction: 0, function_name: Some("receive_impl") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(15), 0)] }), command: Some(0) } }
 
 task 14, line 104:
-//# run tto::M1::receive_b_parent --args object(2,4) receiving(2,5) --sender A
+//# run tto::M1::receive_b_parent --args object(2,0) receiving(2,1) --sender A
 created: object(14,0)
-mutated: object(0,0), object(2,4), object(2,5)
+mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 3521232, non_refundable_storage_fee: 35568
 
 task 15, line 106:
-//# run tto::M1::receive_wrapped --args object(2,4) receiving(2,9) --sender A
+//# run tto::M1::receive_wrapped --args object(2,0) receiving(2,5) --sender A
 created: object(15,0)
-mutated: object(0,0), object(2,4), object(2,9)
+mutated: object(0,0), object(2,0), object(2,5)
 gas summary: computation_cost: 1000000, storage_cost: 6589200,  storage_rebate: 4093056, non_refundable_storage_fee: 41344

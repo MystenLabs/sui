@@ -24,7 +24,7 @@ use sui_types::{
     execution::DynamicallyLoadedObjectMetadata,
     execution_status::ExecutionErrorKind,
     id::UID,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
     SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
@@ -138,7 +138,7 @@ pub struct ObjectRuntime<'a> {
     loaded_child_objects_fixed: bool,
 
     pub(crate) constants: LocalProtocolConfig,
-    pub(crate) metrics: Arc<LimitsMetrics>,
+    pub(crate) metrics: Arc<ExecutionMetrics>,
 }
 
 pub enum TransferResult {
@@ -165,7 +165,7 @@ impl<'a> ObjectRuntime<'a> {
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Self {
         let mut input_object_owners = BTreeMap::new();
         let mut root_version = BTreeMap::new();
@@ -212,7 +212,7 @@ impl<'a> ObjectRuntime<'a> {
             self.state.new_ids.len(),
             self.constants.max_num_new_move_object_ids,
             self.constants.max_num_new_move_object_ids_system_tx,
-            self.metrics.excessive_new_move_object_ids
+            self.metrics.limits_metrics.excessive_new_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!("Creating more than {} IDs is not allowed", lim))
@@ -240,7 +240,9 @@ impl<'a> ObjectRuntime<'a> {
             self.state.deleted_ids.len(),
             self.constants.max_num_deleted_move_object_ids,
             self.constants.max_num_deleted_move_object_ids_system_tx,
-            self.metrics.excessive_deleted_move_object_ids
+            self.metrics
+                .limits_metrics
+                .excessive_deleted_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!("Deleting more than {} IDs is not allowed", lim))
@@ -296,7 +298,9 @@ impl<'a> ObjectRuntime<'a> {
             self.state.transfers.len(),
             self.constants.max_num_transferred_move_object_ids,
             self.constants.max_num_transferred_move_object_ids_system_tx,
-            self.metrics.excessive_transferred_move_object_ids
+            self.metrics
+                .limits_metrics
+                .excessive_transferred_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!("Transferring more than {} IDs is not allowed", lim))

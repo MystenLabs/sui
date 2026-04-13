@@ -1,8 +1,8 @@
 module 0x2::bench {
     const COUNT: u64 = 10_000u64;
     public fun bench_while_loop(): u64 {
-        let mut sum = 0;
-        let mut i = 0;
+        let mut sum: u64 = 0;
+        let mut i: u64 = 0;
         while (i < COUNT) {
             sum = sum + i;
             i = i + 1;
@@ -10,8 +10,8 @@ module 0x2::bench {
         sum
     }
     public fun bench_loop_loop(): u64 {
-        let mut sum = 0;
-        let mut i = 0;
+        let mut sum: u64 = 0;
+        let mut i: u64 = 0;
         loop {
             sum = sum + i;
             i = i + 1;

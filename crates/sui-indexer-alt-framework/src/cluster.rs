@@ -15,7 +15,6 @@ use url::Url;
 
 use crate::Indexer;
 use crate::IndexerArgs;
-use crate::Result;
 use crate::ingestion::ClientArgs;
 use crate::ingestion::IngestionConfig;
 use crate::metrics::IndexerMetrics;
@@ -145,7 +144,7 @@ impl IndexerClusterBuilder {
     /// - Required fields are missing
     /// - Database connection cannot be established
     /// - Metrics registry creation fails
-    pub async fn build(self) -> Result<IndexerCluster> {
+    pub async fn build(self) -> anyhow::Result<IndexerCluster> {
         let database_url = self.database_url.context("database_url is required")?;
 
         tracing_subscriber::fmt::init();
@@ -191,7 +190,7 @@ impl IndexerCluster {
     /// Starts the indexer and metrics service, returning a handle over the service's tasks.
     /// The service will exit when the indexer has finished processing all the checkpoints it was
     /// configured to process, or when it is instructed to shut down.
-    pub async fn run(self) -> Result<Service> {
+    pub async fn run(self) -> anyhow::Result<Service> {
         let s_indexer = self.indexer.run().await?;
         let s_metrics = self.metrics.run().await?;
 

@@ -20,7 +20,7 @@ use sui_types::{
     error::ExecutionError,
     execution::{ExecutionTiming, ResultWithTimings},
     execution_status::{ExecutionErrorKind, PackageUpgradeError},
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::Owner,
 };
@@ -28,7 +28,7 @@ use tracing::instrument;
 
 pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage>,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
     ast: T::Transaction,
@@ -61,7 +61,7 @@ where
 pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
     timings: &mut Vec<ExecutionTiming>,
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage>,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
     ast: T::Transaction,

@@ -10,8 +10,10 @@ use async_graphql::connection::Connection;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
+use prost_types::FieldMask;
 use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
+use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use tonic::Code;
 
@@ -761,12 +763,23 @@ impl Query {
         let proto_tx: proto::Transaction = serde_json::from_value(json_value)
             .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionJson(err)))?;
 
+        let read_mask = FieldMask::from_paths([
+            "transaction.effects",
+            "transaction.transaction",
+            "transaction.events.bcs",
+            "transaction.balance_changes",
+            "transaction.objects.objects.bcs",
+            "transaction.transaction.bcs",
+            "command_outputs",
+        ]);
+
         // Simulate transaction via gRPC
         match fullnode_client
             .simulate_transaction(
                 proto_tx,
                 checks_enabled.unwrap_or(true),
                 do_gas_selection.unwrap_or(false),
+                read_mask,
             )
             .await
         {

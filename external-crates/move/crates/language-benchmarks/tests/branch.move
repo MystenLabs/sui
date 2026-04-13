@@ -2,10 +2,10 @@ module 0x2::bench {
     const COUNT: u64 = 10_000u64;
 
     public fun bench_branch() {
-        let mut sum = 0;
-        let mut i = 0;
+        let mut sum: u64 = 0;
+        let mut i: u64 = 0;
         while (i < COUNT) {
-            let rem = i % 7;
+            let rem: u64 = i % 7;
             if (rem == 0) {
                 sum = sum + 100;
             };

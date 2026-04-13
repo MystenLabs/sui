@@ -14,14 +14,14 @@ module 0x2::bench {
         let transfer_amount = 10;
 
         // Initialize accounts with a balance of 1000 each
-        let mut i = 0;
+        let mut i: u64 = 0;
         while (i < num_accounts) {
             accounts.push_back(Account { balance: 1000 });
             i = i + 1;
         };
 
         // Perform transfers
-        let mut j = 0;
+        let mut j: u64 = 0;
         while (j < num_accounts / 2) {
             let sender_index = j;
             let receiver_index = num_accounts - j - 1;
@@ -36,7 +36,7 @@ module 0x2::bench {
             j = j + 1;
         };
 
-        let mut i = 0;
+        let mut i: u64 = 0;
         while (i < num_accounts) {
             destroy_account(accounts.pop_back());
             i = i + 1;

@@ -1,0 +1,6 @@
+[package]
+name = "LintTest"
+edition = "2024.beta"
+
+[addresses]
+test = "0x42"

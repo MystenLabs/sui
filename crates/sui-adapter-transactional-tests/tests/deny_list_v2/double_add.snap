@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 11 tasks
 
@@ -14,9 +15,9 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 gas summary: computation_cost: 1000000, storage_cost: 19486400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 46-48:
-//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+//# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(2,0)
-mutated: object(0,0), object(1,1)
+mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 

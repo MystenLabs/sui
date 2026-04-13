@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 8 tasks
 
@@ -13,7 +14,7 @@ mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 9241600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 42-48:
-//# programmable --sender A --inputs object(1,0) 42 @A
+//# programmable --sender A --inputs object(1,1) 42 @A
 //> 0: test::counter::inc(Input(0));
 //> 1: test::counter::inc_by(Input(0), Input(1));
 //> 2: sui::coin::value<sui::sui::SUI>(Gas);
@@ -22,7 +23,7 @@ task 2, lines 42-48:
 //> 5: TransferObjects([Result(4)], Input(2))
 events: Event { package_id: test, transaction_module: Identifier("counter"), sender: A, type_: StructTag { address: test, module: Identifier("counter"), name: Identifier("NFTMinted"), type_params: [] }, contents: [133, 20, 85, 69, 12, 179, 25, 123, 5, 66, 137, 243, 65, 61, 13, 29, 192, 167, 252, 247, 137, 252, 215, 33, 196, 175, 198, 60, 8, 119, 72, 229] }
 created: object(2,0)
-mutated: object(0,0), object(1,0)
+mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 1346796, non_refundable_storage_fee: 13604
 
 task 3, lines 50-52:

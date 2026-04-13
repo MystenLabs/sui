@@ -10,7 +10,7 @@ use crate::{
         def_info::DefInfo,
         mod_defs::{MemberDef, MemberDefInfo, ModuleDefs},
         runner::SymbolicatorRunner,
-        use_def::UseDef,
+        use_def::{self, UseDef},
     },
     utils::{canonical_path_from_uri, lsp_position_to_loc},
 };
@@ -18,11 +18,12 @@ use crate::{
 use lsp_server::{Message, Request, RequestId, Response};
 use lsp_types::{
     DocumentSymbol, DocumentSymbolParams, GotoDefinitionParams, Hover, HoverContents, HoverParams,
-    Location, MarkupContent, MarkupKind, Position, Range, ReferenceParams, SymbolKind,
+    Location, MarkupContent, MarkupKind, Position, PrepareRenameResponse, Range, ReferenceParams,
+    RenameParams, SymbolKind, TextDocumentPositionParams, TextEdit, WorkspaceEdit,
     request::GotoTypeDefinitionParams,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     path::{Path, PathBuf},
     vec,
 };
@@ -140,6 +141,176 @@ pub fn on_references_request(context: &Context, request: &Request) {
                 .map(|locs| serde_json::to_value(locs).unwrap())
         },
     );
+}
+
+/// Handles prepare rename request of the language server.
+///
+/// Validates that the identifier at the cursor can be renamed and returns
+/// the identifier's range and current name as placeholder text.
+pub fn on_prepare_rename_request(context: &Context, request: &Request) {
+    let symbols_map = &context.symbols.lock().unwrap();
+    let parameters = serde_json::from_value::<TextDocumentPositionParams>(request.params.clone())
+        .expect("could not deserialize prepare rename request");
+
+    let fpath = canonical_path_from_uri(&parameters.text_document.uri).unwrap();
+    let loc = parameters.position;
+    let line = loc.line;
+    let col = loc.character;
+
+    on_use_request(
+        context,
+        symbols_map,
+        &fpath,
+        line,
+        col,
+        request.id.clone(),
+        |u, symbols| {
+            let def_info = symbols.def_info.get(&u.def_loc)?;
+            // Reject rename for module definitions as these require
+            // file/directory and import changes beyond simple text replacement.
+            if matches!(def_info, DefInfo::Module(..)) {
+                return None;
+            }
+            let ident = ident_source_text(symbols, &fpath, line, u.col_start, u.col_end)?;
+            let range = Range {
+                start: Position {
+                    line,
+                    character: u.col_start,
+                },
+                end: Position {
+                    line,
+                    character: u.col_end,
+                },
+            };
+            // Return the identifier's range and text so the editor can highlight
+            // it and pre-fill the rename dialog with the current name.
+            Some(
+                serde_json::to_value(PrepareRenameResponse::RangeWithPlaceholder {
+                    range,
+                    placeholder: ident,
+                })
+                .unwrap(),
+            )
+        },
+    );
+}
+
+/// Handles rename request of the language server.
+///
+/// Renames the identifier at the cursor and all its references. When aliases are present
+/// (e.g., `use M::Foo as Bar`), only references sharing the same source-level name as the
+/// cursor identifier are renamed. This means renaming an alias only affects the alias
+/// definition and its uses, not the original name or its direct uses, and vice versa.
+///
+/// Known limitations:
+/// - Module definitions cannot be renamed (technically they could but it wouldn't work
+///   well with module extensions).
+/// - Symbols defined in dependency packages cannot be renamed.
+/// - References inside macros are not tracked and won't be updated.
+pub fn on_rename_request(context: &Context, request: &Request) {
+    let symbols_map = &context.symbols.lock().unwrap();
+    let parameters = serde_json::from_value::<RenameParams>(request.params.clone())
+        .expect("could not deserialize rename request");
+
+    let fpath =
+        canonical_path_from_uri(&parameters.text_document_position.text_document.uri).unwrap();
+    let loc = parameters.text_document_position.position;
+    let line = loc.line;
+    let col = loc.character;
+    let new_name = parameters.new_name;
+
+    on_use_request(
+        context,
+        symbols_map,
+        &fpath,
+        line,
+        col,
+        request.id.clone(),
+        |u, symbols| {
+            let def_info = symbols.def_info.get(&u.def_loc)?;
+            if matches!(def_info, DefInfo::Module(..)) {
+                return None;
+            }
+
+            let ref_locs = symbols.references.get(&u.def_loc)?;
+
+            // Read the identifier text at the cursor position to determine which name
+            // the user is renaming. This is how we distinguish alias uses from direct
+            // uses: only references whose source text matches the cursor's identifier
+            // will be included in the rename.
+            let cursor_ident = ident_source_text(symbols, &fpath, line, u.col_start, u.col_end)?;
+
+            let mut edits_by_file: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+            for ref_loc in ref_locs {
+                let ref_ident = use_loc_source_text(symbols, ref_loc);
+                if ref_ident.as_deref() != Some(cursor_ident.as_str()) {
+                    continue;
+                }
+                let range = Range {
+                    start: ref_loc.start,
+                    end: Position {
+                        line: ref_loc.start.line,
+                        character: ref_loc.col_end,
+                    },
+                };
+                let path = symbols.files.file_path(&ref_loc.fhash);
+                let uri = Url::from_file_path(path).unwrap();
+                edits_by_file.entry(uri).or_default().push(TextEdit {
+                    range,
+                    new_text: new_name.clone(),
+                });
+            }
+
+            // Return a workspace edit mapping each affected file to its text edits.
+            // The editor applies all edits atomically across files.
+            let edit = WorkspaceEdit {
+                changes: Some(edits_by_file),
+                ..Default::default()
+            };
+            Some(serde_json::to_value(edit).unwrap())
+        },
+    );
+}
+
+/// Extracts the source text at a reference location (UseLoc).
+fn use_loc_source_text(symbols: &Symbols, ref_loc: &use_def::UseLoc) -> Option<String> {
+    let (_, content) = symbols.files.get(&ref_loc.fhash)?;
+    let src_line = content.lines().nth(ref_loc.start.line as usize)?;
+    let (start, _) = src_line
+        .char_indices()
+        .nth(ref_loc.start.character as usize)?;
+    // col_end is one-past-the-last-character; when the identifier ends at the
+    // end of a line there is no character at that index, so fall back to the
+    // byte length of the line.
+    let end = src_line
+        .char_indices()
+        .nth(ref_loc.col_end as usize)
+        .map(|(i, _)| i)
+        .unwrap_or(src_line.len());
+    Some(src_line[start..end].to_string())
+}
+
+/// Extracts the source text at a given line and column range in a file.
+fn ident_source_text(
+    symbols: &Symbols,
+    fpath: &Path,
+    line: u32,
+    col_start: u32,
+    col_end: u32,
+) -> Option<String> {
+    let fhash = symbols.file_hash(fpath)?;
+    let (_, content) = symbols.files.get(&fhash)?;
+    let src_line = content.lines().nth(line as usize)?;
+    let (start, _) = src_line.char_indices().nth(col_start as usize)?;
+    // col_end is one-past-the-last-character; when the identifier ends at the
+    // end of a line there is no character at that index, so fall back to the
+    // byte length of the line.
+    let end = src_line
+        .char_indices()
+        .nth(col_end as usize)
+        .map(|(i, _)| i)
+        .unwrap_or(src_line.len());
+    Some(src_line[start..end].to_string())
 }
 
 /// Handles hover request of the language server

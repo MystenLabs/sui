@@ -69,11 +69,11 @@ module Test::real {
     }
 }
 
-//# view-object 1,1
-
 //# view-object 1,2
 
 //# view-object 1,4
+
+//# view-object 1,3
 
 //# create-checkpoint
 
@@ -101,7 +101,7 @@ module Test::real {
   "params": ["invalid_coin_type"]
 }
 
-//# programmable --sender A --inputs object(1,4) object(1,2)
+//# programmable --sender A --inputs object(1,3) object(1,4)
 //> 0: Test::real::update_metadata_name(Input(0),Input(1));
 
 //# create-checkpoint
@@ -112,7 +112,7 @@ module Test::real {
   "params": ["@{Test}::real::REAL"]
 }
 
-//# transfer-object 1,2 --sender A --recipient B
+//# transfer-object 1,4 --sender A --recipient B
 
 //# create-checkpoint
 
@@ -122,7 +122,7 @@ module Test::real {
   "params": ["@{Test}::real::REAL"]
 }
 
-//# programmable --sender B --inputs object(1,2)
+//# programmable --sender B --inputs object(1,4)
 //> 0: Test::real::wrap_coin_metadata(Input(0));
 
 //# create-checkpoint

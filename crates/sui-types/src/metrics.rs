@@ -73,6 +73,19 @@ impl LimitsMetrics {
     }
 }
 
+/// Combined execution metrics passed into executor methods.
+pub struct ExecutionMetrics {
+    pub limits_metrics: LimitsMetrics,
+}
+
+impl ExecutionMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            limits_metrics: LimitsMetrics::new(registry),
+        }
+    }
+}
+
 pub struct BytecodeVerifierMetrics {
     /// Bytecode verifier metrics timeout counter
     pub verifier_timeout_metrics: IntCounterVec,

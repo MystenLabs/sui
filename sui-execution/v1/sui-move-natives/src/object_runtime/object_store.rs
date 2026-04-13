@@ -19,7 +19,7 @@ use sui_types::{
     committee::EpochId,
     error::VMMemoryLimitExceededSubStatusCode,
     execution::DynamicallyLoadedObjectMetadata,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     object::{Data, MoveObject, Object, Owner},
     storage::ChildObjectResolver,
 };
@@ -53,7 +53,7 @@ struct Inner<'a> {
     // Local protocol config used to enforce limits
     local_config: LocalProtocolConfig,
     // Metrics for reporting exceeded limits
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
     // Epoch ID for the current transaction. Used for receiving objects.
     current_epoch_id: EpochId,
 }
@@ -212,7 +212,9 @@ impl Inner<'_> {
                 self.local_config.object_runtime_max_num_cached_objects,
                 self.local_config
                     .object_runtime_max_num_cached_objects_system_tx,
-                self.metrics.excessive_object_runtime_cached_objects
+                self.metrics
+                    .limits_metrics
+                    .excessive_object_runtime_cached_objects
             ) {
                 return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                     .with_message(format!(
@@ -337,7 +339,7 @@ impl<'a> ChildObjectStore<'a> {
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         is_metered: bool,
         local_config: LocalProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         current_epoch_id: EpochId,
     ) -> Self {
         Self {
@@ -457,7 +459,10 @@ impl<'a> ChildObjectStore<'a> {
                     self.inner
                         .local_config
                         .object_runtime_max_num_store_entries_system_tx,
-                    self.inner.metrics.excessive_object_runtime_store_entries
+                    self.inner
+                        .metrics
+                        .limits_metrics
+                        .excessive_object_runtime_store_entries
                 ) {
                     return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                         .with_message(format!(
@@ -503,7 +508,10 @@ impl<'a> ChildObjectStore<'a> {
             self.inner
                 .local_config
                 .object_runtime_max_num_store_entries_system_tx,
-            self.inner.metrics.excessive_object_runtime_store_entries
+            self.inner
+                .metrics
+                .limits_metrics
+                .excessive_object_runtime_store_entries
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(

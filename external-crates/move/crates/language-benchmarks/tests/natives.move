@@ -36,7 +36,7 @@ module 0x2::bench {
     }
 
     public fun bench_vector_ops() {
-        let mut i = 0;
+        let mut i: u64 = 0;
         // 300 is the number of loops to make the benchmark run for a couple of minutes,
         // which is an eternity.
         // Adjust according to your needs, it's just a reference

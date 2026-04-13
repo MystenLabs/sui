@@ -26,7 +26,7 @@ module test::simple {
   }
 }
 
-//# programmable --sender A --inputs object(1,0) 42 @B
+//# programmable --sender A --inputs object(1,1) 42 @B
 //> 0: test::simple::increment(Input(0));
 //> 1: test::simple::add(Input(0), Input(1));
 //> 2: TransferObjects([Gas], Input(2))

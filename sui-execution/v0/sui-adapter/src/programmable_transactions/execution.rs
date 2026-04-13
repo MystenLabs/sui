@@ -50,7 +50,7 @@ mod checked {
         error::{command_argument_error, ExecutionError},
         execution_status::ExecutionErrorKind,
         id::RESOLVED_SUI_ID,
-        metrics::LimitsMetrics,
+        metrics::ExecutionMetrics,
         move_package::{
             normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
             UpgradeReceipt, UpgradeTicket,
@@ -68,7 +68,7 @@ mod checked {
 
     pub fn execute<Mode: ExecutionMode>(
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         vm: &MoveVM,
         state_view: &mut dyn ExecutionState,
         tx_context: &mut TxContext,

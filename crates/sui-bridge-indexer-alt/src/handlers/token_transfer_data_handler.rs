@@ -95,7 +95,7 @@ impl Handler for TokenTransferDataHandler {
     async fn commit<'a>(
         values: &[Self::Value],
         conn: &mut Connection<'a>,
-    ) -> sui_indexer_alt_framework::Result<usize> {
+    ) -> anyhow::Result<usize> {
         Ok(diesel::insert_into(token_transfer_data::table)
             .values(values)
             .on_conflict_do_nothing()

@@ -1049,6 +1049,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     disallow_jump_orphans: bool,
+
+    // If true, return early on type mismatch in receive_object.
+    #[serde(skip_serializing_if = "is_false")]
+    early_return_receive_object_mismatched_type: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2738,6 +2742,11 @@ impl ProtocolConfig {
 
     pub fn disallow_jump_orphans(&self) -> bool {
         self.feature_flags.disallow_jump_orphans
+    }
+
+    pub fn early_return_receive_object_mismatched_type(&self) -> bool {
+        self.feature_flags
+            .early_return_receive_object_mismatched_type
     }
 }
 
@@ -4785,6 +4794,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.defer_unpaid_amplification = true;
                         cfg.gasless_max_tps = Some(50);
                     }
+                    cfg.feature_flags
+                        .early_return_receive_object_mismatched_type = true;
                 }
                 // Use this template when making changes:
                 //

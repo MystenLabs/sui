@@ -12,23 +12,23 @@ use std::str::FromStr;
 use sui_types::supported_protocol_versions::Chain;
 
 /// GraphQL endpoint for Sui mainnet.
-pub const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
+pub(crate) const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
 /// GraphQL endpoint for Sui testnet.
-pub const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
+pub(crate) const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
 /// GraphQL endpoint for Sui devnet.
-pub const DEVNET_GQL_URL: &str = "https://graphql.devnet.sui.io/graphql";
+pub(crate) const DEVNET_GQL_URL: &str = "https://graphql.devnet.sui.io/graphql";
 /// gRPC endpoint for Sui mainnet.
-pub const MAINNET_RPC_URL: &str = "https://fullnode.mainnet.sui.io:443";
+pub(crate) const MAINNET_RPC_URL: &str = "https://fullnode.mainnet.sui.io:443";
 /// gRPC endpoint for Sui testnet.
-pub const TESTNET_RPC_URL: &str = "https://fullnode.testnet.sui.io:443";
+pub(crate) const TESTNET_RPC_URL: &str = "https://fullnode.testnet.sui.io:443";
 /// gRPC endpoint for Sui devnet.
-pub const DEVNET_RPC_URL: &str = "https://fullnode.devnet.sui.io:443";
+pub(crate) const DEVNET_RPC_URL: &str = "https://fullnode.devnet.sui.io:443";
 
 /// Represents a Sui network node configuration.
 ///
 /// Used to specify which network the data store should connect to.
 #[derive(Clone, Debug)]
-pub enum Node {
+pub(crate) enum Node {
     /// Sui mainnet
     Mainnet,
     /// Sui testnet
@@ -41,7 +41,7 @@ pub enum Node {
 
 impl Node {
     /// Returns the [`Chain`] identifier for this node.
-    pub fn chain(&self) -> Chain {
+    pub(crate) fn chain(&self) -> Chain {
         match self {
             Node::Mainnet => Chain::Mainnet,
             Node::Testnet => Chain::Testnet,
@@ -51,7 +51,7 @@ impl Node {
     }
 
     /// Returns a human-readable network name.
-    pub fn network_name(&self) -> String {
+    pub(crate) fn network_name(&self) -> String {
         match self {
             Node::Mainnet => "mainnet".to_string(),
             Node::Testnet => "testnet".to_string(),
@@ -61,7 +61,7 @@ impl Node {
     }
 
     /// Returns the GraphQL endpoint URL for this node.
-    pub fn gql_url(&self) -> &str {
+    pub(crate) fn gql_url(&self) -> &str {
         match self {
             Node::Mainnet => MAINNET_GQL_URL,
             Node::Testnet => TESTNET_GQL_URL,
@@ -71,7 +71,7 @@ impl Node {
     }
 
     /// Returns the gRPC endpoint URL for this node.
-    pub fn node_url(&self) -> &str {
+    pub(crate) fn node_url(&self) -> &str {
         match self {
             Node::Mainnet => MAINNET_RPC_URL,
             Node::Testnet => TESTNET_RPC_URL,

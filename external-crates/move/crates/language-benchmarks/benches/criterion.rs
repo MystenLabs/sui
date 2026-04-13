@@ -3,11 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::{Criterion, criterion_group, criterion_main, measurement::Measurement};
-use language_benchmarks::{
-    measurement::wall_time_measurement,
-    move_vm::{bench, run_cross_module_tests},
-};
-use std::path::PathBuf;
+use language_benchmarks::measurement::wall_time_measurement;
+use language_benchmarks::move_vm::bench;
 
 //
 // MoveVM benchmarks
@@ -45,12 +42,53 @@ fn vector<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "vector.move");
 }
 
-#[allow(dead_code)]
-fn cross_module<M: Measurement + 'static>(c: &mut Criterion<M>) {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let dir = "a1";
-    path.extend(["tests", "packages", dir]);
-    run_cross_module_tests(c, path);
+fn structs<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "structs.move");
+}
+
+fn references<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "references.move");
+}
+
+fn generics<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "generics.move");
+}
+
+fn large_functions<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "large_functions.move");
+}
+
+fn enums<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "enums.move");
+}
+
+fn abort_paths<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "abort_paths.move");
+}
+
+fn deep_calls<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "deep_calls.move");
+}
+
+fn constants<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "constants.move");
+}
+
+// TODO: broken — uses multi-address packages not supported by current setup
+// fn cross_module<M: Measurement + 'static>(c: &mut Criterion<M>) {
+//     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+//     let dir = "a1";
+//     path.extend(["tests", "packages", dir]);
+//     run_cross_module_tests(c, path);
+// }
+
+/// Interpreter step() overhead benchmarks.
+/// These measure raw dispatch overhead with minimal work per instruction.
+/// Use to validate tracing optimizations:
+/// - Without tracing: `cargo bench -p language-benchmarks -- interpreter_step`
+/// - With tracing: `cargo bench -p language-benchmarks --features move-vm-runtime/tracing -- interpreter_step`
+fn interpreter_step<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "interpreter_step.move");
 }
 
 criterion_group!(
@@ -65,6 +103,15 @@ criterion_group!(
         natives,
         transfers,
         vector,
+        structs,
+        references,
+        generics,
+        large_functions,
+        enums,
+        abort_paths,
+        deep_calls,
+        constants,
+        interpreter_step,
         // cross_module, // TODO: broken — uses multi-address packages not supported by current setup
 );
 

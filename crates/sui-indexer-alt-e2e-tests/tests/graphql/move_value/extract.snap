@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 14 tasks
 
@@ -29,11 +30,11 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4164800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 76-77:
-//# programmable --sender A --inputs object(3,1)
+//# programmable --sender A --inputs object(3,0)
 //> 0: test::mod::upgrade(Input(0))
 created: object(4,0)
-mutated: object(0,0), object(3,1)
-deleted: object(3,0)
+mutated: object(0,0), object(3,0)
+deleted: object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 4172400,  storage_rebate: 4123152, non_refundable_storage_fee: 41648
 
 task 5, lines 79-80:
