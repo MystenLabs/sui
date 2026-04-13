@@ -11,8 +11,6 @@ use sui_types::object::Object;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 
 use crate::CheckpointRead;
-use crate::EpochData;
-use crate::EpochRead;
 use crate::Node;
 use crate::ObjectKey;
 use crate::ObjectRead;
@@ -91,7 +89,7 @@ impl GraphQLClient {
     {
         client
             .post(rpc.clone())
-            .header(USER_AGENT, format!("forking-data-store-v{}", version))
+            .header(USER_AGENT, format!("sui-forking-v{}", version))
             .json(operation)
             .send()
             .await
@@ -115,16 +113,6 @@ impl TransactionRead for GraphQLClient {
         _tx_digest: &str,
     ) -> Result<Option<TransactionInfo>, Error> {
         todo!("GraphQL transaction reads are not implemented in the skeleton")
-    }
-}
-
-impl EpochRead for GraphQLClient {
-    fn epoch_info(&self, _epoch: u64) -> Result<Option<EpochData>, Error> {
-        todo!("GraphQL epoch reads are not implemented in the skeleton")
-    }
-
-    fn protocol_config(&self, _epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
-        todo!("GraphQL protocol-config reads are not implemented in the skeleton")
     }
 }
 
@@ -235,7 +223,7 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/"))
-            .and(header("user-agent", "forking-data-store-vtest-version"))
+            .and(header("user-agent", "sui-forking-vtest-version"))
             .and(body_partial_json(json!({
                 "variables": {
                     "sequenceNumber": 7,
@@ -326,7 +314,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/"))
-            .and(header("user-agent", "forking-data-store-vtest-version"))
+            .and(header("user-agent", "sui-forking-vtest-version"))
             .and(body_partial_json(json!({
                 "variables": {
                     "keys": [
@@ -407,7 +395,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/"))
-            .and(header("user-agent", "forking-data-store-vtest-version"))
+            .and(header("user-agent", "sui-forking-vtest-version"))
             .and(body_partial_json(json!({
                 "variables": {
                     "sequenceNumber": 31,

@@ -96,6 +96,8 @@ impl FilesystemStore {
         self.read_bcs_file(&version_file).map(Some)
     }
 
+    /// Get the object at the given version for the given object ID. Returns `None` if the version
+    /// file does not exist on disk.
     pub(crate) fn get_object_at_version(
         &self,
         object_id: ObjectID,
@@ -119,8 +121,13 @@ impl FilesystemStore {
         let version_file = object_dir.join(version.to_string());
         self.write_bcs_file(&version_file, object)?;
 
+        let latest_version = if object_dir.join(LATEST_FILE).exists() {
+            std::cmp::max(self.read_latest_file(&object_dir)?, version)
+        } else {
+            version
+        };
         let latest_file = object_dir.join(LATEST_FILE);
-        fs::write(latest_file, version.to_string())
+        fs::write(latest_file, latest_version.to_string())
             .with_context(|| format!("Failed to write latest file for object {}", object.id()))
     }
 
@@ -145,7 +152,7 @@ impl FilesystemStore {
     }
 
     fn write_bcs_file<T: serde::Serialize>(&self, path: &Path, data: &T) -> Result<(), Error> {
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
         }
@@ -165,12 +172,10 @@ impl FilesystemStore {
         }
         let content = fs::read_to_string(&latest_path)
             .with_context(|| format!("Failed to read latest file: {}", latest_path.display()))?;
-        content.trim().parse::<u64>().with_context(|| {
-            format!(
-                "Failed to parse checkpoint sequence number from latest file: {}",
-                latest_path.display()
-            )
-        })
+        content
+            .trim()
+            .parse::<u64>()
+            .with_context(|| format!("Failed to parse latest file: {}", latest_path.display()))
     }
 }
 
