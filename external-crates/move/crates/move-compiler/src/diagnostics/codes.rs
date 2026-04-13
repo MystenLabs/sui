@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 //**************************************************************************************************
 // Main types
 //**************************************************************************************************
@@ -15,18 +17,84 @@ pub enum Severity {
     Bug = 4,
 }
 
-/// An optional prefix to distinguish between different types of warnings (internal vs. possibly
-/// multiple externally provided ones).
-pub type ExternalPrefix = Option<&'static str>;
-/// The ID for a diagnostic, consisting of an optional prefix, a category, and a code.
-pub type DiagnosticsID = (ExternalPrefix, u8, u8);
+/// A compact identifier for a diagnostic family. Compiler-internal diagnostics use
+/// `COMPILER_FAMILY`; external tools (linters, sui-specific checks, etc.) register their
+/// family at startup and receive a unique `Family`.
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
+pub struct Family(u8);
+
+pub const COMPILER_FAMILY: Family = Family(0);
+pub const LINT_WARNING_FAMILY: Family = Family(1);
+pub const SUI_LINT_FAMILY: Family = Family(2);
+
+impl Family {
+    pub fn as_u8(self) -> u8 {
+        self.0
+    }
+}
+
+/// Registry mapping `Family` values to their display prefixes. Built once during compiler
+/// setup and shared (read-only) thereafter. The display prefix is used when rendering diagnostic
+/// codes (e.g., `"Lint W04001"`).
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub struct FamilyRegistry {
+    /// Index = Family.0. The compiler family (index 0) has no display prefix.
+    prefixes: Vec<Option<&'static str>>,
+    /// Reverse map from display prefix string to Family for lookup during filter resolution.
+    by_prefix: BTreeMap<&'static str, Family>,
+}
+
+impl FamilyRegistry {
+    pub fn new() -> Self {
+        let mut registry = Self {
+            prefixes: vec![None], // 0 = COMPILER, no display prefix
+            by_prefix: BTreeMap::new(),
+        };
+        assert!(registry.register("Lint ") == LINT_WARNING_FAMILY);
+        assert!(registry.register("Sui ") == SUI_LINT_FAMILY);
+        registry
+    }
+
+    /// Register an external family with the given display prefix (e.g., `"Lint "`, `"Sui "`).
+    /// Returns the assigned `Family`. Panics if more than 255 families are registered.
+    pub fn register(&mut self, display_prefix: &'static str) -> Family {
+        if let Some(&existing) = self.by_prefix.get(display_prefix) {
+            return existing;
+        }
+        let id = self.prefixes.len();
+        assert!(id <= u8::MAX as usize, "too many diagnostic families");
+        let ns = Family(id as u8);
+        self.prefixes.push(Some(display_prefix));
+        self.by_prefix.insert(display_prefix, ns);
+        ns
+    }
+
+    /// Look up the display prefix for a family. Returns `None` for the compiler family.
+    pub fn display_prefix(&self, ns: Family) -> Option<&'static str> {
+        self.prefixes.get(ns.0 as usize).copied().unwrap_or(None)
+    }
+
+    /// Look up a `Family` by its display prefix string.
+    pub fn family_for_prefix(&self, prefix: &str) -> Option<Family> {
+        self.by_prefix.get(prefix).copied()
+    }
+}
+
+impl Default for FamilyRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The ID for a diagnostic, consisting of a family, category, and code.
+pub type DiagnosticsID = (Family, u8, u8);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct DiagnosticInfo {
     severity: Severity,
     category: u8,
     code: u8,
-    external_prefix: ExternalPrefix,
+    family: Family,
     message: &'static str,
 }
 
@@ -45,7 +113,7 @@ pub(crate) trait DiagnosticCode: Copy {
             severity,
             category,
             code,
-            external_prefix: None,
+            family: COMPILER_FAMILY,
             message,
         }
     }
@@ -55,12 +123,13 @@ pub(crate) trait DiagnosticCode: Copy {
 // Categories and Codes
 //**************************************************************************************************
 
-/// A custom DiagnosticInfo.
+/// A custom DiagnosticInfo for external diagnostics (lints, sui-specific checks, etc.).
 /// The diagnostic will get rendered as
-/// `"[{external_prefix}{severity}{category}{code}] {message}"`.
+/// `"[{display_prefix}{severity}{category}{code}] {message}"`,
+/// where the display prefix is looked up from the `FamilyRegistry` at render time.
 /// Note, this will panic if `category > 99`
 pub const fn custom(
-    external_prefix: &'static str,
+    family: Family,
     severity: Severity,
     category: u8,
     code: u8,
@@ -71,7 +140,7 @@ pub const fn custom(
         severity,
         category,
         code,
-        external_prefix: Some(external_prefix),
+        family,
         message,
     }
 }
@@ -374,12 +443,15 @@ codes!(
 //**************************************************************************************************
 
 impl DiagnosticInfo {
-    pub fn render(self) -> (/* code */ String, /* message */ &'static str) {
+    pub fn render(
+        self,
+        registry: &FamilyRegistry,
+    ) -> (/* code */ String, /* message */ &'static str) {
         let Self {
             severity,
             category,
             code,
-            external_prefix,
+            family,
             message,
         } = self;
         let sev_prefix = match severity {
@@ -389,7 +461,7 @@ impl DiagnosticInfo {
             Severity::Bug => "ICE",
         };
         debug_assert!(category <= 99);
-        let string_code = if let Some(ext) = external_prefix {
+        let string_code = if let Some(ext) = registry.display_prefix(family) {
             format!("{ext}{sev_prefix}{category:02}{code:03}")
         } else {
             format!("{sev_prefix}{category:02}{code:03}")
@@ -415,7 +487,7 @@ impl DiagnosticInfo {
     }
 
     pub fn id(&self) -> DiagnosticsID {
-        (self.external_prefix, self.category, self.code)
+        (self.family, self.category, self.code)
     }
 
     pub fn message(&self) -> &'static str {
@@ -423,11 +495,11 @@ impl DiagnosticInfo {
     }
 
     pub fn is_external(&self) -> bool {
-        self.external_prefix.is_some()
+        self.family != COMPILER_FAMILY
     }
 
-    pub fn external_prefix(&self) -> Option<&'static str> {
-        self.external_prefix
+    pub fn family(&self) -> Family {
+        self.family
     }
 }
 

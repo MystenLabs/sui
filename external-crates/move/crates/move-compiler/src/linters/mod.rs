@@ -7,7 +7,7 @@ use crate::{
     cfgir::visitor::CFGIRVisitor,
     command_line::compiler::Visitor,
     diagnostics::{
-        codes::{DiagnosticInfo, Severity, custom},
+        codes::{DiagnosticInfo, LINT_WARNING_FAMILY, Severity, custom},
         warning_filters::WarningFilter,
     },
     typing::visitor::TypingVisitor,
@@ -86,7 +86,7 @@ macro_rules! lints {
             const fn diag_info(&self) -> DiagnosticInfo {
                 let (category, code, msg) = self.category_code_and_message();
                 custom(
-                    LINT_WARNING_PREFIX,
+                    LINT_WARNING_FAMILY,
                     Severity::Warning,
                     category,
                     code,
@@ -187,12 +187,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
         STYLE_WARNING_FILTERS
             .iter()
             .map(|(category, code, filter_name)| {
-                WarningFilter::code(
-                    Some(LINT_WARNING_PREFIX),
-                    *category,
-                    *code,
-                    Some(filter_name),
-                )
+                WarningFilter::code(LINT_WARNING_FAMILY, *category, *code, Some(filter_name))
             })
             .collect(),
     )

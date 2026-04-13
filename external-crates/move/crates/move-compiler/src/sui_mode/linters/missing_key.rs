@@ -3,12 +3,12 @@
 
 //! This linter rule checks for structs with an `id` field of type `UID` without the `key` ability.
 
-use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
+use super::{LinterDiagnosticCategory, LinterDiagnosticCode};
 use crate::expansion::ast::ModuleIdent;
 use crate::parser::ast::DatatypeName;
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::{DiagnosticInfo, LINT_WARNING_FAMILY, Severity, custom},
     naming::ast::{StructDefinition, StructFields},
     parser::ast::Ability_,
     sui_mode::{ID_FIELD_NAME, OBJECT_MODULE_NAME, SUI_ADDR_VALUE, UID_TYPE_NAME},
@@ -16,7 +16,7 @@ use crate::{
 };
 
 const MISSING_KEY_ABILITY_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    LINT_WARNING_FAMILY,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::MissingKey as u8,

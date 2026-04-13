@@ -4,7 +4,7 @@
 use crate::{
     diagnostics::{
         Diagnostic, DiagnosticCode,
-        codes::{Category, DiagnosticInfo, ExternalPrefix, Severity, UnusedItem},
+        codes::{COMPILER_FAMILY, Category, DiagnosticInfo, Family, Severity, UnusedItem},
     },
     shared::{AstDebug, CompilationEnv, known_attributes},
 };
@@ -45,7 +45,7 @@ macro_rules! known_code_filter {
             move_symbol_pool::Symbol::from($name),
             std::collections::BTreeSet::from([
                 crate::diagnostics::warning_filters::WarningFilter::Code {
-                    prefix: None,
+                    namespace: COMPILER_FAMILY,
                     category: Category::$category as u8,
                     code: $category::$code as u8,
                     name: Some($name),
@@ -59,8 +59,8 @@ macro_rules! known_code_filter {
 // Types
 //**************************************************************************************************
 
-/// None for the default 'allow'.
-/// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
+/// The namespace prefix for a filter. `None` for the default attribute namespace (e.g., `allow`).
+/// `Some(symbol)` for a custom namespace, e.g., `lint` in `allow(lint(_))`.
 pub type FilterPrefix = Option<Symbol>;
 pub type FilterName = Symbol;
 
@@ -102,7 +102,7 @@ unsafe impl Sync for WarningFilters {}
 #[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 /// Used to filter out diagnostics, specifically used for warning suppression
 pub struct WarningFiltersBuilder {
-    filters: BTreeMap<ExternalPrefix, UnprefixedWarningFilters>,
+    filters: BTreeMap<Family, UnprefixedWarningFilters>,
     for_dependency: bool, // if false, the filters are used for source code
 }
 
@@ -125,16 +125,16 @@ enum UnprefixedWarningFilters {
 /// Represents a single annotation for a diagnostic filter
 pub enum WarningFilter {
     /// Filters all warnings
-    All(ExternalPrefix),
+    All(Family),
     /// Filters all warnings of a specific category. Only known filters have names.
     Category {
-        prefix: ExternalPrefix,
+        namespace: Family,
         category: u8,
         name: Option<WellKnownFilterName>,
     },
     /// Filters a single warning, as defined by codes below. Only known filters have names.
     Code {
-        prefix: ExternalPrefix,
+        namespace: Family,
         category: u8,
         code: u8,
         name: Option<WellKnownFilterName>,
@@ -273,8 +273,8 @@ impl WarningFiltersBuilder {
 
     pub fn new_all_filter_alls(env: &CompilationEnv) -> Self {
         let mut all_filter_alls = WarningFiltersBuilder::new_for_dependency();
-        for prefix in env.known_filter_names() {
-            for f in env.filter_from_str(prefix, FILTER_ALL) {
+        for filter_prefix in env.known_filter_prefixes() {
+            for f in env.filter_from_str(filter_prefix, FILTER_ALL) {
                 all_filter_alls.add(f);
             }
         }
@@ -286,16 +286,16 @@ impl WarningFiltersBuilder {
     }
 
     fn is_filtered_by_info(&self, info: &DiagnosticInfo) -> bool {
-        let prefix = info.external_prefix();
+        let namespace = info.family();
         self.filters
-            .get(&prefix)
+            .get(&namespace)
             .is_some_and(|filters| filters.is_filtered_by_info(info))
     }
 
     pub fn union(&mut self, other: &Self) {
-        for (prefix, filters) in &other.filters {
+        for (namespace, filters) in &other.filters {
             self.filters
-                .entry(*prefix)
+                .entry(*namespace)
                 .or_insert_with(UnprefixedWarningFilters::new)
                 .union(filters);
         }
@@ -312,25 +312,26 @@ impl WarningFiltersBuilder {
     }
 
     pub fn add(&mut self, filter: WarningFilter) {
-        let (prefix, category, code, name) = match filter {
-            WarningFilter::All(prefix) => {
-                self.filters.insert(prefix, UnprefixedWarningFilters::All);
+        let (namespace, category, code, name) = match filter {
+            WarningFilter::All(namespace) => {
+                self.filters
+                    .insert(namespace, UnprefixedWarningFilters::All);
                 return;
             }
             WarningFilter::Category {
-                prefix,
+                namespace,
                 category,
                 name,
-            } => (prefix, category, None, name),
+            } => (namespace, category, None, name),
             WarningFilter::Code {
-                prefix,
+                namespace,
                 category,
                 code,
                 name,
-            } => (prefix, category, Some(code), name),
+            } => (namespace, category, Some(code), name),
         };
         self.filters
-            .entry(prefix)
+            .entry(namespace)
             .or_insert(UnprefixedWarningFilters::Empty)
             .add(category, code, name)
     }
@@ -338,7 +339,7 @@ impl WarningFiltersBuilder {
     pub fn unused_warnings_filter_for_test() -> Self {
         Self {
             filters: BTreeMap::from([(
-                None,
+                COMPILER_FAMILY,
                 UnprefixedWarningFilters::unused_warnings_filter_for_test(),
             )]),
             for_dependency: false,
@@ -455,26 +456,22 @@ impl WarningFilter {
     }
 
     pub fn code(
-        prefix: ExternalPrefix,
+        namespace: Family,
         category: u8,
         code: u8,
         name: Option<WellKnownFilterName>,
     ) -> Self {
         Self::Code {
-            prefix,
+            namespace,
             category,
             code,
             name,
         }
     }
 
-    pub fn category(
-        prefix: ExternalPrefix,
-        category: u8,
-        name: Option<WellKnownFilterName>,
-    ) -> Self {
+    pub fn category(namespace: Family, category: u8, name: Option<WellKnownFilterName>) -> Self {
         Self::Category {
-            prefix,
+            namespace,
             category,
             name,
         }
@@ -484,12 +481,12 @@ impl WarningFilter {
         BTreeMap::from([
             (
                 FILTER_ALL.into(),
-                BTreeSet::from([WarningFilter::All(None)]),
+                BTreeSet::from([WarningFilter::All(COMPILER_FAMILY)]),
             ),
             (
                 FILTER_UNUSED.into(),
                 BTreeSet::from([WarningFilter::Category {
-                    prefix: None,
+                    namespace: COMPILER_FAMILY,
                     category: Category::UnusedItem as u8,
                     name: Some(FILTER_UNUSED),
                 }]),
@@ -506,13 +503,13 @@ impl WarningFilter {
                 FILTER_UNUSED_TYPE_PARAMETER.into(),
                 BTreeSet::from([
                     WarningFilter::Code {
-                        prefix: None,
+                        namespace: COMPILER_FAMILY,
                         category: Category::UnusedItem as u8,
                         code: UnusedItem::StructTypeParam as u8,
                         name: Some(FILTER_UNUSED_TYPE_PARAMETER),
                     },
                     WarningFilter::Code {
-                        prefix: None,
+                        namespace: COMPILER_FAMILY,
                         category: Category::UnusedItem as u8,
                         code: UnusedItem::FunTypeParam as u8,
                         name: Some(FILTER_UNUSED_TYPE_PARAMETER),
@@ -547,25 +544,30 @@ impl AstDebug for WarningFilters {
 
 impl AstDebug for WarningFiltersBuilder {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
-        for (prefix, filters) in &self.filters {
-            let prefix_str = prefix.unwrap_or(known_attributes::DiagnosticAttribute::ALLOW);
+        for (namespace, filters) in &self.filters {
+            let ns_str = if *namespace == COMPILER_FAMILY {
+                known_attributes::DiagnosticAttribute::ALLOW
+            } else {
+                // For external namespaces, use the allow attribute as a fallback label
+                known_attributes::DiagnosticAttribute::ALLOW
+            };
             match filters {
                 UnprefixedWarningFilters::All => w.write(format!(
                     "#[{}({})]",
-                    prefix_str,
-                    WarningFilter::All(*prefix).to_str().unwrap(),
+                    ns_str,
+                    WarningFilter::All(*namespace).to_str().unwrap(),
                 )),
                 UnprefixedWarningFilters::Specified { categories, codes } => {
-                    w.write(format!("#[{}(", prefix_str));
+                    w.write(format!("#[{}(", ns_str));
                     let items = categories
                         .iter()
                         .map(|(cat, n)| WarningFilter::Category {
-                            prefix: *prefix,
+                            namespace: *namespace,
                             category: *cat,
                             name: *n,
                         })
                         .chain(codes.iter().map(|((cat, code), n)| WarningFilter::Code {
-                            prefix: *prefix,
+                            namespace: *namespace,
                             category: *cat,
                             code: *code,
                             name: *n,

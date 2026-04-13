@@ -9,19 +9,19 @@ use crate::sui_mode::{SUI_ADDR_NAME, SUI_ADDR_VALUE};
 use crate::typing::visitor::simple_visitor;
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::{DiagnosticInfo, LINT_WARNING_FAMILY, Severity, custom},
     expansion::ast::Visibility,
     naming::ast as N,
     typing::ast as T,
 };
 
 use super::{
-    LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
-    RANDOM_GENERATOR_STRUCT_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME,
+    LinterDiagnosticCategory, LinterDiagnosticCode, RANDOM_GENERATOR_STRUCT_NAME, RANDOM_MOD_NAME,
+    RANDOM_STRUCT_NAME,
 };
 
 const PUBLIC_RANDOM_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    LINT_WARNING_FAMILY,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::PublicRandom as u8,

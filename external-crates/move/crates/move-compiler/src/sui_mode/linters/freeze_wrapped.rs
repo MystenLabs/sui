@@ -9,7 +9,7 @@ use crate::{
     diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
-        codes::{DiagnosticInfo, Severity, custom},
+        codes::{DiagnosticInfo, LINT_WARNING_FAMILY, Severity, custom},
         warning_filters::WarningFilters,
     },
     expansion::ast as E,
@@ -19,8 +19,8 @@ use crate::{
     sui_mode::{
         SUI_ADDR_VALUE,
         linters::{
-            FREEZE_FUN, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
-            PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME,
+            FREEZE_FUN, LinterDiagnosticCategory, LinterDiagnosticCode, PUBLIC_FREEZE_FUN,
+            TRANSFER_MOD_NAME,
         },
     },
     typing::{
@@ -34,7 +34,7 @@ use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, sync::Arc};
 
 const FREEZE_WRAPPING_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    LINT_WARNING_FAMILY,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::FreezeWrapped as u8,

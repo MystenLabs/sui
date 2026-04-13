@@ -5,7 +5,7 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
 use crate::{
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::{DiagnosticInfo, SUI_LINT_FAMILY, Severity, custom},
     shared::stdlib_definitions,
 };
 
@@ -111,7 +111,7 @@ pub const ID_LEAK_CATEGORY: u8 = 1;
 pub const TYPING: u8 = 2;
 
 pub const ID_LEAK_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ ID_LEAK_CATEGORY,
     /* code */ 1,
@@ -119,63 +119,63 @@ pub const ID_LEAK_DIAG: DiagnosticInfo = custom(
 );
 
 pub const INIT_FUN_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 3,
     "invalid 'init' function",
 );
 pub const OTW_DECL_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 4,
     "invalid one-time witness declaration",
 );
 pub const OTW_USAGE_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 5,
     "invalid one-time witness usage",
 );
 pub const INIT_CALL_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 6,
     "invalid 'init' call",
 );
 pub const OBJECT_DECL_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 7,
     "invalid object declaration",
 );
 pub const EVENT_EMIT_CALL_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 8,
     "invalid event",
 );
 pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 9,
     "invalid private transfer call",
 );
 pub const DYNAMIC_COIN_CREATION_CALL_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 10,
     "invalid coin creation call",
 );
 pub const INTERNAL_PERMIT_CALL_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
+    SUI_LINT_FAMILY,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 11,

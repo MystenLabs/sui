@@ -9,7 +9,10 @@ use crate::{
     Flags,
     command_line::COLOR_MODE_ENV_VAR,
     diagnostics::{
-        codes::{Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity},
+        codes::{
+            Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Family, FamilyRegistry,
+            Severity,
+        },
         warning_filters::{FilterName, FilterPrefix, WarningFilters, WarningFiltersScope},
     },
     shared::{
@@ -52,10 +55,17 @@ pub struct DiagnosticReporter<'env> {
     warning_filters_scope: WarningFiltersScope,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct Diagnostics {
     diags: Option<Diagnostics_>,
     format: DiagnosticsFormat,
+    family_registry: Box<FamilyRegistry>,
+}
+
+impl Default for Diagnostics {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
@@ -213,6 +223,7 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags:
     let Diagnostics {
         diags: Some(mut diags),
         format,
+        family_registry,
     } = diags
     else {
         return;
@@ -227,7 +238,7 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags:
         loc1.cmp(loc2).then_with(|| e1.cmp(e2))
     });
     match format {
-        DiagnosticsFormat::Text => emit_diagnostics_text(writer, mapping, diags),
+        DiagnosticsFormat::Text => emit_diagnostics_text(&family_registry, writer, mapping, diags),
         DiagnosticsFormat::JSON => emit_diagnostics_json(writer, mapping, diags),
     }
 }
@@ -240,6 +251,7 @@ fn convert_loc(mapped_files: &MappedFiles, loc: Loc) -> Option<(FileId, Range<us
 }
 
 fn emit_diagnostics_text(
+    registry: &FamilyRegistry,
     writer: &mut dyn WriteColor,
     mapped_files: &MappedFiles,
     diags: Diagnostics_,
@@ -250,12 +262,13 @@ fn emit_diagnostics_text(
             continue;
         }
         seen.insert(diag.clone());
-        let rendered = render_diagnostic_text(mapped_files, diag);
+        let rendered = render_diagnostic_text(registry, mapped_files, diag);
         emit(writer, &Config::default(), mapped_files.files(), &rendered).unwrap()
     }
 }
 
 fn render_diagnostic_text(
+    registry: &FamilyRegistry,
     mapped_files: &MappedFiles,
     diag: Diagnostic,
 ) -> csr::diagnostic::Diagnostic<FileId> {
@@ -279,7 +292,7 @@ fn render_diagnostic_text(
         mut notes,
     } = diag;
     let mut diag = csr::diagnostic::Diagnostic::new(info.severity().into_codespan_severity());
-    let (code, message) = info.render();
+    let (code, message) = info.render(registry);
     diag = diag.with_code(code);
     diag = diag.with_message(message.to_string());
     let labels = vec![mk_lbl(LabelStyle::Primary, primary_label, &mut notes)]
@@ -331,6 +344,7 @@ pub fn generate_migration_diff(
         Diagnostics {
             diags: Some(inner),
             format,
+            ..
         } => {
             assert!(
                 matches!(format, DiagnosticsFormat::Text),
@@ -487,7 +501,12 @@ impl Diagnostics {
         Self {
             diags: None,
             format: DiagnosticsFormat::default(),
+            family_registry: Box::new(FamilyRegistry::new()),
         }
+    }
+
+    pub fn family_registry(&self) -> &FamilyRegistry {
+        &self.family_registry
     }
 
     pub fn set_format(&mut self, format: DiagnosticsFormat) {
@@ -515,6 +534,7 @@ impl Diagnostics {
         let Self {
             diags: Some(inner),
             format: _,
+            ..
         } = self
         else {
             return None;
@@ -532,6 +552,7 @@ impl Diagnostics {
         let Self {
             diags: Some(inner),
             format: _,
+            ..
         } = self
         else {
             return 0;
@@ -550,6 +571,7 @@ impl Diagnostics {
         let Self {
             diags: Some(inner),
             format: _,
+            ..
         } = self
         else {
             return true;
@@ -561,6 +583,7 @@ impl Diagnostics {
         let Self {
             diags: Some(inner),
             format: _,
+            ..
         } = self
         else {
             return 0;
@@ -603,6 +626,7 @@ impl Diagnostics {
                     severity_count,
                 }),
             format: _format,
+            ..
         } = other
         else {
             return;
@@ -660,10 +684,11 @@ impl Diagnostics {
         inner.diagnostics.retain(f);
     }
 
-    pub fn any_with_prefix(&self, prefix: &str) -> bool {
+    pub fn any_with_family(&self, namespace: Family) -> bool {
         let Self {
             diags: Some(inner),
             format: _,
+            ..
         } = self
         else {
             return false;
@@ -671,7 +696,7 @@ impl Diagnostics {
         inner
             .diagnostics
             .iter()
-            .any(|d| d.info.external_prefix() == Some(prefix))
+            .any(|d| d.info.family() == namespace)
     }
 
     /// Returns true if any diagnostic in the Syntax category have already been recorded.
@@ -679,6 +704,7 @@ impl Diagnostics {
         let Self {
             diags: Some(inner),
             format: _,
+            ..
         } = self
         else {
             return false;
@@ -691,10 +717,11 @@ impl Diagnostics {
 
     /// Returns the number of diags filtered in source (user) code (not in the dependencies) that
     /// have a given prefix and how many different unique lints were filtered.
-    pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
+    pub fn filtered_source_diags_with_family(&self, namespace: Family) -> (usize, usize) {
         let Self {
             diags: Some(inner),
             format: _,
+            ..
         } = self
         else {
             return (0, 0);
@@ -702,7 +729,7 @@ impl Diagnostics {
         let mut filtered_diags_num = 0;
         let mut unique = HashSet::new();
         inner.filtered_source_diagnostics.iter().for_each(|d| {
-            if d.info.external_prefix() == Some(prefix) {
+            if d.info.family() == namespace {
                 filtered_diags_num += 1;
                 unique.insert((d.info.category(), d.info.code()));
             }
@@ -1103,24 +1130,20 @@ impl FromIterator<Diagnostic> for Diagnostics {
 impl From<Vec<Diagnostic>> for Diagnostics {
     fn from(diagnostics: Vec<Diagnostic>) -> Self {
         if diagnostics.is_empty() {
-            return Self {
-                diags: None,
-                format: DiagnosticsFormat::default(),
-            };
+            return Self::new();
         }
 
         let mut severity_count = BTreeMap::new();
         for diag in &diagnostics {
             *severity_count.entry(diag.info.severity()).or_insert(0) += 1;
         }
-        Self {
-            diags: Some(Diagnostics_ {
-                diagnostics,
-                filtered_source_diagnostics: vec![],
-                severity_count,
-            }),
-            format: DiagnosticsFormat::default(),
-        }
+        let mut s = Self::new();
+        s.diags = Some(Diagnostics_ {
+            diagnostics,
+            filtered_source_diagnostics: vec![],
+            severity_count,
+        });
+        s
     }
 }
 

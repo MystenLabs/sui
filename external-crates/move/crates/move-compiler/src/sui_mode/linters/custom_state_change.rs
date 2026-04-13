@@ -24,7 +24,7 @@ use crate::{
     diag,
     diagnostics::{
         Diagnostic, Diagnostics,
-        codes::{DiagnosticInfo, Severity, custom},
+        codes::{DiagnosticInfo, LINT_WARNING_FAMILY, Severity, custom},
     },
     hlir::ast::{
         BaseType_, Label, ModuleCall, SingleType, SingleType_, Type, Type_, TypeName_, Var,
@@ -36,8 +36,8 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    FREEZE_FUN, INVALID_LOC, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
-    RECEIVE_FUN, SHARE_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME,
+    FREEZE_FUN, INVALID_LOC, LinterDiagnosticCategory, LinterDiagnosticCode, RECEIVE_FUN,
+    SHARE_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
 const PRIVATE_OBJ_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
@@ -48,7 +48,7 @@ const PRIVATE_OBJ_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
 ];
 
 const CUSTOM_STATE_CHANGE_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    LINT_WARNING_FAMILY,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::CustomStateChange as u8,

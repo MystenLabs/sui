@@ -4,10 +4,10 @@
 // Implements lint rule for Move code to detect unnecessary `public entry` functions.
 // It identifies and reports functions that contain both `public` and `entry` modifiers.
 
-use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
+use super::{LinterDiagnosticCategory, LinterDiagnosticCode};
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::{DiagnosticInfo, LINT_WARNING_FAMILY, Severity, custom},
     expansion::ast::{ModuleIdent, Visibility},
     parser::ast::FunctionName,
     typing::{
@@ -17,7 +17,7 @@ use crate::{
 };
 
 const PUBLIC_ENTRY_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    LINT_WARNING_FAMILY,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::UnnecessaryPublicEntry as u8,

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
+use super::{LinterDiagnosticCategory, LinterDiagnosticCode};
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::{DiagnosticInfo, LINT_WARNING_FAMILY, Severity, custom},
     expansion::ast::ModuleIdent,
     parser::ast::FunctionName,
     sui_mode::{
@@ -17,7 +17,7 @@ use crate::{
 use move_ir_types::location::Loc;
 
 const UNCALLABLE_FUNCTION_SIGNATURE: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    LINT_WARNING_FAMILY,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::UncallableFunction as u8,

@@ -10,7 +10,7 @@ use crate::{
     command_line as cli, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics, DiagnosticsFormat,
-        codes::{DiagnosticsID, Severity},
+        codes::{COMPILER_FAMILY, DiagnosticsID, FamilyRegistry, Severity},
         warning_filters::{
             FILTER_ALL, FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder,
             WarningFiltersScope, WarningFiltersTable,
@@ -248,6 +248,8 @@ pub struct CompilationEnv {
     known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>>,
     /// Maps a diagnostics ID to a known filter name.
     known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
+    /// Registry mapping `Family` values to their display prefix strings.
+    family_registry: FamilyRegistry,
     prim_definers: OnceLock<BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
@@ -286,13 +288,13 @@ impl CompilationEnv {
                 all_filters.iter().flat_map(|(name, filters)| {
                     filters.iter().filter_map(|v| {
                         if let WarningFilter::Code {
-                            prefix,
+                            namespace,
                             category,
                             code,
                             ..
                         } = v
                         {
-                            Some(((*prefix, *category, *code), (*attr, *name)))
+                            Some(((*namespace, *category, *code), (*attr, *name)))
                         } else {
                             None
                         }
@@ -303,7 +305,7 @@ impl CompilationEnv {
 
         let top_level_warning_filter_opt = if flags.silence_warnings() {
             let mut f = WarningFiltersBuilder::new_for_source();
-            f.add(WarningFilter::All(None));
+            f.add(WarningFilter::All(COMPILER_FAMILY));
             Some(f)
         } else {
             warning_filters
@@ -330,6 +332,7 @@ impl CompilationEnv {
             default_config: default_config.unwrap_or_default(),
             known_filters,
             known_filter_names,
+            family_registry: FamilyRegistry::new(),
             prim_definers: OnceLock::new(),
             mapped_files: MappedFiles::empty(),
             save_hooks,
@@ -436,7 +439,7 @@ impl CompilationEnv {
         final_diags
     }
 
-    pub fn known_filter_names(&self) -> impl IntoIterator<Item = FilterPrefix> + '_ {
+    pub fn known_filter_prefixes(&self) -> impl IntoIterator<Item = FilterPrefix> + '_ {
         self.known_filters.keys().copied()
     }
 
@@ -458,16 +461,18 @@ impl CompilationEnv {
     ) -> anyhow::Result<()> {
         let filter_attr = self.known_filters.entry(attr_name).or_default();
         for filter in filters {
-            let (prefix, n) = match filter {
-                WarningFilter::All(prefix) => (prefix, Symbol::from(FILTER_ALL)),
-                WarningFilter::Category { name, prefix, .. } => {
+            let (namespace, n) = match filter {
+                WarningFilter::All(namespace) => (namespace, Symbol::from(FILTER_ALL)),
+                WarningFilter::Category {
+                    name, namespace, ..
+                } => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Category warning filter must have a name specified");
                     };
-                    (prefix, Symbol::from(n))
+                    (namespace, Symbol::from(n))
                 }
                 WarningFilter::Code {
-                    prefix,
+                    namespace,
                     category,
                     code,
                     name,
@@ -477,18 +482,26 @@ impl CompilationEnv {
                     };
                     let n = Symbol::from(n);
                     self.known_filter_names
-                        .insert((prefix, category, code), (attr_name, n));
-                    (prefix, n)
+                        .insert((namespace, category, code), (attr_name, n));
+                    (namespace, n)
                 }
             };
             anyhow::ensure!(
-                attr_name.is_some() == prefix.is_some(),
-                "If the attribute name is specified, e.g. Some(_), the external prefix must also \
-                be specified. attribute name: {attr_name:?}, external prefix: {prefix:?}",
+                attr_name.is_some() == (namespace != COMPILER_FAMILY),
+                "If the attribute name is specified, e.g. Some(_), the namespace must be \
+                external (not COMPILER). attribute name: {attr_name:?}, namespace: {namespace:?}",
             );
             filter_attr.entry(n).or_default().insert(filter);
         }
         Ok(())
+    }
+
+    pub fn family_registry(&self) -> &FamilyRegistry {
+        &self.family_registry
+    }
+
+    pub fn family_registry_mut(&mut self) -> &mut FamilyRegistry {
+        &mut self.family_registry
     }
 
     pub fn visitors(&self) -> &Visitors {

@@ -4,10 +4,10 @@
 use crate::{
     cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::Visitor,
-    diagnostics::warning_filters::WarningFilter,
+    diagnostics::{codes::LINT_WARNING_FAMILY, warning_filters::WarningFilter},
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX, LintLevel, LinterDiagnosticCategory},
+    linters::{ALLOW_ATTR_CATEGORY, LintLevel, LinterDiagnosticCategory},
     typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;
@@ -100,75 +100,75 @@ pub enum LinterDiagnosticCode {
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     let filters = vec![
-        WarningFilter::All(Some(LINT_WARNING_PREFIX)),
+        WarningFilter::All(LINT_WARNING_FAMILY),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::ShareOwned as u8,
             Some(SHARE_OWNED_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::SelfTransfer as u8,
             Some(SELF_TRANSFER_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::CustomStateChange as u8,
             Some(CUSTOM_STATE_CHANGE_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::CoinField as u8,
             Some(COIN_FIELD_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::FreezeWrapped as u8,
             Some(FREEZE_WRAPPED_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::CollectionEquality as u8,
             Some(COLLECTION_EQUALITY_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::PublicRandom as u8,
             Some(PUBLIC_RANDOM_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::MissingKey as u8,
             Some(MISSING_KEY_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::FreezingCapability as u8,
             Some(FREEZING_CAPABILITY_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::PreferMutableTxContext as u8,
             Some(PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
             Some(UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME),
         ),
         WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
+            LINT_WARNING_FAMILY,
             LinterDiagnosticCategory::Sui as u8,
             LinterDiagnosticCode::UncallableFunction as u8,
             Some(UNCALLABLE_FUNCTION_FILTER_NAME),

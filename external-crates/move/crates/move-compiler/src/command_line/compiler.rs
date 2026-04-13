@@ -594,7 +594,7 @@ macro_rules! ast_stepped_compilers {
 
                 pub fn check_and_report(self, files: &MappedFiles)  {
                     let errors_result = self.check().map_err(|(_, diags)| diags);
-                    unwrap_or_report_diagnostics(&files, errors_result);
+                    unwrap_or_report_diagnostics(files, errors_result);
                 }
 
                 pub fn build_and_report(
@@ -602,8 +602,8 @@ macro_rules! ast_stepped_compilers {
                     files: &MappedFiles,
                 ) -> Vec<AnnotatedCompiledUnit> {
                     let units_result = self.build().map_err(|(_, diags)| diags);
-                    let (units, warnings) = unwrap_or_report_diagnostics(&files, units_result);
-                    report_warnings(&files, warnings);
+                    let (units, warnings) = unwrap_or_report_diagnostics(files, units_result);
+                    report_warnings(files, warnings);
                     units
                 }
             }

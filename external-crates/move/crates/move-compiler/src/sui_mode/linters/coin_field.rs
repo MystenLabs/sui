@@ -6,7 +6,7 @@
 
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::{DiagnosticInfo, LINT_WARNING_FAMILY, Severity, custom},
     expansion::ast::ModuleIdent,
     naming::ast as N,
     parser::ast::DatatypeName,
@@ -14,13 +14,10 @@ use crate::{
     typing::{ast as T, visitor::simple_visitor},
 };
 
-use super::{
-    COIN_MOD_NAME, COIN_STRUCT_NAME, LINT_WARNING_PREFIX, LinterDiagnosticCategory,
-    LinterDiagnosticCode,
-};
+use super::{COIN_MOD_NAME, COIN_STRUCT_NAME, LinterDiagnosticCategory, LinterDiagnosticCode};
 
 const COIN_FIELD_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    LINT_WARNING_FAMILY,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::CoinField as u8,
