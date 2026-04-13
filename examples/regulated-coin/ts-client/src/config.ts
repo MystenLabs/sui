@@ -5,7 +5,16 @@ import { config } from "dotenv";
 
 config({});
 export const PACKAGE_ID = process.env.PACKAGE_ID!;
-export const SUI_NETWORK = process.env.SUI_FULLNODE_URL!;
+export const SUI_FULLNODE_URL = process.env.SUI_FULLNODE_URL!;
+
+// Derive network type from URL for SDK v2
+function getNetworkFromUrl(url: string): 'mainnet' | 'testnet' | 'devnet' | 'localnet' {
+    if (url.includes('mainnet')) return 'mainnet';
+    if (url.includes('testnet')) return 'testnet';
+    if (url.includes('devnet')) return 'devnet';
+    return 'localnet';
+}
+export const SUI_NETWORK = getNetworkFromUrl(SUI_FULLNODE_URL);
 export const ADMIN_ADDRESS = process.env.ADMIN_ADDRESS!;
 export const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY!;
 
