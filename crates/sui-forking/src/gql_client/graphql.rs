@@ -151,9 +151,9 @@ mod tests {
     use wiremock::matchers::{body_partial_json, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    use super::super::gql_queries::checkpoint_query::{CheckpointArgs, Query as CheckpointQuery};
     use super::*;
     use forking_data_store::VersionQuery;
-    use super::super::gql_queries::checkpoint_query::{CheckpointArgs, Query as CheckpointQuery};
 
     fn mock_store(server: &MockServer) -> GraphQLStore {
         GraphQLStore::new(Node::Custom(server.uri()), "test-version").expect("store should build")

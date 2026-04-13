@@ -241,7 +241,10 @@ pub(crate) mod object_query {
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(graphql_type = "Object", schema_module = "crate::gql_client::gql_queries::schema")]
+    #[cynic(
+        graphql_type = "Object",
+        schema_module = "crate::gql_client::gql_queries::schema"
+    )]
     pub(crate) struct ObjectFragment {
         #[allow(dead_code)]
         pub address: SuiAddress,
