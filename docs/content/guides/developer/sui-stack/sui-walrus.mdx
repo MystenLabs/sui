@@ -2,6 +2,7 @@
 title: Data Storage with Walrus
 description: A complete guide to the Sui and Walrus storage stack, covering publishers and aggregators, the TypeScript SDK, and the Move API for onchain blob lifecycle management.
 keywords: [ walrus, sui, blob storage, typescript sdk, walrus file, move api, publishers, aggregators, upload relay ]
+draft: true
 ---
 
 Sui and [Walrus](https://docs.wal.app/) are designed as a pair. Sui handles coordination, ownership, and payments onchain. Walrus handles large binary data offchain. Together, they form a programmable storage stack: every blob stored on Walrus is represented as a [Sui object](/guides/developer/objects/object-model.mdx), which means Move smart contracts can own, transfer, extend, or delete it using the same primitives you use for any other onchain resource.
